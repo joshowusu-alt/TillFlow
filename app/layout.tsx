@@ -1,0 +1,56 @@
+﻿import './globals.css';
+import type { Metadata, Viewport } from 'next';
+import { Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
+import Script from 'next/script';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+import NetworkStatus from '@/components/NetworkStatus';
+import InstallPrompt from '@/components/InstallPrompt';
+
+const displayFont = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-display'
+});
+
+const bodyFont = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-sans'
+});
+
+export const metadata: Metadata = {
+  title: 'TillFlow',
+  description: 'Sales made simple. Point of Sale, Inventory & Accounting.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'TillFlow'
+  }
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#059669'
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
+      <body className="min-h-screen bg-paper text-ink">
+        <ServiceWorkerRegistration />
+        <Script
+          src="https://cdnjs.cloudflare.com/ajax/libs/qz-tray/2.1.0/qz-tray.js"
+          strategy="beforeInteractive"
+        />
+        {children}
+        <NetworkStatus />
+        <InstallPrompt />
+      </body>
+    </html>
+  );
+}
+

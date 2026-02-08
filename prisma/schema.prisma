@@ -1,0 +1,476 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Business {
+  id         String   @id @default(cuid())
+  name       String
+  currency   String   @default("GBP")
+  vatEnabled Boolean  @default(false)
+  vatNumber  String?
+  mode       String   @default("SIMPLE")
+  receiptTemplate String @default("THERMAL_80")
+  printMode  String   @default("DIRECT_ESC_POS")
+  printerName String?
+  // Receipt customization fields
+  receiptLogoUrl      String?
+  receiptHeader       String?
+  receiptFooter       String?
+  receiptShowVatNumber Boolean @default(true)
+  receiptShowAddress   Boolean @default(true)
+  socialMediaHandle   String?
+  address             String?
+  phone               String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  stores         Store[]
+  users          User[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  products       Product[]
+  accounts       Account[]
+  journalEntries JournalEntry[]
+  expenses       Expense[]
+  expensePayments ExpensePayment[]
+  salesInvoices  SalesInvoice[]
+  purchaseInvoices PurchaseInvoice[]
+}
+
+model Store {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  address    String?
+  createdAt  DateTime @default(now())
+
+  business          Business         @relation(fields: [businessId], references: [id])
+  tills             Till[]
+  inventoryBalances InventoryBalance[]
+  stockMovements    StockMovement[]
+  stockAdjustments  StockAdjustment[]
+  salesInvoices     SalesInvoice[]
+  purchaseInvoices  PurchaseInvoice[]
+  salesReturns      SalesReturn[]
+  purchaseReturns   PurchaseReturn[]
+  expenses          Expense[]
+  expensePayments   ExpensePayment[]
+}
+
+model Till {
+  id        String   @id @default(cuid())
+  storeId   String
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  store         Store          @relation(fields: [storeId], references: [id])
+  salesInvoices SalesInvoice[]
+  shifts        Shift[]
+}
+
+model Shift {
+  id                 String    @id @default(cuid())
+  tillId             String
+  userId             String
+  openedAt           DateTime  @default(now())
+  closedAt           DateTime?
+  openingCashPence   Int       @default(0)
+  expectedCashPence  Int       @default(0)
+  actualCashPence    Int?
+  cardTotalPence     Int       @default(0)
+  transferTotalPence Int       @default(0)
+  variance           Int?
+  notes              String?
+  status             String    @default("OPEN")
+
+  till         Till           @relation(fields: [tillId], references: [id])
+  user         User           @relation(fields: [userId], references: [id])
+  salesInvoices SalesInvoice[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  businessId   String
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  business       Business      @relation(fields: [businessId], references: [id])
+  sessions       Session[]
+  salesInvoices  SalesInvoice[] @relation("CashierSales")
+  stockMovements StockMovement[]
+  stockAdjustments StockAdjustment[]
+  salesReturns     SalesReturn[]
+  purchaseReturns  PurchaseReturn[]
+  expenses         Expense[]
+  expensePayments  ExpensePayment[]
+  shifts           Shift[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  phone      String?
+  email      String?
+  creditLimitPence Int @default(0)
+  createdAt  DateTime @default(now())
+
+  business      Business       @relation(fields: [businessId], references: [id])
+  salesInvoices SalesInvoice[]
+}
+
+model Supplier {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  phone      String?
+  email      String?
+  creditLimitPence Int @default(0)
+  createdAt  DateTime @default(now())
+
+  business         Business         @relation(fields: [businessId], references: [id])
+  purchaseInvoices PurchaseInvoice[]
+}
+
+model Product {
+  id                    String   @id @default(cuid())
+  businessId            String
+  sku                   String?
+  barcode               String?  @unique
+  name                  String
+  active                Boolean  @default(true)
+  sellingPriceBasePence Int
+  defaultCostBasePence  Int
+  vatRateBps            Int      @default(0)
+  vatCode               String?
+  reorderPointBase      Int      @default(0)
+  promoBuyQty           Int      @default(0)
+  promoGetQty           Int      @default(0)
+  createdAt             DateTime @default(now())
+
+  business          Business         @relation(fields: [businessId], references: [id])
+  productUnits      ProductUnit[]
+  inventoryBalances InventoryBalance[]
+  salesLines        SalesInvoiceLine[]
+  purchaseLines     PurchaseInvoiceLine[]
+  stockMovements    StockMovement[]
+  stockAdjustments  StockAdjustment[]
+
+  @@unique([businessId, name])
+}
+
+model Unit {
+  id         String   @id @default(cuid())
+  name       String
+  pluralName String
+  symbol     String?
+
+  productUnits ProductUnit[]
+  salesInvoiceLines SalesInvoiceLine[]
+  purchaseInvoiceLines PurchaseInvoiceLine[]
+  stockAdjustments   StockAdjustment[]
+}
+
+model ProductUnit {
+  id               String   @id @default(cuid())
+  productId        String
+  unitId           String
+  isBaseUnit       Boolean  @default(false)
+  conversionToBase Int
+  createdAt        DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  unit    Unit    @relation(fields: [unitId], references: [id])
+
+  @@unique([productId, unitId])
+}
+
+model InventoryBalance {
+  id             String   @id @default(cuid())
+  storeId        String
+  productId      String
+  qtyOnHandBase  Int      @default(0)
+  avgCostBasePence Int    @default(0)
+  updatedAt      DateTime @updatedAt
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([storeId, productId])
+}
+
+model StockMovement {
+  id                String             @id @default(cuid())
+  storeId           String
+  productId         String
+  qtyBase           Int
+  unitCostBasePence Int?
+  type              String
+  referenceType     String?
+  referenceId       String?
+  userId            String?
+  createdAt         DateTime           @default(now())
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
+}
+
+model StockAdjustment {
+  id           String   @id @default(cuid())
+  storeId      String
+  productId    String
+  unitId       String
+  qtyInUnit    Int
+  qtyBase      Int
+  direction    String
+  reason       String?
+  userId       String
+  createdAt    DateTime @default(now())
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  unit    Unit    @relation(fields: [unitId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+}
+
+model SalesInvoice {
+  id             String        @id @default(cuid())
+  businessId     String
+  storeId        String
+  tillId         String
+  shiftId        String?
+  cashierUserId  String
+  customerId     String?
+  paymentStatus  String
+  dueDate        DateTime?
+  discountPence  Int           @default(0)
+  subtotalPence  Int
+  vatPence       Int
+  totalPence     Int
+  createdAt      DateTime      @default(now())
+
+  business    Business        @relation(fields: [businessId], references: [id])
+  store       Store           @relation(fields: [storeId], references: [id])
+  till        Till            @relation(fields: [tillId], references: [id])
+  shift       Shift?          @relation(fields: [shiftId], references: [id])
+  cashierUser User            @relation("CashierSales", fields: [cashierUserId], references: [id])
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+  lines       SalesInvoiceLine[]
+  payments    SalesPayment[]
+  salesReturn SalesReturn?
+}
+
+model SalesReturn {
+  id               String   @id @default(cuid())
+  salesInvoiceId   String   @unique
+  storeId          String
+  userId           String
+  type             String
+  refundMethod     String?
+  refundAmountPence Int @default(0)
+  reason           String?
+  createdAt        DateTime @default(now())
+
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  store        Store       @relation(fields: [storeId], references: [id])
+  user         User        @relation(fields: [userId], references: [id])
+}
+
+model SalesInvoiceLine {
+  id                String   @id @default(cuid())
+  salesInvoiceId    String
+  productId         String
+  unitId            String
+  qtyInUnit         Int
+  conversionToBase  Int
+  qtyBase           Int
+  unitPricePence    Int
+  lineDiscountPence Int      @default(0)
+  promoDiscountPence Int     @default(0)
+  lineSubtotalPence Int
+  lineVatPence      Int
+  lineTotalPence    Int
+  createdAt         DateTime @default(now())
+
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  product      Product      @relation(fields: [productId], references: [id])
+  unit         Unit         @relation(fields: [unitId], references: [id])
+}
+
+model SalesPayment {
+  id             String        @id @default(cuid())
+  salesInvoiceId String
+  method         String
+  amountPence    Int
+  receivedAt     DateTime      @default(now())
+  reference      String?
+
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+}
+
+model PurchaseInvoice {
+  id             String        @id @default(cuid())
+  businessId     String
+  storeId        String
+  supplierId     String?
+  paymentStatus  String
+  dueDate        DateTime?
+  subtotalPence  Int
+  vatPence       Int
+  totalPence     Int
+  createdAt      DateTime      @default(now())
+
+  business    Business          @relation(fields: [businessId], references: [id])
+  store       Store             @relation(fields: [storeId], references: [id])
+  supplier    Supplier?         @relation(fields: [supplierId], references: [id])
+  lines       PurchaseInvoiceLine[]
+  payments    PurchasePayment[]
+  purchaseReturn PurchaseReturn?
+}
+
+model PurchaseReturn {
+  id                String   @id @default(cuid())
+  purchaseInvoiceId String   @unique
+  storeId           String
+  userId            String
+  type              String
+  refundMethod      String?
+  refundAmountPence Int @default(0)
+  reason            String?
+  createdAt         DateTime @default(now())
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  store           Store          @relation(fields: [storeId], references: [id])
+  user            User           @relation(fields: [userId], references: [id])
+}
+
+model PurchaseInvoiceLine {
+  id                String   @id @default(cuid())
+  purchaseInvoiceId String
+  productId         String
+  unitId            String
+  qtyInUnit         Int
+  conversionToBase  Int
+  qtyBase           Int
+  unitCostPence     Int
+  lineSubtotalPence Int
+  lineVatPence      Int
+  lineTotalPence    Int
+  createdAt         DateTime @default(now())
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id])
+  unit            Unit            @relation(fields: [unitId], references: [id])
+}
+
+model PurchasePayment {
+  id               String        @id @default(cuid())
+  purchaseInvoiceId String
+  method           String
+  amountPence      Int
+  paidAt           DateTime      @default(now())
+  reference        String?
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+}
+
+model Account {
+  id         String      @id @default(cuid())
+  businessId String
+  code       String
+  name       String
+  type       String
+  createdAt  DateTime    @default(now())
+
+  business     Business     @relation(fields: [businessId], references: [id])
+  journalLines JournalLine[]
+  expenses     Expense[]
+
+  @@unique([businessId, code])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  businessId  String
+  storeId     String
+  userId      String
+  accountId   String
+  amountPence Int
+  paymentStatus String @default("PAID")
+  method      String?
+  dueDate     DateTime?
+  vendorName  String?
+  reference   String?
+  attachmentPath String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  store    Store    @relation(fields: [storeId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+  account  Account  @relation(fields: [accountId], references: [id])
+  payments ExpensePayment[]
+}
+
+model ExpensePayment {
+  id         String   @id @default(cuid())
+  businessId String
+  storeId    String
+  userId     String
+  expenseId  String
+  method     String
+  amountPence Int
+  paidAt     DateTime @default(now())
+  reference  String?
+
+  business Business @relation(fields: [businessId], references: [id])
+  store    Store    @relation(fields: [storeId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+  expense Expense @relation(fields: [expenseId], references: [id])
+}
+
+model JournalEntry {
+  id            String      @id @default(cuid())
+  businessId    String
+  description   String
+  referenceType String?
+  referenceId   String?
+  entryDate     DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  business Business     @relation(fields: [businessId], references: [id])
+  lines    JournalLine[]
+}
+
+model JournalLine {
+  id            String   @id @default(cuid())
+  journalEntryId String
+  accountId     String
+  debitPence    Int
+  creditPence   Int
+  memo          String?
+  createdAt     DateTime @default(now())
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  account      Account      @relation(fields: [accountId], references: [id])
+}

@@ -1,0 +1,51 @@
+{
+  "name": "TillFlow",
+  "short_name": "TillFlow",
+  "description": "Sales made simple. The complete point of sale system with inventory management, accounting, and offline support.",
+  "start_url": "/pos",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "orientation": "any",
+  "categories": [
+    "business",
+    "productivity",
+    "finance"
+  ],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Point of Sale",
+      "short_name": "POS",
+      "description": "Open the POS terminal",
+      "url": "/pos"
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View business dashboard",
+      "url": "/reports/dashboard"
+    },
+    {
+      "name": "Analytics",
+      "short_name": "Analytics",
+      "description": "View advanced analytics",
+      "url": "/reports/analytics"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

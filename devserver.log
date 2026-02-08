@@ -1,0 +1,39 @@
+
+> supermarket-pos@0.1.0 predev
+> npm run db:setup
+
+
+> supermarket-pos@0.1.0 db:setup
+> npm run db:push && npm run db:seed
+
+
+> supermarket-pos@0.1.0 db:push
+> prisma db push
+
+Datasource "db": SQLite database "dev.db" at "file:./dev.db"
+
+The database is already in sync with the Prisma schema.
+
+
+> supermarket-pos@0.1.0 db:seed
+> prisma db seed
+
+Running seed command `tsx prisma/seed.ts` ...
+
+The seed command has been executed.
+
+> supermarket-pos@0.1.0 dev
+> next dev -p 6200
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:6200
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 3.7s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.7s (491 modules)
+ GET / 307 in 3947ms
+ ○ Compiling /pos ...
+ ✓ Compiled /pos in 1441ms (607 modules)
+ GET /pos 200 in 1854ms

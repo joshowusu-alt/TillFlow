@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50">
+  <defs>
+    <linearGradient id="text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#059669"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Till part -->
+  <text x="0" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800" fill="url(#text-grad)">Till</text>
+  
+  <!-- Flow part -->
+  <text x="62" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="400" fill="#374151">Flow</text>
+  
+  <!-- Animated flow accent -->
+  <path d="M165 25 Q175 18, 185 25 Q195 32, 185 35" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round">
+    <animate attributeName="stroke-dasharray" values="0,100;30,100" dur="1s" fill="freeze"/>
+  </path>
+</svg>

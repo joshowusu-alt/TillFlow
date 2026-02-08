@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50">
+  <!-- Till part -->
+  <text x="0" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800" fill="#10b981">Till</text>
+  
+  <!-- Flow part -->
+  <text x="62" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="400" fill="#f3f4f6">Flow</text>
+  
+  <!-- Flow accent -->
+  <path d="M165 25 Q175 18, 185 25 Q195 32, 185 35" fill="none" stroke="#34d399" stroke-width="3" stroke-linecap="round"/>
+</svg>
