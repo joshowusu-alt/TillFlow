@@ -8,12 +8,15 @@ You need two programs on your computer first.
 2. **Download Git:** [Click here to download](https://git-scm.com/download/win) -> Install it (just click Next, Next, Next).
 
 ## Step 2: Get the App
-1. Open the folder where you want the app.
-2. Right-click and select **"Open Terminal"** or **"Git Bash Here"**.
-3. Type this command and press Enter:
+1. Create a new folder on your Desktop called `TillFlow`.
+2. Open that folder.
+3. Right-click inside the empty folder and select **"Git Bash Here"** (this option appeared when you installed Git).
+   *(If you don't see it, search your computer for "Git Bash", open it, and type `cd Desktop`)*
+4. Type this command and press Enter:
    ```bash
-   git clone https://github.com/joshowusu-alt/TillFlow.git
+   git clone https://github.com/joshowusu-alt/TillFlow.git .
    ```
+   *(Note the dot at the end!)*
 
 ## Step 3: Turn it On
 1. Go into the new folder:
