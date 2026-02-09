@@ -4,6 +4,12 @@
 
 ![TillFlow Logo](./public/icon.svg)
 
+## 🚀 How to Install
+
+**[👉 CLICK HERE FOR SETUP GUIDE (Simple English)](/GHANA_SETUP.md)**
+
+---
+
 ## Features
 
 ✅ **Point of Sale** - Fast, intuitive checkout with barcode scanning  
