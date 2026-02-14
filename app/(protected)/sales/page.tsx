@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -26,7 +27,11 @@ export default async function SalesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Sales" subtitle="Latest sales invoices and receipts." />
+      <PageHeader
+        title="Sales"
+        subtitle="Latest sales invoices and receipts."
+        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
+      />
       <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>

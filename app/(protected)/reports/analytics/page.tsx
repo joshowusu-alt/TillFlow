@@ -1,7 +1,10 @@
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import AnalyticsClient from './AnalyticsClient';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
     await requireRole(['MANAGER', 'OWNER']);
@@ -184,6 +187,7 @@ export default async function AnalyticsPage() {
             <PageHeader
                 title="Advanced Analytics"
                 subtitle="Deep insights into your business performance."
+                actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
             />
             <AnalyticsClient data={analyticsData} />
         </div>

@@ -1,10 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { requireRole } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
   await requireRole(['MANAGER', 'OWNER']);
@@ -96,7 +99,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Owner Dashboard" subtitle="Today at a glance." />
+      <PageHeader
+        title="Owner Dashboard"
+        subtitle="Today at a glance."
+        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />}
+      />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Sales Today" value={formatMoney(totalSales, business.currency)} tone="accent" />
         <StatCard label="Gross Profit Today" value={formatMoney(income.grossProfit, business.currency)} />

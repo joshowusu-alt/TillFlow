@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
@@ -20,7 +21,11 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Inventory" subtitle="Real-time balances in mixed units." />
+      <PageHeader
+        title="Inventory"
+        subtitle="Real-time balances in mixed units."
+        actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
+      />
       <div className="flex justify-end">
         <Link className="btn-secondary text-xs" href="/inventory/adjustments">
           Record adjustment
