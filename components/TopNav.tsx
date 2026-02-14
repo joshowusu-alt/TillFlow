@@ -98,6 +98,16 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
     setMobileOpen(false);
   }, [pathname]);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
+
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       if (!navRef.current) return;
@@ -191,7 +201,11 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
       </div>
 
       {mobileOpen ? (
-        <div className="border-t border-black/10 bg-white/95 px-6 pb-6 lg:hidden">
+        <>
+        {/* Backdrop */}
+        <div className="fixed inset-0 top-0 z-40 bg-black/20 lg:hidden" onClick={() => setMobileOpen(false)} />
+        {/* Menu panel — fixed overlay with independent scroll */}
+        <div className="fixed left-0 right-0 top-[65px] bottom-0 z-50 overflow-y-auto overscroll-contain bg-white px-6 pb-6 lg:hidden">
           <div className="mt-4 space-y-4">
             {/* Mobile user info */}
             <div className="flex items-center justify-between rounded-xl bg-black/[.03] px-4 py-3">
@@ -237,6 +251,7 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
             </form>
           </div>
         </div>
+        </>
       ) : null}
     </header>
   );
