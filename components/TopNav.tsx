@@ -56,6 +56,7 @@ const navGroups = [
     id: 'admin',
     label: 'Administration',
     items: [
+      { href: '/account', label: 'My Account', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/settings', label: 'Settings', roles: ['OWNER', 'MANAGER'] },
       { href: '/settings/backup', label: 'Data Backup', roles: ['OWNER'] },
       { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['OWNER', 'MANAGER'] },
