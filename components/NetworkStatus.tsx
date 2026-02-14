@@ -94,12 +94,12 @@ export default function NetworkStatus() {
         <div className="fixed bottom-4 right-4 z-50">
             <div
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-lg transition-all ${online
-                        ? syncing
-                            ? 'bg-blue-500 text-white'
-                            : pendingCount > 0
-                                ? 'bg-amber-500 text-white'
-                                : 'bg-emerald-500 text-white'
-                        : 'bg-rose-500 text-white'
+                    ? syncing
+                        ? 'bg-blue-500 text-white'
+                        : pendingCount > 0
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-emerald-500 text-white'
+                    : 'bg-rose-500 text-white'
                     }`}
             >
                 {/* Status icon */}
@@ -109,7 +109,7 @@ export default function NetworkStatus() {
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                 ) : online ? (
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg width="16" height="16" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                     </svg>
                 ) : (

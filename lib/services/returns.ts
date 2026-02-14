@@ -1,5 +1,43 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { type JournalLine } from './shared';
+import {
+  buildQtyByProductMap,
+  fetchInventoryMap,
+  resolveAvgCost,
+  upsertInventoryBalance
+} from './shared';
+
+// ---------------------------------------------------------------------------
+// Shared helper — accumulate payments by method
+// ---------------------------------------------------------------------------
+function summarisePayments(payments: { method: string; amountPence: number }[]) {
+  return payments.reduce(
+    (acc, p) => {
+      acc.total += p.amountPence;
+      if (p.method === 'CASH') acc.cash += p.amountPence;
+      if (p.method === 'CARD') acc.card += p.amountPence;
+      if (p.method === 'TRANSFER') acc.transfer += p.amountPence;
+      return acc;
+    },
+    { total: 0, cash: 0, card: 0, transfer: 0 }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper — build avgCost map from inventory + product defaults
+// ---------------------------------------------------------------------------
+function buildAvgCostMap(
+  lines: { productId: string; product: { defaultCostBasePence: number } }[],
+  inventoryMap: Map<string, { qtyOnHandBase: number; avgCostBasePence: number }>
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const line of lines) {
+    if (map.has(line.productId)) continue;
+    map.set(line.productId, resolveAvgCost(inventoryMap, line.productId, line.product.defaultCostBasePence));
+  }
+  return map;
+}
 
 export async function createSalesReturn(input: {
   businessId: string;
@@ -26,16 +64,7 @@ export async function createSalesReturn(input: {
   });
   if (existingReturn) throw new Error('Sale already returned');
 
-  const paidByMethod = invoice.payments.reduce(
-    (acc, payment) => {
-      acc.total += payment.amountPence;
-      if (payment.method === 'CASH') acc.cash += payment.amountPence;
-      if (payment.method === 'CARD') acc.card += payment.amountPence;
-      if (payment.method === 'TRANSFER') acc.transfer += payment.amountPence;
-      return acc;
-    },
-    { total: 0, cash: 0, card: 0, transfer: 0 }
-  );
+  const paidByMethod = summarisePayments(invoice.payments);
 
   const totalPaid = paidByMethod.total;
   const refundAmount =
@@ -50,30 +79,13 @@ export async function createSalesReturn(input: {
   const arReversal = Math.max(invoice.totalPence - totalPaid, 0);
   const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
 
-  const qtyByProduct = new Map<string, number>();
-  for (const line of invoice.lines) {
-    qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.qtyBase);
-  }
+  const qtyByProduct = buildQtyByProductMap(invoice.lines);
 
-  const inventoryBalances = await prisma.inventoryBalance.findMany({
-    where: { storeId: invoice.storeId, productId: { in: Array.from(qtyByProduct.keys()) } }
-  });
-  const inventoryMap = new Map(
-    inventoryBalances.map((item) => [
-      item.productId,
-      { qtyOnHandBase: item.qtyOnHandBase, avgCostBasePence: item.avgCostBasePence }
-    ])
+  const inventoryMap = await fetchInventoryMap(
+    invoice.storeId,
+    Array.from(qtyByProduct.keys())
   );
-  const avgCostMap = new Map<string, number>();
-  for (const line of invoice.lines) {
-    if (avgCostMap.has(line.productId)) continue;
-    const inventory = inventoryMap.get(line.productId);
-    const avgCost =
-      inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-        ? inventory.avgCostBasePence
-        : line.product.defaultCostBasePence;
-    avgCostMap.set(line.productId, avgCost);
-  }
+  const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
 
   const result = await prisma.$transaction(async (tx) => {
     const created = await tx.salesReturn.create({
@@ -94,19 +106,9 @@ export async function createSalesReturn(input: {
     });
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const inventory = inventoryMap.get(productId);
-      const onHand = inventory?.qtyOnHandBase ?? 0;
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
       const avgCost = avgCostMap.get(productId) ?? 0;
-      await tx.inventoryBalance.upsert({
-        where: { storeId_productId: { storeId: invoice.storeId, productId } },
-        update: { qtyOnHandBase: onHand + qtyBase, avgCostBasePence: avgCost },
-        create: {
-          storeId: invoice.storeId,
-          productId,
-          qtyOnHandBase: onHand + qtyBase,
-          avgCostBasePence: avgCost
-        }
-      });
+      await upsertInventoryBalance(tx, invoice.storeId, productId, onHand + qtyBase, avgCost);
     }
 
     await tx.stockMovement.createMany({
@@ -127,7 +129,7 @@ export async function createSalesReturn(input: {
       return sum + avgCost * line.qtyBase;
     }, 0);
 
-    const journalLines = [
+    const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.sales, debitPence: invoice.subtotalPence },
       invoice.business.vatEnabled && invoice.vatPence > 0
         ? { accountCode: ACCOUNT_CODES.vatPayable, debitPence: invoice.vatPence }
@@ -140,7 +142,7 @@ export async function createSalesReturn(input: {
           : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
         : null,
       arReversal > 0 ? { accountCode: ACCOUNT_CODES.ar, creditPence: arReversal } : null
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[];
+    ].filter(Boolean) as JournalLine[];
 
     await postJournalEntry({
       businessId: invoice.businessId,
@@ -182,16 +184,7 @@ export async function createPurchaseReturn(input: {
   });
   if (existingReturn) throw new Error('Purchase already returned');
 
-  const paidByMethod = invoice.payments.reduce(
-    (acc, payment) => {
-      acc.total += payment.amountPence;
-      if (payment.method === 'CASH') acc.cash += payment.amountPence;
-      if (payment.method === 'CARD') acc.card += payment.amountPence;
-      if (payment.method === 'TRANSFER') acc.transfer += payment.amountPence;
-      return acc;
-    },
-    { total: 0, cash: 0, card: 0, transfer: 0 }
-  );
+  const paidByMethod = summarisePayments(invoice.payments);
 
   const totalPaid = paidByMethod.total;
   const refundAmount =
@@ -206,30 +199,13 @@ export async function createPurchaseReturn(input: {
   const apReversal = Math.max(invoice.totalPence - totalPaid, 0);
   const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
 
-  const qtyByProduct = new Map<string, number>();
-  for (const line of invoice.lines) {
-    qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.qtyBase);
-  }
+  const qtyByProduct = buildQtyByProductMap(invoice.lines);
 
-  const inventoryBalances = await prisma.inventoryBalance.findMany({
-    where: { storeId: invoice.storeId, productId: { in: Array.from(qtyByProduct.keys()) } }
-  });
-  const inventoryMap = new Map(
-    inventoryBalances.map((item) => [
-      item.productId,
-      { qtyOnHandBase: item.qtyOnHandBase, avgCostBasePence: item.avgCostBasePence }
-    ])
+  const inventoryMap = await fetchInventoryMap(
+    invoice.storeId,
+    Array.from(qtyByProduct.keys())
   );
-  const avgCostMap = new Map<string, number>();
-  for (const line of invoice.lines) {
-    if (avgCostMap.has(line.productId)) continue;
-    const inventory = inventoryMap.get(line.productId);
-    const avgCost =
-      inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-        ? inventory.avgCostBasePence
-        : line.product.defaultCostBasePence;
-    avgCostMap.set(line.productId, avgCost);
-  }
+  const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
 
   const result = await prisma.$transaction(async (tx) => {
     const created = await tx.purchaseReturn.create({
@@ -250,23 +226,13 @@ export async function createPurchaseReturn(input: {
     });
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const inventory = inventoryMap.get(productId);
-      const onHand = inventory?.qtyOnHandBase ?? 0;
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
       const avgCost = avgCostMap.get(productId) ?? 0;
       const nextOnHand = onHand - qtyBase;
       if (nextOnHand < 0) {
         throw new Error('Return would result in negative stock');
       }
-      await tx.inventoryBalance.upsert({
-        where: { storeId_productId: { storeId: invoice.storeId, productId } },
-        update: { qtyOnHandBase: nextOnHand, avgCostBasePence: avgCost },
-        create: {
-          storeId: invoice.storeId,
-          productId,
-          qtyOnHandBase: nextOnHand,
-          avgCostBasePence: avgCost
-        }
-      });
+      await upsertInventoryBalance(tx, invoice.storeId, productId, nextOnHand, avgCost);
     }
 
     await tx.stockMovement.createMany({
@@ -287,7 +253,7 @@ export async function createPurchaseReturn(input: {
       return sum + avgCost * line.qtyBase;
     }, 0);
 
-    const journalLines = [
+    const journalLines: JournalLine[] = [
       { accountCode: ACCOUNT_CODES.inventory, creditPence: inventoryCreditTotal },
       invoice.business.vatEnabled && invoice.vatPence > 0
         ? { accountCode: ACCOUNT_CODES.vatReceivable, creditPence: invoice.vatPence }
@@ -298,7 +264,7 @@ export async function createPurchaseReturn(input: {
           : { accountCode: ACCOUNT_CODES.bank, debitPence: refundAmount }
         : null,
       apReversal > 0 ? { accountCode: ACCOUNT_CODES.ap, debitPence: apReversal } : null
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[];
+    ].filter(Boolean) as JournalLine[];
 
     await postJournalEntry({
       businessId: invoice.businessId,

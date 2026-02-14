@@ -1,175 +1,183 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Prisma } from '@prisma/client';
+import { formString, formInt } from '@/lib/form-helpers';
+import {
+  withBusinessContext,
+  formAction,
+  safeAction,
+  ok,
+  err,
+  type ActionResult
+} from '@/lib/action-utils';
 
-const toInt = (value: FormDataEntryValue | null) => {
-  if (value === null) return 0;
-  const parsed = parseInt(String(value), 10);
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
+// ---------------------------------------------------------------------------
+// Shared helpers (private to this module)
+// ---------------------------------------------------------------------------
 
-export async function createProductAction(formData: FormData) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  if (!business) redirect('/settings');
-
-  const name = String(formData.get('name') || '').trim();
-  const sku = String(formData.get('sku') || '') || null;
-  const barcode = String(formData.get('barcode') || '') || null;
-  const sellingPriceBasePence = toInt(formData.get('sellingPriceBasePence'));
-  const defaultCostBasePence = toInt(formData.get('defaultCostBasePence'));
-  const vatRateBps = toInt(formData.get('vatRateBps'));
-  const promoBuyQty = toInt(formData.get('promoBuyQty'));
-  const promoGetQty = toInt(formData.get('promoGetQty'));
-  const baseUnitId = String(formData.get('baseUnitId') || '');
-  const packagingUnitId = String(formData.get('packagingUnitId') || '');
-  const packagingConversion = toInt(formData.get('packagingConversion'));
-
-  const duplicate = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM Product
-    WHERE businessId = ${business.id}
-      AND lower(name) = lower(${name})
-    LIMIT 1
-  `;
-  if (duplicate.length > 0) {
-    redirect('/products?error=duplicate-name');
-  }
-
-  await prisma.product.create({
-    data: {
-      businessId: business.id,
-      name,
-      sku,
-      barcode,
-      sellingPriceBasePence,
-      defaultCostBasePence,
-      vatRateBps,
-      promoBuyQty,
-      promoGetQty,
-      productUnits: {
-        create: [
-          {
-            unitId: baseUnitId,
-            isBaseUnit: true,
-            conversionToBase: 1
-          },
-          packagingUnitId && packagingConversion > 1 && packagingUnitId !== baseUnitId
-            ? {
-                unitId: packagingUnitId,
-                isBaseUnit: false,
-                conversionToBase: packagingConversion
-              }
-            : null
-        ].filter(Boolean) as any
-      }
-    }
-  });
-
-  redirect('/products');
+/** Check for a case-insensitive duplicate product name. */
+async function hasDuplicateName(businessId: string, name: string, excludeId?: string) {
+  const rows = excludeId
+    ? await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM Product
+        WHERE businessId = ${businessId}
+          AND lower(name) = lower(${name})
+          AND id <> ${excludeId}
+        LIMIT 1`
+    : await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM Product
+        WHERE businessId = ${businessId}
+          AND lower(name) = lower(${name})
+        LIMIT 1`;
+  return rows.length > 0;
 }
 
-export async function updateProductAction(formData: FormData) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  if (!business) redirect('/settings');
+/** Build the productUnits `create` array from base + optional packaging unit. */
+function buildUnitCreates(
+  baseUnitId: string,
+  packagingUnitId: string,
+  packagingConversion: number
+) {
+  return [
+    { unitId: baseUnitId, isBaseUnit: true, conversionToBase: 1 },
+    packagingUnitId && packagingConversion > 1 && packagingUnitId !== baseUnitId
+      ? { unitId: packagingUnitId, isBaseUnit: false, conversionToBase: packagingConversion }
+      : null
+  ].filter(Boolean) as { unitId: string; isBaseUnit: boolean; conversionToBase: number }[];
+}
 
-  const id = String(formData.get('id') || '');
-  if (!id) redirect('/products');
+/** Extract the common product fields from FormData. */
+function parseProductFields(formData: FormData) {
+  return {
+    name: formString(formData, 'name'),
+    sku: formString(formData, 'sku') || null,
+    barcode: formString(formData, 'barcode') || null,
+    sellingPriceBasePence: formInt(formData, 'sellingPriceBasePence'),
+    defaultCostBasePence: formInt(formData, 'defaultCostBasePence'),
+    vatRateBps: formInt(formData, 'vatRateBps'),
+    promoBuyQty: formInt(formData, 'promoBuyQty'),
+    promoGetQty: formInt(formData, 'promoGetQty'),
+    baseUnitId: formString(formData, 'baseUnitId'),
+    packagingUnitId: formString(formData, 'packagingUnitId'),
+    packagingConversion: formInt(formData, 'packagingConversion')
+  };
+}
 
-  const name = String(formData.get('name') || '').trim();
-  const sku = String(formData.get('sku') || '') || null;
-  const barcode = String(formData.get('barcode') || '') || null;
-  const sellingPriceBasePence = toInt(formData.get('sellingPriceBasePence'));
-  const defaultCostBasePence = toInt(formData.get('defaultCostBasePence'));
-  const vatRateBps = toInt(formData.get('vatRateBps'));
-  const promoBuyQty = toInt(formData.get('promoBuyQty'));
-  const promoGetQty = toInt(formData.get('promoGetQty'));
-  const baseUnitId = String(formData.get('baseUnitId') || '');
-  const packagingUnitId = String(formData.get('packagingUnitId') || '');
-  const packagingConversion = toInt(formData.get('packagingConversion'));
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
 
-  const duplicate = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM Product
-    WHERE businessId = ${business.id}
-      AND lower(name) = lower(${name})
-      AND id <> ${id}
-    LIMIT 1
-  `;
-  if (duplicate.length > 0) {
-    redirect(`/products/${id}?error=duplicate-name`);
-  }
+export async function createProductAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const fields = parseProductFields(formData);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.product.update({
-      where: { id },
+    if (await hasDuplicateName(businessId, fields.name)) {
+      redirect('/products?error=duplicate-name');
+    }
+
+    await prisma.product.create({
       data: {
-        name,
-        sku,
-        barcode,
-        sellingPriceBasePence,
-        defaultCostBasePence,
-        vatRateBps,
-        promoBuyQty,
-        promoGetQty
+        businessId,
+        name: fields.name,
+        sku: fields.sku,
+        barcode: fields.barcode,
+        sellingPriceBasePence: fields.sellingPriceBasePence,
+        defaultCostBasePence: fields.defaultCostBasePence,
+        vatRateBps: fields.vatRateBps,
+        promoBuyQty: fields.promoBuyQty,
+        promoGetQty: fields.promoGetQty,
+        productUnits: {
+          create: buildUnitCreates(fields.baseUnitId, fields.packagingUnitId, fields.packagingConversion)
+        }
       }
     });
 
-    const existingUnits = await tx.productUnit.findMany({ where: { productId: id } });
-
-    if (baseUnitId) {
-      const baseUnit = existingUnits.find((unit) => unit.unitId === baseUnitId);
-      if (baseUnit) {
-        await tx.productUnit.update({
-          where: { id: baseUnit.id },
-          data: { isBaseUnit: true, conversionToBase: 1 }
-        });
-      } else {
-        await tx.productUnit.create({
-          data: {
-            productId: id,
-            unitId: baseUnitId,
-            isBaseUnit: true,
-            conversionToBase: 1
-          }
-        });
-      }
-
-      await tx.productUnit.updateMany({
-        where: { productId: id, unitId: { not: baseUnitId } },
-        data: { isBaseUnit: false }
-      });
-    }
-
-    if (packagingUnitId && packagingConversion > 1 && packagingUnitId !== baseUnitId) {
-      const packagingUnit = existingUnits.find((unit) => unit.unitId === packagingUnitId);
-      if (packagingUnit) {
-        await tx.productUnit.update({
-          where: { id: packagingUnit.id },
-          data: { isBaseUnit: false, conversionToBase: packagingConversion }
-        });
-      } else {
-        await tx.productUnit.create({
-          data: {
-            productId: id,
-            unitId: packagingUnitId,
-            isBaseUnit: false,
-            conversionToBase: packagingConversion
-          }
-        });
-      }
-
-      await tx.productUnit.deleteMany({
-        where: { productId: id, isBaseUnit: false, unitId: { not: packagingUnitId } }
-      });
-    } else {
-      await tx.productUnit.deleteMany({ where: { productId: id, isBaseUnit: false } });
-    }
+    redirect('/products');
   });
+}
 
-  redirect(`/products/${id}`);
+export async function updateProductAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const id = formString(formData, 'id');
+    if (!id) redirect('/products');
+
+    const fields = parseProductFields(formData);
+
+    if (await hasDuplicateName(businessId, fields.name, id)) {
+      redirect(`/products/${id}?error=duplicate-name`);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: {
+          name: fields.name,
+          sku: fields.sku,
+          barcode: fields.barcode,
+          sellingPriceBasePence: fields.sellingPriceBasePence,
+          defaultCostBasePence: fields.defaultCostBasePence,
+          vatRateBps: fields.vatRateBps,
+          promoBuyQty: fields.promoBuyQty,
+          promoGetQty: fields.promoGetQty
+        }
+      });
+
+      const existingUnits = await tx.productUnit.findMany({ where: { productId: id } });
+
+      if (fields.baseUnitId) {
+        const baseUnit = existingUnits.find((u) => u.unitId === fields.baseUnitId);
+        if (baseUnit) {
+          await tx.productUnit.update({
+            where: { id: baseUnit.id },
+            data: { isBaseUnit: true, conversionToBase: 1 }
+          });
+        } else {
+          await tx.productUnit.create({
+            data: { productId: id, unitId: fields.baseUnitId, isBaseUnit: true, conversionToBase: 1 }
+          });
+        }
+        await tx.productUnit.updateMany({
+          where: { productId: id, unitId: { not: fields.baseUnitId } },
+          data: { isBaseUnit: false }
+        });
+      }
+
+      if (
+        fields.packagingUnitId &&
+        fields.packagingConversion > 1 &&
+        fields.packagingUnitId !== fields.baseUnitId
+      ) {
+        const packagingUnit = existingUnits.find((u) => u.unitId === fields.packagingUnitId);
+        if (packagingUnit) {
+          await tx.productUnit.update({
+            where: { id: packagingUnit.id },
+            data: { isBaseUnit: false, conversionToBase: fields.packagingConversion }
+          });
+        } else {
+          await tx.productUnit.create({
+            data: {
+              productId: id,
+              unitId: fields.packagingUnitId,
+              isBaseUnit: false,
+              conversionToBase: fields.packagingConversion
+            }
+          });
+        }
+        await tx.productUnit.deleteMany({
+          where: { productId: id, isBaseUnit: false, unitId: { not: fields.packagingUnitId } }
+        });
+      } else {
+        await tx.productUnit.deleteMany({ where: { productId: id, isBaseUnit: false } });
+      }
+    });
+
+    redirect(`/products/${id}`);
+  });
 }
 
 export async function quickCreateProductAction(input: {
@@ -183,91 +191,67 @@ export async function quickCreateProductAction(input: {
   packagingUnitId?: string | null;
   packagingConversion?: number | null;
 }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  if (!business) {
-    throw new Error('Business not found.');
-  }
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
-  const name = input.name.trim();
-  if (!name) {
-    throw new Error('Product name is required.');
-  }
+    const name = input.name.trim();
+    if (!name) return err('Product name is required.');
 
-  const duplicateName = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM Product
-    WHERE businessId = ${business.id}
-      AND lower(name) = lower(${name})
-    LIMIT 1
-  `;
-  if (duplicateName.length > 0) {
-    throw new Error('A product with that name already exists.');
-  }
-
-  if (input.barcode) {
-    const duplicateBarcode = await prisma.product.findFirst({
-      where: { businessId: business.id, barcode: input.barcode }
-    });
-    if (duplicateBarcode) {
-      throw new Error('That barcode is already in use.');
+    if (await hasDuplicateName(businessId, name)) {
+      return err('A product with that name already exists.');
     }
-  }
 
-  try {
-    const created = await prisma.product.create({
-      data: {
-        businessId: business.id,
-        name,
-        sku: input.sku ?? null,
-        barcode: input.barcode ?? null,
-        sellingPriceBasePence: input.sellingPriceBasePence,
-        defaultCostBasePence: input.defaultCostBasePence,
-        vatRateBps: input.vatRateBps,
-        productUnits: {
-          create: [
-            {
-              unitId: input.baseUnitId,
-              isBaseUnit: true,
-              conversionToBase: 1
-            },
-            input.packagingUnitId &&
-            input.packagingConversion &&
-            input.packagingConversion > 1 &&
-            input.packagingUnitId !== input.baseUnitId
-              ? {
-                  unitId: input.packagingUnitId,
-                  isBaseUnit: false,
-                  conversionToBase: input.packagingConversion
-                }
-              : null
-          ].filter(Boolean) as any
-        }
-      },
-      include: { productUnits: { include: { unit: true } } }
-    });
-
-    return {
-      id: created.id,
-      name: created.name,
-      barcode: created.barcode,
-      defaultCostBasePence: created.defaultCostBasePence,
-      sellingPriceBasePence: created.sellingPriceBasePence,
-      vatRateBps: created.vatRateBps,
-      promoBuyQty: created.promoBuyQty,
-      promoGetQty: created.promoGetQty,
-      onHandBase: 0,
-      units: created.productUnits.map((pu) => ({
-        id: pu.unitId,
-        name: pu.unit.name,
-        pluralName: pu.unit.pluralName,
-        conversionToBase: pu.conversionToBase,
-        isBaseUnit: pu.isBaseUnit
-      }))
-    };
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      throw new Error('Product already exists with the same name or barcode.');
+    if (input.barcode) {
+      const dup = await prisma.product.findFirst({
+        where: { businessId, barcode: input.barcode }
+      });
+      if (dup) return err('That barcode is already in use.');
     }
-    throw error;
-  }
+
+    try {
+      const created = await prisma.product.create({
+        data: {
+          businessId,
+          name,
+          sku: input.sku ?? null,
+          barcode: input.barcode ?? null,
+          sellingPriceBasePence: input.sellingPriceBasePence,
+          defaultCostBasePence: input.defaultCostBasePence,
+          vatRateBps: input.vatRateBps,
+          productUnits: {
+            create: buildUnitCreates(
+              input.baseUnitId,
+              input.packagingUnitId ?? '',
+              input.packagingConversion ?? 0
+            )
+          }
+        },
+        include: { productUnits: { include: { unit: true } } }
+      });
+
+      return ok({
+        id: created.id,
+        name: created.name,
+        barcode: created.barcode,
+        defaultCostBasePence: created.defaultCostBasePence,
+        sellingPriceBasePence: created.sellingPriceBasePence,
+        vatRateBps: created.vatRateBps,
+        promoBuyQty: created.promoBuyQty,
+        promoGetQty: created.promoGetQty,
+        onHandBase: 0,
+        units: created.productUnits.map((pu) => ({
+          id: pu.unitId,
+          name: pu.unit.name,
+          pluralName: pu.unit.pluralName,
+          conversionToBase: pu.conversionToBase,
+          isBaseUnit: pu.isBaseUnit
+        }))
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return err('Product already exists with the same name or barcode.');
+      }
+      throw error;
+    }
+  });
 }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { resolveAvgCost, upsertInventoryBalance } from './shared';
 
 export async function createStockAdjustment(input: {
   businessId: string;
@@ -15,12 +16,8 @@ export async function createStockAdjustment(input: {
     where: { productId: input.productId, unitId: input.unitId },
     include: { product: true }
   });
-  if (!productUnit) {
-    throw new Error('Unit not configured for product');
-  }
-  if (input.qtyInUnit <= 0) {
-    throw new Error('Quantity must be at least 1');
-  }
+  if (!productUnit) throw new Error('Unit not configured for product');
+  if (input.qtyInUnit <= 0) throw new Error('Quantity must be at least 1');
 
   const qtyBase = input.qtyInUnit * productUnit.conversionToBase;
   const signedQtyBase = input.direction === 'DECREASE' ? -qtyBase : qtyBase;
@@ -29,14 +26,14 @@ export async function createStockAdjustment(input: {
     where: { storeId_productId: { storeId: input.storeId, productId: input.productId } }
   });
   const onHand = inventory?.qtyOnHandBase ?? 0;
-  const currentAvgCost =
-    inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-      ? inventory.avgCostBasePence
-      : productUnit.product.defaultCostBasePence;
+  const invMap = new Map(
+    inventory
+      ? [[input.productId, { qtyOnHandBase: onHand, avgCostBasePence: inventory.avgCostBasePence }]]
+      : []
+  );
+  const currentAvgCost = resolveAvgCost(invMap, input.productId, productUnit.product.defaultCostBasePence);
   const nextOnHand = onHand + signedQtyBase;
-  if (nextOnHand < 0) {
-    throw new Error('Adjustment would result in negative stock');
-  }
+  if (nextOnHand < 0) throw new Error('Adjustment would result in negative stock');
 
   const adjustment = await prisma.$transaction(async (tx) => {
     const created = await tx.stockAdjustment.create({
@@ -52,16 +49,7 @@ export async function createStockAdjustment(input: {
       }
     });
 
-    await tx.inventoryBalance.upsert({
-      where: { storeId_productId: { storeId: input.storeId, productId: input.productId } },
-      update: { qtyOnHandBase: nextOnHand, avgCostBasePence: currentAvgCost },
-      create: {
-        storeId: input.storeId,
-        productId: input.productId,
-        qtyOnHandBase: nextOnHand,
-        avgCostBasePence: currentAvgCost
-      }
-    });
+    await upsertInventoryBalance(tx, input.storeId, input.productId, nextOnHand, currentAvgCost);
 
     await tx.stockMovement.create({
       data: {

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { logout } from '@/app/actions/auth';
 import { getFeatures, type BusinessMode } from '@/lib/features';
+import InstallButton from './InstallButton';
 
 const navGroups = [
   {
@@ -107,7 +108,7 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-6 py-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <img src="/icon.svg" alt="TillFlow" className="h-8 w-8 rounded-lg" />
+            <img src="/icon.svg" alt="TillFlow" width="32" height="32" className="h-8 w-8 rounded-lg" />
             <div className="text-lg font-display font-bold">
               <span className="text-emerald-600">Till</span>
               <span className="text-gray-700">Flow</span>
@@ -163,6 +164,7 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
         </nav>
 
         <div className="flex items-center gap-3">
+          <InstallButton />
           <div className="hidden text-right text-xs text-black/50 sm:block">
             <div className="font-semibold text-black">{user.name}</div>
             <div className="uppercase tracking-[0.2em]">{user.role}</div>
@@ -212,6 +214,9 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
                 </div>
               </div>
             ))}
+            <div className="mt-4 flex justify-center">
+              <InstallButton />
+            </div>
             <form action={logout}>
               <button type="submit" className="btn-ghost w-full text-xs">
                 Sign out

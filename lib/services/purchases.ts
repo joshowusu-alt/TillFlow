@@ -1,10 +1,16 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import {
+  filterPositivePayments,
+  splitPayments,
+  derivePaymentStatus,
+  creditCashBankLines,
+  type PaymentInput,
+  type JournalLine
+} from './shared';
+import { fetchInventoryMap, upsertInventoryBalance } from './shared';
 
-export type PurchasePaymentInput = {
-  method: 'CASH' | 'CARD' | 'TRANSFER';
-  amountPence: number;
-};
+export type PurchasePaymentInput = PaymentInput;
 
 export type PurchaseLineInput = {
   productId: string;
@@ -69,22 +75,20 @@ export async function createPurchase(input: CreatePurchaseInput) {
     };
   });
 
-  const initialPayments = input.payments.filter((payment) => payment.amountPence > 0);
+  const positivePayments = filterPositivePayments(input.payments);
   const subtotal = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
   const vatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
   const total = subtotal + vatTotal;
 
   const payments =
-    initialPayments.length === 0 && input.paymentStatus === 'PAID'
-      ? [{ method: 'CASH', amountPence: total }]
-      : initialPayments;
-  const totalPaid = payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    positivePayments.length === 0 && input.paymentStatus === 'PAID'
+      ? [{ method: 'CASH' as const, amountPence: total }]
+      : positivePayments;
+  const totalPaid = payments.reduce((sum, p) => sum + p.amountPence, 0);
   if (totalPaid > total) {
     throw new Error('Payment exceeds total due');
   }
-  const balanceDue = Math.max(total - totalPaid, 0);
-  const finalStatus =
-    balanceDue === 0 ? 'PAID' : totalPaid === 0 ? 'UNPAID' : 'PART_PAID';
+  const finalStatus = derivePaymentStatus(total, totalPaid);
 
   const productTotals = new Map<
     string,
@@ -135,44 +139,23 @@ export async function createPurchase(input: CreatePurchaseInput) {
       }
     });
 
-    const inventoryBalances = await tx.inventoryBalance.findMany({
-      where: { storeId: input.storeId, productId: { in: Array.from(productTotals.keys()) } }
-    });
-    const inventoryMap = new Map(
-      inventoryBalances.map((item) => [
-        item.productId,
-        { qtyOnHandBase: item.qtyOnHandBase, avgCostBasePence: item.avgCostBasePence }
-      ])
+    const inventoryMap = await fetchInventoryMap(
+      input.storeId,
+      Array.from(productTotals.keys()),
+      tx as any
     );
 
-    const nextAverageMap = new Map<string, number>();
     for (const [productId, totals] of productTotals.entries()) {
-      const inventory = inventoryMap.get(productId);
-      const onHand = inventory?.qtyOnHandBase ?? 0;
+      const inv = inventoryMap.get(productId);
+      const onHand = inv?.qtyOnHandBase ?? 0;
       const currentAvg =
-        inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-          ? inventory.avgCostBasePence
+        inv?.avgCostBasePence && inv.avgCostBasePence > 0
+          ? inv.avgCostBasePence
           : totals.defaultCostBasePence;
       const existingValue = onHand * currentAvg;
       const newQty = onHand + totals.qtyBase;
       const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      nextAverageMap.set(productId, newAvg);
-    }
-
-    for (const [productId, totals] of productTotals.entries()) {
-      const inventory = inventoryMap.get(productId);
-      const onHand = inventory?.qtyOnHandBase ?? 0;
-      const nextAvg = nextAverageMap.get(productId) ?? 0;
-      await tx.inventoryBalance.upsert({
-        where: { storeId_productId: { storeId: input.storeId, productId } },
-        update: { qtyOnHandBase: onHand + totals.qtyBase, avgCostBasePence: nextAvg },
-        create: {
-          storeId: input.storeId,
-          productId,
-          qtyOnHandBase: onHand + totals.qtyBase,
-          avgCostBasePence: nextAvg
-        }
-      });
+      await upsertInventoryBalance(tx, input.storeId, productId, newQty, newAvg);
     }
 
     await tx.stockMovement.createMany({
@@ -190,23 +173,17 @@ export async function createPurchase(input: CreatePurchaseInput) {
     return created;
   });
 
-  const cashPaid = payments
-    .filter((payment) => payment.method === 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const bankPaid = payments
-    .filter((payment) => payment.method !== 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const apAmount = total - cashPaid - bankPaid;
+  const split = splitPayments(payments);
+  const apAmount = total - split.totalPence;
 
-  const journalLines = [
+  const journalLines: JournalLine[] = [
     { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
     business.vatEnabled && vatTotal > 0
       ? { accountCode: ACCOUNT_CODES.vatReceivable, debitPence: vatTotal }
       : null,
-    cashPaid > 0 ? { accountCode: ACCOUNT_CODES.cash, creditPence: cashPaid } : null,
-    bankPaid > 0 ? { accountCode: ACCOUNT_CODES.bank, creditPence: bankPaid } : null,
+    ...creditCashBankLines(split),
     apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
-  ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[];
+  ].filter(Boolean) as JournalLine[];
 
   await postJournalEntry({
     businessId: input.businessId,

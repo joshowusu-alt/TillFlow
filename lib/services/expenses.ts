@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { creditCashBankLines, splitPayments, type JournalLine } from './shared';
 
 export type ExpenseInput = {
   businessId: string;
@@ -18,19 +19,13 @@ export type ExpenseInput = {
 };
 
 export async function createExpense(input: ExpenseInput) {
-  if (input.amountPence <= 0) {
-    throw new Error('Amount must be greater than 0');
-  }
+  if (input.amountPence <= 0) throw new Error('Amount must be greater than 0');
 
   const account = await prisma.account.findUnique({ where: { id: input.accountId } });
-  if (!account) {
-    throw new Error('Expense account not found');
-  }
+  if (!account) throw new Error('Expense account not found');
 
   const amountPaid = Math.max(input.amountPaidPence ?? 0, 0);
-  if (amountPaid > input.amountPence) {
-    throw new Error('Paid amount cannot exceed expense total');
-  }
+  if (amountPaid > input.amountPence) throw new Error('Paid amount cannot exceed expense total');
 
   const paymentStatus =
     input.paymentStatus === 'UNPAID'
@@ -74,8 +69,10 @@ export async function createExpense(input: ExpenseInput) {
     include: { account: true }
   });
 
-  const cashCredit = amountPaid > 0 && input.method === 'CASH' ? amountPaid : 0;
-  const bankCredit = amountPaid > 0 && input.method !== 'CASH' ? amountPaid : 0;
+  const method = input.method ?? 'CASH';
+  const split = splitPayments(
+    amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
+  );
   const apCredit = Math.max(input.amountPence - amountPaid, 0);
 
   await postJournalEntry({
@@ -85,10 +82,9 @@ export async function createExpense(input: ExpenseInput) {
     referenceId: expense.id,
     lines: [
       { accountCode: expense.account.code, debitPence: input.amountPence },
-      cashCredit > 0 ? { accountCode: ACCOUNT_CODES.cash, creditPence: cashCredit } : null,
-      bankCredit > 0 ? { accountCode: ACCOUNT_CODES.bank, creditPence: bankCredit } : null,
+      ...creditCashBankLines(split),
       apCredit > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apCredit } : null
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[]
+    ].filter(Boolean) as JournalLine[]
   });
 
   return expense;

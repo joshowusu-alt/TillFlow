@@ -1,29 +1,28 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { formString, formOptionalString } from '@/lib/form-helpers';
+import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 
-export async function updateBusinessAction(formData: FormData) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  if (!business) {
-    redirect('/onboarding');
-  }
+export async function updateBusinessAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
-  const name = String(formData.get('name') || '');
-  const currency = String(formData.get('currency') || 'GBP');
-  const vatEnabled = formData.get('vatEnabled') === 'on';
-  const vatNumber = String(formData.get('vatNumber') || '') || null;
-  const mode = (String(formData.get('mode') || 'SIMPLE') || 'SIMPLE').toUpperCase();
-  const receiptTemplate = String(formData.get('receiptTemplate') || 'THERMAL_80');
-  const printMode = String(formData.get('printMode') || 'DIRECT_ESC_POS');
-  const printerName = String(formData.get('printerName') || '') || null;
+    const name = formString(formData, 'name');
+    const currency = formString(formData, 'currency') || 'GBP';
+    const vatEnabled = formData.get('vatEnabled') === 'on';
+    const vatNumber = formOptionalString(formData, 'vatNumber');
+    const mode = (formString(formData, 'mode') || 'SIMPLE').toUpperCase();
+    const receiptTemplate = formString(formData, 'receiptTemplate') || 'THERMAL_80';
+    const printMode = formString(formData, 'printMode') || 'DIRECT_ESC_POS';
+    const printerName = formOptionalString(formData, 'printerName');
 
-  await prisma.business.update({
-    where: { id: business.id },
-    data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName }
+    await prisma.business.update({
+      where: { id: businessId },
+      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName }
+    });
+
+    redirect('/settings');
   });
-
-  redirect('/settings');
 }

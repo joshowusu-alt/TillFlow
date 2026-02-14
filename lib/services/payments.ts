@@ -1,11 +1,17 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import {
+  type PaymentInput,
+  filterPositivePayments,
+  splitPayments,
+  derivePaymentStatus,
+  debitCashBankLines,
+  type JournalLine
+} from './shared';
 
-type PaymentInput = {
-  method: 'CASH' | 'CARD' | 'TRANSFER';
-  amountPence: number;
-};
-
+/**
+ * Record additional payment(s) against an existing sales invoice.
+ */
 export async function recordCustomerPayment(
   businessId: string,
   invoiceId: string,
@@ -17,54 +23,43 @@ export async function recordCustomerPayment(
   });
   if (!invoice) throw new Error('Invoice not found');
 
-  const newPayments = payments.filter((payment) => payment.amountPence > 0);
+  const newPayments = filterPositivePayments(payments);
   if (newPayments.length === 0) return invoice;
 
   await prisma.salesPayment.createMany({
-    data: newPayments.map((payment) => ({
+    data: newPayments.map((p) => ({
       salesInvoiceId: invoiceId,
-      method: payment.method,
-      amountPence: payment.amountPence
+      method: p.method,
+      amountPence: p.amountPence
     }))
   });
 
-  const totalPaid =
-    invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0) +
-    newPayments.reduce((sum, payment) => sum + payment.amountPence, 0);
+  const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
+  const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
+  const totalPaid = previouslyPaid + newPaid;
+  if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
 
-  const remaining = invoice.totalPence - totalPaid;
-  if (remaining < 0) {
-    throw new Error('Payment exceeds outstanding balance');
-  }
-  const status = remaining <= 0 ? 'PAID' : totalPaid > 0 ? 'PART_PAID' : 'UNPAID';
+  const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+  await prisma.salesInvoice.update({ where: { id: invoiceId }, data: { paymentStatus: status } });
 
-  await prisma.salesInvoice.update({
-    where: { id: invoiceId },
-    data: { paymentStatus: status }
-  });
-
-  const cashPaid = newPayments
-    .filter((payment) => payment.method === 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const bankPaid = newPayments
-    .filter((payment) => payment.method !== 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-
+  const split = splitPayments(newPayments);
   await postJournalEntry({
     businessId,
     description: `Customer receipt ${invoiceId}`,
     referenceType: 'CUSTOMER_RECEIPT',
     referenceId: invoiceId,
     lines: [
-      cashPaid > 0 ? { accountCode: ACCOUNT_CODES.cash, debitPence: cashPaid } : null,
-      bankPaid > 0 ? { accountCode: ACCOUNT_CODES.bank, debitPence: bankPaid } : null,
-      { accountCode: ACCOUNT_CODES.ar, creditPence: cashPaid + bankPaid }
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[]
+      ...debitCashBankLines(split),
+      { accountCode: ACCOUNT_CODES.ar, creditPence: split.totalPence }
+    ].filter(Boolean) as JournalLine[]
   });
 
   return invoice;
 }
 
+/**
+ * Record additional payment(s) against an existing purchase invoice.
+ */
 export async function recordSupplierPayment(
   businessId: string,
   invoiceId: string,
@@ -76,49 +71,36 @@ export async function recordSupplierPayment(
   });
   if (!invoice) throw new Error('Invoice not found');
 
-  const newPayments = payments.filter((payment) => payment.amountPence > 0);
+  const newPayments = filterPositivePayments(payments);
   if (newPayments.length === 0) return invoice;
 
   await prisma.purchasePayment.createMany({
-    data: newPayments.map((payment) => ({
+    data: newPayments.map((p) => ({
       purchaseInvoiceId: invoiceId,
-      method: payment.method,
-      amountPence: payment.amountPence
+      method: p.method,
+      amountPence: p.amountPence
     }))
   });
 
-  const totalPaid =
-    invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0) +
-    newPayments.reduce((sum, payment) => sum + payment.amountPence, 0);
+  const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
+  const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
+  const totalPaid = previouslyPaid + newPaid;
+  if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
 
-  const remaining = invoice.totalPence - totalPaid;
-  if (remaining < 0) {
-    throw new Error('Payment exceeds outstanding balance');
-  }
-  const status = remaining <= 0 ? 'PAID' : totalPaid > 0 ? 'PART_PAID' : 'UNPAID';
+  const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+  await prisma.purchaseInvoice.update({ where: { id: invoiceId }, data: { paymentStatus: status } });
 
-  await prisma.purchaseInvoice.update({
-    where: { id: invoiceId },
-    data: { paymentStatus: status }
-  });
-
-  const cashPaid = newPayments
-    .filter((payment) => payment.method === 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const bankPaid = newPayments
-    .filter((payment) => payment.method !== 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-
+  const split = splitPayments(newPayments);
   await postJournalEntry({
     businessId,
     description: `Supplier payment ${invoiceId}`,
     referenceType: 'SUPPLIER_PAYMENT',
     referenceId: invoiceId,
     lines: [
-      { accountCode: ACCOUNT_CODES.ap, debitPence: cashPaid + bankPaid },
-      cashPaid > 0 ? { accountCode: ACCOUNT_CODES.cash, creditPence: cashPaid } : null,
-      bankPaid > 0 ? { accountCode: ACCOUNT_CODES.bank, creditPence: bankPaid } : null
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[]
+      { accountCode: ACCOUNT_CODES.ap, debitPence: split.totalPence },
+      ...split.cashPence > 0 ? [{ accountCode: ACCOUNT_CODES.cash, creditPence: split.cashPence }] : [],
+      ...split.bankPence > 0 ? [{ accountCode: ACCOUNT_CODES.bank, creditPence: split.bankPence }] : []
+    ]
   });
 
   return invoice;

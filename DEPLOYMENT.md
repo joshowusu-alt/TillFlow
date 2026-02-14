@@ -67,6 +67,22 @@ To access from tablets, phones, or other computers on the same WiFi:
 
 ---
 
+## Getting Updates
+
+Since the code is on GitHub, you can easily update TillFlow:
+
+```bash
+cd C:\TillFlow
+git pull origin master
+npm install
+npm run build
+npm start
+```
+
+Repository: https://github.com/joshowusu-alt/TillFlow
+
+---
+
 ## Step 5: First Login & Setup
 
 1. Open http://localhost:3000 (or the IP address on other devices)

@@ -146,15 +146,17 @@ export default function PosClient({ business, store, tills, products, customers,
   const selectedUnits = selectedProduct?.units ?? [];
   const selectedUnit = selectedUnits.find((unit) => unit.id === unitId) ?? selectedUnits[0];
 
-  const parseCurrencyToPence = (value: string) => {
-    const trimmed = value.replace(/,/g, '').trim();
+  const parseCurrencyToPence = (value: string | undefined | null) => {
+    if (!value) return 0;
+    const trimmed = String(value).replace(/,/g, '').trim();
     if (!trimmed) return 0;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
   };
 
-  const parsePercent = (value: string) => {
-    const trimmed = value.replace(/,/g, '').trim();
+  const parsePercent = (value: string | undefined | null) => {
+    if (!value) return 0;
+    const trimmed = String(value).replace(/,/g, '').trim();
     if (!trimmed) return 0;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? 0 : parsed;
@@ -212,7 +214,7 @@ export default function PosClient({ business, store, tills, products, customers,
     }
     startTransition(async () => {
       try {
-        const created = await quickCreateProductAction({
+        const result = await quickCreateProductAction({
           name: quickName.trim(),
           sku: quickSku.trim() || null,
           barcode: quickBarcode.trim() || null,
@@ -223,6 +225,8 @@ export default function PosClient({ business, store, tills, products, customers,
           packagingUnitId: quickPackagingUnitId || null,
           packagingConversion: parseInt(quickPackagingConversion, 10) || 1
         });
+        if (!result.success) throw new Error(result.error);
+        const created = result.data;
         setQuickAddOpen(false);
         setQuickAddError(null);
         setProductId(created.id);
@@ -575,20 +579,20 @@ export default function PosClient({ business, store, tills, products, customers,
         };
       })
       .filter(Boolean) as Array<
-      CartLine & {
-        product: ProductDto;
-        unit: UnitDto;
-        qtyLabel: string;
-        unitPrice: number;
-        subtotal: number;
-        lineDiscount: number;
-        promoDiscount: number;
-        netSubtotal: number;
-        vat: number;
-        total: number;
-        promoLabel: string | null;
-      }
-    >;
+        CartLine & {
+          product: ProductDto;
+          unit: UnitDto;
+          qtyLabel: string;
+          unitPrice: number;
+          subtotal: number;
+          lineDiscount: number;
+          promoDiscount: number;
+          netSubtotal: number;
+          vat: number;
+          total: number;
+          promoLabel: string | null;
+        }
+      >;
   }, [cart, productOptions, business.vatEnabled]);
 
   const totals = cartDetails.reduce(
@@ -960,8 +964,8 @@ export default function PosClient({ business, store, tills, products, customers,
               {errorParam === 'customer-required'
                 ? 'Select a customer for credit or part-paid sales.'
                 : errorParam === 'insufficient-stock'
-                ? 'One or more items exceed available stock.'
-                : 'Unable to complete sale. Please review the form.'}
+                  ? 'One or more items exceed available stock.'
+                  : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
@@ -1020,9 +1024,8 @@ export default function PosClient({ business, store, tills, products, customers,
                         <button
                           key={product.id}
                           type="button"
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-black/5 ${
-                            product.id === productId ? 'bg-accent/10 font-semibold' : ''
-                          }`}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-black/5 ${product.id === productId ? 'bg-accent/10 font-semibold' : ''
+                            }`}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setProductId(product.id);
@@ -1143,13 +1146,12 @@ export default function PosClient({ business, store, tills, products, customers,
                       setQtyInUnitInput('1');
                       barcodeRef.current?.focus();
                     }}
-                    className={`group relative rounded-xl border p-4 text-left transition-all active:scale-95 ${
-                      disabled
+                    className={`group relative rounded-xl border p-4 text-left transition-all active:scale-95 ${disabled
                         ? 'border-black/5 bg-black/5 text-black/30 cursor-not-allowed'
                         : lowStock
-                        ? 'border-amber-200 bg-amber-50 hover:border-amber-300 hover:shadow-md'
-                        : 'border-black/10 bg-white hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5'
-                    }`}
+                          ? 'border-amber-200 bg-amber-50 hover:border-amber-300 hover:shadow-md'
+                          : 'border-black/10 bg-white hover:border-emerald-300 hover:shadow-md hover:-translate-y-0.5'
+                      }`}
                   >
                     {lowStock && !disabled && (
                       <div className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">
@@ -1284,10 +1286,10 @@ export default function PosClient({ business, store, tills, products, customers,
                               prev.map((item) =>
                                 item.id === line.id
                                   ? {
-                                      ...item,
-                                      discountType: nextType,
-                                      discountValue: nextType === 'NONE' ? '' : item.discountValue ?? ''
-                                    }
+                                    ...item,
+                                    discountType: nextType,
+                                    discountValue: nextType === 'NONE' ? '' : item.discountValue ?? ''
+                                  }
                                   : item
                               )
                             );
@@ -1387,15 +1389,13 @@ export default function PosClient({ business, store, tills, products, customers,
 
           {/* Customer section - highlighted when required for credit sales */}
           {requiresCustomer && (
-            <div className={`rounded-xl border-2 p-4 mb-4 transition-all ${
-              !customerId
+            <div className={`rounded-xl border-2 p-4 mb-4 transition-all ${!customerId
                 ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
                 : 'border-emerald-400 bg-emerald-50'
-            }`}>
+              }`}>
               <div className="flex items-center gap-3 mb-3">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                  !customerId ? 'bg-amber-400' : 'bg-emerald-500'
-                }`}>
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full ${!customerId ? 'bg-amber-400' : 'bg-emerald-500'
+                  }`}>
                   <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>

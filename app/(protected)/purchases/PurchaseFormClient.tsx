@@ -161,7 +161,7 @@ export default function PurchaseFormClient({
     }
     startTransition(async () => {
       try {
-        const created = await quickCreateProductAction({
+        const result = await quickCreateProductAction({
           name: quickName.trim(),
           sku: quickSku.trim() || null,
           barcode: quickBarcode.trim() || null,
@@ -172,6 +172,8 @@ export default function PurchaseFormClient({
           packagingUnitId: quickPackagingUnitId || null,
           packagingConversion: parseInt(quickPackagingConversion, 10) || 1
         });
+        if (!result.success) throw new Error(result.error);
+        const created = result.data;
         setProductOptions((prev) => [...prev, created]);
         setProductId(created.id);
         const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];

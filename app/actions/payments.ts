@@ -1,60 +1,47 @@
 'use server';
 
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
-import { requireUser } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { toPence } from '@/lib/form-helpers';
+import { formString, formPence } from '@/lib/form-helpers';
+import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import type { PaymentMethod, PaymentInput } from '@/lib/services/shared';
 
-const toPence = (value: FormDataEntryValue | null) => {
-  if (value === null) return 0;
-  const trimmed = String(value).replace(/,/g, '').trim();
-  if (!trimmed) return 0;
-  const parsed = Number(trimmed);
-  return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
-};
-
-export async function recordCustomerPaymentAction(formData: FormData) {
-  await requireUser();
-  const business = await prisma.business.findFirst();
-  if (!business) redirect('/settings');
-
-  const invoiceId = String(formData.get('invoiceId') || '');
+/** Build a payments array from FormData — supports both single-amount and split modes. */
+function parsePayments(formData: FormData): PaymentInput[] {
   const amount = formData.get('amount');
-  const method = String(formData.get('paymentMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER';
-  if (amount !== null) {
-    await recordCustomerPayment(business.id, invoiceId, [
-      { method, amountPence: toPence(amount) }
-    ]);
-  } else {
-    await recordCustomerPayment(business.id, invoiceId, [
-      { method: 'CASH', amountPence: toPence(formData.get('cashPaid')) },
-      { method: 'CARD', amountPence: toPence(formData.get('cardPaid')) },
-      { method: 'TRANSFER', amountPence: toPence(formData.get('transferPaid')) }
-    ]);
-  }
+  const method = (formString(formData, 'paymentMethod') || 'CASH') as PaymentMethod;
 
-  redirect('/payments/customer-receipts');
+  if (amount !== null) {
+    return [{ method, amountPence: toPence(amount) }];
+  }
+  return [
+    { method: 'CASH', amountPence: toPence(formData.get('cashPaid')) },
+    { method: 'CARD', amountPence: toPence(formData.get('cardPaid')) },
+    { method: 'TRANSFER', amountPence: toPence(formData.get('transferPaid')) }
+  ];
 }
 
-export async function recordSupplierPaymentAction(formData: FormData) {
-  await requireUser();
-  const business = await prisma.business.findFirst();
-  if (!business) redirect('/settings');
+export async function recordCustomerPaymentAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext();
 
-  const invoiceId = String(formData.get('invoiceId') || '');
-  const amount = formData.get('amount');
-  const method = String(formData.get('paymentMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER';
-  if (amount !== null) {
-    await recordSupplierPayment(business.id, invoiceId, [
-      { method, amountPence: toPence(amount) }
-    ]);
-  } else {
-    await recordSupplierPayment(business.id, invoiceId, [
-      { method: 'CASH', amountPence: toPence(formData.get('cashPaid')) },
-      { method: 'CARD', amountPence: toPence(formData.get('cardPaid')) },
-      { method: 'TRANSFER', amountPence: toPence(formData.get('transferPaid')) }
-    ]);
-  }
+    const invoiceId = formString(formData, 'invoiceId');
+    const payments = parsePayments(formData);
 
-  redirect('/payments/supplier-payments');
+    await recordCustomerPayment(businessId, invoiceId, payments);
+    redirect('/payments/customer-receipts');
+  });
+}
+
+export async function recordSupplierPaymentAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext();
+
+    const invoiceId = formString(formData, 'invoiceId');
+    const payments = parsePayments(formData);
+
+    await recordSupplierPayment(businessId, invoiceId, payments);
+    redirect('/payments/supplier-payments');
+  });
 }

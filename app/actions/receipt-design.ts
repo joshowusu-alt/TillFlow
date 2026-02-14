@@ -1,31 +1,30 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { formOptionalString } from '@/lib/form-helpers';
+import { withBusinessContext, formAction, ok, type ActionResult } from '@/lib/action-utils';
 
-export async function updateReceiptDesignAction(formData: FormData) {
-    await requireRole(['OWNER', 'MANAGER']);
-
-    const business = await prisma.business.findFirst();
-    if (!business) {
-        throw new Error('Business not found');
-    }
+export async function updateReceiptDesignAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
 
     await prisma.business.update({
-        where: { id: business.id },
-        data: {
-            receiptHeader: formData.get('receiptHeader') as string || null,
-            receiptFooter: formData.get('receiptFooter') as string || null,
-            receiptLogoUrl: formData.get('receiptLogoUrl') as string || null,
-            receiptShowVatNumber: formData.get('receiptShowVatNumber') === 'on',
-            receiptShowAddress: formData.get('receiptShowAddress') === 'on',
-            socialMediaHandle: formData.get('socialMediaHandle') as string || null,
-            address: formData.get('address') as string || null,
-            phone: formData.get('phone') as string || null
-        }
+      where: { id: businessId },
+      data: {
+        receiptHeader: formOptionalString(formData, 'receiptHeader'),
+        receiptFooter: formOptionalString(formData, 'receiptFooter'),
+        receiptLogoUrl: formOptionalString(formData, 'receiptLogoUrl'),
+        receiptShowVatNumber: formData.get('receiptShowVatNumber') === 'on',
+        receiptShowAddress: formData.get('receiptShowAddress') === 'on',
+        socialMediaHandle: formOptionalString(formData, 'socialMediaHandle'),
+        address: formOptionalString(formData, 'address'),
+        phone: formOptionalString(formData, 'phone')
+      }
     });
 
     revalidatePath('/settings/receipt-design');
     revalidatePath('/receipts');
+    return ok();
+  });
 }

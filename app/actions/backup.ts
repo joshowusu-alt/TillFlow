@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 
 export interface BackupData {
     version: string;
@@ -34,14 +34,12 @@ export interface BackupData {
     shifts: any[];
 }
 
-export async function exportDatabaseAction(): Promise<{ success: true; data: BackupData } | { success: false; error: string }> {
-    try {
-        await requireRole(['OWNER']);
+export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER']);
 
-        const business = await prisma.business.findFirst();
-        if (!business) {
-            return { success: false, error: 'No business found' };
-        }
+    const business = await prisma.business.findUnique({ where: { id: businessId } });
+    if (!business) return err('No business found');
 
         // Export all tables
         const [
@@ -71,27 +69,27 @@ export async function exportDatabaseAction(): Promise<{ success: true; data: Bac
             tills,
             shifts
         ] = await Promise.all([
-            prisma.store.findMany({ where: { businessId: business.id } }),
-            prisma.user.findMany({ where: { businessId: business.id }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }), // Exclude passwordHash
-            prisma.customer.findMany({ where: { businessId: business.id } }),
-            prisma.supplier.findMany({ where: { businessId: business.id } }),
-            prisma.product.findMany({ where: { businessId: business.id } }),
+            prisma.store.findMany({ where: { businessId } }),
+            prisma.user.findMany({ where: { businessId }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }),
+            prisma.customer.findMany({ where: { businessId } }),
+            prisma.supplier.findMany({ where: { businessId } }),
+            prisma.product.findMany({ where: { businessId } }),
             prisma.unit.findMany(),
             prisma.productUnit.findMany(),
             prisma.inventoryBalance.findMany(),
-            prisma.account.findMany({ where: { businessId: business.id } }),
-            prisma.journalEntry.findMany({ where: { businessId: business.id } }),
+            prisma.account.findMany({ where: { businessId } }),
+            prisma.journalEntry.findMany({ where: { businessId } }),
             prisma.journalLine.findMany(),
-            prisma.salesInvoice.findMany({ where: { businessId: business.id } }),
+            prisma.salesInvoice.findMany({ where: { businessId } }),
             prisma.salesInvoiceLine.findMany(),
             prisma.salesPayment.findMany(),
             prisma.salesReturn.findMany(),
-            prisma.purchaseInvoice.findMany({ where: { businessId: business.id } }),
+            prisma.purchaseInvoice.findMany({ where: { businessId } }),
             prisma.purchaseInvoiceLine.findMany(),
             prisma.purchasePayment.findMany(),
             prisma.purchaseReturn.findMany(),
-            prisma.expense.findMany({ where: { businessId: business.id } }),
-            prisma.expensePayment.findMany({ where: { businessId: business.id } }),
+            prisma.expense.findMany({ where: { businessId } }),
+            prisma.expensePayment.findMany({ where: { businessId } }),
             prisma.stockMovement.findMany(),
             prisma.stockAdjustment.findMany(),
             prisma.till.findMany(),
@@ -129,21 +127,17 @@ export async function exportDatabaseAction(): Promise<{ success: true; data: Bac
             shifts
         };
 
-        return { success: true, data: backupData };
-    } catch (error) {
-        console.error('Export error:', error);
-        return { success: false, error: error instanceof Error ? error.message : 'Export failed' };
-    }
+    return ok(backupData);
+  });
 }
 
-export async function importDatabaseAction(backup: BackupData): Promise<{ success: true; message: string } | { success: false; error: string }> {
-    try {
-        await requireRole(['OWNER']);
+export async function importDatabaseAction(backup: BackupData): Promise<ActionResult<{ message: string }>> {
+  return safeAction(async () => {
+    await withBusinessContext(['OWNER']);
 
-        // Validate backup structure
-        if (!backup.version || !backup.business || !backup.exportedAt) {
-            return { success: false, error: 'Invalid backup file format' };
-        }
+    if (!backup.version || !backup.business || !backup.exportedAt) {
+      return err('Invalid backup file format');
+    }
 
         // Clear existing data (in reverse order of dependencies)
         await prisma.$transaction([
@@ -310,12 +304,8 @@ export async function importDatabaseAction(backup: BackupData): Promise<{ succes
             await prisma.journalLine.create({ data: line });
         }
 
-        return {
-            success: true,
-            message: `Restored backup from ${new Date(backup.exportedAt).toLocaleString()}. Users will need to reset their passwords.`
-        };
-    } catch (error) {
-        console.error('Import error:', error);
-        return { success: false, error: error instanceof Error ? error.message : 'Import failed' };
-    }
+    return ok({
+      message: `Restored backup from ${new Date(backup.exportedAt).toLocaleString()}. Users will need to reset their passwords.`
+    });
+  });
 }

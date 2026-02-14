@@ -81,7 +81,7 @@ export default function BackupClient() {
             const result = await importDatabaseAction(previewData);
 
             if (result.success) {
-                setMessage({ type: 'success', text: result.message });
+                setMessage({ type: 'success', text: result.data.message });
                 setPreviewData(null);
                 if (fileInputRef.current) {
                     fileInputRef.current.value = '';

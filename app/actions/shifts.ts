@@ -1,102 +1,90 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { formString } from '@/lib/form-helpers';
+import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 
-export async function openShiftAction(formData: FormData) {
-  const user = await requireUser();
-  const tillId = String(formData.get('tillId') || '');
-  const openingCash = Math.round(Number(formData.get('openingCash') || 0) * 100);
+export async function openShiftAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user } = await withBusinessContext();
 
-  if (!tillId) {
-    throw new Error('Till is required');
-  }
+    const tillId = formString(formData, 'tillId');
+    const openingCash = Math.round(Number(formData.get('openingCash') || 0) * 100);
 
-  // Check if there's already an open shift for this till
-  const existingShift = await prisma.shift.findFirst({
-    where: { tillId, status: 'OPEN' }
+    if (!tillId) return err('Till is required');
+
+    const existingShift = await prisma.shift.findFirst({
+      where: { tillId, status: 'OPEN' }
+    });
+    if (existingShift) return err('There is already an open shift for this till');
+
+    const shift = await prisma.shift.create({
+      data: {
+        tillId,
+        userId: user.id,
+        openingCashPence: openingCash,
+        status: 'OPEN'
+      }
+    });
+
+    revalidatePath('/shifts');
+    return ok({ id: shift.id });
   });
-
-  if (existingShift) {
-    throw new Error('There is already an open shift for this till');
-  }
-
-  const shift = await prisma.shift.create({
-    data: {
-      tillId,
-      userId: user.id,
-      openingCashPence: openingCash,
-      status: 'OPEN'
-    }
-  });
-
-  revalidatePath('/shifts');
-  return { id: shift.id };
 }
 
-export async function closeShiftAction(formData: FormData) {
-  const user = await requireUser();
-  const shiftId = String(formData.get('shiftId') || '');
-  const actualCash = Math.round(Number(formData.get('actualCash') || 0) * 100);
-  const notes = String(formData.get('notes') || '');
+export async function closeShiftAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    await withBusinessContext();
 
-  if (!shiftId) {
-    throw new Error('Shift ID is required');
-  }
+    const shiftId = formString(formData, 'shiftId');
+    const actualCash = Math.round(Number(formData.get('actualCash') || 0) * 100);
+    const notes = formString(formData, 'notes') || null;
 
-  const shift = await prisma.shift.findUnique({
-    where: { id: shiftId },
-    include: {
-      salesInvoices: {
-        include: { payments: true }
+    if (!shiftId) return err('Shift ID is required');
+
+    const shift = await prisma.shift.findUnique({
+      where: { id: shiftId },
+      include: { salesInvoices: { include: { payments: true } } }
+    });
+    if (!shift) return err('Shift not found');
+    if (shift.status !== 'OPEN') return err('Shift is already closed');
+
+    // Calculate expected totals by payment method
+    let cashTotal = shift.openingCashPence;
+    let cardTotal = 0;
+    let transferTotal = 0;
+    for (const invoice of shift.salesInvoices) {
+      for (const payment of invoice.payments) {
+        if (payment.method === 'CASH') cashTotal += payment.amountPence;
+        else if (payment.method === 'CARD') cardTotal += payment.amountPence;
+        else if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
       }
     }
-  });
 
-  if (!shift) {
-    throw new Error('Shift not found');
-  }
+    const variance = actualCash - cashTotal;
 
-  if (shift.status !== 'OPEN') {
-    throw new Error('Shift is already closed');
-  }
-
-  // Calculate expected cash from sales during this shift
-  let cashTotal = shift.openingCashPence;
-  let cardTotal = 0;
-  let transferTotal = 0;
-
-  for (const invoice of shift.salesInvoices) {
-    for (const payment of invoice.payments) {
-      if (payment.method === 'CASH') {
-        cashTotal += payment.amountPence;
-      } else if (payment.method === 'CARD') {
-        cardTotal += payment.amountPence;
-      } else if (payment.method === 'TRANSFER') {
-        transferTotal += payment.amountPence;
+    await prisma.shift.update({
+      where: { id: shiftId },
+      data: {
+        closedAt: new Date(),
+        expectedCashPence: cashTotal,
+        actualCashPence: actualCash,
+        cardTotalPence: cardTotal,
+        transferTotalPence: transferTotal,
+        variance,
+        notes,
+        status: 'CLOSED'
       }
-    }
-  }
+    });
 
-  const variance = actualCash - cashTotal;
-
-  await prisma.shift.update({
-    where: { id: shiftId },
-    data: {
-      closedAt: new Date(),
-      expectedCashPence: cashTotal,
-      actualCashPence: actualCash,
-      cardTotalPence: cardTotal,
-      transferTotalPence: transferTotal,
-      variance,
-      notes: notes || null,
-      status: 'CLOSED'
-    }
+    revalidatePath('/shifts');
+    return ok({ id: shiftId });
   });
-
-  revalidatePath('/shifts');
-  return { success: true };
 }
 
 export async function getOpenShift(tillId: string) {

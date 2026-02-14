@@ -1,10 +1,20 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import {
+  filterPositivePayments,
+  splitPayments,
+  debitCashBankLines,
+  type PaymentInput,
+  type JournalLine
+} from './shared';
+import {
+  buildQtyByProductMap,
+  fetchInventoryMap,
+  resolveAvgCost,
+  upsertInventoryBalance
+} from './shared';
 
-export type SalePaymentInput = {
-  method: 'CASH' | 'CARD' | 'TRANSFER';
-  amountPence: number;
-};
+export type SalePaymentInput = PaymentInput;
 
 export type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 
@@ -108,19 +118,11 @@ export async function createSale(input: CreateSaleInput) {
     };
   });
 
-  const qtyByProduct = new Map<string, number>();
-  for (const line of lineDetails) {
-    qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.qtyBase);
-  }
+  const qtyByProduct = buildQtyByProductMap(lineDetails);
 
-  const inventoryBalances = await prisma.inventoryBalance.findMany({
-    where: { storeId: input.storeId, productId: { in: Array.from(qtyByProduct.keys()) } }
-  });
-  const inventoryMap = new Map(
-    inventoryBalances.map((item) => [
-      item.productId,
-      { qtyOnHandBase: item.qtyOnHandBase, avgCostBasePence: item.avgCostBasePence }
-    ])
+  const inventoryMap = await fetchInventoryMap(
+    input.storeId,
+    Array.from(qtyByProduct.keys())
   );
 
   for (const [productId, qtyBase] of qtyByProduct.entries()) {
@@ -133,12 +135,10 @@ export async function createSale(input: CreateSaleInput) {
   const costByProduct = new Map<string, number>();
   for (const line of lineDetails) {
     if (costByProduct.has(line.productId)) continue;
-    const inventory = inventoryMap.get(line.productId);
-    const avgCost =
-      inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-        ? inventory.avgCostBasePence
-        : line.productUnit.product.defaultCostBasePence;
-    costByProduct.set(line.productId, avgCost);
+    costByProduct.set(
+      line.productId,
+      resolveAvgCost(inventoryMap, line.productId, line.productUnit.product.defaultCostBasePence)
+    );
   }
 
   const lineNetSubtotalTotal = lineDetails.reduce((sum, line) => sum + line.lineNetSubtotal, 0);
@@ -157,37 +157,35 @@ export async function createSale(input: CreateSaleInput) {
   const subtotal = netAfterOrderDiscount;
   const total = subtotal + vatTotal;
 
-  const initialPayments = input.payments.filter((payment) => payment.amountPence > 0);
+  const positivePayments = filterPositivePayments(input.payments);
   const fallbackPayments =
-    initialPayments.length === 0 && input.paymentStatus === 'PAID'
-      ? [{ method: 'CASH', amountPence: total }]
-      : initialPayments;
+    positivePayments.length === 0 && input.paymentStatus === 'PAID'
+      ? [{ method: 'CASH' as const, amountPence: total }]
+      : positivePayments;
 
-  let cashPaid = fallbackPayments
-    .filter((payment) => payment.method === 'CASH')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const cardPaid = fallbackPayments
-    .filter((payment) => payment.method === 'CARD')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
-  const transferPaid = fallbackPayments
-    .filter((payment) => payment.method === 'TRANSFER')
-    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const split = splitPayments(fallbackPayments);
+  let { cashPence } = split;
+  const { bankPence } = split;
 
-  let totalPaid = cashPaid + cardPaid + transferPaid;
+  let totalPaid = cashPence + bankPence;
   if (totalPaid > total) {
     const overpaid = totalPaid - total;
-    if (cashPaid < overpaid) {
+    if (cashPence < overpaid) {
       throw new Error('Payment exceeds total due');
     }
-    cashPaid -= overpaid;
+    cashPence -= overpaid;
     totalPaid -= overpaid;
   }
 
   const balanceDue = Math.max(total - totalPaid, 0);
-  const payments = [
-    cashPaid > 0 ? { method: 'CASH' as const, amountPence: cashPaid } : null,
-    cardPaid > 0 ? { method: 'CARD' as const, amountPence: cardPaid } : null,
-    transferPaid > 0 ? { method: 'TRANSFER' as const, amountPence: transferPaid } : null
+  const payments: SalePaymentInput[] = [
+    cashPence > 0 ? { method: 'CASH' as const, amountPence: cashPence } : null,
+    ...fallbackPayments
+      .filter((p) => p.method === 'CARD' && p.amountPence > 0)
+      .map((p) => ({ method: 'CARD' as const, amountPence: p.amountPence })),
+    ...fallbackPayments
+      .filter((p) => p.method === 'TRANSFER' && p.amountPence > 0)
+      .map((p) => ({ method: 'TRANSFER' as const, amountPence: p.amountPence }))
   ].filter(Boolean) as SalePaymentInput[];
 
   const finalStatus =
@@ -236,23 +234,13 @@ export async function createSale(input: CreateSaleInput) {
     });
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const inventory = inventoryMap.get(productId);
-      const onHand = inventory?.qtyOnHandBase ?? 0;
-      const avgCost =
-        inventory?.avgCostBasePence && inventory.avgCostBasePence > 0
-          ? inventory.avgCostBasePence
-          : lineDetails.find((line) => line.productId === productId)?.productUnit.product
-              .defaultCostBasePence ?? 0;
-      await tx.inventoryBalance.upsert({
-        where: { storeId_productId: { storeId: input.storeId, productId } },
-        update: { qtyOnHandBase: onHand - qtyBase, avgCostBasePence: avgCost },
-        create: {
-          storeId: input.storeId,
-          productId,
-          qtyOnHandBase: onHand - qtyBase,
-          avgCostBasePence: avgCost
-        }
-      });
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
+      const avgCost = resolveAvgCost(
+        inventoryMap,
+        productId,
+        lineDetails.find((l) => l.productId === productId)?.productUnit.product.defaultCostBasePence ?? 0
+      );
+      await upsertInventoryBalance(tx, input.storeId, productId, onHand - qtyBase, avgCost);
     }
 
     await tx.stockMovement.createMany({
@@ -268,23 +256,17 @@ export async function createSale(input: CreateSaleInput) {
       }))
     });
 
-    const cashPaid = payments
-      .filter((payment) => payment.method === 'CASH')
-      .reduce((sum, payment) => sum + payment.amountPence, 0);
-    const bankPaid = payments
-      .filter((payment) => payment.method !== 'CASH')
-      .reduce((sum, payment) => sum + payment.amountPence, 0);
-    const arAmount = total - cashPaid - bankPaid;
+    const paymentSplit = splitPayments(payments);
+    const arAmount = total - paymentSplit.totalPence;
 
-    const journalLines = [
-      cashPaid > 0 ? { accountCode: ACCOUNT_CODES.cash, debitPence: cashPaid } : null,
-      bankPaid > 0 ? { accountCode: ACCOUNT_CODES.bank, debitPence: bankPaid } : null,
+    const journalLines: JournalLine[] = [
+      ...debitCashBankLines(paymentSplit),
       arAmount > 0 ? { accountCode: ACCOUNT_CODES.ar, debitPence: arAmount } : null,
       { accountCode: ACCOUNT_CODES.sales, creditPence: subtotal },
       business.vatEnabled && vatTotal > 0
         ? { accountCode: ACCOUNT_CODES.vatPayable, creditPence: vatTotal }
         : null
-    ].filter(Boolean) as { accountCode: string; debitPence?: number; creditPence?: number }[];
+    ].filter(Boolean) as JournalLine[];
 
     const cogsTotal = lineDetails.reduce((sum, line) => {
       const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;

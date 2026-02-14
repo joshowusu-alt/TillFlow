@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
+import InstallButton from '@/components/InstallButton';
 
 export default async function SettingsPage() {
   await requireRole(['MANAGER', 'OWNER']);
@@ -148,6 +149,20 @@ export default async function SettingsPage() {
             </div>
           </div>
         </a>
+        <div className="card flex items-center justify-between p-6 transition hover:shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+              <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold">Install App</h3>
+              <p className="text-sm text-black/50">Install on this device</p>
+            </div>
+          </div>
+          <InstallButton />
+        </div>
       </div>
     </div>
   );
