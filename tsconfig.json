@@ -36,6 +36,10 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scripts",
+    "test_adapter.ts",
+    "test-prisma.ts",
+    "reproduce_prisma_error.ts"
   ]
 }
