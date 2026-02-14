@@ -33,6 +33,7 @@ model Business {
   users          User[]
   customers      Customer[]
   suppliers      Supplier[]
+  categories     Category[]
   products       Product[]
   accounts       Account[]
   journalEntries JournalEntry[]
@@ -152,23 +153,41 @@ model Supplier {
   purchaseInvoices PurchaseInvoice[]
 }
 
+model Category {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  colour     String   @default("#059669")
+  imageUrl   String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id])
+  products Product[]
+
+  @@unique([businessId, name])
+}
+
 model Product {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   businessId            String
+  categoryId            String?
   sku                   String?
-  barcode               String?  @unique
+  barcode               String?   @unique
   name                  String
-  active                Boolean  @default(true)
+  active                Boolean   @default(true)
+  imageUrl              String?
   sellingPriceBasePence Int
   defaultCostBasePence  Int
-  vatRateBps            Int      @default(0)
+  vatRateBps            Int       @default(0)
   vatCode               String?
-  reorderPointBase      Int      @default(0)
-  promoBuyQty           Int      @default(0)
-  promoGetQty           Int      @default(0)
-  createdAt             DateTime @default(now())
+  reorderPointBase      Int       @default(0)
+  promoBuyQty           Int       @default(0)
+  promoGetQty           Int       @default(0)
+  createdAt             DateTime  @default(now())
 
   business          Business         @relation(fields: [businessId], references: [id])
+  category          Category?        @relation(fields: [categoryId], references: [id])
   productUnits      ProductUnit[]
   inventoryBalances InventoryBalance[]
   salesLines        SalesInvoiceLine[]

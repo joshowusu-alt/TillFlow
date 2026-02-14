@@ -19,11 +19,15 @@ export default async function ProductDetailPage({
 
   const product = await prisma.product.findUnique({
     where: { id: params.id },
-    include: { productUnits: { include: { unit: true } }, inventoryBalances: true }
+    include: { productUnits: { include: { unit: true } }, inventoryBalances: true, category: true }
   });
 
   if (!product) return <div className="card p-6">Product not found.</div>;
   const units = await prisma.unit.findMany();
+  const categories = await prisma.category.findMany({
+    where: { businessId: business.id },
+    orderBy: { sortOrder: 'asc' }
+  });
   const isManager = user.role !== 'CASHIER';
 
   const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
@@ -44,6 +48,30 @@ export default async function ProductDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader title={product.name} subtitle="Product detail and unit breakdown." />
+
+      {/* Hero row with image + summary */}
+      <div className="card p-6 flex gap-6">
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
+        ) : (
+          <div className="w-24 h-24 rounded-xl bg-emerald-100 flex items-center justify-center text-3xl font-bold text-emerald-700 flex-shrink-0">
+            {product.name.charAt(0)}
+          </div>
+        )}
+        <div>
+          <h2 className="text-xl font-semibold">{product.name}</h2>
+          {product.category ? (
+            <span className="inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-medium text-white" style={{ backgroundColor: product.category.colour }}>
+              {product.category.name}
+            </span>
+          ) : (
+            <span className="text-xs text-black/40 mt-1 inline-block">Uncategorised</span>
+          )}
+          {product.sku && <div className="text-xs text-black/50 mt-1">SKU: {product.sku}</div>}
+          {product.barcode && <div className="text-xs text-black/50">Barcode: {product.barcode}</div>}
+        </div>
+      </div>
+
       <div className="card p-6 grid gap-6 md:grid-cols-2">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Pricing</div>
@@ -83,6 +111,19 @@ export default async function ProductDetailPage({
             <div>
               <label className="label">Barcode</label>
               <input className="input" name="barcode" defaultValue={product.barcode ?? ''} />
+            </div>
+            <div>
+              <label className="label">Category</label>
+              <select className="input" name="categoryId" defaultValue={product.categoryId ?? ''}>
+                <option value="">Uncategorised</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Image URL</label>
+              <input className="input" name="imageUrl" type="url" defaultValue={product.imageUrl ?? ''} placeholder="https://..." />
             </div>
             <div>
               <label className="label">Base Price (pence)</label>

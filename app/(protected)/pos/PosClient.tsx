@@ -24,9 +24,14 @@ type ProductDto = {
   vatRateBps: number;
   promoBuyQty: number;
   promoGetQty: number;
+  categoryId: string | null;
+  categoryName: string | null;
+  imageUrl: string | null;
   units: UnitDto[];
   onHandBase: number;
 };
+
+type CategoryDto = { id: string; name: string; colour: string };
 
 type PosClientProps = {
   business: { currency: string; vatEnabled: boolean };
@@ -35,6 +40,7 @@ type PosClientProps = {
   products: ProductDto[];
   customers: { id: string; name: string }[];
   units: { id: string; name: string }[];
+  categories: CategoryDto[];
 };
 
 type CartLine = {
@@ -52,7 +58,7 @@ type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 const CART_STORAGE_KEY = 'pos.savedCart';
 const CART_CUSTOMER_KEY = 'pos.savedCustomer';
 
-export default function PosClient({ business, store, tills, products, customers, units }: PosClientProps) {
+export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
   const searchParams = useSearchParams();
   const safeUnits = units ?? [];
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
@@ -102,6 +108,7 @@ export default function PosClient({ business, store, tills, products, customers,
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [isCreating, startTransition] = useTransition();
   const [productSearch, setProductSearch] = useState('');
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
@@ -232,7 +239,7 @@ export default function PosClient({ business, store, tills, products, customers,
         setProductId(created.id);
         const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
         setUnitId(baseUnit?.id ?? '');
-        setProductOptions((prev) => [...prev, created]);
+        setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
         if (pendingScan || quickBarcode.trim()) {
           const targetBarcode = pendingScan ?? quickBarcode.trim();
           if (targetBarcode && created.barcode === targetBarcode) {
@@ -449,10 +456,12 @@ export default function PosClient({ business, store, tills, products, customers,
   }, [selectedProduct, selectedUnits]);
 
   const quickItems = useMemo(() => {
-    return [...productOptions]
-      .sort((a, b) => b.onHandBase - a.onHandBase)
-      .slice(0, 12);
-  }, [productOptions]);
+    let items = [...productOptions];
+    if (activeCategoryId) {
+      items = items.filter((p) => p.categoryId === activeCategoryId);
+    }
+    return items.sort((a, b) => b.onHandBase - a.onHandBase).slice(0, 12);
+  }, [productOptions, activeCategoryId]);
 
   const filteredProducts = useMemo(() => {
     if (!productSearch.trim()) return productOptions.slice(0, 8);
@@ -1127,6 +1136,31 @@ export default function PosClient({ business, store, tills, products, customers,
                 <div className="text-xs text-black/50 hidden md:block">F2 scan · F4 qty · F8 cash</div>
               </div>
             </div>
+            {/* Category filter tabs */}
+            {categories.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveCategoryId(null)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${!activeCategoryId ? 'bg-emerald-600 text-white' : 'bg-black/5 text-black/60 hover:bg-black/10'}`}
+                >
+                  All
+                </button>
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveCategoryId(activeCategoryId === cat.id ? null : cat.id)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${activeCategoryId === cat.id ? 'text-white' : 'text-black/60 hover:opacity-80'}`}
+                    style={{
+                      backgroundColor: activeCategoryId === cat.id ? cat.colour : `${cat.colour}20`
+                    }}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="mt-3 grid gap-2 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
               {quickItems.map((item) => {
                 const base = item.units.find((unit) => unit.isBaseUnit) ?? item.units[0];
@@ -1158,7 +1192,13 @@ export default function PosClient({ business, store, tills, products, customers,
                         !
                       </div>
                     )}
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-16 rounded-lg object-cover mb-2" />
+                    ) : null}
                     <div className="text-sm font-semibold leading-tight line-clamp-2">{item.name}</div>
+                    {item.categoryName && (
+                      <div className="text-[10px] text-black/40 mt-0.5 truncate">{item.categoryName}</div>
+                    )}
                     <div className="mt-2 flex items-baseline justify-between">
                       <span className="text-base font-bold text-emerald-700">
                         {formatMoney(item.sellingPriceBasePence, business.currency)}

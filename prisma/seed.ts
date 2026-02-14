@@ -26,27 +26,40 @@ interface ProductSeed {
   vatRateBps?: number;
   promoBuyQty?: number;
   promoGetQty?: number;
+  categoryId?: string;
   units: { unitId: string; isBaseUnit: boolean; conversionToBase: number }[];
   stockQty: number;
 }
 
 async function seedProduct(businessId: string, storeId: string, p: ProductSeed) {
-  const product = await prisma.product.upsert({
-    where: { barcode: p.barcode },
-    update: {},
-    create: {
-      businessId,
-      sku: p.sku,
-      barcode: p.barcode,
-      name: p.name,
-      sellingPriceBasePence: p.sellingPriceBasePence,
-      defaultCostBasePence: p.defaultCostBasePence,
-      vatRateBps: p.vatRateBps ?? 0,
-      reorderPointBase: p.reorderPointBase,
-      promoBuyQty: p.promoBuyQty ?? 0,
-      promoGetQty: p.promoGetQty ?? 0,
-    },
+  // Try to find existing product by barcode or by name
+  let product = await prisma.product.findFirst({
+    where: { OR: [{ barcode: p.barcode }, { businessId, name: p.name }] },
   });
+
+  if (product) {
+    // Update categoryId on existing product
+    product = await prisma.product.update({
+      where: { id: product.id },
+      data: { categoryId: p.categoryId ?? null },
+    });
+  } else {
+    product = await prisma.product.create({
+      data: {
+        businessId,
+        sku: p.sku,
+        barcode: p.barcode,
+        name: p.name,
+        sellingPriceBasePence: p.sellingPriceBasePence,
+        defaultCostBasePence: p.defaultCostBasePence,
+        vatRateBps: p.vatRateBps ?? 0,
+        reorderPointBase: p.reorderPointBase,
+        promoBuyQty: p.promoBuyQty ?? 0,
+        promoGetQty: p.promoGetQty ?? 0,
+        categoryId: p.categoryId ?? null,
+      },
+    });
+  }
 
   for (const u of p.units) {
     const existing = await prisma.productUnit.findFirst({
@@ -125,11 +138,40 @@ async function main() {
   const tin     = await ensureUnit('tin', 'tins', 'tin');
   const crate   = await ensureUnit('crate', 'crates', 'crt');
 
-  /* ---------- Products (20 realistic supermarket items) ---------- */
+  /* ---------- Categories ---------- */
+  const categoryDefs = [
+    { name: 'Beverages',    colour: '#2563EB', sortOrder: 1 },
+    { name: 'Dairy',        colour: '#7C3AED', sortOrder: 2 },
+    { name: 'Canned Goods', colour: '#DC2626', sortOrder: 3 },
+    { name: 'Staples',      colour: '#D97706', sortOrder: 4 },
+    { name: 'Snacks',       colour: '#059669', sortOrder: 5 },
+    { name: 'Toiletries',   colour: '#EC4899', sortOrder: 6 },
+    { name: 'Household',    colour: '#6366F1', sortOrder: 7 },
+  ];
+
+  const categoryMap = new Map<string, string>();
+  for (const c of categoryDefs) {
+    const existing = await prisma.category.findFirst({
+      where: { businessId: business.id, name: c.name },
+    });
+    if (existing) {
+      categoryMap.set(c.name, existing.id);
+    } else {
+      const created = await prisma.category.create({
+        data: { businessId: business.id, name: c.name, colour: c.colour, sortOrder: c.sortOrder },
+      });
+      categoryMap.set(c.name, created.id);
+    }
+  }
+
+  const cat = (name: string) => categoryMap.get(name);
+
+  /* ---------- Products (21 realistic supermarket items) ---------- */
   const products: ProductSeed[] = [
     {
       sku: 'CARN-001', barcode: '5000312123456', name: 'Carnation Milk',
       sellingPriceBasePence: 150, defaultCostBasePence: 100, reorderPointBase: 24, stockQty: 48,
+      categoryId: cat('Dairy'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 48 },
@@ -138,6 +180,7 @@ async function main() {
     {
       sku: 'COCA-001', barcode: '5449000000996', name: 'Coca-Cola 500ml',
       sellingPriceBasePence: 120, defaultCostBasePence: 80, reorderPointBase: 24, stockQty: 72,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: bottle.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: crate.id, isBaseUnit: false, conversionToBase: 24 },
@@ -146,6 +189,7 @@ async function main() {
     {
       sku: 'FANTA-001', barcode: '5449000011527', name: 'Fanta Orange 500ml',
       sellingPriceBasePence: 120, defaultCostBasePence: 80, reorderPointBase: 24, stockQty: 48,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: bottle.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: crate.id, isBaseUnit: false, conversionToBase: 24 },
@@ -154,6 +198,7 @@ async function main() {
     {
       sku: 'WATER-001', barcode: '6001234567890', name: 'Bel-Aqua Water 1.5L',
       sellingPriceBasePence: 100, defaultCostBasePence: 60, reorderPointBase: 30, stockQty: 60,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: bottle.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: pack.id, isBaseUnit: false, conversionToBase: 6 },
@@ -162,6 +207,7 @@ async function main() {
     {
       sku: 'MILO-001', barcode: '7613036000345', name: 'Milo 400g',
       sellingPriceBasePence: 550, defaultCostBasePence: 400, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: tin.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -170,6 +216,7 @@ async function main() {
     {
       sku: 'PEAK-001', barcode: '5060096123456', name: 'Peak Milk Tin',
       sellingPriceBasePence: 200, defaultCostBasePence: 140, reorderPointBase: 24, stockQty: 48,
+      categoryId: cat('Dairy'),
       units: [
         { unitId: tin.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 48 },
@@ -178,6 +225,7 @@ async function main() {
     {
       sku: 'SUGAR-001', barcode: '6001234567891', name: 'Sugar 1kg',
       sellingPriceBasePence: 150, defaultCostBasePence: 100, reorderPointBase: 20, stockQty: 40,
+      categoryId: cat('Staples'),
       units: [
         { unitId: bag.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: box.id, isBaseUnit: false, conversionToBase: 10 },
@@ -186,6 +234,7 @@ async function main() {
     {
       sku: 'RICE-001', barcode: '6001234567892', name: 'Basmati Rice 5kg',
       sellingPriceBasePence: 800, defaultCostBasePence: 600, reorderPointBase: 10, stockQty: 20,
+      categoryId: cat('Staples'),
       units: [
         { unitId: bag.id, isBaseUnit: true, conversionToBase: 1 },
       ],
@@ -193,6 +242,7 @@ async function main() {
     {
       sku: 'OIL-001', barcode: '6001234567893', name: 'Vegetable Oil 1L',
       sellingPriceBasePence: 350, defaultCostBasePence: 250, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Staples'),
       units: [
         { unitId: bottle.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -201,7 +251,7 @@ async function main() {
     {
       sku: 'INDO-001', barcode: '0089686170030', name: 'Indomie Noodles',
       sellingPriceBasePence: 80, defaultCostBasePence: 50, reorderPointBase: 40, stockQty: 120,
-      promoBuyQty: 5, promoGetQty: 1,
+      promoBuyQty: 5, promoGetQty: 1, categoryId: cat('Snacks'),
       units: [
         { unitId: pack.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 40 },
@@ -210,6 +260,7 @@ async function main() {
     {
       sku: 'SOAP-001', barcode: '6001234567894', name: 'Key Soap',
       sellingPriceBasePence: 100, defaultCostBasePence: 70, reorderPointBase: 20, stockQty: 36,
+      categoryId: cat('Household'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 36 },
@@ -218,6 +269,7 @@ async function main() {
     {
       sku: 'COLG-001', barcode: '8901314010117', name: 'Colgate Toothpaste 100ml',
       sellingPriceBasePence: 180, defaultCostBasePence: 120, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Toiletries'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: box.id, isBaseUnit: false, conversionToBase: 24 },
@@ -226,6 +278,7 @@ async function main() {
     {
       sku: 'CORB-001', barcode: '5000312010000', name: 'Exeter Corned Beef',
       sellingPriceBasePence: 300, defaultCostBasePence: 200, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Canned Goods'),
       units: [
         { unitId: tin.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 24 },
@@ -234,6 +287,7 @@ async function main() {
     {
       sku: 'SARD-001', barcode: '6001234567895', name: 'Sardines in Tomato Sauce',
       sellingPriceBasePence: 150, defaultCostBasePence: 100, reorderPointBase: 20, stockQty: 36,
+      categoryId: cat('Canned Goods'),
       units: [
         { unitId: tin.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 24 },
@@ -242,6 +296,7 @@ async function main() {
     {
       sku: 'TOMA-001', barcode: '6001234567896', name: 'Tomato Paste 400g',
       sellingPriceBasePence: 200, defaultCostBasePence: 130, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Canned Goods'),
       units: [
         { unitId: tin.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -250,6 +305,7 @@ async function main() {
     {
       sku: 'BISC-001', barcode: '5000168137841', name: 'Digestive Biscuits',
       sellingPriceBasePence: 120, defaultCostBasePence: 80, reorderPointBase: 15, stockQty: 30,
+      categoryId: cat('Snacks'),
       units: [
         { unitId: pack.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: box.id, isBaseUnit: false, conversionToBase: 12 },
@@ -258,6 +314,7 @@ async function main() {
     {
       sku: 'BREAD-001', barcode: '6001234567897', name: 'White Bread',
       sellingPriceBasePence: 150, defaultCostBasePence: 100, reorderPointBase: 10, stockQty: 20,
+      categoryId: cat('Staples'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
       ],
@@ -265,6 +322,7 @@ async function main() {
     {
       sku: 'MARG-001', barcode: '6001234567898', name: 'Blue Band Margarine 250g',
       sellingPriceBasePence: 180, defaultCostBasePence: 120, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Dairy'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: box.id, isBaseUnit: false, conversionToBase: 24 },
@@ -273,6 +331,7 @@ async function main() {
     {
       sku: 'NESC-001', barcode: '7613036345678', name: 'Nescafe Classic 200g',
       sellingPriceBasePence: 450, defaultCostBasePence: 320, reorderPointBase: 8, stockQty: 18,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: piece.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -281,6 +340,7 @@ async function main() {
     {
       sku: 'TEA-001', barcode: '8712566123456', name: 'Lipton Tea Bags (50)',
       sellingPriceBasePence: 250, defaultCostBasePence: 170, reorderPointBase: 10, stockQty: 18,
+      categoryId: cat('Beverages'),
       units: [
         { unitId: box.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -289,6 +349,7 @@ async function main() {
     {
       sku: 'DISH-001', barcode: '6001234567899', name: 'Sunlight Dish Soap 500ml',
       sellingPriceBasePence: 200, defaultCostBasePence: 130, reorderPointBase: 12, stockQty: 24,
+      categoryId: cat('Household'),
       units: [
         { unitId: bottle.id, isBaseUnit: true, conversionToBase: 1 },
         { unitId: carton.id, isBaseUnit: false, conversionToBase: 12 },
@@ -379,7 +440,7 @@ async function main() {
     }
   }
 
-  console.log('✓ Seed complete — 21 products, 5 customers, 4 suppliers, 17 accounts');
+  console.log('✓ Seed complete — 21 products, 7 categories, 5 customers, 4 suppliers, 17 accounts');
 }
 
 main()

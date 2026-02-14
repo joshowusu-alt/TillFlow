@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { Prisma } from '@prisma/client';
-import { formString, formInt } from '@/lib/form-helpers';
+import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
 import {
   withBusinessContext,
   formAction,
@@ -54,6 +54,8 @@ function parseProductFields(formData: FormData) {
     name: formString(formData, 'name'),
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
+    categoryId: formOptionalString(formData, 'categoryId') || null,
+    imageUrl: formOptionalString(formData, 'imageUrl') || null,
     sellingPriceBasePence: formInt(formData, 'sellingPriceBasePence'),
     defaultCostBasePence: formInt(formData, 'defaultCostBasePence'),
     vatRateBps: formInt(formData, 'vatRateBps'),
@@ -84,6 +86,8 @@ export async function createProductAction(formData: FormData): Promise<void> {
         name: fields.name,
         sku: fields.sku,
         barcode: fields.barcode,
+        categoryId: fields.categoryId,
+        imageUrl: fields.imageUrl,
         sellingPriceBasePence: fields.sellingPriceBasePence,
         defaultCostBasePence: fields.defaultCostBasePence,
         vatRateBps: fields.vatRateBps,
@@ -119,6 +123,8 @@ export async function updateProductAction(formData: FormData): Promise<void> {
           name: fields.name,
           sku: fields.sku,
           barcode: fields.barcode,
+          categoryId: fields.categoryId,
+          imageUrl: fields.imageUrl,
           sellingPriceBasePence: fields.sellingPriceBasePence,
           defaultCostBasePence: fields.defaultCostBasePence,
           vatRateBps: fields.vatRateBps,

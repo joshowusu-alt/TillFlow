@@ -25,7 +25,7 @@ export default async function AnalyticsPage() {
         },
         include: {
             lines: {
-                include: { product: true }
+                include: { product: { include: { category: true } } }
             }
         },
         orderBy: { createdAt: 'asc' }
@@ -116,13 +116,12 @@ export default async function AnalyticsPage() {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10);
 
-    // Category breakdown (using first word of product name as pseudo-category)
+    // Category breakdown (using real product categories)
     const categoryStats = new Map<string, number>();
 
     recentSales.forEach((sale) => {
         sale.lines.forEach((line) => {
-            // In a real app, you'd have actual categories
-            const category = line.product.name.split(' ')[0] || 'Other';
+            const category = (line.product as any).category?.name || 'Uncategorised';
             categoryStats.set(category, (categoryStats.get(category) || 0) + line.lineTotalPence);
         });
     });

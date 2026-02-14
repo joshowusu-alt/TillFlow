@@ -15,11 +15,15 @@ export default async function PosPage() {
 
   const products = await prisma.product.findMany({
     where: { businessId: business.id, active: true },
-    include: { productUnits: { include: { unit: true } } }
+    include: { productUnits: { include: { unit: true } }, category: true }
   });
   const units = await prisma.unit.findMany();
 
   const customers = await prisma.customer.findMany({ where: { businessId: business.id } });
+  const categories = await prisma.category.findMany({
+    where: { businessId: business.id },
+    orderBy: { sortOrder: 'asc' }
+  });
 
   const productDtos = products.map((product) => ({
     id: product.id,
@@ -29,6 +33,9 @@ export default async function PosPage() {
     vatRateBps: product.vatRateBps,
     promoBuyQty: product.promoBuyQty,
     promoGetQty: product.promoGetQty,
+    categoryId: product.categoryId,
+    categoryName: product.category?.name ?? null,
+    imageUrl: product.imageUrl,
     units: product.productUnits.map((pu) => ({
       id: pu.unitId,
       name: pu.unit.name,
@@ -47,6 +54,7 @@ export default async function PosPage() {
       products={productDtos}
       customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
+      categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
     />
   );
 }
