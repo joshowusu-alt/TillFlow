@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
+import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 
@@ -34,6 +35,7 @@ export default async function InventoryPage() {
               <th>Avg Cost (Base)</th>
               <th>Base Unit</th>
               <th>Packaging Unit</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -53,16 +55,27 @@ export default async function InventoryPage() {
                 packagingUnitPlural: packaging?.unit.pluralName,
                 packagingConversion: packaging?.conversionToBase
               });
+              const isLow = product.reorderPointBase > 0 && qtyOnHand <= product.reorderPointBase;
+              const isOut = qtyOnHand <= 0;
               return (
-                <tr key={product.id} className="rounded-xl bg-white">
+                <tr key={product.id} className={`rounded-xl ${isOut ? 'bg-rose-50' : isLow ? 'bg-amber-50' : 'bg-white'}`}>
                   <td className="px-3 py-3 font-semibold">{product.name}</td>
-                  <td className="px-3 py-3">{formatted}</td>
+                  <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
                   <td className="px-3 py-3 text-sm font-semibold">
-                    £{(avgCostBase / 100).toFixed(2)}
+                    {formatMoney(avgCostBase, business.currency)}
                   </td>
                   <td className="px-3 py-3 text-sm text-black/60">{baseUnit?.unit.name ?? '-'}</td>
                   <td className="px-3 py-3 text-sm text-black/60">
                     {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : '-'}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    {isOut ? (
+                      <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Out of stock</span>
+                    ) : isLow ? (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Low stock</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">OK</span>
+                    )}
                   </td>
                 </tr>
               );
