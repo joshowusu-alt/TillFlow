@@ -1,4 +1,0 @@
-[    1411ms] [ERROR] Event @ https://supermarket-pos-five.vercel.app/_next/static/chunks/7023-eb59757263dba135.js:0
-[    1654ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/login:0
-[   12403ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/pos:0
-[   12608ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/onboarding:0
