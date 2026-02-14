@@ -1104,7 +1104,7 @@ export default function PosClient({ business, store, tills, products, customers,
                       </div>
                       <button
                         type="button"
-                        className="flex-shrink-0 rounded-lg p-1.5 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
+                        className="flex-shrink-0 rounded-lg p-2 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
                         onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
                         title="Remove"
                       >
@@ -1122,7 +1122,7 @@ export default function PosClient({ business, store, tills, products, customers,
           {/* ── Inline discount for selected line ────────────── */}
           {activeLineId && cartDetails.find((l) => l.id === activeLineId) && (
             <div className="card p-3">
-              <div className="flex items-center gap-3 text-sm">
+              <div className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="text-xs text-black/40 font-semibold uppercase">Line discount</span>
                 <select
                   className="input py-1 text-sm w-24"
@@ -1240,7 +1240,7 @@ export default function PosClient({ business, store, tills, products, customers,
             </div>
 
             {/* Order discount */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <label className="label whitespace-nowrap">Order Discount</label>
               <select
                 className="input w-24"

@@ -71,7 +71,7 @@ export default async function PurchasesPage() {
         />
       </div>
 
-      <div className="card p-6">
+      <div className="card p-6 overflow-x-auto">
         <h2 className="text-lg font-display font-semibold">Recent purchases</h2>
         <table className="table mt-4 w-full border-separate border-spacing-y-2">
           <thead>

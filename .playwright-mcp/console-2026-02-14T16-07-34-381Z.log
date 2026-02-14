@@ -1,0 +1,4 @@
+[    1556ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/:0
+[    1616ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/pos:0
+[    1873ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/login:0
+[   18153ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://supermarket-pos-five.vercel.app/login?error=invalid:0

@@ -31,7 +31,7 @@ export default async function CustomersPage() {
         </form>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>

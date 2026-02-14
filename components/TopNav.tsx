@@ -44,6 +44,7 @@ const navGroups = [
     label: 'Reports',
     items: [
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
@@ -56,7 +57,10 @@ const navGroups = [
     label: 'Administration',
     items: [
       { href: '/settings', label: 'Settings', roles: ['OWNER', 'MANAGER'] },
-      { href: '/users', label: 'Users', roles: ['OWNER'] }
+      { href: '/settings/backup', label: 'Data Backup', roles: ['OWNER'] },
+      { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['OWNER', 'MANAGER'] },
+      { href: '/users', label: 'Users', roles: ['OWNER'] },
+      { href: '/onboarding', label: 'Setup Guide', roles: ['OWNER'] }
     ]
   }
 ];
@@ -187,6 +191,13 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
       {mobileOpen ? (
         <div className="border-t border-black/10 bg-white/95 px-6 pb-6 lg:hidden">
           <div className="mt-4 space-y-4">
+            {/* Mobile user info */}
+            <div className="flex items-center justify-between rounded-xl bg-black/[.03] px-4 py-3">
+              <div>
+                <div className="text-sm font-semibold text-black">{user.name}</div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-black/50">{user.role}</div>
+              </div>
+            </div>
             {visibleGroups.map((group) => (
               <div key={group.id}>
                 <div className="text-xs uppercase tracking-[0.2em] text-black/50">{group.label}</div>

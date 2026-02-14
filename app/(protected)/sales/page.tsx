@@ -27,7 +27,7 @@ export default async function SalesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Sales" subtitle="Latest sales invoices and receipts." />
-      <div className="card p-6">
+      <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
