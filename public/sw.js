@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v2';
+const CACHE_NAME = 'pos-cache-v3';
 const OFFLINE_URL = '/offline';
 
 // Assets to cache immediately on install
@@ -6,7 +6,10 @@ const PRECACHE_ASSETS = [
   '/',
   '/pos',
   '/offline',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon.svg',
+  '/api/icon?size=192',
+  '/api/icon?size=512'
 ];
 
 // API routes that should be cached for offline access

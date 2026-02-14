@@ -22,6 +22,16 @@ export const metadata: Metadata = {
   title: 'TillFlow',
   description: 'Sales made simple. Point of Sale, Inventory & Accounting.',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/api/icon?size=32', type: 'image/png', sizes: '32x32' },
+      { url: '/api/icon?size=192', type: 'image/png', sizes: '192x192' },
+    ],
+    apple: [
+      { url: '/api/icon?size=180', sizes: '180x180' },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
