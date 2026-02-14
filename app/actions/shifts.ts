@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { formString } from '@/lib/form-helpers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 
 export async function openShiftAction(
   formData: FormData
@@ -30,6 +31,8 @@ export async function openShiftAction(
       }
     });
 
+    await audit({ businessId: 'system', userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_OPEN', entity: 'Shift', entityId: shift.id, details: { tillId, openingCash } });
+
     revalidatePath('/shifts');
     return ok({ id: shift.id });
   });
@@ -39,7 +42,7 @@ export async function closeShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    await withBusinessContext();
+    const { user } = await withBusinessContext();
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.round(Number(formData.get('actualCash') || 0) * 100);
@@ -81,6 +84,8 @@ export async function closeShiftAction(
         status: 'CLOSED'
       }
     });
+
+    await audit({ businessId: 'system', userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_CLOSE', entity: 'Shift', entityId: shiftId, details: { variance, actualCash, expectedCash: cashTotal } });
 
     revalidatePath('/shifts');
     return ok({ id: shiftId });

@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
+import { audit } from '@/lib/audit';
 
 /**
  * Lets ANY logged-in user update their own name, email, and password.
@@ -56,6 +57,8 @@ export async function updateMyAccountAction(formData: FormData) {
   }
 
   await prisma.user.update({ where: { id: user.id }, data });
+
+  await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PASSWORD_CHANGE', entity: 'User', entityId: user.id, details: { nameChanged: name !== dbUser.name, emailChanged: email !== dbUser.email, passwordChanged: !!newPassword } });
 
   redirect('/account?success=updated');
 }

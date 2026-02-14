@@ -115,6 +115,7 @@ model User {
   expenses         Expense[]
   expensePayments  ExpensePayment[]
   shifts           Shift[]
+  auditLogs        AuditLog[]
 }
 
 model Session {
@@ -493,4 +494,24 @@ model JournalLine {
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   account      Account      @relation(fields: [accountId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String?
+  userName   String
+  userRole   String
+  action     String
+  entity     String?
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([action])
+  @@index([userId])
 }

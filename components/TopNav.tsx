@@ -49,7 +49,8 @@ const navGroups = [
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'] }
+      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'] }
     ]
   },
   {

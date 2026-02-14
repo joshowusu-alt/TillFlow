@@ -8,6 +8,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { formString, formOptionalString, formPence, formDate } from '@/lib/form-helpers';
 import { withBusinessStoreContext, formAction, err, type ActionResult } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
 
 /** Save an uploaded file and return its public path (or null). */
@@ -68,6 +69,8 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       attachmentPath,
       notes
     });
+
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } });
 
     redirect('/expenses');
   });

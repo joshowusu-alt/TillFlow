@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { audit } from '@/lib/audit';
 
 export async function login(formData: FormData) {
   const email = String(formData.get('email') || '').toLowerCase();
@@ -41,6 +42,8 @@ export async function login(formData: FormData) {
     path: '/',
     expires: expiresAt
   });
+
+  await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'LOGIN' });
 
   redirect('/pos');
 }

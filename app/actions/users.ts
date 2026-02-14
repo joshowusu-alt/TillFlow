@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
+import { audit } from '@/lib/audit';
 
 export async function createUserAction(formData: FormData) {
   const owner = await requireRole(['OWNER']);
@@ -39,6 +40,8 @@ export async function createUserAction(formData: FormData) {
       active: true,
     },
   });
+
+  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', details: { name, email, role } });
 
   redirect('/users?success=created');
 }
@@ -76,6 +79,9 @@ export async function updateUserAction(formData: FormData) {
 
   await prisma.user.update({ where: { id: userId }, data });
 
+  const owner = await requireRole(['OWNER']);
+  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: userId, details: { name, email, role, active } });
+
   redirect('/users?success=updated');
 }
 
@@ -90,6 +96,9 @@ export async function toggleUserActiveAction(formData: FormData) {
     where: { id: userId },
     data: { active: !user!.active },
   });
+
+  const owner = await requireRole(['OWNER']);
+  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: user!.active ? 'USER_DEACTIVATE' : 'USER_UPDATE', entity: 'User', entityId: userId, details: { name: user!.name, active: !user!.active } });
 
   redirect('/users');
 }

@@ -12,6 +12,7 @@ import {
   err,
   type ActionResult
 } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (private to this module)
@@ -73,14 +74,14 @@ function parseProductFields(formData: FormData) {
 
 export async function createProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const fields = parseProductFields(formData);
 
     if (await hasDuplicateName(businessId, fields.name)) {
       redirect('/products?error=duplicate-name');
     }
 
-    await prisma.product.create({
+    const product = await prisma.product.create({
       data: {
         businessId,
         name: fields.name,
@@ -99,13 +100,15 @@ export async function createProductAction(formData: FormData): Promise<void> {
       }
     });
 
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+
     redirect('/products');
   });
 }
 
 export async function updateProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
     if (!id) redirect('/products');
@@ -181,6 +184,8 @@ export async function updateProductAction(formData: FormData): Promise<void> {
         await tx.productUnit.deleteMany({ where: { productId: id, isBaseUnit: false } });
       }
     });
+
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
     redirect(`/products/${id}`);
   });

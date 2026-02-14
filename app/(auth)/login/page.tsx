@@ -29,9 +29,6 @@ export default function LoginPage({ searchParams }: { searchParams?: { error?: s
         </div>
         <button className="btn-primary w-full" type="submit">Sign in</button>
       </form>
-      <div className="text-center text-xs text-black/40">
-        <p>Demo: owner@store.com / Pass1234!</p>
-      </div>
     </div>
   );
 }

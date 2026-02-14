@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { toInt, toPence } from '@/lib/form-helpers';
 import { formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 
@@ -91,6 +92,8 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         ],
         lines
       });
+
+      await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } });
 
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {

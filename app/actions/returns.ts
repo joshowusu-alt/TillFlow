@@ -4,6 +4,7 @@ import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns'
 import { redirect } from 'next/navigation';
 import { formString, formInt } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 
 export async function createSalesReturnAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -24,6 +25,8 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       reason,
       type
     });
+
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: type === 'VOID' ? 'SALE_VOID' : 'SALE_RETURN', entity: 'SalesInvoice', entityId: salesInvoiceId, details: { type, reason, refundAmountPence } });
 
     redirect('/sales');
   });
@@ -48,6 +51,8 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       reason,
       type
     });
+
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
     redirect('/purchases');
   });

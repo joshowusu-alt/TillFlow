@@ -116,6 +116,7 @@ model User {
   expenses         Expense[]
   expensePayments  ExpensePayment[]
   shifts           Shift[]
+  auditLogs        AuditLog[]
 }
 
 model Session {
@@ -494,4 +495,24 @@ model JournalLine {
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   account      Account      @relation(fields: [accountId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String?
+  userName   String
+  userRole   String
+  action     String   // LOGIN, SALE_CREATE, SALE_VOID, SALE_RETURN, PRODUCT_CREATE, PRODUCT_UPDATE, PRODUCT_DELETE, INVENTORY_ADJUST, PURCHASE_CREATE, PURCHASE_RETURN, EXPENSE_CREATE, EXPENSE_UPDATE, USER_CREATE, USER_UPDATE, USER_DEACTIVATE, SETTINGS_UPDATE, PASSWORD_CHANGE, PRICE_CHANGE, DISCOUNT_APPLIED, SHIFT_OPEN, SHIFT_CLOSE
+  entity     String?  // e.g. "SalesInvoice", "Product", "User"
+  entityId   String?  // ID of the affected record
+  details    String?  // JSON string with before/after or extra context
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([action])
+  @@index([userId])
 }
