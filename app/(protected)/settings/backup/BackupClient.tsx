@@ -2,11 +2,12 @@
 
 import { useState, useRef } from 'react';
 import PageHeader from '@/components/PageHeader';
-import { exportDatabaseAction, importDatabaseAction, type BackupData } from '@/app/actions/backup';
+import { exportDatabaseAction, importDatabaseAction, resetAllDataAction, type BackupData } from '@/app/actions/backup';
 
 export default function BackupClient() {
     const [exporting, setExporting] = useState(false);
     const [importing, setImporting] = useState(false);
+    const [resetting, setResetting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [previewData, setPreviewData] = useState<BackupData | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +102,37 @@ export default function BackupClient() {
         setMessage(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
+        }
+    };
+
+    const handleReset = async () => {
+        const first = window.confirm(
+            'This will permanently delete ALL products, sales, purchases, inventory, expenses, customers, and suppliers. Your business settings and user accounts will be kept.\n\nContinue?'
+        );
+        if (!first) return;
+
+        const second = window.prompt(
+            'Type RESET to confirm you want to wipe all data. This cannot be undone.'
+        );
+        if (second !== 'RESET') {
+            setMessage({ type: 'error', text: 'Reset cancelled — you must type RESET to confirm.' });
+            return;
+        }
+
+        setResetting(true);
+        setMessage(null);
+
+        try {
+            const result = await resetAllDataAction();
+            if (result.success) {
+                setMessage({ type: 'success', text: result.data.message });
+            } else {
+                setMessage({ type: 'error', text: result.error });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Reset failed' });
+        } finally {
+            setResetting(false);
         }
     };
 
@@ -208,6 +240,40 @@ export default function BackupClient() {
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* Reset Section */}
+            <div className="card border-2 border-rose-200 p-6">
+                <h2 className="text-lg font-display font-semibold text-rose-700">Start Fresh</h2>
+                <p className="mt-2 text-sm text-black/60">
+                    Delete all products, inventory, sales, purchases, expenses, customers, and suppliers.
+                    Your business settings, user accounts, and tills are kept so you can start entering real data immediately.
+                </p>
+                <div className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+                    <strong>Warning:</strong> This action is permanent and cannot be undone. We recommend exporting a backup first.
+                </div>
+                <button
+                    onClick={handleReset}
+                    disabled={resetting}
+                    className="btn mt-4 bg-rose-600 text-white hover:bg-rose-700"
+                >
+                    {resetting ? (
+                        <>
+                            <svg className="mr-2 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Resetting...
+                        </>
+                    ) : (
+                        <>
+                            <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Reset All Data
+                        </>
+                    )}
+                </button>
             </div>
 
             {/* Best Practices */}

@@ -23,7 +23,8 @@ export type AuditAction =
   | 'PRICE_CHANGE'
   | 'DISCOUNT_APPLIED'
   | 'SHIFT_OPEN'
-  | 'SHIFT_CLOSE';
+  | 'SHIFT_CLOSE'
+  | 'DATA_RESET';
 
 /**
  * Write an entry to the audit trail — fire-and-forget, never throws.

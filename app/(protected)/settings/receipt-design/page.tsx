@@ -3,6 +3,8 @@ import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
 
+import { formatMoney } from '@/lib/format';
+
 export default async function ReceiptDesignPage() {
     await requireRole(['OWNER', 'MANAGER']);
 
@@ -171,15 +173,15 @@ export default async function ReceiptDesignPage() {
                             <div className="space-y-1 border-y border-dashed border-black/10 py-3">
                                 <div className="flex justify-between text-xs">
                                     <span>Sample Item</span>
-                                    <span>£5.00</span>
+                                    <span>{formatMoney(500, business.currency)}</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span>Another Item x2</span>
-                                    <span>£10.00</span>
+                                    <span>{formatMoney(1000, business.currency)}</span>
                                 </div>
                                 <div className="flex justify-between border-t border-black/10 pt-1 font-bold">
                                     <span>Total</span>
-                                    <span>£15.00</span>
+                                    <span>{formatMoney(1500, business.currency)}</span>
                                 </div>
                             </div>
 

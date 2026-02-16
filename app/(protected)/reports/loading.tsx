@@ -15,7 +15,7 @@ export default function Loading() {
 
       <div className="card p-6 space-y-3">
         <div className="h-6 w-40 rounded bg-black/5" />
-        {[...Array(6)].map((_, i) => (
+        {[...Array(5)].map((_, i) => (
           <div key={i} className="h-12 rounded-xl bg-black/5" />
         ))}
       </div>

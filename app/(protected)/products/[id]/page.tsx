@@ -1,9 +1,10 @@
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
+import DeleteProductButton from './DeleteProductButton';
 
 export default async function ProductDetailPage({
   params,
@@ -120,13 +121,16 @@ export default async function ProductDetailPage({
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+              <div className="mt-1 text-xs text-black/50">
+                Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+              </div>
             </div>
             <div>
               <label className="label">Image URL</label>
               <input className="input" name="imageUrl" type="url" defaultValue={product.imageUrl ?? ''} placeholder="https://..." />
             </div>
             <div>
-              <label className="label">Base Price (pence)</label>
+              <label className="label">Base Price ({getMinorUnitLabel(business.currency)})</label>
               <input
                 className="input"
                 name="sellingPriceBasePence"
@@ -134,10 +138,10 @@ export default async function ProductDetailPage({
                 min={0}
                 defaultValue={product.sellingPriceBasePence}
               />
-              <div className="mt-1 text-xs text-black/50">Price per base unit (e.g., per piece).</div>
+              <div className="mt-1 text-xs text-black/50">Price per base unit in {getMinorUnitLabel(business.currency)}. E.g. {getCurrencySymbol(business.currency)}5.00 = 500.</div>
             </div>
             <div>
-              <label className="label">Base Cost (pence)</label>
+              <label className="label">Base Cost ({getMinorUnitLabel(business.currency)})</label>
               <input
                 className="input"
                 name="defaultCostBasePence"
@@ -145,7 +149,7 @@ export default async function ProductDetailPage({
                 min={0}
                 defaultValue={product.defaultCostBasePence}
               />
-              <div className="mt-1 text-xs text-black/50">Cost per base unit.</div>
+              <div className="mt-1 text-xs text-black/50">Cost per base unit in {getMinorUnitLabel(business.currency)}.</div>
             </div>
             <div>
               <label className="label">VAT Rate (bps)</label>
@@ -237,6 +241,16 @@ export default async function ProductDetailPage({
           ))}
         </div>
       </div>
+
+      {user.role === 'OWNER' && (
+        <div className="card border-2 border-rose-200 p-6">
+          <h2 className="text-lg font-display font-semibold text-rose-700">Danger Zone</h2>
+          <p className="mt-2 text-sm text-black/60">
+            Deactivating a product hides it from the POS and product list. Existing sales history is preserved.
+          </p>
+          <DeleteProductButton productId={product.id} productName={product.name} />
+        </div>
+      )}
     </div>
   );
 }

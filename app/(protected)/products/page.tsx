@@ -1,7 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
@@ -13,7 +13,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const products = await prisma.product.findMany({
-    where: { businessId: business.id },
+    where: { businessId: business.id, active: true },
     include: { productUnits: { include: { unit: true } }, category: true }
   });
   const categories = await prisma.category.findMany({
@@ -79,6 +79,9 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                       </option>
                     ))}
                   </select>
+                  <div className="mt-1 text-xs text-black/50">
+                    Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+                  </div>
                 </div>
                 <div>
                   <label className="label">Image URL</label>
@@ -86,14 +89,14 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <div className="mt-1 text-xs text-black/50">Optional product image link.</div>
                 </div>
                 <div>
-                  <label className="label">Base Price (pence)</label>
+                  <label className="label">Base Price ({getMinorUnitLabel(business.currency)})</label>
                   <input className="input" name="sellingPriceBasePence" type="number" min={0} required />
-                  <div className="mt-1 text-xs text-black/50">Price per base unit (e.g., per piece).</div>
+                  <div className="mt-1 text-xs text-black/50">Price per base unit in {getMinorUnitLabel(business.currency)}. E.g. {getCurrencySymbol(business.currency)}5.00 = 500.</div>
                 </div>
                 <div>
-                  <label className="label">Base Cost (pence)</label>
+                  <label className="label">Base Cost ({getMinorUnitLabel(business.currency)})</label>
                   <input className="input" name="defaultCostBasePence" type="number" min={0} required />
-                  <div className="mt-1 text-xs text-black/50">Cost per base unit.</div>
+                  <div className="mt-1 text-xs text-black/50">Cost per base unit in {getMinorUnitLabel(business.currency)}.</div>
                 </div>
                 <div>
                   <label className="label">VAT Rate (bps)</label>

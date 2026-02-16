@@ -266,3 +266,36 @@ export async function quickCreateProductAction(input: {
     }
   });
 }
+
+/**
+ * Soft-delete a product by setting active = false.
+ * Only OWNER can delete products.
+ */
+export async function deleteProductAction(productId: string): Promise<ActionResult<{ message: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, businessId },
+    });
+    if (!product) return err('Product not found.');
+
+    await prisma.product.update({
+      where: { id: productId },
+      data: { active: false },
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRODUCT_DELETE',
+      entity: 'Product',
+      entityId: productId,
+      details: { name: product.name },
+    });
+
+    return ok({ message: `"${product.name}" has been deactivated.` });
+  });
+}

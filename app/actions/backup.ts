@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { audit } from '@/lib/audit';
 
 export interface BackupData {
     version: string;
@@ -310,5 +311,63 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     return ok({
       message: `Restored backup from ${new Date(backup.exportedAt).toLocaleString()}. Users will need to reset their passwords.`
     });
+  });
+}
+
+/**
+ * Wipe all transactional + product data but keep business, users, stores,
+ * categories, units, accounts and tills so the owner can start fresh.
+ */
+export async function resetAllDataAction(): Promise<ActionResult<{ message: string }>> {
+  return safeAction(async () => {
+    const { businessId, user } = await withBusinessContext(['OWNER']);
+
+    // Delete in reverse-dependency order
+    await prisma.$transaction([
+      // Journals
+      prisma.journalLine.deleteMany(),
+      prisma.journalEntry.deleteMany({ where: { businessId } }),
+      // Audit logs
+      prisma.auditLog.deleteMany({ where: { businessId } }),
+      // Expense payments & expenses
+      prisma.expensePayment.deleteMany({ where: { businessId } }),
+      prisma.expense.deleteMany({ where: { businessId } }),
+      // Stock
+      prisma.stockAdjustment.deleteMany(),
+      prisma.stockMovement.deleteMany(),
+      // Sales chain
+      prisma.salesPayment.deleteMany(),
+      prisma.salesReturn.deleteMany(),
+      prisma.salesInvoiceLine.deleteMany(),
+      prisma.salesInvoice.deleteMany({ where: { businessId } }),
+      // Purchase chain
+      prisma.purchasePayment.deleteMany(),
+      prisma.purchaseReturn.deleteMany(),
+      prisma.purchaseInvoiceLine.deleteMany(),
+      prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
+      // Inventory & products
+      prisma.inventoryBalance.deleteMany(),
+      prisma.productUnit.deleteMany(),
+      prisma.product.deleteMany({ where: { businessId } }),
+      // Categories
+      prisma.category.deleteMany({ where: { businessId } }),
+      // Customers & suppliers
+      prisma.customer.deleteMany({ where: { businessId } }),
+      prisma.supplier.deleteMany({ where: { businessId } }),
+      // Shifts (keep tills)
+      prisma.shift.deleteMany(),
+    ]);
+
+    // Audit the reset itself (the log table was just cleared, so this is the first entry)
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'DATA_RESET',
+      details: { note: 'All transactional and product data wiped by owner' },
+    });
+
+    return ok({ message: 'All data has been reset. You can now add your real products and start fresh.' });
   });
 }
