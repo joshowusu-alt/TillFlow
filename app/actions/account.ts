@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
@@ -57,6 +58,14 @@ export async function updateMyAccountAction(formData: FormData) {
   }
 
   await prisma.user.update({ where: { id: user.id }, data });
+
+  // Invalidate all OTHER sessions when password changes
+  if (newPassword) {
+    const currentToken = cookies().get('pos_session')?.value;
+    await prisma.session.deleteMany({
+      where: { userId: user.id, NOT: { token: currentToken ?? '' } },
+    });
+  }
 
   await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PASSWORD_CHANGE', entity: 'User', entityId: user.id, details: { nameChanged: name !== dbUser.name, emailChanged: email !== dbUser.email, passwordChanged: !!newPassword } });
 

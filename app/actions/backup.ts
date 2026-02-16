@@ -1,6 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 
 export interface BackupData {
@@ -74,26 +76,26 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             prisma.customer.findMany({ where: { businessId } }),
             prisma.supplier.findMany({ where: { businessId } }),
             prisma.product.findMany({ where: { businessId } }),
-            prisma.unit.findMany(),
-            prisma.productUnit.findMany(),
-            prisma.inventoryBalance.findMany(),
+            prisma.unit.findMany({ where: { productUnits: { some: { product: { businessId } } } } }),
+            prisma.productUnit.findMany({ where: { product: { businessId } } }),
+            prisma.inventoryBalance.findMany({ where: { store: { businessId } } }),
             prisma.account.findMany({ where: { businessId } }),
             prisma.journalEntry.findMany({ where: { businessId } }),
-            prisma.journalLine.findMany(),
+            prisma.journalLine.findMany({ where: { journalEntry: { businessId } } }),
             prisma.salesInvoice.findMany({ where: { businessId } }),
-            prisma.salesInvoiceLine.findMany(),
-            prisma.salesPayment.findMany(),
-            prisma.salesReturn.findMany(),
+            prisma.salesInvoiceLine.findMany({ where: { salesInvoice: { businessId } } }),
+            prisma.salesPayment.findMany({ where: { salesInvoice: { businessId } } }),
+            prisma.salesReturn.findMany({ where: { salesInvoice: { businessId } } }),
             prisma.purchaseInvoice.findMany({ where: { businessId } }),
-            prisma.purchaseInvoiceLine.findMany(),
-            prisma.purchasePayment.findMany(),
-            prisma.purchaseReturn.findMany(),
+            prisma.purchaseInvoiceLine.findMany({ where: { purchaseInvoice: { businessId } } }),
+            prisma.purchasePayment.findMany({ where: { purchaseInvoice: { businessId } } }),
+            prisma.purchaseReturn.findMany({ where: { purchaseInvoice: { businessId } } }),
             prisma.expense.findMany({ where: { businessId } }),
             prisma.expensePayment.findMany({ where: { businessId } }),
-            prisma.stockMovement.findMany(),
-            prisma.stockAdjustment.findMany(),
-            prisma.till.findMany(),
-            prisma.shift.findMany()
+            prisma.stockMovement.findMany({ where: { store: { businessId } } }),
+            prisma.stockAdjustment.findMany({ where: { store: { businessId } } }),
+            prisma.till.findMany({ where: { store: { businessId } } }),
+            prisma.shift.findMany({ where: { till: { store: { businessId } } } })
         ]);
 
         const backupData: BackupData = {
@@ -179,12 +181,13 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
             await prisma.store.create({ data: store });
         }
 
-        // Users (without password - they'll need to reset)
+        // Users (with random password hash - they'll need to reset via owner)
         for (const user of backup.users) {
+            const safeHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
             await prisma.user.create({
                 data: {
                     ...user,
-                    passwordHash: '$2a$10$placeholder' // Placeholder hash, user needs to reset password
+                    passwordHash: safeHash
                 }
             });
         }

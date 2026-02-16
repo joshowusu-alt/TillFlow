@@ -59,7 +59,7 @@ export async function withBusinessContext(
   roles?: Role[]
 ): Promise<BusinessContext> {
   const user = roles ? await requireRole(roles) : await requireUser();
-  const business = await prisma.business.findFirst();
+  const business = await prisma.business.findUnique({ where: { id: user.businessId } });
   if (!business) redirect('/settings');
   return { user, businessId: business.id };
 }

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         }
         const payload = await request.json() as OfflineSalePayload;
 
-        const business = await prisma.business.findFirst();
+        const business = await prisma.business.findUnique({ where: { id: user.businessId } });
         if (!business) {
             return NextResponse.json({ error: 'Business not found' }, { status: 404 });
         }

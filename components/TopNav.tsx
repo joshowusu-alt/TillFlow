@@ -120,19 +120,22 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur" role="banner">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-emerald-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+        Skip to content
+      </a>
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-6 py-4">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <img src="/icon.svg" alt="TillFlow" width="32" height="32" className="h-8 w-8 rounded-lg" />
+          <a href="/pos" className="flex items-center gap-2" aria-label="TillFlow — go to POS">
+            <img src="/icon.svg" alt="" width="32" height="32" className="h-8 w-8 rounded-lg" aria-hidden="true" />
             <div className="text-lg font-display font-bold">
               <span className="text-emerald-600">Till</span>
               <span className="text-gray-700">Flow</span>
             </div>
-          </div>
+          </a>
         </div>
 
-        <nav ref={navRef} className="hidden items-center gap-3 lg:flex">
+        <nav ref={navRef} aria-label="Main navigation" className="hidden items-center gap-3 lg:flex">
           {visibleGroups.map((group) => {
             const isActive = group.items.some(
               (item) => pathname === item.href || pathname.startsWith(item.href + '/')
@@ -142,6 +145,8 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
                 <button
                   type="button"
                   onClick={() => setOpenGroup((prev) => (prev === group.id ? null : group.id))}
+                  aria-expanded={openGroup === group.id}
+                  aria-haspopup="true"
                   className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${isActive ? 'bg-accent text-white shadow-soft' : 'text-black/70 hover:bg-black/5'
                     }`}
                 >
@@ -186,7 +191,7 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
             <div className="uppercase tracking-[0.2em]">{user.role}</div>
           </div>
           <form action={logout} className="hidden sm:block">
-            <button type="submit" className="btn-ghost text-xs">
+            <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
               Sign out
             </button>
           </form>
@@ -194,6 +199,8 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
             type="button"
             className="btn-ghost text-xs lg:hidden"
             onClick={() => setMobileOpen((prev) => !prev)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
           >
             {mobileOpen ? 'Close' : 'Menu'}
           </button>

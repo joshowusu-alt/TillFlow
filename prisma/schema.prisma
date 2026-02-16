@@ -10,7 +10,7 @@ datasource db {
 model Business {
   id         String   @id @default(cuid())
   name       String
-  currency   String   @default("GBP")
+  currency   String   @default("GHS")
   vatEnabled Boolean  @default(false)
   vatNumber  String?
   mode       String   @default("SIMPLE")

@@ -3,7 +3,7 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient | undefined 
 
 const prismaClientSingleton = () => {
   return new PrismaClient({
-    log: ['query', 'error', 'warn'],
+    log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['query', 'error', 'warn'],
   });
 };
 

@@ -5,9 +5,9 @@ import { updateMyAccountAction } from '@/app/actions/account';
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: { error?: string; success?: string };
+  searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const user = await requireUser();
+  const [user, params] = await Promise.all([requireUser(), searchParams]);
 
   const errorMessages: Record<string, string> = {
     missing: 'Name and email are required.',
@@ -21,12 +21,12 @@ export default async function AccountPage({
     <div className="space-y-6">
       <PageHeader title="My Account" subtitle="Update your name, email, or password." />
 
-      {searchParams.error && (
+      {params.error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {errorMessages[searchParams.error] || 'An error occurred.'}
+          {errorMessages[params.error] || 'An error occurred.'}
         </div>
       )}
-      {searchParams.success === 'updated' && (
+      {params.success === 'updated' && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           Account updated successfully. Changes take effect on your next login.
         </div>

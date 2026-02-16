@@ -9,7 +9,8 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const business = await prisma.business.findFirst({
+        const business = await prisma.business.findUnique({
+            where: { id: user.businessId },
             select: {
                 id: true,
                 currency: true,
@@ -22,6 +23,7 @@ export async function GET() {
         }
 
         const store = await prisma.store.findFirst({
+            where: { businessId: business.id },
             select: {
                 id: true,
                 name: true,

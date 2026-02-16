@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const business = await prisma.business.findFirst();
+  const business = await prisma.business.findUnique({ where: { id: user.businessId } });
 
   // Check if this is a new business that needs onboarding
   const needsOnboarding = business?.name === 'Supermarket Demo';
@@ -35,7 +35,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main className="p-6">{children}</main>
+      <main id="main-content" className="p-6">{children}</main>
     </div>
   );
 }

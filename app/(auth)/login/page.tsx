@@ -1,7 +1,7 @@
 ﻿import { login } from '@/app/actions/auth';
 
-export default function LoginPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const error = searchParams?.error;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   return (
     <div className="space-y-6">
       <div className="text-center">
