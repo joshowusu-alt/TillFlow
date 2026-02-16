@@ -1,5 +1,5 @@
 import PageHeader from '@/components/PageHeader';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { getCashflow } from '@/lib/reports/financials';
@@ -11,8 +11,7 @@ export default async function CashflowPage({
 }: {
   searchParams?: { from?: string; to?: string };
 }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   if (!isAdvancedMode(business.mode as any)) {
     return <AdvancedModeNotice title="Cashflow is an advanced report" />;

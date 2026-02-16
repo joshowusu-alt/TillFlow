@@ -1,11 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import ShiftClient from './ShiftClient';
 
 export default async function ShiftsPage() {
-  const user = await requireUser();
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness();
   if (!business) return <div>Business not found</div>;
 
   const store = await prisma.store.findFirst({

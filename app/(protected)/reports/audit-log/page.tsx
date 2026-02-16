@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import PageHeader from '@/components/PageHeader';
 import type { AuditAction } from '@/lib/audit';
 
@@ -55,10 +55,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: { action?: string; user?: string; page?: string };
 }) {
-  await requireRole(['OWNER']);
-
-  const business = await prisma.business.findFirst();
-  if (!business) return <div>Business not found</div>;
+  const { user, business } = await requireBusiness(['OWNER']);
 
   const pageSize = 50;
   const currentPage = Math.max(1, parseInt(searchParams.page || '1', 10) || 1);

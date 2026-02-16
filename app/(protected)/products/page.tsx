@@ -1,7 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
@@ -9,8 +9,7 @@ import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from
 import Link from 'next/link';
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string } }) {
-  const user = await requireUser();
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const products = await prisma.product.findMany({

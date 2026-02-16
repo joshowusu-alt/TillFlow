@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useFormStatus } from 'react-dom';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
@@ -767,11 +768,18 @@ export default function PurchaseFormClient({
         ) : null}
 
         <div>
-          <button className="btn-primary" disabled={cart.length === 0 || overpay}>
-            Receive Purchase
-          </button>
+          <ReceivePurchaseButton disabled={cart.length === 0 || overpay} />
         </div>
       </form>
     </div>
+  );
+}
+
+function ReceivePurchaseButton({ disabled }: { disabled: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className="btn-primary" disabled={disabled || pending}>
+      {pending ? 'Submitting…' : 'Receive Purchase'}
+    </button>
   );
 }

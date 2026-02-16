@@ -1,12 +1,11 @@
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { createPurchaseReturnAction } from '@/app/actions/returns';
 
 export default async function PurchaseReturnPage({ params }: { params: { id: string } }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const invoice = await prisma.purchaseInvoice.findUnique({

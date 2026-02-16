@@ -1,11 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import PosClient from './PosClient';
 
 export default async function PosPage() {
-  await requireUser();
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst({ include: { tills: true } });
+  const { user, business, store: baseStore } = await requireBusinessStore();
+  const store = await prisma.store.findFirst({ where: { id: baseStore.id }, include: { tills: true } });
   if (!business || !store) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }

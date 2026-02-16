@@ -1,6 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 
@@ -11,8 +11,7 @@ export default async function SupplierDetailPage({
   params: { id: string };
   searchParams?: { from?: string; to?: string };
 }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const start = searchParams?.from ? new Date(searchParams.from) : undefined;

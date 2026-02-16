@@ -1,14 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { createCustomerAction } from '@/app/actions/customers';
 import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
 export default async function CustomersPage({ searchParams }: { searchParams?: { error?: string } }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const customers = await prisma.customer.findMany({

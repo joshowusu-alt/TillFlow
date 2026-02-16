@@ -2,15 +2,14 @@ import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
+import DeletePurchaseButton from './DeletePurchaseButton';
 
 export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string } }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst();
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return (
       <div className="card p-6 text-center">
@@ -122,9 +121,12 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
                     {purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus) ? (
                       <span className="text-xs text-black/40">Returned</span>
                     ) : (
-                      <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
-                        Return
-                      </Link>
+                      <div className="flex gap-2">
+                        <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
+                          Return
+                        </Link>
+                        <DeletePurchaseButton purchaseId={purchase.id} />
+                      </div>
                     )}
                   </td>
                 </tr>

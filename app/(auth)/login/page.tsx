@@ -1,4 +1,5 @@
 ﻿import { login } from '@/app/actions/auth';
+import Link from 'next/link';
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -29,6 +30,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <button className="btn-primary w-full" type="submit">Sign in</button>
       </form>
+      <div className="text-center text-sm text-black/50">
+        Don&apos;t have an account?{' '}
+        <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+          Create one free
+        </Link>
+      </div>
     </div>
   );
 }

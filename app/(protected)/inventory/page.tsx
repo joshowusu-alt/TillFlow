@@ -1,15 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 
 export default async function InventoryPage() {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst();
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }

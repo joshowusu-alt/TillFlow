@@ -1,7 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
@@ -14,9 +14,7 @@ export default async function ProductDetailPage({
   params: { id: string };
   searchParams?: { error?: string };
 }) {
-  const user = await requireUser();
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst();
+  const { user, business, store } = await requireBusinessStore();
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const product = await prisma.product.findUnique({

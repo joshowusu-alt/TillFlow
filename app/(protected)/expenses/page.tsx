@@ -1,16 +1,14 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 
 export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string } }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst();
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const features = getFeatures(business.mode as any);

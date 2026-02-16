@@ -5,14 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
-import { requireRole } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
-  const store = await prisma.store.findFirst();
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return (
       <div className="card p-6 text-center">

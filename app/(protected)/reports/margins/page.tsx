@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 
 export default async function MarginsPage({
@@ -7,8 +7,7 @@ export default async function MarginsPage({
 }: {
   searchParams: { period?: string };
 }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div>Business not found</div>;
 
   const period = searchParams.period || '30';

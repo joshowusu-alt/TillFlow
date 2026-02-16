@@ -37,3 +37,25 @@ export async function requireRole(roles: Role[]) {
   }
   return user;
 }
+
+/**
+ * Authenticate and return the user + their Business record.
+ * Always scoped to the logged-in user's businessId.
+ */
+export async function requireBusiness(roles?: Role[]) {
+  const user = roles ? await requireRole(roles) : await requireUser();
+  const business = await prisma.business.findUnique({ where: { id: user.businessId } });
+  if (!business) redirect('/login');
+  return { user, business };
+}
+
+/**
+ * Authenticate and return user + Business + first Store.
+ * Always scoped to the logged-in user's businessId.
+ */
+export async function requireBusinessStore(roles?: Role[]) {
+  const { user, business } = await requireBusiness(roles);
+  const store = await prisma.store.findFirst({ where: { businessId: business.id } });
+  if (!store) redirect('/settings');
+  return { user, business, store };
+}

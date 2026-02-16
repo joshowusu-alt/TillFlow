@@ -1,14 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  await requireRole(['MANAGER', 'OWNER']);
-  const business = await prisma.business.findFirst();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   return (

@@ -1,14 +1,12 @@
 import PageHeader from '@/components/PageHeader';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
 
 import { formatMoney } from '@/lib/format';
 
 export default async function ReceiptDesignPage() {
-    await requireRole(['OWNER', 'MANAGER']);
-
-    const business = await prisma.business.findFirst();
+    const { user, business } = await requireBusiness(['OWNER', 'MANAGER']);
     if (!business) {
         return <div className="card p-6">Business not found. Please complete setup.</div>;
     }

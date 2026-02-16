@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
@@ -7,9 +7,7 @@ import AnalyticsClient from './AnalyticsClient';
 export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
-    await requireRole(['MANAGER', 'OWNER']);
-
-    const business = await prisma.business.findFirst();
+    const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
     if (!business) {
         return <div className="card p-6">Business not found.</div>;
     }

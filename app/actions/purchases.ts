@@ -1,10 +1,11 @@
 'use server';
 
 import { createPurchase } from '@/lib/services/purchases';
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { toInt, toPence } from '@/lib/form-helpers';
 import { formString, formInt, formDate } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 
@@ -55,4 +56,66 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 
     redirect('/purchases');
   }, '/purchases');
+}
+
+/**
+ * Delete a purchase invoice and reverse the inventory movements.
+ */
+export async function deletePurchaseAction(purchaseId: string): Promise<ActionResult> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const invoice = await prisma.purchaseInvoice.findUnique({
+      where: { id: purchaseId },
+      include: { lines: true, payments: true, purchaseReturn: true },
+    });
+
+    if (!invoice || invoice.businessId !== businessId) {
+      return err('Purchase not found.');
+    }
+
+    if (invoice.purchaseReturn) {
+      return err('Cannot delete a purchase that has been returned.');
+    }
+
+    // Reverse inventory: subtract the quantities that were added
+    for (const line of invoice.lines) {
+      const balance = await prisma.inventoryBalance.findFirst({
+        where: { storeId: invoice.storeId, productId: line.productId },
+      });
+      if (balance) {
+        await prisma.inventoryBalance.update({
+          where: { id: balance.id },
+          data: { qtyOnHandBase: Math.max(0, balance.qtyOnHandBase - line.qtyBase) },
+        });
+      }
+    }
+
+    // Delete related records then the invoice
+    await prisma.purchasePayment.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
+    await prisma.stockMovement.deleteMany({ where: { referenceType: 'PURCHASE', referenceId: purchaseId } });
+    await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
+    await prisma.purchaseInvoice.delete({ where: { id: purchaseId } });
+
+    // Delete accounting entries if any
+    await prisma.journalLine.deleteMany({
+      where: { journalEntry: { referenceType: 'PURCHASE', referenceId: purchaseId } },
+    });
+    await prisma.journalEntry.deleteMany({
+      where: { referenceType: 'PURCHASE', referenceId: purchaseId },
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PURCHASE_CREATE',
+      entity: 'PurchaseInvoice',
+      entityId: purchaseId,
+      details: { action: 'DELETE', lines: invoice.lines.length },
+    });
+
+    return ok();
+  });
 }
