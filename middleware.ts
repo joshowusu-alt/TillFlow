@@ -9,7 +9,8 @@ export function middleware(request: NextRequest) {
 
     // --- Auth guard: redirect unauthenticated users to /login ---
     const sessionToken = request.cookies.get('pos_session')?.value;
-    const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+    const isPublic =
+        pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!sessionToken && !isPublic) {
         const loginUrl = request.nextUrl.clone();
