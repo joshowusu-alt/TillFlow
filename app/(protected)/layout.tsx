@@ -1,7 +1,6 @@
 import { requireUser } from '@/lib/auth';
 import TopNav from '@/components/TopNav';
 import { prisma } from '@/lib/prisma';
-import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 
@@ -13,15 +12,6 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const needsOnboarding = business?.name === 'Supermarket Demo';
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
-
-  // Auto-redirect to onboarding on first login (except if already on onboarding)
-  if (needsOnboarding && !pathname.includes('/onboarding') && user.role === 'OWNER') {
-    // Only redirect owners, let cashiers/managers proceed
-    const referer = headersList.get('referer') || '';
-    if (referer.includes('/login') || referer === '') {
-      redirect('/onboarding');
-    }
-  }
 
   return (
     <div className="min-h-screen">

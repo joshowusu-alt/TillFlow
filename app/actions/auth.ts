@@ -45,6 +45,17 @@ export async function login(formData: FormData) {
 
   await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'LOGIN' });
 
+  // Redirect owners to onboarding if the business still has the default name
+  if (user.role === 'OWNER') {
+    const business = await prisma.business.findFirst({
+      where: { id: user.businessId },
+      select: { name: true },
+    });
+    if (business?.name === 'Supermarket Demo') {
+      redirect('/onboarding');
+    }
+  }
+
   redirect('/pos');
 }
 
