@@ -11,7 +11,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
-    const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | '';
+    const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
     const refundAmountPence = formInt(formData, 'refundAmountPence');
     const type = (formString(formData, 'type') || 'RETURN') as 'RETURN' | 'VOID';
     const reason = formString(formData, 'reason') || null;
@@ -37,7 +37,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const purchaseInvoiceId = formString(formData, 'purchaseInvoiceId');
-    const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | '';
+    const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
     const refundAmountPence = formInt(formData, 'refundAmountPence');
     const type = (formString(formData, 'type') || 'RETURN') as 'RETURN' | 'VOID';
     const reason = formString(formData, 'reason') || null;

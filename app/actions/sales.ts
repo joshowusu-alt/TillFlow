@@ -125,6 +125,8 @@ export async function completeSaleAction(data: {
   cashPaid: number;
   cardPaid: number;
   transferPaid: number;
+  momoPaid?: number;
+  momoRef?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext();
@@ -180,6 +182,7 @@ export async function completeSaleAction(data: {
         { method: 'CASH', amountPence: data.cashPaid },
         { method: 'CARD', amountPence: data.cardPaid },
         { method: 'TRANSFER', amountPence: data.transferPaid },
+        { method: 'MOBILE_MONEY', amountPence: data.momoPaid ?? 0, reference: data.momoRef ?? null },
       ],
       lines,
     });
@@ -205,7 +208,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
 
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
     const reason = formString(formData, 'reason') || 'Sale amended';
-    const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER';
+    const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 
     let keepLineIds: string[] = [];
     const keepRaw = formData.get('keepLineIds');

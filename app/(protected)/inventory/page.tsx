@@ -41,7 +41,10 @@ export default async function InventoryPage() {
         subtitle="Real-time balances in mixed units."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Link className="btn-secondary text-xs" href="/inventory/stocktake">
+          Stocktake
+        </Link>
         <Link className="btn-secondary text-xs" href="/inventory/adjustments">
           Record adjustment
         </Link>

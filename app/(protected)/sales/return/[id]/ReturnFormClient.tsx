@@ -48,6 +48,7 @@ export default function ReturnFormClient({
                 <option value="CASH">Cash</option>
                 <option value="CARD">Card</option>
                 <option value="TRANSFER">Transfer</option>
+                <option value="MOBILE_MONEY">Mobile Money</option>
               </select>
             </div>
             <div>

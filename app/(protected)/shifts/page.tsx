@@ -51,6 +51,7 @@ export default async function ShiftsPage() {
     let cashTotal = openShift.openingCashPence;
     let cardTotal = 0;
     let transferTotal = 0;
+    let momoTotal = 0;
     let salesCount = openShift.salesInvoices.length;
     let salesTotal = 0;
 
@@ -60,6 +61,7 @@ export default async function ShiftsPage() {
         if (payment.method === 'CASH') cashTotal += payment.amountPence;
         if (payment.method === 'CARD') cardTotal += payment.amountPence;
         if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
+        if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
       }
     }
 
@@ -69,7 +71,8 @@ export default async function ShiftsPage() {
       salesTotal,
       expectedCash: cashTotal,
       cardTotal,
-      transferTotal
+      transferTotal,
+      momoTotal
     };
   }
 
@@ -98,7 +101,8 @@ export default async function ShiftsPage() {
           actualCashPence: s.actualCashPence,
           variance: s.variance,
           cardTotalPence: s.cardTotalPence,
-          transferTotalPence: s.transferTotalPence
+          transferTotalPence: s.transferTotalPence,
+          momoTotalPence: (s as any).momoTotalPence ?? 0
         }))}
         currency={business.currency}
       />

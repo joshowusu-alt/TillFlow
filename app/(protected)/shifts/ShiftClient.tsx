@@ -16,6 +16,7 @@ type OpenShift = {
   expectedCash: number;
   cardTotal: number;
   transferTotal: number;
+  momoTotal: number;
 };
 
 type RecentShift = {
@@ -32,6 +33,7 @@ type RecentShift = {
   variance: number | null;
   cardTotalPence: number;
   transferTotalPence: number;
+  momoTotalPence: number;
 };
 
 type Props = {
@@ -156,11 +158,19 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
               </div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-black/40">Card + Transfer</div>
+              <div className="text-xs uppercase tracking-wide text-black/40">Card / Transfer</div>
               <div className="mt-1 text-2xl font-bold">
                 {formatMoney(openShift.cardTotal + openShift.transferTotal, currency)}
               </div>
             </div>
+            {openShift.momoTotal > 0 && (
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
+                <div className="text-xs uppercase tracking-wide text-yellow-700">Mobile Money</div>
+                <div className="mt-1 text-2xl font-bold text-yellow-700">
+                  {formatMoney(openShift.momoTotal, currency)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : (

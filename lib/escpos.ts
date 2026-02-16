@@ -137,6 +137,9 @@ export function buildEscPosReceipt(data: ReceiptData) {
   const transferPaid = data.payments
     .filter((payment) => payment.method === 'TRANSFER')
     .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const momoPaid = data.payments
+    .filter((payment) => payment.method === 'MOBILE_MONEY')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
   appendText(
     buffer,
     `${formatLine('Paid (cash)', formatMoney(cashPaid, data.business.currency), width)}\n`
@@ -151,6 +154,12 @@ export function buildEscPosReceipt(data: ReceiptData) {
     appendText(
       buffer,
       `${formatLine('Paid (transfer)', formatMoney(transferPaid, data.business.currency), width)}\n`
+    );
+  }
+  if (momoPaid > 0) {
+    appendText(
+      buffer,
+      `${formatLine('Paid (MoMo)', formatMoney(momoPaid, data.business.currency), width)}\n`
     );
   }
 

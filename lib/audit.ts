@@ -26,7 +26,9 @@ export type AuditAction =
   | 'DISCOUNT_APPLIED'
   | 'SHIFT_OPEN'
   | 'SHIFT_CLOSE'
-  | 'DATA_RESET';
+  | 'DATA_RESET'
+  | 'STOCKTAKE_CREATE'
+  | 'STOCKTAKE_COMPLETE';
 
 /**
  * Write an entry to the audit trail — fire-and-forget, never throws.

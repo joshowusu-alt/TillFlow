@@ -50,7 +50,7 @@ export interface UseOfflinePosResult {
             discountValue: string;
         }>;
         payments: Array<{
-            method: 'CASH' | 'CARD' | 'TRANSFER';
+            method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
             amountPence: number;
         }>;
         orderDiscountType: string;
@@ -143,7 +143,7 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
             discountValue: string;
         }>;
         payments: Array<{
-            method: 'CASH' | 'CARD' | 'TRANSFER';
+            method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
             amountPence: number;
         }>;
         orderDiscountType: string;

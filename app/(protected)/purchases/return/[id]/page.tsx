@@ -57,6 +57,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
                   <option value="CASH">Cash</option>
                   <option value="CARD">Card</option>
                   <option value="TRANSFER">Transfer</option>
+                  <option value="MOBILE_MONEY">Mobile Money</option>
                 </select>
               </div>
               <div>

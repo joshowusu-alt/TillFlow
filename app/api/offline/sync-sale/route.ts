@@ -20,7 +20,7 @@ interface OfflineSalePayload {
         discountValue: string;
     }>;
     payments: Array<{
-        method: 'CASH' | 'CARD' | 'TRANSFER';
+        method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
         amountPence: number;
     }>;
     orderDiscountType: string;

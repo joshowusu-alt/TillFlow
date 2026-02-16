@@ -18,10 +18,16 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const receiptTemplate = formString(formData, 'receiptTemplate') || 'THERMAL_80';
     const printMode = formString(formData, 'printMode') || 'DIRECT_ESC_POS';
     const printerName = formOptionalString(formData, 'printerName');
+    const tinNumber = formOptionalString(formData, 'tinNumber');
+    const phone = formOptionalString(formData, 'phone');
+    const address = formOptionalString(formData, 'address');
+    const momoEnabled = formData.get('momoEnabled') === 'on';
+    const momoProvider = formOptionalString(formData, 'momoProvider');
+    const momoNumber = formOptionalString(formData, 'momoNumber');
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName }
+      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName, tinNumber, phone, address, momoEnabled, momoProvider, momoNumber }
     });
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });

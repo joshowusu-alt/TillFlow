@@ -70,11 +70,13 @@ export async function closeShiftAction(
     let cashTotal = shift.openingCashPence;
     let cardTotal = 0;
     let transferTotal = 0;
+    let momoTotal = 0;
     for (const invoice of shift.salesInvoices) {
       for (const payment of invoice.payments) {
         if (payment.method === 'CASH') cashTotal += payment.amountPence;
         else if (payment.method === 'CARD') cardTotal += payment.amountPence;
         else if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
+        else if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
       }
     }
 
@@ -88,6 +90,7 @@ export async function closeShiftAction(
         actualCashPence: actualCash,
         cardTotalPence: cardTotal,
         transferTotalPence: transferTotal,
+        momoTotalPence: momoTotal,
         variance,
         notes,
         status: 'CLOSED'
@@ -130,6 +133,7 @@ export async function getShiftSummary(shiftId: string) {
   let cashTotal = shift.openingCashPence;
   let cardTotal = 0;
   let transferTotal = 0;
+  let momoTotal = 0;
   let salesCount = 0;
   let salesTotal = 0;
 
@@ -143,6 +147,8 @@ export async function getShiftSummary(shiftId: string) {
         cardTotal += payment.amountPence;
       } else if (payment.method === 'TRANSFER') {
         transferTotal += payment.amountPence;
+      } else if (payment.method === 'MOBILE_MONEY') {
+        momoTotal += payment.amountPence;
       }
     }
   }
@@ -153,6 +159,7 @@ export async function getShiftSummary(shiftId: string) {
     salesTotal,
     expectedCash: cashTotal,
     cardTotal,
-    transferTotal
+    transferTotal,
+    momoTotal
   };
 }

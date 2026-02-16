@@ -87,6 +87,37 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <label className="label">VAT Number</label>
             <input className="input" name="vatNumber" defaultValue={business.vatNumber ?? ''} />
           </div>
+          <div>
+            <label className="label">GRA TIN</label>
+            <input className="input" name="tinNumber" defaultValue={(business as any).tinNumber ?? ''} placeholder="e.g. C0012345678" />
+            <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
+          </div>
+          <div>
+            <label className="label">Phone Number</label>
+            <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
+          </div>
+          <div>
+            <label className="label">Business Address</label>
+            <input className="input" name="address" defaultValue={business.address ?? ''} />
+          </div>
+          <div className="flex items-center gap-2">
+            <input className="h-4 w-4" type="checkbox" name="momoEnabled" defaultChecked={(business as any).momoEnabled ?? false} />
+            <label className="text-sm">Mobile Money Enabled</label>
+          </div>
+          <div>
+            <label className="label">MoMo Provider</label>
+            <select className="input" name="momoProvider" defaultValue={(business as any).momoProvider ?? ''}>
+              <option value="">Select provider</option>
+              <option value="MTN">MTN Mobile Money</option>
+              <option value="TELECEL">Telecel Cash</option>
+              <option value="AIRTELTIGO">AirtelTigo Money</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">MoMo Number</label>
+            <input className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
+            <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
+          </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">

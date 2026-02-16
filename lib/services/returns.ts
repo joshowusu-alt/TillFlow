@@ -43,7 +43,7 @@ export async function createSalesReturn(input: {
   businessId: string;
   salesInvoiceId: string;
   userId: string;
-  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | null;
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
   refundAmountPence?: number | null;
   reason?: string | null;
   type: 'RETURN' | 'VOID';
@@ -163,7 +163,7 @@ export async function createPurchaseReturn(input: {
   businessId: string;
   purchaseInvoiceId: string;
   userId: string;
-  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | null;
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
   refundAmountPence?: number | null;
   reason?: string | null;
   type: 'RETURN' | 'VOID';

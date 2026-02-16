@@ -26,6 +26,11 @@ model Business {
   socialMediaHandle   String?
   address             String?
   phone               String?
+  // Ghana-specific fields
+  tinNumber           String?
+  momoEnabled         Boolean  @default(false)
+  momoProvider        String?
+  momoNumber          String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -55,6 +60,7 @@ model Store {
   inventoryBalances InventoryBalance[]
   stockMovements    StockMovement[]
   stockAdjustments  StockAdjustment[]
+  stocktakes        Stocktake[]
   salesInvoices     SalesInvoice[]
   purchaseInvoices  PurchaseInvoice[]
   salesReturns      SalesReturn[]
@@ -90,6 +96,7 @@ model Shift {
   actualCashPence    Int?
   cardTotalPence     Int       @default(0)
   transferTotalPence Int       @default(0)
+  momoTotalPence     Int       @default(0)
   variance           Int?
   notes              String?
   status             String    @default("OPEN")
@@ -126,6 +133,7 @@ model User {
   expensePayments  ExpensePayment[]
   shifts           Shift[]
   auditLogs        AuditLog[]
+  stocktakes       Stocktake[]
 }
 
 model Session {
@@ -216,6 +224,7 @@ model Product {
   purchaseLines     PurchaseInvoiceLine[]
   stockMovements    StockMovement[]
   stockAdjustments  StockAdjustment[]
+  stocktakeLines    StocktakeLine[]
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
@@ -558,6 +567,39 @@ model JournalLine {
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   account      Account      @relation(fields: [accountId], references: [id])
+}
+
+model Stocktake {
+  id         String   @id @default(cuid())
+  storeId    String
+  userId     String
+  status     String   @default("IN_PROGRESS")
+  notes      String?
+  createdAt  DateTime @default(now())
+  completedAt DateTime?
+
+  store Store @relation(fields: [storeId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  lines StocktakeLine[]
+
+  @@index([storeId, createdAt])
+  @@index([status])
+}
+
+model StocktakeLine {
+  id            String @id @default(cuid())
+  stocktakeId   String
+  productId     String
+  expectedBase  Int
+  countedBase   Int
+  varianceBase  Int
+  adjusted      Boolean @default(false)
+
+  stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@unique([stocktakeId, productId])
+  @@index([stocktakeId])
 }
 
 model AuditLog {

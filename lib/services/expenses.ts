@@ -9,7 +9,7 @@ export type ExpenseInput = {
   accountId: string;
   amountPence: number;
   paymentStatus: 'PAID' | 'PART_PAID' | 'UNPAID';
-  method?: 'CASH' | 'CARD' | 'TRANSFER' | null;
+  method?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
   amountPaidPence?: number;
   dueDate?: Date | null;
   vendorName?: string | null;

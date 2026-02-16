@@ -12,7 +12,7 @@ import { ACCOUNT_CODES } from '@/lib/accounting';
 // Types
 // ---------------------------------------------------------------------------
 
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER';
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 
 export type PaymentInput = {
   method: PaymentMethod;
@@ -24,7 +24,7 @@ export type PaymentStatus = 'PAID' | 'PART_PAID' | 'UNPAID';
 
 export type PaymentSplit = {
   cashPence: number;
-  bankPence: number; // card + transfer
+  bankPence: number; // card + transfer + mobile money
   totalPence: number;
 };
 

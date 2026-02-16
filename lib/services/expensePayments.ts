@@ -7,7 +7,7 @@ export type ExpensePaymentInput = {
   storeId: string;
   userId: string;
   expenseId: string;
-  method: 'CASH' | 'CARD' | 'TRANSFER';
+  method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
   amountPence: number;
   reference?: string | null;
 };

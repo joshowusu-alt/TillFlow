@@ -210,7 +210,10 @@ export async function createSale(input: CreateSaleInput) {
       .map((p) => ({ method: 'CARD' as const, amountPence: p.amountPence })),
     ...fallbackPayments
       .filter((p) => p.method === 'TRANSFER' && p.amountPence > 0)
-      .map((p) => ({ method: 'TRANSFER' as const, amountPence: p.amountPence }))
+      .map((p) => ({ method: 'TRANSFER' as const, amountPence: p.amountPence })),
+    ...fallbackPayments
+      .filter((p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0)
+      .map((p) => ({ method: 'MOBILE_MONEY' as const, amountPence: p.amountPence }))
   ].filter(Boolean) as SalePaymentInput[];
 
   const finalStatus =
@@ -329,7 +332,7 @@ export type AmendSaleInput = {
   /** Line IDs to keep — any line NOT in this array is removed. */
   keepLineIds: string[];
   /** Refund method when new total < old total */
-  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER';
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 };
 
 /**

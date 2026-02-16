@@ -1,12 +1,15 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef, useTransition, useCallback } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { completeSaleAction } from '@/app/actions/sales';
-import { quickCreateProductAction } from '@/app/actions/products';
+import SummarySidebar from './components/SummarySidebar';
+import KeyboardHelpModal from './components/KeyboardHelpModal';
+import QuickAddPanel from './components/QuickAddPanel';
+import ParkModal from './components/ParkModal';
 
 type UnitDto = {
   id: string;
@@ -52,11 +55,21 @@ type CartLine = {
   discountValue?: string;
 };
 
-type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER';
+type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 
 const CART_STORAGE_KEY = 'pos.savedCart';
 const CART_CUSTOMER_KEY = 'pos.savedCustomer';
+const PARKED_CARTS_KEY = 'pos.parkedCarts';
+
+type ParkedCart = {
+  id: string;
+  label: string;
+  cart: CartLine[];
+  customerId: string;
+  parkedAt: string;
+  itemCount: number;
+};
 
 export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
   const searchParams = useSearchParams();
@@ -77,6 +90,8 @@ export default function PosClient({ business, store, tills, products, customers,
   const [cashTendered, setCashTendered] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
+  const [momoPaid, setMomoPaid] = useState('');
+  const [momoRef, setMomoRef] = useState('');
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
@@ -97,18 +112,8 @@ export default function PosClient({ business, store, tills, products, customers,
     active: boolean;
   }>({ value: '', lastTime: 0, fastCount: 0, active: false });
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [quickAddError, setQuickAddError] = useState<string | null>(null);
-  const [quickName, setQuickName] = useState('');
-  const [quickSku, setQuickSku] = useState('');
-  const [quickBarcode, setQuickBarcode] = useState('');
-  const [quickBaseUnitId, setQuickBaseUnitId] = useState(safeUnits[0]?.id ?? '');
-  const [quickPackagingUnitId, setQuickPackagingUnitId] = useState('');
-  const [quickPackagingConversion, setQuickPackagingConversion] = useState('1');
-  const [quickSellPrice, setQuickSellPrice] = useState('');
-  const [quickCost, setQuickCost] = useState('');
-  const [quickVatRate, setQuickVatRate] = useState('0');
+  const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
-  const [isCreating, startTransition] = useTransition();
   const [productSearch, setProductSearch] = useState('');
 
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
@@ -118,6 +123,11 @@ export default function PosClient({ business, store, tills, products, customers,
   const maxUndoSteps = 10;
   const [cartRestored, setCartRestored] = useState(false);
   const cartInitialized = useRef(false);
+
+  // Park/hold state
+  const [parkedCarts, setParkedCarts] = useState<ParkedCart[]>([]);
+  const [showParkModal, setShowParkModal] = useState(false);
+  const [showParkedPanel, setShowParkedPanel] = useState(false);
 
   const pushUndo = useCallback((currentCart: CartLine[]) => {
     setUndoStack((prev) => [...prev.slice(-(maxUndoSteps - 1)), currentCart]);
@@ -184,80 +194,10 @@ export default function PosClient({ business, store, tills, products, customers,
     return 0;
   }, [parseCurrencyToPence, parsePercent]);
 
-  const resetQuickForm = useCallback(() => {
-    setQuickName('');
-    setQuickSku('');
-    setQuickBarcode('');
-    setQuickBaseUnitId(safeUnits[0]?.id ?? '');
-    setQuickPackagingUnitId('');
-    setQuickPackagingConversion('1');
-    setQuickSellPrice('');
-    setQuickCost('');
-    setQuickVatRate('0');
-  }, [safeUnits]);
-
   const openQuickAdd = useCallback((barcodeValue?: string) => {
     setQuickAddOpen(true);
-    setQuickAddError(null);
-    resetQuickForm();
-    if (barcodeValue) {
-      setQuickBarcode(barcodeValue);
-    }
-  }, [resetQuickForm]);
-
-  const handleQuickCreate = () => {
-    setQuickAddError(null);
-    if (!quickName.trim()) {
-      setQuickAddError('Please enter a product name.');
-      return;
-    }
-    if (!quickBaseUnitId) {
-      setQuickAddError('Please select a base unit.');
-      return;
-    }
-    const selling = parseCurrencyToPence(quickSellPrice);
-    const cost = parseCurrencyToPence(quickCost);
-    if (selling <= 0 || cost <= 0) {
-      setQuickAddError('Please enter both the selling price and cost.');
-      return;
-    }
-    startTransition(async () => {
-      try {
-        const result = await quickCreateProductAction({
-          name: quickName.trim(),
-          sku: quickSku.trim() || null,
-          barcode: quickBarcode.trim() || null,
-          sellingPriceBasePence: selling,
-          defaultCostBasePence: cost,
-          vatRateBps: Math.max(0, parseInt(quickVatRate, 10) || 0),
-          baseUnitId: quickBaseUnitId,
-          packagingUnitId: quickPackagingUnitId || null,
-          packagingConversion: parseInt(quickPackagingConversion, 10) || 1
-        });
-        if (!result.success) throw new Error(result.error);
-        const created = result.data;
-        setQuickAddOpen(false);
-        setQuickAddError(null);
-        setProductId(created.id);
-        const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
-        setUnitId(baseUnit?.id ?? '');
-        setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
-        if (pendingScan || quickBarcode.trim()) {
-          const targetBarcode = pendingScan ?? quickBarcode.trim();
-          if (targetBarcode && created.barcode === targetBarcode) {
-            addToCart({ productId: created.id, unitId: baseUnit?.id ?? '', qtyInUnit: 1 });
-          }
-        }
-        setPendingScan(null);
-        resetQuickForm();
-        setBarcodeAlert(null);
-        setBarcode('');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to create product.';
-        setQuickAddError(message);
-      }
-    });
-  };
+    setQuickAddBarcode(barcodeValue ?? '');
+  }, []);
 
   useEffect(() => {
     barcodeRef.current?.focus();
@@ -324,6 +264,90 @@ export default function PosClient({ business, store, tills, products, customers,
     }
   };
 
+  // ── Park/Hold Cart ──────────────────────────────────────
+  // Load parked carts on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(PARKED_CARTS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ParkedCart[];
+        if (Array.isArray(parsed)) setParkedCarts(parsed);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveParkedCarts = useCallback((carts: ParkedCart[]) => {
+    setParkedCarts(carts);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PARKED_CARTS_KEY, JSON.stringify(carts));
+    }
+  }, []);
+
+  const parkCurrentCart = useCallback((label: string) => {
+    if (cart.length === 0) return;
+    const parked: ParkedCart = {
+      id: Date.now().toString(36),
+      label: label.trim() || `Sale (${cart.length} items)`,
+      cart: [...cart],
+      customerId,
+      parkedAt: new Date().toISOString(),
+      itemCount: cart.length,
+    };
+    const updated = [...parkedCarts, parked];
+    saveParkedCarts(updated);
+    // Clear current cart
+    setCart([]);
+    clearSavedCart();
+    setCustomerId('');
+    setCashTendered('');
+    setCardPaid('');
+    setTransferPaid('');
+    setMomoPaid('');
+    setMomoRef('');
+    setPaymentMethods(['CASH']);
+    setOrderDiscountType('NONE');
+    setOrderDiscountInput('');
+    setQtyDrafts({});
+    setUndoStack([]);
+    playBeep(true);
+  }, [cart, customerId, parkedCarts, saveParkedCarts, playBeep]);
+
+  const recallParkedCart = useCallback((parkedId: string) => {
+    const parked = parkedCarts.find((p) => p.id === parkedId);
+    if (!parked) return;
+    // If current cart has items, park it first (swap)
+    if (cart.length > 0) {
+      const currentParked: ParkedCart = {
+        id: Date.now().toString(36),
+        label: `Swapped sale (${cart.length} items)`,
+        cart: [...cart],
+        customerId,
+        parkedAt: new Date().toISOString(),
+        itemCount: cart.length,
+      };
+      const updated = parkedCarts.filter((p) => p.id !== parkedId);
+      updated.push(currentParked);
+      saveParkedCarts(updated);
+    } else {
+      saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
+    }
+    // Restore parked cart
+    const validCart = parked.cart.filter((line) =>
+      productOptions.some((p) => p.id === line.productId)
+    );
+    setCart(validCart);
+    if (parked.customerId) {
+      const customerExists = customers.some((c) => c.id === parked.customerId);
+      setCustomerId(customerExists ? parked.customerId : '');
+    }
+    playBeep(true);
+  }, [cart, customerId, customers, parkedCarts, productOptions, saveParkedCarts, playBeep]);
+
+  const deleteParkedCart = useCallback((parkedId: string) => {
+    saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
+  }, [parkedCarts, saveParkedCarts]);
+
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
     setIsCompletingSale(true);
@@ -342,6 +366,8 @@ export default function PosClient({ business, store, tills, products, customers,
         cashPaid: Math.max(0, Math.round(cashApplied)),
         cardPaid: Math.max(0, Math.round(cardPaidValue)),
         transferPaid: Math.max(0, Math.round(transferPaidValue)),
+        momoPaid: Math.max(0, Math.round(momoPaidValue)),
+        momoRef: momoRef.trim() || undefined,
       });
 
       if (result.success) {
@@ -360,6 +386,8 @@ export default function PosClient({ business, store, tills, products, customers,
         setCashTendered('');
         setCardPaid('');
         setTransferPaid('');
+        setMomoPaid('');
+        setMomoRef('');
         setPaymentStatus('PAID');
         setPaymentMethods(['CASH']);
         setOrderDiscountType('NONE');
@@ -458,6 +486,7 @@ export default function PosClient({ business, store, tills, products, customers,
       if (method === 'CASH') setCashTendered('');
       if (method === 'CARD') setCardPaid('');
       if (method === 'TRANSFER') setTransferPaid('');
+      if (method === 'MOBILE_MONEY') { setMomoPaid(''); setMomoRef(''); }
     }
     setPaymentMethods(next);
   };
@@ -539,6 +568,26 @@ export default function PosClient({ business, store, tills, products, customers,
       ];
     });
   }, [cart, clampQtyInUnit]);
+
+  const handleQuickCreated = useCallback((created: { id: string; name: string; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean }[] }, matchedScan: boolean) => {
+    setQuickAddOpen(false);
+    setProductId(created.id);
+    const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
+    setUnitId(baseUnit?.id ?? '');
+    setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
+    if (matchedScan) {
+      addToCart({ productId: created.id, unitId: baseUnit?.id ?? '', qtyInUnit: 1 });
+    }
+    setPendingScan(null);
+    setBarcodeAlert(null);
+    setBarcode('');
+  }, [addToCart]);
+
+  const handleQuickCancel = useCallback(() => {
+    setQuickAddOpen(false);
+    setPendingScan(null);
+    setBarcodeAlert(null);
+  }, []);
 
   const handleAddToCart = () => {
     const parsed = Number(qtyInUnitInput);
@@ -675,11 +724,13 @@ export default function PosClient({ business, store, tills, products, customers,
   const cashTenderedValue = hasMethod('CASH') ? parseCurrencyToPence(cashTendered) : 0;
   const cardPaidRaw = hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
   const transferPaidRaw = hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
-  const nonCashRaw = cardPaidRaw + transferPaidRaw;
+  const momoPaidRaw = hasMethod('MOBILE_MONEY') ? parseCurrencyToPence(momoPaid) : 0;
+  const nonCashRaw = cardPaidRaw + transferPaidRaw + momoPaidRaw;
   const nonCashOverpay = nonCashRaw > totalDue;
   const cardPaidValue = cardPaidRaw;
   const transferPaidValue = transferPaidRaw;
-  const nonCashPaid = cardPaidValue + transferPaidValue;
+  const momoPaidValue = momoPaidRaw;
+  const nonCashPaid = cardPaidValue + transferPaidValue + momoPaidValue;
   const cashDue = Math.max(totalDue - nonCashPaid, 0);
   const cashApplied = Math.min(cashTenderedValue, cashDue);
   const changeDue = Math.max(cashTenderedValue - cashDue, 0);
@@ -728,6 +779,13 @@ export default function PosClient({ business, store, tills, products, customers,
       if (event.key === 'F8') {
         event.preventDefault();
         cashRef.current?.focus();
+        return;
+      }
+      if (event.key === 'F9') {
+        event.preventDefault();
+        if (cart.length > 0) {
+          setShowParkModal(true);
+        }
         return;
       }
       if (!isField && event.key === '/') {
@@ -997,7 +1055,7 @@ export default function PosClient({ business, store, tills, products, customers,
               <button
                 type="button"
                 className="btn-secondary text-xs ml-3"
-                onClick={() => openQuickAdd(pendingScan ?? quickBarcode)}
+                onClick={() => openQuickAdd(pendingScan ?? '')}
               >
                 Create product
               </button>
@@ -1012,40 +1070,13 @@ export default function PosClient({ business, store, tills, products, customers,
 
         {/* ── Quick‑add product (collapsed by default) ──────── */}
         {quickAddOpen && (
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-semibold">New Product</div>
-              <button type="button" className="text-xs text-black/40 hover:text-black/60" onClick={() => { setQuickAddOpen(false); setQuickAddError(null); setPendingScan(null); setBarcodeAlert(null); }}>Cancel</button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div><label className="label">Name</label><input className="input" value={quickName} onChange={(e) => setQuickName(e.target.value)} /></div>
-              <div><label className="label">SKU</label><input className="input" value={quickSku} onChange={(e) => setQuickSku(e.target.value)} /></div>
-              <div><label className="label">Barcode</label><input className="input" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} /></div>
-              <div>
-                <label className="label">Base Unit</label>
-                <select className="input" value={quickBaseUnitId} onChange={(e) => setQuickBaseUnitId(e.target.value)}>
-                  {safeUnits.map((unit) => (<option key={unit.id} value={unit.id}>{unit.name}</option>))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Pack Unit</label>
-                <select className="input" value={quickPackagingUnitId} onChange={(e) => setQuickPackagingUnitId(e.target.value)}>
-                  <option value="">None</option>
-                  {safeUnits.map((unit) => (<option key={unit.id} value={unit.id}>{unit.name}</option>))}
-                </select>
-              </div>
-              <div><label className="label">Per Pack</label><input className="input" type="number" min={1} value={quickPackagingConversion} onChange={(e) => setQuickPackagingConversion(e.target.value)} /></div>
-              <div><label className="label">Sell Price</label><input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={quickSellPrice} onChange={(e) => setQuickSellPrice(e.target.value)} /></div>
-              <div><label className="label">Cost Price</label><input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={quickCost} onChange={(e) => setQuickCost(e.target.value)} /></div>
-              <div><label className="label">VAT (bps)</label><input className="input" type="number" min={0} value={quickVatRate} onChange={(e) => setQuickVatRate(e.target.value)} /></div>
-              {quickAddError && <div className="md:col-span-3 text-sm text-rose">{quickAddError}</div>}
-              <div className="md:col-span-3">
-                <button type="button" className="btn-primary" onClick={handleQuickCreate} disabled={isCreating}>
-                  {isCreating ? 'Creating…' : pendingScan ? 'Create & Add to Cart' : 'Create Product'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <QuickAddPanel
+            units={safeUnits}
+            initialBarcode={quickAddBarcode}
+            pendingScan={pendingScan}
+            onCreated={handleQuickCreated}
+            onCancel={handleQuickCancel}
+          />
         )}
 
         {/* ── Cart ──────────────────────────────────────────── */}
@@ -1307,14 +1338,14 @@ export default function PosClient({ business, store, tills, products, customers,
               <div>
                 <label className="label">Method</label>
                 <div className="mt-1.5 flex flex-wrap gap-2">
-                  {(['CASH', 'CARD', 'TRANSFER'] as PaymentMethod[]).map((method) => (
+                  {(['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'] as PaymentMethod[]).map((method) => (
                     <button
                       key={method}
                       type="button"
                       onClick={() => togglePaymentMethod(method)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${hasMethod(method) ? 'bg-emerald-600 text-white' : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-emerald-600 text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
                     >
-                      {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : 'Transfer'}
+                      {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'}
                     </button>
                   ))}
                 </div>
@@ -1419,6 +1450,21 @@ export default function PosClient({ business, store, tills, products, customers,
                   <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={transferPaid} onChange={(e) => setTransferPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} />
                 </div>
               )}
+              {hasMethod('MOBILE_MONEY') && (
+                <div>
+                  <label className="label flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
+                    MoMo Amount
+                  </label>
+                  <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={momoPaid} onChange={(e) => setMomoPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} placeholder="0.00" />
+                  <input className="input mt-1.5" type="text" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="Transaction ID (optional)" />
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800">MTN</span>
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800">Telecel</span>
+                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">AirtelTigo</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Validation alerts */}
@@ -1426,201 +1472,69 @@ export default function PosClient({ business, store, tills, products, customers,
               <div className="text-sm text-amber-700 font-medium">Select a customer for credit or part-paid sales.</div>
             )}
             {hasPaymentError && (
-              <div className="text-sm text-amber-700 font-medium">Card/transfer amounts cannot exceed the total due.</div>
+              <div className="text-sm text-amber-700 font-medium">Card/transfer/MoMo amounts cannot exceed the total due.</div>
             )}
             {paymentStatus === 'PAID' && !fullyPaid && (
               <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>
             )}
 
-            <button className="btn-primary w-full text-lg py-3" type="submit" disabled={!canSubmit || isCompletingSale}>
-              {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
-            </button>
+            <div className="flex gap-2">
+              <button className="btn-primary flex-1 text-lg py-3" type="submit" disabled={!canSubmit || isCompletingSale}>
+                {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
+              </button>
+              {cart.length > 0 && (
+                <button
+                  type="button"
+                  className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition"
+                  onClick={() => setShowParkModal(true)}
+                  title="Park this sale and serve another customer"
+                >
+                  <svg className="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  <span className="text-[10px]">Park</span>
+                </button>
+              )}
+            </div>
           </div>
         </form>
+
+        {/* Park modal */}
+        {showParkModal && (
+          <ParkModal
+            itemCount={cart.length}
+            onPark={(label) => { parkCurrentCart(label); setShowParkModal(false); }}
+            onClose={() => setShowParkModal(false)}
+          />
+        )}
       </div>
 
       {/* ── Summary sidebar ─────────────────────────────── */}
-      <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-semibold uppercase tracking-widest text-black/40">Summary</div>
-            <div className="text-xs text-black/30">{store.name}</div>
-          </div>
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-black/50">Items</span>
-              <span className="font-semibold">{cartDetails.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-black/50">Subtotal</span>
-              <span className="font-semibold">{formatMoney(totals.subtotal, business.currency)}</span>
-            </div>
-            {totals.lineDiscount > 0 && (
-              <div className="flex justify-between text-emerald-700">
-                <span>Line discounts</span>
-                <span className="font-semibold">-{formatMoney(totals.lineDiscount, business.currency)}</span>
-              </div>
-            )}
-            {totals.promoDiscount > 0 && (
-              <div className="flex justify-between text-emerald-700">
-                <span>Promos</span>
-                <span className="font-semibold">-{formatMoney(totals.promoDiscount, business.currency)}</span>
-              </div>
-            )}
-            {orderDiscount > 0 && (
-              <div className="flex justify-between text-emerald-700">
-                <span>Order discount</span>
-                <span className="font-semibold">-{formatMoney(orderDiscount, business.currency)}</span>
-              </div>
-            )}
-            {business.vatEnabled && (
-              <div className="flex justify-between text-black/50">
-                <span>VAT</span>
-                <span className="font-semibold">{formatMoney(vatTotal, business.currency)}</span>
-              </div>
-            )}
-            <div className="flex justify-between border-t border-black/10 pt-3">
-              <span className="text-lg font-semibold">Total</span>
-              <span className="text-2xl font-bold">{formatMoney(totalDue, business.currency)}</span>
-            </div>
-            {totalPaid > 0 && (
-              <div className="flex justify-between">
-                <span className="text-black/50">Paid</span>
-                <span className="font-semibold">{formatMoney(totalPaid, business.currency)}</span>
-              </div>
-            )}
-            {balanceRemaining > 0 && (
-              <div className="flex justify-between text-rose font-semibold">
-                <span>Balance</span>
-                <span>{formatMoney(balanceRemaining, business.currency)}</span>
-              </div>
-            )}
-          </div>
-        </div>
+      <SummarySidebar
+        business={business}
+        store={store}
+        cartItemCount={cartDetails.length}
+        totals={totals}
+        orderDiscount={orderDiscount}
+        vatTotal={vatTotal}
+        totalDue={totalDue}
+        totalPaid={totalPaid}
+        balanceRemaining={balanceRemaining}
+        cashTenderedValue={cashTenderedValue}
+        changeDue={changeDue}
+        hasCash={hasMethod('CASH')}
+        lastReceiptId={lastReceiptId}
+        parkedCarts={parkedCarts}
+        showParkedPanel={showParkedPanel}
+        onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
+        onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
+        onDeleteParked={deleteParkedCart}
+      />
 
-        {changeDue > 0 && (
-          <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 px-5 py-5 text-white shadow-lg ring-4 ring-emerald-200">
-            <div className="text-center">
-              <div className="text-[11px] font-medium uppercase tracking-[0.3em] opacity-80">Change Due</div>
-              <div className="mt-1.5 text-4xl font-bold tracking-tight">
-                {formatMoney(changeDue, business.currency)}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {hasMethod('CASH') && (
-          <div className="card px-4 py-3 text-sm">
-            <div className="flex justify-between text-black/50">
-              <span>Cash tendered</span>
-              <span className="font-semibold text-black">{formatMoney(cashTenderedValue, business.currency)}</span>
-            </div>
-          </div>
-        )}
-
-        {lastReceiptId && (
-          <Link
-            href={`/receipts/${lastReceiptId}`}
-            target="_blank"
-            className="flex items-center justify-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-xs font-semibold text-black/60 hover:bg-black/5 transition"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            Reprint last receipt
-          </Link>
-        )}
-
-        <div className="rounded-xl bg-black/[.03] p-3 text-[11px] text-black/40 space-y-1">
-          <div className="flex justify-between"><span>F2</span><span>Barcode</span></div>
-          <div className="flex justify-between"><span>F3</span><span>Product search</span></div>
-          <div className="flex justify-between"><span>F8</span><span>Cash field</span></div>
-          <div className="flex justify-between"><span>Ctrl+Enter</span><span>Complete sale</span></div>
-          <div className="flex justify-between"><span>Ctrl+Z</span><span>Undo</span></div>
-          <div className="flex justify-between"><span>?</span><span>All shortcuts</span></div>
-        </div>
-      </div>
-
-      {showKeyboardHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-display font-semibold">Keyboard Shortcuts</h3>
-              <button
-                type="button"
-                className="rounded-lg p-1 hover:bg-black/5"
-                onClick={() => setShowKeyboardHelp(false)}
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="mt-4 space-y-3">
-              <div className="text-xs uppercase tracking-wide text-black/50">Navigation</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F2</kbd>
-                  <span>Barcode field</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F3</kbd>
-                  <span>Product search</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F4</kbd>
-                  <span>Quantity field</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">F8</kbd>
-                  <span>Cash field</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">/</kbd>
-                  <span>Focus barcode</span>
-                </div>
-              </div>
-              <div className="mt-4 text-xs uppercase tracking-wide text-black/50">Actions</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">Ctrl+Enter</kbd>
-                  <span>Complete sale</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">Ctrl+Backspace</kbd>
-                  <span>Remove last item</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">Delete</kbd>
-                  <span>Remove selected</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">Ctrl+P</kbd>
-                  <span>Reprint last</span>
-                </div>
-              </div>
-              <div className="mt-4 text-xs uppercase tracking-wide text-black/50">Help</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">?</kbd>
-                  <span>Toggle this help</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <kbd className="rounded bg-black/10 px-2 py-1 text-xs font-mono">Esc</kbd>
-                  <span>Close dialog</span>
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn-primary mt-6 w-full"
-              onClick={() => setShowKeyboardHelp(false)}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
+      <KeyboardHelpModal
+        show={showKeyboardHelp}
+        onClose={() => setShowKeyboardHelp(false)}
+      />
     </div>
   );
 }

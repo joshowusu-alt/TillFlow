@@ -25,7 +25,12 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
           vatNumber: true,
           receiptTemplate: true,
           printMode: true,
-          printerName: true
+          printerName: true,
+          tinNumber: true,
+          phone: true,
+          address: true,
+          momoNumber: true,
+          momoProvider: true
         }
       },
       payments: {
@@ -94,7 +99,12 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
         vatNumber: invoice.business.vatNumber,
         receiptTemplate: invoice.business.receiptTemplate,
         printMode: invoice.business.printMode,
-        printerName: invoice.business.printerName
+        printerName: invoice.business.printerName,
+        tinNumber: (invoice.business as any).tinNumber ?? null,
+        phone: (invoice.business as any).phone ?? null,
+        address: (invoice.business as any).address ?? null,
+        momoNumber: (invoice.business as any).momoNumber ?? null,
+        momoProvider: (invoice.business as any).momoProvider ?? null
       }}
       store={{ name: invoice.store.name }}
       cashier={{ name: invoice.cashierUser.name }}
