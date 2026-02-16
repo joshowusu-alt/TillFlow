@@ -1,11 +1,12 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
 import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
-export default async function SuppliersPage() {
+export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -20,6 +21,7 @@ export default async function SuppliersPage() {
       <PageHeader title="Suppliers" subtitle="Vendors and payables." />
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Add supplier</h2>
+        <FormError error={searchParams?.error} />
         <form action={createSupplierAction} className="mt-4 grid gap-4 md:grid-cols-3">
           <input className="input" name="name" placeholder="Supplier name" required />
           <input className="input" name="phone" placeholder="Phone" />

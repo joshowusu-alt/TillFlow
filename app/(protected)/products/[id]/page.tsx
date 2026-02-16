@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
@@ -94,11 +95,7 @@ export default async function ProductDetailPage({
       {isManager ? (
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Edit product</h2>
-          {searchParams?.error === 'duplicate-name' ? (
-            <div className="mt-3 rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose">
-              A product with that name already exists. Please choose a different name.
-            </div>
-          ) : null}
+          <FormError error={searchParams?.error} />
           <form action={updateProductAction} className="mt-4 grid gap-4 md:grid-cols-3">
             <input type="hidden" name="id" value={product.id} />
             <div>

@@ -1,11 +1,12 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <PageHeader title="Business Settings" subtitle="VAT settings and company profile." />
       <div className="card p-6">
+        <FormError error={searchParams?.error} />
         <form action={updateBusinessAction} className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="label">Business Name</label>

@@ -15,7 +15,7 @@ export async function openShiftAction(
     const tillId = formString(formData, 'tillId');
     const openingCash = Math.round(Number(formData.get('openingCash') || 0) * 100);
 
-    if (!tillId) return err('Till is required');
+    if (!tillId) return err('Please select a till first.');
 
     const existingShift = await prisma.shift.findFirst({
       where: { tillId, status: 'OPEN' }
@@ -48,13 +48,13 @@ export async function closeShiftAction(
     const actualCash = Math.round(Number(formData.get('actualCash') || 0) * 100);
     const notes = formString(formData, 'notes') || null;
 
-    if (!shiftId) return err('Shift ID is required');
+    if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
 
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
       include: { salesInvoices: { include: { payments: true } } }
     });
-    if (!shift) return err('Shift not found');
+    if (!shift) return err('That shift could not be found. It may have been removed.');
     if (shift.status !== 'OPEN') return err('Shift is already closed');
 
     // Calculate expected totals by payment method

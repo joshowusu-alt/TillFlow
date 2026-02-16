@@ -42,7 +42,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
     const { businessId } = await withBusinessContext(['OWNER']);
 
     const business = await prisma.business.findUnique({ where: { id: businessId } });
-    if (!business) return err('No business found');
+    if (!business) return err('No business set up yet. Please complete onboarding first.');
 
         // Export all tables
         const [
@@ -139,7 +139,7 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     await withBusinessContext(['OWNER']);
 
     if (!backup.version || !backup.business || !backup.exportedAt) {
-      return err('Invalid backup file format');
+      return err('The backup file is not in the right format. Please use a file exported from TillFlow.');
     }
 
         // Clear existing data (in reverse order of dependencies)

@@ -23,7 +23,7 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
     });
 
     redirect('/products?tab=categories');
-  });
+  }, '/products?tab=categories');
 }
 
 export async function updateCategoryAction(formData: FormData): Promise<void> {
@@ -42,7 +42,7 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
     });
 
     redirect('/products?tab=categories');
-  });
+  }, '/products?tab=categories');
 }
 
 export async function deleteCategoryAction(formData: FormData): Promise<void> {
@@ -60,5 +60,5 @@ export async function deleteCategoryAction(formData: FormData): Promise<void> {
     await prisma.category.delete({ where: { id } });
 
     redirect('/products?tab=categories');
-  });
+  }, '/products?tab=categories');
 }

@@ -46,7 +46,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       const operating = await prisma.account.findFirst({
         where: { businessId, code: ACCOUNT_CODES.operatingExpenses }
       });
-      if (!operating) return err('Operating Expenses account not found');
+      if (!operating) return err('Could not find the default expenses account. Please check your settings.');
       resolvedAccountId = operating.id;
     }
 
@@ -73,5 +73,5 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } });
 
     redirect('/expenses');
-  });
+  }, '/expenses');
 }

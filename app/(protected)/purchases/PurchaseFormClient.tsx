@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 
 type UnitDto = {
@@ -406,7 +406,7 @@ export default function PurchaseFormClient({
               </div>
             </div>
             <div>
-              <label className="label">Selling Price (per base)</label>
+              <label className="label">Selling Price ({getMinorUnitLabel(currency)})</label>
               <input
                 className="input"
                 type="number"
@@ -418,7 +418,7 @@ export default function PurchaseFormClient({
               />
             </div>
             <div>
-              <label className="label">Default Cost (per base)</label>
+              <label className="label">Default Cost ({getMinorUnitLabel(currency)})</label>
               <input
                 className="input"
                 type="number"

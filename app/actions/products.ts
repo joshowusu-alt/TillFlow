@@ -78,7 +78,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     const fields = parseProductFields(formData);
 
     if (await hasDuplicateName(businessId, fields.name)) {
-      redirect('/products?error=duplicate-name');
+      return err('A product with that name already exists. Please choose a different name.');
     }
 
     const product = await prisma.product.create({
@@ -103,7 +103,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
     redirect('/products');
-  });
+  }, '/products');
 }
 
 export async function updateProductAction(formData: FormData): Promise<void> {
@@ -116,7 +116,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     const fields = parseProductFields(formData);
 
     if (await hasDuplicateName(businessId, fields.name, id)) {
-      redirect(`/products/${id}?error=duplicate-name`);
+      return err('A product with that name already exists. Please choose a different name.');
     }
 
     await prisma.$transaction(async (tx) => {
@@ -188,7 +188,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
     redirect(`/products/${id}`);
-  });
+  }, '/products');
 }
 
 export async function quickCreateProductAction(input: {

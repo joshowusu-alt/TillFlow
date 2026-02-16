@@ -26,5 +26,5 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
     });
 
     redirect('/payments/expense-payments');
-  });
+  }, '/payments/expense-payments');
 }

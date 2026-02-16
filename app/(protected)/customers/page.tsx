@@ -1,11 +1,12 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { createCustomerAction } from '@/app/actions/customers';
 import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
-export default async function CustomersPage() {
+export default async function CustomersPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -20,6 +21,7 @@ export default async function CustomersPage() {
       <PageHeader title="Customers" subtitle="Credit customers and contact details." />
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Add customer</h2>
+        <FormError error={searchParams?.error} />
         <form action={createCustomerAction} className="mt-4 grid gap-4 md:grid-cols-3">
           <input className="input" name="name" placeholder="Customer name" required />
           <input className="input" name="phone" placeholder="Phone" />

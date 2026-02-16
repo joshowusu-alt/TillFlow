@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
@@ -6,7 +7,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
 
-export default async function PurchasesPage() {
+export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   const store = await prisma.store.findFirst();
@@ -41,6 +42,7 @@ export default async function PurchasesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Purchases" subtitle="Receive stock and track payables." />
+      <FormError error={searchParams?.error} />
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-display font-semibold">Receive stock</h2>

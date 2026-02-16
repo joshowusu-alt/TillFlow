@@ -31,7 +31,7 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
     await recordCustomerPayment(businessId, invoiceId, payments);
     redirect('/payments/customer-receipts');
-  });
+  }, '/payments/customer-receipts');
 }
 
 export async function recordSupplierPaymentAction(formData: FormData): Promise<void> {
@@ -43,5 +43,5 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
 
     await recordSupplierPayment(businessId, invoiceId, payments);
     redirect('/payments/supplier-payments');
-  });
+  }, '/payments/supplier-payments');
 }

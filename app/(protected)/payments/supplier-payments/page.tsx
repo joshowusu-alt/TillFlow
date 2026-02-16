@@ -1,10 +1,11 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 
-export default async function SupplierPaymentsPage() {
+export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -18,6 +19,7 @@ export default async function SupplierPaymentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Supplier Payments" subtitle="Settle outstanding payables." />
+      <FormError error={searchParams?.error} />
       <div className="card p-6">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>

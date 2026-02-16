@@ -29,7 +29,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: type === 'VOID' ? 'SALE_VOID' : 'SALE_RETURN', entity: 'SalesInvoice', entityId: salesInvoiceId, details: { type, reason, refundAmountPence } });
 
     redirect('/sales');
-  });
+  }, '/sales');
 }
 
 export async function createPurchaseReturnAction(formData: FormData): Promise<void> {
@@ -55,5 +55,5 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
     redirect('/purchases');
-  });
+  }, '/purchases');
 }

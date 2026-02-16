@@ -54,5 +54,5 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
 
     redirect('/purchases');
-  });
+  }, '/purchases');
 }

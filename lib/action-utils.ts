@@ -114,10 +114,19 @@ export async function safeAction<T>(
 }
 
 /**
- * Identical to `safeAction` but typed as `Promise<void>` — use this for
- * actions bound to `<form action={…}>` which requires a void return.
- * Errors are silently swallowed (the redirect or error boundary handles them).
+ * Wrapper for `<form action={…}>` server actions.  Runs `safeAction` and,
+ * when the action returns an error, redirects to `errorRedirectPath` with
+ * the error message in the query string so the page can display it.
+ *
+ * If no `errorRedirectPath` is given the error is silently swallowed
+ * (legacy behaviour — avoid this).
  */
-export function formAction(fn: () => Promise<ActionResult>): Promise<void> {
-  return safeAction(fn) as Promise<unknown> as Promise<void>;
+export async function formAction(
+  fn: () => Promise<ActionResult>,
+  errorRedirectPath?: string
+): Promise<void> {
+  const result = await safeAction(fn);
+  if (!result.success && errorRedirectPath) {
+    redirect(`${errorRedirectPath}?error=${encodeURIComponent(result.error)}`);
+  }
 }

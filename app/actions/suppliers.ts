@@ -14,14 +14,14 @@ export async function createSupplierAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
-    if (!name) return err('Supplier name is required');
+    if (!name) return err('Please enter the supplier name.');
 
     await prisma.supplier.create({
       data: { businessId, name, phone, email, creditLimitPence }
     });
 
     redirect('/suppliers');
-  });
+  }, '/suppliers');
 }
 
 export async function updateSupplierAction(formData: FormData): Promise<void> {
@@ -29,7 +29,7 @@ export async function updateSupplierAction(formData: FormData): Promise<void> {
     await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
-    if (!id) return err('Supplier ID is required');
+    if (!id) return err('Could not find that supplier. Please refresh and try again.');
 
     const name = formString(formData, 'name');
     const phone = formOptionalString(formData, 'phone');
@@ -42,5 +42,5 @@ export async function updateSupplierAction(formData: FormData): Promise<void> {
     });
 
     redirect(`/suppliers/${id}`);
-  });
+  }, '/suppliers');
 }

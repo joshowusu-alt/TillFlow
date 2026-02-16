@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -6,7 +7,7 @@ import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string } }) {
   await requireRole(['MANAGER', 'OWNER']);
   const business = await prisma.business.findFirst();
   const store = await prisma.store.findFirst();
@@ -35,6 +36,7 @@ export default async function ExpensesPage() {
 
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Record expense</h2>
+        <FormError error={searchParams?.error} />
         <form action={createExpenseAction} className="mt-4 grid gap-4 md:grid-cols-4" encType="multipart/form-data">
           <input type="hidden" name="useSimple" value={features.advancedOps ? 'false' : 'true'} />
           {features.advancedOps ? (

@@ -14,14 +14,14 @@ export async function createCustomerAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
-    if (!name) return err('Customer name is required');
+    if (!name) return err('Please enter the customer name.');
 
     await prisma.customer.create({
       data: { businessId, name, phone, email, creditLimitPence }
     });
 
     redirect('/customers');
-  });
+  }, '/customers');
 }
 
 export async function updateCustomerAction(formData: FormData): Promise<void> {
@@ -29,7 +29,7 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
-    if (!id) return err('Customer ID is required');
+    if (!id) return err('Could not find that customer. Please refresh and try again.');
 
     const name = formString(formData, 'name');
     const phone = formOptionalString(formData, 'phone');
@@ -42,5 +42,5 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     });
 
     redirect(`/customers/${id}`);
-  });
+  }, '/customers');
 }

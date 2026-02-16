@@ -26,5 +26,5 @@ export async function updateReceiptDesignAction(formData: FormData): Promise<voi
     revalidatePath('/settings/receipt-design');
     revalidatePath('/receipts');
     return ok();
-  });
+  }, '/settings/receipt-design');
 }
