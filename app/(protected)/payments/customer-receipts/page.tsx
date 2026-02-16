@@ -7,12 +7,17 @@ import { formatMoney } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 
 export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const invoices = await prisma.salesInvoice.findMany({
     where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-    include: { customer: true, payments: true },
+    select: {
+      id: true,
+      totalPence: true,
+      customer: { select: { name: true } },
+      payments: { select: { amountPence: true } }
+    },
     orderBy: { createdAt: 'desc' }
   });
 

@@ -9,7 +9,7 @@ import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 
 export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const features = getFeatures(business.mode as any);
@@ -22,11 +22,23 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         type: 'EXPENSE',
         code: { not: ACCOUNT_CODES.cogs }
       },
-      orderBy: { code: 'asc' }
+      orderBy: { code: 'asc' },
+      select: { id: true, code: true, name: true }
     }),
     prisma.expense.findMany({
       where: { businessId: business.id },
-      include: { account: true, user: true },
+      select: {
+        id: true,
+        createdAt: true,
+        amountPence: true,
+        paymentStatus: true,
+        method: true,
+        vendorName: true,
+        notes: true,
+        attachmentPath: true,
+        account: { select: { name: true } },
+        user: { select: { name: true } }
+      },
       orderBy: { createdAt: 'desc' },
       take: 50
     }),

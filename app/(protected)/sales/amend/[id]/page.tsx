@@ -6,7 +6,7 @@ import AmendSaleClient from './AmendSaleClient';
 import Link from 'next/link';
 
 export default async function AmendSalePage({ params }: { params: { id: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -17,22 +17,34 @@ export default async function AmendSalePage({ params }: { params: { id: string }
     );
   }
 
-  const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: params.id },
-    include: {
-      payments: true,
-      customer: true,
-      salesReturn: true,
+  const invoice = await prisma.salesInvoice.findFirst({
+    where: { id: params.id, businessId: business.id },
+    select: {
+      id: true,
+      createdAt: true,
+      paymentStatus: true,
+      totalPence: true,
+      payments: { select: { amountPence: true } },
+      customer: { select: { name: true } },
+      salesReturn: { select: { id: true } },
       lines: {
-        include: {
-          product: true,
-          unit: true,
-        },
-      },
-    },
+        select: {
+          id: true,
+          productId: true,
+          qtyInUnit: true,
+          unitPricePence: true,
+          lineDiscountPence: true,
+          promoDiscountPence: true,
+          lineTotalPence: true,
+          lineVatPence: true,
+          product: { select: { name: true } },
+          unit: { select: { name: true } }
+        }
+      }
+    }
   });
 
-  if (!invoice || invoice.businessId !== business.id) {
+  if (!invoice) {
     return (
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Sale Not Found</div>

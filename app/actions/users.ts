@@ -47,7 +47,7 @@ export async function createUserAction(formData: FormData) {
 }
 
 export async function updateUserAction(formData: FormData) {
-  await requireRole(['OWNER']);
+  const owner = await requireRole(['OWNER']);
 
   const userId = String(formData.get('userId') || '');
   const name = String(formData.get('name') || '').trim();
@@ -60,9 +60,17 @@ export async function updateUserAction(formData: FormData) {
     redirect('/users?error=missing');
   }
 
+  const targetUser = await prisma.user.findFirst({
+    where: { id: userId, businessId: owner.businessId },
+    select: { id: true },
+  });
+  if (!targetUser) {
+    redirect('/users?error=not_found');
+  }
+
   // Check for duplicate email (excluding this user)
   const existing = await prisma.user.findFirst({
-    where: { email, NOT: { id: userId } },
+    where: { email, NOT: { id: targetUser.id } },
   });
   if (existing) {
     redirect('/users?error=duplicate');
@@ -77,39 +85,43 @@ export async function updateUserAction(formData: FormData) {
     data.passwordHash = await bcrypt.hash(newPassword, 10);
   }
 
-  await prisma.user.update({ where: { id: userId }, data });
+  await prisma.user.update({ where: { id: targetUser.id }, data });
 
   // Invalidate all sessions when password is changed or user is deactivated
   if (newPassword || !active) {
-    await prisma.session.deleteMany({ where: { userId } });
+    await prisma.session.deleteMany({ where: { userId: targetUser.id } });
   }
 
-  const owner = await requireRole(['OWNER']);
-  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: userId, details: { name, email, role, active } });
+  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
 
   redirect('/users?success=updated');
 }
 
 export async function toggleUserActiveAction(formData: FormData) {
-  await requireRole(['OWNER']);
+  const owner = await requireRole(['OWNER']);
 
   const userId = String(formData.get('userId') || '');
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findFirst({
+    where: { id: userId, businessId: owner.businessId },
+  });
   if (!user) redirect('/users');
+
+  if (user.id === owner.id) {
+    redirect('/users?error=self_toggle');
+  }
 
   const nowActive = !user!.active;
   await prisma.user.update({
-    where: { id: userId },
+    where: { id: user.id },
     data: { active: nowActive },
   });
 
   // Invalidate all sessions when deactivating a user
   if (!nowActive) {
-    await prisma.session.deleteMany({ where: { userId } });
+    await prisma.session.deleteMany({ where: { userId: user.id } });
   }
 
-  const owner = await requireRole(['OWNER']);
-  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: user!.active ? 'USER_DEACTIVATE' : 'USER_UPDATE', entity: 'User', entityId: userId, details: { name: user!.name, active: nowActive } });
+  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: user.id, details: { name: user.name, active: nowActive } });
 
   redirect('/users');
 }

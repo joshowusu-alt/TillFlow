@@ -13,10 +13,20 @@ export default async function UsersPage({
 
   // Run both queries in parallel (users uses businessId directly)
   const [business, users] = await Promise.all([
-    prisma.business.findFirst({ where: { id: owner.businessId } }),
+    prisma.business.findUnique({
+      where: { id: owner.businessId },
+      select: { id: true }
+    }),
     prisma.user.findMany({
       where: { businessId: owner.businessId },
       orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        active: true
+      }
     }),
   ]);
   if (!business) return <div className="card p-6">Seed data missing.</div>;

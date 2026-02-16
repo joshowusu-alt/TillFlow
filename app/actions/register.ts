@@ -89,6 +89,7 @@ export async function register(formData: FormData) {
   });
   cookies().set('pos_session', token, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     expires: expiresAt,

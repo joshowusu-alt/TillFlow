@@ -6,7 +6,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 
 export default async function SalesPage() {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -20,7 +20,15 @@ export default async function SalesPage() {
   // Sales query is the only data fetch — no parallelisation needed but auth is now cached
   const sales = await prisma.salesInvoice.findMany({
     where: { businessId: business.id },
-    include: { customer: true, payments: true, salesReturn: true, lines: true },
+    select: {
+      id: true,
+      createdAt: true,
+      paymentStatus: true,
+      totalPence: true,
+      customer: { select: { name: true } },
+      salesReturn: { select: { id: true } },
+      _count: { select: { lines: true } }
+    },
     orderBy: { createdAt: 'desc' },
     take: 50
   });
@@ -67,7 +75,7 @@ export default async function SalesPage() {
                     <span className="text-xs text-black/40">Returned</span>
                   ) : (
                     <div className="flex gap-2">
-                      {sale.lines.length > 1 && (
+                      {sale._count.lines > 1 && (
                         <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                           Amend
                         </Link>

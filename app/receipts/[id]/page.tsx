@@ -4,19 +4,55 @@ import ReceiptClient from './ReceiptClient';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 
 export default async function ReceiptPage({ params }: { params: { id: string } }) {
-  await requireUser();
-  const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: params.id },
-    include: {
-      store: true,
-      cashierUser: true,
-      customer: true,
-      business: true,
-      payments: true,
+  const user = await requireUser();
+  const invoice = await prisma.salesInvoice.findFirst({
+    where: { id: params.id, businessId: user.businessId },
+    select: {
+      id: true,
+      createdAt: true,
+      subtotalPence: true,
+      vatPence: true,
+      totalPence: true,
+      discountPence: true,
+      store: { select: { name: true } },
+      cashierUser: { select: { name: true } },
+      customer: { select: { name: true, phone: true } },
+      business: {
+        select: {
+          name: true,
+          currency: true,
+          vatEnabled: true,
+          vatNumber: true,
+          receiptTemplate: true,
+          printMode: true,
+          printerName: true
+        }
+      },
+      payments: {
+        select: {
+          method: true,
+          amountPence: true
+        }
+      },
       lines: {
-        include: {
-          unit: true,
-          product: { include: { productUnits: { include: { unit: true } } } }
+        select: {
+          qtyBase: true,
+          unitPricePence: true,
+          lineTotalPence: true,
+          lineDiscountPence: true,
+          promoDiscountPence: true,
+          product: {
+            select: {
+              name: true,
+              productUnits: {
+                select: {
+                  isBaseUnit: true,
+                  conversionToBase: true,
+                  unit: { select: { name: true, pluralName: true } }
+                }
+              }
+            }
+          }
         }
       }
     }

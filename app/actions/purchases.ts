@@ -65,12 +65,12 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
-    const invoice = await prisma.purchaseInvoice.findUnique({
-      where: { id: purchaseId },
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseId, businessId },
       include: { lines: true, payments: true, purchaseReturn: true },
     });
 
-    if (!invoice || invoice.businessId !== businessId) {
+    if (!invoice) {
       return err('Purchase not found.');
     }
 
@@ -93,16 +93,16 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
 
     // Delete related records then the invoice
     await prisma.purchasePayment.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
-    await prisma.stockMovement.deleteMany({ where: { referenceType: 'PURCHASE', referenceId: purchaseId } });
+    await prisma.stockMovement.deleteMany({ where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } });
     await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
     await prisma.purchaseInvoice.delete({ where: { id: purchaseId } });
 
     // Delete accounting entries if any
     await prisma.journalLine.deleteMany({
-      where: { journalEntry: { referenceType: 'PURCHASE', referenceId: purchaseId } },
+      where: { journalEntry: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } },
     });
     await prisma.journalEntry.deleteMany({
-      where: { referenceType: 'PURCHASE', referenceId: purchaseId },
+      where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId },
     });
 
     await audit({

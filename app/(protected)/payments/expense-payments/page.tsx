@@ -7,12 +7,18 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { recordExpensePaymentAction } from '@/app/actions/expense-payments';
 
 export default async function ExpensePaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const expenses = await prisma.expense.findMany({
     where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-    include: { account: true, payments: true },
+    select: {
+      id: true,
+      createdAt: true,
+      amountPence: true,
+      account: { select: { name: true } },
+      payments: { select: { amountPence: true } }
+    },
     orderBy: { createdAt: 'desc' }
   });
 

@@ -7,7 +7,7 @@ export default async function MarginsPage({
 }: {
   searchParams: { period?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div>Business not found</div>;
 
   const period = searchParams.period || '30';
@@ -24,9 +24,16 @@ export default async function MarginsPage({
         paymentStatus: { not: 'VOID' }
       }
     },
-    include: {
-      product: true,
-      salesInvoice: { select: { createdAt: true } }
+    select: {
+      productId: true,
+      qtyBase: true,
+      lineTotalPence: true,
+      product: {
+        select: {
+          name: true,
+          defaultCostBasePence: true
+        }
+      }
     }
   });
 

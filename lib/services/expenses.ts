@@ -21,8 +21,16 @@ export type ExpenseInput = {
 export async function createExpense(input: ExpenseInput) {
   if (input.amountPence <= 0) throw new Error('Amount must be greater than 0');
 
-  const account = await prisma.account.findUnique({ where: { id: input.accountId } });
+  const account = await prisma.account.findFirst({
+    where: { id: input.accountId, businessId: input.businessId }
+  });
   if (!account) throw new Error('Expense account not found');
+
+  const store = await prisma.store.findFirst({
+    where: { id: input.storeId, businessId: input.businessId },
+    select: { id: true },
+  });
+  if (!store) throw new Error('Store not found for your business');
 
   const amountPaid = Math.max(input.amountPaidPence ?? 0, 0);
   if (amountPaid > input.amountPence) throw new Error('Paid amount cannot exceed expense total');

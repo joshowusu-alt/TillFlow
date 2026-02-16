@@ -12,8 +12,18 @@ export async function createStockAdjustment(input: {
   reason?: string | null;
   userId: string;
 }) {
+  const store = await prisma.store.findFirst({
+    where: { id: input.storeId, businessId: input.businessId },
+    select: { id: true },
+  });
+  if (!store) throw new Error('Store not found');
+
   const productUnit = await prisma.productUnit.findFirst({
-    where: { productId: input.productId, unitId: input.unitId },
+    where: {
+      productId: input.productId,
+      unitId: input.unitId,
+      product: { businessId: input.businessId },
+    },
     include: { product: true }
   });
   if (!productUnit) throw new Error('Unit not configured for product');
@@ -23,7 +33,7 @@ export async function createStockAdjustment(input: {
   const signedQtyBase = input.direction === 'DECREASE' ? -qtyBase : qtyBase;
 
   const inventory = await prisma.inventoryBalance.findUnique({
-    where: { storeId_productId: { storeId: input.storeId, productId: input.productId } }
+    where: { storeId_productId: { storeId: store.id, productId: input.productId } }
   });
   const onHand = inventory?.qtyOnHandBase ?? 0;
   const invMap = new Map(
@@ -38,7 +48,7 @@ export async function createStockAdjustment(input: {
   const adjustment = await prisma.$transaction(async (tx) => {
     const created = await tx.stockAdjustment.create({
       data: {
-        storeId: input.storeId,
+        storeId: store.id,
         productId: input.productId,
         unitId: input.unitId,
         qtyInUnit: input.qtyInUnit,
@@ -49,11 +59,11 @@ export async function createStockAdjustment(input: {
       }
     });
 
-    await upsertInventoryBalance(tx, input.storeId, input.productId, nextOnHand, currentAvgCost);
+    await upsertInventoryBalance(tx, store.id, input.productId, nextOnHand, currentAvgCost);
 
     await tx.stockMovement.create({
       data: {
-        storeId: input.storeId,
+        storeId: store.id,
         productId: input.productId,
         qtyBase: signedQtyBase,
         unitCostBasePence: currentAvgCost,

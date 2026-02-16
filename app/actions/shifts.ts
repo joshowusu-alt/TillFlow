@@ -10,28 +10,34 @@ export async function openShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user } = await withBusinessContext();
+    const { user, businessId } = await withBusinessContext();
 
     const tillId = formString(formData, 'tillId');
     const openingCash = Math.round(Number(formData.get('openingCash') || 0) * 100);
 
     if (!tillId) return err('Please select a till first.');
 
+    const till = await prisma.till.findFirst({
+      where: { id: tillId, store: { businessId } },
+      select: { id: true },
+    });
+    if (!till) return err('Till not found for your business.');
+
     const existingShift = await prisma.shift.findFirst({
-      where: { tillId, status: 'OPEN' }
+      where: { tillId: till.id, status: 'OPEN' }
     });
     if (existingShift) return err('There is already an open shift for this till');
 
     const shift = await prisma.shift.create({
       data: {
-        tillId,
+        tillId: till.id,
         userId: user.id,
         openingCashPence: openingCash,
         status: 'OPEN'
       }
     });
 
-    await audit({ businessId: 'system', userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_OPEN', entity: 'Shift', entityId: shift.id, details: { tillId, openingCash } });
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_OPEN', entity: 'Shift', entityId: shift.id, details: { tillId: till.id, openingCash } });
 
     revalidatePath('/shifts');
     return ok({ id: shift.id });
@@ -42,7 +48,7 @@ export async function closeShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user } = await withBusinessContext();
+    const { user, businessId } = await withBusinessContext();
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.round(Number(formData.get('actualCash') || 0) * 100);
@@ -50,8 +56,11 @@ export async function closeShiftAction(
 
     if (!shiftId) return err('Could not find the shift. Please refresh and try again.');
 
-    const shift = await prisma.shift.findUnique({
-      where: { id: shiftId },
+    const shift = await prisma.shift.findFirst({
+      where: {
+        id: shiftId,
+        till: { store: { businessId } },
+      },
       include: { salesInvoices: { include: { payments: true } } }
     });
     if (!shift) return err('That shift could not be found. It may have been removed.');
@@ -72,7 +81,7 @@ export async function closeShiftAction(
     const variance = actualCash - cashTotal;
 
     await prisma.shift.update({
-      where: { id: shiftId },
+      where: { id: shift.id },
       data: {
         closedAt: new Date(),
         expectedCashPence: cashTotal,
@@ -85,16 +94,17 @@ export async function closeShiftAction(
       }
     });
 
-    await audit({ businessId: 'system', userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_CLOSE', entity: 'Shift', entityId: shiftId, details: { variance, actualCash, expectedCash: cashTotal } });
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SHIFT_CLOSE', entity: 'Shift', entityId: shift.id, details: { variance, actualCash, expectedCash: cashTotal } });
 
     revalidatePath('/shifts');
-    return ok({ id: shiftId });
+    return ok({ id: shift.id });
   });
 }
 
 export async function getOpenShift(tillId: string) {
+  const { businessId } = await withBusinessContext();
   return prisma.shift.findFirst({
-    where: { tillId, status: 'OPEN' },
+    where: { tillId, status: 'OPEN', till: { store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } }
@@ -103,8 +113,9 @@ export async function getOpenShift(tillId: string) {
 }
 
 export async function getShiftSummary(shiftId: string) {
-  const shift = await prisma.shift.findUnique({
-    where: { id: shiftId },
+  const { businessId } = await withBusinessContext();
+  const shift = await prisma.shift.findFirst({
+    where: { id: shiftId, till: { store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } },

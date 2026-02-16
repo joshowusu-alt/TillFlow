@@ -8,12 +8,25 @@ import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
 export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const suppliers = await prisma.supplier.findMany({
     where: { businessId: business.id },
-    include: { purchaseInvoices: { include: { payments: true } } }
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      creditLimitPence: true,
+      purchaseInvoices: {
+        select: {
+          paymentStatus: true,
+          totalPence: true,
+          payments: { select: { amountPence: true } }
+        }
+      }
+    }
   });
 
   return (

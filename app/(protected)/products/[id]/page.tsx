@@ -18,25 +18,35 @@ export default async function ProductDetailPage({
   const { user, business, store } = await requireBusinessStore();
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
-  const product = await prisma.product.findUnique({
-    where: { id: params.id },
-    include: { productUnits: { include: { unit: true } }, inventoryBalances: true, category: true }
-  });
+  const [product, units, categories] = await Promise.all([
+    prisma.product.findFirst({
+      where: { id: params.id, businessId: business.id },
+      include: {
+        productUnits: { include: { unit: true } },
+        inventoryBalances: {
+          where: { storeId: store.id },
+          select: { storeId: true, qtyOnHandBase: true }
+        },
+        category: true
+      }
+    }),
+    prisma.unit.findMany({
+      select: { id: true, name: true, pluralName: true }
+    }),
+    prisma.category.findMany({
+      where: { businessId: business.id },
+      orderBy: { sortOrder: 'asc' }
+    })
+  ]);
 
   if (!product) return <div className="card p-6">Product not found.</div>;
-  const units = await prisma.unit.findMany();
-  const categories = await prisma.category.findMany({
-    where: { businessId: business.id },
-    orderBy: { sortOrder: 'asc' }
-  });
   const isManager = user.role !== 'CASHIER';
 
   const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
   const packaging = getPrimaryPackagingUnit(
     product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
   );
-  const qtyOnHand =
-    product.inventoryBalances.find((balance) => balance.storeId === store.id)?.qtyOnHandBase ?? 0;
+  const qtyOnHand = product.inventoryBalances[0]?.qtyOnHandBase ?? 0;
   const mixed = formatMixedUnit({
     qtyBase: qtyOnHand,
     baseUnit: baseUnit?.unit.name ?? 'unit',

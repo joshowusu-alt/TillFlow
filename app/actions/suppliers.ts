@@ -26,7 +26,7 @@ export async function createSupplierAction(formData: FormData): Promise<void> {
 
 export async function updateSupplierAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    await withBusinessContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
     if (!id) return err('Could not find that supplier. Please refresh and try again.');
@@ -36,11 +36,17 @@ export async function updateSupplierAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
+    const supplier = await prisma.supplier.findFirst({
+      where: { id, businessId },
+      select: { id: true },
+    });
+    if (!supplier) return err('Supplier not found. It may have been removed.');
+
     await prisma.supplier.update({
-      where: { id },
+      where: { id: supplier.id },
       data: { name, phone, email, creditLimitPence }
     });
 
-    redirect(`/suppliers/${id}`);
+    redirect(`/suppliers/${supplier.id}`);
   }, '/suppliers');
 }

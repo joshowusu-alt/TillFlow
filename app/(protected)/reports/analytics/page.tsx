@@ -7,7 +7,7 @@ import AnalyticsClient from './AnalyticsClient';
 export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
-    const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+    const { business } = await requireBusiness(['MANAGER', 'OWNER']);
     if (!business) {
         return <div className="card p-6">Business not found.</div>;
     }
@@ -25,9 +25,22 @@ export default async function AnalyticsPage() {
                 businessId: business.id,
                 createdAt: { gte: sevenDaysAgo }
             },
-            include: {
+            select: {
+                createdAt: true,
+                totalPence: true,
                 lines: {
-                    include: { product: { include: { category: true } } }
+                    select: {
+                        productId: true,
+                        qtyBase: true,
+                        lineTotalPence: true,
+                        product: {
+                            select: {
+                                name: true,
+                                defaultCostBasePence: true,
+                                category: { select: { name: true } }
+                            }
+                        }
+                    }
                 }
             },
             orderBy: { createdAt: 'asc' }
@@ -36,7 +49,8 @@ export default async function AnalyticsPage() {
             where: {
                 businessId: business.id,
                 createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo }
-            }
+            },
+            select: { createdAt: true, totalPence: true }
         }),
     ]);
 
@@ -122,7 +136,7 @@ export default async function AnalyticsPage() {
 
     recentSales.forEach((sale) => {
         sale.lines.forEach((line) => {
-            const category = (line.product as any).category?.name || 'Uncategorised';
+            const category = line.product.category?.name || 'Uncategorised';
             categoryStats.set(category, (categoryStats.get(category) || 0) + line.lineTotalPence);
         });
     });

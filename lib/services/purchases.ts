@@ -33,12 +33,27 @@ export async function createPurchase(input: CreatePurchaseInput) {
   const business = await prisma.business.findUnique({ where: { id: input.businessId } });
   if (!business) throw new Error('Business not found');
 
+  const store = await prisma.store.findFirst({
+    where: { id: input.storeId, businessId: input.businessId },
+    select: { id: true },
+  });
+  if (!store) throw new Error('Store not found');
+
+  if (input.supplierId) {
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: input.supplierId, businessId: input.businessId },
+      select: { id: true },
+    });
+    if (!supplier) throw new Error('Supplier not found');
+  }
+
   if (!input.lines.length) {
     throw new Error('No items in purchase');
   }
 
   const productUnits = await prisma.productUnit.findMany({
     where: {
+      product: { businessId: input.businessId },
       OR: input.lines.map((line) => ({
         productId: line.productId,
         unitId: line.unitId
@@ -110,7 +125,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
     const created = await tx.purchaseInvoice.create({
       data: {
         businessId: input.businessId,
-        storeId: input.storeId,
+        storeId: store.id,
         supplierId: input.supplierId || null,
         paymentStatus: finalStatus,
         dueDate: input.dueDate || null,
@@ -133,14 +148,15 @@ export async function createPurchase(input: CreatePurchaseInput) {
         payments: {
           create: payments.map((payment) => ({
             method: payment.method,
-            amountPence: payment.amountPence
+            amountPence: payment.amountPence,
+            reference: payment.reference ?? null
           }))
         }
       }
     });
 
     const inventoryMap = await fetchInventoryMap(
-      input.storeId,
+      store.id,
       Array.from(productTotals.keys()),
       tx as any
     );
@@ -155,12 +171,12 @@ export async function createPurchase(input: CreatePurchaseInput) {
       const existingValue = onHand * currentAvg;
       const newQty = onHand + totals.qtyBase;
       const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      await upsertInventoryBalance(tx, input.storeId, productId, newQty, newAvg);
+      await upsertInventoryBalance(tx, store.id, productId, newQty, newAvg);
     }
 
     await tx.stockMovement.createMany({
       data: lineDetails.map((line) => ({
-        storeId: input.storeId,
+        storeId: store.id,
         productId: line.productId,
         qtyBase: line.qtyBase,
         unitCostBasePence: line.unitCostBasePence,

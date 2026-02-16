@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 
@@ -14,6 +15,7 @@ export interface BackupData {
     users: any[];
     customers: any[];
     suppliers: any[];
+    categories: any[];
     products: any[];
     units: any[];
     productUnits: any[];
@@ -50,6 +52,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             users,
             customers,
             suppliers,
+            categories,
             products,
             units,
             productUnits,
@@ -76,6 +79,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             prisma.user.findMany({ where: { businessId }, select: { id: true, businessId: true, name: true, email: true, role: true, active: true, createdAt: true } }),
             prisma.customer.findMany({ where: { businessId } }),
             prisma.supplier.findMany({ where: { businessId } }),
+            prisma.category.findMany({ where: { businessId } }),
             prisma.product.findMany({ where: { businessId } }),
             prisma.unit.findMany({ where: { productUnits: { some: { product: { businessId } } } } }),
             prisma.productUnit.findMany({ where: { product: { businessId } } }),
@@ -107,6 +111,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             users,
             customers,
             suppliers,
+            categories,
             products,
             units,
             productUnits,
@@ -136,180 +141,208 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
 
 export async function importDatabaseAction(backup: BackupData): Promise<ActionResult<{ message: string }>> {
   return safeAction(async () => {
-    await withBusinessContext(['OWNER']);
+    const { businessId } = await withBusinessContext(['OWNER']);
 
     if (!backup.version || !backup.business || !backup.exportedAt) {
       return err('The backup file is not in the right format. Please use a file exported from TillFlow.');
     }
 
-        // Clear existing data (in reverse order of dependencies)
-        await prisma.$transaction([
-            prisma.journalLine.deleteMany(),
-            prisma.journalEntry.deleteMany(),
-            prisma.expensePayment.deleteMany(),
-            prisma.expense.deleteMany(),
-            prisma.stockAdjustment.deleteMany(),
-            prisma.stockMovement.deleteMany(),
-            prisma.salesPayment.deleteMany(),
-            prisma.salesReturn.deleteMany(),
-            prisma.salesInvoiceLine.deleteMany(),
-            prisma.salesInvoice.deleteMany(),
-            prisma.purchasePayment.deleteMany(),
-            prisma.purchaseReturn.deleteMany(),
-            prisma.purchaseInvoiceLine.deleteMany(),
-            prisma.purchaseInvoice.deleteMany(),
-            prisma.inventoryBalance.deleteMany(),
-            prisma.productUnit.deleteMany(),
-            prisma.product.deleteMany(),
-            prisma.unit.deleteMany(),
-            prisma.shift.deleteMany(),
-            prisma.till.deleteMany(),
-            prisma.customer.deleteMany(),
-            prisma.supplier.deleteMany(),
-            prisma.account.deleteMany(),
-            prisma.session.deleteMany(),
-            prisma.user.deleteMany(),
-            prisma.store.deleteMany(),
-            prisma.business.deleteMany()
-        ]);
+    const users = Array.isArray(backup.users) ? backup.users : [];
+    const hasOwner = users.some((u) => String(u?.role || '').toUpperCase() === 'OWNER');
+    if (!hasOwner) {
+      return err('Backup must include at least one owner user.');
+    }
 
-        // Import data in dependency order
-        // Business
-        await prisma.business.create({ data: backup.business });
+    const exportDate = new Date(backup.exportedAt);
+    if (Number.isNaN(exportDate.getTime())) {
+      return err('Backup export date is invalid.');
+    }
 
-        // Stores
-        for (const store of backup.stores) {
-            await prisma.store.create({ data: store });
+    const list = <T = any>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+
+    // Clear only this business data (multi-tenant safe)
+    await prisma.$transaction([
+      prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
+      prisma.journalEntry.deleteMany({ where: { businessId } }),
+      prisma.expensePayment.deleteMany({ where: { businessId } }),
+      prisma.expense.deleteMany({ where: { businessId } }),
+      prisma.stockAdjustment.deleteMany({ where: { store: { businessId } } }),
+      prisma.stockMovement.deleteMany({ where: { store: { businessId } } }),
+      prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.salesInvoice.deleteMany({ where: { businessId } }),
+      prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
+      prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
+      prisma.productUnit.deleteMany({ where: { product: { businessId } } }),
+      prisma.product.deleteMany({ where: { businessId } }),
+      prisma.category.deleteMany({ where: { businessId } }),
+      prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }),
+      prisma.till.deleteMany({ where: { store: { businessId } } }),
+      prisma.customer.deleteMany({ where: { businessId } }),
+      prisma.supplier.deleteMany({ where: { businessId } }),
+      prisma.account.deleteMany({ where: { businessId } }),
+      prisma.session.deleteMany({ where: { user: { businessId } } }),
+      prisma.user.deleteMany({ where: { businessId } }),
+      prisma.store.deleteMany({ where: { businessId } }),
+    ]);
+
+    // Keep the same business row/id and restore settings into it
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        name: backup.business.name ?? 'Restored Business',
+        currency: backup.business.currency ?? 'GHS',
+        vatEnabled: !!backup.business.vatEnabled,
+        vatNumber: backup.business.vatNumber ?? null,
+        mode: backup.business.mode ?? 'SIMPLE',
+        receiptTemplate: backup.business.receiptTemplate ?? 'THERMAL_80',
+        printMode: backup.business.printMode ?? 'DIRECT_ESC_POS',
+        printerName: backup.business.printerName ?? null,
+        receiptLogoUrl: backup.business.receiptLogoUrl ?? null,
+        receiptHeader: backup.business.receiptHeader ?? null,
+        receiptFooter: backup.business.receiptFooter ?? null,
+        receiptShowVatNumber: backup.business.receiptShowVatNumber ?? true,
+        receiptShowAddress: backup.business.receiptShowAddress ?? true,
+        socialMediaHandle: backup.business.socialMediaHandle ?? null,
+        address: backup.business.address ?? null,
+        phone: backup.business.phone ?? null,
+      },
+    });
+
+    // Units are global/shared: upsert so we never delete other businesses' units.
+    for (const unit of list(backup.units)) {
+      await prisma.unit.upsert({
+        where: { id: unit.id },
+        update: {
+          name: unit.name,
+          pluralName: unit.pluralName,
+          symbol: unit.symbol ?? null,
+        },
+        create: {
+          id: unit.id,
+          name: unit.name,
+          pluralName: unit.pluralName,
+          symbol: unit.symbol ?? null,
+        },
+      });
+    }
+
+    for (const store of list(backup.stores)) {
+      await prisma.store.create({ data: { ...store, businessId } });
+    }
+
+    for (const user of users) {
+      const safeHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+      await prisma.user.create({
+        data: {
+          ...user,
+          businessId,
+          passwordHash: safeHash
         }
+      });
+    }
 
-        // Users (with random password hash - they'll need to reset via owner)
-        for (const user of backup.users) {
-            const safeHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
-            await prisma.user.create({
-                data: {
-                    ...user,
-                    passwordHash: safeHash
-                }
-            });
-        }
+    for (const customer of list(backup.customers)) {
+      await prisma.customer.create({ data: { ...customer, businessId } });
+    }
 
-        // Units
-        for (const unit of backup.units) {
-            await prisma.unit.create({ data: unit });
-        }
+    for (const supplier of list(backup.suppliers)) {
+      await prisma.supplier.create({ data: { ...supplier, businessId } });
+    }
 
-        // Customers
-        for (const customer of backup.customers) {
-            await prisma.customer.create({ data: customer });
-        }
+    for (const category of list(backup.categories)) {
+      await prisma.category.create({ data: { ...category, businessId } });
+    }
 
-        // Suppliers
-        for (const supplier of backup.suppliers) {
-            await prisma.supplier.create({ data: supplier });
-        }
+    for (const product of list(backup.products)) {
+      await prisma.product.create({ data: { ...product, businessId } });
+    }
 
-        // Products
-        for (const product of backup.products) {
-            await prisma.product.create({ data: product });
-        }
+    for (const pu of list(backup.productUnits)) {
+      await prisma.productUnit.create({ data: pu });
+    }
 
-        // Product Units
-        for (const pu of backup.productUnits) {
-            await prisma.productUnit.create({ data: pu });
-        }
+    for (const account of list(backup.accounts)) {
+      await prisma.account.create({ data: { ...account, businessId } });
+    }
 
-        // Accounts
-        for (const account of backup.accounts) {
-            await prisma.account.create({ data: account });
-        }
+    for (const till of list(backup.tills)) {
+      await prisma.till.create({ data: till });
+    }
 
-        // Tills
-        for (const till of backup.tills) {
-            await prisma.till.create({ data: till });
-        }
+    for (const balance of list(backup.inventoryBalances)) {
+      await prisma.inventoryBalance.create({ data: balance });
+    }
 
-        // Inventory Balances
-        for (const balance of backup.inventoryBalances) {
-            await prisma.inventoryBalance.create({ data: balance });
-        }
+    for (const shift of list(backup.shifts)) {
+      await prisma.shift.create({ data: shift });
+    }
 
-        // Shifts
-        for (const shift of backup.shifts) {
-            await prisma.shift.create({ data: shift });
-        }
+    for (const invoice of list(backup.salesInvoices)) {
+      await prisma.salesInvoice.create({ data: { ...invoice, businessId } });
+    }
 
-        // Sales Invoices
-        for (const invoice of backup.salesInvoices) {
-            await prisma.salesInvoice.create({ data: invoice });
-        }
+    for (const line of list(backup.salesInvoiceLines)) {
+      await prisma.salesInvoiceLine.create({ data: line });
+    }
 
-        // Sales Invoice Lines
-        for (const line of backup.salesInvoiceLines) {
-            await prisma.salesInvoiceLine.create({ data: line });
-        }
+    for (const payment of list(backup.salesPayments)) {
+      await prisma.salesPayment.create({ data: payment });
+    }
 
-        // Sales Payments
-        for (const payment of backup.salesPayments) {
-            await prisma.salesPayment.create({ data: payment });
-        }
+    for (const ret of list(backup.salesReturns)) {
+      await prisma.salesReturn.create({ data: ret });
+    }
 
-        // Sales Returns
-        for (const ret of backup.salesReturns) {
-            await prisma.salesReturn.create({ data: ret });
-        }
+    for (const invoice of list(backup.purchaseInvoices)) {
+      await prisma.purchaseInvoice.create({ data: { ...invoice, businessId } });
+    }
 
-        // Purchase Invoices
-        for (const invoice of backup.purchaseInvoices) {
-            await prisma.purchaseInvoice.create({ data: invoice });
-        }
+    for (const line of list(backup.purchaseInvoiceLines)) {
+      await prisma.purchaseInvoiceLine.create({ data: line });
+    }
 
-        // Purchase Invoice Lines
-        for (const line of backup.purchaseInvoiceLines) {
-            await prisma.purchaseInvoiceLine.create({ data: line });
-        }
+    for (const payment of list(backup.purchasePayments)) {
+      await prisma.purchasePayment.create({ data: payment });
+    }
 
-        // Purchase Payments
-        for (const payment of backup.purchasePayments) {
-            await prisma.purchasePayment.create({ data: payment });
-        }
+    for (const ret of list(backup.purchaseReturns)) {
+      await prisma.purchaseReturn.create({ data: ret });
+    }
 
-        // Purchase Returns
-        for (const ret of backup.purchaseReturns) {
-            await prisma.purchaseReturn.create({ data: ret });
-        }
+    for (const expense of list(backup.expenses)) {
+      await prisma.expense.create({ data: { ...expense, businessId } });
+    }
 
-        // Expenses
-        for (const expense of backup.expenses) {
-            await prisma.expense.create({ data: expense });
-        }
+    for (const payment of list(backup.expensePayments)) {
+      await prisma.expensePayment.create({ data: { ...payment, businessId } });
+    }
 
-        // Expense Payments
-        for (const payment of backup.expensePayments) {
-            await prisma.expensePayment.create({ data: payment });
-        }
+    for (const movement of list(backup.stockMovements)) {
+      await prisma.stockMovement.create({ data: movement });
+    }
 
-        // Stock Movements
-        for (const movement of backup.stockMovements) {
-            await prisma.stockMovement.create({ data: movement });
-        }
+    for (const adjustment of list(backup.stockAdjustments)) {
+      await prisma.stockAdjustment.create({ data: adjustment });
+    }
 
-        // Stock Adjustments
-        for (const adjustment of backup.stockAdjustments) {
-            await prisma.stockAdjustment.create({ data: adjustment });
-        }
+    for (const entry of list(backup.journalEntries)) {
+      await prisma.journalEntry.create({ data: { ...entry, businessId } });
+    }
 
-        // Journal Entries
-        for (const entry of backup.journalEntries) {
-            await prisma.journalEntry.create({ data: entry });
-        }
+    for (const line of list(backup.journalLines)) {
+      await prisma.journalLine.create({ data: line });
+    }
 
-        // Journal Lines
-        for (const line of backup.journalLines) {
-            await prisma.journalLine.create({ data: line });
-        }
+    // Imported users have random temporary passwords and sessions were cleared.
+    cookies().delete('pos_session');
 
     return ok({
-      message: `Restored backup from ${new Date(backup.exportedAt).toLocaleString()}. Users will need to reset their passwords.`
+      message: `Restored backup from ${exportDate.toLocaleString()}. Users will need to reset their passwords and sign in again.`
     });
   });
 }
@@ -325,7 +358,7 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
     // Delete in reverse-dependency order
     await prisma.$transaction([
       // Journals
-      prisma.journalLine.deleteMany(),
+      prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
       prisma.journalEntry.deleteMany({ where: { businessId } }),
       // Audit logs
       prisma.auditLog.deleteMany({ where: { businessId } }),
@@ -333,21 +366,21 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       prisma.expensePayment.deleteMany({ where: { businessId } }),
       prisma.expense.deleteMany({ where: { businessId } }),
       // Stock
-      prisma.stockAdjustment.deleteMany(),
-      prisma.stockMovement.deleteMany(),
+      prisma.stockAdjustment.deleteMany({ where: { store: { businessId } } }),
+      prisma.stockMovement.deleteMany({ where: { store: { businessId } } }),
       // Sales chain
-      prisma.salesPayment.deleteMany(),
-      prisma.salesReturn.deleteMany(),
-      prisma.salesInvoiceLine.deleteMany(),
+      prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } }),
       prisma.salesInvoice.deleteMany({ where: { businessId } }),
       // Purchase chain
-      prisma.purchasePayment.deleteMany(),
-      prisma.purchaseReturn.deleteMany(),
-      prisma.purchaseInvoiceLine.deleteMany(),
+      prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
+      prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
       // Inventory & products
-      prisma.inventoryBalance.deleteMany(),
-      prisma.productUnit.deleteMany(),
+      prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
+      prisma.productUnit.deleteMany({ where: { product: { businessId } } }),
       prisma.product.deleteMany({ where: { businessId } }),
       // Categories
       prisma.category.deleteMany({ where: { businessId } }),
@@ -355,7 +388,7 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
       prisma.customer.deleteMany({ where: { businessId } }),
       prisma.supplier.deleteMany({ where: { businessId } }),
       // Shifts (keep tills)
-      prisma.shift.deleteMany(),
+      prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }),
     ]);
 
     // Audit the reset itself (the log table was just cleared, so this is the first entry)

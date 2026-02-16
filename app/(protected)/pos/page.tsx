@@ -3,24 +3,60 @@ import { requireBusinessStore } from '@/lib/auth';
 import PosClient from './PosClient';
 
 export default async function PosPage() {
-  const { user, business, store: baseStore } = await requireBusinessStore();
+  const { business, store: baseStore } = await requireBusinessStore();
   if (!business) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
   // Run ALL data queries in parallel instead of sequentially
   const [storeWithTills, inventory, products, units, customers, categories] = await Promise.all([
-    prisma.store.findFirst({ where: { id: baseStore.id }, include: { tills: true } }),
-    prisma.inventoryBalance.findMany({ where: { storeId: baseStore.id } }),
+    prisma.store.findFirst({
+      where: { id: baseStore.id },
+      select: {
+        id: true,
+        name: true,
+        tills: {
+          where: { active: true },
+          select: { id: true, name: true }
+        }
+      }
+    }),
+    prisma.inventoryBalance.findMany({
+      where: { storeId: baseStore.id },
+      select: { productId: true, qtyOnHandBase: true }
+    }),
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
-      include: { productUnits: { include: { unit: true } }, category: true }
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        sellingPriceBasePence: true,
+        vatRateBps: true,
+        promoBuyQty: true,
+        promoGetQty: true,
+        categoryId: true,
+        imageUrl: true,
+        category: { select: { name: true } },
+        productUnits: {
+          select: {
+            unitId: true,
+            conversionToBase: true,
+            isBaseUnit: true,
+            unit: { select: { name: true, pluralName: true } }
+          }
+        }
+      }
     }),
-    prisma.unit.findMany(),
-    prisma.customer.findMany({ where: { businessId: business.id } }),
+    prisma.unit.findMany({ select: { id: true, name: true } }),
+    prisma.customer.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true }
+    }),
     prisma.category.findMany({
       where: { businessId: business.id },
-      orderBy: { sortOrder: 'asc' }
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, colour: true }
     }),
   ]);
 
@@ -52,7 +88,7 @@ export default async function PosPage() {
     <PosClient
       business={{ currency: business.currency, vatEnabled: business.vatEnabled }}
       store={{ id: store.id, name: store.name }}
-      tills={'tills' in store ? (store as any).tills.map((till: any) => ({ id: till.id, name: till.name })) : []}
+      tills={'tills' in store ? store.tills.map((till) => ({ id: till.id, name: till.name })) : []}
       products={productDtos}
       customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}

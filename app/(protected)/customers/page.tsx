@@ -8,13 +8,26 @@ import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
 export default async function CustomersPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   // Auth is now cached; customer query benefits from not repeating business lookup
   const customers = await prisma.customer.findMany({
     where: { businessId: business.id },
-    include: { salesInvoices: { include: { payments: true } } }
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      creditLimitPence: true,
+      salesInvoices: {
+        select: {
+          paymentStatus: true,
+          totalPence: true,
+          payments: { select: { amountPence: true } }
+        }
+      }
+    }
   });
 
   return (

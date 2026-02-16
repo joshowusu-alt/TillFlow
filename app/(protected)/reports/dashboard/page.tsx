@@ -10,7 +10,7 @@ import { requireBusinessStore } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return (
       <div className="card p-6 text-center">
@@ -32,23 +32,41 @@ export default async function DashboardPage() {
         businessId: business.id,
         createdAt: { gte: start, lte: end },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-      }
+      },
+      select: { totalPence: true }
     }),
     prisma.salesPayment.findMany({
-      where: { receivedAt: { gte: start, lte: end }, salesInvoice: { businessId: business.id } }
+      where: { receivedAt: { gte: start, lte: end }, salesInvoice: { businessId: business.id } },
+      select: { method: true, amountPence: true }
     }),
     getIncomeStatement(business.id, start, end),
     prisma.salesInvoice.findMany({
       where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-      include: { payments: true }
+      select: { totalPence: true, payments: { select: { amountPence: true } } }
     }),
     prisma.purchaseInvoice.findMany({
       where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-      include: { payments: true }
+      select: { totalPence: true, payments: { select: { amountPence: true } } }
     }),
     prisma.inventoryBalance.findMany({
       where: { storeId: store.id },
-      include: { product: { include: { productUnits: { include: { unit: true } } } } }
+      select: {
+        id: true,
+        qtyOnHandBase: true,
+        product: {
+          select: {
+            name: true,
+            reorderPointBase: true,
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                unit: { select: { name: true, pluralName: true } }
+              }
+            }
+          }
+        }
+      }
     }),
     prisma.salesInvoiceLine.findMany({
       where: {
@@ -58,7 +76,22 @@ export default async function DashboardPage() {
           paymentStatus: { notIn: ['RETURNED', 'VOID'] }
         }
       },
-      include: { product: { include: { productUnits: { include: { unit: true } } } } }
+      select: {
+        productId: true,
+        qtyBase: true,
+        product: {
+          select: {
+            name: true,
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                unit: { select: { name: true, pluralName: true } }
+              }
+            }
+          }
+        }
+      }
     }),
   ]);
 

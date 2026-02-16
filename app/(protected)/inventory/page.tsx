@@ -7,7 +7,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 
 export default async function InventoryPage() {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }
@@ -15,7 +15,23 @@ export default async function InventoryPage() {
   // Auth is now cached; single data query
   const products = await prisma.product.findMany({
     where: { businessId: business.id, active: true },
-    include: { productUnits: { include: { unit: true } }, inventoryBalances: true }
+    select: {
+      id: true,
+      name: true,
+      reorderPointBase: true,
+      defaultCostBasePence: true,
+      productUnits: {
+        select: {
+          isBaseUnit: true,
+          conversionToBase: true,
+          unit: { select: { name: true, pluralName: true } }
+        }
+      },
+      inventoryBalances: {
+        where: { storeId: store.id },
+        select: { qtyOnHandBase: true, avgCostBasePence: true }
+      }
+    }
   });
 
   return (
@@ -48,7 +64,7 @@ export default async function InventoryPage() {
               const packaging = getPrimaryPackagingUnit(
                 product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
               );
-              const balance = product.inventoryBalances.find((item) => item.storeId === store.id);
+              const balance = product.inventoryBalances[0];
               const qtyOnHand = balance?.qtyOnHandBase ?? 0;
               const avgCostBase = balance?.avgCostBasePence ?? product.defaultCostBasePence;
               const formatted = formatMixedUnit({

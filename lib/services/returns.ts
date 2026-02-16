@@ -48,8 +48,8 @@ export async function createSalesReturn(input: {
   reason?: string | null;
   type: 'RETURN' | 'VOID';
 }) {
-  const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: input.salesInvoiceId },
+  const invoice = await prisma.salesInvoice.findFirst({
+    where: { id: input.salesInvoiceId, businessId: input.businessId },
     include: {
       business: true,
       store: true,
@@ -168,8 +168,8 @@ export async function createPurchaseReturn(input: {
   reason?: string | null;
   type: 'RETURN' | 'VOID';
 }) {
-  const invoice = await prisma.purchaseInvoice.findUnique({
-    where: { id: input.purchaseInvoiceId },
+  const invoice = await prisma.purchaseInvoice.findFirst({
+    where: { id: input.purchaseInvoiceId, businessId: input.businessId },
     include: {
       business: true,
       store: true,

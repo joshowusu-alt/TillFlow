@@ -115,13 +115,21 @@ export async function updateProductAction(formData: FormData): Promise<void> {
 
     const fields = parseProductFields(formData);
 
-    if (await hasDuplicateName(businessId, fields.name, id)) {
+    const existingProduct = await prisma.product.findFirst({
+      where: { id, businessId },
+      select: { id: true },
+    });
+    if (!existingProduct) {
+      return err('Product not found. It may have been removed.');
+    }
+
+    if (await hasDuplicateName(businessId, fields.name, existingProduct.id)) {
       return err('A product with that name already exists. Please choose a different name.');
     }
 
     await prisma.$transaction(async (tx) => {
       await tx.product.update({
-        where: { id },
+        where: { id: existingProduct.id },
         data: {
           name: fields.name,
           sku: fields.sku,
@@ -136,7 +144,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
         }
       });
 
-      const existingUnits = await tx.productUnit.findMany({ where: { productId: id } });
+      const existingUnits = await tx.productUnit.findMany({ where: { productId: existingProduct.id } });
 
       if (fields.baseUnitId) {
         const baseUnit = existingUnits.find((u) => u.unitId === fields.baseUnitId);
@@ -147,11 +155,11 @@ export async function updateProductAction(formData: FormData): Promise<void> {
           });
         } else {
           await tx.productUnit.create({
-            data: { productId: id, unitId: fields.baseUnitId, isBaseUnit: true, conversionToBase: 1 }
+            data: { productId: existingProduct.id, unitId: fields.baseUnitId, isBaseUnit: true, conversionToBase: 1 }
           });
         }
         await tx.productUnit.updateMany({
-          where: { productId: id, unitId: { not: fields.baseUnitId } },
+          where: { productId: existingProduct.id, unitId: { not: fields.baseUnitId } },
           data: { isBaseUnit: false }
         });
       }
@@ -170,7 +178,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
         } else {
           await tx.productUnit.create({
             data: {
-              productId: id,
+              productId: existingProduct.id,
               unitId: fields.packagingUnitId,
               isBaseUnit: false,
               conversionToBase: fields.packagingConversion
@@ -178,16 +186,16 @@ export async function updateProductAction(formData: FormData): Promise<void> {
           });
         }
         await tx.productUnit.deleteMany({
-          where: { productId: id, isBaseUnit: false, unitId: { not: fields.packagingUnitId } }
+          where: { productId: existingProduct.id, isBaseUnit: false, unitId: { not: fields.packagingUnitId } }
         });
       } else {
-        await tx.productUnit.deleteMany({ where: { productId: id, isBaseUnit: false } });
+        await tx.productUnit.deleteMany({ where: { productId: existingProduct.id, isBaseUnit: false } });
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
-    redirect(`/products/${id}`);
+    redirect(`/products/${existingProduct.id}`);
   }, '/products');
 }
 
@@ -281,7 +289,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     if (!product) return err('Product not found. It may have already been removed.');
 
     await prisma.product.update({
-      where: { id: productId },
+      where: { id: product.id },
       data: { active: false },
     });
 

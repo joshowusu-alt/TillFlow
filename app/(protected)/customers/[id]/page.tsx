@@ -13,21 +13,27 @@ export default async function CustomerDetailPage({
   params: { id: string };
   searchParams?: { from?: string; to?: string };
 }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const start = searchParams?.from ? new Date(searchParams.from) : undefined;
   const end = searchParams?.to ? new Date(searchParams.to) : undefined;
 
-  const customer = await prisma.customer.findUnique({
-    where: { id: params.id },
+  const customer = await prisma.customer.findFirst({
+    where: { id: params.id, businessId: business.id },
     include: {
       salesInvoices: {
         where: {
           ...(start ? { createdAt: { gte: start } } : {}),
           ...(end ? { createdAt: { lte: end } } : {})
         },
-        include: { payments: true },
+        select: {
+          id: true,
+          createdAt: true,
+          paymentStatus: true,
+          totalPence: true,
+          payments: { select: { amountPence: true } }
+        },
         orderBy: { createdAt: 'desc' },
         take: 200
       }

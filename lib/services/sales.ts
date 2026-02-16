@@ -39,6 +39,8 @@ export type CreateSaleInput = {
   payments: SalePaymentInput[];
   orderDiscountType?: DiscountType;
   orderDiscountValue?: number;
+  externalRef?: string | null;
+  createdAt?: Date | null;
   lines: SaleLineInput[];
 };
 
@@ -46,12 +48,33 @@ export async function createSale(input: CreateSaleInput) {
   const business = await prisma.business.findUnique({ where: { id: input.businessId } });
   if (!business) throw new Error('Business not found');
 
+  const store = await prisma.store.findFirst({
+    where: { id: input.storeId, businessId: input.businessId },
+    select: { id: true },
+  });
+  if (!store) throw new Error('Store not found');
+
+  const till = await prisma.till.findFirst({
+    where: { id: input.tillId, storeId: store.id, active: true },
+    select: { id: true },
+  });
+  if (!till) throw new Error('Till not found');
+
+  if (input.customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: input.customerId, businessId: input.businessId },
+      select: { id: true },
+    });
+    if (!customer) throw new Error('Customer not found');
+  }
+
   if (!input.lines.length) {
     throw new Error('No items in cart');
   }
 
   const productUnits = await prisma.productUnit.findMany({
     where: {
+      product: { businessId: input.businessId },
       OR: input.lines.map((line) => ({
         productId: line.productId,
         unitId: line.unitId
@@ -201,8 +224,8 @@ export async function createSale(input: CreateSaleInput) {
     const created = await tx.salesInvoice.create({
       data: {
         businessId: input.businessId,
-        storeId: input.storeId,
-        tillId: input.tillId,
+        storeId: store.id,
+        tillId: till.id,
         cashierUserId: input.cashierUserId,
         customerId: input.customerId || null,
         paymentStatus: finalStatus,
@@ -211,6 +234,7 @@ export async function createSale(input: CreateSaleInput) {
         vatPence: vatTotal,
         totalPence: total,
         discountPence: orderDiscount,
+        createdAt: input.createdAt ?? undefined,
         lines: {
           create: lineDetails.map((line) => ({
             productId: line.productId,
@@ -229,7 +253,8 @@ export async function createSale(input: CreateSaleInput) {
         payments: {
           create: payments.map((payment) => ({
             method: payment.method,
-            amountPence: payment.amountPence
+            amountPence: payment.amountPence,
+            reference: input.externalRef ?? payment.reference ?? null
           }))
         }
       }
@@ -318,8 +343,8 @@ export type AmendSaleInput = {
  * Returns the before/after snapshot for audit logging.
  */
 export async function amendSale(input: AmendSaleInput) {
-  const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: input.salesInvoiceId },
+  const invoice = await prisma.salesInvoice.findFirst({
+    where: { id: input.salesInvoiceId, businessId: input.businessId },
     include: {
       business: true,
       store: true,
@@ -330,7 +355,6 @@ export async function amendSale(input: AmendSaleInput) {
   });
 
   if (!invoice) throw new Error('Sale not found');
-  if (invoice.businessId !== input.businessId) throw new Error('Sale not found');
   if (invoice.salesReturn) throw new Error('Cannot amend a returned or voided sale');
   if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
     throw new Error('Cannot amend a returned or voided sale');

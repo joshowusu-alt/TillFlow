@@ -5,7 +5,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import ReturnFormClient from './ReturnFormClient';
 
 export default async function SalesReturnPage({ params }: { params: { id: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -16,12 +16,15 @@ export default async function SalesReturnPage({ params }: { params: { id: string
     );
   }
 
-  const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: params.id },
-    include: {
-      payments: true,
-      customer: true,
-      salesReturn: true
+  const invoice = await prisma.salesInvoice.findFirst({
+    where: { id: params.id, businessId: business.id },
+    select: {
+      id: true,
+      createdAt: true,
+      totalPence: true,
+      payments: { select: { amountPence: true } },
+      customer: { select: { name: true } },
+      salesReturn: { select: { id: true } }
     }
   });
 

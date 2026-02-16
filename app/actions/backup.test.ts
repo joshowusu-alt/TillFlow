@@ -10,6 +10,7 @@ describe('Backup Data Structure', () => {
             users: [],
             customers: [],
             suppliers: [],
+            categories: [],
             products: [],
             units: [],
             productUnits: [],

@@ -17,6 +17,7 @@ export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER';
 export type PaymentInput = {
   method: PaymentMethod;
   amountPence: number;
+  reference?: string | null;
 };
 
 export type PaymentStatus = 'PAID' | 'PART_PAID' | 'UNPAID';

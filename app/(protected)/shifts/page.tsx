@@ -9,7 +9,10 @@ export default async function ShiftsPage() {
 
   const store = await prisma.store.findFirst({
     where: { businessId: business.id },
-    include: { tills: true }
+    select: {
+      id: true,
+      tills: { select: { id: true, name: true, active: true } }
+    }
   });
   if (!store) return <div>Store not found</div>;
 
@@ -17,9 +20,17 @@ export default async function ShiftsPage() {
   const [openShift, recentShifts] = await Promise.all([
     prisma.shift.findFirst({
       where: { userId: user.id, status: 'OPEN' },
-      include: {
+      select: {
+        id: true,
+        openedAt: true,
+        openingCashPence: true,
         till: { select: { name: true } },
-        salesInvoices: { include: { payments: true } }
+        salesInvoices: {
+          select: {
+            totalPence: true,
+            payments: { select: { method: true, amountPence: true } }
+          }
+        }
       }
     }),
     prisma.shift.findMany({

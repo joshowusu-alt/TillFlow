@@ -17,14 +17,36 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const [products, categories, units] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
-      include: { productUnits: { include: { unit: true } }, category: true }
+      select: {
+        id: true,
+        name: true,
+        imageUrl: true,
+        sellingPriceBasePence: true,
+        defaultCostBasePence: true,
+        productUnits: {
+          select: {
+            isBaseUnit: true,
+            conversionToBase: true,
+            unit: { select: { name: true, pluralName: true } }
+          }
+        },
+        category: { select: { name: true, colour: true } }
+      }
     }),
     prisma.category.findMany({
       where: { businessId: business.id },
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { products: true } } }
+      select: {
+        id: true,
+        name: true,
+        colour: true,
+        imageUrl: true,
+        _count: { select: { products: true } }
+      }
     }),
-    prisma.unit.findMany(),
+    prisma.unit.findMany({
+      select: { id: true, name: true }
+    }),
   ]);
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';

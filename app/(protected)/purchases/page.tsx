@@ -9,7 +9,7 @@ import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
 
 export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return (
       <div className="card p-6 text-center">
@@ -24,16 +24,57 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
   const [products, suppliers, units, purchases] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
-      include: { productUnits: { include: { unit: true } } }
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        defaultCostBasePence: true,
+        sellingPriceBasePence: true,
+        vatRateBps: true,
+        productUnits: {
+          select: {
+            unitId: true,
+            conversionToBase: true,
+            isBaseUnit: true,
+            unit: { select: { id: true, name: true, pluralName: true } }
+          }
+        }
+      }
     }),
-    prisma.supplier.findMany({ where: { businessId: business.id } }),
-    prisma.unit.findMany(),
+    prisma.supplier.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true }
+    }),
+    prisma.unit.findMany({
+      select: { id: true, name: true }
+    }),
     prisma.purchaseInvoice.findMany({
       where: { businessId: business.id },
-      include: {
-        supplier: true,
-        purchaseReturn: true,
-        lines: { include: { product: { include: { productUnits: { include: { unit: true } } } } } }
+      select: {
+        id: true,
+        createdAt: true,
+        paymentStatus: true,
+        totalPence: true,
+        supplier: { select: { name: true } },
+        purchaseReturn: { select: { id: true } },
+        _count: { select: { lines: true } },
+        lines: {
+          take: 1,
+          select: {
+            qtyBase: true,
+            product: {
+              select: {
+                productUnits: {
+                  select: {
+                    isBaseUnit: true,
+                    conversionToBase: true,
+                    unit: { select: { name: true, pluralName: true } }
+                  }
+                }
+              }
+            }
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
       take: 30
@@ -90,7 +131,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
           </thead>
           <tbody>
             {purchases.map((purchase) => {
-              const lineCount = purchase.lines.length;
+              const lineCount = purchase._count.lines;
               const line = purchase.lines[0];
               const baseUnit = line?.product.productUnits.find((unit) => unit.isBaseUnit);
               const packaging = getPrimaryPackagingUnit(

@@ -6,15 +6,19 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { createPurchaseReturnAction } from '@/app/actions/returns';
 
 export default async function PurchaseReturnPage({ params }: { params: { id: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
-  const invoice = await prisma.purchaseInvoice.findUnique({
-    where: { id: params.id },
-    include: {
-      payments: true,
-      supplier: true,
-      purchaseReturn: true
+  const invoice = await prisma.purchaseInvoice.findFirst({
+    where: { id: params.id, businessId: business.id },
+    select: {
+      id: true,
+      createdAt: true,
+      totalPence: true,
+      paymentStatus: true,
+      payments: { select: { amountPence: true } },
+      supplier: { select: { name: true } },
+      purchaseReturn: { select: { id: true } }
     }
   });
 

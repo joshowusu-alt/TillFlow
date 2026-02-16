@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
+import { createSale, type DiscountType } from '@/lib/services/sales';
+import type { PaymentStatus } from '@/lib/services/shared';
+
+export const dynamic = 'force-dynamic';
 
 interface OfflineSalePayload {
     id: string;
@@ -24,6 +28,30 @@ interface OfflineSalePayload {
     createdAt: string;
 }
 
+function parseDiscountValue(type: DiscountType, raw: unknown): number {
+    if (type === 'PERCENT') {
+        const pct = Number(raw);
+        if (Number.isNaN(pct)) return 0;
+        return Math.min(Math.max(pct, 0), 100);
+    }
+    if (type === 'AMOUNT') {
+        const amount = Number(raw);
+        if (Number.isNaN(amount)) return 0;
+        return Math.max(Math.round(amount * 100), 0);
+    }
+    return 0;
+}
+
+function toDiscountType(value: unknown): DiscountType {
+    if (value === 'PERCENT' || value === 'AMOUNT') return value;
+    return 'NONE';
+}
+
+function toPaymentStatus(value: unknown): PaymentStatus {
+    if (value === 'PAID' || value === 'PART_PAID' || value === 'UNPAID') return value;
+    return 'PAID';
+}
+
 export async function POST(request: NextRequest) {
     try {
         const user = await getUser();
@@ -31,28 +59,45 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
         const payload = await request.json() as OfflineSalePayload;
-
-        const business = await prisma.business.findUnique({ where: { id: user.businessId } });
-        if (!business) {
-            return NextResponse.json({ error: 'Business not found' }, { status: 404 });
+        if (!payload?.id || !payload.storeId || !payload.tillId || !Array.isArray(payload.lines)) {
+            return NextResponse.json({ error: 'Invalid offline payload' }, { status: 400 });
         }
 
-        // Check if this offline sale was already synced (by checking referenceId pattern)
+        const store = await prisma.store.findFirst({
+            where: { id: payload.storeId, businessId: user.businessId },
+            select: { id: true }
+        });
+        if (!store) {
+            return NextResponse.json({ error: 'Store not found' }, { status: 400 });
+        }
+
+        const till = await prisma.till.findFirst({
+            where: { id: payload.tillId, storeId: store.id, active: true },
+            select: { id: true }
+        });
+        if (!till) {
+            return NextResponse.json({ error: 'Till not found' }, { status: 400 });
+        }
+
+        if (payload.customerId) {
+            const customer = await prisma.customer.findFirst({
+                where: { id: payload.customerId, businessId: user.businessId },
+                select: { id: true }
+            });
+            if (!customer) {
+                return NextResponse.json({ error: 'Customer not found' }, { status: 400 });
+            }
+        }
+
+        const externalRef = `OFFLINE_SYNC:${payload.id}`;
         const existingSale = await prisma.salesInvoice.findFirst({
             where: {
-                businessId: business.id,
-                // We encode the offline ID in a way we can check
-                createdAt: {
-                    gte: new Date(payload.createdAt),
-                    lte: new Date(new Date(payload.createdAt).getTime() + 1000) // 1 second window
-                },
-                storeId: payload.storeId,
-                tillId: payload.tillId
-            }
+                businessId: user.businessId,
+                payments: { some: { reference: externalRef } }
+            },
+            select: { id: true }
         });
-
         if (existingSale) {
-            // Already synced, return success
             return NextResponse.json({
                 success: true,
                 message: 'Sale already synced',
@@ -60,125 +105,55 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Fetch products for price calculations
-        const productIds = payload.lines.map((l) => l.productId);
-        const products = await prisma.product.findMany({
-            where: { id: { in: productIds } },
-            include: { productUnits: true }
-        });
-        const productMap = new Map(products.map((p) => [p.id, p]));
+        const lines = payload.lines
+            .map((line) => {
+                const qtyInUnit = Math.floor(Number(line.qtyInUnit));
+                const discountType = toDiscountType(line.discountType);
+                return {
+                    productId: String(line.productId || ''),
+                    unitId: String(line.unitId || ''),
+                    qtyInUnit,
+                    discountType,
+                    discountValue: parseDiscountValue(discountType, line.discountValue)
+                };
+            })
+            .filter((line) => line.productId && line.unitId && line.qtyInUnit > 0);
 
-        // Calculate line totals
-        let subtotalPence = 0;
-        let vatPence = 0;
-        let discountPence = 0;
-
-        const lineData = payload.lines.map((line) => {
-            const product = productMap.get(line.productId);
-            if (!product) throw new Error(`Product ${line.productId} not found`);
-
-            const productUnit = product.productUnits.find((pu) => pu.unitId === line.unitId);
-            const conversionToBase = productUnit?.conversionToBase ?? 1;
-            const qtyBase = line.qtyInUnit * conversionToBase;
-            const unitPricePence = conversionToBase * product.sellingPriceBasePence;
-            const lineSubtotalPence = unitPricePence * line.qtyInUnit;
-
-            // Calculate line discount
-            let lineDiscountPence = 0;
-            if (line.discountType === 'PERCENT' && line.discountValue) {
-                const pct = Math.min(Math.max(parseFloat(line.discountValue) || 0, 0), 100);
-                lineDiscountPence = Math.round((lineSubtotalPence * pct) / 100);
-            } else if (line.discountType === 'AMOUNT' && line.discountValue) {
-                lineDiscountPence = Math.min(Math.round(parseFloat(line.discountValue) * 100) || 0, lineSubtotalPence);
-            }
-
-            const netSubtotal = lineSubtotalPence - lineDiscountPence;
-            const lineVatPence = business.vatEnabled
-                ? Math.round((netSubtotal * product.vatRateBps) / 10000)
-                : 0;
-            const lineTotalPence = netSubtotal + lineVatPence;
-
-            subtotalPence += lineSubtotalPence;
-            vatPence += lineVatPence;
-            discountPence += lineDiscountPence;
-
-            return {
-                productId: line.productId,
-                unitId: line.unitId,
-                qtyInUnit: line.qtyInUnit,
-                conversionToBase,
-                qtyBase,
-                unitPricePence,
-                lineDiscountPence,
-                promoDiscountPence: 0,
-                lineSubtotalPence: netSubtotal,
-                lineVatPence,
-                lineTotalPence
-            };
-        });
-
-        // Calculate order-level discount
-        const netAfterLineDiscount = subtotalPence - discountPence;
-        let orderDiscountPence = 0;
-        if (payload.orderDiscountType === 'PERCENT' && payload.orderDiscountValue) {
-            const pct = Math.min(Math.max(parseFloat(payload.orderDiscountValue) || 0, 0), 100);
-            orderDiscountPence = Math.round((netAfterLineDiscount * pct) / 100);
-        } else if (payload.orderDiscountType === 'AMOUNT' && payload.orderDiscountValue) {
-            orderDiscountPence = Math.min(Math.round(parseFloat(payload.orderDiscountValue) * 100) || 0, netAfterLineDiscount);
+        if (lines.length === 0) {
+            return NextResponse.json({ error: 'No valid sale lines to sync' }, { status: 400 });
         }
 
-        const totalPence = netAfterLineDiscount - orderDiscountPence + vatPence;
+        const payments = Array.isArray(payload.payments)
+            ? payload.payments
+                .map((payment) => ({
+                    method: payment.method,
+                    amountPence: Math.max(0, Math.round(Number(payment.amountPence) || 0)),
+                    reference: externalRef
+                }))
+                .filter((payment) => payment.amountPence > 0)
+            : [];
 
-        // Create the sale
-        const invoice = await prisma.salesInvoice.create({
-            data: {
-                businessId: business.id,
-                storeId: payload.storeId,
-                tillId: payload.tillId,
-                cashierUserId: user.id,
-                customerId: payload.customerId || null,
-                paymentStatus: payload.paymentStatus,
-                discountPence: discountPence + orderDiscountPence,
-                subtotalPence: subtotalPence - discountPence - orderDiscountPence,
-                vatPence,
-                totalPence,
-                createdAt: new Date(payload.createdAt),
-                lines: {
-                    create: lineData
-                },
-                payments: {
-                    create: payload.payments.map((p) => ({
-                        method: p.method,
-                        amountPence: p.amountPence
-                    }))
-                }
-            }
+        const orderDiscountType = toDiscountType(payload.orderDiscountType);
+        const orderDiscountValue = parseDiscountValue(orderDiscountType, payload.orderDiscountValue);
+        const createdAt = payload.createdAt ? new Date(payload.createdAt) : null;
+        const safeCreatedAt =
+            createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null;
+
+        const invoice = await createSale({
+            businessId: user.businessId,
+            storeId: store.id,
+            tillId: till.id,
+            cashierUserId: user.id,
+            customerId: payload.customerId || null,
+            paymentStatus: toPaymentStatus(payload.paymentStatus),
+            dueDate: null,
+            orderDiscountType,
+            orderDiscountValue,
+            externalRef,
+            createdAt: safeCreatedAt,
+            payments,
+            lines
         });
-
-        // Update inventory
-        for (const line of lineData) {
-            await prisma.inventoryBalance.updateMany({
-                where: {
-                    storeId: payload.storeId,
-                    productId: line.productId
-                },
-                data: {
-                    qtyOnHandBase: { decrement: line.qtyBase }
-                }
-            });
-
-            await prisma.stockMovement.create({
-                data: {
-                    storeId: payload.storeId,
-                    productId: line.productId,
-                    qtyBase: -line.qtyBase,
-                    type: 'SALE',
-                    referenceType: 'SalesInvoice',
-                    referenceId: invoice.id,
-                    userId: user.id
-                }
-            });
-        }
 
         return NextResponse.json({
             success: true,
@@ -186,6 +161,17 @@ export async function POST(request: NextRequest) {
         });
     } catch (error) {
         console.error('Sync sale error:', error);
+        if (error instanceof Error) {
+            const message = error.message;
+            if (
+                message.includes('not found') ||
+                message.includes('No items') ||
+                message.includes('Insufficient stock') ||
+                message.includes('required')
+            ) {
+                return NextResponse.json({ error: message }, { status: 400 });
+            }
+        }
         return NextResponse.json(
             { error: error instanceof Error ? error.message : 'Failed to sync sale' },
             { status: 500 }

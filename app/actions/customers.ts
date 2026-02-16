@@ -26,7 +26,7 @@ export async function createCustomerAction(formData: FormData): Promise<void> {
 
 export async function updateCustomerAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    await withBusinessContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
     if (!id) return err('Could not find that customer. Please refresh and try again.');
@@ -36,11 +36,17 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
+    const customer = await prisma.customer.findFirst({
+      where: { id, businessId },
+      select: { id: true },
+    });
+    if (!customer) return err('Customer not found. It may have been removed.');
+
     await prisma.customer.update({
-      where: { id },
+      where: { id: customer.id },
       data: { name, phone, email, creditLimitPence }
     });
 
-    redirect(`/customers/${id}`);
+    redirect(`/customers/${customer.id}`);
   }, '/customers');
 }

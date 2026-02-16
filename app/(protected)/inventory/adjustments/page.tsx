@@ -6,22 +6,57 @@ import { formatDateTime } from '@/lib/format';
 import StockAdjustmentClient from '../StockAdjustmentClient';
 
 export default async function StockAdjustmentsPage() {
-  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }
 
-  const products = await prisma.product.findMany({
-    where: { businessId: business.id, active: true },
-    include: { productUnits: { include: { unit: true } }, inventoryBalances: true }
-  });
-
-  const adjustments = await prisma.stockAdjustment.findMany({
-    where: { storeId: store.id },
-    include: { product: { include: { productUnits: { include: { unit: true } } } }, unit: true, user: true },
-    orderBy: { createdAt: 'desc' },
-    take: 30
-  });
+  const [products, adjustments] = await Promise.all([
+    prisma.product.findMany({
+      where: { businessId: business.id, active: true },
+      select: {
+        id: true,
+        name: true,
+        productUnits: {
+          select: {
+            unitId: true,
+            isBaseUnit: true,
+            conversionToBase: true,
+            unit: { select: { name: true, pluralName: true } }
+          }
+        },
+        inventoryBalances: {
+          where: { storeId: store.id },
+          select: { qtyOnHandBase: true }
+        }
+      }
+    }),
+    prisma.stockAdjustment.findMany({
+      where: { storeId: store.id },
+      select: {
+        id: true,
+        createdAt: true,
+        qtyBase: true,
+        direction: true,
+        reason: true,
+        product: {
+          select: {
+            name: true,
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                unit: { select: { name: true, pluralName: true } }
+              }
+            }
+          }
+        },
+        user: { select: { name: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 30
+    })
+  ]);
 
   return (
     <div className="space-y-6">
@@ -33,8 +68,7 @@ export default async function StockAdjustmentsPage() {
           products={products.map((product) => ({
             id: product.id,
             name: product.name,
-            onHandBase:
-              product.inventoryBalances.find((balance) => balance.storeId === store.id)?.qtyOnHandBase ?? 0,
+            onHandBase: product.inventoryBalances[0]?.qtyOnHandBase ?? 0,
             units: product.productUnits.map((pu) => ({
               id: pu.unitId,
               name: pu.unit.name,
