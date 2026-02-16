@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState, useEffect, useRef, useTransition } from 'react';
+import { useMemo, useState, useEffect, useRef, useTransition, useCallback } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
-import { createSaleAction } from '@/app/actions/sales';
+import { completeSaleAction } from '@/app/actions/sales';
 import { quickCreateProductAction } from '@/app/actions/products';
 
 type UnitDto = {
@@ -60,6 +60,7 @@ const CART_CUSTOMER_KEY = 'pos.savedCustomer';
 
 export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const safeUnits = units ?? [];
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [productId, setProductId] = useState(products[0]?.id ?? '');
@@ -81,6 +82,9 @@ export default function PosClient({ business, store, tills, products, customers,
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
   const [orderDiscountInput, setOrderDiscountInput] = useState('');
   const [lastReceiptId, setLastReceiptId] = useState('');
+  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number } | null>(null);
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [isCompletingSale, setIsCompletingSale] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const cashRef = useRef<HTMLInputElement>(null);
@@ -317,6 +321,65 @@ export default function PosClient({ business, store, tills, products, customers,
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(CART_STORAGE_KEY);
       window.localStorage.removeItem(CART_CUSTOMER_KEY);
+    }
+  };
+
+  const handleCompleteSale = async () => {
+    if (!canSubmit || isCompletingSale) return;
+    setIsCompletingSale(true);
+    setSaleError(null);
+
+    try {
+      const result = await completeSaleAction({
+        storeId: store.id,
+        tillId,
+        cart: JSON.stringify(cart),
+        paymentStatus,
+        customerId,
+        dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
+        orderDiscountType,
+        orderDiscountValue: orderDiscountInput,
+        cashPaid: Math.max(0, Math.round(cashApplied)),
+        cardPaid: Math.max(0, Math.round(cardPaidValue)),
+        transferPaid: Math.max(0, Math.round(transferPaidValue)),
+      });
+
+      if (result.success) {
+        const { receiptId, totalPence } = result.data;
+        // Store receipt ID for reprinting
+        setLastReceiptId(receiptId);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('lastReceiptId', receiptId);
+        }
+        // Show success toast
+        setSaleSuccess({ receiptId, totalPence });
+        // Reset cart and payment fields
+        setCart([]);
+        clearSavedCart();
+        setCustomerId('');
+        setCashTendered('');
+        setCardPaid('');
+        setTransferPaid('');
+        setPaymentStatus('PAID');
+        setPaymentMethods(['CASH']);
+        setOrderDiscountType('NONE');
+        setOrderDiscountInput('');
+        setQtyDrafts({});
+        setUndoStack([]);
+        playBeep(true);
+        // Auto-dismiss success toast after 8 seconds
+        setTimeout(() => setSaleSuccess(null), 8000);
+        // Refresh server data (product stock levels etc)
+        router.refresh();
+      } else {
+        setSaleError(result.error);
+        playBeep(false);
+      }
+    } catch {
+      setSaleError('Something went wrong. Please try again.');
+      playBeep(false);
+    } finally {
+      setIsCompletingSale(false);
     }
   };
 
@@ -980,14 +1043,50 @@ export default function PosClient({ business, store, tills, products, customers,
         )}
 
         {/* ── Cart ──────────────────────────────────────────── */}
-        <form action={createSaleAction} className="space-y-4" ref={formRef}>
-          <input type="hidden" name="storeId" value={store.id} />
-          <input type="hidden" name="cart" value={JSON.stringify(cart)} />
-          <input type="hidden" name="orderDiscountType" value={orderDiscountType} />
-          <input type="hidden" name="orderDiscountValue" value={orderDiscountInput} />
-          <input type="hidden" name="cashPaid" value={Math.max(0, Math.round(cashApplied))} />
-          <input type="hidden" name="cardPaid" value={Math.max(0, Math.round(cardPaidValue))} />
-          <input type="hidden" name="transferPaid" value={Math.max(0, Math.round(transferPaidValue))} />
+        <form onSubmit={(e) => { e.preventDefault(); handleCompleteSale(); }} className="space-y-4" ref={formRef}>
+
+          {/* Success toast */}
+          {saleSuccess && (
+            <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-4 text-white shadow-lg animate-in fade-in">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Sale Complete!</div>
+                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)} — Ready for next customer</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-semibold hover:bg-white/30 transition"
+                    onClick={() => window.open(`/receipts/${saleSuccess.receiptId}`, '_blank', 'noopener')}
+                  >
+                    Print Receipt
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition"
+                    onClick={() => setSaleSuccess(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sale error */}
+          {saleError && (
+            <div className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose flex items-center justify-between">
+              <span>{saleError}</span>
+              <button type="button" className="text-xs font-semibold ml-2" onClick={() => setSaleError(null)}>✕</button>
+            </div>
+          )}
 
           {errorParam ? (
             <div className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">
@@ -1327,8 +1426,8 @@ export default function PosClient({ business, store, tills, products, customers,
               <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>
             )}
 
-            <button className="btn-primary w-full text-lg py-3" type="submit" disabled={!canSubmit}>
-              Complete Sale — {formatMoney(totalDue, business.currency)}
+            <button className="btn-primary w-full text-lg py-3" type="submit" disabled={!canSubmit || isCompletingSale}>
+              {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
             </button>
           </div>
         </form>

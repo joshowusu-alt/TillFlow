@@ -109,6 +109,96 @@ export async function createSaleAction(formData: FormData): Promise<void> {
   });
 }
 
+/**
+ * Complete a sale and return the receipt ID — stays on POS (no redirect).
+ * Called from PosClient via JavaScript for a seamless checkout flow.
+ */
+export async function completeSaleAction(data: {
+  storeId: string;
+  tillId: string;
+  cart: string;
+  paymentStatus: string;
+  customerId: string;
+  dueDate: string;
+  orderDiscountType: string;
+  orderDiscountValue: string;
+  cashPaid: number;
+  cardPaid: number;
+  transferPaid: number;
+}): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext();
+
+    const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
+    const customerId = data.customerId || null;
+    const dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
+    const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
+
+    let lines: {
+      productId: string;
+      unitId: string;
+      qtyInUnit: number;
+      discountType?: DiscountType;
+      discountValue?: number;
+    }[] = [];
+
+    if (data.cart) {
+      try {
+        const parsed = JSON.parse(data.cart);
+        if (Array.isArray(parsed)) {
+          lines = parsed
+            .map((item: any) => ({
+              productId: String(item.productId || ''),
+              unitId: String(item.unitId || ''),
+              qtyInUnit: Number(item.qtyInUnit || 0),
+              discountType: (item.discountType || 'NONE') as DiscountType,
+              discountValue: parseDiscountValue(item.discountType, item.discountValue),
+            }))
+            .filter((item: any) => item.productId && item.unitId && item.qtyInUnit > 0);
+        }
+      } catch {
+        lines = [];
+      }
+    }
+
+    if (paymentStatus !== 'PAID' && !customerId) {
+      return { success: false, error: 'Select a customer for credit or part-paid sales.' };
+    }
+
+    const invoice = await createSale({
+      businessId,
+      storeId: data.storeId,
+      tillId: data.tillId,
+      cashierUserId: user.id,
+      customerId,
+      paymentStatus,
+      dueDate,
+      orderDiscountType,
+      orderDiscountValue,
+      payments: [
+        { method: 'CASH', amountPence: data.cashPaid },
+        { method: 'CARD', amountPence: data.cardPaid },
+        { method: 'TRANSFER', amountPence: data.transferPaid },
+      ],
+      lines,
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SALE_CREATE',
+      entity: 'SalesInvoice',
+      entityId: invoice.id,
+      details: { lines: lines.length, total: invoice.totalPence },
+    });
+
+    return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence } };
+  });
+}
+
 export async function amendSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
