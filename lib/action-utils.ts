@@ -100,8 +100,16 @@ export async function safeAction<T>(
     ) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return err(message);
+    // Return a user-friendly message instead of raw technical errors
+    if (error instanceof Error) {
+      const msg = error.message;
+      // Hide Prisma / database internals from end users
+      if (msg.includes('prisma') || msg.includes('P2002') || msg.includes('P2025') || msg.includes('42P01') || msg.includes('Raw query failed')) {
+        return err('Something went wrong saving your data. Please try again or contact support.');
+      }
+      return err(msg);
+    }
+    return err('Something unexpected happened. Please try again.');
   }
 }
 

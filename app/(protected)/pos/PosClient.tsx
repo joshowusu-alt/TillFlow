@@ -204,17 +204,17 @@ export default function PosClient({ business, store, tills, products, customers,
   const handleQuickCreate = () => {
     setQuickAddError(null);
     if (!quickName.trim()) {
-      setQuickAddError('Product name is required.');
+      setQuickAddError('Please enter a product name.');
       return;
     }
     if (!quickBaseUnitId) {
-      setQuickAddError('Select a base unit.');
+      setQuickAddError('Please select a base unit.');
       return;
     }
     const selling = parseCurrencyToPence(quickSellPrice);
     const cost = parseCurrencyToPence(quickCost);
     if (selling <= 0 || cost <= 0) {
-      setQuickAddError('Enter selling price and cost.');
+      setQuickAddError('Please enter both the selling price and cost.');
       return;
     }
     startTransition(async () => {

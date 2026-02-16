@@ -53,7 +53,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               <h2 className="text-lg font-display font-semibold">Add product</h2>
               {searchParams?.error === 'duplicate-name' ? (
                 <div className="mt-3 rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose">
-                  A product with that name already exists.
+                  A product with that name already exists. Please choose a different name.
                 </div>
               ) : null}
               <form action={createProductAction} className="mt-4 grid gap-4 md:grid-cols-3">
@@ -82,11 +82,6 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <div className="mt-1 text-xs text-black/50">
                     Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
                   </div>
-                </div>
-                <div>
-                  <label className="label">Image URL</label>
-                  <input className="input" name="imageUrl" type="url" placeholder="https://..." />
-                  <div className="mt-1 text-xs text-black/50">Optional product image link.</div>
                 </div>
                 <div>
                   <label className="label">Base Price ({getMinorUnitLabel(business.currency)})</label>

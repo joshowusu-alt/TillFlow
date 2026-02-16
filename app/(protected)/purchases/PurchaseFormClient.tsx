@@ -139,24 +139,24 @@ export default function PurchaseFormClient({
       setQuickAddError(null);
     } else {
       openQuickAdd(code);
-      setQuickAddError('No product found. Create a new one below.');
+      setQuickAddError('No product found for that barcode. You can create a new one below.');
     }
   };
 
   const handleQuickCreate = () => {
     setQuickAddError(null);
     if (!quickName.trim()) {
-      setQuickAddError('Product name is required.');
+      setQuickAddError('Please enter a product name.');
       return;
     }
     if (!quickBaseUnitId) {
-      setQuickAddError('Select a base unit.');
+      setQuickAddError('Please select a base unit.');
       return;
     }
     const selling = parseCurrencyToPence(quickSellPrice);
     const cost = parseCurrencyToPence(quickCost);
     if (selling <= 0 || cost <= 0) {
-      setQuickAddError('Enter selling price and cost.');
+      setQuickAddError('Please enter both the selling price and cost.');
       return;
     }
     startTransition(async () => {

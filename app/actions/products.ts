@@ -22,15 +22,15 @@ import { audit } from '@/lib/audit';
 async function hasDuplicateName(businessId: string, name: string, excludeId?: string) {
   const rows = excludeId
     ? await prisma.$queryRaw<{ id: string }[]>`
-        SELECT id FROM Product
-        WHERE businessId = ${businessId}
-          AND lower(name) = lower(${name})
+        SELECT id FROM "Product"
+        WHERE "businessId" = ${businessId}
+          AND lower("name") = lower(${name})
           AND id <> ${excludeId}
         LIMIT 1`
     : await prisma.$queryRaw<{ id: string }[]>`
-        SELECT id FROM Product
-        WHERE businessId = ${businessId}
-          AND lower(name) = lower(${name})
+        SELECT id FROM "Product"
+        WHERE "businessId" = ${businessId}
+          AND lower("name") = lower(${name})
         LIMIT 1`;
   return rows.length > 0;
 }
@@ -206,17 +206,17 @@ export async function quickCreateProductAction(input: {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const name = input.name.trim();
-    if (!name) return err('Product name is required.');
+    if (!name) return err('Please enter a product name.');
 
     if (await hasDuplicateName(businessId, name)) {
-      return err('A product with that name already exists.');
+      return err('A product with that name already exists. Please choose a different name.');
     }
 
     if (input.barcode) {
       const dup = await prisma.product.findFirst({
         where: { businessId, barcode: input.barcode }
       });
-      if (dup) return err('That barcode is already in use.');
+      if (dup) return err('That barcode is already used by another product.');
     }
 
     try {
@@ -260,9 +260,9 @@ export async function quickCreateProductAction(input: {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return err('Product already exists with the same name or barcode.');
+        return err('A product with that name or barcode already exists. Please use a different name or barcode.');
       }
-      throw error;
+      return err('Something went wrong creating the product. Please try again.');
     }
   });
 }
@@ -278,7 +278,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     const product = await prisma.product.findFirst({
       where: { id: productId, businessId },
     });
-    if (!product) return err('Product not found.');
+    if (!product) return err('Product not found. It may have already been removed.');
 
     await prisma.product.update({
       where: { id: productId },
