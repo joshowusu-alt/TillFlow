@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -12,21 +13,24 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const features = getFeatures(business.mode as any);
-  const expenseAccounts = await prisma.account.findMany({
-    where: {
-      businessId: business.id,
-      type: 'EXPENSE',
-      code: { not: ACCOUNT_CODES.cogs }
-    },
-    orderBy: { code: 'asc' }
-  });
 
-  const expenses = await prisma.expense.findMany({
-    where: { businessId: business.id },
-    include: { account: true, user: true },
-    orderBy: { createdAt: 'desc' },
-    take: 50
-  });
+  // Run both queries in parallel
+  const [expenseAccounts, expenses] = await Promise.all([
+    prisma.account.findMany({
+      where: {
+        businessId: business.id,
+        type: 'EXPENSE',
+        code: { not: ACCOUNT_CODES.cogs }
+      },
+      orderBy: { code: 'asc' }
+    }),
+    prisma.expense.findMany({
+      where: { businessId: business.id },
+      include: { account: true, user: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -105,7 +109,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
             <input className="input" name="notes" placeholder="Optional notes" />
           </div>
           <div className="md:col-span-4">
-            <button className="btn-primary">Record expense</button>
+            <SubmitButton className="btn-primary" loadingText="Recording…">Record expense</SubmitButton>
           </div>
         </form>
       </div>

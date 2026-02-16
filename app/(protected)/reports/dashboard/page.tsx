@@ -25,18 +25,45 @@ export default async function DashboardPage() {
   start.setHours(0, 0, 0, 0);
   const end = new Date();
 
-  const salesToday = await prisma.salesInvoice.findMany({
-    where: {
-      businessId: business.id,
-      createdAt: { gte: start, lte: end },
-      paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-    }
-  });
+  // Run ALL dashboard queries in parallel instead of sequentially
+  const [salesToday, paymentsToday, income, outstandingSales, outstandingPurchases, balances, bestSellers] = await Promise.all([
+    prisma.salesInvoice.findMany({
+      where: {
+        businessId: business.id,
+        createdAt: { gte: start, lte: end },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
+      }
+    }),
+    prisma.salesPayment.findMany({
+      where: { receivedAt: { gte: start, lte: end }, salesInvoice: { businessId: business.id } }
+    }),
+    getIncomeStatement(business.id, start, end),
+    prisma.salesInvoice.findMany({
+      where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      include: { payments: true }
+    }),
+    prisma.purchaseInvoice.findMany({
+      where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      include: { payments: true }
+    }),
+    prisma.inventoryBalance.findMany({
+      where: { storeId: store.id },
+      include: { product: { include: { productUnits: { include: { unit: true } } } } }
+    }),
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: {
+          businessId: business.id,
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] }
+        }
+      },
+      include: { product: { include: { productUnits: { include: { unit: true } } } } }
+    }),
+  ]);
+
   const totalSales = salesToday.reduce((sum, sale) => sum + sale.totalPence, 0);
 
-  const paymentsToday = await prisma.salesPayment.findMany({
-    where: { receivedAt: { gte: start, lte: end }, salesInvoice: { businessId: business.id } }
-  });
   const paymentSplit = paymentsToday.reduce(
     (acc, payment) => {
       acc[payment.method as keyof typeof acc] += payment.amountPence;
@@ -45,44 +72,20 @@ export default async function DashboardPage() {
     { CASH: 0, CARD: 0, TRANSFER: 0 }
   );
 
-  const income = await getIncomeStatement(business.id, start, end);
-
-  const outstandingSales = await prisma.salesInvoice.findMany({
-    where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-    include: { payments: true }
-  });
   const outstandingAR = outstandingSales.reduce((sum, invoice) => {
     const paid = invoice.payments.reduce((total, payment) => total + payment.amountPence, 0);
     return sum + Math.max(invoice.totalPence - paid, 0);
   }, 0);
 
-  const outstandingPurchases = await prisma.purchaseInvoice.findMany({
-    where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-    include: { payments: true }
-  });
   const outstandingAP = outstandingPurchases.reduce((sum, invoice) => {
     const paid = invoice.payments.reduce((total, payment) => total + payment.amountPence, 0);
     return sum + Math.max(invoice.totalPence - paid, 0);
   }, 0);
 
-  const balances = await prisma.inventoryBalance.findMany({
-    where: { storeId: store.id },
-    include: { product: { include: { productUnits: { include: { unit: true } } } } }
-  });
   const lowStock = balances
     .filter((balance) => balance.product.reorderPointBase > 0 && balance.qtyOnHandBase <= balance.product.reorderPointBase)
     .slice(0, 5);
 
-  const bestSellers = await prisma.salesInvoiceLine.findMany({
-    where: {
-      salesInvoice: {
-        businessId: business.id,
-        createdAt: { gte: start, lte: end },
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-      }
-    },
-    include: { product: { include: { productUnits: { include: { unit: true } } } } }
-  });
   const bestMap = new Map<string, { name: string; qty: number; units: any[] }>();
   for (const line of bestSellers) {
     const entry = bestMap.get(line.productId) ?? {

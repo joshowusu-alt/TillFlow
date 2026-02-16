@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
@@ -9,13 +10,16 @@ export default async function UsersPage({
   searchParams: { error?: string; success?: string; edit?: string };
 }) {
   const owner = await requireRole(['OWNER']);
-  const business = await prisma.business.findFirst({ where: { id: owner.businessId } });
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
 
-  const users = await prisma.user.findMany({
-    where: { businessId: business.id },
-    orderBy: { name: 'asc' },
-  });
+  // Run both queries in parallel (users uses businessId directly)
+  const [business, users] = await Promise.all([
+    prisma.business.findFirst({ where: { id: owner.businessId } }),
+    prisma.user.findMany({
+      where: { businessId: owner.businessId },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+  if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const editUser = searchParams.edit
     ? users.find((u) => u.id === searchParams.edit)
@@ -107,9 +111,9 @@ export default async function UsersPage({
             </div>
           )}
           <div className="sm:col-span-2 flex gap-3">
-            <button className="btn-primary" type="submit">
+            <SubmitButton className="btn-primary" loadingText={editUser ? 'Updating…' : 'Creating…'}>
               {editUser ? 'Update User' : 'Create User'}
-            </button>
+            </SubmitButton>
             {editUser && (
               <a href="/users" className="btn-ghost">Cancel</a>
             )}

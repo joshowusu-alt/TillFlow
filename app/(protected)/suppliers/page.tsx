@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
@@ -27,7 +28,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
           <input className="input" name="email" placeholder="Email" />
           <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
           <div className="md:col-span-3">
-            <button className="btn-primary">Add supplier</button>
+            <SubmitButton className="btn-primary" loadingText="Adding…">Add supplier</SubmitButton>
           </div>
         </form>
       </div>

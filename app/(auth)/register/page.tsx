@@ -1,8 +1,9 @@
 import { register } from '@/app/actions/register';
+import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
 
-export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function RegisterPage({ searchParams }: { searchParams: { error?: string } }) {
+  const error = searchParams?.error;
 
   const errorMessages: Record<string, string> = {
     missing: 'Please fill in all fields.',
@@ -23,7 +24,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose">
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {errorMessages[error] || 'Something went wrong. Please try again.'}
         </div>
       )}
@@ -61,7 +62,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
             <option value="EUR">EUR — Euro</option>
           </select>
         </div>
-        <button className="btn-primary w-full" type="submit">Create Account</button>
+        <SubmitButton loadingText="Creating your store…">Create Account</SubmitButton>
       </form>
 
       <div className="text-center text-sm text-black/50">

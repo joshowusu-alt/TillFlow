@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -86,7 +87,7 @@ export default async function SupplierDetailPage({
             placeholder="Credit limit"
           />
           <div className="md:col-span-3">
-            <button className="btn-primary">Save changes</button>
+            <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
           </div>
         </form>
       </div>

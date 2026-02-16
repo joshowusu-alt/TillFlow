@@ -1,8 +1,9 @@
 ﻿import { login } from '@/app/actions/auth';
+import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+  const error = searchParams?.error;
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -15,8 +16,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="mt-4 text-sm text-black/60">Sign in to your account</p>
       </div>
       {error && (
-        <div className="rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose">
-          Invalid credentials. Please try again.
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {error === 'missing' ? 'Please enter your email and password.' : 'Invalid credentials. Please try again.'}
         </div>
       )}
       <form action={login} className="space-y-4">
@@ -28,7 +29,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <label className="label">Password</label>
           <input name="password" type="password" className="input" placeholder="••••••••" required />
         </div>
-        <button className="btn-primary w-full" type="submit">Sign in</button>
+        <SubmitButton loadingText="Signing in…">Sign in</SubmitButton>
       </form>
       <div className="text-center text-sm text-black/50">
         Don&apos;t have an account?{' '}

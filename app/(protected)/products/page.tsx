@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
@@ -12,16 +13,19 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const { user, business } = await requireBusiness();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
-  const products = await prisma.product.findMany({
-    where: { businessId: business.id, active: true },
-    include: { productUnits: { include: { unit: true } }, category: true }
-  });
-  const categories = await prisma.category.findMany({
-    where: { businessId: business.id },
-    orderBy: { sortOrder: 'asc' },
-    include: { _count: { select: { products: true } } }
-  });
-  const units = await prisma.unit.findMany();
+  // Run all data queries in parallel
+  const [products, categories, units] = await Promise.all([
+    prisma.product.findMany({
+      where: { businessId: business.id, active: true },
+      include: { productUnits: { include: { unit: true } }, category: true }
+    }),
+    prisma.category.findMany({
+      where: { businessId: business.id },
+      orderBy: { sortOrder: 'asc' },
+      include: { _count: { select: { products: true } } }
+    }),
+    prisma.unit.findMany(),
+  ]);
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
 
@@ -138,7 +142,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   </div>
                 </div>
                 <div className="md:col-span-3">
-                  <button className="btn-primary">Create product</button>
+                  <SubmitButton className="btn-primary" loadingText="Creating…">Create product</SubmitButton>
                 </div>
               </form>
             </div>
@@ -237,7 +241,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <input className="input" name="sortOrder" type="number" defaultValue={0} />
                 </div>
                 <div className="md:col-span-4">
-                  <button className="btn-primary">Create category</button>
+                  <SubmitButton className="btn-primary" loadingText="Creating…">Create category</SubmitButton>
                 </div>
               </form>
             </div>

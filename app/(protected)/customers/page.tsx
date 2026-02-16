@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createCustomerAction } from '@/app/actions/customers';
@@ -10,6 +11,7 @@ export default async function CustomersPage({ searchParams }: { searchParams?: {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
+  // Auth is now cached; customer query benefits from not repeating business lookup
   const customers = await prisma.customer.findMany({
     where: { businessId: business.id },
     include: { salesInvoices: { include: { payments: true } } }
@@ -27,7 +29,7 @@ export default async function CustomersPage({ searchParams }: { searchParams?: {
           <input className="input" name="email" placeholder="Email" />
           <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
           <div className="md:col-span-3">
-            <button className="btn-primary">Add customer</button>
+            <SubmitButton className="btn-primary" loadingText="Adding…">Add customer</SubmitButton>
           </div>
         </form>
       </div>

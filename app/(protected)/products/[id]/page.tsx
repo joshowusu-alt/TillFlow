@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
@@ -215,7 +216,7 @@ export default async function ProductDetailPage({
               </div>
             </div>
             <div className="md:col-span-3">
-              <button className="btn-primary">Save changes</button>
+              <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
             </div>
           </form>
         </div>

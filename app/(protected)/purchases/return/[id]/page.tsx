@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -71,7 +72,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
             <input className="input" name="reason" placeholder="Reason for return/void" />
           </div>
           <div className="md:col-span-3">
-            <button className="btn-primary">{isVoid ? 'Void Purchase' : 'Process Return'}</button>
+            <SubmitButton className="btn-primary" loadingText="Processing…">{isVoid ? 'Void Purchase' : 'Process Return'}</SubmitButton>
           </div>
         </form>
       </div>

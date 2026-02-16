@@ -39,12 +39,27 @@ export async function requireRole(roles: Role[]) {
 }
 
 /**
+ * Cached business lookup — only hits DB once per request even if
+ * called from both layout and page.
+ */
+const _getBusiness = cache(async (businessId: string) => {
+  return prisma.business.findUnique({ where: { id: businessId } });
+});
+
+/**
+ * Cached store lookup — only hits DB once per request.
+ */
+const _getStore = cache(async (businessId: string) => {
+  return prisma.store.findFirst({ where: { businessId } });
+});
+
+/**
  * Authenticate and return the user + their Business record.
  * Always scoped to the logged-in user's businessId.
  */
 export async function requireBusiness(roles?: Role[]) {
   const user = roles ? await requireRole(roles) : await requireUser();
-  const business = await prisma.business.findUnique({ where: { id: user.businessId } });
+  const business = await _getBusiness(user.businessId);
   if (!business) redirect('/login');
   return { user, business };
 }
@@ -55,7 +70,7 @@ export async function requireBusiness(roles?: Role[]) {
  */
 export async function requireBusinessStore(roles?: Role[]) {
   const { user, business } = await requireBusiness(roles);
-  const store = await prisma.store.findFirst({ where: { businessId: business.id } });
+  const store = await _getStore(business.id);
   if (!store) redirect('/settings');
   return { user, business, store };
 }

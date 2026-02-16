@@ -13,26 +13,26 @@ export default async function ShiftsPage() {
   });
   if (!store) return <div>Store not found</div>;
 
-  // Get open shift for current user
-  const openShift = await prisma.shift.findFirst({
-    where: { userId: user.id, status: 'OPEN' },
-    include: {
-      till: { select: { name: true } },
-      salesInvoices: { include: { payments: true } }
-    }
-  });
-
-  // Get recent closed shifts
-  const recentShifts = await prisma.shift.findMany({
-    where: { till: { storeId: store.id } },
-    orderBy: { openedAt: 'desc' },
-    take: 10,
-    include: {
-      user: { select: { name: true } },
-      till: { select: { name: true } },
-      _count: { select: { salesInvoices: true } }
-    }
-  });
+  // Run both shift queries in parallel
+  const [openShift, recentShifts] = await Promise.all([
+    prisma.shift.findFirst({
+      where: { userId: user.id, status: 'OPEN' },
+      include: {
+        till: { select: { name: true } },
+        salesInvoices: { include: { payments: true } }
+      }
+    }),
+    prisma.shift.findMany({
+      where: { till: { storeId: store.id } },
+      orderBy: { openedAt: 'desc' },
+      take: 10,
+      include: {
+        user: { select: { name: true } },
+        till: { select: { name: true } },
+        _count: { select: { salesInvoices: true } }
+      }
+    }),
+  ]);
 
   // Calculate open shift summary
   let openShiftSummary = null;

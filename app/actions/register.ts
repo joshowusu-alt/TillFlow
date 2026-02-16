@@ -95,12 +95,6 @@ export async function register(formData: FormData) {
 // Demo data seeder — creates categories, products, inventory, accounts, etc.
 // ---------------------------------------------------------------------------
 
-async function ensureUnit(name: string, pluralName: string, symbol: string) {
-  const existing = await prisma.unit.findFirst({ where: { name } });
-  if (existing) return existing;
-  return prisma.unit.create({ data: { name, pluralName, symbol } });
-}
-
 interface DemoProduct {
   sku: string;
   barcode: string;
@@ -115,18 +109,39 @@ interface DemoProduct {
 
 async function seedDemoData(businessId: string, storeId: string) {
   try {
-    // Units (global / shared)
-    const piece = await ensureUnit('piece', 'pieces', 'pc');
-    const carton = await ensureUnit('carton', 'cartons', 'ctn');
-    const bottle = await ensureUnit('bottle', 'bottles', 'btl');
-    const pack = await ensureUnit('pack', 'packs', 'pk');
-    const bag = await ensureUnit('bag', 'bags', 'bag');
-    const box = await ensureUnit('box', 'boxes', 'bx');
-    const sachet = await ensureUnit('sachet', 'sachets', 'sct');
-    const tin = await ensureUnit('tin', 'tins', 'tin');
-    const crate = await ensureUnit('crate', 'crates', 'crt');
+    // Units (global / shared) — batch check + create
+    const existingUnits = await prisma.unit.findMany();
+    const unitMap = new Map(existingUnits.map(u => [u.name, u]));
+    
+    const unitDefs = [
+      { name: 'piece', pluralName: 'pieces', symbol: 'pc' },
+      { name: 'carton', pluralName: 'cartons', symbol: 'ctn' },
+      { name: 'bottle', pluralName: 'bottles', symbol: 'btl' },
+      { name: 'pack', pluralName: 'packs', symbol: 'pk' },
+      { name: 'bag', pluralName: 'bags', symbol: 'bag' },
+      { name: 'box', pluralName: 'boxes', symbol: 'bx' },
+      { name: 'sachet', pluralName: 'sachets', symbol: 'sct' },
+      { name: 'tin', pluralName: 'tins', symbol: 'tin' },
+      { name: 'crate', pluralName: 'crates', symbol: 'crt' },
+    ];
+    
+    const missingUnits = unitDefs.filter(u => !unitMap.has(u.name));
+    if (missingUnits.length > 0) {
+      await prisma.unit.createMany({ data: missingUnits, skipDuplicates: true });
+      const newUnits = await prisma.unit.findMany();
+      newUnits.forEach(u => unitMap.set(u.name, u));
+    }
+    
+    const piece = unitMap.get('piece')!;
+    const carton = unitMap.get('carton')!;
+    const bottle = unitMap.get('bottle')!;
+    const pack = unitMap.get('pack')!;
+    const bag = unitMap.get('bag')!;
+    const box = unitMap.get('box')!;
+    const tin = unitMap.get('tin')!;
+    const crate = unitMap.get('crate')!;
 
-    // Categories
+    // Categories — batch create
     const categoryDefs = [
       { name: 'Beverages', colour: '#2563EB', sortOrder: 1 },
       { name: 'Dairy', colour: '#7C3AED', sortOrder: 2 },
@@ -136,14 +151,16 @@ async function seedDemoData(businessId: string, storeId: string) {
       { name: 'Toiletries', colour: '#EC4899', sortOrder: 6 },
       { name: 'Household', colour: '#6366F1', sortOrder: 7 },
     ];
-
-    const categoryMap = new Map<string, string>();
-    for (const c of categoryDefs) {
-      const created = await prisma.category.create({
-        data: { businessId, name: c.name, colour: c.colour, sortOrder: c.sortOrder },
-      });
-      categoryMap.set(c.name, created.id);
-    }
+    
+    // Use transaction for all batch inserts
+    await prisma.$transaction(async (tx) => {
+      for (const c of categoryDefs) {
+        await tx.category.create({ data: { businessId, name: c.name, colour: c.colour, sortOrder: c.sortOrder } });
+      }
+    });
+    
+    const categories = await prisma.category.findMany({ where: { businessId } });
+    const categoryMap = new Map(categories.map(c => [c.name, c.id]));
     const cat = (name: string) => categoryMap.get(name);
 
     // Products
@@ -237,88 +254,80 @@ async function seedDemoData(businessId: string, storeId: string) {
       },
     ];
 
-    for (const p of products) {
-      const product = await prisma.product.create({
-        data: {
-          businessId,
-          sku: p.sku,
-          barcode: p.barcode || null,
-          name: p.name,
-          sellingPriceBasePence: p.sellingPriceBasePence,
-          defaultCostBasePence: p.defaultCostBasePence,
-          vatRateBps: 0,
-          reorderPointBase: p.reorderPointBase,
-          categoryId: p.categoryId ?? null,
-        },
-      });
-
-      for (const u of p.units) {
-        await prisma.productUnit.create({
+    // Create all products, units, inventory, accounts, customers, and supplier in one transaction
+    await prisma.$transaction(async (tx) => {
+      for (const p of products) {
+        const product = await tx.product.create({
           data: {
+            businessId,
+            sku: p.sku,
+            barcode: p.barcode || null,
+            name: p.name,
+            sellingPriceBasePence: p.sellingPriceBasePence,
+            defaultCostBasePence: p.defaultCostBasePence,
+            vatRateBps: 0,
+            reorderPointBase: p.reorderPointBase,
+            categoryId: p.categoryId ?? null,
+          },
+        });
+
+        if (p.units.length > 0) {
+          await tx.productUnit.createMany({
+            data: p.units.map(u => ({
+              productId: product.id,
+              unitId: u.unitId,
+              isBaseUnit: u.isBaseUnit,
+              conversionToBase: u.conversionToBase,
+            })),
+          });
+        }
+
+        await tx.inventoryBalance.create({
+          data: {
+            storeId,
             productId: product.id,
-            unitId: u.unitId,
-            isBaseUnit: u.isBaseUnit,
-            conversionToBase: u.conversionToBase,
+            qtyOnHandBase: p.stockQty,
+            avgCostBasePence: p.defaultCostBasePence,
           },
         });
       }
 
-      await prisma.inventoryBalance.create({
-        data: {
-          storeId,
-          productId: product.id,
-          qtyOnHandBase: p.stockQty,
-          avgCostBasePence: p.defaultCostBasePence,
-        },
+      // Chart of Accounts — batch create
+      await tx.account.createMany({
+        data: [
+          { businessId, code: '1000', name: 'Cash on Hand', type: 'ASSET' },
+          { businessId, code: '1010', name: 'Bank', type: 'ASSET' },
+          { businessId, code: '1100', name: 'Accounts Receivable', type: 'ASSET' },
+          { businessId, code: '1200', name: 'Inventory', type: 'ASSET' },
+          { businessId, code: '1300', name: 'VAT Receivable', type: 'ASSET' },
+          { businessId, code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
+          { businessId, code: '2100', name: 'VAT Payable', type: 'LIABILITY' },
+          { businessId, code: '3000', name: 'Retained Earnings', type: 'EQUITY' },
+          { businessId, code: '4000', name: 'Sales Revenue', type: 'INCOME' },
+          { businessId, code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
+          { businessId, code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },
+          { businessId, code: '6100', name: 'Rent', type: 'EXPENSE' },
+          { businessId, code: '6200', name: 'Utilities', type: 'EXPENSE' },
+          { businessId, code: '6300', name: 'Salaries', type: 'EXPENSE' },
+          { businessId, code: '6400', name: 'Repairs & Maintenance', type: 'EXPENSE' },
+          { businessId, code: '6500', name: 'Fuel & Transport', type: 'EXPENSE' },
+          { businessId, code: '6600', name: 'Marketing', type: 'EXPENSE' },
+        ],
       });
-    }
 
-    // Chart of Accounts
-    const accounts = [
-      { code: '1000', name: 'Cash on Hand', type: 'ASSET' },
-      { code: '1010', name: 'Bank', type: 'ASSET' },
-      { code: '1100', name: 'Accounts Receivable', type: 'ASSET' },
-      { code: '1200', name: 'Inventory', type: 'ASSET' },
-      { code: '1300', name: 'VAT Receivable', type: 'ASSET' },
-      { code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
-      { code: '2100', name: 'VAT Payable', type: 'LIABILITY' },
-      { code: '3000', name: 'Retained Earnings', type: 'EQUITY' },
-      { code: '4000', name: 'Sales Revenue', type: 'INCOME' },
-      { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
-      { code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },
-      { code: '6100', name: 'Rent', type: 'EXPENSE' },
-      { code: '6200', name: 'Utilities', type: 'EXPENSE' },
-      { code: '6300', name: 'Salaries', type: 'EXPENSE' },
-      { code: '6400', name: 'Repairs & Maintenance', type: 'EXPENSE' },
-      { code: '6500', name: 'Fuel & Transport', type: 'EXPENSE' },
-      { code: '6600', name: 'Marketing', type: 'EXPENSE' },
-    ];
-
-    for (const a of accounts) {
-      await prisma.account.create({
-        data: { businessId, code: a.code, name: a.name, type: a.type },
+      // Customers — batch create
+      await tx.customer.createMany({
+        data: [
+          { businessId, name: 'Walk-in Customer' },
+          { businessId, name: 'Kofi Mensah', phone: '0241234567' },
+          { businessId, name: 'Ama Serwaa', phone: '0551234567' },
+        ],
       });
-    }
 
-    // Default customer
-    await prisma.customer.create({
-      data: { businessId, name: 'Walk-in Customer' },
-    });
-
-    // Demo customers
-    const demoCustomers = [
-      { name: 'Kofi Mensah', phone: '0241234567' },
-      { name: 'Ama Serwaa', phone: '0551234567' },
-    ];
-    for (const c of demoCustomers) {
-      await prisma.customer.create({
-        data: { businessId, name: c.name, phone: c.phone },
+      // Demo supplier
+      await tx.supplier.create({
+        data: { businessId, name: 'Default Supplier' },
       });
-    }
-
-    // Demo supplier
-    await prisma.supplier.create({
-      data: { businessId, name: 'Default Supplier' },
     });
 
     console.log(`[register] Demo data seeded for business ${businessId}`);

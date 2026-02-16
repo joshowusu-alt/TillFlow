@@ -17,6 +17,7 @@ export default async function SalesPage() {
     );
   }
 
+  // Sales query is the only data fetch — no parallelisation needed but auth is now cached
   const sales = await prisma.salesInvoice.findMany({
     where: { businessId: business.id },
     include: { customer: true, payments: true, salesReturn: true, lines: true },

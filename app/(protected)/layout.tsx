@@ -1,12 +1,10 @@
-import { requireUser } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import TopNav from '@/components/TopNav';
-import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
-  const business = await prisma.business.findUnique({ where: { id: user.businessId } });
+  const { user, business } = await requireBusiness();
 
   // Check if this is a new business that needs onboarding
   const needsOnboarding = business?.name === 'Supermarket Demo';

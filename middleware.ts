@@ -17,8 +17,8 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Redirect logged-in users away from login page
-    if (sessionToken && pathname === '/login') {
+    // Redirect logged-in users away from auth pages
+    if (sessionToken && (pathname === '/login' || pathname === '/register')) {
         const posUrl = request.nextUrl.clone();
         posUrl.pathname = '/pos';
         return NextResponse.redirect(posUrl);

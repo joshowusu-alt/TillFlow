@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import SubmitButton from '@/components/SubmitButton';
 import { createStockAdjustmentAction } from '@/app/actions/inventory';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 
@@ -137,7 +138,7 @@ export default function StockAdjustmentClient({
         />
       </div>
       <div className="md:col-span-3">
-        <button className="btn-primary">Record adjustment</button>
+        <SubmitButton className="btn-primary" loadingText="Recording…">Record adjustment</SubmitButton>
       </div>
     </form>
   );

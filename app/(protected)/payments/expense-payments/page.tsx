@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -68,7 +69,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                         <input className="input" name="reference" placeholder="Receipt / transaction ref" />
                       </div>
                       <div className="md:col-span-2">
-                        <button className="btn-primary w-full text-xs">Record payment</button>
+                        <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
                       </div>
                     </form>
                   </td>

@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import { requireUser } from '@/lib/auth';
 import { updateMyAccountAction } from '@/app/actions/account';
 
@@ -88,7 +89,7 @@ export default async function AccountPage({
             </div>
           </div>
 
-          <button className="btn-primary">Save Changes</button>
+          <SubmitButton className="btn-primary" loadingText="Saving…">Save Changes</SubmitButton>
         </form>
       </div>
 

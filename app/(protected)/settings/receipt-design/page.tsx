@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
@@ -118,9 +119,9 @@ export default async function ReceiptDesignPage() {
                             </label>
                         </div>
 
-                        <button type="submit" className="btn-primary">
+                        <SubmitButton className="btn-primary" loadingText="Saving…">
                             Save Receipt Design
-                        </button>
+                        </SubmitButton>
                     </form>
                 </div>
 

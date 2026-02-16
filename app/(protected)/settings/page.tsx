@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
@@ -110,7 +111,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </div>
           </div>
           <div className="md:col-span-2">
-            <button className="btn-primary">Save settings</button>
+            <SubmitButton className="btn-primary" loadingText="Saving…">Save settings</SubmitButton>
           </div>
         </form>
         <div className="mt-4 text-xs text-black/50">

@@ -18,27 +18,27 @@ export default async function AnalyticsPage() {
     const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const fourteenDaysAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-    // Fetch sales data for last 7 days
-    const recentSales = await prisma.salesInvoice.findMany({
-        where: {
-            businessId: business.id,
-            createdAt: { gte: sevenDaysAgo }
-        },
-        include: {
-            lines: {
-                include: { product: { include: { category: true } } }
+    // Fetch both periods in parallel
+    const [recentSales, previousSales] = await Promise.all([
+        prisma.salesInvoice.findMany({
+            where: {
+                businessId: business.id,
+                createdAt: { gte: sevenDaysAgo }
+            },
+            include: {
+                lines: {
+                    include: { product: { include: { category: true } } }
+                }
+            },
+            orderBy: { createdAt: 'asc' }
+        }),
+        prisma.salesInvoice.findMany({
+            where: {
+                businessId: business.id,
+                createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo }
             }
-        },
-        orderBy: { createdAt: 'asc' }
-    });
-
-    // Fetch previous period sales for comparison
-    const previousSales = await prisma.salesInvoice.findMany({
-        where: {
-            businessId: business.id,
-            createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo }
-        }
-    });
+        }),
+    ]);
 
     // Calculate daily sales trend
     const dailySales = new Map<string, number>();

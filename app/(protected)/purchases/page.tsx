@@ -20,23 +20,25 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
     );
   }
 
-  const products = await prisma.product.findMany({
-    where: { businessId: business.id, active: true },
-    include: { productUnits: { include: { unit: true } } }
-  });
-  const suppliers = await prisma.supplier.findMany({ where: { businessId: business.id } });
-  const units = await prisma.unit.findMany();
-
-  const purchases = await prisma.purchaseInvoice.findMany({
-    where: { businessId: business.id },
-    include: {
-      supplier: true,
-      purchaseReturn: true,
-      lines: { include: { product: { include: { productUnits: { include: { unit: true } } } } } }
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 30
-  });
+  // Run all data queries in parallel
+  const [products, suppliers, units, purchases] = await Promise.all([
+    prisma.product.findMany({
+      where: { businessId: business.id, active: true },
+      include: { productUnits: { include: { unit: true } } }
+    }),
+    prisma.supplier.findMany({ where: { businessId: business.id } }),
+    prisma.unit.findMany(),
+    prisma.purchaseInvoice.findMany({
+      where: { businessId: business.id },
+      include: {
+        supplier: true,
+        purchaseReturn: true,
+        lines: { include: { product: { include: { productUnits: { include: { unit: true } } } } } }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 30
+    }),
+  ]);
 
   return (
     <div className="space-y-6">

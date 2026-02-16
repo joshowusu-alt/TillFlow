@@ -12,6 +12,7 @@ export default async function InventoryPage() {
     return <div className="card p-6">Seed data missing.</div>;
   }
 
+  // Auth is now cached; single data query
   const products = await prisma.product.findMany({
     where: { businessId: business.id, active: true },
     include: { productUnits: { include: { unit: true } }, inventoryBalances: true }
