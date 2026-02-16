@@ -3,14 +3,39 @@ import type { NextRequest } from 'next/server';
 
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome'];
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function forbiddenResponse(request: NextRequest, reason: string) {
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'forbidden', reason }, { status: 403 });
+    }
+    return new NextResponse('Forbidden', { status: 403 });
+}
 
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
+    const requestOrigin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
+
+    // --- CSRF protection for all mutating requests ---
+    if (MUTATING_METHODS.has(request.method)) {
+        const origin = request.headers.get('origin');
+        const secFetchSite = request.headers.get('sec-fetch-site');
+
+        if (origin && origin !== requestOrigin) {
+            return forbiddenResponse(request, 'origin_mismatch');
+        }
+
+        if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+            return forbiddenResponse(request, 'cross_site_request');
+        }
+    }
 
     // --- Auth guard: redirect unauthenticated users to /login ---
     const sessionToken = request.cookies.get('pos_session')?.value;
+    const isApiPath = pathname.startsWith('/api/');
     const isPublic =
-        pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+        pathname === '/' || isApiPath || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!sessionToken && !isPublic) {
         const loginUrl = request.nextUrl.clone();
@@ -28,10 +53,12 @@ export function middleware(request: NextRequest) {
     // --- Forward pathname header for server components ---
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set('x-pathname', pathname);
+    requestHeaders.set('x-request-id', requestId);
 
     const response = NextResponse.next({
         request: { headers: requestHeaders },
     });
+    response.headers.set('x-request-id', requestId);
 
     // --- HSTS header (Vercel terminates TLS, but this ensures clients remember HTTPS) ---
     response.headers.set(
@@ -46,11 +73,10 @@ export const config = {
     matcher: [
         /*
          * Match all request paths except for the ones starting with:
-         * - api (API routes)
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          */
-        '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|icon.svg).*)',
+        '/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|icon.svg).*)',
     ],
 };

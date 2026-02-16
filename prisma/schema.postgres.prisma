@@ -62,6 +62,8 @@ model Store {
   purchaseReturns   PurchaseReturn[]
   expenses          Expense[]
   expensePayments   ExpensePayment[]
+
+  @@index([businessId])
 }
 
 model Till {
@@ -74,6 +76,8 @@ model Till {
   store         Store          @relation(fields: [storeId], references: [id])
   salesInvoices SalesInvoice[]
   shifts        Shift[]
+
+  @@index([storeId, active])
 }
 
 model Shift {
@@ -94,6 +98,9 @@ model Shift {
   till         Till           @relation(fields: [tillId], references: [id])
   user         User           @relation(fields: [userId], references: [id])
   salesInvoices SalesInvoice[]
+
+  @@index([userId, status])
+  @@index([tillId, openedAt])
 }
 
 model User {
@@ -104,6 +111,9 @@ model User {
   passwordHash String
   role         String
   active       Boolean  @default(true)
+  twoFactorEnabled    Boolean  @default(false)
+  twoFactorSecret     String?
+  twoFactorTempSecret String?
   createdAt    DateTime @default(now())
 
   business       Business      @relation(fields: [businessId], references: [id])
@@ -123,12 +133,16 @@ model Session {
   id        String   @id @default(cuid())
   token     String   @unique
   userId    String
+  ipAddress String?
+  userAgent String?
   createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
   expiresAt DateTime
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([expiresAt])
+  @@index([userId, createdAt])
 }
 
 model Customer {
@@ -142,6 +156,8 @@ model Customer {
 
   business      Business       @relation(fields: [businessId], references: [id])
   salesInvoices SalesInvoice[]
+
+  @@index([businessId, name])
 }
 
 model Supplier {
@@ -155,6 +171,8 @@ model Supplier {
 
   business         Business         @relation(fields: [businessId], references: [id])
   purchaseInvoices PurchaseInvoice[]
+
+  @@index([businessId, name])
 }
 
 model Category {
@@ -170,6 +188,7 @@ model Category {
   products Product[]
 
   @@unique([businessId, name])
+  @@index([businessId, sortOrder])
 }
 
 model Product {
@@ -200,6 +219,8 @@ model Product {
   stockAdjustments  StockAdjustment[]
 
   @@unique([businessId, name])
+  @@index([businessId, active, createdAt])
+  @@index([categoryId])
 }
 
 model Unit {
@@ -279,6 +300,9 @@ model StockAdjustment {
   product Product @relation(fields: [productId], references: [id])
   unit    Unit    @relation(fields: [unitId], references: [id])
   user    User    @relation(fields: [userId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([productId, createdAt])
 }
 
 model SalesInvoice {
@@ -310,6 +334,8 @@ model SalesInvoice {
   @@index([businessId])
   @@index([storeId, createdAt])
   @@index([cashierUserId, createdAt])
+  @@index([businessId, paymentStatus, createdAt])
+  @@index([customerId, createdAt])
 }
 
 model SalesReturn {
@@ -326,6 +352,9 @@ model SalesReturn {
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
   store        Store       @relation(fields: [storeId], references: [id])
   user         User        @relation(fields: [userId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model SalesInvoiceLine {
@@ -361,6 +390,9 @@ model SalesPayment {
   reference      String?
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+
+  @@index([salesInvoiceId, receivedAt])
+  @@index([receivedAt])
 }
 
 model PurchaseInvoice {
@@ -384,6 +416,8 @@ model PurchaseInvoice {
 
   @@index([businessId, createdAt])
   @@index([storeId, createdAt])
+  @@index([businessId, paymentStatus, createdAt])
+  @@index([supplierId, createdAt])
 }
 
 model PurchaseReturn {
@@ -400,6 +434,9 @@ model PurchaseReturn {
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
   store           Store          @relation(fields: [storeId], references: [id])
   user            User           @relation(fields: [userId], references: [id])
+
+  @@index([storeId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model PurchaseInvoiceLine {
@@ -430,6 +467,9 @@ model PurchasePayment {
   reference        String?
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+
+  @@index([purchaseInvoiceId, paidAt])
+  @@index([paidAt])
 }
 
 model Account {
@@ -445,6 +485,7 @@ model Account {
   expenses     Expense[]
 
   @@unique([businessId, code])
+  @@index([businessId, type])
 }
 
 model Expense {
@@ -468,6 +509,10 @@ model Expense {
   user     User     @relation(fields: [userId], references: [id])
   account  Account  @relation(fields: [accountId], references: [id])
   payments ExpensePayment[]
+
+  @@index([businessId, paymentStatus, createdAt])
+  @@index([storeId, createdAt])
+  @@index([accountId, createdAt])
 }
 
 model ExpensePayment {
@@ -485,6 +530,9 @@ model ExpensePayment {
   store    Store    @relation(fields: [storeId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
   expense Expense @relation(fields: [expenseId], references: [id])
+
+  @@index([expenseId, paidAt])
+  @@index([businessId, paidAt])
 }
 
 model JournalEntry {
@@ -531,4 +579,5 @@ model AuditLog {
   @@index([businessId, createdAt])
   @@index([action])
   @@index([userId])
+  @@index([businessId, action, createdAt])
 }

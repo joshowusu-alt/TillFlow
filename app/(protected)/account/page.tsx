@@ -1,14 +1,26 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import { requireUser } from '@/lib/auth';
-import { updateMyAccountAction } from '@/app/actions/account';
+import QRCode from 'qrcode';
+import { buildTwoFactorOtpAuthUrl } from '@/lib/security/two-factor';
+import {
+  beginTwoFactorSetupAction,
+  cancelTwoFactorSetupAction,
+  confirmTwoFactorSetupAction,
+  disableTwoFactorAction,
+  updateMyAccountAction
+} from '@/app/actions/account';
 
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{ error?: string; success?: string; twofactor?: string }>;
 }) {
   const [user, params] = await Promise.all([requireUser(), searchParams]);
+  const twoFactorSetupUri = user.twoFactorTempSecret
+    ? buildTwoFactorOtpAuthUrl(user.twoFactorTempSecret, user.email)
+    : null;
+  const twoFactorQrDataUrl = twoFactorSetupUri ? await QRCode.toDataURL(twoFactorSetupUri) : null;
 
   const errorMessages: Record<string, string> = {
     missing: 'Name and email are required.',
@@ -16,6 +28,8 @@ export default async function AccountPage({
     wrong_password: 'Current password is incorrect.',
     duplicate: 'That email is already in use by another account.',
     password_short: 'New password must be at least 6 characters.',
+    '2fa_not_ready': 'Start 2FA setup first before confirming.',
+    '2fa_invalid': 'Invalid authenticator code.',
   };
 
   return (
@@ -30,6 +44,16 @@ export default async function AccountPage({
       {params.success === 'updated' && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           Account updated successfully. Changes take effect on your next login.
+        </div>
+      )}
+      {params.success === '2fa_enabled' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Two-factor authentication is now enabled for your account.
+        </div>
+      )}
+      {params.success === '2fa_disabled' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Two-factor authentication has been disabled.
         </div>
       )}
 
@@ -105,6 +129,101 @@ export default async function AccountPage({
             <div>Your role can only be changed by the store owner.</div>
           </div>
         </div>
+      </div>
+
+      <div className="card p-6 max-w-lg space-y-4">
+        <h2 className="text-lg font-semibold">Two-Factor Authentication (2FA)</h2>
+        <p className="text-sm text-black/60">
+          Add an authenticator app challenge to protect logins even if your password is exposed.
+        </p>
+
+        {!user.twoFactorEnabled && !user.twoFactorTempSecret ? (
+          <form action={beginTwoFactorSetupAction} className="space-y-3">
+            <div>
+              <label className="label">Current Password</label>
+              <input
+                className="input"
+                name="currentPassword"
+                type="password"
+                required
+                placeholder="Enter current password to begin setup"
+              />
+            </div>
+            <SubmitButton className="btn-primary" loadingText="Starting…">Start 2FA Setup</SubmitButton>
+          </form>
+        ) : null}
+
+        {!user.twoFactorEnabled && user.twoFactorTempSecret && twoFactorSetupUri ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-black/10 bg-black/5 p-4">
+              <div className="text-sm font-semibold">Step 1: Scan QR code</div>
+              {twoFactorQrDataUrl ? (
+                <img
+                  src={twoFactorQrDataUrl}
+                  alt="2FA QR code"
+                  className="mt-3 h-44 w-44 rounded-lg border border-black/10 bg-white p-2"
+                />
+              ) : null}
+              <div className="mt-3 text-xs text-black/60">
+                If scanning fails, add this key manually:
+              </div>
+              <code className="mt-1 block break-all rounded-lg bg-white px-2 py-2 text-xs">
+                {user.twoFactorTempSecret}
+              </code>
+            </div>
+
+            <form action={confirmTwoFactorSetupAction} className="space-y-3">
+              <div>
+                <label className="label">Step 2: Enter 6-digit code</label>
+                <input
+                  className="input"
+                  name="otp"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="123456"
+                  required
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <SubmitButton className="btn-primary" loadingText="Enabling…">Enable 2FA</SubmitButton>
+              </div>
+            </form>
+
+            <form action={cancelTwoFactorSetupAction}>
+              <button className="btn-ghost" type="submit">Cancel setup</button>
+            </form>
+          </div>
+        ) : null}
+
+        {user.twoFactorEnabled ? (
+          <form action={disableTwoFactorAction} className="space-y-3">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700">
+              2FA is currently enabled.
+            </div>
+            <div>
+              <label className="label">Current Password</label>
+              <input
+                className="input"
+                name="currentPassword"
+                type="password"
+                required
+                placeholder="Enter current password"
+              />
+            </div>
+            <div>
+              <label className="label">Authenticator Code</label>
+              <input
+                className="input"
+                name="otp"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                required
+                placeholder="123456"
+              />
+            </div>
+            <SubmitButton className="btn-ghost" loadingText="Disabling…">Disable 2FA</SubmitButton>
+          </form>
+        ) : null}
       </div>
     </div>
   );

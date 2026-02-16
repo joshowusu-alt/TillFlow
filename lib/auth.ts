@@ -1,5 +1,5 @@
 import { cache } from 'react';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 
@@ -12,13 +12,39 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
 export const getUser = cache(async () => {
   const token = cookies().get('pos_session')?.value;
   if (!token) return null;
+
+  const headerStore = headers();
+  const forwarded = headerStore.get('x-forwarded-for');
+  const currentIp =
+    forwarded?.split(',')[0]?.trim() || headerStore.get('x-real-ip') || 'unknown';
+  const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
+
   const session = await prisma.session.findUnique({
     where: { token },
     include: { user: true }
   });
-  if (!session || session.expiresAt < new Date()) {
+  if (!session) {
     return null;
   }
+
+  if (session.expiresAt < new Date()) {
+    await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
+
+  if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
+    await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
+
+  await prisma.session.update({
+    where: { id: session.id },
+    data: {
+      lastSeenAt: new Date(),
+      ipAddress: currentIp || session.ipAddress
+    }
+  });
+
   return session.user;
 });
 

@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 
 export type AuditAction =
   | 'LOGIN'
+  | 'LOGIN_FAILED'
   | 'LOGOUT'
   | 'SALE_CREATE'
   | 'SALE_AMEND'

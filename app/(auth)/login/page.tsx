@@ -17,7 +17,15 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       </div>
       {error && (
         <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {error === 'missing' ? 'Please enter your email and password.' : 'Invalid credentials. Please try again.'}
+          {error === 'missing'
+            ? 'Please enter your email and password.'
+            : error === 'locked'
+            ? 'Too many failed attempts. Please wait and try again.'
+            : error === 'otp_required'
+            ? 'This account requires a 2FA code from your authenticator app.'
+            : error === 'otp_invalid'
+            ? 'Invalid 2FA code. Please try again.'
+            : 'Invalid credentials. Please try again.'}
         </div>
       )}
       <form action={login} className="space-y-4">
@@ -28,6 +36,16 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         <div>
           <label className="label">Password</label>
           <input name="password" type="password" className="input" placeholder="••••••••" required />
+        </div>
+        <div>
+          <label className="label">2FA Code (if enabled)</label>
+          <input
+            name="otp"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="input"
+            placeholder="123456"
+          />
         </div>
         <SubmitButton loadingText="Signing in…">Sign in</SubmitButton>
       </form>
