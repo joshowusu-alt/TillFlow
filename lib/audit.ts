@@ -5,6 +5,7 @@ export type AuditAction =
   | 'LOGIN'
   | 'LOGOUT'
   | 'SALE_CREATE'
+  | 'SALE_AMEND'
   | 'SALE_VOID'
   | 'SALE_RETURN'
   | 'PRODUCT_CREATE'

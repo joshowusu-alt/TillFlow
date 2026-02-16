@@ -1,6 +1,6 @@
 'use server';
 
-import { createSale } from '@/lib/services/sales';
+import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
 import { toInt, toPence } from '@/lib/form-helpers';
 import { formString, formInt, formDate } from '@/lib/form-helpers';
@@ -107,4 +107,55 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       throw error;
     }
   });
+}
+
+export async function amendSaleAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const salesInvoiceId = formString(formData, 'salesInvoiceId');
+    const reason = formString(formData, 'reason') || 'Sale amended';
+    const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER';
+
+    let keepLineIds: string[] = [];
+    const keepRaw = formData.get('keepLineIds');
+    if (keepRaw) {
+      try {
+        const parsed = JSON.parse(String(keepRaw));
+        if (Array.isArray(parsed)) {
+          keepLineIds = parsed.map(String).filter(Boolean);
+        }
+      } catch {
+        keepLineIds = [];
+      }
+    }
+
+    const result = await amendSale({
+      salesInvoiceId,
+      businessId,
+      userId: user.id,
+      reason,
+      keepLineIds,
+      refundMethod,
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SALE_AMEND',
+      entity: 'SalesInvoice',
+      entityId: salesInvoiceId,
+      details: {
+        reason,
+        before: result.before,
+        after: result.after,
+        refundAmount: result.refundAmount,
+        refundMethod: result.refundMethod,
+      },
+    });
+
+    redirect('/sales?amended=true');
+  }, '/sales');
 }

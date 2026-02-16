@@ -4,6 +4,8 @@ import {
   filterPositivePayments,
   splitPayments,
   debitCashBankLines,
+  creditCashBankLines,
+  derivePaymentStatus,
   type PaymentInput,
   type JournalLine
 } from './shared';
@@ -288,4 +290,224 @@ export async function createSale(input: CreateSaleInput) {
   });
 
   return invoice;
+}
+
+// ---------------------------------------------------------------------------
+// Amend Sale
+// ---------------------------------------------------------------------------
+
+export type AmendSaleInput = {
+  salesInvoiceId: string;
+  businessId: string;
+  userId: string;
+  reason: string;
+  /** Line IDs to keep — any line NOT in this array is removed. */
+  keepLineIds: string[];
+  /** Refund method when new total < old total */
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER';
+};
+
+/**
+ * Amend an existing sale by removing line items. Handles:
+ * - Removing selected lines from the invoice
+ * - Restoring inventory for removed items
+ * - Recalculating invoice totals  
+ * - Posting corrective journal entries
+ * - Creating refund payment records if applicable
+ *
+ * Returns the before/after snapshot for audit logging.
+ */
+export async function amendSale(input: AmendSaleInput) {
+  const invoice = await prisma.salesInvoice.findUnique({
+    where: { id: input.salesInvoiceId },
+    include: {
+      business: true,
+      store: true,
+      lines: { include: { product: true } },
+      payments: true,
+      salesReturn: true,
+    },
+  });
+
+  if (!invoice) throw new Error('Sale not found');
+  if (invoice.businessId !== input.businessId) throw new Error('Sale not found');
+  if (invoice.salesReturn) throw new Error('Cannot amend a returned or voided sale');
+  if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+    throw new Error('Cannot amend a returned or voided sale');
+  }
+
+  // Validate keepLineIds — they must all belong to this invoice
+  const invoiceLineIds = new Set(invoice.lines.map((l) => l.id));
+  for (const id of input.keepLineIds) {
+    if (!invoiceLineIds.has(id)) {
+      throw new Error('Invalid line item reference');
+    }
+  }
+
+  const keepSet = new Set(input.keepLineIds);
+  const removedLines = invoice.lines.filter((l) => !keepSet.has(l.id));
+  const keptLines = invoice.lines.filter((l) => keepSet.has(l.id));
+
+  if (removedLines.length === 0) {
+    throw new Error('No items selected for removal');
+  }
+
+  if (keptLines.length === 0) {
+    throw new Error('Cannot remove all items — use Return/Void instead');
+  }
+
+  // Snapshot before state
+  const beforeSnapshot = {
+    totalPence: invoice.totalPence,
+    subtotalPence: invoice.subtotalPence,
+    vatPence: invoice.vatPence,
+    discountPence: invoice.discountPence,
+    lineCount: invoice.lines.length,
+    removedItems: removedLines.map((l) => ({
+      productId: l.productId,
+      productName: l.product.name,
+      qtyInUnit: l.qtyInUnit,
+      qtyBase: l.qtyBase,
+      lineTotalPence: l.lineTotalPence,
+    })),
+  };
+
+  // Recalculate totals from kept lines
+  const newSubtotal = keptLines.reduce((sum, l) => sum + l.lineTotalPence - l.lineVatPence, 0);
+  const newVat = keptLines.reduce((sum, l) => sum + l.lineVatPence, 0);
+  const newTotal = newSubtotal + newVat;
+
+  const oldTotalPaid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
+  const refundAmount = Math.max(oldTotalPaid - newTotal, 0);
+  const refundMethod = input.refundMethod ?? 'CASH';
+
+  // Build qty map for removed items to restore inventory
+  const removedQtyByProduct = buildQtyByProductMap(removedLines);
+
+  const inventoryMap = await fetchInventoryMap(
+    invoice.storeId,
+    Array.from(removedQtyByProduct.keys())
+  );
+
+  // Build avg cost map for removed items
+  const avgCostMap = new Map<string, number>();
+  for (const line of removedLines) {
+    if (avgCostMap.has(line.productId)) continue;
+    avgCostMap.set(
+      line.productId,
+      resolveAvgCost(inventoryMap, line.productId, line.product.defaultCostBasePence)
+    );
+  }
+
+  const newPaymentStatus = derivePaymentStatus(newTotal, oldTotalPaid - refundAmount);
+
+  const result = await prisma.$transaction(async (tx) => {
+    // 1. Delete removed lines
+    await tx.salesInvoiceLine.deleteMany({
+      where: {
+        id: { in: removedLines.map((l) => l.id) },
+        salesInvoiceId: invoice.id,
+      },
+    });
+
+    // 2. Update invoice totals and status
+    await tx.salesInvoice.update({
+      where: { id: invoice.id },
+      data: {
+        subtotalPence: newSubtotal,
+        vatPence: newVat,
+        totalPence: newTotal,
+        discountPence: 0, // order-level discount is cleared on amend
+        paymentStatus: newPaymentStatus,
+      },
+    });
+
+    // 3. Restore inventory for removed items
+    for (const [productId, qtyBase] of removedQtyByProduct.entries()) {
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
+      const avgCost = avgCostMap.get(productId) ?? 0;
+      await upsertInventoryBalance(tx, invoice.storeId, productId, onHand + qtyBase, avgCost);
+    }
+
+    // 4. Create stock movements for the restored items
+    await tx.stockMovement.createMany({
+      data: removedLines.map((line) => ({
+        storeId: invoice.storeId,
+        productId: line.productId,
+        qtyBase: line.qtyBase, // positive = stock returned
+        unitCostBasePence: avgCostMap.get(line.productId) ?? line.product.defaultCostBasePence,
+        type: 'SALE_AMENDMENT',
+        referenceType: 'SALES_INVOICE',
+        referenceId: invoice.id,
+        userId: input.userId,
+      })),
+    });
+
+    // 5. Create refund payment if applicable
+    if (refundAmount > 0) {
+      await tx.salesPayment.create({
+        data: {
+          salesInvoiceId: invoice.id,
+          method: refundMethod,
+          amountPence: -refundAmount, // negative = refund
+        },
+      });
+    }
+
+    // 6. Post corrective journal entry
+    const removedSubtotal = removedLines.reduce((sum, l) => sum + l.lineTotalPence - l.lineVatPence, 0);
+    const removedVat = removedLines.reduce((sum, l) => sum + l.lineVatPence, 0);
+    const removedCogs = removedLines.reduce((sum, l) => {
+      const avgCost = avgCostMap.get(l.productId) ?? l.product.defaultCostBasePence;
+      return sum + avgCost * l.qtyBase;
+    }, 0);
+
+    const journalLines: JournalLine[] = [
+      // Reverse the removed sales revenue
+      { accountCode: ACCOUNT_CODES.sales, debitPence: removedSubtotal },
+      // Reverse VAT on removed items
+      invoice.business.vatEnabled && removedVat > 0
+        ? { accountCode: ACCOUNT_CODES.vatPayable, debitPence: removedVat }
+        : null,
+      // Reverse COGS — credit COGS, debit inventory
+      removedCogs > 0 ? { accountCode: ACCOUNT_CODES.inventory, debitPence: removedCogs } : null,
+      removedCogs > 0 ? { accountCode: ACCOUNT_CODES.cogs, creditPence: removedCogs } : null,
+      // Refund payment
+      refundAmount > 0
+        ? refundMethod === 'CASH'
+          ? { accountCode: ACCOUNT_CODES.cash, creditPence: refundAmount }
+          : { accountCode: ACCOUNT_CODES.bank, creditPence: refundAmount }
+        : null,
+      // Any balance that remains unpaid becomes AR reversal
+      removedSubtotal + removedVat - refundAmount > 0
+        ? { accountCode: ACCOUNT_CODES.ar, creditPence: removedSubtotal + removedVat - refundAmount }
+        : null,
+    ].filter(Boolean) as JournalLine[];
+
+    if (journalLines.length > 0) {
+      await postJournalEntry({
+        businessId: invoice.businessId,
+        description: `Sale amendment ${invoice.id}`,
+        referenceType: 'SALES_INVOICE',
+        referenceId: invoice.id,
+        lines: journalLines,
+        prismaClient: tx as any,
+      });
+    }
+
+    return { newTotal, refundAmount };
+  });
+
+  return {
+    invoiceId: invoice.id,
+    before: beforeSnapshot,
+    after: {
+      totalPence: newTotal,
+      subtotalPence: newSubtotal,
+      vatPence: newVat,
+      lineCount: keptLines.length,
+    },
+    refundAmount: result.refundAmount,
+    refundMethod: result.refundAmount > 0 ? refundMethod : null,
+  };
 }

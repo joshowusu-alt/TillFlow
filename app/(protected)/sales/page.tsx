@@ -19,7 +19,7 @@ export default async function SalesPage() {
 
   const sales = await prisma.salesInvoice.findMany({
     where: { businessId: business.id },
-    include: { customer: true, payments: true, salesReturn: true },
+    include: { customer: true, payments: true, salesReturn: true, lines: true },
     orderBy: { createdAt: 'desc' },
     take: 50
   });
@@ -65,9 +65,16 @@ export default async function SalesPage() {
                   {sale.salesReturn || ['RETURNED', 'VOID'].includes(sale.paymentStatus) ? (
                     <span className="text-xs text-black/40">Returned</span>
                   ) : (
-                    <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
-                      Return
-                    </Link>
+                    <div className="flex gap-2">
+                      {sale.lines.length > 1 && (
+                        <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
+                          Amend
+                        </Link>
+                      )}
+                      <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
+                        Return
+                      </Link>
+                    </div>
                   )}
                 </td>
               </tr>
