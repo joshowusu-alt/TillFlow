@@ -49,6 +49,8 @@ In the Vercel project settings (or during import), add these env vars:
 | `POSTGRES_URL_NON_POOLING` | your Neon **direct** URL | Production, Preview |
 | `NEXTAUTH_SECRET` | run `openssl rand -base64 32` to generate | Production, Preview |
 | `NEXTAUTH_URL` | `https://your-project.vercel.app` | Production |
+| `UPSTASH_REDIS_REST_URL` | your Upstash Redis REST URL | Production, Preview |
+| `UPSTASH_REDIS_REST_TOKEN` | your Upstash Redis REST token | Production, Preview |
 
 To set them:
 1. Go to **Project Settings → Environment Variables**.
@@ -103,6 +105,7 @@ If the build fails, check the build logs — the most common issue is a missing 
 | Build fails with `POSTGRES_PRISMA_URL` error | Add the env vars in Step 3. |
 | `prisma db push` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL. |
 | Login doesn't work | Ensure `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are set. |
+| Login lockout is inconsistent across instances | Ensure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. |
 | Seed fails on Neon | Run `SET search_path TO public;` if using a custom schema. |
 
 ---

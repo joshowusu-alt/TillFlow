@@ -111,7 +111,7 @@ export default function ReceiptClient({
     };
 
     directPrint();
-  }, [business, cashier, customer, invoice, lines, payments, printMode, template]);
+  }, [business, cashier, customer, invoice, lines, payments, printMode, store, template]);
 
   return (
     <div

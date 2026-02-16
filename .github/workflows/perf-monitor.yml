@@ -1,0 +1,95 @@
+name: Performance Monitor
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:./perf.db
+      BASE_URL: http://127.0.0.1:6200
+      E2E_OWNER_EMAIL: owner@store.com
+      E2E_OWNER_PASSWORD: Pass1234!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client for SQLite
+        run: npm run db:prepare:ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start app
+        run: |
+          npm run start -- -p 6200 > .perf-server.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS "$BASE_URL/login" >/dev/null; then
+              echo "Server ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start"
+          cat .perf-server.log || true
+          exit 1
+
+      - name: Run speed monitor
+        id: speed
+        run: |
+          npm run test:perf > .perf-report.json
+          cat .perf-report.json
+
+      - name: Evaluate speed budget
+        id: budget
+        run: |
+          node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('.perf-report.json','utf8')); const max=(r.summary&&r.summary.maxWallMs)||99999; const avg=(r.summary&&r.summary.avgWallMs)||99999; const ok=max<=400&&avg<=200&&Array.isArray(r.summary?.slowRoutes)&&r.summary.slowRoutes.length===0; if(!ok){console.error('Speed budget failed', {max,avg,slow:r.summary?.slowRoutes?.length||0}); process.exit(1);} console.log('Speed budget ok', {max,avg});"
+
+      - name: Create issue on regression
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = 'Performance monitor failed.\n\nSee workflow logs for details.';
+            try {
+              const report = fs.readFileSync('.perf-report.json', 'utf8');
+              body += `\n\n\`\`\`json\n${report.slice(0, 50000)}\n\`\`\``;
+            } catch {}
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Perf Alert] Route speed regression - ${new Date().toISOString().slice(0, 10)}`,
+              body,
+              labels: ['performance', 'automation']
+            });
+
+      - name: Upload performance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-monitor-artifacts
+          path: |
+            .perf-report.json
+            .perf-server.log
+          if-no-files-found: ignore

@@ -61,7 +61,7 @@ const CART_CUSTOMER_KEY = 'pos.savedCustomer';
 export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const safeUnits = units ?? [];
+  const safeUnits = useMemo(() => units ?? [], [units]);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [unitId, setUnitId] = useState(products[0]?.units.find((u) => u.isBaseUnit)?.id ?? '');
@@ -119,19 +119,11 @@ export default function PosClient({ business, store, tills, products, customers,
   const [cartRestored, setCartRestored] = useState(false);
   const cartInitialized = useRef(false);
 
-  const pushUndo = (currentCart: CartLine[]) => {
+  const pushUndo = useCallback((currentCart: CartLine[]) => {
     setUndoStack((prev) => [...prev.slice(-(maxUndoSteps - 1)), currentCart]);
-  };
+  }, [maxUndoSteps]);
 
-  const handleUndo = () => {
-    if (undoStack.length === 0) return;
-    const previousCart = undoStack[undoStack.length - 1];
-    setUndoStack((prev) => prev.slice(0, -1));
-    setCart(previousCart);
-    playBeep(true);
-  };
-
-  const playBeep = (success: boolean) => {
+  const playBeep = useCallback((success: boolean) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -146,7 +138,15 @@ export default function PosClient({ business, store, tills, products, customers,
     } catch {
       // Audio not supported
     }
-  };
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const previousCart = undoStack[undoStack.length - 1];
+    setUndoStack((prev) => prev.slice(0, -1));
+    setCart(previousCart);
+    playBeep(true);
+  }, [undoStack, playBeep]);
 
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
@@ -155,23 +155,23 @@ export default function PosClient({ business, store, tills, products, customers,
   const selectedUnits = selectedProduct?.units ?? [];
   const selectedUnit = selectedUnits.find((unit) => unit.id === unitId) ?? selectedUnits[0];
 
-  const parseCurrencyToPence = (value: string | undefined | null) => {
+  const parseCurrencyToPence = useCallback((value: string | undefined | null) => {
     if (!value) return 0;
     const trimmed = String(value).replace(/,/g, '').trim();
     if (!trimmed) return 0;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
-  };
+  }, []);
 
-  const parsePercent = (value: string | undefined | null) => {
+  const parsePercent = useCallback((value: string | undefined | null) => {
     if (!value) return 0;
     const trimmed = String(value).replace(/,/g, '').trim();
     if (!trimmed) return 0;
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? 0 : parsed;
-  };
+  }, []);
 
-  const computeDiscount = (subtotal: number, type?: DiscountType, value?: string) => {
+  const computeDiscount = useCallback((subtotal: number, type?: DiscountType, value?: string) => {
     if (!subtotal || !type || type === 'NONE') return 0;
     if (type === 'PERCENT') {
       const pct = Math.min(Math.max(parsePercent(value ?? ''), 0), 100);
@@ -182,9 +182,9 @@ export default function PosClient({ business, store, tills, products, customers,
       return Math.min(amount, subtotal);
     }
     return 0;
-  };
+  }, [parseCurrencyToPence, parsePercent]);
 
-  const resetQuickForm = () => {
+  const resetQuickForm = useCallback(() => {
     setQuickName('');
     setQuickSku('');
     setQuickBarcode('');
@@ -194,16 +194,16 @@ export default function PosClient({ business, store, tills, products, customers,
     setQuickSellPrice('');
     setQuickCost('');
     setQuickVatRate('0');
-  };
+  }, [safeUnits]);
 
-  const openQuickAdd = (barcodeValue?: string) => {
+  const openQuickAdd = useCallback((barcodeValue?: string) => {
     setQuickAddOpen(true);
     setQuickAddError(null);
     resetQuickForm();
     if (barcodeValue) {
       setQuickBarcode(barcodeValue);
     }
-  };
+  }, [resetQuickForm]);
 
   const handleQuickCreate = () => {
     setQuickAddError(null);
@@ -383,11 +383,17 @@ export default function PosClient({ business, store, tills, products, customers,
     }
   };
 
-  const getProduct = (id: string) => productOptions.find((product) => product.id === id);
-  const getUnit = (product: ProductDto | undefined, unitIdValue: string) =>
-    product?.units.find((unit) => unit.id === unitIdValue);
+  const getProduct = useCallback(
+    (id: string) => productOptions.find((product) => product.id === id),
+    [productOptions]
+  );
+  const getUnit = useCallback(
+    (product: ProductDto | undefined, unitIdValue: string) =>
+      product?.units.find((unit) => unit.id === unitIdValue),
+    []
+  );
 
-  const getAvailableBase = (targetProductId: string, excludeLineId?: string) => {
+  const getAvailableBase = useCallback((targetProductId: string, excludeLineId?: string) => {
     const product = getProduct(targetProductId);
     if (!product) return 0;
     const usedBase = cart.reduce((sum, line) => {
@@ -397,9 +403,9 @@ export default function PosClient({ business, store, tills, products, customers,
       return sum + line.qtyInUnit * unit.conversionToBase;
     }, 0);
     return Math.max(product.onHandBase - usedBase, 0);
-  };
+  }, [cart, getProduct, getUnit]);
 
-  const formatAvailable = (product: ProductDto, availableBase: number) => {
+  const formatAvailable = useCallback((product: ProductDto, availableBase: number) => {
     const baseUnit = product.units.find((unit) => unit.isBaseUnit);
     const packaging = getPrimaryPackagingUnit(
       product.units.map((unit) => ({ conversionToBase: unit.conversionToBase, unit }))
@@ -412,9 +418,9 @@ export default function PosClient({ business, store, tills, products, customers,
       packagingUnitPlural: packaging?.unit.pluralName,
       packagingConversion: packaging?.conversionToBase
     });
-  };
+  }, []);
 
-  const clampQtyInUnit = (
+  const clampQtyInUnit = useCallback((
     targetProductId: string,
     targetUnitId: string,
     desiredQty: number,
@@ -436,7 +442,7 @@ export default function PosClient({ business, store, tills, products, customers,
     }
     setStockAlert(null);
     return desiredQty;
-  };
+  }, [formatAvailable, getAvailableBase, getProduct, getUnit]);
 
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
 
@@ -456,23 +462,23 @@ export default function PosClient({ business, store, tills, products, customers,
     setPaymentMethods(next);
   };
 
-  const clearQtyDraft = (lineId: string) => {
+  const clearQtyDraft = useCallback((lineId: string) => {
     setQtyDrafts((prev) => {
       if (!prev[lineId]) return prev;
       const next = { ...prev };
       delete next[lineId];
       return next;
     });
-  };
+  }, []);
 
-  const removeLine = (lineId: string) => {
+  const removeLine = useCallback((lineId: string) => {
     pushUndo(cart);
     setCart((prev) => prev.filter((item) => item.id !== lineId));
     clearQtyDraft(lineId);
     if (activeLineId === lineId) {
       setActiveLineId(null);
     }
-  };
+  }, [activeLineId, cart, clearQtyDraft, pushUndo]);
 
   const commitLineQty = (line: CartLine) => {
     const draft = qtyDrafts[line.id];
@@ -516,7 +522,7 @@ export default function PosClient({ business, store, tills, products, customers,
 
 
 
-  const addToCart = (line: { productId: string; unitId: string; qtyInUnit: number }) => {
+  const addToCart = useCallback((line: { productId: string; unitId: string; qtyInUnit: number }) => {
     if (!line.productId || !line.unitId || line.qtyInUnit <= 0) return;
     const id = `${line.productId}:${line.unitId}`;
     const existing = cart.find((item) => item.id === id);
@@ -532,7 +538,7 @@ export default function PosClient({ business, store, tills, products, customers,
         { id, ...line, qtyInUnit: clampedQty, discountType: 'NONE', discountValue: '' }
       ];
     });
-  };
+  }, [cart, clampQtyInUnit]);
 
   const handleAddToCart = () => {
     const parsed = Number(qtyInUnitInput);
@@ -547,7 +553,7 @@ export default function PosClient({ business, store, tills, products, customers,
     barcodeRef.current?.focus();
   };
 
-  const handleBarcodeScan = (code: string) => {
+  const handleBarcodeScan = useCallback((code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
     const match = productOptions.find((product) => product.barcode === trimmed);
@@ -568,7 +574,7 @@ export default function PosClient({ business, store, tills, products, customers,
       setPendingScan(trimmed);
       openQuickAdd(trimmed);
     }
-  };
+  }, [addToCart, openQuickAdd, playBeep, productOptions]);
 
   const cartDetails = useMemo(() => {
     return cart
@@ -639,7 +645,7 @@ export default function PosClient({ business, store, tills, products, customers,
           promoLabel: string | null;
         }
       >;
-  }, [cart, productOptions, business.vatEnabled]);
+  }, [cart, productOptions, business.vatEnabled, computeDiscount]);
 
   const totals = cartDetails.reduce(
     (acc, line) => {
@@ -774,7 +780,7 @@ export default function PosClient({ business, store, tills, products, customers,
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeLineId, canSubmit, cart, lastReceiptId, undoStack]);
+  }, [activeLineId, canSubmit, cart, handleUndo, lastReceiptId, removeLine]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {

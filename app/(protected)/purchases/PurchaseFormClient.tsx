@@ -103,7 +103,7 @@ export default function PurchaseFormClient({
     if (unitCostTouched) return;
     const baseCost = selectedProduct.defaultCostBasePence * selectedUnit.conversionToBase;
     setUnitCostInput((baseCost / 100).toFixed(2));
-  }, [selectedProduct?.id, selectedUnit?.id, unitCostTouched]);
+  }, [selectedProduct, selectedUnit, unitCostTouched]);
 
   const resetQuickForm = () => {
     setQuickName('');

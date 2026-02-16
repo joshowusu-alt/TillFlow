@@ -46,6 +46,7 @@ const navGroups = [
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'] },
@@ -81,7 +82,8 @@ export default function TopNav({ user, mode }: { user: TopNavUser; mode?: Busine
   const advancedReportLinks = new Set([
     '/reports/income-statement',
     '/reports/balance-sheet',
-    '/reports/cashflow'
+    '/reports/cashflow',
+    '/reports/reorder-suggestions'
   ]);
 
   const visibleGroups = useMemo(() => {
