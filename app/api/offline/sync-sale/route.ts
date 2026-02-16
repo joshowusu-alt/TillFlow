@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
+import { getUser } from '@/lib/auth';
 
 interface OfflineSalePayload {
     id: string;
@@ -26,7 +26,10 @@ interface OfflineSalePayload {
 
 export async function POST(request: NextRequest) {
     try {
-        const user = await requireUser();
+        const user = await getUser();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const payload = await request.json() as OfflineSalePayload;
 
         const business = await prisma.business.findFirst();

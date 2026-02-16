@@ -1,7 +1,6 @@
 ﻿import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
-import Script from 'next/script';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import InstallPrompt from '@/components/InstallPrompt';
@@ -42,8 +41,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: '#059669'
 };
 
@@ -52,10 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
       <body className="min-h-screen bg-paper text-ink">
         <ServiceWorkerRegistration />
-        <Script
-          src="https://cdnjs.cloudflare.com/ajax/libs/qz-tray/2.1.0/qz-tray.js"
-          strategy="beforeInteractive"
-        />
         {children}
         <NetworkStatus />
         <InstallPrompt />
