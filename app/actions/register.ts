@@ -17,6 +17,7 @@ export async function register(formData: FormData) {
   const email = String(formData.get('email') || '').toLowerCase().trim();
   const password = String(formData.get('password') || '');
   const currency = String(formData.get('currency') || 'GHS');
+  const mode = String(formData.get('mode') || 'demo');
 
   // Validation
   if (!businessName || !ownerName || !email || !password) {
@@ -72,8 +73,13 @@ export async function register(formData: FormData) {
     return { business, store, owner };
   });
 
-  // Seed demo data in the background (non-blocking, best-effort)
-  await seedDemoData(result.business.id, result.store.id);
+  // Seed demo data only in demo mode; fresh mode gets a clean business
+  if (mode === 'demo') {
+    await seedDemoData(result.business.id, result.store.id);
+  } else {
+    // Fresh mode: only seed chart of accounts (required for accounting) and units
+    await seedEssentials(result.business.id);
+  }
 
   // Auto-login
   const token = randomBytes(32).toString('hex');
@@ -127,7 +133,7 @@ async function seedDemoData(businessId: string, storeId: string) {
     
     const missingUnits = unitDefs.filter(u => !unitMap.has(u.name));
     if (missingUnits.length > 0) {
-      await prisma.unit.createMany({ data: missingUnits, skipDuplicates: true });
+      await prisma.unit.createMany({ data: missingUnits });
       const newUnits = await prisma.unit.findMany();
       newUnits.forEach(u => unitMap.set(u.name, u));
     }
@@ -334,5 +340,65 @@ async function seedDemoData(businessId: string, storeId: string) {
   } catch (err) {
     // Non-fatal: the business/user is already created, demo data is a convenience
     console.error('[register] Failed to seed demo data:', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Essentials seeder — only chart of accounts and units (for fresh businesses)
+// ---------------------------------------------------------------------------
+async function seedEssentials(businessId: string) {
+  try {
+    // Units (global / shared) — create if missing
+    const existingUnits = await prisma.unit.findMany();
+    const unitNames = new Set(existingUnits.map(u => u.name));
+
+    const unitDefs = [
+      { name: 'piece', pluralName: 'pieces', symbol: 'pc' },
+      { name: 'carton', pluralName: 'cartons', symbol: 'ctn' },
+      { name: 'bottle', pluralName: 'bottles', symbol: 'btl' },
+      { name: 'pack', pluralName: 'packs', symbol: 'pk' },
+      { name: 'bag', pluralName: 'bags', symbol: 'bag' },
+      { name: 'box', pluralName: 'boxes', symbol: 'bx' },
+      { name: 'sachet', pluralName: 'sachets', symbol: 'sct' },
+      { name: 'tin', pluralName: 'tins', symbol: 'tin' },
+      { name: 'crate', pluralName: 'crates', symbol: 'crt' },
+    ];
+
+    const missingUnits = unitDefs.filter(u => !unitNames.has(u.name));
+    if (missingUnits.length > 0) {
+      await prisma.unit.createMany({ data: missingUnits });
+    }
+
+    // Chart of Accounts — required for accounting to work
+    await prisma.account.createMany({
+      data: [
+        { businessId, code: '1000', name: 'Cash on Hand', type: 'ASSET' },
+        { businessId, code: '1010', name: 'Bank', type: 'ASSET' },
+        { businessId, code: '1100', name: 'Accounts Receivable', type: 'ASSET' },
+        { businessId, code: '1200', name: 'Inventory', type: 'ASSET' },
+        { businessId, code: '1300', name: 'VAT Receivable', type: 'ASSET' },
+        { businessId, code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
+        { businessId, code: '2100', name: 'VAT Payable', type: 'LIABILITY' },
+        { businessId, code: '3000', name: 'Retained Earnings', type: 'EQUITY' },
+        { businessId, code: '4000', name: 'Sales Revenue', type: 'INCOME' },
+        { businessId, code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
+        { businessId, code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },
+        { businessId, code: '6100', name: 'Rent', type: 'EXPENSE' },
+        { businessId, code: '6200', name: 'Utilities', type: 'EXPENSE' },
+        { businessId, code: '6300', name: 'Salaries', type: 'EXPENSE' },
+        { businessId, code: '6400', name: 'Repairs & Maintenance', type: 'EXPENSE' },
+        { businessId, code: '6500', name: 'Fuel & Transport', type: 'EXPENSE' },
+        { businessId, code: '6600', name: 'Marketing', type: 'EXPENSE' },
+      ],
+    });
+
+    // Default walk-in customer
+    await prisma.customer.create({
+      data: { businessId, name: 'Walk-in Customer' },
+    });
+
+    console.log(`[register] Essentials seeded for business ${businessId}`);
+  } catch (err) {
+    console.error('[register] Failed to seed essentials:', err);
   }
 }

@@ -2,8 +2,9 @@ import { register } from '@/app/actions/register';
 import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
 
-export default async function RegisterPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function RegisterPage({ searchParams }: { searchParams: { error?: string; mode?: string } }) {
   const error = searchParams?.error;
+  const isDemo = searchParams?.mode === 'demo';
 
   const errorMessages: Record<string, string> = {
     missing: 'Please fill in all fields.',
@@ -20,7 +21,23 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
           <span className="text-gray-800">Flow</span>
         </h1>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
-        <p className="mt-4 text-sm text-black/60">Create your store account</p>
+
+        {isDemo ? (
+          <div className="mt-4">
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-sm font-medium text-emerald-700 mb-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              Demo Mode
+            </div>
+            <p className="text-sm text-black/60">Create a demo store with sample products to explore TillFlow instantly.</p>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <p className="text-sm text-black/60">Create your store from scratch - just your products, your way.</p>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -30,9 +47,17 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
       )}
 
       <form action={register} className="space-y-4">
+        <input type="hidden" name="mode" value={isDemo ? 'demo' : 'fresh'} />
+
         <div>
           <label className="label">Business / Store Name</label>
-          <input name="businessName" type="text" className="input" placeholder="e.g. El-Shaddai Supermarket" required />
+          <input
+            name="businessName"
+            type="text"
+            className="input"
+            placeholder={isDemo ? 'e.g. Demo Supermarket' : 'e.g. El-Shaddai Supermarket'}
+            required
+          />
         </div>
         <div>
           <label className="label">Your Name</label>
@@ -62,14 +87,46 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
             <option value="EUR">EUR — Euro</option>
           </select>
         </div>
-        <SubmitButton loadingText="Creating your store…">Create Account</SubmitButton>
+
+        {isDemo && (
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-800">
+            <span className="font-semibold">Demo includes:</span> 10 products, 7 categories, 3 customers, and 1 supplier loaded automatically.
+          </div>
+        )}
+
+        {!isDemo && (
+          <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-800">
+            <span className="font-semibold">Clean start:</span> Your store will be created empty so you can add your own products from scratch.
+          </div>
+        )}
+
+        <SubmitButton loadingText={isDemo ? 'Setting up demo...' : 'Creating your store...'}>
+          {isDemo ? 'Create Demo Store' : 'Create My Business'}
+        </SubmitButton>
       </form>
 
-      <div className="text-center text-sm text-black/50">
-        Already have an account?{' '}
-        <Link href="/login" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
-          Sign in
-        </Link>
+      <div className="text-center space-y-2">
+        {isDemo ? (
+          <p className="text-sm text-black/40">
+            Want a clean start instead?{' '}
+            <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+              Create from scratch
+            </Link>
+          </p>
+        ) : (
+          <p className="text-sm text-black/40">
+            Want to explore first?{' '}
+            <Link href="/register?mode=demo" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+              Try the demo
+            </Link>
+          </p>
+        )}
+        <p className="text-sm text-black/50">
+          Already have an account?{' '}
+          <Link href="/login" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+            Sign in
+          </Link>
+        </p>
       </div>
     </div>
   );

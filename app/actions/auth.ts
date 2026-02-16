@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
+import { cleanupStaleData } from '@/lib/auth';
 
 export async function login(formData: FormData) {
   const email = String(formData.get('email') || '').toLowerCase();
@@ -44,6 +45,9 @@ export async function login(formData: FormData) {
   });
 
   await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'LOGIN' });
+
+  // Opportunistic cleanup of expired sessions and old audit logs
+  cleanupStaleData(user.businessId).catch(() => {});
 
   // Redirect owners to onboarding if the business still has the default name
   if (user.role === 'OWNER') {

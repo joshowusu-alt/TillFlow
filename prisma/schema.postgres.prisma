@@ -127,6 +127,8 @@ model Session {
   expiresAt DateTime
 
   user User @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])
 }
 
 model Customer {
@@ -238,6 +240,7 @@ model InventoryBalance {
   product Product @relation(fields: [productId], references: [id])
 
   @@unique([storeId, productId])
+  @@index([productId])
 }
 
 model StockMovement {
@@ -255,6 +258,9 @@ model StockMovement {
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
   user    User?   @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([storeId, createdAt])
 }
 
 model StockAdjustment {
@@ -300,6 +306,10 @@ model SalesInvoice {
   lines       SalesInvoiceLine[]
   payments    SalesPayment[]
   salesReturn SalesReturn?
+
+  @@index([businessId])
+  @@index([storeId, createdAt])
+  @@index([cashierUserId, createdAt])
 }
 
 model SalesReturn {
@@ -337,6 +347,9 @@ model SalesInvoiceLine {
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
   unit         Unit         @relation(fields: [unitId], references: [id])
+
+  @@index([salesInvoiceId])
+  @@index([productId])
 }
 
 model SalesPayment {
@@ -368,6 +381,9 @@ model PurchaseInvoice {
   lines       PurchaseInvoiceLine[]
   payments    PurchasePayment[]
   purchaseReturn PurchaseReturn?
+
+  @@index([businessId, createdAt])
+  @@index([storeId, createdAt])
 }
 
 model PurchaseReturn {

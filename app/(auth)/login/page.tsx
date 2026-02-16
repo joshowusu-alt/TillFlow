@@ -31,11 +31,18 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         </div>
         <SubmitButton loadingText="Signing in…">Sign in</SubmitButton>
       </form>
-      <div className="text-center text-sm text-black/50">
-        Don&apos;t have an account?{' '}
-        <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
-          Create one free
-        </Link>
+      <div className="text-center space-y-2">
+        <p className="text-sm text-black/50">
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+            Create one free
+          </Link>
+        </p>
+        <p className="text-sm text-black/30">
+          <Link href="/welcome" className="hover:text-black/50 transition">
+            &larr; Back to TillFlow
+          </Link>
+        </p>
       </div>
     </div>
   );

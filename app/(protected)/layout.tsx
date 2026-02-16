@@ -6,8 +6,8 @@ import Link from 'next/link';
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
 
-  // Check if this is a new business that needs onboarding
-  const needsOnboarding = business?.name === 'Supermarket Demo';
+  // Check if this is a new business that may need onboarding guidance
+  const needsOnboarding = business?.createdAt && (Date.now() - new Date(business.createdAt).getTime() < 1000 * 60 * 60 * 24);
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
