@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:e2e:smoke": "node scripts/manual-e2e-check.js",
     "test:e2e:deep": "node scripts/manual-e2e-deep-check.js",
+    "test:qa:phase3a": "tsx scripts/phase3a-qa.ts",
     "test:perf": "node scripts/page-speed-check.js",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
