@@ -8,67 +8,96 @@ datasource db {
 }
 
 model Business {
-  id         String   @id @default(cuid())
-  name       String
-  currency   String   @default("GHS")
-  vatEnabled Boolean  @default(false)
-  vatNumber  String?
-  mode       String   @default("SIMPLE")
-  receiptTemplate String @default("THERMAL_80")
-  printMode  String   @default("DIRECT_ESC_POS")
-  printerName String?
+  id                                   String   @id @default(cuid())
+  name                                 String
+  currency                             String   @default("GHS")
+  // Legacy top-level VAT switch kept for backward compatibility.
+  vatEnabled                           Boolean  @default(false)
+  vatNumber                            String?
+  mode                                 String   @default("SIMPLE")
+  receiptTemplate                      String   @default("THERMAL_80")
+  printMode                            String   @default("DIRECT_ESC_POS")
+  printerName                          String?
   // Receipt customization fields
-  receiptLogoUrl      String?
-  receiptHeader       String?
-  receiptFooter       String?
-  receiptShowVatNumber Boolean @default(true)
-  receiptShowAddress   Boolean @default(true)
-  socialMediaHandle   String?
-  address             String?
-  phone               String?
+  receiptLogoUrl                       String?
+  receiptHeader                        String?
+  receiptFooter                        String?
+  receiptShowVatNumber                 Boolean  @default(true)
+  receiptShowAddress                   Boolean  @default(true)
+  socialMediaHandle                    String?
+  address                              String?
+  phone                                String?
   // Ghana-specific fields
-  tinNumber           String?
-  momoEnabled         Boolean  @default(false)
-  momoProvider        String?
-  momoNumber          String?
+  tinNumber                            String?
+  momoEnabled                          Boolean  @default(false)
+  momoProvider                         String?
+  momoNumber                           String?
   // Opening capital / owner's investment
-  openingCapitalPence Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  openingCapitalPence                  Int      @default(0)
+  requireOpenTillForSales              Boolean  @default(false)
+  discountApprovalThresholdBps         Int      @default(1500)
+  varianceReasonRequired               Boolean  @default(true)
+  inventoryAdjustmentRiskThresholdBase Int      @default(50)
+  cashVarianceRiskThresholdPence       Int      @default(2000)
+  customerScope                        String   @default("SHARED")
+  createdAt                            DateTime @default(now())
+  updatedAt                            DateTime @updatedAt
 
-  stores         Store[]
-  users          User[]
-  customers      Customer[]
-  suppliers      Supplier[]
-  categories     Category[]
-  products       Product[]
-  accounts       Account[]
-  journalEntries JournalEntry[]
-  expenses       Expense[]
-  expensePayments ExpensePayment[]
-  salesInvoices  SalesInvoice[]
-  purchaseInvoices PurchaseInvoice[]
+  organization           Organization?
+  branches               Branch[]
+  devices                Device[]
+  stores                 Store[]
+  users                  User[]
+  customers              Customer[]
+  suppliers              Supplier[]
+  categories             Category[]
+  products               Product[]
+  accounts               Account[]
+  journalEntries         JournalEntry[]
+  expenses               Expense[]
+  expensePayments        ExpensePayment[]
+  salesInvoices          SalesInvoice[]
+  purchaseInvoices       PurchaseInvoice[]
+  mobileMoneyCollections MobileMoneyCollection[]
+  cashDrawerEntries      CashDrawerEntry[]
+  riskAlerts             RiskAlert[]
+  stockTransfers         StockTransfer[]
+  syncEvents             SyncEvent[]
+  dayClosures            DayClosure[]
 }
 
 model Store {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
-  address    String?
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  businessId     String
+  name           String
+  address        String?
+  phone          String?
+  vatEnabled     Boolean  @default(false)
+  vatRateBps     Int      @default(1500)
+  nhilRateBps    Int      @default(250)
+  getFundRateBps Int      @default(250)
+  createdAt      DateTime @default(now())
 
-  business          Business         @relation(fields: [businessId], references: [id])
-  tills             Till[]
-  inventoryBalances InventoryBalance[]
-  stockMovements    StockMovement[]
-  stockAdjustments  StockAdjustment[]
-  stocktakes        Stocktake[]
-  salesInvoices     SalesInvoice[]
-  purchaseInvoices  PurchaseInvoice[]
-  salesReturns      SalesReturn[]
-  purchaseReturns   PurchaseReturn[]
-  expenses          Expense[]
-  expensePayments   ExpensePayment[]
+  business               Business                @relation(fields: [businessId], references: [id])
+  tills                  Till[]
+  inventoryBalances      InventoryBalance[]
+  stockMovements         StockMovement[]
+  stockAdjustments       StockAdjustment[]
+  stocktakes             Stocktake[]
+  salesInvoices          SalesInvoice[]
+  purchaseInvoices       PurchaseInvoice[]
+  salesReturns           SalesReturn[]
+  purchaseReturns        PurchaseReturn[]
+  customers              Customer[]
+  expenses               Expense[]
+  expensePayments        ExpensePayment[]
+  dayClosures            DayClosure[]
+  branch                 Branch?
+  mobileMoneyCollections MobileMoneyCollection[]
+  cashDrawerEntries      CashDrawerEntry[]
+  riskAlerts             RiskAlert[]
+  transfersOut           StockTransfer[]         @relation("StockTransferFromStore")
+  transfersIn            StockTransfer[]         @relation("StockTransferToStore")
 
   @@index([businessId])
 }
@@ -80,73 +109,100 @@ model Till {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  store         Store          @relation(fields: [storeId], references: [id])
-  salesInvoices SalesInvoice[]
-  shifts        Shift[]
+  store             Store             @relation(fields: [storeId], references: [id])
+  salesInvoices     SalesInvoice[]
+  shifts            Shift[]
+  cashDrawerEntries CashDrawerEntry[]
 
   @@index([storeId, active])
 }
 
 model Shift {
-  id                 String    @id @default(cuid())
-  tillId             String
-  userId             String
-  openedAt           DateTime  @default(now())
-  closedAt           DateTime?
-  openingCashPence   Int       @default(0)
-  expectedCashPence  Int       @default(0)
-  actualCashPence    Int?
-  cardTotalPence     Int       @default(0)
-  transferTotalPence Int       @default(0)
-  momoTotalPence     Int       @default(0)
-  variance           Int?
-  notes              String?
-  status             String    @default("OPEN")
+  id                           String    @id @default(cuid())
+  tillId                       String
+  userId                       String
+  openedAt                     DateTime  @default(now())
+  closedAt                     DateTime?
+  openingCashPence             Int       @default(0)
+  expectedCashPence            Int       @default(0)
+  actualCashPence              Int?
+  cardTotalPence               Int       @default(0)
+  transferTotalPence           Int       @default(0)
+  momoTotalPence               Int       @default(0)
+  variance                     Int?
+  closedByUserId               String?
+  closeManagerApprovedByUserId String?
+  closeManagerApprovalMode     String?
+  varianceReasonCode           String?
+  varianceReason               String?
+  closureSnapshotJson          String?
+  notes                        String?
+  status                       String    @default("OPEN")
 
-  till         Till           @relation(fields: [tillId], references: [id])
-  user         User           @relation(fields: [userId], references: [id])
-  salesInvoices SalesInvoice[]
+  till                   Till              @relation(fields: [tillId], references: [id])
+  user                   User              @relation("ShiftOpenedBy", fields: [userId], references: [id])
+  closedBy               User?             @relation("ShiftClosedBy", fields: [closedByUserId], references: [id])
+  closeManagerApprovedBy User?             @relation("ShiftCloseApprovedBy", fields: [closeManagerApprovedByUserId], references: [id])
+  salesInvoices          SalesInvoice[]
+  cashDrawerEntries      CashDrawerEntry[]
 
   @@index([userId, status])
   @@index([tillId, openedAt])
+  @@index([closedByUserId, closedAt])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  businessId   String
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         String
-  active       Boolean  @default(true)
+  id                  String   @id @default(cuid())
+  businessId          String
+  name                String
+  email               String   @unique
+  passwordHash        String
+  approvalPinHash     String?
+  qaTag               String?
+  qaRunId             String?
+  role                String
+  active              Boolean  @default(true)
   twoFactorEnabled    Boolean  @default(false)
   twoFactorSecret     String?
   twoFactorTempSecret String?
-  createdAt    DateTime @default(now())
+  createdAt           DateTime @default(now())
 
-  business       Business      @relation(fields: [businessId], references: [id])
-  sessions       Session[]
-  salesInvoices  SalesInvoice[] @relation("CashierSales")
-  stockMovements StockMovement[]
-  stockAdjustments StockAdjustment[]
-  salesReturns     SalesReturn[]
-  purchaseReturns  PurchaseReturn[]
-  expenses         Expense[]
-  expensePayments  ExpensePayment[]
-  shifts           Shift[]
-  auditLogs        AuditLog[]
-  stocktakes       Stocktake[]
+  business                   Business                @relation(fields: [businessId], references: [id])
+  sessions                   Session[]
+  salesInvoices              SalesInvoice[]          @relation("CashierSales")
+  stockMovements             StockMovement[]
+  stockAdjustments           StockAdjustment[]
+  salesReturns               SalesReturn[]
+  purchaseReturns            PurchaseReturn[]
+  expenses                   Expense[]
+  expensePayments            ExpensePayment[]
+  shifts                     Shift[]                 @relation("ShiftOpenedBy")
+  closedShifts               Shift[]                 @relation("ShiftClosedBy")
+  approvedShiftClosures      Shift[]                 @relation("ShiftCloseApprovedBy")
+  auditLogs                  AuditLog[]
+  stocktakes                 Stocktake[]
+  dayClosures                DayClosure[]            @relation("DayClosureClosedBy")
+  approvedReturns            SalesReturn[]           @relation("SalesReturnApprovedBy")
+  discountApprovedSales      SalesInvoice[]          @relation("SalesDiscountApprovedBy")
+  requestedTransfers         StockTransfer[]         @relation("StockTransferRequestedBy")
+  approvedTransfers          StockTransfer[]         @relation("StockTransferApprovedBy")
+  devices                    Device[]
+  collectionsInitiated       MobileMoneyCollection[] @relation("CollectionInitiatedBy")
+  cashDrawerEntriesCreated   CashDrawerEntry[]       @relation("CashDrawerEntryCreatedBy")
+  cashDrawerEntriesAsCashier CashDrawerEntry[]       @relation("CashDrawerEntryCashier")
+  riskAlerts                 RiskAlert[]             @relation("RiskAlertCashier")
+  acknowledgedRiskAlerts     RiskAlert[]             @relation("RiskAlertAcknowledgedBy")
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  userId    String
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
-  expiresAt DateTime
+  expiresAt  DateTime
 
   user User @relation(fields: [userId], references: [id])
 
@@ -155,30 +211,39 @@ model Session {
 }
 
 model Customer {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
-  phone      String?
-  email      String?
-  creditLimitPence Int @default(0)
-  createdAt  DateTime @default(now())
+  id               String   @id @default(cuid())
+  businessId       String
+  storeId          String?
+  name             String
+  phone            String?
+  email            String?
+  accountType      String   @default("RETAIL")
+  paymentTermsDays Int      @default(0)
+  creditLimitPence Int      @default(0)
+  qaTag            String?
+  qaRunId          String?
+  createdAt        DateTime @default(now())
 
   business      Business       @relation(fields: [businessId], references: [id])
+  store         Store?         @relation(fields: [storeId], references: [id])
   salesInvoices SalesInvoice[]
 
   @@index([businessId, name])
+  @@index([storeId, name])
 }
 
 model Supplier {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
-  phone      String?
-  email      String?
-  creditLimitPence Int @default(0)
-  createdAt  DateTime @default(now())
+  id               String   @id @default(cuid())
+  businessId       String
+  name             String
+  phone            String?
+  email            String?
+  creditLimitPence Int      @default(0)
+  qaTag            String?
+  qaRunId          String?
+  createdAt        DateTime @default(now())
 
-  business         Business         @relation(fields: [businessId], references: [id])
+  business         Business          @relation(fields: [businessId], references: [id])
   purchaseInvoices PurchaseInvoice[]
 
   @@index([businessId, name])
@@ -201,32 +266,41 @@ model Category {
 }
 
 model Product {
-  id                    String    @id @default(cuid())
+  id                    String   @id @default(cuid())
   businessId            String
   categoryId            String?
   sku                   String?
-  barcode               String?   @unique
+  barcode               String?  @unique
   name                  String
-  active                Boolean   @default(true)
+  active                Boolean  @default(true)
   imageUrl              String?
   sellingPriceBasePence Int
+  allowZeroPrice        Boolean  @default(false)
   defaultCostBasePence  Int
-  vatRateBps            Int       @default(0)
+  isTaxable             Boolean  @default(true)
+  // 0 means "use store default tax component rates".
+  vatRateBps            Int      @default(0)
   vatCode               String?
-  reorderPointBase      Int       @default(0)
-  promoBuyQty           Int       @default(0)
-  promoGetQty           Int       @default(0)
-  createdAt             DateTime  @default(now())
+  reorderPointBase      Int      @default(0)
+  reorderQtyBase        Int      @default(0)
+  version               Int      @default(1)
+  qaTag                 String?
+  qaRunId               String?
+  promoBuyQty           Int      @default(0)
+  promoGetQty           Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
 
-  business          Business         @relation(fields: [businessId], references: [id])
-  category          Category?        @relation(fields: [categoryId], references: [id])
-  productUnits      ProductUnit[]
-  inventoryBalances InventoryBalance[]
-  salesLines        SalesInvoiceLine[]
-  purchaseLines     PurchaseInvoiceLine[]
-  stockMovements    StockMovement[]
-  stockAdjustments  StockAdjustment[]
-  stocktakeLines    StocktakeLine[]
+  business           Business              @relation(fields: [businessId], references: [id])
+  category           Category?             @relation(fields: [categoryId], references: [id])
+  productUnits       ProductUnit[]
+  inventoryBalances  InventoryBalance[]
+  salesLines         SalesInvoiceLine[]
+  purchaseLines      PurchaseInvoiceLine[]
+  stockMovements     StockMovement[]
+  stockAdjustments   StockAdjustment[]
+  stocktakeLines     StocktakeLine[]
+  stockTransferLines StockTransferLine[]
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
@@ -234,15 +308,17 @@ model Product {
 }
 
 model Unit {
-  id         String   @id @default(cuid())
+  id         String  @id @default(cuid())
   name       String
   pluralName String
   symbol     String?
+  qaTag      String?
+  qaRunId    String?
 
-  productUnits ProductUnit[]
-  salesInvoiceLines SalesInvoiceLine[]
+  productUnits         ProductUnit[]
+  salesInvoiceLines    SalesInvoiceLine[]
   purchaseInvoiceLines PurchaseInvoiceLine[]
-  stockAdjustments   StockAdjustment[]
+  stockAdjustments     StockAdjustment[]
 }
 
 model ProductUnit {
@@ -251,6 +327,8 @@ model ProductUnit {
   unitId           String
   isBaseUnit       Boolean  @default(false)
   conversionToBase Int
+  qaTag            String?
+  qaRunId          String?
   createdAt        DateTime @default(now())
 
   product Product @relation(fields: [productId], references: [id])
@@ -260,12 +338,14 @@ model ProductUnit {
 }
 
 model InventoryBalance {
-  id             String   @id @default(cuid())
-  storeId        String
-  productId      String
-  qtyOnHandBase  Int      @default(0)
-  avgCostBasePence Int    @default(0)
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(cuid())
+  storeId          String
+  productId        String
+  qtyOnHandBase    Int      @default(0)
+  avgCostBasePence Int      @default(0)
+  qaTag            String?
+  qaRunId          String?
+  updatedAt        DateTime @updatedAt
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -275,16 +355,20 @@ model InventoryBalance {
 }
 
 model StockMovement {
-  id                String             @id @default(cuid())
+  id                String   @id @default(cuid())
   storeId           String
   productId         String
   qtyBase           Int
+  beforeQtyBase     Int?
+  afterQtyBase      Int?
   unitCostBasePence Int?
   type              String
   referenceType     String?
   referenceId       String?
   userId            String?
-  createdAt         DateTime           @default(now())
+  qaTag             String?
+  qaRunId           String?
+  createdAt         DateTime @default(now())
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -295,16 +379,18 @@ model StockMovement {
 }
 
 model StockAdjustment {
-  id           String   @id @default(cuid())
-  storeId      String
-  productId    String
-  unitId       String
-  qtyInUnit    Int
-  qtyBase      Int
-  direction    String
-  reason       String?
-  userId       String
-  createdAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  storeId   String
+  productId String
+  unitId    String
+  qtyInUnit Int
+  qtyBase   Int
+  direction String
+  reason    String?
+  userId    String
+  qaTag     String?
+  qaRunId   String?
+  createdAt DateTime @default(now())
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -316,72 +402,100 @@ model StockAdjustment {
 }
 
 model SalesInvoice {
-  id             String        @id @default(cuid())
-  businessId     String
-  storeId        String
-  tillId         String
-  shiftId        String?
-  cashierUserId  String
-  customerId     String?
-  paymentStatus  String
-  dueDate        DateTime?
-  discountPence  Int           @default(0)
-  subtotalPence  Int
-  vatPence       Int
-  totalPence     Int
-  createdAt      DateTime      @default(now())
+  id                         String    @id @default(cuid())
+  businessId                 String
+  storeId                    String
+  tillId                     String
+  transactionNumber          String?
+  shiftId                    String?
+  cashierUserId              String
+  customerId                 String?
+  paymentStatus              String
+  dueDate                    DateTime?
+  qaTag                      String?
+  qaRunId                    String?
+  branchId                   String?
+  discountPence              Int       @default(0)
+  discountOverrideReasonCode String?
+  discountOverrideReason     String?
+  discountApprovedByUserId   String?
+  subtotalPence              Int
+  vatComponentPence          Int       @default(0)
+  nhilComponentPence         Int       @default(0)
+  getFundComponentPence      Int       @default(0)
+  taxRateBps                 Int       @default(0)
+  vatPence                   Int
+  totalPence                 Int
+  grossMarginPence           Int       @default(0)
+  cashReceivedPence          Int       @default(0)
+  changeDuePence             Int       @default(0)
+  createdAt                  DateTime  @default(now())
 
-  business    Business        @relation(fields: [businessId], references: [id])
-  store       Store           @relation(fields: [storeId], references: [id])
-  till        Till            @relation(fields: [tillId], references: [id])
-  shift       Shift?          @relation(fields: [shiftId], references: [id])
-  cashierUser User            @relation("CashierSales", fields: [cashierUserId], references: [id])
-  customer    Customer?       @relation(fields: [customerId], references: [id])
-  lines       SalesInvoiceLine[]
-  payments    SalesPayment[]
-  salesReturn SalesReturn?
+  business               Business                @relation(fields: [businessId], references: [id])
+  store                  Store                   @relation(fields: [storeId], references: [id])
+  till                   Till                    @relation(fields: [tillId], references: [id])
+  shift                  Shift?                  @relation(fields: [shiftId], references: [id])
+  cashierUser            User                    @relation("CashierSales", fields: [cashierUserId], references: [id])
+  customer               Customer?               @relation(fields: [customerId], references: [id])
+  discountApprovedBy     User?                   @relation("SalesDiscountApprovedBy", fields: [discountApprovedByUserId], references: [id])
+  mobileMoneyCollections MobileMoneyCollection[]
+  lines                  SalesInvoiceLine[]
+  payments               SalesPayment[]
+  salesReturn            SalesReturn?
 
+  @@unique([businessId, transactionNumber])
   @@index([businessId])
   @@index([storeId, createdAt])
   @@index([cashierUserId, createdAt])
   @@index([businessId, paymentStatus, createdAt])
   @@index([customerId, createdAt])
+  @@index([transactionNumber])
+  @@index([branchId, createdAt])
 }
 
 model SalesReturn {
-  id               String   @id @default(cuid())
-  salesInvoiceId   String   @unique
-  storeId          String
-  userId           String
-  type             String
-  refundMethod     String?
-  refundAmountPence Int @default(0)
-  reason           String?
-  createdAt        DateTime @default(now())
+  id                      String   @id @default(cuid())
+  salesInvoiceId          String   @unique
+  storeId                 String
+  userId                  String
+  type                    String
+  reasonCode              String?
+  refundMethod            String?
+  refundAmountPence       Int      @default(0)
+  reason                  String?
+  managerApprovedByUserId String?
+  managerApprovalMode     String?
+  createdAt               DateTime @default(now())
 
-  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
-  store        Store       @relation(fields: [storeId], references: [id])
-  user         User        @relation(fields: [userId], references: [id])
+  salesInvoice      SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  store             Store        @relation(fields: [storeId], references: [id])
+  user              User         @relation(fields: [userId], references: [id])
+  managerApprovedBy User?        @relation("SalesReturnApprovedBy", fields: [managerApprovedByUserId], references: [id])
 
   @@index([storeId, createdAt])
   @@index([userId, createdAt])
+  @@index([managerApprovedByUserId, createdAt])
 }
 
 model SalesInvoiceLine {
-  id                String   @id @default(cuid())
-  salesInvoiceId    String
-  productId         String
-  unitId            String
-  qtyInUnit         Int
-  conversionToBase  Int
-  qtyBase           Int
-  unitPricePence    Int
-  lineDiscountPence Int      @default(0)
-  promoDiscountPence Int     @default(0)
-  lineSubtotalPence Int
-  lineVatPence      Int
-  lineTotalPence    Int
-  createdAt         DateTime @default(now())
+  id                        String   @id @default(cuid())
+  salesInvoiceId            String
+  productId                 String
+  unitId                    String
+  qtyInUnit                 Int
+  conversionToBase          Int
+  qtyBase                   Int
+  unitPricePence            Int
+  lineDiscountPence         Int      @default(0)
+  promoDiscountPence        Int      @default(0)
+  lineSubtotalPence         Int
+  lineVatComponentPence     Int      @default(0)
+  lineNhilComponentPence    Int      @default(0)
+  lineGetFundComponentPence Int      @default(0)
+  lineTaxRateBps            Int      @default(0)
+  lineVatPence              Int
+  lineTotalPence            Int
+  createdAt                 DateTime @default(now())
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
   product      Product      @relation(fields: [productId], references: [id])
@@ -392,36 +506,49 @@ model SalesInvoiceLine {
 }
 
 model SalesPayment {
-  id             String        @id @default(cuid())
+  id             String   @id @default(cuid())
   salesInvoiceId String
   method         String
   amountPence    Int
-  receivedAt     DateTime      @default(now())
+  receivedAt     DateTime @default(now())
   reference      String?
+  network        String?
+  payerMsisdn    String?
+  provider       String?
+  status         String   @default("CONFIRMED")
+  collectionId   String?
+  branchId       String?
+  qaTag          String?
+  qaRunId        String?
 
-  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice SalesInvoice           @relation(fields: [salesInvoiceId], references: [id])
+  collection   MobileMoneyCollection? @relation(fields: [collectionId], references: [id])
 
   @@index([salesInvoiceId, receivedAt])
   @@index([receivedAt])
+  @@index([collectionId, receivedAt])
+  @@index([status, receivedAt])
 }
 
 model PurchaseInvoice {
-  id             String        @id @default(cuid())
-  businessId     String
-  storeId        String
-  supplierId     String?
-  paymentStatus  String
-  dueDate        DateTime?
-  subtotalPence  Int
-  vatPence       Int
-  totalPence     Int
-  createdAt      DateTime      @default(now())
+  id            String    @id @default(cuid())
+  businessId    String
+  storeId       String
+  supplierId    String?
+  paymentStatus String
+  dueDate       DateTime?
+  qaTag         String?
+  qaRunId       String?
+  subtotalPence Int
+  vatPence      Int
+  totalPence    Int
+  createdAt     DateTime  @default(now())
 
-  business    Business          @relation(fields: [businessId], references: [id])
-  store       Store             @relation(fields: [storeId], references: [id])
-  supplier    Supplier?         @relation(fields: [supplierId], references: [id])
-  lines       PurchaseInvoiceLine[]
-  payments    PurchasePayment[]
+  business       Business              @relation(fields: [businessId], references: [id])
+  store          Store                 @relation(fields: [storeId], references: [id])
+  supplier       Supplier?             @relation(fields: [supplierId], references: [id])
+  lines          PurchaseInvoiceLine[]
+  payments       PurchasePayment[]
   purchaseReturn PurchaseReturn?
 
   @@index([businessId, createdAt])
@@ -437,13 +564,13 @@ model PurchaseReturn {
   userId            String
   type              String
   refundMethod      String?
-  refundAmountPence Int @default(0)
+  refundAmountPence Int      @default(0)
   reason            String?
   createdAt         DateTime @default(now())
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
-  store           Store          @relation(fields: [storeId], references: [id])
-  user            User           @relation(fields: [userId], references: [id])
+  store           Store           @relation(fields: [storeId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
 
   @@index([storeId, createdAt])
   @@index([userId, createdAt])
@@ -469,12 +596,14 @@ model PurchaseInvoiceLine {
 }
 
 model PurchasePayment {
-  id               String        @id @default(cuid())
+  id                String   @id @default(cuid())
   purchaseInvoiceId String
-  method           String
-  amountPence      Int
-  paidAt           DateTime      @default(now())
-  reference        String?
+  method            String
+  amountPence       Int
+  paidAt            DateTime @default(now())
+  reference         String?
+  qaTag             String?
+  qaRunId           String?
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
 
@@ -483,14 +612,14 @@ model PurchasePayment {
 }
 
 model Account {
-  id         String      @id @default(cuid())
+  id         String   @id @default(cuid())
   businessId String
   code       String
   name       String
   type       String
-  createdAt  DateTime    @default(now())
+  createdAt  DateTime @default(now())
 
-  business     Business     @relation(fields: [businessId], references: [id])
+  business     Business      @relation(fields: [businessId], references: [id])
   journalLines JournalLine[]
   expenses     Expense[]
 
@@ -499,25 +628,25 @@ model Account {
 }
 
 model Expense {
-  id          String   @id @default(cuid())
-  businessId  String
-  storeId     String
-  userId      String
-  accountId   String
-  amountPence Int
-  paymentStatus String @default("PAID")
-  method      String?
-  dueDate     DateTime?
-  vendorName  String?
-  reference   String?
+  id             String    @id @default(cuid())
+  businessId     String
+  storeId        String
+  userId         String
+  accountId      String
+  amountPence    Int
+  paymentStatus  String    @default("PAID")
+  method         String?
+  dueDate        DateTime?
+  vendorName     String?
+  reference      String?
   attachmentPath String?
-  notes       String?
-  createdAt   DateTime @default(now())
+  notes          String?
+  createdAt      DateTime  @default(now())
 
-  business Business @relation(fields: [businessId], references: [id])
-  store    Store    @relation(fields: [storeId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
-  account  Account  @relation(fields: [accountId], references: [id])
+  business Business         @relation(fields: [businessId], references: [id])
+  store    Store            @relation(fields: [storeId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+  account  Account          @relation(fields: [accountId], references: [id])
   payments ExpensePayment[]
 
   @@index([businessId, paymentStatus, createdAt])
@@ -526,62 +655,62 @@ model Expense {
 }
 
 model ExpensePayment {
-  id         String   @id @default(cuid())
-  businessId String
-  storeId    String
-  userId     String
-  expenseId  String
-  method     String
+  id          String   @id @default(cuid())
+  businessId  String
+  storeId     String
+  userId      String
+  expenseId   String
+  method      String
   amountPence Int
-  paidAt     DateTime @default(now())
-  reference  String?
+  paidAt      DateTime @default(now())
+  reference   String?
 
   business Business @relation(fields: [businessId], references: [id])
   store    Store    @relation(fields: [storeId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
-  expense Expense @relation(fields: [expenseId], references: [id])
+  expense  Expense  @relation(fields: [expenseId], references: [id])
 
   @@index([expenseId, paidAt])
   @@index([businessId, paidAt])
 }
 
 model JournalEntry {
-  id            String      @id @default(cuid())
+  id            String   @id @default(cuid())
   businessId    String
   description   String
   referenceType String?
   referenceId   String?
-  entryDate     DateTime    @default(now())
-  createdAt     DateTime    @default(now())
+  entryDate     DateTime @default(now())
+  createdAt     DateTime @default(now())
 
-  business Business     @relation(fields: [businessId], references: [id])
+  business Business      @relation(fields: [businessId], references: [id])
   lines    JournalLine[]
 }
 
 model JournalLine {
-  id            String   @id @default(cuid())
+  id             String   @id @default(cuid())
   journalEntryId String
-  accountId     String
-  debitPence    Int
-  creditPence   Int
-  memo          String?
-  createdAt     DateTime @default(now())
+  accountId      String
+  debitPence     Int
+  creditPence    Int
+  memo           String?
+  createdAt      DateTime @default(now())
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   account      Account      @relation(fields: [accountId], references: [id])
 }
 
 model Stocktake {
-  id         String   @id @default(cuid())
-  storeId    String
-  userId     String
-  status     String   @default("IN_PROGRESS")
-  notes      String?
-  createdAt  DateTime @default(now())
+  id          String    @id @default(cuid())
+  storeId     String
+  userId      String
+  status      String    @default("IN_PROGRESS")
+  notes       String?
+  createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  store Store @relation(fields: [storeId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  store Store           @relation(fields: [storeId], references: [id])
+  user  User            @relation(fields: [userId], references: [id])
   lines StocktakeLine[]
 
   @@index([storeId, createdAt])
@@ -589,13 +718,13 @@ model Stocktake {
 }
 
 model StocktakeLine {
-  id            String @id @default(cuid())
-  stocktakeId   String
-  productId     String
-  expectedBase  Int
-  countedBase   Int
-  varianceBase  Int
-  adjusted      Boolean @default(false)
+  id           String  @id @default(cuid())
+  stocktakeId  String
+  productId    String
+  expectedBase Int
+  countedBase  Int
+  varianceBase Int
+  adjusted     Boolean @default(false)
 
   stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id])
@@ -605,22 +734,274 @@ model StocktakeLine {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  businessId String
-  userId     String?
-  userName   String
-  userRole   String
-  action     String
-  entity     String?
-  entityId   String?
-  details    String?
-  ipAddress  String?
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  businessId  String
+  userId      String?
+  userName    String
+  userRole    String
+  action      String
+  actionType  String?
+  entity      String?
+  entityType  String?
+  entityId    String?
+  beforeState String?
+  afterState  String?
+  reason      String?
+  details     String?
+  ipAddress   String?
+  deviceId    String?
+  branchId    String?
+  qaTag       String?
+  qaRunId     String?
+  createdAt   DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([businessId, createdAt])
   @@index([action])
+  @@index([actionType])
   @@index([userId])
+  @@index([branchId, createdAt])
   @@index([businessId, action, createdAt])
+}
+
+model Organization {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  name       String
+  createdAt  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  branches Branch[]
+  devices  Device[]
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  businessId     String
+  organizationId String?
+  storeId        String   @unique
+  code           String?
+  name           String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  business     Business      @relation(fields: [businessId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  store        Store         @relation(fields: [storeId], references: [id])
+  devices      Device[]
+
+  @@index([businessId, active])
+  @@index([organizationId, active])
+}
+
+model Device {
+  id             String    @id @default(cuid())
+  businessId     String
+  organizationId String?
+  branchId       String?
+  userId         String?
+  label          String
+  deviceKey      String    @unique
+  platform       String?
+  active         Boolean   @default(true)
+  lastSeenAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  business     Business      @relation(fields: [businessId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  branch       Branch?       @relation(fields: [branchId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
+
+  @@index([businessId, active])
+  @@index([branchId, active])
+}
+
+model MobileMoneyCollection {
+  id                    String    @id @default(cuid())
+  businessId            String
+  storeId               String
+  salesInvoiceId        String?
+  initiatedByUserId     String?
+  provider              String
+  network               String
+  payerMsisdn           String
+  amountPence           Int
+  currency              String    @default("GHS")
+  idempotencyKey        String    @unique
+  providerRequestId     String?
+  providerTransactionId String?
+  providerReference     String?
+  status                String    @default("PENDING")
+  providerStatus        String?
+  failureReason         String?
+  initiatedAt           DateTime  @default(now())
+  confirmedAt           DateTime?
+  lastCheckedAt         DateTime?
+  metadataJson          String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  business      Business               @relation(fields: [businessId], references: [id])
+  store         Store                  @relation(fields: [storeId], references: [id])
+  salesInvoice  SalesInvoice?          @relation(fields: [salesInvoiceId], references: [id])
+  initiatedBy   User?                  @relation("CollectionInitiatedBy", fields: [initiatedByUserId], references: [id])
+  statusLogs    MobileMoneyStatusLog[]
+  salesPayments SalesPayment[]
+
+  @@index([businessId, status, initiatedAt])
+  @@index([storeId, initiatedAt])
+  @@index([salesInvoiceId])
+  @@index([provider, providerRequestId])
+}
+
+model MobileMoneyStatusLog {
+  id             String   @id @default(cuid())
+  collectionId   String
+  status         String
+  providerStatus String?
+  notes          String?
+  payloadJson    String?
+  observedAt     DateTime @default(now())
+
+  collection MobileMoneyCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@index([collectionId, observedAt])
+}
+
+model CashDrawerEntry {
+  id                      String   @id @default(cuid())
+  businessId              String
+  storeId                 String
+  tillId                  String
+  shiftId                 String?
+  createdByUserId         String
+  cashierUserId           String?
+  entryType               String
+  amountPence             Int
+  reasonCode              String?
+  reason                  String?
+  referenceType           String?
+  referenceId             String?
+  beforeExpectedCashPence Int?
+  afterExpectedCashPence  Int?
+  createdAt               DateTime @default(now())
+
+  business      Business @relation(fields: [businessId], references: [id])
+  store         Store    @relation(fields: [storeId], references: [id])
+  till          Till     @relation(fields: [tillId], references: [id])
+  shift         Shift?   @relation(fields: [shiftId], references: [id])
+  createdByUser User     @relation("CashDrawerEntryCreatedBy", fields: [createdByUserId], references: [id])
+  cashierUser   User?    @relation("CashDrawerEntryCashier", fields: [cashierUserId], references: [id])
+
+  @@index([businessId, createdAt])
+  @@index([storeId, tillId, createdAt])
+  @@index([shiftId, createdAt])
+  @@index([entryType, createdAt])
+}
+
+model StockTransfer {
+  id                String    @id @default(cuid())
+  businessId        String
+  fromStoreId       String
+  toStoreId         String
+  requestedByUserId String
+  approvedByUserId  String?
+  status            String    @default("PENDING")
+  reason            String?
+  requestedAt       DateTime  @default(now())
+  approvedAt        DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  business        Business            @relation(fields: [businessId], references: [id])
+  fromStore       Store               @relation("StockTransferFromStore", fields: [fromStoreId], references: [id])
+  toStore         Store               @relation("StockTransferToStore", fields: [toStoreId], references: [id])
+  requestedByUser User                @relation("StockTransferRequestedBy", fields: [requestedByUserId], references: [id])
+  approvedByUser  User?               @relation("StockTransferApprovedBy", fields: [approvedByUserId], references: [id])
+  lines           StockTransferLine[]
+
+  @@index([businessId, status, requestedAt])
+  @@index([fromStoreId, requestedAt])
+  @@index([toStoreId, requestedAt])
+}
+
+model StockTransferLine {
+  id                String @id @default(cuid())
+  stockTransferId   String
+  productId         String
+  qtyBase           Int
+  unitCostBasePence Int?
+
+  stockTransfer StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([stockTransferId])
+  @@index([productId])
+}
+
+model RiskAlert {
+  id                   String    @id @default(cuid())
+  businessId           String
+  storeId              String?
+  cashierUserId        String?
+  alertType            String
+  severity             String    @default("MEDIUM")
+  metricValue          Int?
+  thresholdValue       Int?
+  status               String    @default("OPEN")
+  summary              String
+  contextJson          String?
+  acknowledgedByUserId String?
+  acknowledgedAt       DateTime?
+  occurredAt           DateTime  @default(now())
+  createdAt            DateTime  @default(now())
+
+  business       Business @relation(fields: [businessId], references: [id])
+  store          Store?   @relation(fields: [storeId], references: [id])
+  cashierUser    User?    @relation("RiskAlertCashier", fields: [cashierUserId], references: [id])
+  acknowledgedBy User?    @relation("RiskAlertAcknowledgedBy", fields: [acknowledgedByUserId], references: [id])
+
+  @@index([businessId, occurredAt])
+  @@index([storeId, occurredAt])
+  @@index([cashierUserId, occurredAt])
+  @@index([status, occurredAt])
+}
+
+model SyncEvent {
+  id          String   @id @default(cuid())
+  businessId  String
+  eventId     String
+  eventType   String
+  deviceId    String?
+  actorUserId String?
+  branchId    String?
+  qaTag       String?
+  qaRunId     String?
+  payloadHash String?
+  resultRef   String?
+  appliedAt   DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, eventId])
+  @@index([businessId, appliedAt])
+}
+
+model DayClosure {
+  id             String   @id @default(cuid())
+  businessId     String
+  storeId        String
+  closedByUserId String
+  closureDate    DateTime
+  summaryJson    String
+  createdAt      DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id])
+  store    Store    @relation(fields: [storeId], references: [id])
+  closedBy User     @relation("DayClosureClosedBy", fields: [closedByUserId], references: [id])
+
+  @@unique([storeId, closureDate])
+  @@index([businessId, closureDate])
 }
