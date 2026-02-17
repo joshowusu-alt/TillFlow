@@ -37,7 +37,9 @@ export type AuditAction =
   | 'STOCK_TRANSFER_APPROVE'
   | 'DATA_RESET'
   | 'STOCKTAKE_CREATE'
-  | 'STOCKTAKE_COMPLETE';
+  | 'STOCKTAKE_COMPLETE'
+  | 'WHATSAPP_EOD_SENT'
+  | 'DEMO_RESET';
 
 /**
  * Write an entry to the audit trail — fire-and-forget, never throws.
