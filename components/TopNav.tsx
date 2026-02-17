@@ -46,6 +46,7 @@ const navGroups = [
     items: [
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },

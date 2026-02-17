@@ -24,12 +24,12 @@ function parsePayments(formData: FormData): PaymentInput[] {
 
 export async function recordCustomerPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext();
+    const { businessId, user } = await withBusinessContext();
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
 
-    await recordCustomerPayment(businessId, invoiceId, payments);
+    await recordCustomerPayment(businessId, invoiceId, payments, user.id);
     redirect('/payments/customer-receipts');
   }, '/payments/customer-receipts');
 }

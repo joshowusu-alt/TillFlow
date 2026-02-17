@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { audit } from '@/lib/audit';
+import { hashApprovalPin } from '@/lib/security/pin';
 
 export async function createUserAction(formData: FormData) {
   const owner = await requireRole(['OWNER']);
@@ -12,6 +13,7 @@ export async function createUserAction(formData: FormData) {
   const name = String(formData.get('name') || '').trim();
   const email = String(formData.get('email') || '').toLowerCase().trim();
   const password = String(formData.get('password') || '');
+  const approvalPin = String(formData.get('approvalPin') || '').trim();
   const role = String(formData.get('role') || 'CASHIER');
 
   if (!name || !email || !password) {
@@ -29,6 +31,7 @@ export async function createUserAction(formData: FormData) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const approvalPinHash = approvalPin ? await hashApprovalPin(approvalPin) : null;
 
   await prisma.user.create({
     data: {
@@ -36,6 +39,7 @@ export async function createUserAction(formData: FormData) {
       name,
       email,
       passwordHash,
+      approvalPinHash,
       role,
       active: true,
     },
@@ -55,6 +59,7 @@ export async function updateUserAction(formData: FormData) {
   const role = String(formData.get('role') || 'CASHIER');
   const active = formData.get('active') === 'on';
   const newPassword = String(formData.get('newPassword') || '');
+  const newApprovalPin = String(formData.get('newApprovalPin') || '').trim();
 
   if (!userId || !name || !email) {
     redirect('/users?error=missing');
@@ -83,6 +88,9 @@ export async function updateUserAction(formData: FormData) {
       redirect('/users?error=password_short');
     }
     data.passwordHash = await bcrypt.hash(newPassword, 10);
+  }
+  if (newApprovalPin) {
+    data.approvalPinHash = await hashApprovalPin(newApprovalPin);
   }
 
   await prisma.user.update({ where: { id: targetUser.id }, data });

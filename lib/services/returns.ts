@@ -7,6 +7,7 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
+import { recordCashDrawerEntryTx } from './cash-drawer';
 
 // ---------------------------------------------------------------------------
 // Shared helper — accumulate payments by method
@@ -104,6 +105,23 @@ export async function createSalesReturn(input: {
       where: { id: invoice.id },
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
+
+    if (refundAmount > 0 && refundMethod === 'CASH' && invoice.shiftId) {
+      await recordCashDrawerEntryTx(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: invoice.tillId,
+        shiftId: invoice.shiftId,
+        createdByUserId: input.userId,
+        cashierUserId: input.userId,
+        entryType: 'CASH_REFUND',
+        amountPence: -refundAmount,
+        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+        reason: input.reason ?? null,
+        referenceType: 'SALES_RETURN',
+        referenceId: created.id,
+      });
+    }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
       const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;

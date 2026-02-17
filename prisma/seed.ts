@@ -114,11 +114,19 @@ async function main() {
   /* ---------- Users ---------- */
   const ownerPassword = await bcrypt.hash('Pass1234!', 10);
   const cashierPassword = await bcrypt.hash('Pass1234!', 10);
+  const ownerPinHash = await bcrypt.hash('1234', 10);
 
   await prisma.user.upsert({
     where: { email: 'owner@store.com' },
-    update: {},
-    create: { businessId: business.id, name: 'Owner', email: 'owner@store.com', passwordHash: ownerPassword, role: 'OWNER' },
+    update: { approvalPinHash: ownerPinHash, passwordHash: ownerPassword },
+    create: {
+      businessId: business.id,
+      name: 'Owner',
+      email: 'owner@store.com',
+      passwordHash: ownerPassword,
+      approvalPinHash: ownerPinHash,
+      role: 'OWNER'
+    },
   });
 
   await prisma.user.upsert({

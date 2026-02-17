@@ -99,6 +99,24 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               The initial cash the owner invested into the business, in minor units (pesewas/pence). E.g. {business.currency === 'GHS' ? '₵10,000 = 1000000' : '£10,000 = 1000000'}.
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="requireOpenTillForSales"
+              defaultChecked={(business as any).requireOpenTillForSales ?? false}
+            />
+            <label className="text-sm">Block sales until till is opened</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="varianceReasonRequired"
+              defaultChecked={(business as any).varianceReasonRequired ?? true}
+            />
+            <label className="text-sm">Require variance reason when closing till</label>
+          </div>
           <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />

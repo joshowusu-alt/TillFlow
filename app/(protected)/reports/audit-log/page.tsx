@@ -26,6 +26,9 @@ const ACTION_LABELS: Record<string, string> = {
   DISCOUNT_APPLIED: 'Discount Applied',
   SHIFT_OPEN: 'Shift Opened',
   SHIFT_CLOSE: 'Shift Closed',
+  CASH_DRAWER_ENTRY: 'Cash Drawer Entry',
+  CASH_DRAWER_OPEN: 'Cash Drawer Opened',
+  CASH_DRAWER_CLOSE: 'Cash Drawer Closed',
 };
 
 const ACTION_COLOURS: Record<string, string> = {
@@ -46,6 +49,9 @@ const ACTION_COLOURS: Record<string, string> = {
   PASSWORD_CHANGE: 'bg-amber-100 text-amber-800',
   SHIFT_OPEN: 'bg-teal-100 text-teal-800',
   SHIFT_CLOSE: 'bg-teal-100 text-teal-800',
+  CASH_DRAWER_ENTRY: 'bg-amber-100 text-amber-800',
+  CASH_DRAWER_OPEN: 'bg-amber-100 text-amber-800',
+  CASH_DRAWER_CLOSE: 'bg-amber-100 text-amber-800',
 };
 
 export const dynamic = 'force-dynamic';

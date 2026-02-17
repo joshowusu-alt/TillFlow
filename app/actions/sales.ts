@@ -101,6 +101,9 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       if (message.includes('Insufficient stock')) {
         redirect('/pos?error=insufficient-stock');
       }
+      if (message.includes('Open till is required')) {
+        redirect('/pos?error=till-not-open');
+      }
       if (message.includes('Customer is required')) {
         redirect('/pos?error=customer-required');
       }

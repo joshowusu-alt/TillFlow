@@ -46,9 +46,11 @@ type PosClientProps = {
     vatEnabled: boolean;
     momoEnabled?: boolean;
     momoProvider?: string | null;
+    requireOpenTillForSales?: boolean;
   };
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
+  openShiftTillIds: string[];
   products: ProductDto[];
   customers: { id: string; name: string }[];
   units: { id: string; name: string }[];
@@ -82,7 +84,16 @@ type ParkedCart = {
   itemCount: number;
 };
 
-export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
+export default function PosClient({
+  business,
+  store,
+  tills,
+  openShiftTillIds,
+  products,
+  customers,
+  units,
+  categories,
+}: PosClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
@@ -934,11 +945,14 @@ export default function PosClient({ business, store, tills, products, customers,
   const fullyPaid = paymentStatus === 'PAID' ? totalPaid >= totalDue : true;
   const hasPaymentError = nonCashOverpay;
   const momoReady = !needsMomoConfirmation || momoConfirmed;
+  const tillReady =
+    !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
   const canSubmit =
     cart.length > 0 &&
     fullyPaid &&
     !hasPaymentError &&
     momoReady &&
+    tillReady &&
     (!requiresCustomer || customerId);
   const errorParam = searchParams.get('error');
 
@@ -1321,6 +1335,8 @@ export default function PosClient({ business, store, tills, products, customers,
                 ? 'Select a customer for credit or part-paid sales.'
                 : errorParam === 'insufficient-stock'
                   ? 'One or more items exceed available stock.'
+                  : errorParam === 'till-not-open'
+                    ? 'Open the till shift first before recording sales.'
                   : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
@@ -1516,6 +1532,11 @@ export default function PosClient({ business, store, tills, products, customers,
                 <select className="input" name="tillId" value={tillId} onChange={(e) => setTillId(e.target.value)}>
                   {tills.map((till) => (<option key={till.id} value={till.id}>{till.name}</option>))}
                 </select>
+                {business.requireOpenTillForSales ? (
+                  <div className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}>
+                    {tillReady ? 'Till is open' : 'Till is not open'}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className="label">Payment Status</label>
@@ -1716,6 +1737,11 @@ export default function PosClient({ business, store, tills, products, customers,
             )}
             {hasPaymentError && (
               <div className="text-sm text-amber-700 font-medium">Card/transfer/MoMo amounts cannot exceed the total due.</div>
+            )}
+            {!tillReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                Open this till shift before recording sales.
+              </div>
             )}
             {needsMomoConfirmation && !momoConfirmed && (
               <div className="text-sm text-amber-700 font-medium">

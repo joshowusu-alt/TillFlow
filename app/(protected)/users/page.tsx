@@ -102,6 +102,24 @@ export default async function UsersPage({
             />
           </div>
           <div>
+            <label className="label">
+              {editUser ? 'Manager PIN (optional update)' : 'Manager PIN (optional)'}
+            </label>
+            <input
+              className="input"
+              name={editUser ? 'newApprovalPin' : 'approvalPin'}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              minLength={4}
+              maxLength={8}
+              placeholder="4-8 digits"
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Required for manager approvals like till close, voids and overrides.
+            </div>
+          </div>
+          <div>
             <label className="label">Role *</label>
             <select className="input" name="role" defaultValue={editUser?.role ?? 'CASHIER'}>
               <option value="CASHIER">Cashier — POS & shifts only</option>

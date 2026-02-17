@@ -15,6 +15,7 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
+import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 
 export type SalePaymentInput = PaymentInput;
 
@@ -60,6 +61,11 @@ export async function createSale(input: CreateSaleInput) {
     select: { id: true },
   });
   if (!till) throw new Error('Till not found');
+
+  const openShift = await getOpenShiftForTill(input.businessId, till.id);
+  if (business.requireOpenTillForSales && !openShift) {
+    throw new Error('Open till is required before recording sales.');
+  }
 
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
@@ -290,6 +296,7 @@ export async function createSale(input: CreateSaleInput) {
         businessId: input.businessId,
         storeId: store.id,
         tillId: till.id,
+        shiftId: openShift?.id ?? null,
         cashierUserId: input.cashierUserId,
         customerId: input.customerId || null,
         paymentStatus: finalStatus,
@@ -341,6 +348,23 @@ export async function createSale(input: CreateSaleInput) {
           providerStatus: 'ATTACHED_TO_SALE',
           notes: `Attached to sale ${created.id}`,
         },
+      });
+    }
+
+    if (cashPence > 0 && openShift) {
+      await recordCashDrawerEntryTx(tx, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        tillId: till.id,
+        shiftId: openShift.id,
+        createdByUserId: input.cashierUserId,
+        cashierUserId: input.cashierUserId,
+        entryType: 'CASH_SALE',
+        amountPence: cashPence,
+        reasonCode: 'SALE',
+        reason: 'Cash sale collected',
+        referenceType: 'SALES_INVOICE',
+        referenceId: created.id,
       });
     }
 
@@ -560,6 +584,23 @@ export async function amendSale(input: AmendSaleInput) {
           amountPence: -refundAmount, // negative = refund
         },
       });
+
+      if (refundMethod === 'CASH' && invoice.shiftId) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          tillId: invoice.tillId,
+          shiftId: invoice.shiftId,
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'CASH_REFUND',
+          amountPence: -refundAmount,
+          reasonCode: 'SALE_AMEND_REFUND',
+          reason: input.reason,
+          referenceType: 'SALES_INVOICE',
+          referenceId: invoice.id,
+        });
+      }
     }
 
     // 6. Post corrective journal entry
