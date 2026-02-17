@@ -1,0 +1,13 @@
+
+> tillflow@1.0.0 start
+> next start -p 6200
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:6200
+
+ ✓ Starting...
+ ✓ Ready in 1307ms
+{"ts":"2026-02-16T21:38:37.118Z","level":"info","message":"Login successful","requestId":"ed99491e-db7c-47db-b87a-cab796d58287","email":"cashier@store.com","ipAddress":"::1","userId":"cmlpdjei30008t9ldewe6r7as"}
+{"ts":"2026-02-16T21:39:32.495Z","level":"info","message":"Login successful","requestId":"f3308c5c-c51a-4cfb-ad39-3f549b453546","email":"owner@store.com","ipAddress":"::1","userId":"cmlpdjehx0006t9ldiot28rd6"}
+{"ts":"2026-02-16T21:40:05.455Z","level":"info","message":"Login successful","requestId":"cc55b379-477a-4beb-a80f-d3fd6705ab85","email":"owner@store.com","ipAddress":"::1","userId":"cmlpdjehx0006t9ldiot28rd6"}
+{"ts":"2026-02-16T21:41:36.481Z","level":"info","message":"Login successful","requestId":"af88342a-13bb-49b9-9b34-5e85e2e6514f","email":"cashier@store.com","ipAddress":"::1","userId":"cmlpdjei30008t9ldewe6r7as"}

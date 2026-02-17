@@ -1,0 +1,297 @@
+
+> tillflow@1.0.0 predev
+> prisma generate --schema=prisma/schema.prisma && npm run db:setup
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+
+✔ Generated Prisma Client (v5.22.0) to .\node_modules\@prisma\client in 250ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+
+> tillflow@1.0.0 db:setup
+> npm run db:push && npm run db:wal && npm run db:seed
+
+
+> tillflow@1.0.0 db:push
+> prisma db push
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": SQLite database "dev.db" at "file:./dev.db"
+
+The database is already in sync with the Prisma schema.
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[G✔ Generated Prisma Client (v5.22.0) to .\node_modules\@prisma\client in 415ms
+
+
+> tillflow@1.0.0 db:wal
+> tsx scripts/enable-wal.ts
+
+WAL mode enabled for dev.db
+
+> tillflow@1.0.0 db:seed
+> prisma db seed
+
+Environment variables loaded from .env
+Running seed command `tsx prisma/seed.ts` ...
+✓ Seed complete — 21 products, 7 categories, 5 customers, 4 suppliers, 17 accounts
+
+The seed command has been executed.
+
+> tillflow@1.0.0 dev
+> next dev -p 6200
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:6200
+  - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 7.9s
+ ✓ Compiled /middleware in 609ms
+ ✓ Compiled (72 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 7.5s (610 modules)
+ GET /login 200 in 1472ms
+ GET /login 200 in 71ms
+ GET /login 200 in 412ms
+ ○ Compiling / ...
+ ✓ Compiled / in 2.9s (586 modules)
+ GET /offline 200 in 3670ms
+ GET / 307 in 3678ms
+ GET /login 200 in 3493ms
+ ○ Compiling /api/icon ...
+ ✓ Compiled /api/icon in 2.5s (787 modules)
+ GET /api/icon?size=192 200 in 3121ms
+ GET /api/icon?size=512 200 in 3126ms
+ GET /welcome 200 in 3328ms
+ GET /login 200 in 69ms
+ GET /login 200 in 48ms
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE (`main`.`User`.`email` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`Session` (`id`, `token`, `userId`, `ipAddress`, `userAgent`, `createdAt`, `lastSeenAt`, `expiresAt`) VALUES (?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Session`.`id` FROM `main`.`Session` WHERE `main`.`Session`.`userId` = ? ORDER BY `main`.`Session`.`createdAt` DESC LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`AuditLog` (`id`, `businessId`, `userId`, `userName`, `userRole`, `action`, `details`, `ipAddress`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `businessId` AS `businessId`, `userId` AS `userId`, `userName` AS `userName`, `userRole` AS `userRole`, `action` AS `action`, `entity` AS `entity`, `entityId` AS `entityId`, `details` AS `details`, `ipAddress` AS `ipAddress`, `createdAt` AS `createdAt`
+{"ts":"2026-02-16T22:07:59.557Z","level":"info","message":"Login successful","requestId":"1cf7f53f-c31f-48a6-85b2-c951834dde70","email":"cashier@store.com","ipAddress":"::1","userId":"cmlpdjei30008t9ldewe6r7as"}
+prisma:query DELETE FROM `main`.`Session` WHERE `main`.`Session`.`expiresAt` < ?
+prisma:query DELETE FROM `main`.`AuditLog` WHERE (`main`.`AuditLog`.`businessId` = ? AND `main`.`AuditLog`.`createdAt` < ?)
+ ○ Compiling /pos ...
+ ✓ Compiled /pos in 5.3s (699 modules)
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`businessId`, `main`.`Store`.`name`, `main`.`Store`.`address`, `main`.`Store`.`createdAt` FROM `main`.`Store` WHERE `main`.`Store`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase` FROM `main`.`InventoryBalance` WHERE `main`.`InventoryBalance`.`storeId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name`, `main`.`Category`.`colour` FROM `main`.`Category` WHERE `main`.`Category`.`businessId` = ? ORDER BY `main`.`Category`.`sortOrder` ASC LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name` FROM `main`.`Unit` WHERE 1=1 LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Customer`.`id`, `main`.`Customer`.`name` FROM `main`.`Customer` WHERE `main`.`Customer`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`barcode`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`categoryId`, `main`.`Product`.`imageUrl` FROM `main`.`Product` WHERE (`main`.`Product`.`businessId` = ? AND `main`.`Product`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name` FROM `main`.`Category` WHERE `main`.`Category`.`id` IN (?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`id` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id`, `main`.`Till`.`name`, `main`.`Till`.`storeId` FROM `main`.`Till` WHERE (`main`.`Till`.`active` = ? AND `main`.`Till`.`storeId` IN (?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+ GET /pos 200 in 6912ms
+ POST /login 303 in 7344ms
+ GET /login 200 in 1149ms
+ GET /login 200 in 116ms
+ GET /login 200 in 349ms
+ GET /offline 200 in 542ms
+ GET / 307 in 554ms
+ GET /login 200 in 906ms
+ GET /welcome 200 in 343ms
+ GET /api/icon?size=192 200 in 1660ms
+ GET /api/icon?size=512 200 in 1493ms
+ GET /login 200 in 52ms
+ GET /login 200 in 42ms
+prisma:query SELECT 1
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE (`main`.`User`.`email` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`Session` (`id`, `token`, `userId`, `ipAddress`, `userAgent`, `createdAt`, `lastSeenAt`, `expiresAt`) VALUES (?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Session`.`id` FROM `main`.`Session` WHERE `main`.`Session`.`userId` = ? ORDER BY `main`.`Session`.`createdAt` DESC LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`AuditLog` (`id`, `businessId`, `userId`, `userName`, `userRole`, `action`, `details`, `ipAddress`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `businessId` AS `businessId`, `userId` AS `userId`, `userName` AS `userName`, `userRole` AS `userRole`, `action` AS `action`, `entity` AS `entity`, `entityId` AS `entityId`, `details` AS `details`, `ipAddress` AS `ipAddress`, `createdAt` AS `createdAt`
+{"ts":"2026-02-16T22:11:12.988Z","level":"info","message":"Login successful","requestId":"43008bc2-44e7-43ed-ab93-a373713ec512","email":"cashier@store.com","ipAddress":"::1","userId":"cmlpdjei30008t9ldewe6r7as"}
+prisma:query DELETE FROM `main`.`Session` WHERE `main`.`Session`.`expiresAt` < ?
+prisma:query DELETE FROM `main`.`AuditLog` WHERE (`main`.`AuditLog`.`businessId` = ? AND `main`.`AuditLog`.`createdAt` < ?)
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`businessId`, `main`.`Store`.`name`, `main`.`Store`.`address`, `main`.`Store`.`createdAt` FROM `main`.`Store` WHERE `main`.`Store`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT 1
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase` FROM `main`.`InventoryBalance` WHERE `main`.`InventoryBalance`.`storeId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT 1
+prisma:query SELECT 1
+prisma:query SELECT 1
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name`, `main`.`Category`.`colour` FROM `main`.`Category` WHERE `main`.`Category`.`businessId` = ? ORDER BY `main`.`Category`.`sortOrder` ASC LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`id` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`barcode`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`categoryId`, `main`.`Product`.`imageUrl` FROM `main`.`Product` WHERE (`main`.`Product`.`businessId` = ? AND `main`.`Product`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name` FROM `main`.`Unit` WHERE 1=1 LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Customer`.`id`, `main`.`Customer`.`name` FROM `main`.`Customer` WHERE `main`.`Customer`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name` FROM `main`.`Category` WHERE `main`.`Category`.`id` IN (?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id`, `main`.`Till`.`name`, `main`.`Till`.`storeId` FROM `main`.`Till` WHERE (`main`.`Till`.`active` = ? AND `main`.`Till`.`storeId` IN (?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+ GET /pos 200 in 130ms
+ POST /login 303 in 581ms
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id` FROM `main`.`Store` WHERE (`main`.`Store`.`id` = ? AND `main`.`Store`.`businessId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id` FROM `main`.`Till` WHERE (`main`.`Till`.`id` = ? AND `main`.`Till`.`storeId` = ? AND `main`.`Till`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`productId`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`createdAt` FROM `main`.`ProductUnit` LEFT JOIN `main`.`Product` AS `j1` ON (`j1`.`id`) = (`main`.`ProductUnit`.`productId`) WHERE ((`j1`.`businessId` = ? AND (`j1`.`id` IS NOT NULL)) AND `main`.`ProductUnit`.`productId` = ? AND `main`.`ProductUnit`.`unitId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`businessId`, `main`.`Product`.`categoryId`, `main`.`Product`.`sku`, `main`.`Product`.`barcode`, `main`.`Product`.`name`, `main`.`Product`.`active`, `main`.`Product`.`imageUrl`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`defaultCostBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`vatCode`, `main`.`Product`.`reorderPointBase`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`createdAt` FROM `main`.`Product` WHERE `main`.`Product`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName`, `main`.`Unit`.`symbol` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`storeId`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase`, `main`.`InventoryBalance`.`avgCostBasePence`, `main`.`InventoryBalance`.`updatedAt` FROM `main`.`InventoryBalance` WHERE (`main`.`InventoryBalance`.`storeId` = ? AND `main`.`InventoryBalance`.`productId` IN (?)) LIMIT ? OFFSET ?
+prisma:query BEGIN IMMEDIATE
+prisma:query INSERT INTO `main`.`SalesInvoice` (`id`, `businessId`, `storeId`, `tillId`, `cashierUserId`, `customerId`, `paymentStatus`, `dueDate`, `discountPence`, `subtotalPence`, `vatPence`, `totalPence`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`SalesInvoiceLine` (`id`, `salesInvoiceId`, `productId`, `unitId`, `qtyInUnit`, `conversionToBase`, `qtyBase`, `unitPricePence`, `lineDiscountPence`, `promoDiscountPence`, `lineSubtotalPence`, `lineVatPence`, `lineTotalPence`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`SalesPayment` (`id`, `salesInvoiceId`, `method`, `amountPence`, `receivedAt`, `reference`) VALUES (?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query SELECT `main`.`SalesInvoice`.`id`, `main`.`SalesInvoice`.`businessId`, `main`.`SalesInvoice`.`storeId`, `main`.`SalesInvoice`.`tillId`, `main`.`SalesInvoice`.`shiftId`, `main`.`SalesInvoice`.`cashierUserId`, `main`.`SalesInvoice`.`customerId`, `main`.`SalesInvoice`.`paymentStatus`, `main`.`SalesInvoice`.`dueDate`, `main`.`SalesInvoice`.`discountPence`, `main`.`SalesInvoice`.`subtotalPence`, `main`.`SalesInvoice`.`vatPence`, `main`.`SalesInvoice`.`totalPence`, `main`.`SalesInvoice`.`createdAt` FROM `main`.`SalesInvoice` WHERE `main`.`SalesInvoice`.`id` = ? LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`InventoryBalance` (`id`, `storeId`, `productId`, `qtyOnHandBase`, `avgCostBasePence`, `updatedAt`) VALUES (?,?,?,?,?,?) ON CONFLICT  (`storeId`,`productId`) DO UPDATE SET `qtyOnHandBase` = ?, `avgCostBasePence` = ?, `updatedAt` = ? WHERE ((`main`.`InventoryBalance`.`storeId` = ? AND `main`.`InventoryBalance`.`productId` = ?) AND 1=1) RETURNING `id` AS `id`, `storeId` AS `storeId`, `productId` AS `productId`, `qtyOnHandBase` AS `qtyOnHandBase`, `avgCostBasePence` AS `avgCostBasePence`, `updatedAt` AS `updatedAt`
+prisma:query INSERT INTO `main`.`StockMovement` (`createdAt`, `userId`, `productId`, `unitCostBasePence`, `id`, `referenceType`, `storeId`, `referenceId`, `type`, `qtyBase`) VALUES (?,?,?,?,?,?,?,?,?,?)
+prisma:query SELECT `main`.`Account`.`id`, `main`.`Account`.`businessId`, `main`.`Account`.`code`, `main`.`Account`.`name`, `main`.`Account`.`type`, `main`.`Account`.`createdAt` FROM `main`.`Account` WHERE (`main`.`Account`.`businessId` = ? AND `main`.`Account`.`code` IN (?,?,?,?)) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`JournalEntry` (`id`, `businessId`, `description`, `referenceType`, `referenceId`, `entryDate`, `createdAt`) VALUES (?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`JournalLine` (`id`, `debitPence`, `createdAt`, `creditPence`, `accountId`, `journalEntryId`) VALUES (?,?,?,?,?,?), (?,?,?,?,?,?), (?,?,?,?,?,?), (?,?,?,?,?,?)
+prisma:query SELECT `main`.`JournalEntry`.`id`, `main`.`JournalEntry`.`businessId`, `main`.`JournalEntry`.`description`, `main`.`JournalEntry`.`referenceType`, `main`.`JournalEntry`.`referenceId`, `main`.`JournalEntry`.`entryDate`, `main`.`JournalEntry`.`createdAt` FROM `main`.`JournalEntry` WHERE `main`.`JournalEntry`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+prisma:query INSERT INTO `main`.`AuditLog` (`id`, `businessId`, `userId`, `userName`, `userRole`, `action`, `entity`, `entityId`, `details`, `ipAddress`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `businessId` AS `businessId`, `userId` AS `userId`, `userName` AS `userName`, `userRole` AS `userRole`, `action` AS `action`, `entity` AS `entity`, `entityId` AS `entityId`, `details` AS `details`, `ipAddress` AS `ipAddress`, `createdAt` AS `createdAt`
+ POST /pos 200 in 820ms
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`businessId`, `main`.`Store`.`name`, `main`.`Store`.`address`, `main`.`Store`.`createdAt` FROM `main`.`Store` WHERE `main`.`Store`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase` FROM `main`.`InventoryBalance` WHERE `main`.`InventoryBalance`.`storeId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT 1
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`id` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name` FROM `main`.`Unit` WHERE 1=1 LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name`, `main`.`Category`.`colour` FROM `main`.`Category` WHERE `main`.`Category`.`businessId` = ? ORDER BY `main`.`Category`.`sortOrder` ASC LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id`, `main`.`Till`.`name`, `main`.`Till`.`storeId` FROM `main`.`Till` WHERE (`main`.`Till`.`active` = ? AND `main`.`Till`.`storeId` IN (?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Customer`.`id`, `main`.`Customer`.`name` FROM `main`.`Customer` WHERE `main`.`Customer`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`barcode`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`categoryId`, `main`.`Product`.`imageUrl` FROM `main`.`Product` WHERE (`main`.`Product`.`businessId` = ? AND `main`.`Product`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name` FROM `main`.`Category` WHERE `main`.`Category`.`id` IN (?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+ GET /pos?_rsc=18f51 200 in 163ms
+ ○ Compiling /receipts/[id] ...
+ ✓ Compiled /receipts/[id] in 3.8s (727 modules)
+prisma:query SELECT 1
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`businessId`, `main`.`Store`.`name`, `main`.`Store`.`address`, `main`.`Store`.`createdAt` FROM `main`.`Store` WHERE `main`.`Store`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT 1
+prisma:query SELECT 1
+prisma:query SELECT 1
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase` FROM `main`.`InventoryBalance` WHERE `main`.`InventoryBalance`.`storeId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name` FROM `main`.`Unit` WHERE 1=1 LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name`, `main`.`Category`.`colour` FROM `main`.`Category` WHERE `main`.`Category`.`businessId` = ? ORDER BY `main`.`Category`.`sortOrder` ASC LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Customer`.`id`, `main`.`Customer`.`name` FROM `main`.`Customer` WHERE `main`.`Customer`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`id` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id`, `main`.`Till`.`name`, `main`.`Till`.`storeId` FROM `main`.`Till` WHERE (`main`.`Till`.`active` = ? AND `main`.`Till`.`storeId` IN (?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`barcode`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`categoryId`, `main`.`Product`.`imageUrl` FROM `main`.`Product` WHERE (`main`.`Product`.`businessId` = ? AND `main`.`Product`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Category`.`id`, `main`.`Category`.`name` FROM `main`.`Category` WHERE `main`.`Category`.`id` IN (?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+ GET /pos?_rsc=18f51 200 in 280ms
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`SalesInvoice`.`id`, `main`.`SalesInvoice`.`createdAt`, `main`.`SalesInvoice`.`subtotalPence`, `main`.`SalesInvoice`.`vatPence`, `main`.`SalesInvoice`.`totalPence`, `main`.`SalesInvoice`.`discountPence`, `main`.`SalesInvoice`.`storeId`, `main`.`SalesInvoice`.`cashierUserId`, `main`.`SalesInvoice`.`customerId`, `main`.`SalesInvoice`.`businessId` FROM `main`.`SalesInvoice` WHERE (`main`.`SalesInvoice`.`id` = ? AND `main`.`SalesInvoice`.`businessId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`name` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName` FROM `main`.`Business` WHERE `main`.`Business`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`SalesPayment`.`id`, `main`.`SalesPayment`.`method`, `main`.`SalesPayment`.`amountPence`, `main`.`SalesPayment`.`salesInvoiceId` FROM `main`.`SalesPayment` WHERE `main`.`SalesPayment`.`salesInvoiceId` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`SalesInvoiceLine`.`id`, `main`.`SalesInvoiceLine`.`qtyBase`, `main`.`SalesInvoiceLine`.`unitPricePence`, `main`.`SalesInvoiceLine`.`lineTotalPence`, `main`.`SalesInvoiceLine`.`lineDiscountPence`, `main`.`SalesInvoiceLine`.`promoDiscountPence`, `main`.`SalesInvoiceLine`.`productId`, `main`.`SalesInvoiceLine`.`salesInvoiceId` FROM `main`.`SalesInvoiceLine` WHERE `main`.`SalesInvoiceLine`.`salesInvoiceId` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name` FROM `main`.`Product` WHERE `main`.`Product`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?) LIMIT ? OFFSET ?
+ GET /receipts/cmlpqb22e000a8xbnoo3a940k 200 in 7461ms
+ ✓ Compiled /api/offline/cache-data in 463ms (457 modules)
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name` FROM `main`.`Store` WHERE `main`.`Store`.`businessId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id`, `main`.`Till`.`name`, `main`.`Till`.`storeId` FROM `main`.`Till` WHERE (`main`.`Till`.`active` = ? AND `main`.`Till`.`storeId` IN (?)) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase` FROM `main`.`InventoryBalance` WHERE `main`.`InventoryBalance`.`storeId` = ? LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`name`, `main`.`Product`.`barcode`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty` FROM `main`.`Product` WHERE (`main`.`Product`.`businessId` = ? AND `main`.`Product`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`productId` FROM `main`.`ProductUnit` WHERE `main`.`ProductUnit`.`productId` IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?,?,?,?,?,?,?,?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Customer`.`id`, `main`.`Customer`.`name` FROM `main`.`Customer` WHERE `main`.`Customer`.`businessId` = ? LIMIT ? OFFSET ?
+ GET /api/offline/cache-data 200 in 689ms
+ ✓ Compiled /api/offline/sync-sale in 430ms (464 modules)
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Store`.`id` FROM `main`.`Store` WHERE (`main`.`Store`.`id` = ? AND `main`.`Store`.`businessId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id` FROM `main`.`Till` WHERE (`main`.`Till`.`id` = ? AND `main`.`Till`.`storeId` = ? AND `main`.`Till`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`SalesInvoice`.`id` FROM `main`.`SalesInvoice` WHERE (`main`.`SalesInvoice`.`businessId` = ? AND (`main`.`SalesInvoice`.`id`) IN (SELECT `t1`.`salesInvoiceId` FROM `main`.`SalesPayment` AS `t1` WHERE (`t1`.`reference` = ? AND `t1`.`salesInvoiceId` IS NOT NULL))) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Store`.`id` FROM `main`.`Store` WHERE (`main`.`Store`.`id` = ? AND `main`.`Store`.`businessId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id` FROM `main`.`Till` WHERE (`main`.`Till`.`id` = ? AND `main`.`Till`.`storeId` = ? AND `main`.`Till`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`ProductUnit`.`id`, `main`.`ProductUnit`.`productId`, `main`.`ProductUnit`.`unitId`, `main`.`ProductUnit`.`isBaseUnit`, `main`.`ProductUnit`.`conversionToBase`, `main`.`ProductUnit`.`createdAt` FROM `main`.`ProductUnit` LEFT JOIN `main`.`Product` AS `j1` ON (`j1`.`id`) = (`main`.`ProductUnit`.`productId`) WHERE ((`j1`.`businessId` = ? AND (`j1`.`id` IS NOT NULL)) AND `main`.`ProductUnit`.`productId` = ? AND `main`.`ProductUnit`.`unitId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Product`.`id`, `main`.`Product`.`businessId`, `main`.`Product`.`categoryId`, `main`.`Product`.`sku`, `main`.`Product`.`barcode`, `main`.`Product`.`name`, `main`.`Product`.`active`, `main`.`Product`.`imageUrl`, `main`.`Product`.`sellingPriceBasePence`, `main`.`Product`.`defaultCostBasePence`, `main`.`Product`.`vatRateBps`, `main`.`Product`.`vatCode`, `main`.`Product`.`reorderPointBase`, `main`.`Product`.`promoBuyQty`, `main`.`Product`.`promoGetQty`, `main`.`Product`.`createdAt` FROM `main`.`Product` WHERE `main`.`Product`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Unit`.`id`, `main`.`Unit`.`name`, `main`.`Unit`.`pluralName`, `main`.`Unit`.`symbol` FROM `main`.`Unit` WHERE `main`.`Unit`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`InventoryBalance`.`id`, `main`.`InventoryBalance`.`storeId`, `main`.`InventoryBalance`.`productId`, `main`.`InventoryBalance`.`qtyOnHandBase`, `main`.`InventoryBalance`.`avgCostBasePence`, `main`.`InventoryBalance`.`updatedAt` FROM `main`.`InventoryBalance` WHERE (`main`.`InventoryBalance`.`storeId` = ? AND `main`.`InventoryBalance`.`productId` IN (?)) LIMIT ? OFFSET ?
+prisma:query BEGIN IMMEDIATE
+prisma:query INSERT INTO `main`.`SalesInvoice` (`id`, `businessId`, `storeId`, `tillId`, `cashierUserId`, `customerId`, `paymentStatus`, `dueDate`, `discountPence`, `subtotalPence`, `vatPence`, `totalPence`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`SalesInvoiceLine` (`id`, `salesInvoiceId`, `productId`, `unitId`, `qtyInUnit`, `conversionToBase`, `qtyBase`, `unitPricePence`, `lineDiscountPence`, `promoDiscountPence`, `lineSubtotalPence`, `lineVatPence`, `lineTotalPence`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`SalesPayment` (`id`, `salesInvoiceId`, `method`, `amountPence`, `receivedAt`, `reference`) VALUES (?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query SELECT `main`.`SalesInvoice`.`id`, `main`.`SalesInvoice`.`businessId`, `main`.`SalesInvoice`.`storeId`, `main`.`SalesInvoice`.`tillId`, `main`.`SalesInvoice`.`shiftId`, `main`.`SalesInvoice`.`cashierUserId`, `main`.`SalesInvoice`.`customerId`, `main`.`SalesInvoice`.`paymentStatus`, `main`.`SalesInvoice`.`dueDate`, `main`.`SalesInvoice`.`discountPence`, `main`.`SalesInvoice`.`subtotalPence`, `main`.`SalesInvoice`.`vatPence`, `main`.`SalesInvoice`.`totalPence`, `main`.`SalesInvoice`.`createdAt` FROM `main`.`SalesInvoice` WHERE `main`.`SalesInvoice`.`id` = ? LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`InventoryBalance` (`id`, `storeId`, `productId`, `qtyOnHandBase`, `avgCostBasePence`, `updatedAt`) VALUES (?,?,?,?,?,?) ON CONFLICT  (`storeId`,`productId`) DO UPDATE SET `qtyOnHandBase` = ?, `avgCostBasePence` = ?, `updatedAt` = ? WHERE ((`main`.`InventoryBalance`.`storeId` = ? AND `main`.`InventoryBalance`.`productId` = ?) AND 1=1) RETURNING `id` AS `id`, `storeId` AS `storeId`, `productId` AS `productId`, `qtyOnHandBase` AS `qtyOnHandBase`, `avgCostBasePence` AS `avgCostBasePence`, `updatedAt` AS `updatedAt`
+prisma:query INSERT INTO `main`.`StockMovement` (`referenceType`, `storeId`, `type`, `unitCostBasePence`, `id`, `createdAt`, `qtyBase`, `referenceId`, `productId`, `userId`) VALUES (?,?,?,?,?,?,?,?,?,?)
+prisma:query SELECT `main`.`Account`.`id`, `main`.`Account`.`businessId`, `main`.`Account`.`code`, `main`.`Account`.`name`, `main`.`Account`.`type`, `main`.`Account`.`createdAt` FROM `main`.`Account` WHERE (`main`.`Account`.`businessId` = ? AND `main`.`Account`.`code` IN (?,?,?,?)) LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`JournalEntry` (`id`, `businessId`, `description`, `referenceType`, `referenceId`, `entryDate`, `createdAt`) VALUES (?,?,?,?,?,?,?) RETURNING `id` AS `id`
+prisma:query INSERT INTO `main`.`JournalLine` (`id`, `debitPence`, `creditPence`, `accountId`, `createdAt`, `journalEntryId`) VALUES (?,?,?,?,?,?), (?,?,?,?,?,?), (?,?,?,?,?,?), (?,?,?,?,?,?)
+prisma:query SELECT `main`.`JournalEntry`.`id`, `main`.`JournalEntry`.`businessId`, `main`.`JournalEntry`.`description`, `main`.`JournalEntry`.`referenceType`, `main`.`JournalEntry`.`referenceId`, `main`.`JournalEntry`.`entryDate`, `main`.`JournalEntry`.`createdAt` FROM `main`.`JournalEntry` WHERE `main`.`JournalEntry`.`id` = ? LIMIT ? OFFSET ?
+prisma:query COMMIT
+ POST /api/offline/sync-sale 200 in 588ms
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Store`.`id` FROM `main`.`Store` WHERE (`main`.`Store`.`id` = ? AND `main`.`Store`.`businessId` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`Till`.`id` FROM `main`.`Till` WHERE (`main`.`Till`.`id` = ? AND `main`.`Till`.`storeId` = ? AND `main`.`Till`.`active` = ?) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`SalesInvoice`.`id` FROM `main`.`SalesInvoice` WHERE (`main`.`SalesInvoice`.`businessId` = ? AND (`main`.`SalesInvoice`.`id`) IN (SELECT `t1`.`salesInvoiceId` FROM `main`.`SalesPayment` AS `t1` WHERE (`t1`.`reference` = ? AND `t1`.`salesInvoiceId` IS NOT NULL))) LIMIT ? OFFSET ?
+ POST /api/offline/sync-sale 200 in 34ms
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Store`.`id` FROM `main`.`Store` WHERE (`main`.`Store`.`id` = ? AND `main`.`Store`.`businessId` = ?) LIMIT ? OFFSET ?
+ POST /api/offline/sync-sale 400 in 22ms
+ GET /login 200 in 881ms
+ GET / 307 in 190ms
+ GET /offline 200 in 204ms
+ GET /login 200 in 170ms
+ GET /welcome 200 in 156ms
+ GET /api/icon?size=192 200 in 1164ms
+ GET /api/icon?size=512 200 in 1148ms
+ GET /login 200 in 150ms
+prisma:query SELECT 1
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE (`main`.`User`.`email` = ? AND 1=1) LIMIT ? OFFSET ?
+ GET /login 200 in 119ms
+prisma:query INSERT INTO `main`.`Session` (`id`, `token`, `userId`, `ipAddress`, `userAgent`, `createdAt`, `lastSeenAt`, `expiresAt`) VALUES (?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+ POST /login 200 in 420ms
+prisma:query SELECT `main`.`Session`.`id` FROM `main`.`Session` WHERE `main`.`Session`.`userId` = ? ORDER BY `main`.`Session`.`createdAt` DESC LIMIT ? OFFSET ?
+prisma:query INSERT INTO `main`.`AuditLog` (`id`, `businessId`, `userId`, `userName`, `userRole`, `action`, `details`, `ipAddress`, `createdAt`) VALUES (?,?,?,?,?,?,?,?,?) RETURNING `id` AS `id`, `businessId` AS `businessId`, `userId` AS `userId`, `userName` AS `userName`, `userRole` AS `userRole`, `action` AS `action`, `entity` AS `entity`, `entityId` AS `entityId`, `details` AS `details`, `ipAddress` AS `ipAddress`, `createdAt` AS `createdAt`
+{"ts":"2026-02-16T22:12:46.441Z","level":"info","message":"Login successful","requestId":"5040ab43-5f85-48c2-92a9-8891cfc24000","email":"owner@store.com","ipAddress":"::1","userId":"cmlpdjehx0006t9ldiot28rd6"}
+prisma:query SELECT 1
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name` FROM `main`.`Business` WHERE `main`.`Business`.`id` = ? LIMIT ? OFFSET ?
+prisma:query DELETE FROM `main`.`Session` WHERE `main`.`Session`.`expiresAt` < ?
+prisma:query DELETE FROM `main`.`AuditLog` WHERE (`main`.`AuditLog`.`businessId` = ? AND `main`.`AuditLog`.`createdAt` < ?)
+ ○ Compiling /onboarding ...
+ ✓ Compiled /onboarding in 4.6s (728 modules)
+prisma:query SELECT `main`.`Session`.`id`, `main`.`Session`.`token`, `main`.`Session`.`userId`, `main`.`Session`.`ipAddress`, `main`.`Session`.`userAgent`, `main`.`Session`.`createdAt`, `main`.`Session`.`lastSeenAt`, `main`.`Session`.`expiresAt` FROM `main`.`Session` WHERE (`main`.`Session`.`token` = ? AND 1=1) LIMIT ? OFFSET ?
+prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`businessId`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`passwordHash`, `main`.`User`.`role`, `main`.`User`.`active`, `main`.`User`.`twoFactorEnabled`, `main`.`User`.`twoFactorSecret`, `main`.`User`.`twoFactorTempSecret`, `main`.`User`.`createdAt` FROM `main`.`User` WHERE `main`.`User`.`id` IN (?) LIMIT ? OFFSET ?
+prisma:query UPDATE `main`.`Session` SET `lastSeenAt` = ?, `ipAddress` = ? WHERE (`main`.`Session`.`id` = ? AND 1=1) RETURNING `id` AS `id`, `token` AS `token`, `userId` AS `userId`, `ipAddress` AS `ipAddress`, `userAgent` AS `userAgent`, `createdAt` AS `createdAt`, `lastSeenAt` AS `lastSeenAt`, `expiresAt` AS `expiresAt`
+prisma:query SELECT `main`.`Business`.`id`, `main`.`Business`.`name`, `main`.`Business`.`currency`, `main`.`Business`.`vatEnabled`, `main`.`Business`.`vatNumber`, `main`.`Business`.`mode`, `main`.`Business`.`receiptTemplate`, `main`.`Business`.`printMode`, `main`.`Business`.`printerName`, `main`.`Business`.`receiptLogoUrl`, `main`.`Business`.`receiptHeader`, `main`.`Business`.`receiptFooter`, `main`.`Business`.`receiptShowVatNumber`, `main`.`Business`.`receiptShowAddress`, `main`.`Business`.`socialMediaHandle`, `main`.`Business`.`address`, `main`.`Business`.`phone`, `main`.`Business`.`createdAt`, `main`.`Business`.`updatedAt` FROM `main`.`Business` WHERE (`main`.`Business`.`id` = ? AND 1=1) LIMIT ? OFFSET ?
+ GET /onboarding 200 in 5484ms
+[?25h

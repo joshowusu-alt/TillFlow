@@ -35,13 +35,15 @@ export function getMinorUnitLabel(currency: string): string {
 export function formatDateTime(value: Date) {
   return value.toLocaleString('en-GB', {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone: 'UTC',
   });
 }
 
 export function formatDate(value: Date) {
   return value.toLocaleDateString('en-GB', {
-    dateStyle: 'medium'
+    dateStyle: 'medium',
+    timeZone: 'UTC',
   });
 }
 

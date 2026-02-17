@@ -14,7 +14,11 @@
       "Bash(npx prisma db push:*)",
       "Bash(npx prisma generate:*)",
       "Bash(npx next build:*)",
-      "Bash(npx prisma db seed:*)"
+      "Bash(npx prisma db seed:*)",
+      "Bash(npx vercel:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:supermarket-pos-five.vercel.app)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

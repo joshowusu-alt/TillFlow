@@ -40,7 +40,7 @@ export default function RefreshIndicator({
 
   return (
     <div className="flex items-center gap-2 text-xs text-black/40">
-      <span>Updated {time}</span>
+      <span suppressHydrationWarning>Updated {time}</span>
       <button
         type="button"
         onClick={handleRefresh}
