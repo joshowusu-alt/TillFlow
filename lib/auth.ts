@@ -117,6 +117,11 @@ const _getBusiness = cache(async (businessId: string) => {
       inventoryAdjustmentRiskThresholdBase: true,
       cashVarianceRiskThresholdPence: true,
       customerScope: true,
+      whatsappEnabled: true,
+      whatsappPhone: true,
+      whatsappScheduleTime: true,
+      whatsappBranchScope: true,
+      isDemo: true,
       createdAt: true,
     }
   });

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome'];
+const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome', '/demo'];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function forbiddenResponse(request: NextRequest, reason: string) {
