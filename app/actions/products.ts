@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { Prisma } from '@prisma/client';
-import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
+import { formString, formOptionalString, formInt, formPence } from '@/lib/form-helpers';
 import {
   withBusinessContext,
   formAction,
@@ -57,8 +57,8 @@ function parseProductFields(formData: FormData) {
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
     imageUrl: formOptionalString(formData, 'imageUrl') || null,
-    sellingPriceBasePence: formInt(formData, 'sellingPriceBasePence'),
-    defaultCostBasePence: formInt(formData, 'defaultCostBasePence'),
+    sellingPriceBasePence: formPence(formData, 'sellingPriceBasePence'),
+    defaultCostBasePence: formPence(formData, 'defaultCostBasePence'),
     vatRateBps: formInt(formData, 'vatRateBps'),
     promoBuyQty: formInt(formData, 'promoBuyQty'),
     promoGetQty: formInt(formData, 'promoGetQty'),

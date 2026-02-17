@@ -1,9 +1,11 @@
 ﻿import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
+import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import InstallPrompt from '@/components/InstallPrompt';
+import ToastProvider from '@/components/ToastProvider';
 
 const displayFont = Space_Grotesk({
   subsets: ['latin'],
@@ -49,7 +51,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
       <body className="min-h-screen bg-paper text-ink">
         <ServiceWorkerRegistration />
-        {children}
+        <Suspense>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </Suspense>
         <NetworkStatus />
         <InstallPrompt />
       </body>

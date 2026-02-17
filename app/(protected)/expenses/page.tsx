@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
+import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -8,14 +9,17 @@ import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 
-export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string } }) {
+const PAGE_SIZE = 25;
+
+export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
   const features = getFeatures(business.mode as any);
+  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
-  // Run both queries in parallel
-  const [expenseAccounts, expenses] = await Promise.all([
+  // Run all queries in parallel
+  const [expenseAccounts, expenseCount, expenses] = await Promise.all([
     prisma.account.findMany({
       where: {
         businessId: business.id,
@@ -25,6 +29,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
       orderBy: { code: 'asc' },
       select: { id: true, code: true, name: true }
     }),
+    prisma.expense.count({ where: { businessId: business.id } }),
     prisma.expense.findMany({
       where: { businessId: business.id },
       select: {
@@ -40,9 +45,12 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         user: { select: { name: true } }
       },
       orderBy: { createdAt: 'desc' },
-      take: 50
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(expenseCount / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -171,6 +179,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
             ))}
           </tbody>
         </table>
+        <Pagination currentPage={page} totalPages={totalPages} basePath="/expenses" />
         {expenses.length === 0 ? <div className="text-sm text-black/50">No expenses yet.</div> : null}
       </div>
     </div>

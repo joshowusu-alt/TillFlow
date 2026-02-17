@@ -1,6 +1,8 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
+import SearchFilter from '@/components/SearchFilter';
+import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
@@ -8,15 +10,28 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
-export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string } }) {
+const PAGE_SIZE = 25;
+
+export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string } }) {
   const { user, business } = await requireBusiness();
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
+  const q = searchParams?.q?.trim() ?? '';
+  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+
+  const productWhere = {
+    businessId: business.id,
+    active: true,
+    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+  };
+
   // Run all data queries in parallel
-  const [products, categories, units] = await Promise.all([
+  const [totalProductCount, products, categories, units] = await Promise.all([
+    prisma.product.count({ where: productWhere }),
     prisma.product.findMany({
-      where: { businessId: business.id, active: true },
+      where: productWhere,
       select: {
         id: true,
         name: true,
@@ -31,7 +46,10 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           }
         },
         category: { select: { name: true, colour: true } }
-      }
+      },
+      orderBy: { name: 'asc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
     prisma.category.findMany({
       where: { businessId: business.id },
@@ -48,6 +66,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       select: { id: true, name: true }
     }),
   ]);
+  const totalProductPages = Math.max(1, Math.ceil(totalProductCount / PAGE_SIZE));
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
 
@@ -61,7 +80,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           href="/products?tab=products"
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
         >
-          Products ({products.length})
+          Products ({totalProductCount})
         </Link>
         <Link
           href="/products?tab=categories"
@@ -106,14 +125,14 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   </div>
                 </div>
                 <div>
-                  <label className="label">Base Price ({getMinorUnitLabel(business.currency)})</label>
-                  <input className="input" name="sellingPriceBasePence" type="number" min={0} required />
-                  <div className="mt-1 text-xs text-black/50">Price per base unit in {getMinorUnitLabel(business.currency)}. E.g. {getCurrencySymbol(business.currency)}5.00 = 500.</div>
+                  <label className="label">Base Price ({getCurrencySymbol(business.currency)})</label>
+                  <input className="input" name="sellingPriceBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                  <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
                 </div>
                 <div>
-                  <label className="label">Base Cost ({getMinorUnitLabel(business.currency)})</label>
-                  <input className="input" name="defaultCostBasePence" type="number" min={0} required />
-                  <div className="mt-1 text-xs text-black/50">Cost per base unit in {getMinorUnitLabel(business.currency)}.</div>
+                  <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
+                  <input className="input" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
+                  <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
                 </div>
                 <div>
                   <label className="label">VAT Rate (bps)</label>
@@ -169,6 +188,9 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               </form>
             </div>
           ) : null}
+          <div className="mb-4 max-w-xs">
+            <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+          </div>
           <div className="card p-6 overflow-x-auto">
             <table className="table w-full border-separate border-spacing-y-2">
               <thead>
@@ -235,6 +257,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                 })}
               </tbody>
             </table>
+            <Pagination currentPage={page} totalPages={totalProductPages} basePath="/products" searchParams={{ q: q || undefined, tab: 'products' }} />
           </div>
         </>
       )}

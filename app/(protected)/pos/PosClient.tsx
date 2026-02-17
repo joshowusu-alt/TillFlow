@@ -908,7 +908,7 @@ export default function PosClient({ business, store, tills, products, customers,
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[3fr_1fr]">
+    <div className="grid gap-6 md:grid-cols-[3fr_1fr]">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -1194,7 +1194,7 @@ export default function PosClient({ business, store, tills, products, customers,
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                           type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
                           onClick={(e) => {
                             e.stopPropagation();
                             const newQty = line.qtyInUnit - 1;
@@ -1222,7 +1222,7 @@ export default function PosClient({ business, store, tills, products, customers,
                         />
                         <button
                           type="button"
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
                           onClick={(e) => {
                             e.stopPropagation();
                             const newQty = clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
@@ -1418,7 +1418,7 @@ export default function PosClient({ business, store, tills, products, customers,
                     onFocus={(e) => e.currentTarget.select()}
                   />
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {[1, 2, 5, 10, 20, 50].map((amount) => (
+                    {[1, 2, 5, 10, 20, 50, 100, 200].map((amount) => (
                       <button
                         key={amount}
                         type="button"

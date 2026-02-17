@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import Pagination from '@/components/Pagination';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
@@ -8,7 +9,9 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
 
-export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string } }) {
+const PAGE_SIZE = 25;
+
+export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return (
@@ -20,8 +23,10 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
     );
   }
 
+  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+
   // Run all data queries in parallel
-  const [products, suppliers, units, purchases] = await Promise.all([
+  const [products, suppliers, units, purchaseCount, purchases] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       select: {
@@ -48,6 +53,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
     prisma.unit.findMany({
       select: { id: true, name: true }
     }),
+    prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
     prisma.purchaseInvoice.findMany({
       where: { businessId: business.id },
       select: {
@@ -77,9 +83,12 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
         }
       },
       orderBy: { createdAt: 'desc' },
-      take: 30
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(purchaseCount / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -177,6 +186,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
             })}
           </tbody>
         </table>
+        <Pagination currentPage={page} totalPages={totalPages} basePath="/purchases" />
       </div>
     </div>
   );

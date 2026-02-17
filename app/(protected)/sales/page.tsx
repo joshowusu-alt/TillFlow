@@ -1,11 +1,16 @@
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
+import SearchFilter from '@/components/SearchFilter';
+import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import Link from 'next/link';
+import { Suspense } from 'react';
 
-export default async function SalesPage() {
+const PAGE_SIZE = 25;
+
+export default async function SalesPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
@@ -17,21 +22,34 @@ export default async function SalesPage() {
     );
   }
 
-  // Sales query is the only data fetch — no parallelisation needed but auth is now cached
-  const sales = await prisma.salesInvoice.findMany({
-    where: { businessId: business.id },
-    select: {
-      id: true,
-      createdAt: true,
-      paymentStatus: true,
-      totalPence: true,
-      customer: { select: { name: true } },
-      salesReturn: { select: { id: true } },
-      _count: { select: { lines: true } }
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 50
-  });
+  const q = searchParams?.q?.trim() ?? '';
+  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+
+  const where = {
+    businessId: business.id,
+    ...(q ? { customer: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
+  };
+
+  const [totalCount, sales] = await Promise.all([
+    prisma.salesInvoice.count({ where }),
+    prisma.salesInvoice.findMany({
+      where,
+      select: {
+        id: true,
+        createdAt: true,
+        paymentStatus: true,
+        totalPence: true,
+        customer: { select: { name: true } },
+        salesReturn: { select: { id: true } },
+        _count: { select: { lines: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -40,6 +58,9 @@ export default async function SalesPage() {
         subtitle="Latest sales invoices and receipts."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
+      <div className="mb-4 max-w-xs">
+        <Suspense><SearchFilter placeholder="Search by customer…" /></Suspense>
+      </div>
       <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
@@ -54,6 +75,21 @@ export default async function SalesPage() {
             </tr>
           </thead>
           <tbody>
+            {sales.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-12 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="rounded-full bg-black/5 p-3 mb-2">
+                      <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
+                      </svg>
+                    </div>
+                    <div className="text-sm text-black/70">{q ? `No sales matching "${q}"` : 'No sales yet'}</div>
+                    <div className="text-xs text-black/40 mt-1">Sales will appear here after completing transactions at the POS.</div>
+                  </div>
+                </td>
+              </tr>
+            )}
             {sales.map((sale) => (
               <tr key={sale.id} className="rounded-xl bg-white">
                 <td className="px-3 py-3 text-sm">{sale.id.slice(0, 8)}</td>
@@ -90,6 +126,7 @@ export default async function SalesPage() {
             ))}
           </tbody>
         </table>
+        <Pagination currentPage={page} totalPages={totalPages} basePath="/sales" searchParams={{ q: q || undefined }} />
       </div>
     </div>
   );
