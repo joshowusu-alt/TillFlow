@@ -89,7 +89,7 @@ async function main() {
   let business = await prisma.business.findFirst();
   if (!business) {
     business = await prisma.business.create({
-      data: { name: 'Supermarket Demo', currency: 'GBP', vatEnabled: false, mode: 'SIMPLE' },
+      data: { name: 'Supermarket Demo', currency: 'GBP', vatEnabled: false, mode: 'SIMPLE', openingCapitalPence: 2000000 },
     });
   }
 

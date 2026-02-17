@@ -93,6 +93,13 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
           <div>
+            <label className="label">Opening Capital ({business.currency})</label>
+            <input className="input" name="openingCapitalPence" type="number" min="0" step="1" defaultValue={(business as any).openingCapitalPence ?? 0} />
+            <div className="mt-1 text-xs text-black/50">
+              The initial cash the owner invested into the business, in minor units (pesewas/pence). E.g. {business.currency === 'GHS' ? '₵10,000 = 1000000' : '£10,000 = 1000000'}.
+            </div>
+          </div>
+          <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
           </div>

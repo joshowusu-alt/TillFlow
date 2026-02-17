@@ -24,10 +24,11 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
+    const openingCapitalPence = parseInt(formData.get('openingCapitalPence') as string || '0', 10) || 0;
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName, tinNumber, phone, address, momoEnabled, momoProvider, momoNumber }
+      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName, tinNumber, phone, address, momoEnabled, momoProvider, momoNumber, openingCapitalPence }
     });
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });

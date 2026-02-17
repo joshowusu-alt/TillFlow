@@ -31,6 +31,8 @@ model Business {
   momoEnabled         Boolean  @default(false)
   momoProvider        String?
   momoNumber          String?
+  // Opening capital / owner's investment
+  openingCapitalPence Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

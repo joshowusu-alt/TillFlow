@@ -54,16 +54,21 @@ export async function getIncomeStatement(businessId: string, start: Date, end: D
 }
 
 export async function getBalanceSheet(businessId: string, asOf: Date) {
-  const lines = await prisma.journalLine.findMany({
-    where: { journalEntry: { businessId, entryDate: { lte: asOf } } },
-    include: { account: true }
-  });
+  const [business, journalLines] = await Promise.all([
+    prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
+    prisma.journalLine.findMany({
+      where: { journalEntry: { businessId, entryDate: { lte: asOf } } },
+      include: { account: true }
+    })
+  ]);
+
+  const openingCapital = business.openingCapitalPence ?? 0;
 
   const map = new Map<string, StatementLine>();
   let incomeTotal = 0;
   let expenseTotal = 0;
 
-  for (const line of lines) {
+  for (const line of journalLines) {
     const key = line.account.id;
     const accountType = line.account.type as AccountType;
     const existing = map.get(key) ?? {
@@ -83,10 +88,34 @@ export async function getBalanceSheet(businessId: string, asOf: Date) {
   const liabilities: StatementLine[] = [];
   const equity: StatementLine[] = [];
 
+  // Add opening capital to Cash on Hand (the owner's investment)
   for (const entry of map.values()) {
+    if (entry.accountCode === ACCOUNT_CODES.cash && openingCapital > 0) {
+      entry.balancePence += openingCapital;
+    }
     if (entry.type === 'ASSET') assets.push(entry);
     if (entry.type === 'LIABILITY') liabilities.push(entry);
     if (entry.type === 'EQUITY') equity.push(entry);
+  }
+
+  // If no Cash account from journals but we have opening capital, add it
+  if (openingCapital > 0 && !assets.find(a => a.accountCode === ACCOUNT_CODES.cash)) {
+    assets.push({
+      accountCode: ACCOUNT_CODES.cash,
+      name: 'Cash on Hand',
+      type: 'ASSET',
+      balancePence: openingCapital
+    });
+  }
+
+  // Add Owner's Capital to equity (balancing entry)
+  if (openingCapital > 0) {
+    equity.push({
+      accountCode: 'OWNER_CAPITAL',
+      name: "Owner's Capital",
+      type: 'EQUITY',
+      balancePence: openingCapital
+    });
   }
 
   const netIncome = incomeTotal - expenseTotal;
@@ -121,7 +150,12 @@ async function getAccountBalance(businessId: string, code: string, asOf: Date) {
 }
 
 export async function getCashflow(businessId: string, start: Date, end: Date) {
-  const income = await getIncomeStatement(businessId, start, end);
+  const [business, income] = await Promise.all([
+    prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
+    getIncomeStatement(businessId, start, end)
+  ]);
+
+  const openingCapital = business.openingCapitalPence ?? 0;
 
   const startAr = await getAccountBalance(businessId, ACCOUNT_CODES.ar, start);
   const endAr = await getAccountBalance(businessId, ACCOUNT_CODES.ar, end);
@@ -129,18 +163,24 @@ export async function getCashflow(businessId: string, start: Date, end: Date) {
   const endAp = await getAccountBalance(businessId, ACCOUNT_CODES.ap, end);
   const startInv = await getAccountBalance(businessId, ACCOUNT_CODES.inventory, start);
   const endInv = await getAccountBalance(businessId, ACCOUNT_CODES.inventory, end);
+  const startCash = await getAccountBalance(businessId, ACCOUNT_CODES.cash, start);
 
   const arChange = endAr - startAr;
   const apChange = endAp - startAp;
   const invChange = endInv - startInv;
 
   const netCashFromOps = income.netProfit - arChange - invChange + apChange;
+  const beginningCash = startCash + openingCapital;
+  const endingCash = beginningCash + netCashFromOps;
 
   return {
     netProfit: income.netProfit,
     arChange,
     apChange,
     invChange,
-    netCashFromOps
+    netCashFromOps,
+    openingCapital,
+    beginningCash,
+    endingCash
   };
 }

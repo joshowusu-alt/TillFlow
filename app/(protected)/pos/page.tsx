@@ -8,18 +8,11 @@ export default async function PosPage() {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
-  // Run ALL data queries in parallel instead of sequentially
-  const [storeWithTills, inventory, products, units, customers, categories] = await Promise.all([
-    prisma.store.findFirst({
-      where: { id: baseStore.id },
-      select: {
-        id: true,
-        name: true,
-        tills: {
-          where: { active: true },
-          select: { id: true, name: true }
-        }
-      }
+  // Run ALL data queries in parallel — single round trip to DB
+  const [tills, inventory, products, units, customers, categories] = await Promise.all([
+    prisma.till.findMany({
+      where: { storeId: baseStore.id, active: true },
+      select: { id: true, name: true }
     }),
     prisma.inventoryBalance.findMany({
       where: { storeId: baseStore.id },
@@ -60,7 +53,6 @@ export default async function PosPage() {
     }),
   ]);
 
-  const store = storeWithTills ?? baseStore;
   const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
 
   const productDtos = products.map((product) => ({
@@ -87,8 +79,8 @@ export default async function PosPage() {
   return (
     <PosClient
       business={{ currency: business.currency, vatEnabled: business.vatEnabled }}
-      store={{ id: store.id, name: store.name }}
-      tills={'tills' in store ? store.tills.map((till) => ({ id: till.id, name: till.name })) : []}
+      store={{ id: baseStore.id, name: baseStore.name }}
+      tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       products={productDtos}
       customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}

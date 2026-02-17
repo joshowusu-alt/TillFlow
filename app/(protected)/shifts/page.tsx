@@ -1,23 +1,16 @@
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { requireBusinessStore } from '@/lib/auth';
 import ShiftClient from './ShiftClient';
 
 export default async function ShiftsPage() {
-  const { user, business } = await requireBusiness();
-  if (!business) return <div>Business not found</div>;
+  const { user, business, store: baseStore } = await requireBusinessStore();
 
-  const store = await prisma.store.findFirst({
-    where: { businessId: business.id },
-    select: {
-      id: true,
-      tills: { select: { id: true, name: true, active: true } }
-    }
-  });
-  if (!store) return <div>Store not found</div>;
-
-  // Run both shift queries in parallel
-  const [openShift, recentShifts] = await Promise.all([
+  // Run all queries in parallel — tills, open shift, and recent shifts
+  const [tills, openShift, recentShifts] = await Promise.all([
+    prisma.till.findMany({
+      where: { storeId: baseStore.id },
+      select: { id: true, name: true, active: true }
+    }),
     prisma.shift.findFirst({
       where: { userId: user.id, status: 'OPEN' },
       select: {
@@ -34,10 +27,21 @@ export default async function ShiftsPage() {
       }
     }),
     prisma.shift.findMany({
-      where: { till: { storeId: store.id } },
+      where: { till: { storeId: baseStore.id } },
       orderBy: { openedAt: 'desc' },
       take: 10,
-      include: {
+      select: {
+        id: true,
+        openedAt: true,
+        closedAt: true,
+        status: true,
+        openingCashPence: true,
+        expectedCashPence: true,
+        actualCashPence: true,
+        variance: true,
+        cardTotalPence: true,
+        transferTotalPence: true,
+        momoTotalPence: true,
         user: { select: { name: true } },
         till: { select: { name: true } },
         _count: { select: { salesInvoices: true } }
@@ -86,7 +90,7 @@ export default async function ShiftsPage() {
       </div>
 
       <ShiftClient
-        tills={store.tills}
+        tills={tills}
         openShift={openShiftSummary}
         recentShifts={recentShifts.map((s) => ({
           id: s.id,
@@ -102,7 +106,7 @@ export default async function ShiftsPage() {
           variance: s.variance,
           cardTotalPence: s.cardTotalPence,
           transferTotalPence: s.transferTotalPence,
-          momoTotalPence: (s as any).momoTotalPence ?? 0
+          momoTotalPence: s.momoTotalPence ?? 0
         }))}
         currency={business.currency}
       />

@@ -43,6 +43,17 @@ export default async function CashflowPage({
       </div>
 
       <div className="card p-6 space-y-2 text-sm">
+        <div className="flex justify-between text-black/60">
+          <span>Beginning Cash Balance</span>
+          <span className="font-semibold">{formatMoney(cashflow.beginningCash, business.currency)}</span>
+        </div>
+        {cashflow.openingCapital > 0 && (
+          <div className="flex justify-between text-xs text-black/40 pl-4">
+            <span>Includes owner&apos;s capital</span>
+            <span>{formatMoney(cashflow.openingCapital, business.currency)}</span>
+          </div>
+        )}
+        <div className="border-t border-black/5 pt-2" />
         <div className="flex justify-between">
           <span>Net Profit</span>
           <span className="font-semibold">{formatMoney(cashflow.netProfit, business.currency)}</span>
@@ -59,9 +70,13 @@ export default async function CashflowPage({
           <span>Change in Accounts Payable</span>
           <span className="font-semibold">{formatMoney(cashflow.apChange, business.currency)}</span>
         </div>
-        <div className="flex justify-between border-t border-black/10 pt-2 text-base font-semibold">
+        <div className="flex justify-between border-t border-black/10 pt-2 font-semibold">
           <span>Net Cash from Operations</span>
           <span>{formatMoney(cashflow.netCashFromOps, business.currency)}</span>
+        </div>
+        <div className="flex justify-between border-t border-black/10 pt-2 text-base font-semibold">
+          <span>Ending Cash Balance</span>
+          <span>{formatMoney(cashflow.endingCash, business.currency)}</span>
         </div>
       </div>
     </div>

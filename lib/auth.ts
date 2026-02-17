@@ -13,37 +13,54 @@ export const getUser = cache(async () => {
   const token = cookies().get('pos_session')?.value;
   if (!token) return null;
 
-  const headerStore = headers();
-  const forwarded = headerStore.get('x-forwarded-for');
-  const currentIp =
-    forwarded?.split(',')[0]?.trim() || headerStore.get('x-real-ip') || 'unknown';
-  const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
-
   const session = await prisma.session.findUnique({
     where: { token },
-    include: { user: true }
-  });
-  if (!session) {
-    return null;
-  }
-
-  if (session.expiresAt < new Date()) {
-    await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    return null;
-  }
-
-  if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
-    await prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    return null;
-  }
-
-  await prisma.session.update({
-    where: { id: session.id },
-    data: {
-      lastSeenAt: new Date(),
-      ipAddress: currentIp || session.ipAddress
+    select: {
+      id: true,
+      expiresAt: true,
+      userAgent: true,
+      ipAddress: true,
+      lastSeenAt: true,
+      user: {
+        select: {
+          id: true,
+          businessId: true,
+          name: true,
+          email: true,
+          role: true,
+          active: true,
+          twoFactorEnabled: true,
+          twoFactorTempSecret: true,
+        }
+      }
     }
   });
+  if (!session) return null;
+
+  if (session.expiresAt < new Date()) {
+    prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
+
+  const headerStore = headers();
+  const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
+  if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
+    prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
+
+  // Only update lastSeenAt once every 5 minutes to avoid a write on every request
+  const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+  if (!session.lastSeenAt || session.lastSeenAt < fiveMinAgo) {
+    const forwarded = headerStore.get('x-forwarded-for');
+    const currentIp =
+      forwarded?.split(',')[0]?.trim() || headerStore.get('x-real-ip') || 'unknown';
+    // Fire-and-forget — don't await
+    prisma.session.update({
+      where: { id: session.id },
+      data: { lastSeenAt: new Date(), ipAddress: currentIp || session.ipAddress }
+    }).catch(() => {});
+  }
 
   return session.user;
 });
@@ -69,14 +86,43 @@ export async function requireRole(roles: Role[]) {
  * called from both layout and page.
  */
 const _getBusiness = cache(async (businessId: string) => {
-  return prisma.business.findUnique({ where: { id: businessId } });
+  return prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      currency: true,
+      vatEnabled: true,
+      vatNumber: true,
+      mode: true,
+      receiptTemplate: true,
+      printMode: true,
+      printerName: true,
+      receiptLogoUrl: true,
+      receiptHeader: true,
+      receiptFooter: true,
+      receiptShowVatNumber: true,
+      receiptShowAddress: true,
+      socialMediaHandle: true,
+      address: true,
+      phone: true,
+      tinNumber: true,
+      momoEnabled: true,
+      momoProvider: true,
+      momoNumber: true,
+      createdAt: true,
+    }
+  });
 });
 
 /**
  * Cached store lookup — only hits DB once per request.
  */
 const _getStore = cache(async (businessId: string) => {
-  return prisma.store.findFirst({ where: { businessId } });
+  return prisma.store.findFirst({
+    where: { businessId },
+    select: { id: true, name: true, address: true, businessId: true }
+  });
 });
 
 /**
@@ -92,11 +138,15 @@ export async function requireBusiness(roles?: Role[]) {
 
 /**
  * Authenticate and return user + Business + first Store.
- * Always scoped to the logged-in user's businessId.
+ * Fetches business and store in parallel to reduce latency.
  */
 export async function requireBusinessStore(roles?: Role[]) {
-  const { user, business } = await requireBusiness(roles);
-  const store = await _getStore(business.id);
+  const user = roles ? await requireRole(roles) : await requireUser();
+  const [business, store] = await Promise.all([
+    _getBusiness(user.businessId),
+    _getStore(user.businessId),
+  ]);
+  if (!business) redirect('/login');
   if (!store) redirect('/settings');
   return { user, business, store };
 }
