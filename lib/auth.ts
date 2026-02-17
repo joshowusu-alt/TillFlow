@@ -110,6 +110,7 @@ const _getBusiness = cache(async (businessId: string) => {
       momoEnabled: true,
       momoProvider: true,
       momoNumber: true,
+      openingCapitalPence: true,
       createdAt: true,
     }
   });

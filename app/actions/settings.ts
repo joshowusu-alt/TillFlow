@@ -24,7 +24,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
-    const openingCapitalPence = parseInt(formData.get('openingCapitalPence') as string || '0', 10) || 0;
+    const openingCapitalRaw = parseInt((formData.get('openingCapitalPence') as string) || '0', 10) || 0;
+    const openingCapitalPence = Math.max(0, openingCapitalRaw);
 
     await prisma.business.update({
       where: { id: businessId },
