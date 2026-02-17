@@ -10,6 +10,7 @@ const prisma = new PrismaClient();
 
 async function login(page, email, password) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
@@ -256,6 +257,14 @@ async function run() {
       page.waitForURL(/\/login/, { timeout: 45000 })
     ]);
     report.backup.restore = true;
+
+    // Re-seed the owner password so any subsequent tests can still log in
+    const bcrypt = require('bcryptjs');
+    const freshHash = await bcrypt.hash(OWNER_PASSWORD, 10);
+    await prisma.user.updateMany({
+      where: { email: OWNER_EMAIL },
+      data: { passwordHash: freshHash }
+    });
 
     console.log(JSON.stringify({ success: true, report }, null, 2));
   } catch (error) {

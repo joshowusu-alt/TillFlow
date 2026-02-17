@@ -33,8 +33,20 @@ const ROUTES = [
   '/users'
 ];
 
+async function ensureOwnerPassword() {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const bcrypt = require('bcryptjs');
+    const prisma = new PrismaClient();
+    const hash = await bcrypt.hash(OWNER_PASSWORD, 10);
+    await prisma.user.updateMany({ where: { email: OWNER_EMAIL }, data: { passwordHash: hash } });
+    await prisma.$disconnect();
+  } catch (_) { /* best-effort */ }
+}
+
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
   await page.locator('input[name="email"]').fill(OWNER_EMAIL);
   await page.locator('input[name="password"]').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
@@ -88,6 +100,7 @@ async function run() {
   };
 
   try {
+    await ensureOwnerPassword();
     await login(page);
 
     for (const route of ROUTES) {

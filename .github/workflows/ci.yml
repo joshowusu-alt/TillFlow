@@ -59,11 +59,11 @@ jobs:
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 
-      - name: Deep owner-flow E2E
-        run: npm run test:e2e:deep
-
       - name: Route speed check
         run: npm run test:perf
+
+      - name: Deep owner-flow E2E
+        run: npm run test:e2e:deep
 
       - name: Upload E2E artifacts
         if: always()
