@@ -1,14 +1,16 @@
 type StatCardProps = {
   label: string;
   value: string;
-  tone?: 'default' | 'accent' | 'danger';
+  tone?: 'default' | 'accent' | 'danger' | 'success' | 'warn';
   helper?: string;
 };
 
 const tones = {
   default: 'border-black/5 bg-white/90',
   accent: 'border-accent/30 bg-accentSoft',
-  danger: 'border-rose/30 bg-rose/10'
+  danger: 'border-rose/30 bg-rose/10',
+  success: 'border-emerald-200 bg-emerald-50',
+  warn: 'border-amber-200 bg-amber-50',
 };
 
 export default function StatCard({ label, value, tone = 'default', helper }: StatCardProps) {
