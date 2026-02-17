@@ -118,6 +118,46 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <label className="text-sm">Require variance reason when closing till</label>
           </div>
           <div>
+            <label className="label">Discount Approval Threshold (bps)</label>
+            <input
+              className="input"
+              name="discountApprovalThresholdBps"
+              type="number"
+              min="0"
+              max="10000"
+              step="1"
+              defaultValue={(business as any).discountApprovalThresholdBps ?? 1500}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Manager PIN required for discounts above this threshold. Example: 1500 = 15%.
+            </div>
+          </div>
+          <div>
+            <label className="label">Inventory Adjustment Risk Threshold (base units)</label>
+            <input
+              className="input"
+              name="inventoryAdjustmentRiskThresholdBase"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={(business as any).inventoryAdjustmentRiskThresholdBase ?? 50}
+            />
+          </div>
+          <div>
+            <label className="label">Cash Variance Risk Threshold (minor units)</label>
+            <input
+              className="input"
+              name="cashVarianceRiskThresholdPence"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={(business as any).cashVarianceRiskThresholdPence ?? 2000}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Alert when till-close variance exceeds this amount. Example: 2000 = 20.00.
+            </div>
+          </div>
+          <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
           </div>

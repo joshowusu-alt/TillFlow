@@ -16,6 +16,8 @@ import {
   upsertInventoryBalance
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
+import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 
 export type SalePaymentInput = PaymentInput;
 
@@ -40,6 +42,9 @@ export type CreateSaleInput = {
   payments: SalePaymentInput[];
   orderDiscountType?: DiscountType;
   orderDiscountValue?: number;
+  discountOverrideReasonCode?: string | null;
+  discountOverrideReason?: string | null;
+  discountApprovedByUserId?: string | null;
   momoCollectionId?: string | null;
   externalRef?: string | null;
   createdAt?: Date | null;
@@ -188,6 +193,43 @@ export async function createSale(input: CreateSaleInput) {
   const vatTotal = business.vatEnabled ? Math.round(lineVatTotal * vatRatio) : 0;
   const subtotal = netAfterOrderDiscount;
   const total = subtotal + vatTotal;
+  const grossSalesPence = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
+  const totalLineDiscountPence = lineDetails.reduce(
+    (sum, line) => sum + line.lineDiscount + line.promoDiscount,
+    0
+  );
+  const totalDiscountPence = totalLineDiscountPence + orderDiscount;
+  const discountBps =
+    grossSalesPence > 0 ? Math.round((totalDiscountPence * 10_000) / grossSalesPence) : 0;
+
+  let discountApprovedByUserId = input.discountApprovedByUserId ?? null;
+  if (input.discountOverrideReasonCode && !isDiscountReasonCode(input.discountOverrideReasonCode)) {
+    throw new Error('Discount reason code is invalid.');
+  }
+  if (discountBps > business.discountApprovalThresholdBps) {
+    if (!discountApprovedByUserId) {
+      throw new Error('Manager discount PIN approval is required for this discount.');
+    }
+    if (!input.discountOverrideReasonCode && !input.discountOverrideReason) {
+      throw new Error('Discount reason is required for override approval.');
+    }
+
+    const approvedBy = await prisma.user.findFirst({
+      where: {
+        id: discountApprovedByUserId,
+        businessId: input.businessId,
+        active: true,
+        role: { in: ['MANAGER', 'OWNER'] },
+      },
+      select: { id: true },
+    });
+    if (!approvedBy) {
+      throw new Error('Discount override approval user is invalid.');
+    }
+    discountApprovedByUserId = approvedBy.id;
+  } else {
+    discountApprovedByUserId = null;
+  }
 
   const positivePayments = filterPositivePayments(input.payments);
   const fallbackPayments =
@@ -283,6 +325,12 @@ export async function createSale(input: CreateSaleInput) {
     }
   }
 
+  const cogsEstimate = lineDetails.reduce((sum, line) => {
+    const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;
+    return sum + cost * line.qtyBase;
+  }, 0);
+  const grossMarginEstimate = subtotal - cogsEstimate;
+
   const finalStatus =
     balanceDue === 0 ? 'PAID' : totalPaid === 0 ? 'UNPAID' : 'PART_PAID';
 
@@ -305,6 +353,10 @@ export async function createSale(input: CreateSaleInput) {
         vatPence: vatTotal,
         totalPence: total,
         discountPence: orderDiscount,
+        discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
+        discountOverrideReason: input.discountOverrideReason ?? null,
+        discountApprovedByUserId,
+        grossMarginPence: grossMarginEstimate,
         createdAt: input.createdAt ?? undefined,
         lines: {
           create: lineDetails.map((line) => ({
@@ -420,6 +472,24 @@ export async function createSale(input: CreateSaleInput) {
     });
 
     return created;
+  });
+
+  await detectExcessiveDiscountRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.cashierUserId,
+    salesInvoiceId: invoice.id,
+    discountPence: totalDiscountPence,
+    grossSalesPence,
+    thresholdBps: business.discountApprovalThresholdBps,
+  });
+
+  await detectNegativeMarginRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.cashierUserId,
+    salesInvoiceId: invoice.id,
+    grossMarginPence: grossMarginEstimate,
   });
 
   return invoice;

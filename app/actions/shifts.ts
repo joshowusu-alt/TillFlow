@@ -7,6 +7,7 @@ import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/l
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
+import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
 
 const toPence = (value: unknown) => Math.round(Number(value || 0) * 100);
 
@@ -120,7 +121,7 @@ export async function closeShiftAction(
 
     const business = await prisma.business.findUnique({
       where: { id: businessId },
-      select: { varianceReasonRequired: true },
+      select: { varianceReasonRequired: true, cashVarianceRiskThresholdPence: true },
     });
 
     const expectedCash = shift.expectedCashPence;
@@ -215,6 +216,15 @@ export async function closeShiftAction(
         varianceReasonCode,
         managerApprovedByUserId: manager.id,
       },
+    });
+
+    await detectCashVarianceRisk({
+      businessId,
+      storeId: shift.till.storeId,
+      cashierUserId: shift.userId,
+      shiftId: shift.id,
+      variancePence: variance,
+      thresholdPence: business?.cashVarianceRiskThresholdPence ?? 2000,
     });
 
     revalidatePath('/shifts');

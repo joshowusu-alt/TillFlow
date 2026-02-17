@@ -10,6 +10,7 @@ import {
   checkMomoCollectionStatusAction,
   initiateMomoCollectionAction,
 } from '@/app/actions/mobile-money';
+import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
@@ -47,6 +48,7 @@ type PosClientProps = {
     momoEnabled?: boolean;
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;
+    discountApprovalThresholdBps?: number;
   };
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
@@ -126,6 +128,9 @@ export default function PosClient({
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
   const [orderDiscountInput, setOrderDiscountInput] = useState('');
+  const [discountManagerPin, setDiscountManagerPin] = useState('');
+  const [discountReasonCode, setDiscountReasonCode] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
   const [lastReceiptId, setLastReceiptId] = useState('');
   const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
@@ -373,6 +378,9 @@ export default function PosClient({
     setPaymentMethods(['CASH']);
     setOrderDiscountType('NONE');
     setOrderDiscountInput('');
+    setDiscountManagerPin('');
+    setDiscountReasonCode('');
+    setDiscountReason('');
     setQtyDrafts({});
     setUndoStack([]);
     playBeep(true);
@@ -532,6 +540,9 @@ export default function PosClient({
         momoCollectionId: momoCollectionId || undefined,
         momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
         momoNetwork,
+        discountManagerPin: discountManagerPin.trim() || undefined,
+        discountReasonCode: discountReasonCode || undefined,
+        discountReason: discountReason.trim() || undefined,
       });
 
       if (result.success) {
@@ -559,6 +570,9 @@ export default function PosClient({
         setPaymentMethods(['CASH']);
         setOrderDiscountType('NONE');
         setOrderDiscountInput('');
+        setDiscountManagerPin('');
+        setDiscountReasonCode('');
+        setDiscountReason('');
         setQtyDrafts({});
         setUndoStack([]);
         playBeep(true);
@@ -885,6 +899,14 @@ export default function PosClient({
     orderDiscountType,
     orderDiscountInput
   );
+  const totalDiscountPence = totals.lineDiscount + totals.promoDiscount + orderDiscount;
+  const discountBps =
+    totals.subtotal > 0 ? Math.round((totalDiscountPence * 10_000) / totals.subtotal) : 0;
+  const requiresDiscountApproval =
+    discountBps > (business.discountApprovalThresholdBps ?? 1500);
+  const discountApprovalReady =
+    !requiresDiscountApproval ||
+    (!!discountManagerPin.trim() && (!!discountReasonCode || !!discountReason.trim()));
   const netAfterOrderDiscount = Math.max(totals.netSubtotal - orderDiscount, 0);
   const vatRatio =
     business.vatEnabled && totals.netSubtotal > 0
@@ -952,6 +974,7 @@ export default function PosClient({
     fullyPaid &&
     !hasPaymentError &&
     momoReady &&
+    discountApprovalReady &&
     tillReady &&
     (!requiresCustomer || customerId);
   const errorParam = searchParams.get('error');
@@ -1337,6 +1360,10 @@ export default function PosClient({
                   ? 'One or more items exceed available stock.'
                   : errorParam === 'till-not-open'
                     ? 'Open the till shift first before recording sales.'
+                    : errorParam === 'invalid-discount-pin'
+                      ? 'Manager PIN for discount override is invalid.'
+                    : errorParam === 'invalid-discount-reason'
+                      ? 'Discount reason code is invalid.'
                   : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
@@ -1612,6 +1639,47 @@ export default function PosClient({
               />
             </div>
 
+            {requiresDiscountApproval ? (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Manager Approval Required
+                </div>
+                <div className="mt-1 text-xs text-amber-700">
+                  Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
+                  {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <select
+                    className="input"
+                    value={discountReasonCode}
+                    onChange={(e) => setDiscountReasonCode(e.target.value)}
+                  >
+                    <option value="">Select reason code</option>
+                    {DISCOUNT_REASON_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {code.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Reason details"
+                  />
+                  <input
+                    className="input"
+                    type="password"
+                    value={discountManagerPin}
+                    onChange={(e) => setDiscountManagerPin(e.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Manager PIN"
+                  />
+                </div>
+              </div>
+            ) : null}
+
             {/* Cash / Card / Transfer inputs */}
             <div className="grid gap-3 sm:grid-cols-3">
               {hasMethod('CASH') && (
@@ -1746,6 +1814,11 @@ export default function PosClient({
             {needsMomoConfirmation && !momoConfirmed && (
               <div className="text-sm text-amber-700 font-medium">
                 MoMo payment must be confirmed before completing this sale.
+              </div>
+            )}
+            {requiresDiscountApproval && !discountApprovalReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                High discount requires manager PIN and reason before sale completion.
               </div>
             )}
             {paymentStatus === 'PAID' && !fullyPaid && (

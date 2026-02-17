@@ -113,6 +113,10 @@ const _getBusiness = cache(async (businessId: string) => {
       openingCapitalPence: true,
       requireOpenTillForSales: true,
       varianceReasonRequired: true,
+      discountApprovalThresholdBps: true,
+      inventoryAdjustmentRiskThresholdBase: true,
+      cashVarianceRiskThresholdPence: true,
+      customerScope: true,
       createdAt: true,
     }
   });

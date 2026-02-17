@@ -88,6 +88,7 @@ export default async function PosPage() {
         momoEnabled: (business as any).momoEnabled ?? false,
         momoProvider: (business as any).momoProvider ?? null,
         requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
+        discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
       }}
       store={{ id: baseStore.id, name: baseStore.name }}
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}

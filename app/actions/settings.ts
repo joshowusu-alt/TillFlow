@@ -26,6 +26,18 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoNumber = formOptionalString(formData, 'momoNumber');
     const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
+    const discountApprovalThresholdBps = Math.max(
+      0,
+      Math.min(10_000, parseInt(String(formData.get('discountApprovalThresholdBps') || '1500'), 10) || 0)
+    );
+    const inventoryAdjustmentRiskThresholdBase = Math.max(
+      1,
+      parseInt(String(formData.get('inventoryAdjustmentRiskThresholdBase') || '50'), 10) || 50
+    );
+    const cashVarianceRiskThresholdPence = Math.max(
+      0,
+      parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
+    );
     const openingCapitalRaw = parseInt((formData.get('openingCapitalPence') as string) || '0', 10) || 0;
     const openingCapitalPence = Math.max(0, openingCapitalRaw);
 
@@ -49,6 +61,9 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         openingCapitalPence,
         requireOpenTillForSales,
         varianceReasonRequired,
+        discountApprovalThresholdBps,
+        inventoryAdjustmentRiskThresholdBase,
+        cashVarianceRiskThresholdPence,
       }
     });
 

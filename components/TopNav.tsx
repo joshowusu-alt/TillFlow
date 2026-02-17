@@ -50,6 +50,7 @@ const navGroups = [
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'] },

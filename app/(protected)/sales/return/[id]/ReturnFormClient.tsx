@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { formatMoney } from '@/lib/format';
 import { createSalesReturnAction } from '@/app/actions/returns';
+import { VOID_RETURN_REASON_CODES } from '@/lib/fraud/reason-codes';
 
 type ReturnFormClientProps = {
   invoiceId: string;
@@ -19,17 +20,32 @@ export default function ReturnFormClient({
 }: ReturnFormClientProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [refundMethod, setRefundMethod] = useState('CASH');
+  const [reasonCode, setReasonCode] = useState('');
   const [reason, setReason] = useState('');
+  const [managerPin, setManagerPin] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
+    if (!reasonCode) {
+      setFormError('Select a reason code before continuing.');
+      return;
+    }
+    if (!managerPin.trim()) {
+      setFormError('Manager PIN is required for returns and voids.');
+      return;
+    }
+
+    setFormError(null);
     setIsSubmitting(true);
     const formData = new FormData();
     formData.set('salesInvoiceId', invoiceId);
     formData.set('refundAmountPence', String(paid));
     formData.set('type', isVoid ? 'VOID' : 'RETURN');
     formData.set('refundMethod', refundMethod);
+    formData.set('reasonCode', reasonCode);
     formData.set('reason', reason);
+    formData.set('managerPin', managerPin.trim());
     await createSalesReturnAction(formData);
   };
 
@@ -63,8 +79,35 @@ export default function ReturnFormClient({
             No payments received. This will void the sale and restore stock.
           </div>
         )}
+        <div>
+          <label className="label">Reason Code</label>
+          <select
+            className="input"
+            value={reasonCode}
+            onChange={(e) => setReasonCode(e.target.value)}
+          >
+            <option value="">Select reason code</option>
+            {VOID_RETURN_REASON_CODES.map((code) => (
+              <option key={code} value={code}>
+                {code.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Manager PIN</label>
+          <input
+            className="input"
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={managerPin}
+            onChange={(e) => setManagerPin(e.target.value)}
+            placeholder="Enter manager PIN"
+          />
+        </div>
         <div className="md:col-span-3">
-          <label className="label">Reason (optional)</label>
+          <label className="label">Reason details (optional)</label>
           <input
             className="input"
             value={reason}
@@ -72,6 +115,11 @@ export default function ReturnFormClient({
             placeholder="Reason for return/void"
           />
         </div>
+        {formError ? (
+          <div className="md:col-span-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {formError}
+          </div>
+        ) : null}
         <div className="md:col-span-3">
           <button
             type="button"
@@ -136,7 +184,7 @@ export default function ReturnFormClient({
                 type="button"
                 className="flex-1 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !reasonCode || !managerPin.trim()}
               >
                 {isSubmitting ? 'Processing...' : isVoid ? 'Void Sale' : 'Confirm Return'}
               </button>

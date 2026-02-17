@@ -6,6 +6,8 @@ import { toInt, toPence } from '@/lib/form-helpers';
 import { formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { verifyManagerPin } from '@/lib/security/pin';
+import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 
@@ -38,6 +40,21 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       orderDiscountType,
       formData.get('orderDiscountValue')
     );
+    const discountManagerPin = formString(formData, 'discountManagerPin') || '';
+    const discountReasonCode = formString(formData, 'discountReasonCode') || null;
+    const discountReason = formString(formData, 'discountReason') || null;
+    if (discountReasonCode && !isDiscountReasonCode(discountReasonCode)) {
+      redirect('/pos?error=invalid-discount-reason');
+    }
+    let discountApprovedByUserId: string | null = null;
+
+    if (discountManagerPin) {
+      const approvedBy = await verifyManagerPin({ businessId, pin: discountManagerPin });
+      if (!approvedBy) {
+        redirect('/pos?error=invalid-discount-pin');
+      }
+      discountApprovedByUserId = approvedBy?.id ?? null;
+    }
 
     let lines: {
       productId: string;
@@ -85,6 +102,9 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         dueDate,
         orderDiscountType,
         orderDiscountValue,
+        discountOverrideReasonCode: discountReasonCode,
+        discountOverrideReason: discountReason,
+        discountApprovedByUserId,
         payments: [
           { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
           { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
@@ -133,6 +153,9 @@ export async function completeSaleAction(data: {
   momoCollectionId?: string;
   momoPayerMsisdn?: string;
   momoNetwork?: string;
+  discountManagerPin?: string;
+  discountReasonCode?: string;
+  discountReason?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext();
@@ -143,9 +166,24 @@ export async function completeSaleAction(data: {
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
     const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
     const momoPaid = Math.max(0, data.momoPaid ?? 0);
+    const discountManagerPin = (data.discountManagerPin || '').trim();
+    const discountReasonCode = (data.discountReasonCode || '').trim() || null;
+    const discountReason = (data.discountReason || '').trim() || null;
+    if (discountReasonCode && !isDiscountReasonCode(discountReasonCode)) {
+      return { success: false, error: 'Invalid discount reason code.' };
+    }
+    let discountApprovedByUserId: string | null = null;
 
     if (momoPaid > 0 && !data.momoCollectionId) {
       return { success: false, error: 'Confirm MoMo payment before completing sale.' };
+    }
+
+    if (discountManagerPin) {
+      const approvedBy = await verifyManagerPin({ businessId, pin: discountManagerPin });
+      if (!approvedBy) {
+        return { success: false, error: 'Invalid manager PIN for discount approval.' };
+      }
+      discountApprovedByUserId = approvedBy.id;
     }
 
     let lines: {
@@ -189,6 +227,9 @@ export async function completeSaleAction(data: {
       dueDate,
       orderDiscountType,
       orderDiscountValue,
+      discountOverrideReasonCode: discountReasonCode,
+      discountOverrideReason: discountReason,
+      discountApprovedByUserId,
       momoCollectionId: data.momoCollectionId || null,
       payments: [
         { method: 'CASH', amountPence: data.cashPaid },
