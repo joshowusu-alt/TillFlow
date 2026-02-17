@@ -27,6 +27,11 @@ model Business {
   socialMediaHandle   String?
   address             String?
   phone               String?
+  // Ghana-specific fields
+  tinNumber           String?
+  momoEnabled         Boolean  @default(false)
+  momoProvider        String?
+  momoNumber          String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -92,6 +97,7 @@ model Shift {
   actualCashPence    Int?
   cardTotalPence     Int       @default(0)
   transferTotalPence Int       @default(0)
+  momoTotalPence     Int       @default(0)
   variance           Int?
   notes              String?
   status             String    @default("OPEN")
