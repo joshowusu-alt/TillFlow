@@ -127,6 +127,9 @@ export async function completeSaleAction(data: {
   transferPaid: number;
   momoPaid?: number;
   momoRef?: string;
+  momoCollectionId?: string;
+  momoPayerMsisdn?: string;
+  momoNetwork?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext();
@@ -136,6 +139,11 @@ export async function completeSaleAction(data: {
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
     const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
+    const momoPaid = Math.max(0, data.momoPaid ?? 0);
+
+    if (momoPaid > 0 && !data.momoCollectionId) {
+      return { success: false, error: 'Confirm MoMo payment before completing sale.' };
+    }
 
     let lines: {
       productId: string;
@@ -178,11 +186,18 @@ export async function completeSaleAction(data: {
       dueDate,
       orderDiscountType,
       orderDiscountValue,
+      momoCollectionId: data.momoCollectionId || null,
       payments: [
         { method: 'CASH', amountPence: data.cashPaid },
         { method: 'CARD', amountPence: data.cardPaid },
         { method: 'TRANSFER', amountPence: data.transferPaid },
-        { method: 'MOBILE_MONEY', amountPence: data.momoPaid ?? 0, reference: data.momoRef ?? null },
+        {
+          method: 'MOBILE_MONEY',
+          amountPence: momoPaid,
+          reference: data.momoRef ?? null,
+          payerMsisdn: data.momoPayerMsisdn ?? null,
+          network: data.momoNetwork ?? null,
+        },
       ],
       lines,
     });

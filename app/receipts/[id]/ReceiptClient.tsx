@@ -32,7 +32,15 @@ type ReceiptClientProps = {
     totalPence: number;
     discountPence?: number;
   };
-  payments: { method: string; amountPence: number }[];
+  payments: {
+    method: string;
+    amountPence: number;
+    reference?: string | null;
+    network?: string | null;
+    payerMsisdn?: string | null;
+    provider?: string | null;
+    receivedAt?: string;
+  }[];
   lines: {
     name: string;
     qtyLabel: string;
@@ -69,6 +77,9 @@ export default function ReceiptClient({
   const momoPaid = payments
     .filter((payment) => payment.method === 'MOBILE_MONEY')
     .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const momoPayments = payments.filter(
+    (payment) => payment.method === 'MOBILE_MONEY' && payment.amountPence > 0
+  );
   const lineDiscountTotal = lines.reduce(
     (sum, line) => sum + line.lineDiscountPence + line.promoDiscountPence,
     0
@@ -256,10 +267,19 @@ export default function ReceiptClient({
           </div>
         ) : null}
         {momoPaid > 0 ? (
-          <div className="flex justify-between">
-            <span>Paid (MoMo)</span>
-            <span>{formatMoney(momoPaid, business.currency)}</span>
-          </div>
+          <>
+            <div className="flex justify-between">
+              <span>Paid (MoMo)</span>
+              <span>{formatMoney(momoPaid, business.currency)}</span>
+            </div>
+            {momoPayments.map((payment, index) => (
+              <div key={`${payment.reference ?? 'momo'}-${index}`} className="text-[11px] text-black/60">
+                {(payment.provider ?? payment.network ?? 'MoMo').toUpperCase()} |{' '}
+                {payment.payerMsisdn ?? 'payer'} | Ref: {payment.reference ?? 'pending'}
+                {payment.receivedAt ? ` | ${new Date(payment.receivedAt).toLocaleString('en-GB')}` : ''}
+              </div>
+            ))}
+          </>
         ) : null}
       </div>
 

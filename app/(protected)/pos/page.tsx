@@ -78,7 +78,12 @@ export default async function PosPage() {
 
   return (
     <PosClient
-      business={{ currency: business.currency, vatEnabled: business.vatEnabled }}
+      business={{
+        currency: business.currency,
+        vatEnabled: business.vatEnabled,
+        momoEnabled: (business as any).momoEnabled ?? false,
+        momoProvider: (business as any).momoProvider ?? null,
+      }}
       store={{ id: baseStore.id, name: baseStore.name }}
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       products={productDtos}
