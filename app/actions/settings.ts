@@ -24,6 +24,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
+    const customerScopeRaw = (formString(formData, 'customerScope') || 'SHARED').toUpperCase();
+    const customerScope = customerScopeRaw === 'BRANCH' ? 'BRANCH' : 'SHARED';
     const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
     const discountApprovalThresholdBps = Math.max(
@@ -58,6 +60,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         momoEnabled,
         momoProvider,
         momoNumber,
+        customerScope,
         openingCapitalPence,
         requireOpenTillForSales,
         varianceReasonRequired,

@@ -16,6 +16,7 @@ const navGroups = [
       { href: '/shifts', label: 'Shifts', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/sales', label: 'Sales', roles: ['MANAGER', 'OWNER'] },
       { href: '/purchases', label: 'Purchases', roles: ['MANAGER', 'OWNER'] },
+      { href: '/transfers', label: 'Transfers', roles: ['MANAGER', 'OWNER'] },
       { href: '/expenses', label: 'Expenses', roles: ['MANAGER', 'OWNER'] }
     ]
   },
@@ -63,6 +64,7 @@ const navGroups = [
     items: [
       { href: '/account', label: 'My Account', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/settings', label: 'Settings', roles: ['OWNER', 'MANAGER'] },
+      { href: '/settings/organization', label: 'Organization', roles: ['OWNER', 'MANAGER'] },
       { href: '/settings/backup', label: 'Data Backup', roles: ['OWNER'] },
       { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['OWNER', 'MANAGER'] },
       { href: '/users', label: 'Users', roles: ['OWNER'] },

@@ -29,6 +29,8 @@ const ACTION_LABELS: Record<string, string> = {
   CASH_DRAWER_ENTRY: 'Cash Drawer Entry',
   CASH_DRAWER_OPEN: 'Cash Drawer Opened',
   CASH_DRAWER_CLOSE: 'Cash Drawer Closed',
+  STOCK_TRANSFER_REQUEST: 'Stock Transfer Requested',
+  STOCK_TRANSFER_APPROVE: 'Stock Transfer Approved',
 };
 
 const ACTION_COLOURS: Record<string, string> = {
@@ -52,6 +54,8 @@ const ACTION_COLOURS: Record<string, string> = {
   CASH_DRAWER_ENTRY: 'bg-amber-100 text-amber-800',
   CASH_DRAWER_OPEN: 'bg-amber-100 text-amber-800',
   CASH_DRAWER_CLOSE: 'bg-amber-100 text-amber-800',
+  STOCK_TRANSFER_REQUEST: 'bg-indigo-100 text-indigo-800',
+  STOCK_TRANSFER_APPROVE: 'bg-emerald-100 text-emerald-800',
 };
 
 export const dynamic = 'force-dynamic';

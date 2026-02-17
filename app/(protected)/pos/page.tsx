@@ -47,7 +47,10 @@ export default async function PosPage() {
     }),
     prisma.unit.findMany({ select: { id: true, name: true } }),
     prisma.customer.findMany({
-      where: { businessId: business.id },
+      where: {
+        businessId: business.id,
+        ...(business.customerScope === 'BRANCH' ? { storeId: baseStore.id } : {}),
+      },
       select: { id: true, name: true }
     }),
     prisma.category.findMany({

@@ -18,6 +18,7 @@ import {
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
+import { resolveBranchIdForStore } from './branches';
 
 export type SalePaymentInput = PaymentInput;
 
@@ -66,6 +67,7 @@ export async function createSale(input: CreateSaleInput) {
     select: { id: true },
   });
   if (!till) throw new Error('Till not found');
+  const branchId = await resolveBranchIdForStore({ businessId: input.businessId, storeId: store.id });
 
   const openShift = await getOpenShiftForTill(input.businessId, till.id);
   if (business.requireOpenTillForSales && !openShift) {
@@ -74,7 +76,11 @@ export async function createSale(input: CreateSaleInput) {
 
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
-      where: { id: input.customerId, businessId: input.businessId },
+      where: {
+        id: input.customerId,
+        businessId: input.businessId,
+        ...(business.customerScope === 'BRANCH' ? { storeId: input.storeId } : {}),
+      },
       select: { id: true },
     });
     if (!customer) throw new Error('Customer not found');
@@ -343,6 +349,7 @@ export async function createSale(input: CreateSaleInput) {
       data: {
         businessId: input.businessId,
         storeId: store.id,
+        branchId,
         tillId: till.id,
         shiftId: openShift?.id ?? null,
         cashierUserId: input.cashierUserId,
@@ -377,6 +384,7 @@ export async function createSale(input: CreateSaleInput) {
           create: payments.map((payment) => ({
             method: payment.method,
             amountPence: payment.amountPence,
+            branchId,
             reference: payment.reference ?? input.externalRef ?? null,
             network: payment.network ?? null,
             payerMsisdn: payment.payerMsisdn ?? null,
@@ -652,6 +660,7 @@ export async function amendSale(input: AmendSaleInput) {
           salesInvoiceId: invoice.id,
           method: refundMethod,
           amountPence: -refundAmount, // negative = refund
+          branchId: invoice.branchId ?? null,
         },
       });
 

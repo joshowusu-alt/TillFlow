@@ -101,6 +101,28 @@ async function main() {
     });
   }
 
+  let organization = await prisma.organization.findUnique({ where: { businessId: business.id } });
+  if (!organization) {
+    organization = await prisma.organization.create({
+      data: { businessId: business.id, name: `${business.name} Organization` },
+    });
+  }
+
+  const existingBranch = await prisma.branch.findFirst({
+    where: { businessId: business.id, storeId: store.id },
+  });
+  if (!existingBranch) {
+    await prisma.branch.create({
+      data: {
+        businessId: business.id,
+        organizationId: organization.id,
+        storeId: store.id,
+        code: 'MAIN01',
+        name: store.name,
+      },
+    });
+  }
+
   const tills = await prisma.till.findMany({ where: { storeId: store.id } });
   if (tills.length === 0) {
     await prisma.till.createMany({

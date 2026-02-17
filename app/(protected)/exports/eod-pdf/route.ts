@@ -62,6 +62,7 @@ export async function GET(request: Request) {
   const from = parseDate(url.searchParams.get('from'), weekAgo);
   const to = parseDate(url.searchParams.get('to'), today);
   to.setHours(23, 59, 59, 999);
+  const storeId = url.searchParams.get('storeId') || 'ALL';
 
   const [business, shifts] = await Promise.all([
     prisma.business.findUnique({
@@ -70,7 +71,12 @@ export async function GET(request: Request) {
     }),
     prisma.shift.findMany({
       where: {
-        till: { store: { businessId: user.businessId } },
+        till: {
+          store: {
+            businessId: user.businessId,
+            ...(storeId === 'ALL' ? {} : { id: storeId }),
+          },
+        },
         openedAt: { gte: from, lte: to },
       },
       orderBy: { openedAt: 'desc' },

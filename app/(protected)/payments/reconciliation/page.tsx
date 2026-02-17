@@ -10,15 +10,42 @@ import {
   reinitiateMomoCollectionAction,
 } from '@/app/actions/mobile-money';
 
+function parseDate(value: string | undefined, fallback: Date) {
+  if (!value) return fallback;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed;
+}
+
 export default async function MomoReconciliationPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string; from?: string; to?: string; storeId?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
+  const from = parseDate(searchParams?.from, weekAgo);
+  const to = parseDate(searchParams?.to, today);
+  to.setHours(23, 59, 59, 999);
+
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const selectedStoreId =
+    searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
+      ? searchParams.storeId
+      : 'ALL';
 
   const collections = await prisma.mobileMoneyCollection.findMany({
-    where: { businessId: business.id },
+    where: {
+      businessId: business.id,
+      ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+      initiatedAt: { gte: from, lte: to },
+    },
     orderBy: { initiatedAt: 'desc' },
     take: 100,
     select: {
@@ -54,6 +81,33 @@ export default async function MomoReconciliationPage({
         title="MoMo Reconciliation"
         subtitle="Track pending, failed and confirmed collections. Re-check status before retrying."
       />
+
+      <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
+        <div>
+          <label className="label">Branch / Store</label>
+          <select className="input" name="storeId" defaultValue={selectedStoreId}>
+            <option value="ALL">All branches</option>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">From</label>
+          <input className="input" type="date" name="from" defaultValue={from.toISOString().slice(0, 10)} />
+        </div>
+        <div>
+          <label className="label">To</label>
+          <input className="input" type="date" name="to" defaultValue={to.toISOString().slice(0, 10)} />
+        </div>
+        <div className="flex items-end">
+          <button className="btn-secondary w-full" type="submit">
+            Apply
+          </button>
+        </div>
+      </form>
 
       {searchParams?.error ? (
         <div className="rounded-xl border border-rose/30 bg-rose/10 px-4 py-3 text-sm text-rose">

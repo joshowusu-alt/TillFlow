@@ -183,6 +183,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
           </div>
+          <div>
+            <label className="label">Customer Scope</label>
+            <select className="input" name="customerScope" defaultValue={(business as any).customerScope ?? 'SHARED'}>
+              <option value="SHARED">Shared across all branches</option>
+              <option value="BRANCH">Branch-specific customers</option>
+            </select>
+            <div className="mt-1 text-xs text-black/50">
+              Choose whether customer records are shared company-wide or isolated per branch.
+            </div>
+          </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
@@ -221,6 +231,19 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
       {/* Additional Settings Links */}
       <div className="grid gap-4 md:grid-cols-2">
+        <a href="/settings/organization" className="card p-6 transition hover:shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+              <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold">Organization</h3>
+              <p className="text-sm text-black/50">Branches, devices, and multi-site model</p>
+            </div>
+          </div>
+        </a>
         <a href="/settings/backup" className="card p-6 transition hover:shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">

@@ -1,9 +1,9 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import Pagination from '@/components/Pagination';
-import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { requireBusinessStore } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
@@ -11,9 +11,13 @@ import DeletePurchaseButton from './DeletePurchaseButton';
 
 const PAGE_SIZE = 25;
 
-export default async function PurchasesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
-  if (!business || !store) {
+export default async function PurchasesPage({
+  searchParams,
+}: {
+  searchParams?: { error?: string; page?: string; storeId?: string };
+}) {
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) {
     return (
       <div className="card p-6 text-center">
         <div className="text-lg font-semibold">Setup Required</div>
@@ -23,9 +27,17 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
     );
   }
 
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const selectedStoreId =
+    (searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
+      ? searchParams.storeId
+      : stores[0]?.id) ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
-  // Run all data queries in parallel
   const [products, suppliers, units, purchaseCount, purchases] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
@@ -41,21 +53,21 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
             unitId: true,
             conversionToBase: true,
             isBaseUnit: true,
-            unit: { select: { id: true, name: true, pluralName: true } }
-          }
-        }
-      }
+            unit: { select: { id: true, name: true, pluralName: true } },
+          },
+        },
+      },
     }),
     prisma.supplier.findMany({
       where: { businessId: business.id },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     }),
-    prisma.unit.findMany({
-      select: { id: true, name: true }
+    prisma.unit.findMany({ select: { id: true, name: true } }),
+    prisma.purchaseInvoice.count({
+      where: { businessId: business.id, ...(selectedStoreId ? { storeId: selectedStoreId } : {}) },
     }),
-    prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
     prisma.purchaseInvoice.findMany({
-      where: { businessId: business.id },
+      where: { businessId: business.id, ...(selectedStoreId ? { storeId: selectedStoreId } : {}) },
       select: {
         id: true,
         createdAt: true,
@@ -74,13 +86,13 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
                   select: {
                     isBaseUnit: true,
                     conversionToBase: true,
-                    unit: { select: { name: true, pluralName: true } }
-                  }
-                }
-              }
-            }
-          }
-        }
+                    unit: { select: { name: true, pluralName: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
@@ -92,8 +104,25 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Purchases" subtitle="Receive stock and track payables." />
+      <PageHeader title="Purchases" subtitle="Receive stock and track payables by branch." />
       <FormError error={searchParams?.error} />
+
+      <form method="GET" className="card flex flex-wrap items-end gap-3 p-4">
+        <div>
+          <label className="label">Branch / Store</label>
+          <select className="input" name="storeId" defaultValue={selectedStoreId}>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button className="btn-secondary" type="submit">
+          Apply
+        </button>
+      </form>
+
       <div className="card p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-display font-semibold">Receive stock</h2>
@@ -102,7 +131,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
           </Link>
         </div>
         <PurchaseFormClient
-          storeId={store.id}
+          storeId={selectedStoreId}
           currency={business.currency}
           vatEnabled={business.vatEnabled}
           units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
@@ -118,8 +147,8 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
               id: pu.unitId,
               name: pu.unit.name,
               conversionToBase: pu.conversionToBase,
-              isBaseUnit: pu.isBaseUnit
-            }))
+              isBaseUnit: pu.isBaseUnit,
+            })),
           }))}
         />
       </div>
@@ -153,7 +182,7 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
                     baseUnitPlural: baseUnit?.unit.pluralName,
                     packagingUnit: packaging?.unit.name,
                     packagingUnitPlural: packaging?.unit.pluralName,
-                    packagingConversion: packaging?.conversionToBase
+                    packagingConversion: packaging?.conversionToBase,
                   })
                 : '-';
               const lineLabel = lineCount > 1 ? `${lineCount} lines` : qtyLabel;
@@ -186,7 +215,12 @@ export default async function PurchasesPage({ searchParams }: { searchParams?: {
             })}
           </tbody>
         </table>
-        <Pagination currentPage={page} totalPages={totalPages} basePath="/purchases" />
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          basePath="/purchases"
+          searchParams={{ storeId: selectedStoreId || undefined }}
+        />
       </div>
     </div>
   );

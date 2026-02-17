@@ -14,7 +14,7 @@ function parseDate(value: string | undefined, fallback: Date) {
 export default async function CashDrawerReportPage({
   searchParams,
 }: {
-  searchParams?: { from?: string; to?: string };
+  searchParams?: { from?: string; to?: string; storeId?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const today = new Date();
@@ -24,10 +24,24 @@ export default async function CashDrawerReportPage({
   const from = parseDate(searchParams?.from, weekAgo);
   const to = parseDate(searchParams?.to, today);
   to.setHours(23, 59, 59, 999);
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const selectedStoreId =
+    searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
+      ? searchParams.storeId
+      : 'ALL';
 
   const shifts = await prisma.shift.findMany({
     where: {
-      till: { store: { businessId: business.id } },
+      till: {
+        store: {
+          businessId: business.id,
+          ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
+        },
+      },
       openedAt: { gte: from, lte: to },
     },
     orderBy: { openedAt: 'desc' },
@@ -65,7 +79,18 @@ export default async function CashDrawerReportPage({
         subtitle="Daily cash summary by branch/store, till and cashier."
       />
 
-      <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
+      <form className="card grid gap-3 p-4 sm:grid-cols-5" method="GET">
+        <div>
+          <label className="label">Branch / Store</label>
+          <select className="input" name="storeId" defaultValue={selectedStoreId}>
+            <option value="ALL">All branches</option>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className="label">From</label>
           <input className="input" type="date" name="from" defaultValue={fromIso} />
@@ -81,13 +106,13 @@ export default async function CashDrawerReportPage({
         </div>
         <div className="flex items-end gap-2">
           <Link
-            href={`/exports/eod-csv?from=${fromIso}&to=${toIso}`}
+            href={`/exports/eod-csv?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
             className="btn-ghost w-full text-center text-xs"
           >
             Export CSV
           </Link>
           <Link
-            href={`/exports/eod-pdf?from=${fromIso}&to=${toIso}`}
+            href={`/exports/eod-pdf?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
             className="btn-ghost w-full text-center text-xs"
           >
             Export PDF
