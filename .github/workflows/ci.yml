@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 25
     env:
       DATABASE_URL: file:./ci.db
-      BASE_URL: http://127.0.0.1:6200
+      BASE_URL: http://localhost:6200
       E2E_OWNER_EMAIL: owner@store.com
       E2E_OWNER_PASSWORD: Pass1234!
     steps:

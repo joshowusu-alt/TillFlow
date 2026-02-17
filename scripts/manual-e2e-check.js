@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-const BASE_URL = 'http://localhost:6200';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 
 async function waitForEnabled(locator, timeoutMs = 15000) {
   const start = Date.now();

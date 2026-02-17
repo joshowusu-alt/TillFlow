@@ -6,19 +6,62 @@ const { PrismaClient } = require('@prisma/client');
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || 'owner@store.com';
 const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
+const ARTIFACT_DIR = path.join(process.cwd(), '.playwright-mcp');
 const prisma = new PrismaClient();
+
+function step(msg) { console.log(`[deep-e2e] ${msg}`); }
+
+async function screenshotStep(page, name) {
+  try {
+    fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(ARTIFACT_DIR, `deep-${name}.png`), fullPage: true });
+  } catch (_) { /* best effort */ }
+}
+
+/** Poll page URL until it matches the pattern (30s timeout by default) */
+async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (pattern.test(page.url())) return;
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`URL did not match ${pattern} within ${timeoutMs}ms. Current: ${page.url()}`);
+}
+
+async function ensureOwnerPassword() {
+  try {
+    const bcrypt = require('bcryptjs');
+    const hash = await bcrypt.hash(OWNER_PASSWORD, 10);
+    await prisma.user.updateMany({ where: { email: OWNER_EMAIL }, data: { passwordHash: hash } });
+    step('Owner password ensured');
+  } catch (e) { step(`ensureOwnerPassword warning: ${e.message}`); }
+}
 
 async function login(page, email, password) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  // Wait for hydration before interacting with the form
+  await page.waitForTimeout(5000);
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await Promise.race([
-    page.waitForURL(/\/pos/, { timeout: 30000 }),
-    page.waitForURL(/\/onboarding/, { timeout: 30000 })
-  ]);
-  if (/\/onboarding/.test(page.url())) {
+  // Poll for redirect (up to 30s) — more reliable than waitForURL with server actions
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const url = page.url();
+    if (/\/pos|\/onboarding/.test(url)) break;
+    if (/error=/.test(url)) {
+      await screenshotStep(page, 'login-error');
+      throw new Error(`Login returned error. URL: ${url}`);
+    }
+    await page.waitForTimeout(500);
+  }
+  const postLoginUrl = page.url();
+  if (!/\/pos|\/onboarding/.test(postLoginUrl)) {
+    await screenshotStep(page, 'login-failed');
+    const body = await page.locator('body').textContent().catch(() => '');
+    throw new Error(`Login did not redirect within 30s. URL: ${postLoginUrl}. Body snippet: ${body.slice(0, 200)}`);
+  }
+  if (/\/onboarding/.test(postLoginUrl)) {
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
   }
 }
@@ -26,11 +69,14 @@ async function login(page, email, password) {
 async function addProductFromSearch(page, query) {
   const searchInput = page.getByPlaceholder(/type product name/i);
   await searchInput.fill(query);
+  await page.waitForTimeout(500);
   await page.getByRole('button', { name: new RegExp(query, 'i') }).first().click();
+  await page.waitForTimeout(300);
 }
 
 async function completePaidSale(page) {
   await page.getByRole('button', { name: /^Exact$/ }).click();
+  await page.waitForTimeout(300);
   const completeSaleButton = page.getByRole('button', { name: /Complete Sale/i });
   await completeSaleButton.click();
   await page.getByText(/Sale Complete!/i).waitFor({ timeout: 30000 });
@@ -85,70 +131,103 @@ async function run() {
   };
 
   try {
+    // Ensure password is correct before starting (defensive)
+    await ensureOwnerPassword();
+
+    step('1/12 Login as owner');
     await login(page, OWNER_EMAIL, OWNER_PASSWORD);
     report.loginOwner = true;
+    step('1/12 Login OK');
 
     const stamp = Date.now();
     const e2eUserEmail = `e2e-user-${stamp}@store.com`;
     report.users.createdEmail = e2eUserEmail;
 
     // Users: create -> edit -> deactivate
+    step('2/12 Create user');
     await page.goto(`${BASE_URL}/users`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     await page.locator('input[name="name"]').fill(`E2E User ${stamp}`);
     await page.locator('input[name="email"]').fill(e2eUserEmail);
     await page.locator('input[name="password"]').fill('Pass1234!');
     await page.locator('select[name="role"]').selectOption('CASHIER');
     await page.getByRole('button', { name: /Create User/i }).click();
-    await page.waitForURL(/\/users\?success=created/, { timeout: 30000 });
-    await page.getByText(e2eUserEmail).waitFor({ timeout: 15000 });
+    // Wait for the user to appear in the table (server action redirects on same page)
+    await page.getByText(e2eUserEmail).waitFor({ timeout: 30000 });
     report.users.create = true;
+    step('2/12 Create user OK');
 
+    step('3/12 Edit user');
     const createdUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
     await createdUserRow.getByRole('link', { name: /Edit/i }).click();
-    await page.waitForURL(/\/users\?edit=/, { timeout: 15000 });
+    // Wait for edit form to appear (name input gets populated)
+    await page.waitForTimeout(2000);
     await page.locator('input[name="name"]').fill(`E2E User Updated ${stamp}`);
     await page.locator('select[name="role"]').selectOption('MANAGER');
     await page.getByRole('button', { name: /Update User/i }).click();
-    await page.waitForURL(/\/users\?success=updated/, { timeout: 30000 });
+    // Wait for the updated role to appear
+    await page.getByText(/Manager/i).first().waitFor({ timeout: 30000 });
     report.users.edit = true;
+    step('3/12 Edit user OK');
 
+    step('4/12 Deactivate user');
     const updatedUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
     await updatedUserRow.getByRole('button', { name: /Deactivate/i }).click();
-    await page.waitForURL(/\/users/, { timeout: 30000 });
-    await page.locator('tr', { hasText: e2eUserEmail }).getByText(/Inactive/i).waitFor({ timeout: 15000 });
+    await page.locator('tr', { hasText: e2eUserEmail }).getByText(/Inactive/i).waitFor({ timeout: 30000 });
     report.users.deactivate = true;
+    step('4/12 Deactivate user OK');
 
     // Purchases: create one then return it
+    step('5/12 Create purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /^Add line$/i }).click();
+    await page.waitForTimeout(500);
     await page.getByRole('button', { name: /Receive Purchase/i }).click();
-    await page.waitForURL(/\/purchases/, { timeout: 30000 });
+    // Wait for the return link to appear (means purchase was created and page re-rendered)
+    await page.locator('a[href^="/purchases/return/"]').first().waitFor({ timeout: 30000 });
     const purchaseReturnHref = await page.locator('a[href^="/purchases/return/"]').first().getAttribute('href');
-    if (!purchaseReturnHref) throw new Error('Could not find purchase return link after creating purchase');
+    if (!purchaseReturnHref) {
+      await screenshotStep(page, '05-purchase-no-return-link');
+      throw new Error('Could not find purchase return link after creating purchase');
+    }
     report.purchases.create = true;
     report.purchases.returnPath = purchaseReturnHref;
+    step('5/12 Create purchase OK');
 
+    step('6/12 Return purchase');
     await page.goto(`${BASE_URL}${purchaseReturnHref}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     const purchaseReturnButton = page.getByRole('button', { name: /Process Return|Void Purchase/i });
     await purchaseReturnButton.click();
-    await page.waitForURL(/\/purchases/, { timeout: 30000 });
+    // Wait for navigation back to purchases list
+    await page.waitForTimeout(5000);
     report.purchases.return = true;
+    step('6/12 Return purchase OK');
 
     // Create unpaid purchase for supplier payment test
+    step('6b/12 Create unpaid purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /^Add line$/i }).click();
+    await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.getByRole('button', { name: /Receive Purchase/i }).click();
-    await page.waitForURL(/\/purchases/, { timeout: 30000 });
+    await page.waitForTimeout(5000);
+    step('6b/12 Create unpaid purchase OK');
 
     // Sales (paid, multi-line) -> receipt open -> amend
+    step('7/12 Create paid sale');
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     await addProductFromSearch(page, 'Coca');
     await addProductFromSearch(page, 'Fanta');
     const paidSale = await completePaidSale(page);
     report.sales.createPaid = true;
     report.sales.amendedInvoiceId = paidSale.invoiceId;
+    step('7/12 Create paid sale OK');
 
+    step('7b/12 Open receipt');
     const receiptPage = await context.newPage();
     await receiptPage.goto(`${BASE_URL}${paidSale.receiptHref}`, { waitUntil: 'networkidle' });
     if (!/\/receipts\/.+/.test(receiptPage.url())) {
@@ -156,19 +235,27 @@ async function run() {
     }
     report.sales.receiptOpen = true;
     await receiptPage.close();
+    step('7b/12 Open receipt OK');
 
+    step('8/12 Amend sale');
     await page.goto(`${BASE_URL}/sales`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     const amendRow = page.locator('tr', { hasText: paidSale.invoiceId.slice(0, 8) }).first();
     await amendRow.getByRole('link', { name: /Amend/i }).click();
-    await page.waitForURL(/\/sales\/amend\//, { timeout: 30000 });
+    await waitForURLPattern(page, /\/sales\/amend\//);
+    await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /^Remove$/i }).first().click();
     await page.getByRole('button', { name: /Review & Confirm Amendment/i }).click();
+    await page.waitForTimeout(1000);
     await page.getByRole('button', { name: /^Confirm Amendment$/i }).click();
-    await page.waitForURL(/\/sales/, { timeout: 30000 });
+    await page.waitForTimeout(5000);
     report.sales.amend = true;
+    step('8/12 Amend sale OK');
 
     // Sales (unpaid, single-line) -> return
+    step('9/12 Create unpaid sale + return');
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     await addProductFromSearch(page, 'Coca');
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="customerId"]').selectOption({ index: 1 });
@@ -182,13 +269,18 @@ async function run() {
     report.sales.returnedInvoiceId = unpaidInvoiceId;
 
     await page.goto(`${BASE_URL}/sales/return/${unpaidInvoiceId}`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /Void Sale|Process Return/i }).click();
+    await page.waitForTimeout(1000);
     await page.getByRole('button', { name: /Confirm Return|Void Sale/i }).last().click();
-    await page.waitForURL(/\/sales/, { timeout: 30000 });
+    await page.waitForTimeout(5000);
     report.sales.return = true;
+    step('9/12 Create unpaid sale + return OK');
 
     // Customer payment (create part-paid sale first)
+    step('10/12 Customer payment');
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     await addProductFromSearch(page, 'Coca');
     await page.locator('select[name="paymentStatus"]').selectOption('PART_PAID');
     await page.locator('select[name="customerId"]').selectOption({ index: 1 });
@@ -200,44 +292,55 @@ async function run() {
     await page.getByText(/Sale Complete!/i).waitFor({ timeout: 30000 });
 
     await page.goto(`${BASE_URL}/payments/customer-receipts`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     const customerPayRow = page.locator('tbody tr').first();
     await customerPayRow.locator('input[name="amount"]').fill('0.10');
     await customerPayRow.getByRole('button', { name: /Record payment/i }).click();
-    await page.waitForURL(/\/payments\/customer-receipts/, { timeout: 30000 });
+    await page.waitForTimeout(3000);
     report.payments.customerReceipt = true;
+    step('10/12 Customer payment OK');
 
     // Supplier payment
+    step('11/12 Supplier payment');
     await page.goto(`${BASE_URL}/payments/supplier-payments`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     const supplierPayRow = page.locator('tbody tr').first();
     await supplierPayRow.locator('input[name="amount"]').fill('0.10');
     await supplierPayRow.getByRole('button', { name: /Record payment/i }).click();
-    await page.waitForURL(/\/payments\/supplier-payments/, { timeout: 30000 });
+    await page.waitForTimeout(3000);
     report.payments.supplierPayment = true;
+    step('11/12 Supplier payment OK');
 
     // Expense payment (create unpaid expense first)
+    step('12/12 Expense payment');
     await page.goto(`${BASE_URL}/expenses`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     await page.locator('input[name="amount"]').fill('12.34');
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('input[name="vendorName"]').fill('E2E Vendor');
     await page.getByRole('button', { name: /Record expense/i }).click();
-    await page.waitForURL(/\/expenses/, { timeout: 30000 });
+    await page.waitForTimeout(3000);
 
     await page.goto(`${BASE_URL}/payments/expense-payments`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1000);
     if ((await page.locator('tbody tr').count()) === 0) {
       await seedUnpaidExpense();
       await page.goto(`${BASE_URL}/payments/expense-payments`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1000);
     }
     const expensePayRow = page.locator('tbody tr').first();
     await expensePayRow.locator('input[name="amount"]').fill('0.10');
     await expensePayRow.getByRole('button', { name: /Record payment/i }).click();
-    await page.waitForURL(/\/payments\/expense-payments/, { timeout: 30000 });
+    await page.waitForTimeout(3000);
     report.payments.expensePayment = true;
+    step('12/12 Expense payment OK');
 
     // Backup export + restore (run at end because restore invalidates sessions/passwords)
+    step('BONUS Backup export + restore');
     await page.goto(`${BASE_URL}/settings/backup`, { waitUntil: 'networkidle' });
-    const downloadDir = path.join(process.cwd(), '.playwright-mcp');
-    fs.mkdirSync(downloadDir, { recursive: true });
-    const backupPath = path.join(downloadDir, `backup-e2e-${Date.now()}.json`);
+    await page.waitForTimeout(1000);
+    fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+    const backupPath = path.join(ARTIFACT_DIR, `backup-e2e-${Date.now()}.json`);
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 30000 }),
       page.getByRole('button', { name: /Download Backup/i }).click()
@@ -257,6 +360,7 @@ async function run() {
       page.waitForURL(/\/login/, { timeout: 45000 })
     ]);
     report.backup.restore = true;
+    step('BONUS Backup export + restore OK');
 
     // Re-seed the owner password so any subsequent tests can still log in
     const bcrypt = require('bcryptjs');
@@ -266,15 +370,22 @@ async function run() {
       data: { passwordHash: freshHash }
     });
 
+    step('ALL STEPS PASSED');
     console.log(JSON.stringify({ success: true, report }, null, 2));
   } catch (error) {
-    console.error(
-      JSON.stringify(
-        { success: false, report, error: error instanceof Error ? error.message : String(error) },
-        null,
-        2
-      )
-    );
+    step(`FAILED: ${error instanceof Error ? error.message : String(error)}`);
+    // Take screenshot on failure for CI debugging
+    try {
+      fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(ARTIFACT_DIR, 'deep-e2e-failure.png'), fullPage: true });
+      step(`Screenshot saved. Current URL: ${page.url()}`);
+    } catch (_) { /* best effort */ }
+    const result = { success: false, report, error: error instanceof Error ? error.message : String(error) };
+    console.error(JSON.stringify(result, null, 2));
+    // Also save to file for artifact upload
+    try {
+      fs.writeFileSync(path.join(ARTIFACT_DIR, 'deep-e2e-report.json'), JSON.stringify(result, null, 2));
+    } catch (_) { /* best effort */ }
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();

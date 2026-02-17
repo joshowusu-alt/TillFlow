@@ -46,14 +46,21 @@ async function ensureOwnerPassword() {
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(5000);
   await page.locator('input[name="email"]').fill(OWNER_EMAIL);
   await page.locator('input[name="password"]').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
-  await Promise.race([
-    page.waitForURL(/\/pos/, { timeout: 30000 }),
-    page.waitForURL(/\/onboarding/, { timeout: 30000 })
-  ]);
+  // Poll for redirect (up to 30s)
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const url = page.url();
+    if (/\/pos|\/onboarding/.test(url)) break;
+    if (/error=/.test(url)) throw new Error(`Login error: ${url}`);
+    await page.waitForTimeout(500);
+  }
+  if (!/\/pos|\/onboarding/.test(page.url())) {
+    throw new Error(`Login failed — landed on ${page.url()}`);
+  }
   if (/\/onboarding/.test(page.url())) {
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
   }
