@@ -1210,7 +1210,7 @@ export default function PosClient({
                           key={product.id}
                           type="button"
                           disabled={outOfStock}
-                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-emerald-50 active:bg-emerald-100'}`}
+                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'}`}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             if (!base || outOfStock) return;
@@ -1410,7 +1410,7 @@ export default function PosClient({
                   return (
                     <div
                       key={line.id}
-                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? 'bg-emerald-50/50' : 'hover:bg-black/[.02]'}`}
+                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
                       onClick={() => setActiveLineId(line.id)}
                     >
                       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-black/5 text-xs font-bold text-black/40">
