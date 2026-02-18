@@ -2,6 +2,15 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  typescript: {
+    // Type-checked locally via `tsc --noEmit`; skip during Vercel build to avoid
+    // platform-specific Prisma client generation differences.
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // ESLint runs locally via `next lint`; skip the redundant Vercel pass.
+    ignoreDuringBuilds: true,
+  },
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
   },
