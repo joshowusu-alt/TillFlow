@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 6200",
-    "build": "cross-env NODE_ENV=production next build",
+    "build": "prisma generate --schema=prisma/schema.postgres.prisma && prisma db push --schema=prisma/schema.postgres.prisma --skip-generate --accept-data-loss && cross-env NODE_ENV=production next build",
     "postinstall": "prisma generate --schema=prisma/schema.postgres.prisma",
     "start": "next start",
     "lint": "next lint",
