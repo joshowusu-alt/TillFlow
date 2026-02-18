@@ -43,12 +43,9 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Redirect logged-in users away from auth pages
-    if (sessionToken && (pathname === '/login' || pathname === '/register')) {
-        const posUrl = request.nextUrl.clone();
-        posUrl.pathname = '/pos';
-        return NextResponse.redirect(posUrl);
-    }
+    // Note: We intentionally do NOT redirect /login → /pos based on cookie existence.
+    // The cookie may reference a stale/invalid session. The login page itself
+    // validates the session via getUser() and redirects if truly authenticated.
 
     // --- Forward pathname header for server components ---
     const requestHeaders = new Headers(request.headers);

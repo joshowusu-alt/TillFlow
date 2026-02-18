@@ -1,9 +1,9 @@
-import { cookies } from 'next/headers';
+import { getUser } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
-export default function Home() {
-  const session = cookies().get('pos_session');
-  if (session?.value) {
+export default async function Home() {
+  const user = await getUser();
+  if (user) {
     redirect('/pos');
   }
   redirect('/welcome');

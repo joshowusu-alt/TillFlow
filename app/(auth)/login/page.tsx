@@ -1,8 +1,14 @@
 ﻿import { login } from '@/app/actions/auth';
+import { getUser } from '@/lib/auth';
 import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export default async function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+  // If the user already has a valid session, send them to POS
+  const user = await getUser();
+  if (user) redirect('/pos');
+
   const error = searchParams?.error;
   return (
     <div className="space-y-6">

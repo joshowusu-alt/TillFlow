@@ -1,8 +1,14 @@
 import { register } from '@/app/actions/register';
+import { getUser } from '@/lib/auth';
 import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export default async function RegisterPage({ searchParams }: { searchParams: { error?: string; mode?: string } }) {
+  // If the user already has a valid session, send them to POS
+  const user = await getUser();
+  if (user) redirect('/pos');
+
   const error = searchParams?.error;
   const isDemo = searchParams?.mode === 'demo';
 
