@@ -17,17 +17,17 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
       <div className="text-center">
         <img src="/icon.svg" alt="TillFlow" className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" />
         <h1 className="text-3xl font-bold font-display">
-          <span className="text-emerald-600">Till</span>
+          <span className="text-blue-700">Till</span>
           <span className="text-gray-800">Flow</span>
         </h1>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
 
         {isDemo ? (
           <div className="mt-4">
-            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-sm font-medium text-emerald-700 mb-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 border border-blue-200 px-4 py-1.5 text-sm font-medium text-blue-700 mb-2">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
               </span>
               Demo Mode
             </div>
@@ -89,7 +89,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
         </div>
 
         {isDemo && (
-          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-sm text-emerald-800">
+          <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-800">
             <span className="font-semibold">Demo includes:</span> 10 products, 7 categories, 3 customers, and 1 supplier loaded automatically.
           </div>
         )}
@@ -109,21 +109,21 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
         {isDemo ? (
           <p className="text-sm text-black/40">
             Want a clean start instead?{' '}
-            <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+            <Link href="/register" className="font-medium text-blue-700 hover:text-blue-700 underline underline-offset-4">
               Create from scratch
             </Link>
           </p>
         ) : (
           <p className="text-sm text-black/40">
             Want to explore first?{' '}
-            <Link href="/register?mode=demo" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+            <Link href="/register?mode=demo" className="font-medium text-blue-700 hover:text-blue-700 underline underline-offset-4">
               Try the demo
             </Link>
           </p>
         )}
         <p className="text-sm text-black/50">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+          <Link href="/login" className="font-medium text-blue-700 hover:text-blue-700 underline underline-offset-4">
             Sign in
           </Link>
         </p>

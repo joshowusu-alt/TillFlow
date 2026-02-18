@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center">
         <img src="/icon.svg" alt="TillFlow" className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" />
         <h1 className="text-3xl font-bold font-display">
-          <span className="text-emerald-600">Till</span>
+          <span className="text-blue-700">Till</span>
           <span className="text-gray-800">Flow</span>
         </h1>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
@@ -25,6 +25,8 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
             ? 'This account requires a 2FA code from your authenticator app.'
             : error === 'otp_invalid'
             ? 'Invalid 2FA code. Please try again.'
+            : error === 'server'
+            ? 'Unable to connect. Please try again in a moment.'
             : 'Invalid credentials. Please try again.'}
         </div>
       )}
@@ -52,7 +54,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+          <Link href="/register" className="font-medium text-blue-700 hover:text-blue-800 underline underline-offset-4">
             Create one free
           </Link>
         </p>

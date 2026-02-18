@@ -44,6 +44,8 @@ export async function login(formData: FormData) {
   const ipAddress = getClientIpAddress();
   const userAgent = getClientUserAgent();
 
+  try {
+
   const throttleStatus = await getLoginThrottleStatus(email, ipAddress);
   if (throttleStatus.isBlocked) {
     appLog('warn', 'Login blocked by rate limiter', { email, ipAddress });
@@ -146,6 +148,12 @@ export async function login(formData: FormData) {
   }
 
   redirect('/pos');
+  } catch (err: unknown) {
+    // redirect() throws internally in Next.js — let it propagate
+    if (err instanceof Error && err.message === 'NEXT_REDIRECT') throw err;
+    appLog('error', 'Login error', { error: String(err) });
+    redirect('/login?error=server');
+  }
 }
 
 export async function logout() {

@@ -74,7 +74,7 @@ export default function WelcomePage() {
           <div className="flex items-center gap-2.5">
             <img src="/icon.svg" alt="" className="h-9 w-9 rounded-xl" />
             <span className="text-xl font-bold font-display">
-              <span className="text-emerald-600">Till</span>
+              <span className="text-blue-700">Till</span>
               <span className="text-gray-800">Flow</span>
             </span>
           </div>
@@ -87,7 +87,7 @@ export default function WelcomePage() {
             </Link>
             <Link
               href="/register"
-              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 hover:shadow-emerald-600/40"
+              className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-700/25 transition hover:bg-blue-800 hover:shadow-blue-700/40"
             >
               Start Free
             </Link>
@@ -99,24 +99,24 @@ export default function WelcomePage() {
       <section className="relative pt-32 pb-20 px-6">
         {/* Background decoration */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 h-[600px] w-[600px] rounded-full bg-emerald-100/50 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-teal-100/40 blur-3xl" />
+          <div className="absolute -top-40 -right-40 h-[600px] w-[600px] rounded-full bg-blue-100/50 blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-indigo-100/40 blur-3xl" />
         </div>
 
         <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto max-w-3xl text-center">
             {/* Badge */}
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-1.5 text-sm font-medium text-emerald-700">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
               </span>
               Trusted by businesses across Africa
             </div>
 
             <h1 className="text-5xl font-bold font-display tracking-tight text-gray-900 sm:text-6xl lg:text-7xl">
               Run Your Store{' '}
-              <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent">
                 Like a Pro
               </span>
             </h1>
@@ -129,7 +129,7 @@ export default function WelcomePage() {
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <Link
                 href="/register?mode=demo"
-                className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-600/25 transition-all hover:shadow-2xl hover:shadow-emerald-600/30 hover:-translate-y-0.5"
+                className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-blue-700/25 transition-all hover:shadow-2xl hover:shadow-blue-700/30 hover:-translate-y-0.5"
               >
                 <svg className="h-5 w-5 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
@@ -138,7 +138,7 @@ export default function WelcomePage() {
               </Link>
               <Link
                 href="/register"
-                className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-emerald-200 hover:shadow-xl hover:-translate-y-0.5"
+                className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-blue-200 hover:shadow-xl hover:-translate-y-0.5"
               >
                 Create My Business
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
@@ -150,15 +150,15 @@ export default function WelcomePage() {
             {/* Social Proof */}
             <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-black/40">
               <span className="flex items-center gap-1.5">
-                <svg className="h-4 w-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                 No credit card required
               </span>
               <span className="flex items-center gap-1.5">
-                <svg className="h-4 w-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                 Setup in 5 minutes
               </span>
               <span className="flex items-center gap-1.5">
-                <svg className="h-4 w-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
                 Works offline
               </span>
             </div>
@@ -170,11 +170,11 @@ export default function WelcomePage() {
               {/* Simulated POS Interface */}
               <div className="px-6 py-4 border-b border-black/5 flex items-center justify-between bg-white">
                 <div className="flex items-center gap-3">
-                  <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                  <div className="h-3 w-3 rounded-full bg-blue-400" />
                   <span className="text-sm font-semibold text-black/70">Point of Sale</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Online</div>
+                  <div className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Online</div>
                   <div className="rounded-lg bg-black/5 px-3 py-1 text-xs font-medium text-black/40">Till 1</div>
                 </div>
               </div>
@@ -196,12 +196,12 @@ export default function WelcomePage() {
                     { name: 'Indomie Noodles', qty: 6, price: '4.00', unit: 'packs', promo: 'Buy 5 Get 1 Free!' },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-3 rounded-xl border border-black/5 bg-white p-3.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-xs font-bold text-emerald-600">{i + 1}</div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-700">{i + 1}</div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold truncate">{item.name}</div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-black/40">{item.qty} {item.unit}</span>
-                          {item.promo && <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">{item.promo}</span>}
+                          {item.promo && <span className="text-[10px] font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">{item.promo}</span>}
                         </div>
                       </div>
                       <div className="text-sm font-bold">{item.price}</div>
@@ -215,14 +215,14 @@ export default function WelcomePage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-black/50">Items</span><span className="font-semibold">3</span></div>
                       <div className="flex justify-between"><span className="text-black/50">Subtotal</span><span className="font-semibold">14.30</span></div>
-                      <div className="flex justify-between text-emerald-700"><span>Promo discount</span><span className="font-semibold">-0.80</span></div>
+                      <div className="flex justify-between text-blue-700"><span>Promo discount</span><span className="font-semibold">-0.80</span></div>
                     </div>
                     <div className="border-t border-black/5 pt-3 flex justify-between items-center">
                       <span className="text-lg font-semibold">Total</span>
                       <span className="text-2xl font-bold">13.50</span>
                     </div>
                   </div>
-                  <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 text-center text-white shadow-lg">
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 p-5 text-center text-white shadow-lg">
                     <div className="text-[10px] font-medium uppercase tracking-[0.3em] opacity-80">Change Due</div>
                     <div className="mt-1 text-3xl font-bold">6.50</div>
                   </div>
@@ -239,7 +239,7 @@ export default function WelcomePage() {
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             {stats.map((s) => (
               <div key={s.label} className="text-center">
-                <div className="text-3xl font-bold font-display text-emerald-600">{s.value}</div>
+                <div className="text-3xl font-bold font-display text-blue-700">{s.value}</div>
                 <div className="mt-1 text-sm text-black/50">{s.label}</div>
               </div>
             ))}
@@ -262,9 +262,9 @@ export default function WelcomePage() {
             {features.map((f) => (
               <div
                 key={f.title}
-                className="group rounded-2xl border border-black/5 bg-white/80 p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-emerald-100"
+                className="group rounded-2xl border border-black/5 bg-white/80 p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-blue-100"
               >
-                <div className="mb-4 inline-flex rounded-xl bg-emerald-50 p-3 text-emerald-600 transition-colors group-hover:bg-emerald-100">
+                <div className="mb-4 inline-flex rounded-xl bg-blue-50 p-3 text-blue-700 transition-colors group-hover:bg-blue-100">
                   {f.icon}
                 </div>
                 <h3 className="text-lg font-semibold font-display">{f.title}</h3>
@@ -276,7 +276,7 @@ export default function WelcomePage() {
       </section>
 
       {/* How It Works */}
-      <section className="relative py-20 px-6 bg-gradient-to-b from-transparent to-emerald-50/50">
+      <section className="relative py-20 px-6 bg-gradient-to-b from-transparent to-blue-50/50">
         <div className="mx-auto max-w-4xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold font-display sm:text-4xl">Up and Running in 3 Steps</h2>
@@ -284,9 +284,9 @@ export default function WelcomePage() {
           </div>
           <div className="grid gap-8 md:grid-cols-3">
             {[
-              { step: '01', title: 'Create Account', desc: 'Enter your business name, currency, and go. Takes 30 seconds.', color: 'from-emerald-500 to-emerald-600' },
-              { step: '02', title: 'Add Products', desc: 'Type or scan your products. Set prices, units, and categories.', color: 'from-teal-500 to-teal-600' },
-              { step: '03', title: 'Start Selling', desc: 'Open the POS, scan items, collect payment. That simple.', color: 'from-emerald-600 to-teal-500' },
+              { step: '01', title: 'Create Account', desc: 'Enter your business name, currency, and go. Takes 30 seconds.', color: 'from-blue-600 to-blue-700' },
+              { step: '02', title: 'Add Products', desc: 'Type or scan your products. Set prices, units, and categories.', color: 'from-indigo-500 to-indigo-600' },
+              { step: '03', title: 'Start Selling', desc: 'Open the POS, scan items, collect payment. That simple.', color: 'from-blue-700 to-indigo-600' },
             ].map((s) => (
               <div key={s.step} className="text-center">
                 <div className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${s.color} text-xl font-bold text-white shadow-lg`}>
@@ -313,13 +313,13 @@ export default function WelcomePage() {
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
               href="/register?mode=demo"
-              className="rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-600/25 transition-all hover:shadow-2xl hover:-translate-y-0.5"
+              className="rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-600 px-8 py-4 text-base font-bold text-white shadow-xl shadow-blue-700/25 transition-all hover:shadow-2xl hover:-translate-y-0.5"
             >
               Try Live Demo
             </Link>
             <Link
               href="/register"
-              className="rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold transition-all hover:border-emerald-200 hover:shadow-xl hover:-translate-y-0.5"
+              className="rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold transition-all hover:border-blue-200 hover:shadow-xl hover:-translate-y-0.5"
             >
               Create My Business
             </Link>
@@ -333,7 +333,7 @@ export default function WelcomePage() {
           <div className="flex items-center gap-2">
             <img src="/icon.svg" alt="" className="h-6 w-6 rounded-lg" />
             <span className="text-sm font-semibold font-display">
-              <span className="text-emerald-600">Till</span>
+              <span className="text-blue-700">Till</span>
               <span className="text-gray-800">Flow</span>
             </span>
           </div>
