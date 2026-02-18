@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { formatMoney } from '@/lib/format';
-import { openShiftAction, closeShiftAction } from '@/app/actions/shifts';
+import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction } from '@/app/actions/shifts';
 
 type Till = { id: string; name: string };
 
@@ -42,9 +42,10 @@ type Props = {
   openShift: OpenShift | null;
   recentShifts: RecentShift[];
   currency: string;
+  userRole?: string;
 };
 
-export default function ShiftClient({ tills, openShift, recentShifts, currency }: Props) {
+export default function ShiftClient({ tills, openShift, recentShifts, currency, userRole }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
@@ -55,6 +56,11 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
   const [varianceReasonCode, setVarianceReasonCode] = useState('');
   const [varianceReason, setVarianceReason] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showOwnerOverride, setShowOwnerOverride] = useState(false);
+  const [ownerPassword, setOwnerPassword] = useState('');
+  const [overrideReasonCode, setOverrideReasonCode] = useState('');
+  const [overrideJustification, setOverrideJustification] = useState('');
+  const isOwner = userRole === 'OWNER';
 
   const handleOpenShift = () => {
     setError(null);
@@ -80,19 +86,34 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
     formData.set('shiftId', openShift.id);
     formData.set('actualCash', actualCash);
     formData.set('notes', closeNotes);
-    formData.set('managerPin', managerPin);
     formData.set('varianceReasonCode', varianceReasonCode);
     formData.set('varianceReason', varianceReason);
 
+    if (showOwnerOverride) {
+      formData.set('ownerPassword', ownerPassword);
+      formData.set('overrideReasonCode', overrideReasonCode);
+      formData.set('overrideJustification', overrideJustification);
+    } else {
+      formData.set('managerPin', managerPin);
+    }
+
     startTransition(async () => {
       try {
-        await closeShiftAction(formData);
+        if (showOwnerOverride) {
+          await closeShiftOwnerOverrideAction(formData);
+        } else {
+          await closeShiftAction(formData);
+        }
         setShowCloseModal(false);
         setActualCash('');
         setCloseNotes('');
         setManagerPin('');
         setVarianceReasonCode('');
         setVarianceReason('');
+        setOwnerPassword('');
+        setOverrideReasonCode('');
+        setOverrideJustification('');
+        setShowOwnerOverride(false);
         window.location.reload();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
@@ -438,18 +459,76 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
               />
             </div>
 
-            <div className="mt-4">
-              <label className="label">Manager PIN (required)</label>
-              <input
-                className="input"
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={managerPin}
-                onChange={(e) => setManagerPin(e.target.value)}
-                placeholder="Enter manager approval PIN"
-              />
-            </div>
+            {!showOwnerOverride ? (
+              <div className="mt-4">
+                <label className="label">Manager PIN (required)</label>
+                <input
+                  className="input"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={managerPin}
+                  onChange={(e) => setManagerPin(e.target.value)}
+                  placeholder="Enter manager approval PIN"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
+                <div>
+                  <label className="label">Your Password</label>
+                  <input
+                    className="input"
+                    type="password"
+                    value={ownerPassword}
+                    onChange={(e) => setOwnerPassword(e.target.value)}
+                    placeholder="Re-enter your login password"
+                  />
+                </div>
+                <div>
+                  <label className="label">Reason Code</label>
+                  <select
+                    className="input"
+                    value={overrideReasonCode}
+                    onChange={(e) => setOverrideReasonCode(e.target.value)}
+                  >
+                    <option value="">Select reason...</option>
+                    <option value="MANAGER_UNAVAILABLE">Manager unavailable</option>
+                    <option value="EMERGENCY_CLOSE">Emergency close</option>
+                    <option value="SYSTEM_ISSUE">System/PIN issue</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Justification</label>
+                  <textarea
+                    className="input"
+                    rows={2}
+                    value={overrideJustification}
+                    onChange={(e) => setOverrideJustification(e.target.value)}
+                    placeholder="Explain why owner override is needed"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isOwner ? (
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  className="text-xs text-black/50 underline hover:text-black/80"
+                  onClick={() => {
+                    setShowOwnerOverride(!showOwnerOverride);
+                    setManagerPin('');
+                    setOwnerPassword('');
+                    setOverrideReasonCode('');
+                    setOverrideJustification('');
+                  }}
+                >
+                  {showOwnerOverride ? 'Use Manager PIN instead' : 'Owner Override (no PIN)'}
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-6 flex gap-3">
               <button
@@ -466,7 +545,8 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                 disabled={
                   isPending ||
                   !actualCash ||
-                  !managerPin ||
+                  (!showOwnerOverride && !managerPin) ||
+                  (showOwnerOverride && (!ownerPassword || !overrideReasonCode || !overrideJustification.trim())) ||
                   (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
                 }
               >

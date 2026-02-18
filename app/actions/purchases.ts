@@ -3,6 +3,7 @@
 import { createPurchase } from '@/lib/services/purchases';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -52,6 +53,8 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     });
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
+
+    revalidateTag('pos-products');
 
     redirect('/purchases');
   }, '/purchases');
@@ -114,6 +117,8 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       entityId: purchaseId,
       details: { action: 'DELETE', lines: invoice.lines.length },
     });
+
+    revalidateTag('pos-products');
 
     return ok();
   });

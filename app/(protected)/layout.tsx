@@ -36,6 +36,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
         mode={(business?.mode as any) ?? 'SIMPLE'}
+        storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
       />
 

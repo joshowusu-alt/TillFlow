@@ -216,6 +216,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               </label>
             </div>
           </div>
+          <div>
+            <label className="label">Store Mode</label>
+            <select className="input" name="storeMode" defaultValue={(business as any).storeMode ?? 'SINGLE_STORE'}>
+              <option value="SINGLE_STORE">Single Store</option>
+              <option value="MULTI_STORE">Multi-Store</option>
+            </select>
+            <div className="mt-1 text-xs text-black/50">
+              Single Store hides Transfers and multi-branch features.
+            </div>
+          </div>
           <div className="md:col-span-2">
             <SubmitButton className="btn-primary" loadingText="Saving…">Save settings</SubmitButton>
           </div>

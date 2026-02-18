@@ -40,8 +40,10 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
+    const paidAtStr = formString(formData, 'paidAt');
+    const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
 
-    await recordSupplierPayment(businessId, invoiceId, payments);
+    await recordSupplierPayment(businessId, invoiceId, payments, paidAt);
     redirect('/payments/supplier-payments');
   }, '/payments/supplier-payments');
 }

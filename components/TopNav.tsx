@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { logout } from '@/app/actions/auth';
-import { getFeatures, type BusinessMode } from '@/lib/features';
+import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
 import InstallButton from './InstallButton';
 
 const navGroups = [
@@ -83,14 +83,16 @@ export type TopNavUser = {
 export default function TopNav({
   user,
   mode,
+  storeMode,
   storeName,
 }: {
   user: TopNavUser;
   mode?: BusinessMode;
+  storeMode?: StoreMode;
   storeName?: string;
 }) {
   const pathname = usePathname();
-  const features = getFeatures(mode ?? 'SIMPLE');
+  const features = getFeatures(mode ?? 'SIMPLE', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -119,10 +121,13 @@ export default function TopNav({
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => item.roles.includes(user.role))
+        items: group.items.filter((item) =>
+          item.roles.includes(user.role) &&
+          (features.multiStore || item.href !== '/transfers')
+        )
       }))
       .filter((group) => group.items.length > 0);
-  }, [user.role]);
+  }, [user.role, features.multiStore]);
 
   useEffect(() => {
     setOpenGroup(null);

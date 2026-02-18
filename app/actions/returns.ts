@@ -2,6 +2,7 @@
 
 import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -86,6 +87,8 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       },
     });
 
+    revalidateTag('pos-products');
+
     redirect('/sales');
   }, '/sales');
 }
@@ -111,6 +114,8 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     });
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
+
+    revalidateTag('pos-products');
 
     redirect('/purchases');
   }, '/purchases');

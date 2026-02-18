@@ -15,6 +15,7 @@ model Business {
   vatEnabled                           Boolean  @default(false)
   vatNumber                            String?
   mode                                 String   @default("SIMPLE")
+  storeMode                            String   @default("SINGLE_STORE")
   receiptTemplate                      String   @default("THERMAL_80")
   printMode                            String   @default("DIRECT_ESC_POS")
   printerName                          String?
@@ -152,6 +153,9 @@ model Shift {
   closureSnapshotJson          String?
   notes                        String?
   status                       String    @default("OPEN")
+  ownerOverride              Boolean  @default(false)
+  ownerOverrideReasonCode    String?
+  ownerOverrideJustification String?
 
   till                   Till              @relation(fields: [tillId], references: [id])
   user                   User              @relation("ShiftOpenedBy", fields: [userId], references: [id])

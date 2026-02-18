@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { formAction, withBusinessContext, err, ok, safeAction, type ActionResult } from '@/lib/action-utils';
 import { formInt, formOptionalString, formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
@@ -96,6 +97,8 @@ export async function approveStockTransferActionSafe(input: {
         lines: transfer.lines.map((line) => ({ productId: line.productId, qtyBase: line.qtyBase })),
       },
     });
+
+    revalidateTag('pos-products');
 
     return ok({ transferId: transfer.id });
   });

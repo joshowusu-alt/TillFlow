@@ -42,6 +42,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     );
     const openingCapitalRaw = parseInt((formData.get('openingCapitalPence') as string) || '0', 10) || 0;
     const openingCapitalPence = Math.max(0, openingCapitalRaw);
+    const storeModeRaw = (formString(formData, 'storeMode') || 'SINGLE_STORE').toUpperCase();
+    const storeMode = storeModeRaw === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
 
     await prisma.business.update({
       where: { id: businessId },
@@ -67,6 +69,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         discountApprovalThresholdBps,
         inventoryAdjustmentRiskThresholdBase,
         cashVarianceRiskThresholdPence,
+        storeMode,
       }
     });
 

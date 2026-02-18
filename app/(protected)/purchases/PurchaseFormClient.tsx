@@ -90,6 +90,9 @@ export default function PurchaseFormClient({
   );
   const unitsForProduct = selectedProduct?.units ?? [];
   const selectedUnit = unitsForProduct.find((unit) => unit.id === unitId);
+  const hasMultipleUnits = unitsForProduct.length > 1;
+  const baseUnit = unitsForProduct.find((u) => u.isBaseUnit);
+  const qtyNumber = Math.max(0, Math.floor(Number(qtyInput) || 0));
 
   const parseCurrencyToPence = (value: string) => {
     const trimmed = value.replace(/,/g, '').trim();
@@ -537,30 +540,37 @@ export default function PurchaseFormClient({
             </select>
           </div>
           <div>
-            <label className="label">Unit</label>
-            <select
-              className="input"
-              value={unitId}
-              onChange={(event) => {
-                setUnitId(event.target.value);
-                setUnitCostTouched(false);
-                setUnitCostInput('');
-              }}
-            >
-              {unitsForProduct.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
-            {selectedUnit ? (
-              <div className="mt-1 text-xs text-black/50">
-                1 {selectedUnit.name} = {selectedUnit.conversionToBase} base units
+            <label className="label">Buy in</label>
+            {hasMultipleUnits ? (
+              <div className="mt-1 flex gap-1">
+                {unitsForProduct.map((unit) => (
+                  <button
+                    key={unit.id}
+                    type="button"
+                    onClick={() => {
+                      setUnitId(unit.id);
+                      setUnitCostTouched(false);
+                      setUnitCostInput('');
+                    }}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                      unitId === unit.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-black/5 text-black/60 hover:bg-black/10'
+                    }`}
+                  >
+                    {unit.name}
+                    {unit.conversionToBase > 1 ? ` (${unit.conversionToBase})` : ''}
+                  </button>
+                ))}
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm">
+                {selectedUnit?.name ?? 'Unit'}
+              </div>
+            )}
           </div>
           <div>
-            <label className="label">Quantity</label>
+            <label className="label">Quantity ({selectedUnit?.name ?? 'units'})</label>
             <input
               className="input"
               type="number"
@@ -571,9 +581,14 @@ export default function PurchaseFormClient({
               onChange={(event) => setQtyInput(event.target.value)}
               onFocus={(event) => event.currentTarget.select()}
             />
+            {selectedUnit && selectedUnit.conversionToBase > 1 && qtyNumber > 0 ? (
+              <div className="mt-1 text-xs font-medium text-emerald-700">
+                = {qtyNumber * selectedUnit.conversionToBase} {baseUnit?.pluralName ?? baseUnit?.name ?? 'units'}
+              </div>
+            ) : null}
           </div>
           <div>
-            <label className="label">Unit Cost (per selected unit)</label>
+            <label className="label">Cost per {selectedUnit?.name ?? 'unit'}</label>
             <input
               className="input"
               type="number"
@@ -588,6 +603,13 @@ export default function PurchaseFormClient({
               placeholder="e.g., 12.50"
               onFocus={(event) => event.currentTarget.select()}
             />
+            {selectedUnit && selectedUnit.conversionToBase > 1 && unitCostInput ? (
+              <div className="mt-1 text-xs text-black/60">
+                {formatMoney(parseCurrencyToPence(unitCostInput), currency)} per {selectedUnit.name}
+                {' · '}
+                {formatMoney(Math.round(parseCurrencyToPence(unitCostInput) / selectedUnit.conversionToBase), currency)} per {baseUnit?.name ?? 'unit'}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-end">
             <button type="button" className="btn-primary w-full" onClick={addToCart}>
@@ -661,7 +683,10 @@ export default function PurchaseFormClient({
                         onFocus={(event) => event.currentTarget.select()}
                       />
                       <div className="mt-1 text-xs text-black/50">
-                        {formatMoney(line.unitCostPence, currency)} per unit
+                        {formatMoney(line.unitCostPence, currency)} per {line.unit.name}
+                        {line.unit.conversionToBase > 1 ? (
+                          <> · {formatMoney(Math.round(line.unitCostPence / line.unit.conversionToBase), currency)} per {line.product.units.find((u) => u.isBaseUnit)?.name ?? 'unit'}</>
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-sm font-semibold">

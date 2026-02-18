@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
 import { createStockAdjustment } from '@/lib/services/inventory';
 import { audit } from '@/lib/audit';
@@ -171,6 +172,8 @@ export async function completeStocktakeAction(data: {
         adjustedLines: adjustedCount,
       },
     });
+
+    revalidateTag('pos-products');
 
     return { success: true };
   });

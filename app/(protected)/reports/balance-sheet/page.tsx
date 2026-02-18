@@ -6,6 +6,7 @@ import { formatMoney } from '@/lib/format';
 import { getBalanceSheet } from '@/lib/reports/financials';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { isAdvancedMode } from '@/lib/features';
+import BalanceSheetDatePicker from './BalanceSheetDatePicker';
 
 export default async function BalanceSheetPage({
   searchParams
@@ -61,15 +62,7 @@ export default async function BalanceSheetPage({
       </div>
 
       <div className="card p-6">
-        <form className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="label">As of</label>
-            <input className="input" name="asOf" type="date" defaultValue={asOfStr} />
-          </div>
-          <div className="flex items-end">
-            <button className="btn-primary w-full">Update</button>
-          </div>
-        </form>
+        <BalanceSheetDatePicker defaultValue={asOfStr} />
       </div>
 
       {!hasData ? (

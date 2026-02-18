@@ -117,6 +117,7 @@ export default async function ShiftsPage() {
           momoTotalPence: s.momoTotalPence ?? 0
         }))}
         currency={business.currency}
+        userRole={user.role}
       />
     </div>
   );

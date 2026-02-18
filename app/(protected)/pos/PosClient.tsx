@@ -15,6 +15,7 @@ import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
+import QuickAddCustomer from './components/QuickAddCustomer';
 
 type UnitDto = {
   id: string;
@@ -157,6 +158,8 @@ export default function PosClient({
   const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
   const maxUndoSteps = 10;
   const [cartRestored, setCartRestored] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState(customers);
+  const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const cartInitialized = useRef(false);
 
   // Park/hold state
@@ -300,7 +303,7 @@ export default function PosClient({
         }
       }
       if (savedCustomer) {
-        const customerExists = customers.some((c) => c.id === savedCustomer);
+        const customerExists = customerOptions.some((c) => c.id === savedCustomer);
         if (customerExists) {
           setCustomerId(savedCustomer);
         }
@@ -308,7 +311,7 @@ export default function PosClient({
     } catch {
       // Ignore parse errors
     }
-  }, [productOptions, customers]);
+  }, [productOptions, customerOptions]);
 
   // Save cart to localStorage when it changes
   useEffect(() => {
@@ -411,11 +414,11 @@ export default function PosClient({
     );
     setCart(validCart);
     if (parked.customerId) {
-      const customerExists = customers.some((c) => c.id === parked.customerId);
+      const customerExists = customerOptions.some((c) => c.id === parked.customerId);
       setCustomerId(customerExists ? parked.customerId : '');
     }
     playBeep(true);
-  }, [cart, customerId, customers, parkedCarts, productOptions, saveParkedCarts, playBeep]);
+  }, [cart, customerId, customerOptions, parkedCarts, productOptions, saveParkedCarts, playBeep]);
 
   const deleteParkedCart = useCallback((parkedId: string) => {
     saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
@@ -522,6 +525,23 @@ export default function PosClient({
     setIsCompletingSale(true);
     setSaleError(null);
 
+    // Optimistic: decrement stock in local state immediately for instant feedback
+    const preOptimisticProducts = productOptions;
+    const stockDecrements = new Map<string, number>();
+    for (const line of cart) {
+      const product = productOptions.find(p => p.id === line.productId);
+      const unit = product?.units.find(u => u.id === line.unitId);
+      if (product && unit) {
+        const baseQty = line.qtyInUnit * unit.conversionToBase;
+        stockDecrements.set(line.productId, (stockDecrements.get(line.productId) ?? 0) + baseQty);
+      }
+    }
+    setProductOptions(prev => prev.map(p => {
+      const decrement = stockDecrements.get(p.id);
+      if (decrement) return { ...p, onHandBase: Math.max(0, p.onHandBase - decrement) };
+      return p;
+    }));
+
     try {
       const result = await completeSaleAction({
         storeId: store.id,
@@ -581,10 +601,14 @@ export default function PosClient({
         // Refresh server data (product stock levels etc)
         router.refresh();
       } else {
+        // Revert optimistic stock on error
+        setProductOptions(preOptimisticProducts);
         setSaleError(result.error);
         playBeep(false);
       }
     } catch {
+      // Revert optimistic stock on error
+      setProductOptions(preOptimisticProducts);
       setSaleError('Something went wrong. Please try again.');
       playBeep(false);
     } finally {
@@ -1605,12 +1629,18 @@ export default function PosClient({
                   onChange={(e) => setCustomerId(e.target.value)}
                 >
                   <option value="">{requiresCustomer ? 'Select a customer…' : 'Walk-in / None'}</option>
-                  {customers.map((customer) => (
+                  {customerOptions.map((customer) => (
                     <option key={customer.id} value={customer.id}>{customer.name}</option>
                   ))}
                 </select>
               </div>
-              <Link className="btn-secondary text-xs whitespace-nowrap mt-5" href="/customers">+ New</Link>
+              <button
+                type="button"
+                className="btn-secondary text-xs whitespace-nowrap mt-5"
+                onClick={() => setShowQuickCustomer(true)}
+              >
+                + New
+              </button>
             </div>
 
             {/* Order discount */}
@@ -1762,6 +1792,17 @@ export default function PosClient({
                     onChange={(e) => setMomoPayerMsisdn(e.target.value)}
                     placeholder="Payer number (e.g. 024xxxxxxx)"
                   />
+                  {momoCollectionStatus === 'IDLE' ? (
+                    <div className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 space-y-0.5">
+                      <div className="font-semibold">How MoMo works:</div>
+                      <ol className="list-decimal pl-4 space-y-0.5">
+                        <li>Enter the customer&apos;s MoMo number above</li>
+                        <li>Click &quot;Request MoMo Collection&quot; to send a prompt</li>
+                        <li>Customer approves the payment on their phone</li>
+                        <li>Status changes to CONFIRMED when done</li>
+                      </ol>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className="btn-secondary mt-1.5 w-full text-xs"
@@ -1793,7 +1834,26 @@ export default function PosClient({
                     {momoRef ? ` | Ref: ${momoRef}` : ''}
                   </div>
                   {momoCollectionError ? (
-                    <div className="mt-1 text-[11px] font-medium text-rose-700">{momoCollectionError}</div>
+                    <div className="mt-1.5 space-y-1">
+                      <div className="text-[11px] font-medium text-rose-700">
+                        {['credential', 'api key', 'unauthorized', 'not configured', 'subscription', '401', '403'].some(
+                          (kw) => momoCollectionError.toLowerCase().includes(kw)
+                        )
+                          ? 'MoMo is not connected. Ask your admin to connect MTN MoMo in Settings.'
+                          : momoCollectionError}
+                      </div>
+                      {['credential', 'api key', 'unauthorized', 'not configured', '401', '403'].some(
+                        (kw) => momoCollectionError.toLowerCase().includes(kw)
+                      ) ? (
+                        <Link href="/settings" className="text-[11px] text-emerald-600 underline">
+                          Go to Settings
+                        </Link>
+                      ) : null}
+                      <details className="text-[10px] text-black/40">
+                        <summary className="cursor-pointer hover:text-black/60">Show technical details</summary>
+                        <pre className="mt-1 whitespace-pre-wrap break-all">{momoCollectionError}</pre>
+                      </details>
+                    </div>
                   ) : null}
                 </div>
               )}
@@ -1882,6 +1942,17 @@ export default function PosClient({
         show={showKeyboardHelp}
         onClose={() => setShowKeyboardHelp(false)}
       />
+      {showQuickCustomer ? (
+        <QuickAddCustomer
+          currency={business.currency}
+          onCreated={(customer) => {
+            setCustomerOptions((prev) => [...prev, customer]);
+            setCustomerId(customer.id);
+            setShowQuickCustomer(false);
+          }}
+          onClose={() => setShowQuickCustomer(false)}
+        />
+      ) : null}
     </div>
   );
 }

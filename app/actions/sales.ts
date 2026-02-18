@@ -2,6 +2,7 @@
 
 import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -256,6 +257,8 @@ export async function completeSaleAction(data: {
       details: { lines: lines.length, total: invoice.totalPence },
     });
 
+    revalidateTag('pos-products');
+
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence } };
   });
 }
@@ -306,6 +309,8 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
         refundMethod: result.refundMethod,
       },
     });
+
+    revalidateTag('pos-products');
 
     redirect('/sales?amended=true');
   }, '/sales');

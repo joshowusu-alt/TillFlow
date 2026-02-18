@@ -5,6 +5,7 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requestStockTransferAction, approveStockTransferAction } from '@/app/actions/transfers';
 import { formatDateTime } from '@/lib/format';
+import { redirect } from 'next/navigation';
 
 export default async function TransfersPage({
   searchParams,
@@ -12,6 +13,10 @@ export default async function TransfersPage({
   searchParams?: { error?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+
+  if ((business as any).storeMode !== 'MULTI_STORE') {
+    redirect('/pos');
+  }
 
   const [stores, products, transfers] = await Promise.all([
     prisma.store.findMany({

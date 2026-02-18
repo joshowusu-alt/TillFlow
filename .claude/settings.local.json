@@ -20,7 +20,8 @@
       "WebFetch(domain:supermarket-pos-five.vercel.app)",
       "Bash(npx tsc:*)",
       "Bash(npx prisma validate:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(npx prisma migrate dev:*)"
     ]
   }
 }

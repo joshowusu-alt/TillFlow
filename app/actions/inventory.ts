@@ -2,6 +2,7 @@
 
 import { createStockAdjustment } from '@/lib/services/inventory';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
 import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -30,6 +31,8 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     });
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'INVENTORY_ADJUST', entity: 'Product', entityId: productId, details: { direction, qtyInUnit, unitId, reason } });
+
+    revalidateTag('pos-products');
 
     redirect('/inventory/adjustments');
   }, '/inventory');
