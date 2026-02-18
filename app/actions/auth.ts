@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -149,8 +150,8 @@ export async function login(formData: FormData) {
 
   redirect('/pos');
   } catch (err: unknown) {
-    // redirect() throws internally in Next.js — let it propagate
-    if (err instanceof Error && err.message === 'NEXT_REDIRECT') throw err;
+    // redirect() throws a special internal error — always re-throw it
+    if (isRedirectError(err)) throw err;
     appLog('error', 'Login error', { error: String(err) });
     redirect('/login?error=server');
   }
