@@ -256,3 +256,86 @@ input, select, textarea {
 .stagger-children > *:nth-child(4) { animation-delay: .21s; }
 .stagger-children > *:nth-child(5) { animation-delay: .28s; }
 .stagger-children > *:nth-child(6) { animation-delay: .35s; }
+
+/* =============================================
+   PHASE 5 — PREMIUM PRESENCE ADDITIONS
+   ============================================= */
+
+/* ---- Skeleton loader ---- */
+@keyframes skeleton-wave {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.4s ease infinite;
+  border-radius: 6px;
+}
+
+/* ---- Page transitions ---- */
+main#main-content { animation: fade-in-up .25s ease-out; }
+
+/* ---- Buttons: slightly stronger active feedback ---- */
+.btn {
+  transition: background-color 150ms ease, box-shadow 150ms ease,
+              transform 100ms ease, opacity 150ms ease;
+}
+.btn:active { transform: scale(0.96); }
+
+/* ---- Success moment: pulse ring around check ---- */
+@keyframes success-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+  70%  { box-shadow: 0 0 0 12px rgba(5, 150, 105, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+}
+.success-ring { animation: success-ring 0.6s ease-out; }
+
+/* ---- Tiny confetti dots (CSS-only, 6 dots) ---- */
+@keyframes confetti-1 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(-40px,-60px) rotate(360deg);opacity:0} }
+@keyframes confetti-2 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(40px,-60px) rotate(-360deg);opacity:0} }
+@keyframes confetti-3 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(60px,-30px) rotate(180deg);opacity:0} }
+@keyframes confetti-4 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(-60px,-30px) rotate(-180deg);opacity:0} }
+@keyframes confetti-5 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(-20px,-80px) rotate(270deg);opacity:0} }
+@keyframes confetti-6 { 0%{transform:translate(0,0) rotate(0);opacity:1} 100%{transform:translate(20px,-80px) rotate(-270deg);opacity:0} }
+
+.confetti-dot { position:absolute; width:8px; height:8px; border-radius:2px; pointer-events:none; }
+.confetti-dot:nth-child(1){background:#1E40AF;animation:confetti-1 .7s ease-out .1s both;}
+.confetti-dot:nth-child(2){background:#059669;animation:confetti-2 .7s ease-out .15s both;}
+.confetti-dot:nth-child(3){background:#D97706;animation:confetti-3 .7s ease-out .05s both;}
+.confetti-dot:nth-child(4){background:#DC2626;animation:confetti-4 .7s ease-out .2s both;}
+.confetti-dot:nth-child(5){background:#7C3AED;animation:confetti-5 .7s ease-out .1s both;}
+.confetti-dot:nth-child(6){background:#0891B2;animation:confetti-6 .7s ease-out .0s both;}
+
+/* ---- Tooltip (used for MoMo status glossary) ---- */
+.tooltip-wrap { position: relative; display: inline-flex; }
+.tooltip-content {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 220px;
+  background: #111827;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  white-space: normal;
+}
+.tooltip-wrap:hover .tooltip-content,
+.tooltip-wrap:focus-within .tooltip-content { opacity: 1; }
+
+/* ---- Empty state helpfulness improvements ---- */
+.empty-state {
+  @apply flex flex-col items-center justify-center py-16 text-center;
+}
+.empty-state-icon { @apply mb-4 text-5xl; }
+.empty-state-title { @apply text-base font-semibold text-ink; }
+.empty-state-body  { @apply mt-1 max-w-sm text-sm text-muted; }
+.empty-state-actions { @apply mt-6 flex flex-wrap justify-center gap-3; }
+

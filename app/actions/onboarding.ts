@@ -26,6 +26,7 @@ export type ReadinessData = {
   staffCount: number;
   saleCount: number;
   onboardingComplete: boolean;
+  guidedSetup: boolean;
 };
 
 /**
@@ -113,6 +114,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     staffCount,
     saleCount,
     onboardingComplete,
+    guidedSetup: business.guidedSetup,
   };
 }
 
@@ -128,4 +130,16 @@ export async function completeOnboarding(): Promise<void> {
       data: { onboardingCompletedAt: new Date() },
     });
   }
+}
+
+/**
+ * Toggle the guided setup preference for the business owner.
+ * Stored in DB so it persists across devices.
+ */
+export async function toggleGuidedSetup(enabled: boolean): Promise<void> {
+  const { business } = await requireBusiness(['OWNER']);
+  await prisma.business.update({
+    where: { id: business.id },
+    data: { guidedSetup: enabled },
+  });
 }

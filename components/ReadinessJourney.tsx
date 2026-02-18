@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
-import { completeOnboarding } from '@/app/actions/onboarding';
+import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
 import { generateDemoDay, wipeDemoData } from '@/app/actions/demo-day';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
@@ -197,6 +197,38 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
   );
 }
 
+/* ────────────────────────────── Guided Setup Toggle ─────────────── */
+function GuidedToggle({ initial }: { initial: boolean }) {
+  const [enabled, setEnabled] = useState(initial);
+  const [, startTransition] = useTransition();
+
+  const handleToggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    startTransition(async () => {
+      await toggleGuidedSetup(next);
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={handleToggle}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
+        enabled ? 'bg-accent' : 'bg-black/15'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+          enabled ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
+
 /* ────────────────────────────── Micro-Win Toast ──────────────────── */
 function MicroWin({ message, show }: { message: string; show: boolean }) {
   if (!show) return null;
@@ -364,6 +396,41 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             isPending={isPending}
           />
         </div>
+
+        {/* First Win — shown when setup is complete */}
+        {allDone && (
+          <div className="animate-fade-in-up mb-6 rounded-2xl border border-success/20 bg-success/5 p-5" style={{ animationDelay: '.35s' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xl">🎉</span>
+              <h2 className="text-base font-bold text-ink">Your next 3 wins</h2>
+            </div>
+            <div className="space-y-2.5">
+              {([
+                { emoji: '📦', label: 'Add your first product', href: '/products', cta: 'Go to Products' },
+                { emoji: '🛒', label: 'Receive your first purchase', href: '/purchases', cta: 'Record Purchase' },
+                { emoji: '💳', label: 'Make your first real sale', href: '/pos', cta: 'Open POS' },
+              ] as const).map(({ emoji, label, href, cta }) => (
+                <div key={href} className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-lg">{emoji}</span>
+                    <span className="text-sm font-medium text-ink">{label}</span>
+                  </div>
+                  <Link href={href} className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+                    {cta} &rarr;
+                  </Link>
+                </div>
+              ))}
+            </div>
+            {/* Guided Setup Toggle */}
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-ink">Guided Setup Tips</p>
+                <p className="text-xs text-muted">Show helpful tooltips on POS, Purchases &amp; Catalog</p>
+              </div>
+              <GuidedToggle initial={data.guidedSetup} />
+            </div>
+          </div>
+        )}
 
         {/* CTA */}
         <div className="animate-fade-in-up text-center space-y-3" style={{ animationDelay: '.4s' }}>

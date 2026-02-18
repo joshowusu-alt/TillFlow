@@ -56,7 +56,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 
     revalidateTag('pos-products');
 
-    redirect('/purchases');
+    redirect('/purchases?created=1');
   }, '/purchases');
 }
 

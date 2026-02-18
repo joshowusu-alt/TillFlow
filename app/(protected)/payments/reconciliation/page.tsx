@@ -111,7 +111,23 @@ export default async function MomoReconciliationPage({
 
       {searchParams?.error ? (
         <div className="rounded-xl border border-rose/30 bg-rose/10 px-4 py-3 text-sm text-rose">
-          {searchParams.error}
+          {/env|config|missing|not.set|undefined/i.test(searchParams.error) ? (
+            <div>
+              <strong>MoMo is not fully connected.</strong>
+              <p className="mt-1 text-xs text-rose/80">Your MoMo credentials haven&apos;t been set up yet. Payments can&apos;t be processed until this is fixed.</p>
+              <div className="mt-2 flex items-center gap-3">
+                <a href="/settings" className="rounded-lg bg-rose px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition">
+                  Connect MoMo →
+                </a>
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-rose/70 hover:text-rose">Show technical details</summary>
+                  <pre className="mt-1 whitespace-pre-wrap font-mono text-[10px] opacity-70">{searchParams.error}</pre>
+                </details>
+              </div>
+            </div>
+          ) : (
+            searchParams.error
+          )}
         </div>
       ) : null}
 
@@ -149,7 +165,22 @@ export default async function MomoReconciliationPage({
               <th>Initiated</th>
               <th>Payer</th>
               <th>Amount</th>
-              <th>Status</th>
+              <th>Status
+                <span className="tooltip-wrap ml-1 cursor-help align-middle">
+                  <svg className="inline h-3.5 w-3.5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="tooltip-content">
+                    <strong>Status Glossary</strong><br />
+                    <br />
+                    <strong>Pending</strong> — Payment initiated, waiting for customer to approve on their phone.<br />
+                    <strong>Confirmed</strong> — Customer approved. Funds are on the way.<br />
+                    <strong>Reconciled</strong> — Confirmed and matched to a sale in TillFlow.<br />
+                    <strong>Failed</strong> — Customer declined or an error occurred. You can retry.<br />
+                    <strong>Timeout</strong> — No response received. Re-check or re-initiate.
+                  </span>
+                </span>
+              </th>
               <th>Provider Ref</th>
               <th>Sale</th>
               <th>Actions</th>
@@ -190,7 +221,10 @@ export default async function MomoReconciliationPage({
                     <span className={`pill ${statusTone}`}>{collection.status}</span>
                     <div className="mt-1 text-[11px] text-black/50">{collection.providerStatus ?? '-'}</div>
                     {collection.failureReason ? (
-                      <div className="mt-1 text-[11px] text-rose">{collection.failureReason}</div>
+                      <details className="mt-1">
+                        <summary className="cursor-pointer text-[11px] text-rose hover:underline">Payment failed — Show reason</summary>
+                        <div className="mt-0.5 text-[11px] text-rose/80 font-mono">{collection.failureReason}</div>
+                      </details>
                     ) : null}
                   </td>
                   <td className="px-3 py-3 text-xs font-mono">{reference}</td>

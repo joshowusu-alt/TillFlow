@@ -1335,12 +1335,19 @@ export default function PosClient({
 
           {/* Success toast */}
           {saleSuccess && (
-            <div className="rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-in fade-in">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-scale-in">
+              {/* Confetti dots */}
+              <span className="confetti-dot" style={{ left: '30%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '50%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '70%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '40%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '60%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '80%', top: '50%' }} />
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                  <div className="success-ring flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" className="animate-check-draw" />
                     </svg>
                   </div>
                   <div>

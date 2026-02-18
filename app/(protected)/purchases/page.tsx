@@ -14,7 +14,7 @@ const PAGE_SIZE = 25;
 export default async function PurchasesPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; page?: string; storeId?: string };
+  searchParams?: { error?: string; page?: string; storeId?: string; created?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
@@ -106,6 +106,21 @@ export default async function PurchasesPage({
     <div className="space-y-6">
       <PageHeader title="Purchases" subtitle="Receive stock and track payables by branch." />
       <FormError error={searchParams?.error} />
+
+      {searchParams?.created === '1' && (
+        <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
+          <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+          <div className="flex-1">
+            <span className="text-sm font-semibold text-success">Stock updated!</span>
+            <span className="ml-1.5 text-sm text-ink/70">All inventory quantities have been adjusted.</span>
+          </div>
+          <Link href="/inventory" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+            View inventory &rarr;
+          </Link>
+        </div>
+      )}
 
       <form method="GET" className="card flex flex-wrap items-end gap-3 p-4">
         <div>

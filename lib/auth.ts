@@ -152,6 +152,7 @@ const _getBusiness = cache(async (businessId: string) => {
       isDemo: true,
       onboardingCompletedAt: true,
       hasDemoData: true,
+      guidedSetup: true,
       createdAt: true,
     }
   });

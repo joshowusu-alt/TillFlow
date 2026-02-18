@@ -52,6 +52,7 @@ model Business {
   // Onboarding tracking
   onboardingCompletedAt                DateTime?
   hasDemoData                          Boolean  @default(false)
+  guidedSetup                          Boolean  @default(true)
   createdAt                            DateTime @default(now())
   updatedAt                            DateTime @updatedAt
 

@@ -45,6 +45,7 @@ const navGroups = [
     id: 'reports',
     label: 'Reports',
     items: [
+      { href: '/reports/owner', label: '⚡ Owner Intelligence', roles: ['OWNER'] },
       { href: '/reports/command-center', label: 'Command Center', roles: ['OWNER'] },
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
