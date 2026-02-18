@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
 // Temporary endpoint — deploy, hit once, then delete this file
-export const maxDuration = 30; // Allow up to 30s for the wipe
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   const { secret } = await req.json();
@@ -13,44 +13,22 @@ export async function POST(req: Request) {
   const prisma = new PrismaClient();
 
   try {
-    // Use TRUNCATE CASCADE for near-instant deletion of all data
-    await prisma.$executeRawUnsafe(`
-      TRUNCATE TABLE
-        "JournalEntry",
-        "SalesPayment",
-        "SalesInvoiceLine",
-        "SalesReturn",
-        "MobileMoneyCollection",
-        "SalesInvoice",
-        "PurchasePayment",
-        "PurchaseInvoiceLine",
-        "PurchaseInvoice",
-        "ExpensePayment",
-        "Expense",
-        "StockAdjustment",
-        "StockTransferLine",
-        "StockTransfer",
-        "InventoryBalance",
-        "Shift",
-        "AuditLog",
-        "Notification",
-        "Session",
-        "Till",
-        "Branch",
-        "ProductUnit",
-        "Product",
-        "Category",
-        "Customer",
-        "Supplier",
-        "Account",
-        "User",
-        "Store",
-        "Business",
-        "Unit"
-      CASCADE
-    `);
+    // Query actual tables in the public schema
+    const rows: { tablename: string }[] = await prisma.$queryRaw`
+      SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+        AND tablename NOT LIKE '_prisma%'
+    `;
+    const tables = rows.map((r) => r.tablename);
 
-    return NextResponse.json({ ok: true, message: 'All tables truncated.' });
+    if (tables.length === 0) {
+      return NextResponse.json({ ok: true, message: 'No tables found.' });
+    }
+
+    // TRUNCATE all tables in a single statement with CASCADE
+    const quoted = tables.map((t) => `"${t}"`).join(', ');
+    await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${quoted} CASCADE`);
+
+    return NextResponse.json({ ok: true, message: `Truncated ${tables.length} tables.`, tables });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: (e as Error).message },
