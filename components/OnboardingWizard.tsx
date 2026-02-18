@@ -133,9 +133,9 @@ function ProductsStep({ onNext, onBack }: StepProps) {
           </div>
         </div>
 
-        <a href="/products" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-emerald-200 hover:shadow-md group">
+        <a href="/products" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-blue-200 hover:shadow-md group">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-accent transition group-hover:bg-blue-100">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             </div>
             <div>
@@ -143,7 +143,7 @@ function ProductsStep({ onNext, onBack }: StepProps) {
               <div className="text-xs text-black/40">Enter names, prices, barcodes, and units</div>
             </div>
           </div>
-          <svg className="h-5 w-5 text-black/20 transition group-hover:text-emerald-500 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <svg className="h-5 w-5 text-black/20 transition group-hover:text-accent group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
         </a>
 
         <a href="/products?tab=categories" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-blue-200 hover:shadow-md group">
@@ -258,7 +258,7 @@ function LaunchStep({ onNext, onBack }: StepProps) {
                 style={{
                   width: `${6 + (i % 4) * 2}px`,
                   height: `${6 + (i % 4) * 2}px`,
-                  backgroundColor: ['#059669', '#0d9488', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'][i % 6],
+                  backgroundColor: ['#1E40AF', '#1D4ED8', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'][i % 6],
                   opacity: 0.5,
                 }}
               />
@@ -267,7 +267,7 @@ function LaunchStep({ onNext, onBack }: StepProps) {
         </div>
       )}
 
-      <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-xl shadow-emerald-500/30">
+      <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-blue-900 shadow-xl shadow-blue-800/30">
         <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
         </svg>

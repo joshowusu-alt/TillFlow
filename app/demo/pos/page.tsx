@@ -75,7 +75,7 @@ export default async function DemoPosPage() {
         <div className="flex gap-2">
           <a
             href="/register"
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-900"
           >
             Start Free Trial →
           </a>
@@ -178,14 +178,14 @@ export default async function DemoPosPage() {
           </div>
 
           {/* CTA */}
-          <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white">
+          <div className="rounded-2xl bg-gradient-to-br from-accent to-blue-900 p-6 text-white">
             <h3 className="mb-2 font-bold text-lg leading-tight">Ready for your store?</h3>
             <p className="mb-4 text-sm text-white/80">
               Get a full instance with multi-branch, WhatsApp alerts, offline mode, and more.
             </p>
             <a
               href="/register"
-              className="block rounded-xl bg-white px-4 py-2 text-center text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+              className="block rounded-xl bg-white px-4 py-2 text-center text-sm font-semibold text-accent hover:bg-blue-50"
             >
               Create Free Account
             </a>

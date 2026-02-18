@@ -188,7 +188,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
             <button
               key={key}
               className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                filter === key ? 'bg-emerald-600 text-white' : 'bg-black/5 text-black/60 hover:bg-black/10'
+                filter === key ? 'bg-accent text-white' : 'bg-black/5 text-black/60 hover:bg-black/10'
               }`}
               onClick={() => setFilter(key)}
             >
@@ -302,7 +302,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
                 <span className="text-sm text-amber-700">
                   Apply {stats.variances} variance{stats.variances !== 1 ? 's' : ''} to stock?
                 </span>
-                <button className="btn-primary text-sm bg-emerald-600" onClick={handleComplete} disabled={pending}>
+                <button className="btn-primary text-sm" onClick={handleComplete} disabled={pending}>
                   Yes, Complete
                 </button>
                 <button className="btn-secondary text-sm" onClick={() => setConfirmComplete(false)}>
@@ -311,7 +311,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
               </div>
             ) : (
               <button
-                className="btn-secondary text-sm border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                className="btn-secondary text-sm"
                 onClick={() => setConfirmComplete(true)}
                 disabled={pending}
               >

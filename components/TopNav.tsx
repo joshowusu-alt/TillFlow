@@ -158,7 +158,7 @@ export default function TopNav({
           <a href="/pos" className="flex items-center gap-2" aria-label="TillFlow — go to POS">
             <img src="/icon.svg" alt="" width="32" height="32" className="h-8 w-8 rounded-lg" aria-hidden="true" />
             <div className="text-lg font-display font-bold">
-              <span className="text-emerald-600">Till</span>
+              <span className="text-accent">Till</span>
               <span className="text-gray-700">Flow</span>
             </div>
           </a>

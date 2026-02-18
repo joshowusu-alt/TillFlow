@@ -78,7 +78,7 @@ export default function InstallPrompt() {
         <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-sm animate-fade-in md:left-auto md:right-4">
             <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">
                 {/* Header gradient */}
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4">
+                <div className="bg-gradient-to-r from-accent to-blue-900 p-4">
                     <div className="flex items-center gap-3">
                         <img src="/icon.svg" alt="TillFlow" className="h-12 w-12 rounded-xl" />
                         <div className="text-white">
@@ -97,19 +97,19 @@ export default function InstallPrompt() {
                     {/* Benefits */}
                     <ul className="mt-3 space-y-1.5">
                         <li className="flex items-center gap-2 text-sm">
-                            <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                             <span>Works offline</span>
                         </li>
                         <li className="flex items-center gap-2 text-sm">
-                            <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                             <span>Faster loading</span>
                         </li>
                         <li className="flex items-center gap-2 text-sm">
-                            <svg className="h-4 w-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
                             <span>Full screen experience</span>
@@ -120,7 +120,7 @@ export default function InstallPrompt() {
                     <div className="mt-4 flex gap-2">
                         <button
                             onClick={handleInstall}
-                            className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 font-semibold text-white transition hover:bg-emerald-700"
+                            className="flex-1 rounded-xl bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-blue-900"
                         >
                             Install
                         </button>

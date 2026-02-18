@@ -1311,7 +1311,7 @@ export default function PosClient({
 
           {/* Success toast */}
           {saleSuccess && (
-            <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-4 text-white shadow-lg animate-in fade-in">
+            <div className="rounded-2xl bg-gradient-to-r from-accent to-blue-900 px-4 py-4 text-white shadow-lg animate-in fade-in">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
