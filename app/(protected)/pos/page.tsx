@@ -1,29 +1,31 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
+import { unstable_cache } from 'next/cache';
 import PosClient from './PosClient';
 
-export default async function PosPage() {
-  const { business, store: baseStore } = await requireBusinessStore();
-  if (!business) {
-    return <div className="card p-6">Run the seed to initialize the business.</div>;
-  }
+// ── Cached lookups for data that rarely changes ───────────────────
+// Revalidates every 60 s or when explicitly invalidated.
+const getCachedUnits = unstable_cache(
+  () => prisma.unit.findMany({ select: { id: true, name: true } }),
+  ['pos-units'],
+  { revalidate: 300, tags: ['pos-units'] }
+);
 
-  // Run ALL data queries in parallel — single round trip to DB
-  const [tills, openShifts, inventory, products, units, customers, categories] = await Promise.all([
-    prisma.till.findMany({
-      where: { storeId: baseStore.id, active: true },
-      select: { id: true, name: true }
+const getCachedCategories = unstable_cache(
+  (businessId: string) =>
+    prisma.category.findMany({
+      where: { businessId },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, colour: true },
     }),
-    prisma.shift.findMany({
-      where: { till: { storeId: baseStore.id }, status: 'OPEN' },
-      select: { tillId: true },
-    }),
-    prisma.inventoryBalance.findMany({
-      where: { storeId: baseStore.id },
-      select: { productId: true, qtyOnHandBase: true }
-    }),
+  ['pos-categories'],
+  { revalidate: 120, tags: ['pos-categories'] }
+);
+
+const getCachedProducts = unstable_cache(
+  (businessId: string) =>
     prisma.product.findMany({
-      where: { businessId: business.id, active: true },
+      where: { businessId, active: true },
       select: {
         id: true,
         name: true,
@@ -40,24 +42,47 @@ export default async function PosPage() {
             unitId: true,
             conversionToBase: true,
             isBaseUnit: true,
-            unit: { select: { name: true, pluralName: true } }
-          }
-        }
-      }
+            unit: { select: { name: true, pluralName: true } },
+          },
+        },
+      },
     }),
-    prisma.unit.findMany({ select: { id: true, name: true } }),
+  ['pos-products'],
+  { revalidate: 60, tags: ['pos-products'] }
+);
+
+export default async function PosPage() {
+  const { business, store: baseStore } = await requireBusinessStore();
+  if (!business) {
+    return <div className="card p-6">Run the seed to initialize the business.</div>;
+  }
+
+  // Layer 1 — cached (rarely-changing) + fresh (session-sensitive) in parallel
+  const [tills, openShifts, inventory, products, units, customers, categories] = await Promise.all([
+    // Fresh: till/shift state must be real-time
+    prisma.till.findMany({
+      where: { storeId: baseStore.id, active: true },
+      select: { id: true, name: true },
+    }),
+    prisma.shift.findMany({
+      where: { till: { storeId: baseStore.id }, status: 'OPEN' },
+      select: { tillId: true },
+    }),
+    prisma.inventoryBalance.findMany({
+      where: { storeId: baseStore.id },
+      select: { productId: true, qtyOnHandBase: true },
+    }),
+    // Cached: products, units, categories change infrequently
+    getCachedProducts(business.id),
+    getCachedUnits(),
     prisma.customer.findMany({
       where: {
         businessId: business.id,
         ...(business.customerScope === 'BRANCH' ? { storeId: baseStore.id } : {}),
       },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     }),
-    prisma.category.findMany({
-      where: { businessId: business.id },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, colour: true }
-    }),
+    getCachedCategories(business.id),
   ]);
 
   const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));

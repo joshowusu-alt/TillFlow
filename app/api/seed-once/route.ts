@@ -14,6 +14,14 @@ export const dynamic = 'force-dynamic';
 const SEED_TOKEN = process.env.SEED_SECRET || 'tillflow-seed-2024';
 
 export async function GET(request: Request) {
+  // Block in production — each store should register via /register
+  if (process.env.NODE_ENV === 'production' && !process.env.SEED_SECRET) {
+    return NextResponse.json(
+      { error: 'Seed endpoint is disabled in production. Register at /register.' },
+      { status: 403 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const token = searchParams.get('token');
   if (token !== SEED_TOKEN) {

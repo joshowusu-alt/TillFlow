@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { Prisma } from '@prisma/client';
 import { formString, formOptionalString, formInt, formPence } from '@/lib/form-helpers';
 import {
@@ -102,6 +103,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
+    revalidateTag('pos-products');
     redirect('/products');
   }, '/products');
 }
@@ -195,6 +197,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
 
     await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
+    revalidateTag('pos-products');
     redirect(`/products/${existingProduct.id}`);
   }, '/products');
 }
@@ -248,6 +251,7 @@ export async function quickCreateProductAction(input: {
         include: { productUnits: { include: { unit: true } } }
       });
 
+      revalidateTag('pos-products');
       return ok({
         id: created.id,
         name: created.name,
@@ -304,6 +308,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       details: { name: product.name },
     });
 
+    revalidateTag('pos-products');
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
 }

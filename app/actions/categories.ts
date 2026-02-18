@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, err } from '@/lib/action-utils';
 
@@ -22,6 +23,7 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
       data: { businessId, name, colour, imageUrl, sortOrder },
     });
 
+    revalidateTag('pos-categories');
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }
@@ -47,6 +49,7 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
       data: { name, colour, imageUrl, sortOrder },
     });
 
+    revalidateTag('pos-categories');
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }
@@ -71,6 +74,7 @@ export async function deleteCategoryAction(formData: FormData): Promise<void> {
 
     await prisma.category.delete({ where: { id: category.id } });
 
+    revalidateTag('pos-categories');
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
 }
