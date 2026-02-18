@@ -2,14 +2,12 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { formString } from '@/lib/form-helpers';
+import { formString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
 import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
-
-const toPence = (value: unknown) => Math.round(Number(value || 0) * 100);
 
 export async function openShiftAction(
   formData: FormData
