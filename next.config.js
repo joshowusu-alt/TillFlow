@@ -14,6 +14,14 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/favicon.ico',
+        destination: '/api/icon?size=32',
+      },
+    ];
+  },
   async headers() {
     return [
       {
