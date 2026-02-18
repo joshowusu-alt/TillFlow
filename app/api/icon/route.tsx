@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
           height: size,
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+          background: 'linear-gradient(135deg, #2563eb 0%, #1E40AF 50%, #1e3a8a 100%)',
           borderRadius: size * 0.21,
         }}
       >
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
               style={{
                 fontSize: size * 0.065,
                 fontWeight: 700,
-                color: '#059669',
+                color: '#1E40AF',
               }}
             >
               TillFlow
@@ -82,8 +82,8 @@ export async function GET(request: NextRequest) {
             <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
             <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
             <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            {/* Green action button */}
-            <div style={{ display: 'flex', width: size * 0.08, height: size * 0.12, background: '#10b981', borderRadius: size * 0.012, marginLeft: 'auto' }} />
+            {/* Action button */}
+            <div style={{ display: 'flex', width: size * 0.08, height: size * 0.12, background: '#3b82f6', borderRadius: size * 0.012, marginLeft: 'auto' }} />
           </div>
         </div>
 
