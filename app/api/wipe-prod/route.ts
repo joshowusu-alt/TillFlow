@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
 // Temporary endpoint — deploy, hit once, then delete this file
+export const maxDuration = 30; // Allow up to 30s for the wipe
+
 export async function POST(req: Request) {
   const { secret } = await req.json();
   if (secret !== 'wipe-stale-2025') {
@@ -9,76 +11,51 @@ export async function POST(req: Request) {
   }
 
   const prisma = new PrismaClient();
-  const log: string[] = [];
-
-  const del = async (label: string, fn: () => Promise<{ count: number }>) => {
-    try {
-      const r = await fn();
-      log.push(`${label}: deleted ${r.count}`);
-    } catch (e: unknown) {
-      log.push(`${label}: skipped — ${(e as Error).message?.split('\n')[0]}`);
-    }
-  };
 
   try {
-    // Layer 1 — leaf tables
-    await Promise.all([
-      del('JournalEntry', () => prisma.journalEntry.deleteMany()),
-      del('SalesPayment', () => prisma.salesPayment.deleteMany()),
-      del('SalesInvoiceLine', () => prisma.salesInvoiceLine.deleteMany()),
-      del('SalesReturn', () => prisma.salesReturn.deleteMany()),
-      del('PurchasePayment', () => prisma.purchasePayment.deleteMany()),
-      del('PurchaseInvoiceLine', () => prisma.purchaseInvoiceLine.deleteMany()),
-      del('ExpensePayment', () => prisma.expensePayment.deleteMany()),
-      del('StockAdjustment', () => prisma.stockAdjustment.deleteMany()),
-      del('StockTransferLine', () => prisma.stockTransferLine.deleteMany()),
-      del('AuditLog', () => prisma.auditLog.deleteMany()),
-      del('Session', () => prisma.session.deleteMany()),
-    ]);
+    // Use TRUNCATE CASCADE for near-instant deletion of all data
+    await prisma.$executeRawUnsafe(`
+      TRUNCATE TABLE
+        "JournalEntry",
+        "SalesPayment",
+        "SalesInvoiceLine",
+        "SalesReturn",
+        "MobileMoneyCollection",
+        "SalesInvoice",
+        "PurchasePayment",
+        "PurchaseInvoiceLine",
+        "PurchaseInvoice",
+        "ExpensePayment",
+        "Expense",
+        "StockAdjustment",
+        "StockTransferLine",
+        "StockTransfer",
+        "InventoryBalance",
+        "Shift",
+        "AuditLog",
+        "Notification",
+        "Session",
+        "Till",
+        "Branch",
+        "ProductUnit",
+        "Product",
+        "Category",
+        "Customer",
+        "Supplier",
+        "Account",
+        "User",
+        "Store",
+        "Business",
+        "Unit"
+      CASCADE
+    `);
 
-    // Layer 2
-    await Promise.all([
-      del('MobileMoneyCollection', () => prisma.mobileMoneyCollection.deleteMany()),
-      del('SalesInvoice', () => prisma.salesInvoice.deleteMany()),
-      del('PurchaseInvoice', () => prisma.purchaseInvoice.deleteMany()),
-      del('Expense', () => prisma.expense.deleteMany()),
-      del('StockTransfer', () => prisma.stockTransfer.deleteMany()),
-      del('Shift', () => prisma.shift.deleteMany()),
-    ]);
-
-    // Layer 3
-    await Promise.all([
-      del('InventoryBalance', () => prisma.inventoryBalance.deleteMany()),
-      del('ProductUnit', () => prisma.productUnit.deleteMany()),
-    ]);
-
-    // Layer 4
-    await Promise.all([
-      del('Product', () => prisma.product.deleteMany()),
-      del('Customer', () => prisma.customer.deleteMany()),
-      del('Supplier', () => prisma.supplier.deleteMany()),
-      del('Account', () => prisma.account.deleteMany()),
-      del('Till', () => prisma.till.deleteMany()),
-      del('Category', () => prisma.category.deleteMany()),
-    ]);
-
-    // Layer 5
-    await Promise.all([
-      del('Unit', () => prisma.unit.deleteMany()),
-      del('User', () => prisma.user.deleteMany()),
-    ]);
-
-    // Layer 6
-    await del('Branch', () => prisma.branch.deleteMany());
-    await del('Store', () => prisma.store.deleteMany());
-    await del('Business', () => prisma.business.deleteMany());
-
-    // Also try Notification table (exists in Postgres schema only)
-    await del('Notification', () => (prisma as any).notification.deleteMany());
-
-    return NextResponse.json({ ok: true, log });
+    return NextResponse.json({ ok: true, message: 'All tables truncated.' });
   } catch (e: unknown) {
-    return NextResponse.json({ error: (e as Error).message, log }, { status: 500 });
+    return NextResponse.json(
+      { error: (e as Error).message },
+      { status: 500 }
+    );
   } finally {
     await prisma.$disconnect();
   }
