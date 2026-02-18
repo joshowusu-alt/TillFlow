@@ -522,18 +522,12 @@ export default function PosClient({
     setIsCompletingSale(true);
     setSaleError(null);
 
-    // Generate a unique idempotency key per sale attempt to prevent double-submissions
-    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
     try {
       const result = await completeSaleAction({
         storeId: store.id,
         tillId,
         cart: JSON.stringify(cart),
         paymentStatus,
-        idempotencyKey,
         customerId,
         dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
         orderDiscountType,
