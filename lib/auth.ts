@@ -9,36 +9,62 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
  * Wrapped with React cache() so that multiple calls within the same
  * server request (e.g. layout + page) only hit the database once.
  */
+/**
+ * Helper to delete the pos_session cookie so stale tokens
+ * don't cause redirect loops between middleware and auth.
+ */
+function clearSessionCookie() {
+  try {
+    cookies().delete('pos_session');
+  } catch {
+    // cookies().delete can throw in certain rendering contexts
+  }
+}
+
 export const getUser = cache(async () => {
   const token = cookies().get('pos_session')?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    select: {
-      id: true,
-      expiresAt: true,
-      userAgent: true,
-      ipAddress: true,
-      lastSeenAt: true,
-      user: {
-        select: {
-          id: true,
-          businessId: true,
-          name: true,
-          email: true,
-          role: true,
-          active: true,
-          twoFactorEnabled: true,
-          twoFactorTempSecret: true,
+  let session;
+  try {
+    session = await prisma.session.findUnique({
+      where: { token },
+      select: {
+        id: true,
+        expiresAt: true,
+        userAgent: true,
+        ipAddress: true,
+        lastSeenAt: true,
+        user: {
+          select: {
+            id: true,
+            businessId: true,
+            name: true,
+            email: true,
+            role: true,
+            active: true,
+            twoFactorEnabled: true,
+            twoFactorTempSecret: true,
+          }
         }
       }
-    }
-  });
-  if (!session) return null;
+    });
+  } catch (err) {
+    // DB connection failure — clear stale cookie so user can reach /login
+    console.error('[auth] DB lookup failed:', err);
+    clearSessionCookie();
+    return null;
+  }
+
+  if (!session) {
+    // Session token in cookie but not in DB — clear stale cookie
+    clearSessionCookie();
+    return null;
+  }
 
   if (session.expiresAt < new Date()) {
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    clearSessionCookie();
     return null;
   }
 
@@ -46,6 +72,7 @@ export const getUser = cache(async () => {
   const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
   if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    clearSessionCookie();
     return null;
   }
 
@@ -68,6 +95,7 @@ export const getUser = cache(async () => {
 export async function requireUser() {
   const user = await getUser();
   if (!user) {
+    // getUser already clears the stale cookie, so redirect will work
     redirect('/login');
   }
   return user;
