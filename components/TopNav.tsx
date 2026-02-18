@@ -45,11 +45,13 @@ const navGroups = [
     id: 'reports',
     label: 'Reports',
     items: [
+      { href: '/reports/command-center', label: 'Command Center', roles: ['OWNER'] },
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/cashflow-forecast', label: 'Cashflow Forecast', roles: ['OWNER'] },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },

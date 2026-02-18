@@ -74,6 +74,7 @@ model Business {
   dayClosures            DayClosure[]
   messageLogs            MessageLog[]
   scheduledJobs          ScheduledJob[]
+  reorderActions         ReorderAction[]
 }
 
 model Store {
@@ -108,6 +109,7 @@ model Store {
   riskAlerts             RiskAlert[]
   transfersOut           StockTransfer[]         @relation("StockTransferFromStore")
   transfersIn            StockTransfer[]         @relation("StockTransferToStore")
+  reorderActions         ReorderAction[]
 
   @@index([businessId])
 }
@@ -202,6 +204,7 @@ model User {
   cashDrawerEntriesAsCashier CashDrawerEntry[]       @relation("CashDrawerEntryCashier")
   riskAlerts                 RiskAlert[]             @relation("RiskAlertCashier")
   acknowledgedRiskAlerts     RiskAlert[]             @relation("RiskAlertAcknowledgedBy")
+  reorderActions             ReorderAction[]
 }
 
 model Session {
@@ -255,6 +258,8 @@ model Supplier {
 
   business         Business          @relation(fields: [businessId], references: [id])
   purchaseInvoices PurchaseInvoice[]
+  products         Product[]         @relation("ProductPreferredSupplier")
+  reorderActions   ReorderAction[]
 
   @@index([businessId, name])
 }
@@ -298,11 +303,13 @@ model Product {
   qaRunId               String?
   promoBuyQty           Int      @default(0)
   promoGetQty           Int      @default(0)
+  preferredSupplierId   String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @default(now()) @updatedAt
 
   business           Business              @relation(fields: [businessId], references: [id])
   category           Category?             @relation(fields: [categoryId], references: [id])
+  preferredSupplier  Supplier?             @relation("ProductPreferredSupplier", fields: [preferredSupplierId], references: [id])
   productUnits       ProductUnit[]
   inventoryBalances  InventoryBalance[]
   salesLines         SalesInvoiceLine[]
@@ -311,6 +318,7 @@ model Product {
   stockAdjustments   StockAdjustment[]
   stocktakeLines     StocktakeLine[]
   stockTransferLines StockTransferLine[]
+  reorderActions     ReorderAction[]
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
@@ -1054,4 +1062,30 @@ model MessageLog {
   @@index([businessId, sentAt])
   @@index([channel, sentAt])
   @@index([messageType, sentAt])
+}
+
+// Phase 4: Lightweight reorder action tracking
+model ReorderAction {
+  id          String    @id @default(cuid())
+  businessId  String
+  storeId     String
+  productId   String
+  supplierId  String?
+  status      String    @default("ORDERED")
+  qtyBase     Int
+  orderedAt   DateTime  @default(now())
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  notes       String?
+  userId      String
+  createdAt   DateTime  @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id])
+  store    Store     @relation(fields: [storeId], references: [id])
+  product  Product   @relation(fields: [productId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@index([businessId, storeId, status])
+  @@index([productId, status])
 }

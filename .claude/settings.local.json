@@ -18,7 +18,9 @@
       "Bash(npx vercel:*)",
       "Bash(gh api:*)",
       "WebFetch(domain:supermarket-pos-five.vercel.app)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx prisma validate:*)",
+      "Bash(npm test:*)"
     ]
   }
 }

@@ -1,11 +1,23 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import Badge from '@/components/Badge';
+import EmptyState from '@/components/EmptyState';
+import PageHeader from '@/components/PageHeader';
+import { markAsOrdered } from '@/app/actions/reorder';
 
 type QueryParams = {
   days?: string;
   lead?: string;
   storeId?: string;
+  group?: string;
+};
+
+const urgencyTone = {
+  URGENT: 'danger' as const,
+  SOON: 'warn' as const,
+  PLAN: 'info' as const,
+  OK: 'success' as const,
 };
 
 export default async function ReorderSuggestionsPage({
@@ -15,11 +27,12 @@ export default async function ReorderSuggestionsPage({
 }) {
   const { business, store: defaultStore } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !defaultStore) {
-    return <div className="card p-6">Business setup is incomplete.</div>;
+    return <EmptyState icon="box" title="Business setup incomplete" cta={{ label: 'Go to Settings', href: '/settings' }} />;
   }
 
   const lookbackDays = Math.min(Math.max(parseInt(searchParams.days ?? '14', 10) || 14, 7), 90);
   const leadDays = Math.min(Math.max(parseInt(searchParams.lead ?? '7', 10) || 7, 1), 30);
+  const groupBySupplier = searchParams.group === 'supplier';
 
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
@@ -34,13 +47,15 @@ export default async function ReorderSuggestionsPage({
 
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
 
-  const [products, salesLines] = await Promise.all([
+  const [products, salesLines, pendingOrders] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       select: {
         id: true,
         name: true,
         reorderPointBase: true,
+        preferredSupplierId: true,
+        preferredSupplier: { select: { id: true, name: true } },
         productUnits: {
           select: {
             isBaseUnit: true,
@@ -64,12 +79,29 @@ export default async function ReorderSuggestionsPage({
         }
       },
       select: { productId: true, qtyBase: true }
-    })
+    }),
+    prisma.reorderAction.findMany({
+      where: {
+        businessId: business.id,
+        storeId: selectedStoreId,
+        status: 'ORDERED',
+      },
+      select: { productId: true, qtyBase: true, orderedAt: true },
+    }),
   ]);
 
   const soldByProduct = new Map<string, number>();
   for (const line of salesLines) {
     soldByProduct.set(line.productId, (soldByProduct.get(line.productId) ?? 0) + line.qtyBase);
+  }
+
+  const pendingByProduct = new Map<string, { qty: number; date: Date }>();
+  for (const order of pendingOrders) {
+    const existing = pendingByProduct.get(order.productId);
+    pendingByProduct.set(order.productId, {
+      qty: (existing?.qty ?? 0) + order.qtyBase,
+      date: existing?.date && existing.date > order.orderedAt ? existing.date : order.orderedAt,
+    });
   }
 
   const suggestions = products
@@ -117,6 +149,8 @@ export default async function ReorderSuggestionsPage({
           ? 'SOON'
           : 'PLAN';
 
+      const pending = pendingByProduct.get(product.id);
+
       return {
         id: product.id,
         name: product.name,
@@ -128,24 +162,48 @@ export default async function ReorderSuggestionsPage({
         suggestedQty,
         suggestionLabel,
         daysOfCover,
-        urgency
+        urgency: urgency as 'URGENT' | 'SOON' | 'PLAN' | 'OK',
+        supplierName: product.preferredSupplier?.name ?? null,
+        supplierId: product.preferredSupplierId,
+        pendingQty: pending?.qty ?? 0,
       };
     })
     .filter((row) => row.suggestedQty > 0 || row.onHand <= 0 || row.onHand <= row.reorderTarget)
     .sort((a, b) => b.suggestedQty - a.suggestedQty)
     .slice(0, 200);
 
+  // Group by supplier if requested
+  const supplierGroups = groupBySupplier
+    ? Array.from(
+        suggestions.reduce((acc, item) => {
+          const key = item.supplierName ?? 'Unassigned';
+          if (!acc.has(key)) acc.set(key, []);
+          acc.get(key)!.push(item);
+          return acc;
+        }, new Map<string, typeof suggestions>())
+      ).sort(([a], [b]) => a.localeCompare(b))
+    : null;
+
+  const baseSearchParams = `days=${lookbackDays}&lead=${leadDays}&storeId=${selectedStoreId}`;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="text-xs uppercase tracking-[0.25em] text-black/40">Forecasting</div>
-          <h1 className="text-2xl font-display font-semibold">Reorder Suggestions</h1>
-          <p className="mt-1 text-sm text-black/60">
-            Suggested reorder quantity = average daily demand × lead time + safety stock.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Reorder Suggestions"
+        subtitle={`Velocity-based reorder: avg daily demand x ${leadDays}-day lead time + safety stock.`}
+        actions={
+          <div className="flex gap-2">
+            <a
+              href={`?${baseSearchParams}&group=${groupBySupplier ? '' : 'supplier'}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                groupBySupplier ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {groupBySupplier ? 'Grouped by Supplier' : 'Group by Supplier'}
+            </a>
+          </div>
+        }
+      />
 
       <div className="card p-4">
         <form className="grid gap-4 md:grid-cols-4">
@@ -170,58 +228,113 @@ export default async function ReorderSuggestionsPage({
           <div className="flex items-end">
             <button className="btn-primary w-full">Recalculate</button>
           </div>
+          {groupBySupplier && <input type="hidden" name="group" value="supplier" />}
         </form>
       </div>
 
-      <div className="card p-6 overflow-x-auto">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Sold ({lookbackDays}d)</th>
-              <th>Avg / Day</th>
-              <th>On Hand</th>
-              <th>Reorder Target</th>
-              <th>Suggested Reorder</th>
-              <th>Coverage</th>
-              <th>Priority</th>
-            </tr>
-          </thead>
-          <tbody>
-            {suggestions.map((item) => (
-              <tr key={item.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-sm font-semibold">{item.name}</td>
-                <td className="px-3 py-3 text-sm">{item.soldQty}</td>
-                <td className="px-3 py-3 text-sm">{item.avgDailyDemand.toFixed(2)}</td>
-                <td className="px-3 py-3 text-sm">{item.onHandLabel}</td>
-                <td className="px-3 py-3 text-sm">{item.reorderTarget}</td>
-                <td className="px-3 py-3 text-sm font-semibold">{item.suggestionLabel}</td>
-                <td className="px-3 py-3 text-sm">
-                  {Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}
-                </td>
-                <td className="px-3 py-3 text-sm">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      item.urgency === 'URGENT'
-                        ? 'bg-rose-100 text-rose-700'
-                        : item.urgency === 'SOON'
-                        ? 'bg-amber-100 text-amber-700'
-                        : item.urgency === 'PLAN'
-                        ? 'bg-sky-100 text-sky-700'
-                        : 'bg-emerald-100 text-emerald-700'
-                    }`}
-                  >
-                    {item.urgency}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {suggestions.length === 0 ? (
-          <div className="text-sm text-black/50">No reorder suggestions for the selected period.</div>
-        ) : null}
-      </div>
+      {suggestions.length === 0 ? (
+        <div className="card p-6">
+          <EmptyState
+            icon="check"
+            title="No reorder suggestions"
+            subtitle="All products are above their reorder points. Adjust lookback days or lead time to check again."
+          />
+        </div>
+      ) : supplierGroups ? (
+        <div className="space-y-6">
+          {supplierGroups.map(([supplierName, items]) => (
+            <div key={supplierName} className="card overflow-x-auto p-6">
+              <div className="mb-3 flex items-center gap-2">
+                <h2 className="text-lg font-display font-semibold">{supplierName}</h2>
+                <Badge tone="neutral">{items.length} item{items.length !== 1 ? 's' : ''}</Badge>
+              </div>
+              <ReorderTable items={items} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="card overflow-x-auto p-6">
+          <ReorderTable items={suggestions} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
+        </div>
+      )}
     </div>
+  );
+}
+
+type SuggestionItem = {
+  id: string; name: string; soldQty: number; avgDailyDemand: number;
+  onHandLabel: string; reorderTarget: number; suggestedQty: number;
+  suggestionLabel: string; daysOfCover: number;
+  urgency: 'URGENT' | 'SOON' | 'PLAN' | 'OK';
+  supplierName: string | null; pendingQty: number;
+};
+
+function ReorderTable({
+  items,
+  lookbackDays,
+  selectedStoreId,
+}: {
+  items: SuggestionItem[];
+  lookbackDays: number;
+  selectedStoreId: string;
+}) {
+  return (
+    <table className="table w-full border-separate border-spacing-y-2">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Sold ({lookbackDays}d)</th>
+          <th>Avg / Day</th>
+          <th>On Hand</th>
+          <th>Suggested</th>
+          <th>Coverage</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => (
+          <tr key={item.id} className="rounded-xl bg-white">
+            <td className="px-3 py-3 text-sm font-semibold">
+              {item.name}
+              {item.supplierName && (
+                <span className="ml-2 text-xs text-muted">{item.supplierName}</span>
+              )}
+            </td>
+            <td className="px-3 py-3 text-sm">{item.soldQty}</td>
+            <td className="px-3 py-3 text-sm">{item.avgDailyDemand.toFixed(2)}</td>
+            <td className="px-3 py-3 text-sm">{item.onHandLabel}</td>
+            <td className="px-3 py-3 text-sm font-semibold">{item.suggestionLabel}</td>
+            <td className="px-3 py-3 text-sm">
+              {Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}
+            </td>
+            <td className="px-3 py-3 text-sm">
+              <Badge tone={urgencyTone[item.urgency]}>{item.urgency}</Badge>
+            </td>
+            <td className="px-3 py-3 text-sm">
+              {item.pendingQty > 0 ? (
+                <Badge tone="info">{item.pendingQty} ordered</Badge>
+              ) : null}
+            </td>
+            <td className="px-3 py-3 text-sm">
+              {item.suggestedQty > 0 && item.pendingQty === 0 && (
+                <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }}>
+                  <input type="hidden" name="productId" value={item.id} />
+                  <input type="hidden" name="qtyBase" value={item.suggestedQty} />
+                  <input type="hidden" name="storeId" value={selectedStoreId} />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-900 transition-colors"
+                  >
+                    Mark Ordered
+                  </button>
+                </form>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
