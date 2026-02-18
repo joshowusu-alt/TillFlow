@@ -84,8 +84,11 @@ export default async function IncomeStatementPage({
       {!hasData ? (
         <EmptyState
           icon="chart"
-          title="No journal entries"
+          title="No journal entries yet"
           subtitle="Record sales or expenses to see your income statement."
+          cta={{ label: 'Open POS', href: '/pos' }}
+          secondaryCta={{ label: 'Run Demo Day', href: '/onboarding#demo' }}
+          hint="Demo Day generates a week of sample data so you can preview reports."
         />
       ) : (
         <div className="card p-6 space-y-3 text-sm">

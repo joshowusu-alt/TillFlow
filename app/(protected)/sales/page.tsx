@@ -113,14 +113,22 @@ export default async function SalesPage({
             {sales.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-12 text-center">
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center animate-fade-in-up">
                     <div className="rounded-full bg-black/5 p-3 mb-2">
                       <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
                       </svg>
                     </div>
                     <div className="text-sm text-black/70">{q ? `No sales matching "${q}"` : 'No sales yet'}</div>
-                    <div className="text-xs text-black/40 mt-1">Sales will appear here after completing transactions at the POS.</div>
+                    <div className="text-xs text-black/40 mt-1">
+                      {q ? 'Try a different search term.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                    </div>
+                    {!q && (
+                      <div className="mt-3 flex gap-2">
+                        <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
+                        <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
+                      </div>
+                    )}
                   </div>
                 </td>
               </tr>

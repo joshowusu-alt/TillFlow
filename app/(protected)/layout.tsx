@@ -13,10 +13,23 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     select: { id: true, name: true }
   });
 
-  // Check if this is a new business that may need onboarding guidance
-  const needsOnboarding = business?.createdAt && (Date.now() - new Date(business.createdAt).getTime() < 1000 * 60 * 60 * 24);
+  // Show onboarding banner when onboarding is not complete
+  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
+
+  // Compute lightweight readiness %
+  let readinessPct = 0;
+  if (needsOnboarding) {
+    const [productCount, staffCount, saleCount] = await Promise.all([
+      prisma.product.count({ where: { businessId: business.id } }),
+      prisma.user.count({ where: { businessId: business.id } }),
+      prisma.salesInvoice.count({ where: { businessId: business.id, qaTag: { not: 'DEMO_DAY' } } }),
+    ]);
+    const hasAddress = !!(business.address || business.phone);
+    const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
+    readinessPct = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }
 
   return (
     <div className="min-h-screen">
@@ -26,23 +39,33 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         storeName={store?.name}
       />
 
-      {/* Setup banner for new businesses */}
-      {needsOnboarding && user.role === 'OWNER' && !pathname.includes('/onboarding') && (
+      {/* Setup banner for owners who haven't completed onboarding */}
+      {needsOnboarding && !pathname.includes('/onboarding') && (
         <div className="border-b border-accent/20 bg-accentSoft px-6 py-3">
           <div className="mx-auto flex max-w-[1600px] items-center justify-between">
             <div className="flex items-center gap-3 text-accent">
-              <svg className="h-5 w-5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-              </svg>
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-500"
+                    style={{ width: `${readinessPct}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
+              </div>
               <span className="text-sm font-medium">
-                Welcome to TillFlow! Complete your setup to get started selling.
+                {readinessPct === 0
+                  ? 'Let\u2019s get your shop set up on TillFlow!'
+                  : readinessPct < 100
+                  ? 'You\u2019re making progress \u2014 keep going!'
+                  : 'Almost there \u2014 just finish up!'}
               </span>
             </div>
             <Link
               href="/onboarding"
               className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-accent/80 ml-4 flex-shrink-0"
             >
-              Complete Setup &rarr;
+              {readinessPct > 0 ? 'Continue Setup' : 'Get Started'} &rarr;
             </Link>
           </div>
         </div>

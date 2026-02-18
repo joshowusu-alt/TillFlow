@@ -526,7 +526,14 @@ export default async function DashboardPage({
           <h2 className="mb-4 text-lg font-display font-semibold">Top Revenue Products</h2>
           <div className="space-y-2 text-sm">
             {bestItems.length === 0 ? (
-              <div className="py-6 text-center text-black/40">No sales in selected range</div>
+              <div className="py-6 text-center animate-fade-in-up">
+                <p className="text-black/40">No sales in selected range</p>
+                <div className="mt-2 flex justify-center gap-2">
+                  <a href="/pos" className="text-xs text-accent hover:underline">Open POS</a>
+                  <span className="text-black/20">|</span>
+                  <a href="/onboarding#demo" className="text-xs text-accent hover:underline">Run Demo Day</a>
+                </div>
+              </div>
             ) : (
               bestItems.map((item) => {
                 const baseUnit = item.units.find((u: any) => u.isBaseUnit);

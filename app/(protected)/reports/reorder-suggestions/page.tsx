@@ -27,7 +27,7 @@ export default async function ReorderSuggestionsPage({
 }) {
   const { business, store: defaultStore } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !defaultStore) {
-    return <EmptyState icon="box" title="Business setup incomplete" cta={{ label: 'Go to Settings', href: '/settings' }} />;
+    return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your shop setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
   }
 
   const lookbackDays = Math.min(Math.max(parseInt(searchParams.days ?? '14', 10) || 14, 7), 90);

@@ -150,6 +150,8 @@ const _getBusiness = cache(async (businessId: string) => {
       whatsappScheduleTime: true,
       whatsappBranchScope: true,
       isDemo: true,
+      onboardingCompletedAt: true,
+      hasDemoData: true,
       createdAt: true,
     }
   });

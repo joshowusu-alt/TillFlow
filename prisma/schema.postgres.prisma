@@ -48,6 +48,9 @@ model Business {
   whatsappBranchScope                  String?  @default("ALL")
   // Phase 3B: demo mode flag
   isDemo                               Boolean  @default(false)
+  // Onboarding tracking
+  onboardingCompletedAt                DateTime?
+  hasDemoData                          Boolean  @default(false)
   createdAt                            DateTime @default(now())
   updatedAt                            DateTime @updatedAt
 
@@ -659,6 +662,7 @@ model Expense {
   reference      String?
   attachmentPath String?
   notes          String?
+  qaTag          String?
   createdAt      DateTime  @default(now())
 
   business Business         @relation(fields: [businessId], references: [id])

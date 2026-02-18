@@ -89,8 +89,11 @@ export default async function CashflowPage({
       {!hasData ? (
         <EmptyState
           icon="chart"
-          title="No cashflow data"
+          title="No cashflow data yet"
           subtitle="Record transactions to see your cashflow statement."
+          cta={{ label: 'Open POS', href: '/pos' }}
+          secondaryCta={{ label: 'Run Demo Day', href: '/onboarding#demo' }}
+          hint="Demo Day generates realistic transactions to preview reports."
         />
       ) : (
         <div className="card p-6 space-y-2 text-sm">

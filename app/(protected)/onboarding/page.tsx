@@ -1,10 +1,9 @@
 import { requireUser } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { getReadiness } from '@/app/actions/onboarding';
 import OnboardingClient from './OnboardingClient';
 
 export default async function OnboardingPage() {
-    const user = await requireUser();
-
-    // Always show the onboarding wizard — it's a helpful reference guide
-    return <OnboardingClient />;
+    await requireUser();
+    const readiness = await getReadiness();
+    return <OnboardingClient readiness={readiness} />;
 }
