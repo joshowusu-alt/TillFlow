@@ -141,7 +141,7 @@ input, select, textarea {
   .pill-online   { @apply pill bg-emerald-100 text-emerald-800; }
   .pill-offline  { @apply pill bg-red-100 text-red-700; }
   .pill-pending  { @apply pill bg-amber-100 text-amber-800; }
-  .pill-synced   { @apply pill bg-blue-100 text-blue-800; }
+  .pill-synced   { @apply pill bg-accentSoft text-accent; }
 
   /* ----- Buttons ----- */
   .btn {
@@ -150,11 +150,11 @@ input, select, textarea {
            focus-visible:ring-offset-2 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-blue-900 focus-visible:ring-accent
+    @apply btn bg-accent text-white hover:bg-accent/80 focus-visible:ring-accent
            shadow-sm hover:shadow-md;
   }
   .btn-secondary {
-    @apply btn bg-accentSoft text-accent border border-blue-200 hover:bg-blue-100
+    @apply btn bg-accentSoft text-accent border border-accent/20 hover:bg-accent/10
            focus-visible:ring-accent;
   }
   .btn-destructive {

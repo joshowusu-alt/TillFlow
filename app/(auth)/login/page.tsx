@@ -9,7 +9,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center">
         <img src="/icon.svg" alt="TillFlow" className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" />
         <h1 className="text-3xl font-bold font-display">
-          <span className="text-blue-700">Till</span>
+          <span className="text-accent">Till</span>
           <span className="text-gray-800">Flow</span>
         </h1>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
@@ -54,7 +54,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-blue-700 hover:text-blue-800 underline underline-offset-4">
+          <Link href="/register" className="font-medium text-accent hover:text-accent underline underline-offset-4">
             Create one free
           </Link>
         </p>

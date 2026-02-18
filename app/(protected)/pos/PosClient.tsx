@@ -522,12 +522,18 @@ export default function PosClient({
     setIsCompletingSale(true);
     setSaleError(null);
 
+    // Generate a unique idempotency key per sale attempt to prevent double-submissions
+    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       const result = await completeSaleAction({
         storeId: store.id,
         tillId,
         cart: JSON.stringify(cart),
         paymentStatus,
+        idempotencyKey,
         customerId,
         dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
         orderDiscountType,
@@ -1311,7 +1317,7 @@ export default function PosClient({
 
           {/* Success toast */}
           {saleSuccess && (
-            <div className="rounded-2xl bg-gradient-to-r from-accent to-blue-900 px-4 py-4 text-white shadow-lg animate-in fade-in">
+            <div className="rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-in fade-in">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
@@ -1379,7 +1385,7 @@ export default function PosClient({
               </div>
               <div className="flex items-center gap-3">
                 {cartRestored && (
-                  <span className="text-xs text-blue-600 font-medium">Restored from last session</span>
+                  <span className="text-xs text-accent font-medium">Restored from last session</span>
                 )}
                 {cart.length > 0 && (
                   <button
@@ -1581,7 +1587,7 @@ export default function PosClient({
                       key={method}
                       type="button"
                       onClick={() => togglePaymentMethod(method)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-emerald-600 text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-accent text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
                     >
                       {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'}
                     </button>

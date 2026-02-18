@@ -1,6 +1,6 @@
-export function formatMoney(pence: number, currency = 'GBP') {
+export function formatMoney(pence: number, currency = 'GHS') {
   try {
-    return new Intl.NumberFormat('en-GB', {
+    return new Intl.NumberFormat('en-GH', {
       style: 'currency',
       currency
     }).format(pence / 100);

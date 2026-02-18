@@ -110,7 +110,7 @@ function SummarySidebar({
       </div>
 
       {changeDue > 0 && (
-        <div className="rounded-2xl bg-gradient-to-br from-accent to-blue-900 px-5 py-5 text-white shadow-lg ring-4 ring-blue-200">
+        <div className="rounded-2xl bg-gradient-to-br from-accent to-accent/80 px-5 py-5 text-white shadow-lg ring-4 ring-accent/20">
           <div className="text-center">
             <div className="text-[11px] font-medium uppercase tracking-[0.3em] opacity-80">Change Due</div>
             <div className="mt-1.5 text-4xl font-bold tracking-tight">

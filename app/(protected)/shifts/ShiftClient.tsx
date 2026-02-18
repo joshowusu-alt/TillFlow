@@ -273,7 +273,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                           shift.variance === 0
                             ? 'text-emerald-700'
                             : shift.variance > 0
-                            ? 'text-blue-700'
+                            ? 'text-accent'
                             : 'text-rose-700'
                         }
                       >
@@ -383,7 +383,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                       Number(actualCash) * 100 === openShift.expectedCash
                         ? 'text-emerald-700 font-semibold'
                         : Number(actualCash) * 100 > openShift.expectedCash
-                        ? 'text-blue-700 font-semibold'
+                        ? 'text-accent font-semibold'
                         : 'text-rose-700 font-semibold'
                     }
                   >

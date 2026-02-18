@@ -21,6 +21,13 @@ export default function ServiceWorkerRegistration() {
       .then((registration) => {
         console.log('SW registered:', registration.scope);
 
+        // Register Background Sync for offline sales
+        if ('sync' in registration) {
+          (registration as any).sync
+            .register('sync-offline-sales')
+            .catch((err: Error) => console.log('Background Sync registration failed:', err));
+        }
+
         // If there's already a waiting worker on load
         if (registration.waiting) {
           setWaitingWorker(registration.waiting);
@@ -66,7 +73,7 @@ export default function ServiceWorkerRegistration() {
         <span className="text-sm font-medium text-black/70">A new version is available</span>
         <button
           onClick={applyUpdate}
-          className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900 transition"
+          className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent/80 transition"
         >
           Update now
         </button>

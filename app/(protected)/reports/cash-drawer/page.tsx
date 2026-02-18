@@ -132,7 +132,7 @@ export default async function CashDrawerReportPage({
         <div className="card p-4">
           <div className="text-xs text-black/50">Variance</div>
           <div
-            className={`text-2xl font-semibold ${totalVariance === 0 ? '' : totalVariance > 0 ? 'text-blue-700' : 'text-rose'}`}
+            className={`text-2xl font-semibold ${totalVariance === 0 ? '' : totalVariance > 0 ? 'text-accent' : 'text-rose'}`}
           >
             {formatMoney(totalVariance, business.currency)}
           </div>
@@ -175,7 +175,7 @@ export default async function CashDrawerReportPage({
                         shift.variance === 0
                           ? 'text-emerald-700'
                           : shift.variance > 0
-                            ? 'text-blue-700'
+                            ? 'text-accent'
                             : 'text-rose'
                       }
                     >

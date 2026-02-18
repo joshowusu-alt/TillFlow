@@ -7,6 +7,7 @@ import { withBusinessContext, formAction, safeAction, type ActionResult } from '
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
+import { prisma } from '@/lib/prisma';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 
@@ -28,6 +29,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
 
     const storeId = formString(formData, 'storeId');
     const tillId = formString(formData, 'tillId');
+    const idempotencyKey = formString(formData, 'idempotencyKey') || null;
     const productId = formString(formData, 'productId');
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
@@ -90,6 +92,17 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       redirect('/pos?error=customer-required');
     }
 
+    // Idempotency guard: if this key was already used, return the existing invoice
+    if (idempotencyKey) {
+      const existing = await prisma.salesInvoice.findFirst({
+        where: { businessId, externalRef: idempotencyKey },
+        select: { id: true },
+      });
+      if (existing) {
+        redirect(`/receipts/${existing.id}`);
+      }
+    }
+
     try {
       const invoice = await createSale({
         businessId,
@@ -104,6 +117,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         discountOverrideReasonCode: discountReasonCode,
         discountOverrideReason: discountReason,
         discountApprovedByUserId,
+        externalRef: idempotencyKey,
         payments: [
           { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
           { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
@@ -155,6 +169,7 @@ export async function completeSaleAction(data: {
   discountManagerPin?: string;
   discountReasonCode?: string;
   discountReason?: string;
+  idempotencyKey?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext();
@@ -216,6 +231,18 @@ export async function completeSaleAction(data: {
       return { success: false, error: 'Select a customer for credit or part-paid sales.' };
     }
 
+    // Idempotency guard: if this key was already used, return the existing invoice
+    const idempotencyKey = (data.idempotencyKey || '').trim() || null;
+    if (idempotencyKey) {
+      const existing = await prisma.salesInvoice.findFirst({
+        where: { businessId, externalRef: idempotencyKey },
+        select: { id: true, totalPence: true },
+      });
+      if (existing) {
+        return { success: true, data: { receiptId: existing.id, totalPence: existing.totalPence } };
+      }
+    }
+
     const invoice = await createSale({
       businessId,
       storeId: data.storeId,
@@ -229,6 +256,7 @@ export async function completeSaleAction(data: {
       discountOverrideReasonCode: discountReasonCode,
       discountOverrideReason: discountReason,
       discountApprovedByUserId,
+      externalRef: idempotencyKey,
       momoCollectionId: data.momoCollectionId || null,
       payments: [
         { method: 'CASH', amountPence: data.cashPaid },

@@ -78,7 +78,7 @@ export default function InstallPrompt() {
         <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-sm animate-fade-in md:left-auto md:right-4">
             <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">
                 {/* Header gradient */}
-                <div className="bg-gradient-to-r from-accent to-blue-900 p-4">
+                <div className="bg-gradient-to-r from-accent to-accent/80 p-4">
                     <div className="flex items-center gap-3">
                         <img src="/icon.svg" alt="TillFlow" className="h-12 w-12 rounded-xl" />
                         <div className="text-white">
@@ -120,7 +120,7 @@ export default function InstallPrompt() {
                     <div className="mt-4 flex gap-2">
                         <button
                             onClick={handleInstall}
-                            className="flex-1 rounded-xl bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-blue-900"
+                            className="flex-1 rounded-xl bg-accent px-4 py-2.5 font-semibold text-white transition hover:bg-accent/80"
                         >
                             Install
                         </button>

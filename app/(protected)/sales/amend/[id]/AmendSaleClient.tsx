@@ -141,9 +141,9 @@ export default function AmendSaleClient({
               <div className="text-sm font-semibold text-emerald-700">{formatMoney(newTotal, currency)}</div>
             </div>
             {refundAmount > 0 && (
-              <div className="rounded-xl bg-blue-50 p-3">
-                <div className="text-xs text-blue-600">Refund Due</div>
-                <div className="text-sm font-semibold text-blue-700">{formatMoney(refundAmount, currency)}</div>
+              <div className="rounded-xl bg-accentSoft p-3">
+                <div className="text-xs text-accent">Refund Due</div>
+                <div className="text-sm font-semibold text-accent">{formatMoney(refundAmount, currency)}</div>
               </div>
             )}
           </div>
@@ -227,7 +227,7 @@ export default function AmendSaleClient({
                 <span>{formatMoney(newTotal, currency)}</span>
               </div>
               {refundAmount > 0 && (
-                <div className="flex justify-between text-blue-700 font-semibold">
+                <div className="flex justify-between text-accent font-semibold">
                   <span>Refund ({refundMethod})</span>
                   <span>{formatMoney(refundAmount, currency)}</span>
                 </div>

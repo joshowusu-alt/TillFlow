@@ -86,6 +86,7 @@ export default async function DashboardPage({
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       select: { totalPence: true, grossMarginPence: true },
+      take: 2000,
     }),
     prisma.salesPayment.findMany({
       where: {
@@ -96,6 +97,7 @@ export default async function DashboardPage({
         },
       },
       select: { method: true, amountPence: true },
+      take: 5000,
     }),
     getIncomeStatement(business.id, start, end),
     prisma.salesInvoice.findMany({
@@ -112,6 +114,8 @@ export default async function DashboardPage({
         customer: { select: { id: true, name: true } },
         payments: { select: { amountPence: true } },
       },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
     }),
     prisma.purchaseInvoice.findMany({
       where: {
@@ -120,6 +124,7 @@ export default async function DashboardPage({
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
+      take: 500,
     }),
     prisma.inventoryBalance.findMany({
       where: {
@@ -145,6 +150,7 @@ export default async function DashboardPage({
           },
         },
       },
+      take: 1000,
     }),
     prisma.salesInvoiceLine.findMany({
       where: {
@@ -172,6 +178,7 @@ export default async function DashboardPage({
           },
         },
       },
+      take: 5000,
     }),
     // Phase 3B: stock adjustments in range
     prisma.stockAdjustment.findMany({
@@ -198,6 +205,7 @@ export default async function DashboardPage({
         paymentStatus: 'VOID',
       },
       select: { totalPence: true, cashierUser: { select: { name: true } } },
+      take: 200,
     }),
     // Returns in range
     prisma.salesReturn.findMany({
@@ -207,6 +215,7 @@ export default async function DashboardPage({
         createdAt: { gte: start, lte: end },
       },
       select: { refundAmountPence: true },
+      take: 500,
     }),
     // Cash variances (shift closures with non-zero variance) in range
     prisma.shift.findMany({
@@ -221,6 +230,7 @@ export default async function DashboardPage({
         variance: { not: null },
       },
       select: { variance: true, user: { select: { name: true } } },
+      take: 100,
     }),
   ]);
 
@@ -351,7 +361,7 @@ export default async function DashboardPage({
               [
                 { label: 'Cash', key: 'CASH', cls: 'bg-emerald-500', text: 'text-emerald-700' },
                 { label: 'Mobile Money (MoMo)', key: 'MOBILE_MONEY', cls: 'bg-amber-500', text: 'text-amber-700' },
-                { label: 'Card', key: 'CARD', cls: 'bg-blue-500', text: 'text-blue-700' },
+                { label: 'Card', key: 'CARD', cls: 'bg-blue-500', text: 'text-accent' },
                 { label: 'Bank Transfer', key: 'TRANSFER', cls: 'bg-purple-500', text: 'text-purple-700' },
               ] as const
             ).map(({ label, key, cls, text }) => {
@@ -395,11 +405,11 @@ export default async function DashboardPage({
                 </div>
               )}
               {todayAdj.map((adj: any, i: number) => (
-                <div key={i} className="flex justify-between rounded-lg bg-blue-50 px-3 py-2 text-xs">
-                  <span className="text-blue-700">
+                <div key={i} className="flex justify-between rounded-lg bg-accentSoft px-3 py-2 text-xs">
+                  <span className="text-accent">
                     Stock adj · {adj.product.name} · {adj.direction} {adj.qtyBase}
                   </span>
-                  <span className="text-blue-500">{adj.user.name}</span>
+                  <span className="text-accent/70">{adj.user.name}</span>
                 </div>
               ))}
               {cashVarTotal > 0 && (

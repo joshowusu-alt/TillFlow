@@ -246,8 +246,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         </a>
         <a href="/settings/backup" className="card p-6 transition hover:shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
-              <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accentSoft">
+              <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
             </div>
@@ -285,8 +285,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           <InstallButton />
         </div>
         <a href="/onboarding" className="card flex items-center gap-4 p-6 transition hover:shadow-lg">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
-            <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accentSoft">
+            <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>

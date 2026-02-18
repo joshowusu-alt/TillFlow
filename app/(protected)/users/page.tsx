@@ -153,8 +153,8 @@ export default async function UsersPage({
       <div className="card p-4">
         <h3 className="text-sm font-semibold mb-2">Role Permissions</h3>
         <div className="grid gap-2 text-xs text-black/60 sm:grid-cols-3">
-          <div className="rounded-lg bg-blue-50 p-3">
-            <span className="font-semibold text-blue-700">Cashier</span>
+          <div className="rounded-lg bg-accentSoft p-3">
+            <span className="font-semibold text-accent">Cashier</span>
             <p className="mt-1">POS, shifts, own sales. Cannot access products, reports, or settings.</p>
           </div>
           <div className="rounded-lg bg-amber-50 p-3">
@@ -194,7 +194,7 @@ export default async function UsersPage({
                           ? 'bg-emerald-100 text-emerald-700'
                           : user.role === 'MANAGER'
                           ? 'bg-amber-100 text-amber-700'
-                          : 'bg-blue-100 text-blue-700'
+                          : 'bg-accentSoft text-accent'
                       }`}
                     >
                       {user.role}
@@ -211,7 +211,7 @@ export default async function UsersPage({
                     <div className="flex justify-end gap-2">
                       <a
                         href={`/users?edit=${user.id}`}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-accent hover:underline"
                       >
                         Edit
                       </a>
