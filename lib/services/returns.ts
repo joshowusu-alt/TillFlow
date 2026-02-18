@@ -7,6 +7,8 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
+import { recordCashDrawerEntryTx } from './cash-drawer';
+import { detectVoidFrequencyRisk } from './risk-monitor';
 
 // ---------------------------------------------------------------------------
 // Shared helper — accumulate payments by method
@@ -43,9 +45,12 @@ export async function createSalesReturn(input: {
   businessId: string;
   salesInvoiceId: string;
   userId: string;
+  reasonCode?: string | null;
   refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
   refundAmountPence?: number | null;
   reason?: string | null;
+  managerApprovedByUserId?: string | null;
+  managerApprovalMode?: string | null;
   type: 'RETURN' | 'VOID';
 }) {
   const invoice = await prisma.salesInvoice.findFirst({
@@ -58,6 +63,25 @@ export async function createSalesReturn(input: {
     }
   });
   if (!invoice) throw new Error('Sale not found');
+  if (!input.managerApprovedByUserId) {
+    throw new Error('Manager approval is required for returns and voids.');
+  }
+  if (!input.reasonCode) {
+    throw new Error('Reason code is required for returns and voids.');
+  }
+
+  const approvedBy = await prisma.user.findFirst({
+    where: {
+      id: input.managerApprovedByUserId,
+      businessId: input.businessId,
+      active: true,
+      role: { in: ['MANAGER', 'OWNER'] },
+    },
+    select: { id: true },
+  });
+  if (!approvedBy) {
+    throw new Error('Manager approval user is invalid.');
+  }
 
   const existingReturn = await prisma.salesReturn.findUnique({
     where: { salesInvoiceId: invoice.id }
@@ -94,9 +118,12 @@ export async function createSalesReturn(input: {
         storeId: invoice.storeId,
         userId: input.userId,
         type: input.type,
+        reasonCode: input.reasonCode ?? null,
         refundMethod,
         refundAmountPence: refundAmount,
-        reason: input.reason ?? null
+        reason: input.reason ?? null,
+        managerApprovedByUserId: approvedBy.id,
+        managerApprovalMode: input.managerApprovalMode ?? null,
       }
     });
 
@@ -104,6 +131,23 @@ export async function createSalesReturn(input: {
       where: { id: invoice.id },
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
+
+    if (refundAmount > 0 && refundMethod === 'CASH' && invoice.shiftId) {
+      await recordCashDrawerEntryTx(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: invoice.tillId,
+        shiftId: invoice.shiftId,
+        createdByUserId: input.userId,
+        cashierUserId: input.userId,
+        entryType: 'CASH_REFUND',
+        amountPence: -refundAmount,
+        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+        reason: input.reason ?? null,
+        referenceType: 'SALES_RETURN',
+        referenceId: created.id,
+      });
+    }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
       const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
@@ -155,6 +199,14 @@ export async function createSalesReturn(input: {
 
     return created;
   });
+
+  if (input.type === 'VOID') {
+    await detectVoidFrequencyRisk({
+      businessId: input.businessId,
+      storeId: invoice.storeId,
+      cashierUserId: input.userId,
+    });
+  }
 
   return result;
 }

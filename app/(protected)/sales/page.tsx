@@ -1,16 +1,18 @@
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
-import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
-import Link from 'next/link';
-import { Suspense } from 'react';
 
 const PAGE_SIZE = 25;
 
-export default async function SalesPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string; page?: string; storeId?: string };
+}) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
@@ -24,9 +26,19 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const stores = await prisma.store.findMany({
+    where: { businessId: business.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const selectedStoreId =
+    searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
+      ? searchParams.storeId
+      : 'ALL';
 
   const where = {
     businessId: business.id,
+    ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
     ...(q ? { customer: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
   };
 
@@ -39,9 +51,10 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
         createdAt: true,
         paymentStatus: true,
         totalPence: true,
+        store: { select: { name: true } },
         customer: { select: { name: true } },
         salesReturn: { select: { id: true } },
-        _count: { select: { lines: true } }
+        _count: { select: { lines: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
@@ -58,15 +71,37 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
         subtitle="Latest sales invoices and receipts."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
-      <div className="mb-4 max-w-xs">
-        <Suspense><SearchFilter placeholder="Search by customer…" /></Suspense>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <form method="GET" className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label">Branch / Store</label>
+            <select className="input" name="storeId" defaultValue={selectedStoreId}>
+              <option value="ALL">All branches</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Customer</label>
+            <input className="input" name="q" defaultValue={q} placeholder="Search by customer..." />
+          </div>
+          <button className="btn-secondary" type="submit">
+            Apply
+          </button>
+        </form>
       </div>
+
       <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Invoice</th>
               <th>Date</th>
+              <th>Branch</th>
               <th>Customer</th>
               <th>Status</th>
               <th>Total</th>
@@ -77,7 +112,7 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
           <tbody>
             {sales.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-12 text-center">
+                <td colSpan={8} className="px-3 py-12 text-center">
                   <div className="flex flex-col items-center">
                     <div className="rounded-full bg-black/5 p-3 mb-2">
                       <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -94,6 +129,7 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
               <tr key={sale.id} className="rounded-xl bg-white">
                 <td className="px-3 py-3 text-sm">{sale.id.slice(0, 8)}</td>
                 <td className="px-3 py-3 text-sm">{formatDateTime(sale.createdAt)}</td>
+                <td className="px-3 py-3 text-sm">{sale.store.name}</td>
                 <td className="px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
                 <td className="px-3 py-3">
                   <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
@@ -126,7 +162,15 @@ export default async function SalesPage({ searchParams }: { searchParams?: { q?:
             ))}
           </tbody>
         </table>
-        <Pagination currentPage={page} totalPages={totalPages} basePath="/sales" searchParams={{ q: q || undefined }} />
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          basePath="/sales"
+          searchParams={{
+            q: q || undefined,
+            storeId: selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+          }}
+        />
       </div>
     </div>
   );

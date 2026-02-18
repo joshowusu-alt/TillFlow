@@ -65,6 +65,9 @@ jobs:
       - name: Deep owner-flow E2E
         run: npm run test:e2e:deep
 
+      - name: Phase 3A financial QA
+        run: npm run test:qa:phase3a
+
       - name: Upload E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4

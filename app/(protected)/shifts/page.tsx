@@ -17,7 +17,11 @@ export default async function ShiftsPage() {
         id: true,
         openedAt: true,
         openingCashPence: true,
+        expectedCashPence: true,
         till: { select: { name: true } },
+        cashDrawerEntries: {
+          select: { entryType: true, amountPence: true }
+        },
         salesInvoices: {
           select: {
             totalPence: true,
@@ -52,7 +56,6 @@ export default async function ShiftsPage() {
   // Calculate open shift summary
   let openShiftSummary = null;
   if (openShift) {
-    let cashTotal = openShift.openingCashPence;
     let cardTotal = 0;
     let transferTotal = 0;
     let momoTotal = 0;
@@ -62,21 +65,26 @@ export default async function ShiftsPage() {
     for (const invoice of openShift.salesInvoices) {
       salesTotal += invoice.totalPence;
       for (const payment of invoice.payments) {
-        if (payment.method === 'CASH') cashTotal += payment.amountPence;
         if (payment.method === 'CARD') cardTotal += payment.amountPence;
         if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
         if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
       }
     }
 
+    const cashByType = openShift.cashDrawerEntries.reduce<Record<string, number>>((acc, entry) => {
+      acc[entry.entryType] = (acc[entry.entryType] ?? 0) + entry.amountPence;
+      return acc;
+    }, {});
+
     openShiftSummary = {
       ...openShift,
       salesCount,
       salesTotal,
-      expectedCash: cashTotal,
+      expectedCash: openShift.expectedCashPence,
       cardTotal,
       transferTotal,
-      momoTotal
+      momoTotal,
+      cashByType
     };
   }
 

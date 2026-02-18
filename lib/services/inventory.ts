@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { resolveAvgCost, upsertInventoryBalance } from './shared';
+import { detectInventoryAdjustmentRisk } from './risk-monitor';
 
 export async function createStockAdjustment(input: {
   businessId: string;
@@ -12,6 +13,11 @@ export async function createStockAdjustment(input: {
   reason?: string | null;
   userId: string;
 }) {
+  const business = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: { inventoryAdjustmentRiskThresholdBase: true },
+  });
+
   const store = await prisma.store.findFirst({
     where: { id: input.storeId, businessId: input.businessId },
     select: { id: true },
@@ -75,6 +81,15 @@ export async function createStockAdjustment(input: {
     });
 
     return created;
+  });
+
+  await detectInventoryAdjustmentRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.userId,
+    adjustmentId: adjustment.id,
+    qtyBase: signedQtyBase,
+    thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
   });
 
   const adjustmentValue = currentAvgCost * qtyBase;

@@ -18,6 +18,11 @@ export type PaymentInput = {
   method: PaymentMethod;
   amountPence: number;
   reference?: string | null;
+  network?: string | null;
+  payerMsisdn?: string | null;
+  provider?: string | null;
+  status?: string | null;
+  collectionId?: string | null;
 };
 
 export type PaymentStatus = 'PAID' | 'PART_PAID' | 'UNPAID';

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { derivePaymentStatus, creditCashBankLines, splitPayments, type JournalLine } from './shared';
+import { recordCashDrawerEntryTx } from './cash-drawer';
 
 export type ExpensePaymentInput = {
   businessId: string;
@@ -53,6 +54,34 @@ export async function recordExpensePayment(input: ExpensePaymentInput) {
       where: { id: expense.id },
       data: { paymentStatus: status, method: input.method }
     });
+
+    if (input.method === 'CASH') {
+      const openShift = await tx.shift.findFirst({
+        where: {
+          status: 'OPEN',
+          till: { storeId: input.storeId },
+          userId: input.userId,
+        },
+        orderBy: { openedAt: 'desc' },
+      });
+
+      if (openShift) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId: input.businessId,
+          storeId: input.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'PAID_OUT_EXPENSE',
+          amountPence: -input.amountPence,
+          reasonCode: 'EXPENSE_PAYMENT',
+          reason: 'Cash paid out for expense',
+          referenceType: 'EXPENSE_PAYMENT',
+          referenceId: createdPayment.id,
+        });
+      }
+    }
 
     await postJournalEntry({
       businessId: input.businessId,

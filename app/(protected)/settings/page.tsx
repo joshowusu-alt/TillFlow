@@ -99,6 +99,64 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               The initial cash the owner invested into the business, in minor units (pesewas/pence). E.g. {business.currency === 'GHS' ? '₵10,000 = 1000000' : '£10,000 = 1000000'}.
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="requireOpenTillForSales"
+              defaultChecked={(business as any).requireOpenTillForSales ?? false}
+            />
+            <label className="text-sm">Block sales until till is opened</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="varianceReasonRequired"
+              defaultChecked={(business as any).varianceReasonRequired ?? true}
+            />
+            <label className="text-sm">Require variance reason when closing till</label>
+          </div>
+          <div>
+            <label className="label">Discount Approval Threshold (bps)</label>
+            <input
+              className="input"
+              name="discountApprovalThresholdBps"
+              type="number"
+              min="0"
+              max="10000"
+              step="1"
+              defaultValue={(business as any).discountApprovalThresholdBps ?? 1500}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Manager PIN required for discounts above this threshold. Example: 1500 = 15%.
+            </div>
+          </div>
+          <div>
+            <label className="label">Inventory Adjustment Risk Threshold (base units)</label>
+            <input
+              className="input"
+              name="inventoryAdjustmentRiskThresholdBase"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={(business as any).inventoryAdjustmentRiskThresholdBase ?? 50}
+            />
+          </div>
+          <div>
+            <label className="label">Cash Variance Risk Threshold (minor units)</label>
+            <input
+              className="input"
+              name="cashVarianceRiskThresholdPence"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={(business as any).cashVarianceRiskThresholdPence ?? 2000}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Alert when till-close variance exceeds this amount. Example: 2000 = 20.00.
+            </div>
+          </div>
           <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
@@ -124,6 +182,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <label className="label">MoMo Number</label>
             <input className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
+          </div>
+          <div>
+            <label className="label">Customer Scope</label>
+            <select className="input" name="customerScope" defaultValue={(business as any).customerScope ?? 'SHARED'}>
+              <option value="SHARED">Shared across all branches</option>
+              <option value="BRANCH">Branch-specific customers</option>
+            </select>
+            <div className="mt-1 text-xs text-black/50">
+              Choose whether customer records are shared company-wide or isolated per branch.
+            </div>
           </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
@@ -163,6 +231,19 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
       {/* Additional Settings Links */}
       <div className="grid gap-4 md:grid-cols-2">
+        <a href="/settings/organization" className="card p-6 transition hover:shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+              <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold">Organization</h3>
+              <p className="text-sm text-black/50">Branches, devices, and multi-site model</p>
+            </div>
+          </div>
+        </a>
         <a href="/settings/backup" className="card p-6 transition hover:shadow-lg">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
@@ -203,6 +284,17 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           </div>
           <InstallButton />
         </div>
+        <a href="/onboarding" className="card flex items-center gap-4 p-6 transition hover:shadow-lg">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-blue-100">
+            <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold">Setup Guide</h3>
+            <p className="text-sm text-black/50">Restart the setup wizard anytime</p>
+          </div>
+        </a>
       </div>
     </div>
   );

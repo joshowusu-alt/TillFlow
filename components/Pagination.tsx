@@ -27,7 +27,7 @@ export default function Pagination({ currentPage, totalPages, basePath, searchPa
       ) : (
         <span />
       )}
-      <span className="text-black/50">Page {currentPage} of {totalPages}</span>
+      <span className="text-sm text-muted">Page {currentPage} of {totalPages}</span>
       {currentPage < totalPages ? (
         <Link className="btn-ghost text-xs" href={buildHref(currentPage + 1)}>Next →</Link>
       ) : (

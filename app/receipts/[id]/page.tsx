@@ -36,7 +36,12 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       payments: {
         select: {
           method: true,
-          amountPence: true
+          amountPence: true,
+          reference: true,
+          network: true,
+          payerMsisdn: true,
+          provider: true,
+          receivedAt: true,
         }
       },
       lines: {
@@ -119,7 +124,12 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       }}
       payments={invoice.payments.map((payment) => ({
         method: payment.method,
-        amountPence: payment.amountPence
+        amountPence: payment.amountPence,
+        reference: payment.reference,
+        network: payment.network,
+        payerMsisdn: payment.payerMsisdn,
+        provider: payment.provider,
+        receivedAt: payment.receivedAt.toISOString(),
       }))}
       lines={lines}
     />

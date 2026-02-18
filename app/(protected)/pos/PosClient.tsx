@@ -6,6 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { completeSaleAction } from '@/app/actions/sales';
+import {
+  checkMomoCollectionStatusAction,
+  initiateMomoCollectionAction,
+} from '@/app/actions/mobile-money';
+import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
@@ -37,9 +42,17 @@ type ProductDto = {
 type CategoryDto = { id: string; name: string; colour: string };
 
 type PosClientProps = {
-  business: { currency: string; vatEnabled: boolean };
+  business: {
+    currency: string;
+    vatEnabled: boolean;
+    momoEnabled?: boolean;
+    momoProvider?: string | null;
+    requireOpenTillForSales?: boolean;
+    discountApprovalThresholdBps?: number;
+  };
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
+  openShiftTillIds: string[];
   products: ProductDto[];
   customers: { id: string; name: string }[];
   units: { id: string; name: string }[];
@@ -57,6 +70,8 @@ type CartLine = {
 
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
+type CollectionNetwork = 'MTN' | 'TELECEL' | 'AIRTELTIGO' | 'UNKNOWN';
+type MomoCollectionState = 'IDLE' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'TIMEOUT';
 
 const CART_STORAGE_KEY = 'pos.savedCart';
 const CART_CUSTOMER_KEY = 'pos.savedCustomer';
@@ -71,7 +86,16 @@ type ParkedCart = {
   itemCount: number;
 };
 
-export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
+export default function PosClient({
+  business,
+  store,
+  tills,
+  openShiftTillIds,
+  products,
+  customers,
+  units,
+  categories,
+}: PosClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
@@ -92,10 +116,21 @@ export default function PosClient({ business, store, tills, products, customers,
   const [transferPaid, setTransferPaid] = useState('');
   const [momoPaid, setMomoPaid] = useState('');
   const [momoRef, setMomoRef] = useState('');
+  const [momoPayerMsisdn, setMomoPayerMsisdn] = useState('');
+  const [momoNetwork, setMomoNetwork] = useState<CollectionNetwork>('MTN');
+  const [momoCollectionId, setMomoCollectionId] = useState('');
+  const [momoCollectionStatus, setMomoCollectionStatus] = useState<MomoCollectionState>('IDLE');
+  const [momoCollectionError, setMomoCollectionError] = useState<string | null>(null);
+  const [momoIdempotencyKey, setMomoIdempotencyKey] = useState('');
+  const [momoCollectionSignature, setMomoCollectionSignature] = useState('');
+  const [isInitiatingMomo, setIsInitiatingMomo] = useState(false);
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
   const [orderDiscountInput, setOrderDiscountInput] = useState('');
+  const [discountManagerPin, setDiscountManagerPin] = useState('');
+  const [discountReasonCode, setDiscountReasonCode] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
   const [lastReceiptId, setLastReceiptId] = useState('');
   const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
@@ -198,6 +233,39 @@ export default function PosClient({ business, store, tills, products, customers,
     setQuickAddOpen(true);
     setQuickAddBarcode(barcodeValue ?? '');
   }, []);
+
+  const resetMomoCollection = useCallback(() => {
+    setMomoCollectionId('');
+    setMomoCollectionStatus('IDLE');
+    setMomoCollectionError(null);
+    setMomoIdempotencyKey('');
+    setMomoCollectionSignature('');
+    setMomoRef('');
+  }, []);
+
+  const applyMomoStatus = useCallback(
+    (next: {
+      status: string;
+      providerStatus?: string | null;
+      providerReference?: string | null;
+      providerTransactionId?: string | null;
+      failureReason?: string | null;
+    }) => {
+      const normalized = (next.status || 'IDLE').toUpperCase() as MomoCollectionState;
+      setMomoCollectionStatus(normalized);
+      const providerRef = next.providerTransactionId ?? next.providerReference ?? '';
+      if (providerRef) setMomoRef(providerRef);
+      if (normalized === 'FAILED' || normalized === 'TIMEOUT') {
+        setMomoCollectionError(
+          next.failureReason ||
+            `MoMo collection ${normalized.toLowerCase()}. You can retry safely.`
+        );
+      } else if (normalized === 'CONFIRMED') {
+        setMomoCollectionError(null);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     barcodeRef.current?.focus();
@@ -304,14 +372,19 @@ export default function PosClient({ business, store, tills, products, customers,
     setCardPaid('');
     setTransferPaid('');
     setMomoPaid('');
-    setMomoRef('');
+    setMomoPayerMsisdn('');
+    setMomoNetwork('MTN');
+    resetMomoCollection();
     setPaymentMethods(['CASH']);
     setOrderDiscountType('NONE');
     setOrderDiscountInput('');
+    setDiscountManagerPin('');
+    setDiscountReasonCode('');
+    setDiscountReason('');
     setQtyDrafts({});
     setUndoStack([]);
     playBeep(true);
-  }, [cart, customerId, parkedCarts, saveParkedCarts, playBeep]);
+  }, [cart, customerId, parkedCarts, playBeep, resetMomoCollection, saveParkedCarts]);
 
   const recallParkedCart = useCallback((parkedId: string) => {
     const parked = parkedCarts.find((p) => p.id === parkedId);
@@ -348,6 +421,102 @@ export default function PosClient({ business, store, tills, products, customers,
     saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
   }, [parkedCarts, saveParkedCarts]);
 
+  const handleInitiateMomoCollection = useCallback(async () => {
+    if (isInitiatingMomo) return;
+
+    const amountPence = Math.max(0, Math.round(parseCurrencyToPence(momoPaid)));
+    const payer = momoPayerMsisdn.trim();
+    if (amountPence <= 0) {
+      setMomoCollectionError('Enter a valid MoMo amount before requesting collection.');
+      return;
+    }
+    if (!payer) {
+      setMomoCollectionError('Enter the payer phone number to request collection.');
+      return;
+    }
+
+    setIsInitiatingMomo(true);
+    setMomoCollectionError(null);
+    setMomoCollectionStatus('PENDING');
+
+    const nextIdempotencyKey =
+      momoIdempotencyKey ||
+      (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+    try {
+      const result = await initiateMomoCollectionAction({
+        storeId: store.id,
+        amountPence,
+        payerMsisdn: payer,
+        network: momoNetwork,
+        idempotencyKey: nextIdempotencyKey,
+      });
+
+      if (!result.success) {
+        setMomoCollectionStatus('FAILED');
+        setMomoCollectionError(result.error);
+        return;
+      }
+
+      setMomoIdempotencyKey(nextIdempotencyKey);
+      setMomoCollectionId(result.data.collectionId);
+      setMomoCollectionSignature(
+        `${amountPence}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`
+      );
+      applyMomoStatus({
+        status: result.data.status,
+        providerStatus: result.data.providerStatus,
+        providerReference: result.data.providerReference,
+        providerTransactionId: result.data.providerTransactionId,
+        failureReason: result.data.failureReason,
+      });
+    } catch {
+      setMomoCollectionStatus('FAILED');
+      setMomoCollectionError('Unable to initiate MoMo collection. Please retry.');
+    } finally {
+      setIsInitiatingMomo(false);
+    }
+  }, [
+    applyMomoStatus,
+    isInitiatingMomo,
+    momoIdempotencyKey,
+    momoNetwork,
+    momoPaid,
+    momoPayerMsisdn,
+    parseCurrencyToPence,
+    store.id,
+  ]);
+
+  useEffect(() => {
+    if (!momoCollectionId) return;
+    if (momoCollectionStatus !== 'PENDING') return;
+
+    let active = true;
+    const poll = async () => {
+      const result = await checkMomoCollectionStatusAction(momoCollectionId);
+      if (!active || !result.success) return;
+      applyMomoStatus({
+        status: result.data.status,
+        providerStatus: result.data.providerStatus,
+        providerReference: result.data.providerReference,
+        providerTransactionId: result.data.providerTransactionId,
+        failureReason: result.data.failureReason,
+      });
+    };
+
+    const interval = window.setInterval(() => {
+      poll().catch(() => null);
+    }, 5000);
+
+    poll().catch(() => null);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [applyMomoStatus, momoCollectionId, momoCollectionStatus]);
+
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
     setIsCompletingSale(true);
@@ -368,6 +537,12 @@ export default function PosClient({ business, store, tills, products, customers,
         transferPaid: Math.max(0, Math.round(transferPaidValue)),
         momoPaid: Math.max(0, Math.round(momoPaidValue)),
         momoRef: momoRef.trim() || undefined,
+        momoCollectionId: momoCollectionId || undefined,
+        momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
+        momoNetwork,
+        discountManagerPin: discountManagerPin.trim() || undefined,
+        discountReasonCode: discountReasonCode || undefined,
+        discountReason: discountReason.trim() || undefined,
       });
 
       if (result.success) {
@@ -388,10 +563,16 @@ export default function PosClient({ business, store, tills, products, customers,
         setTransferPaid('');
         setMomoPaid('');
         setMomoRef('');
+        setMomoPayerMsisdn('');
+        setMomoNetwork('MTN');
+        resetMomoCollection();
         setPaymentStatus('PAID');
         setPaymentMethods(['CASH']);
         setOrderDiscountType('NONE');
         setOrderDiscountInput('');
+        setDiscountManagerPin('');
+        setDiscountReasonCode('');
+        setDiscountReason('');
         setQtyDrafts({});
         setUndoStack([]);
         playBeep(true);
@@ -486,7 +667,12 @@ export default function PosClient({ business, store, tills, products, customers,
       if (method === 'CASH') setCashTendered('');
       if (method === 'CARD') setCardPaid('');
       if (method === 'TRANSFER') setTransferPaid('');
-      if (method === 'MOBILE_MONEY') { setMomoPaid(''); setMomoRef(''); }
+      if (method === 'MOBILE_MONEY') {
+        setMomoPaid('');
+        setMomoPayerMsisdn('');
+        setMomoNetwork('MTN');
+        resetMomoCollection();
+      }
     }
     setPaymentMethods(next);
   };
@@ -713,6 +899,14 @@ export default function PosClient({ business, store, tills, products, customers,
     orderDiscountType,
     orderDiscountInput
   );
+  const totalDiscountPence = totals.lineDiscount + totals.promoDiscount + orderDiscount;
+  const discountBps =
+    totals.subtotal > 0 ? Math.round((totalDiscountPence * 10_000) / totals.subtotal) : 0;
+  const requiresDiscountApproval =
+    discountBps > (business.discountApprovalThresholdBps ?? 1500);
+  const discountApprovalReady =
+    !requiresDiscountApproval ||
+    (!!discountManagerPin.trim() && (!!discountReasonCode || !!discountReason.trim()));
   const netAfterOrderDiscount = Math.max(totals.netSubtotal - orderDiscount, 0);
   const vatRatio =
     business.vatEnabled && totals.netSubtotal > 0
@@ -736,6 +930,30 @@ export default function PosClient({ business, store, tills, products, customers,
   const changeDue = Math.max(cashTenderedValue - cashDue, 0);
   const totalPaid = cashApplied + nonCashPaid;
   const balanceRemaining = Math.max(totalDue - totalPaid, 0);
+  const momoMethodEnabled = hasMethod('MOBILE_MONEY');
+  const needsMomoConfirmation = momoMethodEnabled && momoPaidValue > 0;
+  const momoConfirmed = momoCollectionStatus === 'CONFIRMED';
+  const momoSignature = `${momoPaidValue}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`;
+
+  useEffect(() => {
+    if (!momoCollectionId) return;
+    if (momoCollectionStatus === 'PENDING') return;
+    if (momoCollectionSignature && momoCollectionSignature !== momoSignature) {
+      resetMomoCollection();
+    }
+  }, [
+    momoCollectionId,
+    momoCollectionSignature,
+    momoCollectionStatus,
+    momoSignature,
+    resetMomoCollection,
+  ]);
+
+  useEffect(() => {
+    if (needsMomoConfirmation) return;
+    if (!momoCollectionId && momoCollectionStatus === 'IDLE') return;
+    resetMomoCollection();
+  }, [momoCollectionId, momoCollectionStatus, needsMomoConfirmation, resetMomoCollection]);
 
   const handleBarcodeKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
@@ -748,8 +966,17 @@ export default function PosClient({ business, store, tills, products, customers,
   const requiresCustomer = paymentStatus !== 'PAID';
   const fullyPaid = paymentStatus === 'PAID' ? totalPaid >= totalDue : true;
   const hasPaymentError = nonCashOverpay;
+  const momoReady = !needsMomoConfirmation || momoConfirmed;
+  const tillReady =
+    !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
   const canSubmit =
-    cart.length > 0 && fullyPaid && !hasPaymentError && (!requiresCustomer || customerId);
+    cart.length > 0 &&
+    fullyPaid &&
+    !hasPaymentError &&
+    momoReady &&
+    discountApprovalReady &&
+    tillReady &&
+    (!requiresCustomer || customerId);
   const errorParam = searchParams.get('error');
 
   useEffect(() => {
@@ -1131,6 +1358,12 @@ export default function PosClient({ business, store, tills, products, customers,
                 ? 'Select a customer for credit or part-paid sales.'
                 : errorParam === 'insufficient-stock'
                   ? 'One or more items exceed available stock.'
+                  : errorParam === 'till-not-open'
+                    ? 'Open the till shift first before recording sales.'
+                    : errorParam === 'invalid-discount-pin'
+                      ? 'Manager PIN for discount override is invalid.'
+                    : errorParam === 'invalid-discount-reason'
+                      ? 'Discount reason code is invalid.'
                   : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
@@ -1326,6 +1559,11 @@ export default function PosClient({ business, store, tills, products, customers,
                 <select className="input" name="tillId" value={tillId} onChange={(e) => setTillId(e.target.value)}>
                   {tills.map((till) => (<option key={till.id} value={till.id}>{till.name}</option>))}
                 </select>
+                {business.requireOpenTillForSales ? (
+                  <div className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}>
+                    {tillReady ? 'Till is open' : 'Till is not open'}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className="label">Payment Status</label>
@@ -1401,6 +1639,47 @@ export default function PosClient({ business, store, tills, products, customers,
               />
             </div>
 
+            {requiresDiscountApproval ? (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Manager Approval Required
+                </div>
+                <div className="mt-1 text-xs text-amber-700">
+                  Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
+                  {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <select
+                    className="input"
+                    value={discountReasonCode}
+                    onChange={(e) => setDiscountReasonCode(e.target.value)}
+                  >
+                    <option value="">Select reason code</option>
+                    {DISCOUNT_REASON_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {code.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Reason details"
+                  />
+                  <input
+                    className="input"
+                    type="password"
+                    value={discountManagerPin}
+                    onChange={(e) => setDiscountManagerPin(e.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Manager PIN"
+                  />
+                </div>
+              </div>
+            ) : null}
+
             {/* Cash / Card / Transfer inputs */}
             <div className="grid gap-3 sm:grid-cols-3">
               {hasMethod('CASH') && (
@@ -1456,13 +1735,66 @@ export default function PosClient({ business, store, tills, products, customers,
                     <span className="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
                     MoMo Amount
                   </label>
-                  <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={momoPaid} onChange={(e) => setMomoPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} placeholder="0.00" />
-                  <input className="input mt-1.5" type="text" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="Transaction ID (optional)" />
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800">MTN</span>
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800">Telecel</span>
-                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">AirtelTigo</span>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={momoPaid}
+                    onChange={(e) => setMomoPaid(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    placeholder="0.00"
+                  />
+                  <select
+                    className="input mt-1.5"
+                    value={momoNetwork}
+                    onChange={(e) => setMomoNetwork(e.target.value as CollectionNetwork)}
+                  >
+                    <option value="MTN">MTN</option>
+                    <option value="TELECEL">Telecel</option>
+                    <option value="AIRTELTIGO">AirtelTigo</option>
+                  </select>
+                  <input
+                    className="input mt-1.5"
+                    type="tel"
+                    value={momoPayerMsisdn}
+                    onChange={(e) => setMomoPayerMsisdn(e.target.value)}
+                    placeholder="Payer number (e.g. 024xxxxxxx)"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary mt-1.5 w-full text-xs"
+                    onClick={() => handleInitiateMomoCollection().catch(() => null)}
+                    disabled={
+                      isInitiatingMomo ||
+                      !momoMethodEnabled ||
+                      parseCurrencyToPence(momoPaid) <= 0 ||
+                      !momoPayerMsisdn.trim()
+                    }
+                  >
+                    {isInitiatingMomo ? 'Requesting collection...' : 'Request MoMo Collection'}
+                  </button>
+                  <div className="mt-1.5 text-[11px] text-black/60">
+                    Status:{' '}
+                    <span
+                      className={
+                        momoCollectionStatus === 'CONFIRMED'
+                          ? 'font-semibold text-emerald-700'
+                          : momoCollectionStatus === 'PENDING'
+                            ? 'font-semibold text-amber-700'
+                            : momoCollectionStatus === 'FAILED' || momoCollectionStatus === 'TIMEOUT'
+                              ? 'font-semibold text-rose-700'
+                              : 'font-semibold text-black/50'
+                      }
+                    >
+                      {momoCollectionStatus}
+                    </span>
+                    {momoRef ? ` | Ref: ${momoRef}` : ''}
                   </div>
+                  {momoCollectionError ? (
+                    <div className="mt-1 text-[11px] font-medium text-rose-700">{momoCollectionError}</div>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1473,6 +1805,21 @@ export default function PosClient({ business, store, tills, products, customers,
             )}
             {hasPaymentError && (
               <div className="text-sm text-amber-700 font-medium">Card/transfer/MoMo amounts cannot exceed the total due.</div>
+            )}
+            {!tillReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                Open this till shift before recording sales.
+              </div>
+            )}
+            {needsMomoConfirmation && !momoConfirmed && (
+              <div className="text-sm text-amber-700 font-medium">
+                MoMo payment must be confirmed before completing this sale.
+              </div>
+            )}
+            {requiresDiscountApproval && !discountApprovalReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                High discount requires manager PIN and reason before sale completion.
+              </div>
             )}
             {paymentStatus === 'PAID' && !fullyPaid && (
               <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>

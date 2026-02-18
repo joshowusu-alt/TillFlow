@@ -15,6 +15,10 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
+import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
+import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
+import { resolveBranchIdForStore } from './branches';
 
 export type SalePaymentInput = PaymentInput;
 
@@ -39,6 +43,10 @@ export type CreateSaleInput = {
   payments: SalePaymentInput[];
   orderDiscountType?: DiscountType;
   orderDiscountValue?: number;
+  discountOverrideReasonCode?: string | null;
+  discountOverrideReason?: string | null;
+  discountApprovedByUserId?: string | null;
+  momoCollectionId?: string | null;
   externalRef?: string | null;
   createdAt?: Date | null;
   lines: SaleLineInput[];
@@ -59,10 +67,20 @@ export async function createSale(input: CreateSaleInput) {
     select: { id: true },
   });
   if (!till) throw new Error('Till not found');
+  const branchId = await resolveBranchIdForStore({ businessId: input.businessId, storeId: store.id });
+
+  const openShift = await getOpenShiftForTill(input.businessId, till.id);
+  if (business.requireOpenTillForSales && !openShift) {
+    throw new Error('Open till is required before recording sales.');
+  }
 
   if (input.customerId) {
     const customer = await prisma.customer.findFirst({
-      where: { id: input.customerId, businessId: input.businessId },
+      where: {
+        id: input.customerId,
+        businessId: input.businessId,
+        ...(business.customerScope === 'BRANCH' ? { storeId: input.storeId } : {}),
+      },
       select: { id: true },
     });
     if (!customer) throw new Error('Customer not found');
@@ -181,6 +199,43 @@ export async function createSale(input: CreateSaleInput) {
   const vatTotal = business.vatEnabled ? Math.round(lineVatTotal * vatRatio) : 0;
   const subtotal = netAfterOrderDiscount;
   const total = subtotal + vatTotal;
+  const grossSalesPence = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
+  const totalLineDiscountPence = lineDetails.reduce(
+    (sum, line) => sum + line.lineDiscount + line.promoDiscount,
+    0
+  );
+  const totalDiscountPence = totalLineDiscountPence + orderDiscount;
+  const discountBps =
+    grossSalesPence > 0 ? Math.round((totalDiscountPence * 10_000) / grossSalesPence) : 0;
+
+  let discountApprovedByUserId = input.discountApprovedByUserId ?? null;
+  if (input.discountOverrideReasonCode && !isDiscountReasonCode(input.discountOverrideReasonCode)) {
+    throw new Error('Discount reason code is invalid.');
+  }
+  if (discountBps > business.discountApprovalThresholdBps) {
+    if (!discountApprovedByUserId) {
+      throw new Error('Manager discount PIN approval is required for this discount.');
+    }
+    if (!input.discountOverrideReasonCode && !input.discountOverrideReason) {
+      throw new Error('Discount reason is required for override approval.');
+    }
+
+    const approvedBy = await prisma.user.findFirst({
+      where: {
+        id: discountApprovedByUserId,
+        businessId: input.businessId,
+        active: true,
+        role: { in: ['MANAGER', 'OWNER'] },
+      },
+      select: { id: true },
+    });
+    if (!approvedBy) {
+      throw new Error('Discount override approval user is invalid.');
+    }
+    discountApprovedByUserId = approvedBy.id;
+  } else {
+    discountApprovedByUserId = null;
+  }
 
   const positivePayments = filterPositivePayments(input.payments);
   const fallbackPayments =
@@ -204,17 +259,83 @@ export async function createSale(input: CreateSaleInput) {
 
   const balanceDue = Math.max(total - totalPaid, 0);
   const payments: SalePaymentInput[] = [
-    cashPence > 0 ? { method: 'CASH' as const, amountPence: cashPence } : null,
+    ...(cashPence > 0 ? [{ method: 'CASH' as const, amountPence: cashPence }] : []),
     ...fallbackPayments
-      .filter((p) => p.method === 'CARD' && p.amountPence > 0)
-      .map((p) => ({ method: 'CARD' as const, amountPence: p.amountPence })),
-    ...fallbackPayments
-      .filter((p) => p.method === 'TRANSFER' && p.amountPence > 0)
-      .map((p) => ({ method: 'TRANSFER' as const, amountPence: p.amountPence })),
-    ...fallbackPayments
-      .filter((p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0)
-      .map((p) => ({ method: 'MOBILE_MONEY' as const, amountPence: p.amountPence }))
-  ].filter(Boolean) as SalePaymentInput[];
+      .filter((p) => p.method !== 'CASH' && p.amountPence > 0)
+      .map((p) => ({ ...p })),
+  ];
+
+  let confirmedMomoCollection:
+    | {
+        id: string;
+        salesInvoiceId: string | null;
+        amountPence: number;
+        providerReference: string | null;
+        providerTransactionId: string | null;
+        network: string;
+        payerMsisdn: string;
+        provider: string;
+      }
+    | null = null;
+
+  const momoPaidPence = payments
+    .filter((payment) => payment.method === 'MOBILE_MONEY')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+
+  if (momoPaidPence > 0) {
+    if (!input.momoCollectionId) {
+      throw new Error('Confirmed MoMo collection is required before checkout.');
+    }
+
+    confirmedMomoCollection = await prisma.mobileMoneyCollection.findFirst({
+      where: {
+        id: input.momoCollectionId,
+        businessId: input.businessId,
+        storeId: input.storeId,
+        status: 'CONFIRMED',
+      },
+      select: {
+        id: true,
+        salesInvoiceId: true,
+        amountPence: true,
+        providerReference: true,
+        providerTransactionId: true,
+        network: true,
+        payerMsisdn: true,
+        provider: true,
+      },
+    });
+
+    if (!confirmedMomoCollection) {
+      throw new Error('MoMo collection is not confirmed yet.');
+    }
+    if (confirmedMomoCollection.salesInvoiceId) {
+      throw new Error('MoMo collection has already been applied to another sale.');
+    }
+    if (confirmedMomoCollection.amountPence !== momoPaidPence) {
+      throw new Error('MoMo amount does not match the confirmed collection.');
+    }
+
+    for (const payment of payments) {
+      if (payment.method !== 'MOBILE_MONEY') continue;
+      payment.reference =
+        confirmedMomoCollection.providerTransactionId ??
+        confirmedMomoCollection.providerReference ??
+        payment.reference ??
+        null;
+      payment.network = confirmedMomoCollection.network;
+      payment.payerMsisdn = confirmedMomoCollection.payerMsisdn;
+      payment.provider = confirmedMomoCollection.provider;
+      payment.status = 'CONFIRMED';
+      payment.collectionId = confirmedMomoCollection.id;
+    }
+  }
+
+  const cogsEstimate = lineDetails.reduce((sum, line) => {
+    const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;
+    return sum + cost * line.qtyBase;
+  }, 0);
+  const grossMarginEstimate = subtotal - cogsEstimate;
 
   const finalStatus =
     balanceDue === 0 ? 'PAID' : totalPaid === 0 ? 'UNPAID' : 'PART_PAID';
@@ -228,7 +349,9 @@ export async function createSale(input: CreateSaleInput) {
       data: {
         businessId: input.businessId,
         storeId: store.id,
+        branchId,
         tillId: till.id,
+        shiftId: openShift?.id ?? null,
         cashierUserId: input.cashierUserId,
         customerId: input.customerId || null,
         paymentStatus: finalStatus,
@@ -237,6 +360,10 @@ export async function createSale(input: CreateSaleInput) {
         vatPence: vatTotal,
         totalPence: total,
         discountPence: orderDiscount,
+        discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
+        discountOverrideReason: input.discountOverrideReason ?? null,
+        discountApprovedByUserId,
+        grossMarginPence: grossMarginEstimate,
         createdAt: input.createdAt ?? undefined,
         lines: {
           create: lineDetails.map((line) => ({
@@ -257,11 +384,49 @@ export async function createSale(input: CreateSaleInput) {
           create: payments.map((payment) => ({
             method: payment.method,
             amountPence: payment.amountPence,
-            reference: input.externalRef ?? payment.reference ?? null
+            branchId,
+            reference: payment.reference ?? input.externalRef ?? null,
+            network: payment.network ?? null,
+            payerMsisdn: payment.payerMsisdn ?? null,
+            provider: payment.provider ?? null,
+            status: payment.status ?? 'CONFIRMED',
+            collectionId: payment.collectionId ?? null,
           }))
         }
       }
     });
+
+    if (confirmedMomoCollection) {
+      await tx.mobileMoneyCollection.update({
+        where: { id: confirmedMomoCollection.id },
+        data: { salesInvoiceId: created.id },
+      });
+      await tx.mobileMoneyStatusLog.create({
+        data: {
+          collectionId: confirmedMomoCollection.id,
+          status: 'CONFIRMED',
+          providerStatus: 'ATTACHED_TO_SALE',
+          notes: `Attached to sale ${created.id}`,
+        },
+      });
+    }
+
+    if (cashPence > 0 && openShift) {
+      await recordCashDrawerEntryTx(tx, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        tillId: till.id,
+        shiftId: openShift.id,
+        createdByUserId: input.cashierUserId,
+        cashierUserId: input.cashierUserId,
+        entryType: 'CASH_SALE',
+        amountPence: cashPence,
+        reasonCode: 'SALE',
+        reason: 'Cash sale collected',
+        referenceType: 'SALES_INVOICE',
+        referenceId: created.id,
+      });
+    }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
       const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
@@ -315,6 +480,24 @@ export async function createSale(input: CreateSaleInput) {
     });
 
     return created;
+  });
+
+  await detectExcessiveDiscountRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.cashierUserId,
+    salesInvoiceId: invoice.id,
+    discountPence: totalDiscountPence,
+    grossSalesPence,
+    thresholdBps: business.discountApprovalThresholdBps,
+  });
+
+  await detectNegativeMarginRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.cashierUserId,
+    salesInvoiceId: invoice.id,
+    grossMarginPence: grossMarginEstimate,
   });
 
   return invoice;
@@ -477,8 +660,26 @@ export async function amendSale(input: AmendSaleInput) {
           salesInvoiceId: invoice.id,
           method: refundMethod,
           amountPence: -refundAmount, // negative = refund
+          branchId: invoice.branchId ?? null,
         },
       });
+
+      if (refundMethod === 'CASH' && invoice.shiftId) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          tillId: invoice.tillId,
+          shiftId: invoice.shiftId,
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'CASH_REFUND',
+          amountPence: -refundAmount,
+          reasonCode: 'SALE_AMEND_REFUND',
+          reason: input.reason,
+          referenceType: 'SALES_INVOICE',
+          referenceId: invoice.id,
+        });
+      }
     }
 
     // 6. Post corrective journal entry

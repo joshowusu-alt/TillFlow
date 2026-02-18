@@ -9,10 +9,14 @@ export default async function PosPage() {
   }
 
   // Run ALL data queries in parallel — single round trip to DB
-  const [tills, inventory, products, units, customers, categories] = await Promise.all([
+  const [tills, openShifts, inventory, products, units, customers, categories] = await Promise.all([
     prisma.till.findMany({
       where: { storeId: baseStore.id, active: true },
       select: { id: true, name: true }
+    }),
+    prisma.shift.findMany({
+      where: { till: { storeId: baseStore.id }, status: 'OPEN' },
+      select: { tillId: true },
     }),
     prisma.inventoryBalance.findMany({
       where: { storeId: baseStore.id },
@@ -43,7 +47,10 @@ export default async function PosPage() {
     }),
     prisma.unit.findMany({ select: { id: true, name: true } }),
     prisma.customer.findMany({
-      where: { businessId: business.id },
+      where: {
+        businessId: business.id,
+        ...(business.customerScope === 'BRANCH' ? { storeId: baseStore.id } : {}),
+      },
       select: { id: true, name: true }
     }),
     prisma.category.findMany({
@@ -78,9 +85,17 @@ export default async function PosPage() {
 
   return (
     <PosClient
-      business={{ currency: business.currency, vatEnabled: business.vatEnabled }}
+      business={{
+        currency: business.currency,
+        vatEnabled: business.vatEnabled,
+        momoEnabled: (business as any).momoEnabled ?? false,
+        momoProvider: (business as any).momoProvider ?? null,
+        requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
+        discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
+      }}
       store={{ id: baseStore.id, name: baseStore.name }}
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
+      openShiftTillIds={openShifts.map((shift) => shift.tillId)}
       products={productDtos}
       customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}

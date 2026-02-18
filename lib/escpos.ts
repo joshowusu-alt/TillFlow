@@ -24,7 +24,13 @@ type ReceiptData = {
     lineDiscountPence: number;
     promoDiscountPence: number;
   }[];
-  payments: { method: string; amountPence: number }[];
+  payments: {
+    method: string;
+    amountPence: number;
+    reference?: string | null;
+    network?: string | null;
+    payerMsisdn?: string | null;
+  }[];
   template: string;
 };
 
@@ -140,6 +146,9 @@ export function buildEscPosReceipt(data: ReceiptData) {
   const momoPaid = data.payments
     .filter((payment) => payment.method === 'MOBILE_MONEY')
     .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const momoPayments = data.payments.filter(
+    (payment) => payment.method === 'MOBILE_MONEY' && payment.amountPence > 0
+  );
   appendText(
     buffer,
     `${formatLine('Paid (cash)', formatMoney(cashPaid, data.business.currency), width)}\n`
@@ -161,6 +170,15 @@ export function buildEscPosReceipt(data: ReceiptData) {
       buffer,
       `${formatLine('Paid (MoMo)', formatMoney(momoPaid, data.business.currency), width)}\n`
     );
+    for (const payment of momoPayments) {
+      const details = `${payment.network ?? 'MOMO'} ${payment.payerMsisdn ?? ''}`.trim();
+      if (details) {
+        appendText(buffer, `${sanitize(details)}\n`);
+      }
+      if (payment.reference) {
+        appendText(buffer, `Ref: ${sanitize(payment.reference)}\n`);
+      }
+    }
   }
 
   appendCmd(buffer, [0x1b, 0x61, 0x01]); // center

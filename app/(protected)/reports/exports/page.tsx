@@ -23,6 +23,9 @@ export default async function ExportsPage() {
         <a className="btn-secondary text-center text-sm" href="/exports/purchases">
           Export purchases
         </a>
+        <a className="btn-secondary text-center text-sm" href="/exports/risk-summary">
+          Export risk summary
+        </a>
       </div>
     </div>
   );

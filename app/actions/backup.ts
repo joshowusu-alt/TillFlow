@@ -160,15 +160,22 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     const list = <T = any>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
-    // Clear only this business data (multi-tenant safe)
+    // Clear only this business data (multi-tenant safe) in FK-safe order.
     await prisma.$transaction([
+      prisma.syncEvent.deleteMany({ where: { businessId } }),
+      prisma.dayClosure.deleteMany({ where: { businessId } }),
+      prisma.riskAlert.deleteMany({ where: { businessId } }),
+      prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
+      prisma.stockTransfer.deleteMany({ where: { businessId } }),
+      prisma.mobileMoneyStatusLog.deleteMany({ where: { collection: { businessId } } }),
+      prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } }),
+      prisma.mobileMoneyCollection.deleteMany({ where: { businessId } }),
       prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
       prisma.journalEntry.deleteMany({ where: { businessId } }),
       prisma.expensePayment.deleteMany({ where: { businessId } }),
       prisma.expense.deleteMany({ where: { businessId } }),
       prisma.stockAdjustment.deleteMany({ where: { store: { businessId } } }),
       prisma.stockMovement.deleteMany({ where: { store: { businessId } } }),
-      prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } }),
       prisma.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
       prisma.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } }),
       prisma.salesInvoice.deleteMany({ where: { businessId } }),
@@ -177,6 +184,8 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
       prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
       prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
+      prisma.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId } } } }),
+      prisma.stocktake.deleteMany({ where: { store: { businessId } } }),
       prisma.productUnit.deleteMany({ where: { product: { businessId } } }),
       prisma.product.deleteMany({ where: { businessId } }),
       prisma.category.deleteMany({ where: { businessId } }),
@@ -185,6 +194,10 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       prisma.customer.deleteMany({ where: { businessId } }),
       prisma.supplier.deleteMany({ where: { businessId } }),
       prisma.account.deleteMany({ where: { businessId } }),
+      prisma.auditLog.deleteMany({ where: { businessId } }),
+      prisma.device.deleteMany({ where: { businessId } }),
+      prisma.branch.deleteMany({ where: { businessId } }),
+      prisma.organization.deleteMany({ where: { businessId } }),
       prisma.session.deleteMany({ where: { user: { businessId } } }),
       prisma.user.deleteMany({ where: { businessId } }),
       prisma.store.deleteMany({ where: { businessId } }),
@@ -210,6 +223,27 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
         socialMediaHandle: backup.business.socialMediaHandle ?? null,
         address: backup.business.address ?? null,
         phone: backup.business.phone ?? null,
+        tinNumber: backup.business.tinNumber ?? null,
+        momoEnabled: backup.business.momoEnabled ?? false,
+        momoProvider: backup.business.momoProvider ?? null,
+        momoNumber: backup.business.momoNumber ?? null,
+        openingCapitalPence:
+          typeof backup.business.openingCapitalPence === 'number' ? backup.business.openingCapitalPence : 0,
+        requireOpenTillForSales: backup.business.requireOpenTillForSales ?? false,
+        discountApprovalThresholdBps:
+          typeof backup.business.discountApprovalThresholdBps === 'number'
+            ? backup.business.discountApprovalThresholdBps
+            : 1500,
+        varianceReasonRequired: backup.business.varianceReasonRequired ?? true,
+        inventoryAdjustmentRiskThresholdBase:
+          typeof backup.business.inventoryAdjustmentRiskThresholdBase === 'number'
+            ? backup.business.inventoryAdjustmentRiskThresholdBase
+            : 50,
+        cashVarianceRiskThresholdPence:
+          typeof backup.business.cashVarianceRiskThresholdPence === 'number'
+            ? backup.business.cashVarianceRiskThresholdPence
+            : 2000,
+        customerScope: backup.business.customerScope ?? 'SHARED',
       },
     });
 
@@ -291,7 +325,9 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     }
 
     for (const payment of list(backup.salesPayments)) {
-      await prisma.salesPayment.create({ data: payment });
+      // collectionId refs MobileMoneyCollection which is not included in the backup export,
+      // so null it out to avoid FK constraint violation on restore.
+      await prisma.salesPayment.create({ data: { ...payment, collectionId: null } });
     }
 
     for (const ret of list(backup.salesReturns)) {

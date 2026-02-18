@@ -32,8 +32,12 @@ async function ensureOwnerPassword() {
   try {
     const bcrypt = require('bcryptjs');
     const hash = await bcrypt.hash(OWNER_PASSWORD, 10);
-    await prisma.user.updateMany({ where: { email: OWNER_EMAIL }, data: { passwordHash: hash } });
-    step('Owner password ensured');
+    const pinHash = await bcrypt.hash('1234', 10);
+    await prisma.user.updateMany({
+      where: { email: OWNER_EMAIL },
+      data: { passwordHash: hash, approvalPinHash: pinHash },
+    });
+    step('Owner password/PIN ensured');
   } catch (e) { step(`ensureOwnerPassword warning: ${e.message}`); }
 }
 
@@ -270,6 +274,11 @@ async function run() {
 
     await page.goto(`${BASE_URL}/sales/return/${unpaidInvoiceId}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await page
+      .locator('label:has-text(\"Reason Code\")')
+      .locator('xpath=following-sibling::select[1]')
+      .selectOption('OTHER');
+    await page.locator('input[placeholder=\"Enter manager PIN\"]').fill('1234');
     await page.getByRole('button', { name: /Void Sale|Process Return/i }).click();
     await page.waitForTimeout(1000);
     await page.getByRole('button', { name: /Confirm Return|Void Sale/i }).last().click();
