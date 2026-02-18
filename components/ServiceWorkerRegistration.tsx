@@ -66,7 +66,7 @@ export default function ServiceWorkerRegistration() {
         <span className="text-sm font-medium text-black/70">A new version is available</span>
         <button
           onClick={applyUpdate}
-          className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+          className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900 transition"
         >
           Update now
         </button>
