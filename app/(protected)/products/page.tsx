@@ -227,7 +227,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                             className="w-8 h-8 rounded-md object-cover"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-md bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
+                          <div className="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent">
                             {product.name.charAt(0)}
                           </div>
                         )}

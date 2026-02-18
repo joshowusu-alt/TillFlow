@@ -28,7 +28,7 @@ export default function ProtectedError({
         <button onClick={reset} className="btn-primary">
           Try Again
         </button>
-        <a href="/pos" className="btn-outline">
+        <a href="/pos" className="btn-ghost">
           Go to POS
         </a>
       </div>

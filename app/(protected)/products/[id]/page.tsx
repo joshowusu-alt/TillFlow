@@ -65,7 +65,7 @@ export default async function ProductDetailPage({
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
         ) : (
-          <div className="w-24 h-24 rounded-xl bg-emerald-100 flex items-center justify-center text-3xl font-bold text-emerald-700 flex-shrink-0">
+          <div className="w-24 h-24 rounded-xl bg-accentSoft flex items-center justify-center text-3xl font-bold text-accent flex-shrink-0">
             {product.name.charAt(0)}
           </div>
         )}
