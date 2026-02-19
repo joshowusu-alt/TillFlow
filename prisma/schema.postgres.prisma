@@ -214,6 +214,7 @@ model User {
   acknowledgedRiskAlerts     RiskAlert[]             @relation("RiskAlertAcknowledgedBy")
   reorderActions             ReorderAction[]
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
+  passwordResetTokens        PasswordResetToken[]
 }
 
 model Session {
@@ -230,6 +231,19 @@ model Session {
 
   @@index([expiresAt])
   @@index([userId, createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])
 }
 
 model Customer {

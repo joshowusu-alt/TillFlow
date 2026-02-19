@@ -4,12 +4,13 @@ import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-export default async function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
   // If the user already has a valid session, send them to POS
   const user = await getUser();
   if (user) redirect('/pos');
 
   const error = searchParams?.error;
+  const success = searchParams?.success;
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -21,6 +22,11 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
         <p className="mt-4 text-sm text-black/60">Sign in to your account</p>
       </div>
+      {success === 'password_reset' && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          Your password has been reset. Please sign in with your new password.
+        </div>
+      )}
       {error && (
         <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error === 'missing'
@@ -44,6 +50,14 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         <div>
           <label className="label">Password</label>
           <input name="password" type="password" className="input" placeholder="••••••••" required />
+          <div className="mt-1 text-right">
+            <Link
+              href="/login/forgot-password"
+              className="text-xs text-accent hover:underline underline-offset-4"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
         <div>
           <label className="label">2FA Code (if enabled)</label>

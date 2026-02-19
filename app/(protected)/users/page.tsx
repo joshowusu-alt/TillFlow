@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
+import ResetPasswordModal from '@/components/ResetPasswordModal';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
@@ -59,6 +60,11 @@ export default async function UsersPage({
       {searchParams.success === 'updated' && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
           User updated successfully.
+        </div>
+      )}
+      {searchParams.success === 'password_reset' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Password reset successfully. The user has been logged out and must sign in with their new password.
         </div>
       )}
 
@@ -216,17 +222,20 @@ export default async function UsersPage({
                         Edit
                       </a>
                       {user.id !== owner.id && (
-                        <form action={toggleUserActiveAction} className="inline">
-                          <input type="hidden" name="userId" value={user.id} />
-                          <button
-                            type="submit"
-                            className={`text-xs ${
-                              user.active ? 'text-red-500' : 'text-emerald-600'
-                            } hover:underline`}
-                          >
-                            {user.active ? 'Deactivate' : 'Activate'}
-                          </button>
-                        </form>
+                        <>
+                          <ResetPasswordModal userId={user.id} userName={user.name} />
+                          <form action={toggleUserActiveAction} className="inline">
+                            <input type="hidden" name="userId" value={user.id} />
+                            <button
+                              type="submit"
+                              className={`text-xs ${
+                                user.active ? 'text-red-500' : 'text-emerald-600'
+                              } hover:underline`}
+                            >
+                              {user.active ? 'Deactivate' : 'Activate'}
+                            </button>
+                          </form>
+                        </>
                       )}
                     </div>
                   </td>

@@ -113,3 +113,37 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
   }, '/users');
 }
 
+export async function resetUserPasswordAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user: owner, businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
+
+    const userId = formString(formData, 'userId');
+    const newPassword = String(formData.get('newPassword') || '');
+
+    if (!userId || !newPassword) return err('User ID and new password are required.');
+    if (newPassword.length < 6) return err('Password must be at least 6 characters.');
+
+    const target = await prisma.user.findFirst({
+      where: { id: userId, businessId },
+      select: { id: true, name: true, role: true },
+    });
+    if (!target) return err('User not found.');
+    if (target.id === owner.id) return err('Use "Edit" to change your own password.');
+
+    // Prevent managers from resetting Owner passwords
+    if (target.role === 'OWNER' && owner.role !== 'OWNER') {
+      return err('Only an owner can reset another owner\'s password.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash } });
+
+    // Invalidate all their sessions so they must log in with the new password
+    await prisma.session.deleteMany({ where: { userId: target.id } });
+
+    await audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
+
+    redirect('/users?success=password_reset');
+  }, '/users');
+}
+
