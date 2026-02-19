@@ -52,8 +52,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
-      <body className="min-h-screen bg-paper text-ink">
+    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`} style={{ backgroundColor: '#f8fafc' }}>
+      <head>
+        {/* Inline critical background to prevent black flash during PWA cold start */}
+        <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#f8fafc}` }} />
+      </head>
+      <body className="min-h-screen bg-paper text-ink" style={{ backgroundColor: '#f8fafc' }}>
         <ServiceWorkerRegistration />
         <Suspense>
           <ToastProvider>

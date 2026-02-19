@@ -144,11 +144,11 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
               <th>Category</th>
               <th>Amount</th>
               <th>Status</th>
-              <th>Method</th>
-              <th>Vendor</th>
-              <th>Recorded By</th>
-              <th>Notes</th>
-              <th>Attachment</th>
+              <th className="hidden sm:table-cell">Method</th>
+              <th className="hidden sm:table-cell">Vendor</th>
+              <th className="hidden md:table-cell">Recorded By</th>
+              <th className="hidden md:table-cell">Notes</th>
+              <th className="hidden sm:table-cell">Attachment</th>
             </tr>
           </thead>
           <tbody>
@@ -162,11 +162,11 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
                 <td className="px-3 py-3 text-sm">
                   <span className="pill bg-black/5 text-black/60">{expense.paymentStatus}</span>
                 </td>
-                <td className="px-3 py-3 text-sm">{expense.method ?? '-'}</td>
-                <td className="px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
-                <td className="px-3 py-3 text-sm">{expense.user.name}</td>
-                <td className="px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
-                <td className="px-3 py-3 text-sm">
+                <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
+                <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
+                <td className="hidden md:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
+                <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
+                <td className="hidden sm:table-cell px-3 py-3 text-sm">
                   {expense.attachmentPath ? (
                     <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank">
                       View

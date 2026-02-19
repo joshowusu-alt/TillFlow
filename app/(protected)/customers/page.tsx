@@ -113,8 +113,8 @@ export default async function CustomersPage({
             <tr>
               <th>Name</th>
               <th>Phone</th>
-              <th>Email</th>
-              <th>Branch</th>
+              <th className="hidden sm:table-cell">Email</th>
+              <th className="hidden md:table-cell">Branch</th>
               <th>Credit Limit</th>
               <th>Balance</th>
             </tr>
@@ -155,8 +155,8 @@ export default async function CustomersPage({
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm text-black/60">{branchName}</td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
+                  <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
                   <td className="px-3 py-3 text-sm">{formatMoney(customer.creditLimitPence, business.currency)}</td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {formatMoney(balance, business.currency)}
