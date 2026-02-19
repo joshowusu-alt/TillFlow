@@ -21,6 +21,32 @@ function clearSessionCookie() {
   }
 }
 
+/**
+ * Extract the browser family from a user-agent string for lenient comparison.
+ * Returns e.g. "Chrome/Android", "Safari/iOS", "Firefox/Windows" etc.
+ * Only compares the broad browser + OS family — not the full string — so that
+ * minor version bumps, middlebox injection, or reduced UA strings don't
+ * invalidate sessions (common on mobile networks in Africa).
+ */
+function browserFamily(ua: string | null): string | null {
+  if (!ua) return null;
+  const browser =
+    /Edg\//i.test(ua) ? 'Edge' :
+    /OPR\//i.test(ua) ? 'Opera' :
+    /Chrome\//i.test(ua) ? 'Chrome' :
+    /Safari\//i.test(ua) ? 'Safari' :
+    /Firefox\//i.test(ua) ? 'Firefox' :
+    'Other';
+  const os =
+    /Android/i.test(ua) ? 'Android' :
+    /iPhone|iPad|iPod/i.test(ua) ? 'iOS' :
+    /Windows/i.test(ua) ? 'Windows' :
+    /Mac OS/i.test(ua) ? 'Mac' :
+    /Linux/i.test(ua) ? 'Linux' :
+    'Other';
+  return `${browser}/${os}`;
+}
+
 export const getUser = cache(async () => {
   const token = cookies().get('pos_session')?.value;
   if (!token) return null;
@@ -50,10 +76,11 @@ export const getUser = cache(async () => {
       }
     });
   } catch (err) {
-    // DB connection failure — clear stale cookie so user can reach /login
+    // DB connection failure — DON'T delete the cookie so the user can retry.
+    // Throwing lets the error boundary show "Try Again" instead of silently
+    // logging out (important for flaky connections, e.g. Africa/cold-starts).
     console.error('[auth] DB lookup failed:', err);
-    clearSessionCookie();
-    return null;
+    throw new Error('Database temporarily unavailable. Please try again.');
   }
 
   if (!session) {
@@ -70,7 +97,14 @@ export const getUser = cache(async () => {
 
   const headerStore = headers();
   const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
-  if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
+
+  // Lenient UA check: only compare browser family + OS, not the full string.
+  // Full-string comparison causes false logouts on mobile networks where
+  // proxies modify UAs or browser versions change between requests.
+  const storedFamily = browserFamily(session.userAgent);
+  const currentFamily = browserFamily(currentUserAgent);
+  if (storedFamily && currentFamily && storedFamily !== currentFamily) {
+    console.warn('[auth] Browser family mismatch', { storedFamily, currentFamily });
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
     clearSessionCookie();
     return null;
