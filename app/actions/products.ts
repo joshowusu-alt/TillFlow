@@ -312,3 +312,61 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
 }
+
+/**
+ * One-time repair: divide all product prices by 100 for products where
+ * prices look inflated (sellingPriceBasePence > threshold).
+ * This fixes the double-conversion bug where editing a product multiplied
+ * the price by 100 again. Only OWNER can run this.
+ */
+export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed: number }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    // Products where selling price > ₵1,000 (100000 pesewas) are likely inflated
+    const inflated = await prisma.product.findMany({
+      where: {
+        businessId,
+        active: true,
+        OR: [
+          { sellingPriceBasePence: { gt: 100000 } },
+          { defaultCostBasePence: { gt: 100000 } },
+        ],
+      },
+      select: { id: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true },
+    });
+
+    if (inflated.length === 0) {
+      return ok({ fixed: 0 });
+    }
+
+    await prisma.$transaction(
+      inflated.map((p) =>
+        prisma.product.update({
+          where: { id: p.id },
+          data: {
+            sellingPriceBasePence: Math.round(p.sellingPriceBasePence / 100),
+            defaultCostBasePence: Math.round(p.defaultCostBasePence / 100),
+          },
+        })
+      )
+    );
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRICE_REPAIR',
+      entity: 'Product',
+      entityId: 'bulk',
+      details: {
+        count: inflated.length,
+        products: inflated.map((p) => p.name),
+      },
+    });
+
+    revalidateTag('pos-products');
+    return ok({ fixed: inflated.length });
+  });
+}

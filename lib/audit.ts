@@ -39,6 +39,7 @@ export type AuditAction =
   | 'STOCKTAKE_CREATE'
   | 'STOCKTAKE_COMPLETE'
   | 'WHATSAPP_EOD_SENT'
+  | 'PRICE_REPAIR'
   | 'DEMO_RESET';
 
 /**

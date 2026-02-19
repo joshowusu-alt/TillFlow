@@ -9,6 +9,7 @@ import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format'
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
+import RepairPricesButton from './RepairPricesButton';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
@@ -93,6 +94,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       {/* ───── Products Tab ───── */}
       {activeTab === 'products' && (
         <>
+          {user.role === 'OWNER' && <RepairPricesButton />}
           {isManager ? (
             <div className="card p-6">
               <h2 className="text-lg font-display font-semibold">Add product</h2>
