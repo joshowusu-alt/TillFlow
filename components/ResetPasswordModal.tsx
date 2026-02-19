@@ -7,9 +7,11 @@ import SubmitButton from '@/components/SubmitButton';
 export default function ResetPasswordModal({
   userId,
   userName,
+  isSelf = false,
 }: {
   userId: string;
   userName: string;
+  isSelf?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -38,7 +40,9 @@ export default function ResetPasswordModal({
         <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
           <h3 className="text-lg font-semibold mb-1">Reset Password</h3>
           <p className="text-sm text-black/60 mb-4">
-            Set a new password for <strong>{userName}</strong>. They will be logged out immediately.
+            {isSelf
+              ? 'Set a new password for your account. You will be logged out and need to sign in again.'
+              : <>Set a new password for <strong>{userName}</strong>. They will be logged out immediately.</>}
           </p>
           <form action={resetUserPasswordAction} className="space-y-4">
             <input type="hidden" name="userId" value={userId} />

@@ -221,21 +221,19 @@ export default async function UsersPage({
                       >
                         Edit
                       </a>
+                      <ResetPasswordModal userId={user.id} userName={user.name} isSelf={user.id === owner.id} />
                       {user.id !== owner.id && (
-                        <>
-                          <ResetPasswordModal userId={user.id} userName={user.name} />
-                          <form action={toggleUserActiveAction} className="inline">
-                            <input type="hidden" name="userId" value={user.id} />
-                            <button
-                              type="submit"
-                              className={`text-xs ${
-                                user.active ? 'text-red-500' : 'text-emerald-600'
-                              } hover:underline`}
-                            >
-                              {user.active ? 'Deactivate' : 'Activate'}
-                            </button>
-                          </form>
-                        </>
+                        <form action={toggleUserActiveAction} className="inline">
+                          <input type="hidden" name="userId" value={user.id} />
+                          <button
+                            type="submit"
+                            className={`text-xs ${
+                              user.active ? 'text-red-500' : 'text-emerald-600'
+                            } hover:underline`}
+                          >
+                            {user.active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </form>
                       )}
                     </div>
                   </td>

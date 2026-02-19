@@ -128,7 +128,6 @@ export async function resetUserPasswordAction(formData: FormData): Promise<void>
       select: { id: true, name: true, role: true },
     });
     if (!target) return err('User not found.');
-    if (target.id === owner.id) return err('Use "Edit" to change your own password.');
 
     // Prevent managers from resetting Owner passwords
     if (target.role === 'OWNER' && owner.role !== 'OWNER') {
