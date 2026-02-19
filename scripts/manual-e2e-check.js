@@ -156,7 +156,22 @@ async function run() {
     // Wait for the autocomplete dropdown to render the product button
     await productButton.first().waitFor({ state: 'visible', timeout: 10000 });
     await productButton.first().click();
-    await page.getByRole('button', { name: /^Exact$/ }).click();
+
+    // Products with multiple units now stage for unit selection before adding
+    // to cart. Race between the staging "Add to Cart" button and the direct
+    // "Exact" qty button (single-unit products skip staging).
+    const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
+    const exactBtn = page.getByRole('button', { name: /^Exact$/ });
+    const outcome = await Promise.race([
+      addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
+      exactBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
+    ]).catch(() => 'timeout');
+
+    if (outcome === 'staged') {
+      await addToCartBtn.click();
+    }
+
+    await exactBtn.click();
 
     const completeSaleButton = page.getByRole('button', { name: /Complete Sale/i });
     await waitForEnabled(completeSaleButton);
