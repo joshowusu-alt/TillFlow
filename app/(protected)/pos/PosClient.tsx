@@ -1174,7 +1174,7 @@ export default function PosClient({
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 md:grid-cols-[3fr_1fr]">
+    <div className="grid gap-6 md:grid-cols-[3fr_1fr] pb-24 md:pb-0">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -2013,7 +2013,8 @@ export default function PosClient({
         )}
       </div>
 
-      {/* ── Summary sidebar ─────────────────────────────── */}
+      {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
+      <div className="hidden md:block">
       <SummarySidebar
         business={business}
         store={store}
@@ -2034,6 +2035,7 @@ export default function PosClient({
         onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
         onDeleteParked={deleteParkedCart}
       />
+      </div>
 
       <KeyboardHelpModal
         show={showKeyboardHelp}
@@ -2050,6 +2052,26 @@ export default function PosClient({
           onClose={() => setShowQuickCustomer(false)}
         />
       ) : null}
+
+      {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
+              <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
+            </div>
+            <button
+              type="button"
+              className="btn-primary px-5 py-3 text-sm font-bold whitespace-nowrap"
+              disabled={!canSubmit || isCompletingSale}
+              onClick={handleCompleteSale}
+            >
+              {isCompletingSale ? 'Processing…' : 'Complete Sale →'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

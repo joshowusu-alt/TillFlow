@@ -72,6 +72,12 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: contain; /* Prevent pull-to-refresh in standalone PWA */
+  -webkit-tap-highlight-color: transparent; /* Clean taps on iOS */
+  /* Safe-area padding for notch devices */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Respect OS-level motion preferences globally */
@@ -91,6 +97,11 @@ a {
 
 input, select, textarea {
   font-family: inherit;
+}
+
+/* Safe-area bottom padding for sticky bars on notch devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* =============================================

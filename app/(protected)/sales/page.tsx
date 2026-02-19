@@ -101,11 +101,11 @@ export default async function SalesPage({
             <tr>
               <th>Invoice</th>
               <th>Date</th>
-              <th>Branch</th>
-              <th>Customer</th>
+              <th className="hidden sm:table-cell">Branch</th>
+              <th className="hidden sm:table-cell">Customer</th>
               <th>Status</th>
               <th>Total</th>
-              <th>Receipt</th>
+              <th className="hidden sm:table-cell">Receipt</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -137,15 +137,15 @@ export default async function SalesPage({
               <tr key={sale.id} className="rounded-xl bg-white">
                 <td className="px-3 py-3 text-sm">{sale.id.slice(0, 8)}</td>
                 <td className="px-3 py-3 text-sm">{formatDateTime(sale.createdAt)}</td>
-                <td className="px-3 py-3 text-sm">{sale.store.name}</td>
-                <td className="px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
+                <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
+                <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
                 <td className="px-3 py-3">
                   <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
                 </td>
                 <td className="px-3 py-3 text-sm font-semibold">
                   {formatMoney(sale.totalPence, business.currency)}
                 </td>
-                <td className="px-3 py-3">
+                <td className="hidden sm:table-cell px-3 py-3">
                   <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
                     Print
                   </Link>

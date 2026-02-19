@@ -195,12 +195,12 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>
-                  <th></th>
+                  <th className="hidden sm:table-cell"></th>
                   <th>Product</th>
-                  <th>Category</th>
+                  <th className="hidden sm:table-cell">Category</th>
                   <th>Base Price</th>
-                  <th>Default Cost</th>
-                  <th>Unit Display</th>
+                  <th className="hidden md:table-cell">Default Cost</th>
+                  <th className="hidden md:table-cell">Unit Display</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +219,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   });
                   return (
                     <tr key={product.id} className="rounded-xl bg-white">
-                      <td className="px-3 py-3 w-10">
+                      <td className="hidden sm:table-cell px-3 py-3 w-10">
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
@@ -237,7 +237,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                           {product.name}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="hidden sm:table-cell px-3 py-3">
                         {product.category ? (
                           <span
                             className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
@@ -250,8 +250,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                         )}
                       </td>
                       <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                      <td className="px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
-                      <td className="px-3 py-3 text-sm text-black/60">{preview}</td>
+                      <td className="hidden md:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                      <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
                     </tr>
                   );
                 })}

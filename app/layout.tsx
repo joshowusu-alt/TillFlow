@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
+import InstallPrompt from '@/components/InstallPrompt';
 
 const displayFont = Space_Grotesk({
   subsets: ['latin'],
@@ -45,6 +46,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',  // iPhone notch safe-area support
   themeColor: '#1E40AF'  // enterprise primary blue
 };
 
@@ -59,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </ToastProvider>
         </Suspense>
         <NetworkStatus />
+        <Suspense><InstallPrompt /></Suspense>
       </body>
     </html>
   );

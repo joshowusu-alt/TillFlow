@@ -46,12 +46,20 @@ export default function OfflinePage() {
             </li>
           </ul>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-6 rounded-xl bg-accent px-6 py-3 font-semibold text-white hover:bg-accent/80"
-        >
-          Try Again
-        </button>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <a
+            href="/pos"
+            className="rounded-xl bg-accent px-6 py-3 font-semibold text-white text-center hover:bg-accent/80 min-h-[44px] flex items-center justify-center"
+          >
+            Go to POS →
+          </a>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-xl border-2 border-accent/20 px-6 py-3 font-semibold text-accent hover:bg-accent/5 min-h-[44px]"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     </div>
   );

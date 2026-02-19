@@ -249,12 +249,20 @@ export default function TopNav({
           </form>
           <button
             type="button"
-            className="btn-ghost text-xs lg:hidden"
+            className="flex items-center justify-center h-11 w-11 rounded-xl bg-black/5 hover:bg-black/10 active:bg-black/15 transition lg:hidden"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
           >
-            {mobileOpen ? 'Close' : 'Menu'}
+            {mobileOpen ? (
+              <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
           </button>
         </div>
       </div>

@@ -43,7 +43,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
       {/* Setup banner for owners who haven't completed onboarding */}
       {needsOnboarding && !pathname.includes('/onboarding') && (
-        <div className="border-b border-accent/20 bg-accentSoft px-6 py-3">
+        <div className="border-b border-accent/20 bg-accentSoft px-4 sm:px-6 py-3">
           <div className="mx-auto flex max-w-[1600px] items-center justify-between">
             <div className="flex items-center gap-3 text-accent">
               <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main id="main-content" className="p-6">{children}</main>
+      <main id="main-content" className="p-4 sm:p-6">{children}</main>
     </div>
   );
 }
