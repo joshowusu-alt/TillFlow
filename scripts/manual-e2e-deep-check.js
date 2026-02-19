@@ -75,6 +75,20 @@ async function addProductFromSearch(page, query) {
   await searchInput.fill(query);
   await page.waitForTimeout(500);
   await page.getByRole('button', { name: new RegExp(query, 'i') }).first().click();
+
+  // Products with multiple units now stage for unit selection.
+  // Race between the staging "Add to Cart" button (multi-unit) and the
+  // "Exact" qty button (single-unit, product already in cart).
+  const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
+  const exactBtn = page.getByRole('button', { name: /^Exact$/ });
+  const outcome = await Promise.race([
+    addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
+    exactBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
+  ]).catch(() => 'timeout');
+
+  if (outcome === 'staged') {
+    await addToCartBtn.click();
+  }
   await page.waitForTimeout(300);
 }
 
