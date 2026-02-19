@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     business: { findUniqueOrThrow: vi.fn() },
-    journalLine: { findMany: vi.fn() },
+    journalLine: { groupBy: vi.fn() },
+    account: { findMany: vi.fn() },
   },
 }));
 
@@ -20,16 +21,26 @@ import { getBalanceSheet } from './financials';
 describe('getBalanceSheet asOf filtering', () => {
   const bizId = 'biz-1';
 
+  // Shared accounts list used by all tests
+  const defaultAccounts = [
+    { id: 'acc-cash', code: '1000', name: 'Cash on Hand', type: 'ASSET' },
+    { id: 'acc-inv', code: '1200', name: 'Inventory', type: 'ASSET' },
+    { id: 'acc-ap', code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
+    { id: 'acc-revenue', code: '4000', name: 'Sales Revenue', type: 'INCOME' },
+    { id: 'acc-cogs', code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.business.findUniqueOrThrow.mockResolvedValue({
       id: bizId,
       openingCapitalPence: 0,
     });
+    prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
   });
 
   it('returns zero totals when no journal entries exist', async () => {
-    prismaMock.journalLine.findMany.mockResolvedValue([]);
+    prismaMock.journalLine.groupBy.mockResolvedValue([]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
 
@@ -42,22 +53,10 @@ describe('getBalanceSheet asOf filtering', () => {
   });
 
   it('correctly classifies assets and liabilities from journal lines', async () => {
-    prismaMock.journalLine.findMany.mockResolvedValue([
-      {
-        account: { id: 'acc-cash', code: '1000', name: 'Cash on Hand', type: 'ASSET' },
-        debitPence: 50000,
-        creditPence: 0,
-      },
-      {
-        account: { id: 'acc-inv', code: '1200', name: 'Inventory', type: 'ASSET' },
-        debitPence: 30000,
-        creditPence: 0,
-      },
-      {
-        account: { id: 'acc-ap', code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
-        debitPence: 0,
-        creditPence: 20000,
-      },
+    prismaMock.journalLine.groupBy.mockResolvedValue([
+      { accountId: 'acc-cash', _sum: { debitPence: 50000, creditPence: 0 } },
+      { accountId: 'acc-inv', _sum: { debitPence: 30000, creditPence: 0 } },
+      { accountId: 'acc-ap', _sum: { debitPence: 0, creditPence: 20000 } },
     ]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
@@ -68,14 +67,15 @@ describe('getBalanceSheet asOf filtering', () => {
     expect(sheet.liabilities).toHaveLength(1);
   });
 
-  it('passes asOf date to journalLine query for correct filtering', async () => {
-    prismaMock.journalLine.findMany.mockResolvedValue([]);
+  it('passes asOf date to journalLine groupBy for correct filtering', async () => {
+    prismaMock.journalLine.groupBy.mockResolvedValue([]);
 
     const asOf = new Date('2024-06-15');
     await getBalanceSheet(bizId, asOf);
 
-    expect(prismaMock.journalLine.findMany).toHaveBeenCalledWith(
+    expect(prismaMock.journalLine.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
+        by: ['accountId'],
         where: {
           journalEntry: {
             businessId: bizId,
@@ -91,7 +91,7 @@ describe('getBalanceSheet asOf filtering', () => {
       id: bizId,
       openingCapitalPence: 100000,
     });
-    prismaMock.journalLine.findMany.mockResolvedValue([]);
+    prismaMock.journalLine.groupBy.mockResolvedValue([]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
 
@@ -106,17 +106,9 @@ describe('getBalanceSheet asOf filtering', () => {
   });
 
   it('includes net income in equity when income/expense entries exist', async () => {
-    prismaMock.journalLine.findMany.mockResolvedValue([
-      {
-        account: { id: 'acc-revenue', code: '4000', name: 'Sales Revenue', type: 'INCOME' },
-        debitPence: 0,
-        creditPence: 100000,
-      },
-      {
-        account: { id: 'acc-cogs', code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
-        debitPence: 60000,
-        creditPence: 0,
-      },
+    prismaMock.journalLine.groupBy.mockResolvedValue([
+      { accountId: 'acc-revenue', _sum: { debitPence: 0, creditPence: 100000 } },
+      { accountId: 'acc-cogs', _sum: { debitPence: 60000, creditPence: 0 } },
     ]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
