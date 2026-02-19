@@ -134,7 +134,6 @@ async function getArApDue7Days(
         ],
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
-      take: 500,
     }),
     prisma.purchaseInvoice.findMany({
       where: {
@@ -147,7 +146,6 @@ async function getArApDue7Days(
         ],
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
-      take: 500,
     }),
   ]);
 

@@ -18,24 +18,38 @@ function applyBalance(type: AccountType, debit: number, credit: number) {
 }
 
 export async function getIncomeStatement(businessId: string, start: Date, end: Date) {
-  const lines = await prisma.journalLine.findMany({
-    where: {
-      journalEntry: { businessId, entryDate: { gte: start, lte: end } }
-    },
-    include: { account: true }
-  });
+  // Aggregate journal lines at DB level grouped by account
+  const [grouped, accounts] = await Promise.all([
+    prisma.journalLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: { businessId, entryDate: { gte: start, lte: end } }
+      },
+      _sum: { debitPence: true, creditPence: true },
+    }),
+    prisma.account.findMany({
+      where: { businessId },
+      select: { id: true, code: true, type: true },
+    }),
+  ]);
+
+  const accountMap = new Map(accounts.map(a => [a.id, a]));
 
   let revenue = 0;
   let cogs = 0;
   let otherExpenses = 0;
 
-  for (const line of lines) {
-    const accountType = line.account.type as AccountType;
-    const balance = applyBalance(accountType, line.debitPence, line.creditPence);
+  for (const g of grouped) {
+    const account = accountMap.get(g.accountId);
+    if (!account) continue;
+    const accountType = account.type as AccountType;
+    const debit = g._sum.debitPence ?? 0;
+    const credit = g._sum.creditPence ?? 0;
+    const balance = applyBalance(accountType, debit, credit);
     if (accountType === 'INCOME') {
       revenue += balance;
     }
-    if (line.account.code === ACCOUNT_CODES.cogs) {
+    if (account.code === ACCOUNT_CODES.cogs) {
       cogs += balance;
     } else if (accountType === 'EXPENSE') {
       otherExpenses += balance;
@@ -54,34 +68,44 @@ export async function getIncomeStatement(businessId: string, start: Date, end: D
 }
 
 export async function getBalanceSheet(businessId: string, asOf: Date) {
-  const [business, journalLines] = await Promise.all([
+  // Aggregate journal lines at DB level grouped by account
+  const [business, grouped, accounts] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
-    prisma.journalLine.findMany({
+    prisma.journalLine.groupBy({
+      by: ['accountId'],
       where: { journalEntry: { businessId, entryDate: { lte: asOf } } },
-      include: { account: true }
-    })
+      _sum: { debitPence: true, creditPence: true },
+    }),
+    prisma.account.findMany({
+      where: { businessId },
+      select: { id: true, code: true, name: true, type: true },
+    }),
   ]);
 
   const openingCapital = business.openingCapitalPence ?? 0;
+  const accountMap = new Map(accounts.map(a => [a.id, a]));
 
   const map = new Map<string, StatementLine>();
   let incomeTotal = 0;
   let expenseTotal = 0;
 
-  for (const line of journalLines) {
-    const key = line.account.id;
-    const accountType = line.account.type as AccountType;
-    const existing = map.get(key) ?? {
-      accountCode: line.account.code,
-      name: line.account.name,
+  for (const g of grouped) {
+    const account = accountMap.get(g.accountId);
+    if (!account) continue;
+    const accountType = account.type as AccountType;
+    const debit = g._sum.debitPence ?? 0;
+    const credit = g._sum.creditPence ?? 0;
+    const balance = applyBalance(accountType, debit, credit);
+
+    map.set(account.id, {
+      accountCode: account.code,
+      name: account.name,
       type: accountType,
-      balancePence: 0
-    };
-    const balance = applyBalance(accountType, line.debitPence, line.creditPence);
-    existing.balancePence += balance;
+      balancePence: balance,
+    });
+
     if (accountType === 'INCOME') incomeTotal += balance;
     if (accountType === 'EXPENSE') expenseTotal += balance;
-    map.set(key, existing);
   }
 
   const assets: StatementLine[] = [];
@@ -136,16 +160,23 @@ export async function getBalanceSheet(businessId: string, asOf: Date) {
 }
 
 async function getAccountBalance(businessId: string, code: string, asOf: Date) {
-  const lines = await prisma.journalLine.findMany({
-    where: {
-      account: { businessId, code },
-      journalEntry: { entryDate: { lte: asOf } }
-    },
-    include: { account: true }
+  const account = await prisma.account.findFirst({
+    where: { businessId, code },
+    select: { id: true, type: true },
   });
-  return lines.reduce(
-    (sum, line) => sum + applyBalance(line.account.type as AccountType, line.debitPence, line.creditPence),
-    0
+  if (!account) return 0;
+
+  const agg = await prisma.journalLine.aggregate({
+    where: {
+      accountId: account.id,
+      journalEntry: { entryDate: { lte: asOf } },
+    },
+    _sum: { debitPence: true, creditPence: true },
+  });
+  return applyBalance(
+    account.type as AccountType,
+    agg._sum.debitPence ?? 0,
+    agg._sum.creditPence ?? 0
   );
 }
 

@@ -620,6 +620,9 @@ model PurchaseInvoiceLine {
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
   product         Product         @relation(fields: [productId], references: [id])
   unit            Unit            @relation(fields: [unitId], references: [id])
+
+  @@index([purchaseInvoiceId])
+  @@index([productId])
 }
 
 model PurchasePayment {
@@ -716,6 +719,9 @@ model JournalEntry {
 
   business Business      @relation(fields: [businessId], references: [id])
   lines    JournalLine[]
+
+  @@index([businessId, entryDate])
+  @@index([businessId, referenceType, referenceId])
 }
 
 model JournalLine {
@@ -729,6 +735,9 @@ model JournalLine {
 
   journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
   account      Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalEntryId])
+  @@index([accountId])
 }
 
 model Stocktake {

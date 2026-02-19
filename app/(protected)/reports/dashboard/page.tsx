@@ -66,8 +66,8 @@ export default async function DashboardPage({
     end.toDateString() === todayEnd.toDateString();
 
   const [
-    salesInRange,
-    paymentsInRange,
+    salesAgg,
+    paymentsByMethod,
     income,
     outstandingSales,
     outstandingPurchases,
@@ -78,17 +78,20 @@ export default async function DashboardPage({
     todayReturns,
     todayCashVar,
   ] = await Promise.all([
-    prisma.salesInvoice.findMany({
+    // Sales — aggregate at DB level
+    prisma.salesInvoice.aggregate({
       where: {
         businessId: business.id,
         ...storeFilter,
         createdAt: { gte: start, lte: end },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      select: { totalPence: true, grossMarginPence: true },
-      take: 2000,
+      _sum: { totalPence: true, grossMarginPence: true },
+      _count: { id: true },
     }),
-    prisma.salesPayment.findMany({
+    // Payments grouped by method — aggregate at DB level
+    prisma.salesPayment.groupBy({
+      by: ['method'],
       where: {
         receivedAt: { gte: start, lte: end },
         salesInvoice: {
@@ -96,8 +99,7 @@ export default async function DashboardPage({
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
         },
       },
-      select: { method: true, amountPence: true },
-      take: 5000,
+      _sum: { amountPence: true },
     }),
     getIncomeStatement(business.id, start, end),
     prisma.salesInvoice.findMany({
@@ -115,7 +117,6 @@ export default async function DashboardPage({
         payments: { select: { amountPence: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 500,
     }),
     prisma.purchaseInvoice.findMany({
       where: {
@@ -124,7 +125,6 @@ export default async function DashboardPage({
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
-      take: 500,
     }),
     prisma.inventoryBalance.findMany({
       where: {
@@ -236,20 +236,17 @@ export default async function DashboardPage({
 
   const currency = business.currency;
 
-  // Summarise sales
-  const totalSales = salesInRange.reduce((s, x) => s + x.totalPence, 0);
-  const totalGrossMargin = salesInRange.reduce((s, x) => s + (x.grossMarginPence ?? 0), 0);
+  // Summarise sales — already aggregated by DB
+  const totalSales = salesAgg._sum.totalPence ?? 0;
+  const totalGrossMargin = salesAgg._sum.grossMarginPence ?? 0;
   const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
 
-  // Payment split
-  const paymentSplit = paymentsInRange.reduce(
-    (acc, p) => {
-      const k = p.method as keyof typeof acc;
-      if (k in acc) acc[k] += p.amountPence;
-      return acc;
-    },
-    { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 }
-  );
+  // Payment split — already grouped by DB
+  const paymentSplit = { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 };
+  for (const p of paymentsByMethod) {
+    const k = p.method as keyof typeof paymentSplit;
+    if (k in paymentSplit) paymentSplit[k] = p._sum.amountPence ?? 0;
+  }
 
   // AR / AP
   const outstandingAR = outstandingSales.reduce((s, inv) => {

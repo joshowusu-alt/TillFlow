@@ -42,40 +42,40 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
   const storeFilter = storeId ? { storeId } : {};
 
   const [
-    salesRows,
-    paymentsRows,
+    salesAgg,
+    paymentsByMethod,
     outstandingSales,
     outstandingPurchases,
     openHighAlerts,
     balances,
-    recentExpenses,
-    thisWeekExpenses,
-    fourWeekExpenses,
+    recentExpensesAgg,
+    thisWeekExpensesAgg,
+    fourWeekExpensesAgg,
     momoPending,
     cashVarShifts,
     discountOverrides,
     salesLines14d,
   ] = await Promise.all([
-    // Today's sales
-    prisma.salesInvoice.findMany({
+    // Today's sales — aggregate at DB level
+    prisma.salesInvoice.aggregate({
       where: {
         businessId, ...storeFilter,
         createdAt: { gte: todayStart, lte: todayEnd },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      select: { totalPence: true, grossMarginPence: true },
-      take: 2000,
+      _sum: { totalPence: true, grossMarginPence: true },
+      _count: { id: true },
     }),
-    // Today's payments
-    prisma.salesPayment.findMany({
+    // Today's payments grouped by method — aggregate at DB level
+    prisma.salesPayment.groupBy({
+      by: ['method'],
       where: {
         receivedAt: { gte: todayStart, lte: todayEnd },
         salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
       },
-      select: { method: true, amountPence: true },
-      take: 5000,
+      _sum: { amountPence: true },
     }),
-    // Outstanding AR
+    // Outstanding AR (need individual rows for aging calc, but limit sensibly)
     prisma.salesInvoice.findMany({
       where: {
         businessId, ...storeFilter,
@@ -85,16 +85,14 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
         totalPence: true, dueDate: true, createdAt: true,
         payments: { select: { amountPence: true } },
       },
-      take: 500,
     }),
-    // Outstanding AP
+    // Outstanding AP — aggregate at DB level
     prisma.purchaseInvoice.findMany({
       where: {
         businessId, ...storeFilter,
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
-      take: 500,
     }),
     // Open HIGH risk alerts
     prisma.riskAlert.count({
@@ -114,22 +112,21 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
         qtyOnHandBase: true,
         product: { select: { reorderPointBase: true, active: true } },
       },
-      take: 2000,
     }),
-    // 30-day expenses for avg
-    prisma.expense.findMany({
+    // 30-day expenses — aggregate at DB level
+    prisma.expense.aggregate({
       where: { businessId, createdAt: { gte: thirtyDaysAgo }, paymentStatus: 'PAID' },
-      select: { amountPence: true },
+      _sum: { amountPence: true },
     }),
-    // This week expenses
-    prisma.expense.findMany({
+    // This week expenses — aggregate at DB level
+    prisma.expense.aggregate({
       where: { businessId, createdAt: { gte: sevenDaysAgo }, paymentStatus: 'PAID' },
-      select: { amountPence: true },
+      _sum: { amountPence: true },
     }),
-    // 4-week expenses
-    prisma.expense.findMany({
+    // 4-week expenses — aggregate at DB level
+    prisma.expense.aggregate({
       where: { businessId, createdAt: { gte: fourWeeksAgo, lt: sevenDaysAgo }, paymentStatus: 'PAID' },
-      select: { amountPence: true },
+      _sum: { amountPence: true },
     }),
     // MoMo pending
     prisma.mobileMoneyCollection.count({
@@ -143,7 +140,7 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
         variance: { not: null },
       },
       select: { variance: true },
-      take: 100,
+      take: 200,
     }),
     // Discount overrides this week
     prisma.salesInvoice.count({
@@ -167,19 +164,19 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
         qtyBase: true,
         product: { select: { defaultCostBasePence: true } },
       },
-      take: 5000,
+      take: 10000,
     }),
   ]);
 
-  // Sales KPIs
-  const totalSalesPence = salesRows.reduce((s, x) => s + x.totalPence, 0);
-  const grossMarginPence = salesRows.reduce((s, x) => s + (x.grossMarginPence ?? 0), 0);
+  // Sales KPIs — already aggregated by the DB
+  const totalSalesPence = salesAgg._sum.totalPence ?? 0;
+  const grossMarginPence = salesAgg._sum.grossMarginPence ?? 0;
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
-  // Payment split
+  // Payment split — already grouped by DB
   const paymentSplit: Record<string, number> = {};
-  for (const p of paymentsRows) {
-    paymentSplit[p.method] = (paymentSplit[p.method] ?? 0) + p.amountPence;
+  for (const p of paymentsByMethod) {
+    paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
 
   // AR
@@ -211,8 +208,8 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
     (b) => b.qtyOnHandBase > b.product.reorderPointBase
   ).length;
 
-  // Expenses
-  const totalExpenses30d = recentExpenses.reduce((s, e) => s + e.amountPence, 0);
+  // Expenses — already aggregated by DB
+  const totalExpenses30d = recentExpensesAgg._sum.amountPence ?? 0;
   const avgDailyExpensesPence = Math.round(totalExpenses30d / 30);
 
   // Cash estimate (sales today - expenses avg)
@@ -247,15 +244,15 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
     (b) => b.qtyOnHandBase <= b.product.reorderPointBase
   ).length;
 
-  const thisWeekExpensesPence = thisWeekExpenses.reduce((s, e) => s + e.amountPence, 0);
-  const fourWeekTotal = fourWeekExpenses.reduce((s, e) => s + e.amountPence, 0);
+  const thisWeekExpensesPence = thisWeekExpensesAgg._sum.amountPence ?? 0;
+  const fourWeekTotal = fourWeekExpensesAgg._sum.amountPence ?? 0;
   const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 3); // 3 weeks in the period
 
   return {
     totalSalesPence,
     grossMarginPence,
     gpPercent,
-    txCount: salesRows.length,
+    txCount: salesAgg._count.id,
     outstandingARPence,
     outstandingAPPence,
     arOver60Pence,

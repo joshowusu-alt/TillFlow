@@ -33,9 +33,9 @@ export async function getWeeklyDigestData(
   prevEnd.setHours(23, 59, 59, 999);
 
   const [
-    salesRows,
-    prevSalesRows,
-    paymentsRows,
+    salesAgg,
+    prevSalesAgg,
+    paymentsByMethod,
     voids,
     returns,
     riskAlerts,
@@ -45,17 +45,23 @@ export async function getWeeklyDigestData(
     adjustments,
     cashierSales,
   ] = await Promise.all([
-    prisma.salesInvoice.findMany({
+    // This week sales — aggregate at DB level
+    prisma.salesInvoice.aggregate({
       where: { businessId, createdAt: { gte: weekStart, lte: weekEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-      select: { totalPence: true, grossMarginPence: true },
+      _sum: { totalPence: true, grossMarginPence: true },
+      _count: { id: true },
     }),
-    prisma.salesInvoice.findMany({
+    // Previous week sales — aggregate at DB level
+    prisma.salesInvoice.aggregate({
       where: { businessId, createdAt: { gte: prevStart, lte: prevEnd }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-      select: { totalPence: true, grossMarginPence: true },
+      _sum: { totalPence: true, grossMarginPence: true },
+      _count: { id: true },
     }),
-    prisma.salesPayment.findMany({
+    // Payments grouped by method — aggregate at DB level
+    prisma.salesPayment.groupBy({
+      by: ['method'],
       where: { receivedAt: { gte: weekStart, lte: weekEnd }, salesInvoice: { businessId } },
-      select: { method: true, amountPence: true },
+      _sum: { amountPence: true },
     }),
     prisma.salesInvoice.count({
       where: { businessId, createdAt: { gte: weekStart, lte: weekEnd }, paymentStatus: 'VOID' },
@@ -96,16 +102,16 @@ export async function getWeeklyDigestData(
     }),
   ]);
 
-  const totalSalesPence = salesRows.reduce((s, x) => s + x.totalPence, 0);
-  const grossProfitPence = salesRows.reduce((s, x) => s + (x.grossMarginPence ?? 0), 0);
+  const totalSalesPence = salesAgg._sum.totalPence ?? 0;
+  const grossProfitPence = salesAgg._sum.grossMarginPence ?? 0;
   const gpPercent = totalSalesPence > 0 ? Math.round((grossProfitPence / totalSalesPence) * 100) : 0;
 
-  const prevTotalSalesPence = prevSalesRows.reduce((s, x) => s + x.totalPence, 0);
-  const prevGrossProfitPence = prevSalesRows.reduce((s, x) => s + (x.grossMarginPence ?? 0), 0);
+  const prevTotalSalesPence = prevSalesAgg._sum.totalPence ?? 0;
+  const prevGrossProfitPence = prevSalesAgg._sum.grossMarginPence ?? 0;
 
   const paymentSplit: Record<string, number> = {};
-  for (const p of paymentsRows) {
-    paymentSplit[p.method] = (paymentSplit[p.method] ?? 0) + p.amountPence;
+  for (const p of paymentsByMethod) {
+    paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
 
   // Top sellers
@@ -156,7 +162,7 @@ export async function getWeeklyDigestData(
     totalSalesPence,
     grossProfitPence,
     gpPercent,
-    txCount: salesRows.length,
+    txCount: salesAgg._count.id,
     voidCount: voids,
     returnCount: returns,
     discountOverrides,
@@ -168,6 +174,6 @@ export async function getWeeklyDigestData(
     riskCashiers: Array.from(cashierRiskMap.values()).filter((c) => c.voids + c.discounts + c.cashVar > 0),
     prevTotalSalesPence,
     prevGrossProfitPence,
-    prevTxCount: prevSalesRows.length,
+    prevTxCount: prevSalesAgg._count.id,
   };
 }
