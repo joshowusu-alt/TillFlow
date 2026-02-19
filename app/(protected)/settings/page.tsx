@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
+import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -267,6 +268,18 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           </div>
         </a>
       </div>
+
+      {/* Data management — clear demo/sample data */}
+      {user.role === 'OWNER' && (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-1">Sample Data</h3>
+          <p className="text-sm text-black/50 mb-4">
+            Remove demo products, sample customers, demo sales and expenses that were
+            created during setup. Your own data will not be affected.
+          </p>
+          <ClearSampleDataButton />
+        </div>
+      )}
     </div>
   );
 }

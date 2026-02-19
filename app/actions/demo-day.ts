@@ -272,3 +272,107 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
     return { ok: false, error: 'Failed to wipe demo data.' };
   }
 }
+
+// --- Registration-time demo product SKUs (from register.ts seedDemoData) ---
+const DEMO_SKUS = [
+  'CARN-001', 'COCA-001', 'MILO-001', 'SUGAR-001', 'RICE-001',
+  'OIL-001', 'INDO-001', 'SOAP-001', 'CORB-001', 'COLG-001',
+];
+const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa'];
+
+/**
+ * Clear ALL sample/demo data from a business — both Demo Day transactions
+ * (tagged DEMO_DAY) AND registration-seeded products, categories, customers,
+ * and supplier.  Leaves chart of accounts, Walk-in Customer, and units intact.
+ */
+export async function clearSampleData(): Promise<{ ok: boolean; removed: string[]; error?: string }> {
+  const { business } = await requireBusiness(['OWNER']);
+  const removed: string[] = [];
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1) Wipe Demo Day sales & expenses (same as wipeDemoData)
+      if (business.hasDemoData) {
+        const demoInvoices = await tx.salesInvoice.findMany({
+          where: { businessId: business.id, qaTag: DEMO_TAG },
+          select: { id: true },
+        });
+        const invoiceIds = demoInvoices.map(i => i.id);
+        if (invoiceIds.length > 0) {
+          await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
+          await tx.salesInvoiceLine.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
+          await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+          removed.push(`${invoiceIds.length} demo sales`);
+        }
+        const expDel = await tx.expense.deleteMany({ where: { businessId: business.id, qaTag: DEMO_TAG } });
+        if (expDel.count > 0) removed.push(`${expDel.count} demo expenses`);
+      }
+
+      // 2) Delete registration-seeded demo products by SKU
+      const demoProducts = await tx.product.findMany({
+        where: { businessId: business.id, sku: { in: DEMO_SKUS } },
+        select: { id: true, name: true },
+      });
+      if (demoProducts.length > 0) {
+        const productIds = demoProducts.map(p => p.id);
+
+        // Must delete dependent records first (in safe order)
+        await tx.salesInvoiceLine.deleteMany({
+          where: { productId: { in: productIds }, salesInvoice: { qaTag: DEMO_TAG } },
+        });
+        await tx.inventoryBalance.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.productUnit.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.stockAdjustment.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.purchaseInvoiceLine.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.stocktakeLine.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.stockTransferLine.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.reorderAction.deleteMany({ where: { productId: { in: productIds } } });
+        await tx.product.deleteMany({ where: { id: { in: productIds } } });
+        removed.push(`${demoProducts.length} sample products`);
+      }
+
+      // 3) Delete demo categories that no longer have any products
+      const demoCategories = await tx.category.findMany({
+        where: { businessId: business.id },
+        select: { id: true, name: true, _count: { select: { products: true } } },
+      });
+      const emptyCategories = demoCategories.filter(c => c._count.products === 0);
+      if (emptyCategories.length > 0) {
+        await tx.category.deleteMany({
+          where: { id: { in: emptyCategories.map(c => c.id) } },
+        });
+        removed.push(`${emptyCategories.length} empty categories`);
+      }
+
+      // 4) Delete demo customers (keep Walk-in)
+      const custDel = await tx.customer.deleteMany({
+        where: { businessId: business.id, name: { in: DEMO_CUSTOMER_NAMES } },
+      });
+      if (custDel.count > 0) removed.push(`${custDel.count} sample customers`);
+
+      // 5) Delete "Default Supplier" if no purchase invoices reference it
+      const defaultSupplier = await tx.supplier.findFirst({
+        where: { businessId: business.id, name: 'Default Supplier' },
+        select: { id: true, _count: { select: { purchaseInvoices: true } } },
+      });
+      if (defaultSupplier && defaultSupplier._count.purchaseInvoices === 0) {
+        await tx.supplier.delete({ where: { id: defaultSupplier.id } });
+        removed.push('default supplier');
+      }
+
+      // 6) Reset demo data flag
+      await tx.business.update({
+        where: { id: business.id },
+        data: { hasDemoData: false },
+      });
+    });
+
+    revalidatePath('/', 'layout');
+    return { ok: true, removed };
+  } catch (err) {
+    console.error('[demo-day] Failed to clear sample data:', err);
+    const msg = err instanceof Error ? err.message : '';
+    return { ok: false, removed, error: `Failed to clear sample data.${msg ? ' ' + msg.slice(0, 120) : ''}` };
+  }
+}

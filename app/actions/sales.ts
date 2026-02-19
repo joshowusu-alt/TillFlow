@@ -2,7 +2,7 @@
 
 import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
-import { revalidateTag } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -115,6 +115,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
 
       await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } });
 
+      revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -258,6 +259,7 @@ export async function completeSaleAction(data: {
     });
 
     revalidateTag('pos-products');
+    revalidatePath('/onboarding');
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence } };
   });

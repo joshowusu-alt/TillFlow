@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
 import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
-import { generateDemoDay, wipeDemoData } from '@/app/actions/demo-day';
+import { generateDemoDay, wipeDemoData, clearSampleData } from '@/app/actions/demo-day';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
@@ -160,7 +160,7 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
             disabled={isPending}
             className="w-full text-xs text-rose hover:text-rose/80 py-1.5 transition disabled:opacity-50"
           >
-            {isPending ? 'Wiping...' : 'Wipe demo data — start fresh'}
+            {isPending ? 'Wiping...' : 'Clear all sample & demo data'}
           </button>
         </div>
       ) : (
@@ -300,9 +300,9 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
   const handleWipeDemo = () => {
     startTransition(async () => {
-      const res = await wipeDemoData();
+      const res = await clearSampleData();
       if (res.ok) {
-        showToast('Demo data wiped — clean slate!');
+        showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!');
         setData(prev => ({
           ...prev,
           hasDemoData: false,

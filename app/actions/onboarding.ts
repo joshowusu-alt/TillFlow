@@ -40,7 +40,10 @@ export async function getReadiness(): Promise<ReadinessData> {
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
     prisma.salesInvoice.count({
-      where: { businessId: business.id, qaTag: { not: 'DEMO_DAY' } },
+      where: {
+        businessId: business.id,
+        OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+      },
     }),
     Promise.resolve(!!(business.address || business.phone)),
   ]);

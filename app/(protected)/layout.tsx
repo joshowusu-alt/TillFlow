@@ -24,7 +24,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     const [productCount, staffCount, saleCount] = await Promise.all([
       prisma.product.count({ where: { businessId: business.id } }),
       prisma.user.count({ where: { businessId: business.id } }),
-      prisma.salesInvoice.count({ where: { businessId: business.id, qaTag: { not: 'DEMO_DAY' } } }),
+      prisma.salesInvoice.count({
+        where: {
+          businessId: business.id,
+          OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+        },
+      }),
     ]);
     const hasAddress = !!(business.address || business.phone);
     const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
