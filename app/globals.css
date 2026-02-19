@@ -74,6 +74,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: contain; /* Prevent pull-to-refresh in standalone PWA */
   -webkit-tap-highlight-color: transparent; /* Clean taps on iOS */
+  overflow-x: hidden; /* Prevent horizontal scroll on mobile */
   /* Safe-area padding for notch devices */
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);

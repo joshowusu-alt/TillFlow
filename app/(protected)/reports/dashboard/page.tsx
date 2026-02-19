@@ -375,8 +375,8 @@ export default async function DashboardPage({
                       {formatMoney(amount, currency)} ({pct}%)
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-black/5">
-                    <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${pct}%` }} />
+                  <div className="h-1.5 rounded-full bg-black/5 overflow-hidden">
+                    <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                 </div>
               );

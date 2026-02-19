@@ -78,7 +78,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main id="main-content" className="p-4 sm:p-6">{children}</main>
+      <main id="main-content" className="p-4 sm:p-6 overflow-x-hidden">{children}</main>
     </div>
   );
 }

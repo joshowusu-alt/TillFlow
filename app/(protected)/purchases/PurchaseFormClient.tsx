@@ -687,7 +687,7 @@ export default function PurchaseFormClient({
           </div>
         </div>
 
-        <div className="card p-4">
+        <div className="card p-4 overflow-x-auto">
           <div className="text-xs uppercase tracking-[0.2em] text-black/40">Purchase cart</div>
           {cartDetails.length === 0 ? (
             <div className="mt-3 text-sm text-black/50">No items yet.</div>

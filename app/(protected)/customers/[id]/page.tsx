@@ -135,6 +135,7 @@ export default async function CustomerDetailPage({
             Balance: {formatMoney(outstanding, business.currency)}
           </div>
         </div>
+        <div className="overflow-x-auto">
         <table className="table mt-4 w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
@@ -169,6 +170,7 @@ export default async function CustomerDetailPage({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

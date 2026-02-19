@@ -100,7 +100,7 @@ export default async function SystemHealthPage() {
 
       {/* Details row */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="card p-5">
+        <div className="card p-5 overflow-x-auto">
           <h3 className="mb-3 font-semibold text-sm">Observability</h3>
           <table className="w-full text-sm">
             <tbody className="divide-y divide-black/5">
