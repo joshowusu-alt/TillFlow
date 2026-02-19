@@ -101,7 +101,9 @@ export async function recordSupplierPayment(
   businessId: string,
   invoiceId: string,
   payments: PaymentInput[],
-  paidAt?: Date
+  paidAt?: Date,
+  recordedByUserId?: string,
+  notes?: string
 ) {
   const invoice = await prisma.purchaseInvoice.findFirst({
     where: { id: invoiceId, businessId },
@@ -127,6 +129,8 @@ export async function recordSupplierPayment(
         amountPence: p.amountPence,
         reference: p.reference ?? null,
         ...(paidAt ? { paidAt } : {}),
+        ...(recordedByUserId ? { recordedByUserId } : {}),
+        ...(notes ? { notes } : {}),
       }))
     });
 

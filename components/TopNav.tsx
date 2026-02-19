@@ -86,11 +86,13 @@ export default function TopNav({
   mode,
   storeMode,
   storeName,
+  momoEnabled,
 }: {
   user: TopNavUser;
   mode?: BusinessMode;
   storeMode?: StoreMode;
   storeName?: string;
+  momoEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const features = getFeatures(mode ?? 'SIMPLE', storeMode ?? 'SINGLE_STORE');
@@ -124,11 +126,12 @@ export default function TopNav({
         ...group,
         items: group.items.filter((item) =>
           item.roles.includes(user.role) &&
-          (features.multiStore || item.href !== '/transfers')
+          (features.multiStore || item.href !== '/transfers') &&
+          (momoEnabled !== false || item.href !== '/payments/reconciliation')
         )
       }))
       .filter((group) => group.items.length > 0);
-  }, [user.role, features.multiStore]);
+  }, [user.role, features.multiStore, momoEnabled]);
 
   useEffect(() => {
     setOpenGroup(null);

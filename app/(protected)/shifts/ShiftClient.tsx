@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction } from '@/app/actions/shifts';
 
@@ -46,6 +47,7 @@ type Props = {
 };
 
 export default function ShiftClient({ tills, openShift, recentShifts, currency, userRole }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
@@ -72,7 +74,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
       try {
         await openShiftAction(formData);
         setOpeningCash('');
-        window.location.reload();
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to open shift');
       }
@@ -114,7 +116,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
         setOverrideReasonCode('');
         setOverrideJustification('');
         setShowOwnerOverride(false);
-        window.location.reload();
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
       }

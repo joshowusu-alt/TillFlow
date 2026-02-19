@@ -131,6 +131,43 @@ export default async function MomoReconciliationPage({
         </div>
       ) : null}
 
+      {/* How MoMo Works — explainer for first-time users */}
+      <details className="card">
+        <summary className="flex cursor-pointer items-center gap-3 px-5 py-4 text-sm font-semibold select-none hover:bg-black/[.02] transition rounded-xl">
+          <svg className="h-5 w-5 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+          </svg>
+          How MoMo Payments Work
+          <svg className="ml-auto h-4 w-4 text-black/30 transition-transform [[open]>&]:rotate-90" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+        </summary>
+        <div className="border-t border-black/5 px-5 py-4 text-sm text-black/70 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-4">
+            {[
+              { step: '1', title: 'Initiate', desc: 'Cashier selects MoMo as payment method in the POS. A collection request is sent to the customer\'s phone.' },
+              { step: '2', title: 'Customer Approves', desc: 'The customer enters their MoMo PIN on their phone to authorize the payment.' },
+              { step: '3', title: 'Confirmation', desc: 'The provider confirms the payment. Status updates from Pending → Confirmed automatically.' },
+              { step: '4', title: 'Reconcile', desc: 'Use this page to track, re-check, or retry any payments that are stuck or failed.' },
+            ].map((s) => (
+              <div key={s.step} className="flex gap-3 rounded-lg bg-black/[.02] p-3">
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
+                  {s.step}
+                </div>
+                <div>
+                  <div className="font-semibold text-xs">{s.title}</div>
+                  <div className="text-xs text-black/50 mt-0.5">{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-black/40">
+            <strong>Tip:</strong> If a payment is stuck on &quot;Pending&quot; for more than 5 minutes, click <em>Re-check</em> to query the provider.
+            If it shows &quot;Failed&quot; or &quot;Timeout&quot;, you can <em>Re-initiate</em> to try again.
+          </p>
+        </div>
+      </details>
+
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="card p-4">
           <div className="text-xs text-black/50">Pending</div>

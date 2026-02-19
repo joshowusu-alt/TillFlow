@@ -36,14 +36,15 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
 export async function recordSupplierPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext();
+    const { businessId, user } = await withBusinessContext();
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
     const paidAtStr = formString(formData, 'paidAt');
     const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
+    const notes = formString(formData, 'notes') || undefined;
 
-    await recordSupplierPayment(businessId, invoiceId, payments, paidAt);
+    await recordSupplierPayment(businessId, invoiceId, payments, paidAt, user.id, notes);
     redirect('/payments/supplier-payments');
   }, '/payments/supplier-payments');
 }

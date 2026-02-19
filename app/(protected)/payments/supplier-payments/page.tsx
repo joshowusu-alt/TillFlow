@@ -30,6 +30,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         method: true,
         amountPence: true,
         paidAt: true,
+        notes: true,
+        recordedBy: { select: { name: true } },
         purchaseInvoice: {
           select: { id: true, supplier: { select: { name: true } } }
         }
@@ -97,6 +99,15 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           defaultValue={today}
                         />
                       </div>
+                      <div>
+                        <div className="text-xs text-black/50">Notes (optional)</div>
+                        <input
+                          className="input"
+                          name="notes"
+                          type="text"
+                          placeholder="e.g. cheque #1234"
+                        />
+                      </div>
                       <div className="flex items-end">
                         <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
                       </div>
@@ -120,6 +131,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                 <th>Supplier</th>
                 <th>Method</th>
                 <th>Amount</th>
+                <th>Notes</th>
+                <th>Recorded By</th>
               </tr>
             </thead>
             <tbody>
@@ -134,6 +147,12 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                   <td className="px-3 py-2 text-sm">{payment.method}</td>
                   <td className="px-3 py-2 text-sm font-semibold">
                     {formatMoney(payment.amountPence, business.currency)}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-black/60">
+                    {payment.notes ?? '—'}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-black/60">
+                    {payment.recordedBy?.name ?? '—'}
                   </td>
                 </tr>
               ))}

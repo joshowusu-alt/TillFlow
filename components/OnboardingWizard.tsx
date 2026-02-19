@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { setStoreModeAction } from '@/app/actions/settings';
 
 interface StepProps {
   onNext: () => void;
@@ -59,7 +60,16 @@ function WelcomeStep({ onNext }: StepProps) {
 /* ---------- Step 2: Business Config (inline) ---------- */
 function BusinessStep({ onNext, onBack }: StepProps) {
   const [show, setShow] = useState(false);
+  const [storeMode, setStoreMode] = useState<'SINGLE_STORE' | 'MULTI_STORE'>('SINGLE_STORE');
+  const [isSaving, startSaving] = useTransition();
   useEffect(() => { setShow(true); }, []);
+
+  const handleNext = () => {
+    startSaving(async () => {
+      await setStoreModeAction(storeMode);
+      onNext();
+    });
+  };
 
   return (
     <div className={`transition-all duration-500 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
@@ -93,11 +103,44 @@ function BusinessStep({ onNext, onBack }: StepProps) {
             <svg className="h-4 w-4 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
           </a>
         </div>
+
+        <div className="rounded-xl border border-black/5 bg-white p-4 space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-black/30">How many branches?</div>
+          <p className="text-xs text-black/40">This hides branch-related features if you only have one store, keeping your interface cleaner.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setStoreMode('SINGLE_STORE')}
+              className={`rounded-lg border p-3 text-left transition ${
+                storeMode === 'SINGLE_STORE'
+                  ? 'border-accent bg-accentSoft/50 ring-1 ring-accent/30'
+                  : 'border-black/10 hover:border-black/20'
+              }`}
+            >
+              <div className="font-semibold text-sm">Single store</div>
+              <div className="text-xs text-black/40 mt-0.5">Just one location</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStoreMode('MULTI_STORE')}
+              className={`rounded-lg border p-3 text-left transition ${
+                storeMode === 'MULTI_STORE'
+                  ? 'border-accent bg-accentSoft/50 ring-1 ring-accent/30'
+                  : 'border-black/10 hover:border-black/20'
+              }`}
+            >
+              <div className="font-semibold text-sm">Multiple stores</div>
+              <div className="text-xs text-black/40 mt-0.5">Branches &amp; transfers</div>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 flex gap-3">
         <button onClick={onBack} className="btn-ghost flex-1 py-3">Back</button>
-        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-blue-800/15">Next</button>
+        <button onClick={handleNext} disabled={isSaving} className="btn-primary flex-1 py-3 shadow-lg shadow-blue-800/15 disabled:opacity-50">
+          {isSaving ? 'Saving...' : 'Next'}
+        </button>
       </div>
     </div>
   );

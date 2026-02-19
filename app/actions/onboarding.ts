@@ -59,7 +59,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     {
       key: 'products',
       title: 'Add your products',
-      subtitle: productCount > 0 ? `${productCount} products loaded` : 'Import or add your first product',
+      subtitle: productCount >= 3 ? `${productCount} products loaded` : productCount > 0 ? `${productCount} added — add at least 3 to complete this step` : 'Add at least 3 products to complete this step',
       benefit: 'Accurate pricing = no more price-tag arguments',
       estimatedMinutes: 5,
       done: productCount >= 3,

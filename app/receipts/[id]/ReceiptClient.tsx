@@ -179,8 +179,10 @@ export default function ReceiptClient({
         </div>
       </div>
       {directError ? (
-        <div className="no-print mb-4 rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-xs text-rose">
-          Direct print error: {directError}
+        <div className="no-print mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {directError.includes('qz-tray') || directError.toLowerCase().includes('qz')
+            ? <>QZ Tray isn&#39;t running on this computer. Click <strong>Print Receipt</strong> above to print using your browser instead. For automatic direct printing, <a href="https://qz.io" target="_blank" rel="noopener" className="underline font-medium">install QZ Tray</a>.</>
+            : <>Print error — {directError}. Try <strong>Print Receipt</strong> instead.</>}
         </div>
       ) : null}
       <div className="text-center">

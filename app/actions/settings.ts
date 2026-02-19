@@ -6,6 +6,27 @@ import { formString, formOptionalString } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 
+/** Lightweight action for onboarding wizard to set store mode */
+export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STORE'): Promise<ActionResult> {
+  const { user, businessId } = await withBusinessContext(['OWNER']);
+  const validated = storeMode === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { storeMode: validated },
+  });
+  await audit({
+    businessId,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Business',
+    entityId: businessId,
+    details: { storeMode: validated, source: 'onboarding' },
+  });
+  return { success: true };
+}
+
 export async function updateBusinessAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);

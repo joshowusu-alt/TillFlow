@@ -10,7 +10,7 @@ export default function BalanceSheetDatePicker({ defaultValue }: { defaultValue:
   const handleDateChange = (newDate: string) => {
     if (!newDate) return;
     startTransition(() => {
-      router.push(`/reports/balance-sheet?asOf=${newDate}`);
+      router.replace(`/reports/balance-sheet?asOf=${newDate}`);
     });
   };
 

@@ -212,6 +212,7 @@ model User {
   riskAlerts                 RiskAlert[]             @relation("RiskAlertCashier")
   acknowledgedRiskAlerts     RiskAlert[]             @relation("RiskAlertAcknowledgedBy")
   reorderActions             ReorderAction[]
+  purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
 }
 
 model Session {
@@ -627,10 +628,13 @@ model PurchasePayment {
   amountPence       Int
   paidAt            DateTime @default(now())
   reference         String?
+  recordedByUserId  String?
+  notes             String?
   qaTag             String?
   qaRunId           String?
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  recordedBy      User?           @relation("PurchasePaymentRecordedBy", fields: [recordedByUserId], references: [id])
 
   @@index([purchaseInvoiceId, paidAt])
   @@index([paidAt])

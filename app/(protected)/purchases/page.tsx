@@ -146,6 +146,7 @@ export default async function PurchasesPage({
           </Link>
         </div>
         <PurchaseFormClient
+          key={searchParams?.created ?? 'default'}
           storeId={selectedStoreId}
           currency={business.currency}
           vatEnabled={business.vatEnabled}

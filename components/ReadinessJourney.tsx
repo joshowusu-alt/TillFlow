@@ -151,7 +151,7 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
             <Link href="/pos" className="btn-primary flex-1 text-center text-sm py-2">
               Open POS
             </Link>
-            <Link href="/reports" className="btn-ghost flex-1 text-center text-sm py-2 border border-black/10">
+            <Link href="/reports/dashboard" className="btn-ghost flex-1 text-center text-sm py-2 border border-black/10">
               View Reports
             </Link>
           </div>
@@ -459,7 +459,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             <span className="text-black/10">|</span>
             <Link href="/pos" className="hover:text-accent transition">POS</Link>
             <span className="text-black/10">|</span>
-            <Link href="/reports" className="hover:text-accent transition">Reports</Link>
+            <Link href="/reports/dashboard" className="hover:text-accent transition">Reports</Link>
           </div>
         </div>
       </div>

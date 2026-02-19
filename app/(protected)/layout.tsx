@@ -38,6 +38,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         mode={(business?.mode as any) ?? 'SIMPLE'}
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
+        momoEnabled={!!business.momoEnabled}
       />
 
       {/* Setup banner for owners who haven't completed onboarding */}

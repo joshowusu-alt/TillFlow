@@ -151,9 +151,13 @@ export default function PosClient({
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
-
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  // Staged product: when a product with multiple units is picked, show unit
+  // toggle + qty row before adding to cart
+  const [stagedProduct, setStagedProduct] = useState<ProductDto | null>(null);
+  const [stagedUnitId, setStagedUnitId] = useState('');
+  const [stagedQty, setStagedQty] = useState('1');
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
   const maxUndoSteps = 10;
@@ -812,6 +816,17 @@ export default function PosClient({
     barcodeRef.current?.focus();
   };
 
+  const handleAddStaged = () => {
+    if (!stagedProduct) return;
+    const qty = Math.max(1, Math.floor(Number(stagedQty) || 1));
+    addToCart({ productId: stagedProduct.id, unitId: stagedUnitId, qtyInUnit: qty });
+    setStagedProduct(null);
+    setStagedQty('1');
+    setProductSearch('');
+    playBeep(true);
+    barcodeRef.current?.focus();
+  };
+
   const handleBarcodeScan = useCallback((code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -1238,13 +1253,23 @@ export default function PosClient({
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             if (!base || outOfStock) return;
-                            addToCart({ productId: product.id, unitId: base.id, qtyInUnit: 1 });
-                            setProductId(product.id);
-                            setUnitId(base.id);
-                            setProductSearch('');
-                            setProductDropdownOpen(false);
-                            playBeep(true);
-                            barcodeRef.current?.focus();
+                            if (product.units.length > 1) {
+                              // Multiple units — stage for unit selection
+                              setStagedProduct(product);
+                              setStagedUnitId(base.id);
+                              setStagedQty('1');
+                              setProductSearch('');
+                              setProductDropdownOpen(false);
+                            } else {
+                              // Single unit — add directly as before
+                              addToCart({ productId: product.id, unitId: base.id, qtyInUnit: 1 });
+                              setProductId(product.id);
+                              setUnitId(base.id);
+                              setProductSearch('');
+                              setProductDropdownOpen(false);
+                              playBeep(true);
+                              barcodeRef.current?.focus();
+                            }
                           }}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -1318,6 +1343,71 @@ export default function PosClient({
             </div>
           )}
         </div>
+
+        {/* ── Staged product: unit + qty picker ──────────────── */}
+        {stagedProduct && (
+          <div className="card p-4 border-2 border-accent/20 bg-accentSoft/30">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-bold text-ink">{stagedProduct.name}</div>
+                <div className="text-xs text-muted">Select how you want to sell</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setStagedProduct(null); barcodeRef.current?.focus(); }}
+                className="text-black/30 hover:text-black/60 text-xl leading-none px-1"
+              >
+                &times;
+              </button>
+            </div>
+            {/* Unit toggle */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {stagedProduct.units.map((u) => {
+                const baseU = stagedProduct.units.find((x) => x.isBaseUnit);
+                const label = u.conversionToBase > 1
+                  ? `${u.name} (${u.conversionToBase} ${baseU?.name ?? 'pcs'})`
+                  : u.name;
+                const available = getAvailableBase(stagedProduct.id);
+                const maxQty = u.conversionToBase > 0 ? Math.floor(available / u.conversionToBase) : available;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setStagedUnitId(u.id)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                      stagedUnitId === u.id
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'bg-black/5 text-black/60 hover:bg-black/10'
+                    }`}
+                  >
+                    {label}
+                    {maxQty <= 5 && <span className="ml-1 text-xs opacity-70">({maxQty} left)</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Qty + Add */}
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={stagedQty}
+                onChange={(e) => setStagedQty(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleAddStaged(); }
+                  if (e.key === 'Escape') { setStagedProduct(null); barcodeRef.current?.focus(); }
+                }}
+                className="input w-24 text-center"
+                autoFocus
+              />
+              <button type="button" onClick={handleAddStaged} className="btn-primary flex-1">
+                Add to Cart →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Quick‑add product (collapsed by default) ──────── */}
         {quickAddOpen && (

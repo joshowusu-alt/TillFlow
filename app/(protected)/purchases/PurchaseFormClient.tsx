@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
@@ -83,6 +83,23 @@ export default function PurchaseFormClient({
   const [quickSellPrice, setQuickSellPrice] = useState('');
   const [quickCost, setQuickCost] = useState('');
   const [quickVatRate, setQuickVatRate] = useState('0');
+  const [productSearch, setProductSearch] = useState(''); // typeahead
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const productSearchRef = useRef<HTMLInputElement>(null);
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return productOptions;
+    return productOptions.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.barcode ?? '').toLowerCase().includes(q)
+    );
+  }, [productSearch, productOptions]);
+
+  // Keep productSearch display in sync when productId changes programmatically
+  useEffect(() => {
+    const p = productOptions.find((x) => x.id === productId);
+    if (p && productSearch === '') setProductSearch(p.name);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
 
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
@@ -92,6 +109,8 @@ export default function PurchaseFormClient({
   const selectedUnit = unitsForProduct.find((unit) => unit.id === unitId);
   const hasMultipleUnits = unitsForProduct.length > 1;
   const baseUnit = unitsForProduct.find((u) => u.isBaseUnit);
+  const packUnit = unitsForProduct.find((u) => !u.isBaseUnit && u.conversionToBase > 1);
+  const isPackMode = selectedUnit ? selectedUnit.conversionToBase > 1 : false;
   const qtyNumber = Math.max(0, Math.floor(Number(qtyInput) || 0));
 
   const parseCurrencyToPence = (value: string) => {
@@ -100,6 +119,17 @@ export default function PurchaseFormClient({
     const parsed = Number(trimmed);
     return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
   };
+
+  // When product/unit changes, default to pack unit if available
+  useEffect(() => {
+    if (!selectedProduct) return;
+    const pack = selectedProduct.units.find((u) => !u.isBaseUnit && u.conversionToBase > 1);
+    if (pack && unitId !== pack.id && !cart.length) {
+      setUnitId(pack.id);
+      setUnitCostTouched(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProduct?.id]);
 
   useEffect(() => {
     if (!selectedProduct || !selectedUnit) return;
@@ -134,6 +164,7 @@ export default function PurchaseFormClient({
     const match = productOptions.find((product) => product.barcode === code);
     if (match) {
       setProductId(match.id);
+      setProductSearch(match.name);
       const baseUnit = match.units.find((unit) => unit.isBaseUnit) ?? match.units[0];
       setUnitId(baseUnit?.id ?? '');
       setQtyInput('1');
@@ -180,6 +211,7 @@ export default function PurchaseFormClient({
         const created = result.data;
         setProductOptions((prev) => [...prev, created]);
         setProductId(created.id);
+        setProductSearch(created.name);
         const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
         setUnitId(baseUnit?.id ?? '');
         setUnitCostTouched(false);
@@ -518,29 +550,55 @@ export default function PurchaseFormClient({
           </div>
           <div>
             <label className="label">Product</label>
-            <select
-              className="input"
-              value={productId}
-              onChange={(event) => {
-                const next = event.target.value;
-                setProductId(next);
-                const product = productOptions.find((p) => p.id === next);
-                const baseUnit = product?.units.find((unit) => unit.isBaseUnit) ?? product?.units[0];
-                setUnitId(baseUnit?.id ?? '');
-                setQtyInput('1');
-                setUnitCostTouched(false);
-                setUnitCostInput('');
-              }}
-            >
-              {productOptions.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                ref={productSearchRef}
+                className="input"
+                value={productSearch}
+                onChange={(e) => {
+                  setProductSearch(e.target.value);
+                  setProductDropdownOpen(true);
+                }}
+                onFocus={() => setProductDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setProductDropdownOpen(false), 200)}
+                placeholder="Type to search product…"
+                autoComplete="off"
+              />
+              {productDropdownOpen && (
+                <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-black/10 bg-white shadow-xl">
+                  {filteredProducts.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-black/50">No products match &ldquo;{productSearch}&rdquo;</div>
+                  ) : (
+                    filteredProducts.map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-accentSoft active:bg-blue-100 ${productId === product.id ? 'bg-accentSoft/50 font-semibold' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setProductId(product.id);
+                          const base = product.units.find((u) => u.isBaseUnit) ?? product.units[0];
+                          setUnitId(base?.id ?? '');
+                          setQtyInput('1');
+                          setUnitCostTouched(false);
+                          setUnitCostInput('');
+                          setProductSearch(product.name);
+                          setProductDropdownOpen(false);
+                        }}
+                      >
+                        <span className="truncate">{product.name}</span>
+                        {product.barcode && (
+                          <span className="ml-2 text-xs text-black/40 font-mono">{product.barcode}</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div>
-            <label className="label">Buy in</label>
+            <label className="label">Purchase in</label>
             {hasMultipleUnits ? (
               <div className="mt-1 flex gap-1">
                 {unitsForProduct.map((unit) => (
@@ -558,8 +616,7 @@ export default function PurchaseFormClient({
                         : 'bg-black/5 text-black/60 hover:bg-black/10'
                     }`}
                   >
-                    {unit.name}
-                    {unit.conversionToBase > 1 ? ` (${unit.conversionToBase})` : ''}
+                    {unit.conversionToBase > 1 ? `Pack/Carton (${unit.conversionToBase} ${baseUnit?.name ?? 'units'})` : unit.name}
                   </button>
                 ))}
               </div>
@@ -568,9 +625,16 @@ export default function PurchaseFormClient({
                 {selectedUnit?.name ?? 'Unit'}
               </div>
             )}
+            {isPackMode && packUnit ? (
+              <div className="mt-1 text-xs text-black/50">
+                1 {packUnit.name} = {packUnit.conversionToBase} {baseUnit?.pluralName ?? baseUnit?.name ?? 'units'}
+              </div>
+            ) : null}
           </div>
           <div>
-            <label className="label">Quantity ({selectedUnit?.name ?? 'units'})</label>
+            <label className="label">
+              Quantity ({isPackMode ? `packs` : selectedUnit?.name ?? 'units'})
+            </label>
             <input
               className="input"
               type="number"
@@ -583,12 +647,17 @@ export default function PurchaseFormClient({
             />
             {selectedUnit && selectedUnit.conversionToBase > 1 && qtyNumber > 0 ? (
               <div className="mt-1 text-xs font-medium text-emerald-700">
-                = {qtyNumber * selectedUnit.conversionToBase} {baseUnit?.pluralName ?? baseUnit?.name ?? 'units'}
+                Will add {qtyNumber * selectedUnit.conversionToBase} {baseUnit?.pluralName ?? baseUnit?.name ?? 'units'} to inventory
+                <span className="text-black/40 ml-1">({qtyNumber} × {selectedUnit.conversionToBase})</span>
+              </div>
+            ) : qtyNumber > 0 ? (
+              <div className="mt-1 text-xs font-medium text-emerald-700">
+                Total units added: {qtyNumber}
               </div>
             ) : null}
           </div>
           <div>
-            <label className="label">Cost per {selectedUnit?.name ?? 'unit'}</label>
+            <label className="label">{isPackMode ? 'Cost per pack' : `Cost per ${selectedUnit?.name ?? 'unit'}`}</label>
             <input
               className="input"
               type="number"
@@ -605,8 +674,8 @@ export default function PurchaseFormClient({
             />
             {selectedUnit && selectedUnit.conversionToBase > 1 && unitCostInput ? (
               <div className="mt-1 text-xs text-black/60">
-                {formatMoney(parseCurrencyToPence(unitCostInput), currency)} per {selectedUnit.name}
-                {' · '}
+                {formatMoney(parseCurrencyToPence(unitCostInput), currency)} per pack
+                {' · ≈ '}
                 {formatMoney(Math.round(parseCurrencyToPence(unitCostInput) / selectedUnit.conversionToBase), currency)} per {baseUnit?.name ?? 'unit'}
               </div>
             ) : null}
