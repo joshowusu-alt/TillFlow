@@ -37,7 +37,6 @@ const navGroups = [
     items: [
       { href: '/payments/customer-receipts', label: 'Customer Receipts', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/supplier-payments', label: 'Supplier Payments', roles: ['MANAGER', 'OWNER'] },
-      { href: '/payments/expense-payments', label: 'Expense Payments', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/reconciliation', label: 'MoMo Reconciliation', roles: ['MANAGER', 'OWNER'] }
     ]
   },
@@ -46,7 +45,6 @@ const navGroups = [
     label: 'Reports',
     items: [
       { href: '/reports/owner', label: '⚡ Owner Intelligence', roles: ['OWNER'] },
-      { href: '/reports/command-center', label: 'Command Center', roles: ['OWNER'] },
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
@@ -67,9 +65,6 @@ const navGroups = [
     items: [
       { href: '/account', label: 'My Account', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/settings', label: 'Settings', roles: ['OWNER', 'MANAGER'] },
-      { href: '/settings/organization', label: 'Organization', roles: ['OWNER', 'MANAGER'] },
-      { href: '/settings/backup', label: 'Data Backup', roles: ['OWNER'] },
-      { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['OWNER', 'MANAGER'] },
       { href: '/users', label: 'Users', roles: ['OWNER'] },
       { href: '/onboarding', label: 'Setup Guide', roles: ['OWNER'] }
     ]

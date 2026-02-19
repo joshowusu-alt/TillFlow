@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import Pagination from '@/components/Pagination';
+import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -74,8 +75,7 @@ export default async function PurchasesPage({
         paymentStatus: true,
         totalPence: true,
         supplier: { select: { name: true } },
-        purchaseReturn: { select: { id: true } },
-        _count: { select: { lines: true } },
+        purchaseReturn: { select: { id: true } },      payments: { select: { amountPence: true } },        _count: { select: { lines: true } },
         lines: {
           take: 1,
           select: {
@@ -218,7 +218,16 @@ export default async function PurchasesPage({
                     {purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus) ? (
                       <span className="text-xs text-black/40">Returned</span>
                     ) : (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        {['UNPAID', 'PART_PAID'].includes(purchase.paymentStatus) && (
+                          <InlinePaymentForm
+                            invoiceId={purchase.id}
+                            outstandingPence={purchase.totalPence - purchase.payments.reduce((s, p) => s + p.amountPence, 0)}
+                            currency={business.currency}
+                            type="supplier"
+                            returnTo="/purchases"
+                          />
+                        )}
                         <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
                           Return
                         </Link>

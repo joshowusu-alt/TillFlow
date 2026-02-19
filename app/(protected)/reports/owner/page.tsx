@@ -1,12 +1,24 @@
 import { Suspense } from 'react';
 import { requireBusiness } from '@/lib/auth';
 import { getOwnerBrief } from '@/lib/owner-intel';
+import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { getCashflowForecast } from '@/lib/reports/forecast';
 import PageHeader from '@/components/PageHeader';
+import StatCard from '@/components/StatCard';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import RefreshIndicator from '@/components/RefreshIndicator';
 
 export const dynamic = 'force-dynamic';
+
+const quickLinks = [
+  { label: 'Weekly Digest', href: '/reports/weekly-digest', desc: 'Last 7 days summary' },
+  { label: 'Reorder', href: '/reports/reorder-suggestions', desc: 'Stock replenishment' },
+  { label: 'Risk Monitor', href: '/reports/risk-monitor', desc: 'Fraud & control alerts' },
+  { label: 'Cashflow', href: '/reports/cashflow', desc: 'Cash position statement' },
+  { label: 'Income Statement', href: '/reports/income-statement', desc: 'Revenue & expenses' },
+  { label: 'Balance Sheet', href: '/reports/balance-sheet', desc: 'Assets & liabilities' },
+];
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
 
@@ -67,7 +79,13 @@ function Section({ title, children, action }: { title: string; children: React.R
 export default async function OwnerIntelligencePage() {
   const { business } = await requireBusiness(['OWNER', 'MANAGER']);
 
-  const brief = await getOwnerBrief(business.id, business.currency);
+  const [brief, kpis, forecast] = await Promise.all([
+    getOwnerBrief(business.id, business.currency),
+    getTodayKPIs(business.id),
+    getCashflowForecast(business.id, 14),
+  ]);
+  const currency = business.currency;
+  const forecastMini = forecast.days.slice(0, 7);
 
   const gradeLabel = { GREEN: 'Healthy', AMBER: 'Needs Attention', RED: 'Critical' };
 
@@ -159,6 +177,73 @@ export default async function OwnerIntelligencePage() {
             </ul>
           )}
         </section>
+      </div>
+
+      {/* Today's KPIs */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Today's Sales"
+          value={formatMoney(kpis.totalSalesPence, currency)}
+          tone="accent"
+          helper={`${kpis.txCount} transaction${kpis.txCount !== 1 ? 's' : ''}`}
+        />
+        <StatCard
+          label={`Gross Profit (${kpis.gpPercent}%)`}
+          value={formatMoney(kpis.grossMarginPence, currency)}
+          tone={kpis.gpPercent >= 20 ? 'success' : kpis.gpPercent >= 10 ? 'warn' : 'danger'}
+        />
+        <StatCard
+          label="Debtors (AR)"
+          value={formatMoney(kpis.outstandingARPence, currency)}
+          tone={kpis.arOver90Pence > 0 ? 'warn' : 'default'}
+          helper={kpis.arOver90Pence > 0 ? `${formatMoney(kpis.arOver90Pence, currency)} 90+ days` : undefined}
+        />
+        <StatCard
+          label="Payables (AP)"
+          value={formatMoney(kpis.outstandingAPPence, currency)}
+        />
+      </div>
+
+      {/* 7-Day Cash Forecast Mini */}
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-ink">7-Day Cash Forecast</h3>
+          <Link href="/reports/cashflow-forecast" className="text-xs text-accent hover:underline">
+            Full forecast \u2192
+          </Link>
+        </div>
+        <div className="flex items-end gap-1 h-24">
+          {forecastMini.map((day) => {
+            const maxVal = Math.max(
+              ...forecastMini.map((d) => Math.abs(d.projectedBalancePence)),
+              1
+            );
+            const heightPct = Math.max(
+              (Math.abs(day.projectedBalancePence) / maxVal) * 100,
+              4
+            );
+            const isNeg = day.projectedBalancePence < 0;
+            return (
+              <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className={`w-full rounded-t-md transition-all ${
+                    isNeg ? 'bg-rose-400' : 'bg-emerald-400'
+                  }`}
+                  style={{ height: `${heightPct}%`, minHeight: '4px' }}
+                  title={`${day.date}: ${formatMoney(day.projectedBalancePence, currency)}`}
+                />
+                <span className="text-[9px] text-muted tabular-nums">
+                  {day.date.slice(5)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {forecast.summary.daysUntilNegative !== null && (
+          <div className="mt-2 rounded-lg bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+            Cash goes negative in {forecast.summary.daysUntilNegative} day{forecast.summary.daysUntilNegative !== 1 ? 's' : ''}
+          </div>
+        )}
       </div>
 
       {/* Money Pulse + Leakage + Stock Risk */}
@@ -271,6 +356,22 @@ export default async function OwnerIntelligencePage() {
             </Link>
           )}
         </Section>
+      </div>
+
+      {/* Quick Links */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {quickLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="card flex items-center gap-3 p-4 hover:border-primary transition-colors"
+          >
+            <div>
+              <p className="text-sm font-semibold text-ink">{link.label}</p>
+              <p className="text-xs text-muted">{link.desc}</p>
+            </div>
+          </Link>
+        ))}
       </div>
 
       {/* Export brief footer */}

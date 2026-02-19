@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import Pagination from '@/components/Pagination';
+import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -54,6 +55,7 @@ export default async function SalesPage({
         store: { select: { name: true } },
         customer: { select: { name: true } },
         salesReturn: { select: { id: true } },
+        payments: { select: { amountPence: true } },
         _count: { select: { lines: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -154,7 +156,16 @@ export default async function SalesPage({
                   {sale.salesReturn || ['RETURNED', 'VOID'].includes(sale.paymentStatus) ? (
                     <span className="text-xs text-black/40">Returned</span>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      {['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) && (
+                        <InlinePaymentForm
+                          invoiceId={sale.id}
+                          outstandingPence={sale.totalPence - sale.payments.reduce((s, p) => s + p.amountPence, 0)}
+                          currency={business.currency}
+                          type="customer"
+                          returnTo="/sales"
+                        />
+                      )}
                       {sale._count.lines > 1 && (
                         <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                           Amend

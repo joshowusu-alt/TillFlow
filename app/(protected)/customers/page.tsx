@@ -3,6 +3,7 @@ import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
+import SearchFilter from '@/components/SearchFilter';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createCustomerAction } from '@/app/actions/customers';
@@ -84,8 +85,11 @@ export default async function CustomersPage({
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <form method="GET" className="flex flex-wrap items-end gap-3">
-          {business.customerScope === 'BRANCH' ? (
+        <div className="w-full max-w-sm">
+          <SearchFilter placeholder="Search customers by name..." />
+        </div>
+        {business.customerScope === 'BRANCH' ? (
+          <form method="GET" className="flex items-end gap-3">
             <div>
               <label className="label">Branch / Store</label>
               <select className="input" name="storeId" defaultValue={selectedStoreId}>
@@ -96,15 +100,11 @@ export default async function CustomersPage({
                 ))}
               </select>
             </div>
-          ) : null}
-          <div>
-            <label className="label">Search</label>
-            <input className="input" name="q" defaultValue={q} placeholder="Search customers..." />
-          </div>
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-        </form>
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
+          </form>
+        ) : null}
       </div>
 
       <div className="card p-6 overflow-x-auto">

@@ -30,7 +30,8 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
     const payments = parsePayments(formData);
 
     await recordCustomerPayment(businessId, invoiceId, payments, user.id);
-    redirect('/payments/customer-receipts');
+    const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
+    redirect(returnTo);
   }, '/payments/customer-receipts');
 }
 
@@ -45,6 +46,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     const notes = formString(formData, 'notes') || undefined;
 
     await recordSupplierPayment(businessId, invoiceId, payments, paidAt, user.id, notes);
-    redirect('/payments/supplier-payments');
+    const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
+    redirect(returnTo);
   }, '/payments/supplier-payments');
 }

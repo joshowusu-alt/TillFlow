@@ -15,7 +15,24 @@ export default async function TransfersPage({
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
 
   if ((business as any).storeMode !== 'MULTI_STORE') {
-    redirect('/pos');
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Stock Transfers" subtitle="Move inventory between branches." />
+        <div className="card p-8 text-center">
+          <div className="rounded-full bg-blue-50 p-3 inline-flex mb-3">
+            <svg className="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-ink">Single-Store Mode</h3>
+          <p className="mt-2 text-sm text-muted max-w-md mx-auto">
+            Stock transfers are only available when running in multi-store mode.
+            Switch to multi-store in Settings &rarr; Store Mode to enable branch transfers.
+          </p>
+          <a href="/settings" className="btn-secondary mt-4 inline-block text-sm">Go to Settings</a>
+        </div>
+      </div>
+    );
   }
 
   const [stores, products, transfers] = await Promise.all([

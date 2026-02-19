@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import RefreshIndicator from '@/components/RefreshIndicator';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -73,7 +74,11 @@ export default async function SystemHealthPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="System Health" subtitle="Live operational metrics and scheduler status." />
+      <PageHeader
+        title="System Health"
+        subtitle="Live operational metrics and scheduler status."
+        actions={<RefreshIndicator fetchedAt={now.toISOString()} autoRefreshMs={30_000} />}
+      />
 
       {/* Quick stats grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
