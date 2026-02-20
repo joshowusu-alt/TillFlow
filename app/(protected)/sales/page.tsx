@@ -5,7 +5,7 @@ import Pagination from '@/components/Pagination';
 import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney } from '@/lib/format';
 
 const PAGE_SIZE = 25;
 
@@ -27,8 +27,9 @@ export default async function SalesPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const fromParam = searchParams?.from ?? '';
-  const toParam = searchParams?.to ?? '';
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const fromParam = searchParams?.from ?? todayIso;
+  const toParam   = searchParams?.to   ?? todayIso;
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
     select: { id: true, name: true },
@@ -63,6 +64,7 @@ export default async function SalesPage({
       where,
       select: {
         id: true,
+        transactionNumber: true,
         createdAt: true,
         paymentStatus: true,
         totalPence: true,
@@ -116,6 +118,11 @@ export default async function SalesPage({
           <button className="btn-secondary" type="submit">
             Apply
           </button>
+          {(!!searchParams?.from || !!searchParams?.to) && (
+            <a href="/sales?from=&to=" className="text-xs text-muted hover:text-primary underline underline-offset-2 self-center">
+              Clear filter
+            </a>
+          )}
         </form>
       </div>
 
@@ -143,24 +150,38 @@ export default async function SalesPage({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
                       </svg>
                     </div>
-                    <div className="text-sm text-black/70">{q ? `No sales matching "${q}"` : 'No sales yet'}</div>
-                    <div className="text-xs text-black/40 mt-1">
-                      {q ? 'Try a different search term.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                    <div className="text-sm text-black/70">
+                      {q ? `No sales matching "${q}"` : (fromParam || toParam) ? 'No sales in this date range' : 'No sales yet'}
                     </div>
-                    {!q && (
+                    <div className="text-xs text-black/40 mt-1">
+                      {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                    </div>
+                    {!q && (fromParam || toParam) ? (
+                      <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
+                    ) : !q ? (
                       <div className="mt-3 flex gap-2">
                         <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
                         <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </td>
               </tr>
             )}
             {sales.map((sale) => (
               <tr key={sale.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-sm">{sale.id.slice(0, 8)}</td>
-                <td className="px-3 py-3 text-sm">{formatDateTime(sale.createdAt)}</td>
+                <td className="px-3 py-3">
+                  <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
+                    {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
+                  </Link>
+                </td>
+                <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
+                  {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                  {' '}
+                  <span className="text-muted">
+                    {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </td>
                 <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
                 <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
                 <td className="px-3 py-3">
