@@ -269,6 +269,18 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         </a>
       </div>
 
+      {/* Data safety trust note */}
+      <div className="rounded-xl border border-black/5 bg-slate-50 px-5 py-4 flex items-start gap-3">
+        <svg className="h-5 w-5 flex-shrink-0 text-black/30 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <p className="text-xs text-black/50 leading-relaxed">
+          Your data is <strong className="text-black/60">encrypted in transit and at rest</strong>, automatically backed up daily,
+          and stored on secure cloud infrastructure in Europe (Vercel&nbsp;/&nbsp;AWS&nbsp;eu-west-2).
+          TillFlow never shares your business data with third parties.
+        </p>
+      </div>
+
       {/* Data management — clear demo/sample data */}
       {user.role === 'OWNER' && (
         <div className="card p-6">

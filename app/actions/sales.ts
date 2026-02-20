@@ -158,7 +158,7 @@ export async function completeSaleAction(data: {
   discountManagerPin?: string;
   discountReasonCode?: string;
   discountReason?: string;
-}): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
+}): Promise<ActionResult<{ receiptId: string; totalPence: number; transactionNumber: string | null }>> {
   return safeAction(async () => {
     // Skip the redundant business lookup — createSale validates it already
     const user = await requireUser();
@@ -268,7 +268,7 @@ export async function completeSaleAction(data: {
     revalidateTag('pos-products');
     revalidatePath('/onboarding');
 
-    return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence } };
+    return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
 }
 

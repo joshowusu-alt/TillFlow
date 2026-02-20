@@ -133,7 +133,7 @@ export default function PosClient({
   const [discountReasonCode, setDiscountReasonCode] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const [lastReceiptId, setLastReceiptId] = useState('');
-  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number } | null>(null);
+  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number; transactionNumber: string | null } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
@@ -570,14 +570,14 @@ export default function PosClient({
       });
 
       if (result.success) {
-        const { receiptId, totalPence } = result.data;
+        const { receiptId, totalPence, transactionNumber } = result.data;
         // Store receipt ID for reprinting
         setLastReceiptId(receiptId);
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('lastReceiptId', receiptId);
         }
         // Show success toast
-        setSaleSuccess({ receiptId, totalPence });
+        setSaleSuccess({ receiptId, totalPence, transactionNumber });
         // Reset cart and payment fields
         setCart([]);
         clearSavedCart();
@@ -1395,8 +1395,8 @@ export default function PosClient({
               <input
                 type="number"
                 min={1}
-                step={1}
-                inputMode="numeric"
+                step={0.001}
+                inputMode="decimal"
                 value={stagedQty}
                 onChange={(e) => setStagedQty(e.target.value)}
                 onKeyDown={(e) => {
@@ -1446,7 +1446,8 @@ export default function PosClient({
                   </div>
                   <div>
                     <div className="font-semibold">Sale Complete!</div>
-                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)} — Ready for next customer</div>
+                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
+                    <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1569,8 +1570,8 @@ export default function PosClient({
                           className="w-12 rounded-lg border border-black/10 bg-white px-1 py-1 text-center text-sm font-bold"
                           type="number"
                           min={0}
-                          step={1}
-                          inputMode="numeric"
+                          step={0.001}
+                          inputMode="decimal"
                           value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
                           onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))}
                           onBlur={() => commitLineQty(line)}
