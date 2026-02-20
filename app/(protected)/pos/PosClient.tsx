@@ -600,10 +600,10 @@ export default function PosClient({
         setQtyDrafts({});
         setUndoStack([]);
         playBeep(true);
-        // Auto-dismiss success toast after 8 seconds
-        setTimeout(() => setSaleSuccess(null), 8000);
-        // Refresh server data (product stock levels etc)
-        router.refresh();
+        // Auto-dismiss success toast after 3 seconds
+        setTimeout(() => setSaleSuccess(null), 3000);
+        // Refresh server data in background (non-blocking — don't slow down the POS)
+        requestAnimationFrame(() => router.refresh());
       } else {
         // Revert optimistic stock on error
         setProductOptions(preOptimisticProducts);
@@ -1005,7 +1005,11 @@ export default function PosClient({
   const requiresCustomer = paymentStatus !== 'PAID';
   const fullyPaid = paymentStatus === 'PAID' ? totalPaid >= totalDue : true;
   const hasPaymentError = nonCashOverpay;
-  const momoReady = !needsMomoConfirmation || momoConfirmed;
+  // MoMo collection API not yet integrated — allow sales with MoMo as a
+  // manually-recorded payment method (same as cash/card/transfer).  Once
+  // providers are connected, flip this back to:
+  //   const momoReady = !needsMomoConfirmation || momoConfirmed;
+  const momoReady = true;
   const tillReady =
     !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
   const canSubmit =
@@ -1969,8 +1973,8 @@ export default function PosClient({
               </div>
             )}
             {needsMomoConfirmation && !momoConfirmed && (
-              <div className="text-sm text-amber-700 font-medium">
-                MoMo payment must be confirmed before completing this sale.
+              <div className="text-sm text-black/50 font-medium">
+                MoMo payment will be recorded manually (provider not yet connected).
               </div>
             )}
             {requiresDiscountApproval && !discountApprovalReady && (
