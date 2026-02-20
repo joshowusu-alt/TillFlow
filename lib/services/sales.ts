@@ -344,7 +344,11 @@ export async function createSale(input: CreateSaleInput) {
   // When a confirmed MoMo collection exists, attach it; otherwise treat
   // MoMo as a manually-recorded payment (staff verify the receipt visually
   // and end-of-day reconciliation catches discrepancies).
-  if (momoPaidPence > 0 && input.momoCollectionId && momoResult) {
+  if (momoPaidPence > 0 && input.momoCollectionId) {
+    // A collection ID was provided — it MUST be confirmed before the sale can proceed.
+    if (!momoResult) {
+      throw new Error('MoMo collection is not confirmed yet.');
+    }
     confirmedMomoCollection = momoResult;
     if (confirmedMomoCollection.salesInvoiceId) {
       throw new Error('MoMo collection has already been applied to another sale.');
@@ -367,7 +371,9 @@ export async function createSale(input: CreateSaleInput) {
       payment.collectionId = confirmedMomoCollection.id;
     }
   } else if (momoPaidPence > 0) {
-    // Manual MoMo — record with whatever details the cashier entered
+    // No collection ID — manual MoMo (provider not yet connected).
+    // Staff verify the customer's receipt visually; end-of-day reconciliation
+    // catches any discrepancies.
     for (const payment of payments) {
       if (payment.method !== 'MOBILE_MONEY') continue;
       payment.status = payment.status ?? 'PENDING_MANUAL';
