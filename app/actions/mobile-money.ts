@@ -46,7 +46,7 @@ export async function initiateMomoCollectionAction(
       idempotencyKey: payload.idempotencyKey ?? randomUUID(),
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -92,7 +92,7 @@ export async function checkMomoCollectionStatusAction(
       collectionId,
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -122,7 +122,7 @@ export async function recheckMomoCollectionAction(formData: FormData): Promise<v
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const collectionId = formString(formData, 'collectionId');
     await checkMobileMoneyCollectionStatus({ businessId, collectionId, force: true });
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -146,7 +146,7 @@ export async function reinitiateMomoCollectionAction(formData: FormData): Promis
       collectionId,
       initiatedByUserId: user.id,
     });
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -165,7 +165,7 @@ export async function reconcilePendingMomoCollectionsAction(_formData: FormData)
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const updates = await reconcileMobileMoneyCollections({ businessId, statuses: ['PENDING'] });
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

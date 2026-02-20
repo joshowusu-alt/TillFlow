@@ -27,7 +27,7 @@ export async function requestStockTransferAction(formData: FormData): Promise<vo
       lines: [{ productId, qtyBase }],
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -82,7 +82,7 @@ export async function approveStockTransferActionSafe(input: {
       approvedByUserId: approvedBy.id,
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

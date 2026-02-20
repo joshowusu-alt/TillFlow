@@ -32,7 +32,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
       select: { id: true },
     });
 
-    await audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } });
 
     redirect('/users?success=created');
   }, '/users');
@@ -81,7 +81,7 @@ export async function updateUserAction(formData: FormData): Promise<void> {
       await prisma.session.deleteMany({ where: { userId: targetUser.id } });
     }
 
-    await audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
 
     redirect('/users?success=updated');
   }, '/users');
@@ -107,7 +107,7 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
       await prisma.session.deleteMany({ where: { userId: target.id } });
     }
 
-    await audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } });
 
     redirect('/users');
   }, '/users');
@@ -140,7 +140,7 @@ export async function resetUserPasswordAction(formData: FormData): Promise<void>
     // Invalidate all their sessions so they must log in with the new password
     await prisma.session.deleteMany({ where: { userId: target.id } });
 
-    await audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
 
     redirect('/users?success=password_reset');
   }, '/users');

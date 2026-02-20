@@ -428,7 +428,7 @@ export async function resetAllDataAction(): Promise<ActionResult<{ message: stri
     ]);
 
     // Audit the reset itself (the log table was just cleared, so this is the first entry)
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

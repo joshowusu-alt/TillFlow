@@ -14,7 +14,7 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
     where: { id: businessId },
     data: { storeMode: validated },
   });
-  await audit({
+  audit({
     businessId,
     userId: user.id,
     userName: user.name,
@@ -94,7 +94,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
 
     redirect('/settings');
   }, '/settings');

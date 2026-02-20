@@ -101,7 +101,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
     revalidateTag('pos-products');
     redirect('/products');
@@ -195,7 +195,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
     revalidateTag('pos-products');
     redirect(`/products/${existingProduct.id}`);
@@ -297,7 +297,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       data: { active: false },
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -352,7 +352,7 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
       )
     );
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

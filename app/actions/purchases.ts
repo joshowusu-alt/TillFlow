@@ -52,7 +52,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       lines
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
 
     revalidateTag('pos-products');
 
@@ -107,7 +107,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId },
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

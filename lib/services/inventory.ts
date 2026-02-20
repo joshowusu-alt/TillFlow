@@ -13,34 +13,36 @@ export async function createStockAdjustment(input: {
   reason?: string | null;
   userId: string;
 }) {
-  const business = await prisma.business.findUnique({
-    where: { id: input.businessId },
-    select: { inventoryAdjustmentRiskThresholdBase: true },
-  });
-
-  const store = await prisma.store.findFirst({
-    where: { id: input.storeId, businessId: input.businessId },
-    select: { id: true },
-  });
-  if (!store) throw new Error('Store not found');
-
-  const productUnit = await prisma.productUnit.findFirst({
-    where: {
-      productId: input.productId,
-      unitId: input.unitId,
-      product: { businessId: input.businessId },
-    },
-    include: { product: true }
-  });
-  if (!productUnit) throw new Error('Unit not configured for product');
   if (input.qtyInUnit <= 0) throw new Error('Quantity must be at least 1');
+
+  // ── Parallel batch: all independent lookups at once ───────────
+  const [business, store, productUnit, inventory] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { inventoryAdjustmentRiskThresholdBase: true },
+    }),
+    prisma.store.findFirst({
+      where: { id: input.storeId, businessId: input.businessId },
+      select: { id: true },
+    }),
+    prisma.productUnit.findFirst({
+      where: {
+        productId: input.productId,
+        unitId: input.unitId,
+        product: { businessId: input.businessId },
+      },
+      include: { product: true }
+    }),
+    prisma.inventoryBalance.findUnique({
+      where: { storeId_productId: { storeId: input.storeId, productId: input.productId } }
+    }),
+  ]);
+  if (!store) throw new Error('Store not found');
+  if (!productUnit) throw new Error('Unit not configured for product');
 
   const qtyBase = input.qtyInUnit * productUnit.conversionToBase;
   const signedQtyBase = input.direction === 'DECREASE' ? -qtyBase : qtyBase;
 
-  const inventory = await prisma.inventoryBalance.findUnique({
-    where: { storeId_productId: { storeId: store.id, productId: input.productId } }
-  });
   const onHand = inventory?.qtyOnHandBase ?? 0;
   const invMap = new Map(
     inventory
@@ -83,34 +85,38 @@ export async function createStockAdjustment(input: {
     return created;
   });
 
-  await detectInventoryAdjustmentRisk({
-    businessId: input.businessId,
-    storeId: input.storeId,
-    cashierUserId: input.userId,
-    adjustmentId: adjustment.id,
-    qtyBase: signedQtyBase,
-    thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
-  });
+  // Fire-and-forget: risk detection + journal entry are non-critical background work
+  const bgWork = async () => {
+    await detectInventoryAdjustmentRisk({
+      businessId: input.businessId,
+      storeId: input.storeId,
+      cashierUserId: input.userId,
+      adjustmentId: adjustment.id,
+      qtyBase: signedQtyBase,
+      thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
+    });
 
-  const adjustmentValue = currentAvgCost * qtyBase;
-  const journalLines =
-    input.direction === 'DECREASE'
-      ? [
-          { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
-          { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
-        ]
-      : [
-          { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
-          { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
-        ];
+    const adjustmentValue = currentAvgCost * qtyBase;
+    const journalLines =
+      input.direction === 'DECREASE'
+        ? [
+            { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
+            { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
+          ]
+        : [
+            { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
+            { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
+          ];
 
-  await postJournalEntry({
-    businessId: input.businessId,
-    description: `Stock adjustment ${adjustment.id}`,
-    referenceType: 'STOCK_ADJUSTMENT',
-    referenceId: adjustment.id,
-    lines: journalLines
-  });
+    await postJournalEntry({
+      businessId: input.businessId,
+      description: `Stock adjustment ${adjustment.id}`,
+      referenceType: 'STOCK_ADJUSTMENT',
+      referenceId: adjustment.id,
+      lines: journalLines
+    });
+  };
+  bgWork().catch(() => {});
 
   return adjustment;
 }

@@ -23,7 +23,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     const auditAction = type === 'VOID' ? 'SALE_VOID' : 'SALE_RETURN';
 
     const deny = async (message: string, code: string) => {
-      await audit({
+      audit({
         businessId,
         userId: user.id,
         userName: user.name,
@@ -69,7 +69,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       type
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -113,7 +113,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       type
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
     revalidateTag('pos-products');
 

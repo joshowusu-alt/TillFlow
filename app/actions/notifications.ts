@@ -174,7 +174,7 @@ export async function sendEodSummaryAction(businessId: string, triggeredBy = 'CR
       select: { id: true, name: true, role: true },
     });
     if (owner) {
-      await audit({
+      audit({
         businessId,
         userId: owner.id,
         userName: owner.name,

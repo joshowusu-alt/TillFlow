@@ -61,7 +61,7 @@ export async function openShiftAction(
       return created;
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -199,7 +199,7 @@ export async function closeShiftAction(
       });
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -423,7 +423,7 @@ export async function closeShiftOwnerOverrideAction(
       });
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,

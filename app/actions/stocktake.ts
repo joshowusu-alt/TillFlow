@@ -50,7 +50,7 @@ export async function createStocktakeAction(): Promise<ActionResult<{ id: string
       },
     });
 
-    await audit({
+    audit({
       businessId: user.businessId,
       userId: user.id,
       userName: user.name,
@@ -159,7 +159,7 @@ export async function completeStocktakeAction(data: {
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
