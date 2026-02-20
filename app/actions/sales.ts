@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidateTag, revalidatePath } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
+import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
@@ -159,7 +160,9 @@ export async function completeSaleAction(data: {
   discountReason?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    // Skip the redundant business lookup — createSale validates it already
+    const user = await requireUser();
+    const businessId = user.businessId;
 
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
     const customerId = data.customerId || null;

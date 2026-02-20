@@ -57,8 +57,53 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error('No items in cart');
   }
 
-  // ── Batch 1: fire all independent lookups in parallel ─────────
-  const [business, store, productUnits] = await Promise.all([
+  // Pre-compute values available from input (no DB dependency)
+  const productIds = [...new Set(input.lines.map((l) => l.productId))];
+  const allAccountCodes = [
+    ACCOUNT_CODES.cash,
+    ACCOUNT_CODES.bank,
+    ACCOUNT_CODES.ar,
+    ACCOUNT_CODES.sales,
+    ACCOUNT_CODES.vatPayable,
+    ACCOUNT_CODES.cogs,
+    ACCOUNT_CODES.inventory,
+  ];
+  const hasMomoPayment = input.payments.some(
+    (p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0
+  );
+  const momoLookup =
+    hasMomoPayment && input.momoCollectionId
+      ? prisma.mobileMoneyCollection.findFirst({
+          where: {
+            id: input.momoCollectionId,
+            businessId: input.businessId,
+            storeId: input.storeId,
+            status: 'CONFIRMED',
+          },
+          select: {
+            id: true,
+            salesInvoiceId: true,
+            amountPence: true,
+            providerReference: true,
+            providerTransactionId: true,
+            network: true,
+            payerMsisdn: true,
+            provider: true,
+          },
+        })
+      : Promise.resolve(null);
+  const customerLookup = input.customerId
+    ? prisma.customer.findFirst({
+        where: { id: input.customerId, businessId: input.businessId },
+        select: { id: true, storeId: true },
+      })
+    : Promise.resolve(null);
+
+  // ── SINGLE BATCH: fire ALL lookups in parallel (was 5 sequential batches) ──
+  const [
+    business, store, productUnits, till, branchId, openShift,
+    accounts, inventoryMap, momoResult, customerResult,
+  ] = await Promise.all([
     prisma.business.findUnique({ where: { id: input.businessId } }),
     prisma.store.findFirst({
       where: { id: input.storeId, businessId: input.businessId },
@@ -69,39 +114,43 @@ export async function createSale(input: CreateSaleInput) {
         product: { businessId: input.businessId },
         OR: input.lines.map((line) => ({
           productId: line.productId,
-          unitId: line.unitId
-        }))
+          unitId: line.unitId,
+        })),
       },
-      include: { product: true, unit: true }
+      include: { product: true, unit: true },
     }),
-  ]);
-  if (!business) throw new Error('Business not found');
-  if (!store) throw new Error('Store not found');
-
-  // ── Batch 2: lookups that depend on store ─────────────────────
-  const [till, branchId, openShift, customerCheck] = await Promise.all([
     prisma.till.findFirst({
-      where: { id: input.tillId, storeId: store.id, active: true },
+      where: { id: input.tillId, storeId: input.storeId, active: true },
       select: { id: true },
     }),
-    resolveBranchIdForStore({ businessId: input.businessId, storeId: store.id }),
+    resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
     getOpenShiftForTill(input.businessId, input.tillId),
-    input.customerId
-      ? prisma.customer.findFirst({
-          where: {
-            id: input.customerId,
-            businessId: input.businessId,
-            ...(business.customerScope === 'BRANCH' ? { storeId: input.storeId } : {}),
-          },
-          select: { id: true },
-        })
-      : Promise.resolve(true),
+    prisma.account.findMany({
+      where: { businessId: input.businessId, code: { in: allAccountCodes } },
+    }),
+    fetchInventoryMap(input.storeId, productIds),
+    momoLookup,
+    customerLookup,
   ]);
+
+  if (!business) throw new Error('Business not found');
+  if (!store) throw new Error('Store not found');
   if (!till) throw new Error('Till not found');
   if (business.requireOpenTillForSales && !openShift) {
     throw new Error('Open till is required before recording sales.');
   }
-  if (input.customerId && !customerCheck) throw new Error('Customer not found');
+  if (input.customerId) {
+    if (!customerResult) throw new Error('Customer not found');
+    if (
+      (business as any).customerScope === 'BRANCH' &&
+      customerResult.storeId !== input.storeId
+    ) {
+      throw new Error('Customer not found');
+    }
+  }
+  const accountMap = new Map(
+    accounts.map((acc: { code: string; id: string }) => [acc.code, acc.id])
+  );
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
 
@@ -164,11 +213,6 @@ export async function createSale(input: CreateSaleInput) {
   });
 
   const qtyByProduct = buildQtyByProductMap(lineDetails);
-
-  const inventoryMap = await fetchInventoryMap(
-    input.storeId,
-    Array.from(qtyByProduct.keys())
-  );
 
   for (const [productId, qtyBase] of qtyByProduct.entries()) {
     const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
@@ -297,45 +341,6 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error('Customer is required for credit or part-paid sales');
   }
 
-  // Pre-fetch journal account map + MoMo collection in parallel BEFORE the transaction
-  const allAccountCodes = [
-    ACCOUNT_CODES.cash,
-    ACCOUNT_CODES.bank,
-    ACCOUNT_CODES.ar,
-    ACCOUNT_CODES.sales,
-    ACCOUNT_CODES.vatPayable,
-    ACCOUNT_CODES.cogs,
-    ACCOUNT_CODES.inventory,
-  ];
-  const momoCollectionPromise = (momoPaidPence > 0 && input.momoCollectionId)
-    ? prisma.mobileMoneyCollection.findFirst({
-        where: {
-          id: input.momoCollectionId,
-          businessId: input.businessId,
-          storeId: input.storeId,
-          status: 'CONFIRMED',
-        },
-        select: {
-          id: true,
-          salesInvoiceId: true,
-          amountPence: true,
-          providerReference: true,
-          providerTransactionId: true,
-          network: true,
-          payerMsisdn: true,
-          provider: true,
-        },
-      })
-    : Promise.resolve(null);
-
-  const [accounts, momoResult] = await Promise.all([
-    prisma.account.findMany({
-      where: { businessId: input.businessId, code: { in: allAccountCodes } },
-    }),
-    momoCollectionPromise,
-  ]);
-  const accountMap = new Map(accounts.map((acc: { code: string; id: string }) => [acc.code, acc.id]));
-
   if (momoPaidPence > 0) {
     if (!input.momoCollectionId) {
       throw new Error('Confirmed MoMo collection is required before checkout.');
@@ -366,7 +371,8 @@ export async function createSale(input: CreateSaleInput) {
     }
   }
 
-  const invoice = await prisma.$transaction(async (tx) => {
+  const invoice = await prisma.$transaction(
+    async (tx) => {
     const created = await tx.salesInvoice.create({
       data: {
         businessId: input.businessId,
@@ -439,20 +445,30 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     if (cashPence > 0 && openShift) {
+      const beforeCash = openShift.expectedCashPence ?? 0;
+      const afterCash = beforeCash + cashPence;
       txPromises.push(
-        recordCashDrawerEntryTx(tx, {
-          businessId: input.businessId,
-          storeId: input.storeId,
-          tillId: till.id,
-          shiftId: openShift.id,
-          createdByUserId: input.cashierUserId,
-          cashierUserId: input.cashierUserId,
-          entryType: 'CASH_SALE',
-          amountPence: cashPence,
-          reasonCode: 'SALE',
-          reason: 'Cash sale collected',
-          referenceType: 'SALES_INVOICE',
-          referenceId: created.id,
+        tx.cashDrawerEntry.create({
+          data: {
+            businessId: input.businessId,
+            storeId: input.storeId,
+            tillId: till.id,
+            shiftId: openShift.id,
+            createdByUserId: input.cashierUserId,
+            cashierUserId: input.cashierUserId,
+            entryType: 'CASH_SALE',
+            amountPence: cashPence,
+            reasonCode: 'SALE',
+            reason: 'Cash sale collected',
+            referenceType: 'SALES_INVOICE',
+            referenceId: created.id,
+            beforeExpectedCashPence: beforeCash,
+            afterExpectedCashPence: afterCash,
+          },
+        }),
+        tx.shift.update({
+          where: { id: openShift.id },
+          data: { expectedCashPence: afterCash },
         }),
       );
     }
@@ -517,7 +533,9 @@ export async function createSale(input: CreateSaleInput) {
     await Promise.all(txPromises);
 
     return created;
-  });
+  },
+  { maxWait: 10000, timeout: 15000 },
+  );
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale
   detectExcessiveDiscountRisk({
