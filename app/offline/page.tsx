@@ -53,6 +53,12 @@ export default function OfflinePage() {
           >
             Go to POS →
           </a>
+          <a
+            href="/offline/sales"
+            className="rounded-xl border-2 border-accent/20 px-6 py-3 font-semibold text-accent text-center hover:bg-accent/5 min-h-[44px] flex items-center justify-center"
+          >
+            View Pending Sales
+          </a>
           <button
             onClick={() => window.location.reload()}
             className="rounded-xl border-2 border-accent/20 px-6 py-3 font-semibold text-accent hover:bg-accent/5 min-h-[44px]"

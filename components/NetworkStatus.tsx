@@ -227,10 +227,19 @@ export default function NetworkStatus() {
                         </div>
                     )}
 
+                    {pendingCount > 0 && (
+                        <a
+                            href="/offline/sales"
+                            className="mt-3 block w-full rounded-lg border border-black/10 px-3 py-2 text-center text-xs font-semibold text-black/70 hover:bg-black/5 transition-colors"
+                        >
+                            View &amp; Amend Pending Sales
+                        </a>
+                    )}
+
                     {online && pendingCount > 0 && !syncing && (
                         <button
                             onClick={handleSync}
-                            className="mt-3 w-full rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/80 transition-colors"
+                            className="mt-2 w-full rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/80 transition-colors"
                         >
                             Sync {pendingCount} pending sale{pendingCount !== 1 ? 's' : ''} now
                         </button>
