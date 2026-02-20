@@ -113,7 +113,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         lines
       });
 
-      await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } });
+      audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }).catch(() => {});
 
       revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
@@ -247,7 +247,8 @@ export async function completeSaleAction(data: {
       lines,
     });
 
-    await audit({
+    // Fire-and-forget: audit + cache revalidation should not block the cashier
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -256,7 +257,7 @@ export async function completeSaleAction(data: {
       entity: 'SalesInvoice',
       entityId: invoice.id,
       details: { lines: lines.length, total: invoice.totalPence },
-    });
+    }).catch(() => {});
 
     revalidateTag('pos-products');
     revalidatePath('/onboarding');
@@ -272,6 +273,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
     const reason = formString(formData, 'reason') || 'Sale amended';
     const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
+    const additionalPaymentMethod = (formString(formData, 'additionalPaymentMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 
     let keepLineIds: string[] = [];
     const keepRaw = formData.get('keepLineIds');
@@ -286,16 +288,37 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       }
     }
 
+    let newLines: { productId: string; unitId: string; qtyInUnit: number }[] = [];
+    const newLinesRaw = formData.get('newLines');
+    if (newLinesRaw) {
+      try {
+        const parsed = JSON.parse(String(newLinesRaw));
+        if (Array.isArray(parsed)) {
+          newLines = parsed
+            .filter((l: any) => l.productId && l.unitId && l.qtyInUnit > 0)
+            .map((l: any) => ({
+              productId: String(l.productId),
+              unitId: String(l.unitId),
+              qtyInUnit: Number(l.qtyInUnit),
+            }));
+        }
+      } catch {
+        newLines = [];
+      }
+    }
+
     const result = await amendSale({
       salesInvoiceId,
       businessId,
       userId: user.id,
       reason,
       keepLineIds,
+      newLines: newLines.length > 0 ? newLines : undefined,
       refundMethod,
+      additionalPaymentMethod,
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -309,8 +332,10 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
         after: result.after,
         refundAmount: result.refundAmount,
         refundMethod: result.refundMethod,
+        additionalPaymentNeeded: result.additionalPaymentNeeded,
+        additionalPaymentMethod: result.additionalPaymentMethod,
       },
-    });
+    }).catch(() => {});
 
     revalidateTag('pos-products');
 
