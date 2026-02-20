@@ -343,11 +343,24 @@ export default async function DashboardPage({
         <StatCard
           label={`Gross Profit (${gpPercent}%)`}
           value={formatMoney(totalGrossMargin, currency)}
-          tone={gpPercent >= 20 ? 'success' : 'warn'}
+          tone={gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger'}
         />
         <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} />
         <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} />
       </div>
+
+      {/* Data-quality warning: extremely negative GP almost always means wrong cost prices */}
+      {gpPercent < -50 && totalSales > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">⚠ Gross margin looks unusual ({gpPercent}%)</p>
+          <p className="mt-0.5 text-amber-700">
+            A margin this negative usually means product cost prices are set much higher than selling prices —
+            possibly entered in whole {currency} instead of pesewas/cents, or a cost per case was applied to
+            individual units. Go to <a href="/products" className="underline font-medium">Products</a> and
+            review <strong>cost price</strong> for your top-selling items.
+          </p>
+        </div>
+      )}
 
       {/* Payment split + Activity highlights */}
       <div className="grid gap-6 lg:grid-cols-2">

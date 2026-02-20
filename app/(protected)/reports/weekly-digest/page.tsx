@@ -84,7 +84,7 @@ export default async function WeeklyDigestPage({
         <StatCard
           label={`Gross Profit (${data.gpPercent}%)`}
           value={formatMoney(data.grossProfitPence, currency)}
-          tone={data.gpPercent >= 20 ? 'success' : 'warn'}
+          tone={data.gpPercent >= 20 ? 'success' : data.gpPercent >= 0 ? 'warn' : 'danger'}
           helper={`${gpChange} vs prev week`}
         />
         <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
@@ -93,6 +93,18 @@ export default async function WeeklyDigestPage({
           value={formatMoney(data.txCount > 0 ? Math.round(data.totalSalesPence / data.txCount) : 0, currency)}
         />
       </div>
+
+      {/* Data-quality warning for extremely negative GP */}
+      {data.gpPercent < -50 && data.totalSalesPence > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">⚠ Gross margin looks unusual ({data.gpPercent}%)</p>
+          <p className="mt-0.5 text-amber-700">
+            A margin this negative usually means product cost prices are set much higher than selling prices.
+            Go to <a href="/products" className="underline font-medium">Products</a> and review the{' '}
+            <strong>cost price</strong> for your top-selling items to correct this.
+          </p>
+        </div>
+      )}
 
       {/* Week-over-Week Comparison */}
       <div className="card p-4">
