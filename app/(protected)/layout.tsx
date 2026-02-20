@@ -13,6 +13,24 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     select: { id: true, name: true }
   });
 
+  // Live sales counter — always fetch so MANAGER/OWNER can see today's pulse
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todaySalesAgg = await prisma.salesInvoice.aggregate({
+    where: {
+      businessId: business.id,
+      createdAt: { gte: todayStart },
+      paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+    },
+    _sum: { totalPence: true },
+    _count: { id: true },
+  });
+  const todaySales = {
+    totalPence: todaySalesAgg._sum.totalPence ?? 0,
+    txCount: todaySalesAgg._count.id,
+    currency: business.currency,
+  };
+
   // Show onboarding banner when onboarding is not complete
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
@@ -44,6 +62,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
         momoEnabled={!!business.momoEnabled}
+        todaySales={todaySales}
       />
 
       {/* Setup banner for owners who haven't completed onboarding */}

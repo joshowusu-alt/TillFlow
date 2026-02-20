@@ -1533,6 +1533,7 @@ export default function PosClient({
               <div className="divide-y divide-black/5">
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
+                  const availBase = getAvailableBase(line.productId, line.id);
                   return (
                     <div
                       key={line.id}
@@ -1548,6 +1549,11 @@ export default function PosClient({
                           <span className="text-xs text-black/40">{formatMoney(line.unitPrice, business.currency)} × {line.unit.name}</span>
                           {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
                           {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
+                          {availBase <= 10 && (
+                            <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
+                              {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">

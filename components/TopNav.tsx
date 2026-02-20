@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { logout } from '@/app/actions/auth';
 import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
 import InstallButton from './InstallButton';
+import { formatMoney } from '@/lib/format';
 
 const navGroups = [
   {
@@ -82,12 +83,14 @@ export default function TopNav({
   storeMode,
   storeName,
   momoEnabled,
+  todaySales,
 }: {
   user: TopNavUser;
   mode?: BusinessMode;
   storeMode?: StoreMode;
   storeName?: string;
   momoEnabled?: boolean;
+  todaySales?: { totalPence: number; txCount: number; currency: string };
 }) {
   const pathname = usePathname();
   const features = getFeatures(mode ?? 'SIMPLE', storeMode ?? 'SINGLE_STORE');
@@ -237,6 +240,12 @@ export default function TopNav({
             <div className="text-gray-500 uppercase tracking-[0.15em]">
               {user.role}{storeName ? ` · ${storeName}` : ''}
             </div>
+            {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') && (
+              <div className="text-gray-400 tabular-nums">
+                {formatMoney(todaySales.totalPence, todaySales.currency)}
+                {' · '}{todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+              </div>
+            )}
           </div>
           <form action={logout} className="hidden sm:block">
             <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
