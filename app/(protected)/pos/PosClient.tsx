@@ -1894,68 +1894,17 @@ export default function PosClient({
                     placeholder="Payer number (e.g. 024xxxxxxx)"
                   />
                   {momoCollectionStatus === 'IDLE' ? (
-                    <div className="mt-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800 space-y-0.5">
-                      <div className="font-semibold">How MoMo works:</div>
-                      <ol className="list-decimal pl-4 space-y-0.5">
-                        <li>Enter the customer&apos;s MoMo number above</li>
-                        <li>Click &quot;Request MoMo Collection&quot; to send a prompt</li>
-                        <li>Customer approves the payment on their phone</li>
-                        <li>Status changes to CONFIRMED when done</li>
-                      </ol>
+                    <div className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800">
+                      Enter the MoMo amount and payer number, then complete the sale. Verify the customer&apos;s payment confirmation on their phone before handing over goods.
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn-secondary mt-1.5 w-full text-xs"
-                    onClick={() => handleInitiateMomoCollection().catch(() => null)}
-                    disabled={
-                      isInitiatingMomo ||
-                      !momoMethodEnabled ||
-                      parseCurrencyToPence(momoPaid) <= 0 ||
-                      !momoPayerMsisdn.trim()
-                    }
-                  >
-                    {isInitiatingMomo ? 'Requesting collection...' : 'Request MoMo Collection'}
-                  </button>
-                  <div className="mt-1.5 text-[11px] text-black/60">
-                    Status:{' '}
-                    <span
-                      className={
-                        momoCollectionStatus === 'CONFIRMED'
-                          ? 'font-semibold text-emerald-700'
-                          : momoCollectionStatus === 'PENDING'
-                            ? 'font-semibold text-amber-700'
-                            : momoCollectionStatus === 'FAILED' || momoCollectionStatus === 'TIMEOUT'
-                              ? 'font-semibold text-rose-700'
-                              : 'font-semibold text-black/50'
-                      }
-                    >
-                      {momoCollectionStatus}
-                    </span>
-                    {momoRef ? ` | Ref: ${momoRef}` : ''}
-                  </div>
-                  {momoCollectionError ? (
-                    <div className="mt-1.5 space-y-1">
-                      <div className="text-[11px] font-medium text-rose-700">
-                        {['credential', 'api key', 'unauthorized', 'not configured', 'subscription', '401', '403'].some(
-                          (kw) => momoCollectionError.toLowerCase().includes(kw)
-                        )
-                          ? 'MoMo is not connected. Ask your admin to connect MTN MoMo in Settings.'
-                          : momoCollectionError}
-                      </div>
-                      {['credential', 'api key', 'unauthorized', 'not configured', '401', '403'].some(
-                        (kw) => momoCollectionError.toLowerCase().includes(kw)
-                      ) ? (
-                        <Link href="/settings" className="text-[11px] text-emerald-600 underline">
-                          Go to Settings
-                        </Link>
-                      ) : null}
-                      <details className="text-[10px] text-black/40">
-                        <summary className="cursor-pointer hover:text-black/60">Show technical details</summary>
-                        <pre className="mt-1 whitespace-pre-wrap break-all">{momoCollectionError}</pre>
-                      </details>
-                    </div>
-                  ) : null}
+                  <input
+                    className="input mt-1.5"
+                    type="text"
+                    value={momoRef}
+                    onChange={(e) => setMomoRef(e.target.value)}
+                    placeholder="Transaction ref (optional)"
+                  />
                 </div>
               )}
             </div>
@@ -1973,8 +1922,8 @@ export default function PosClient({
               </div>
             )}
             {needsMomoConfirmation && !momoConfirmed && (
-              <div className="text-sm text-black/50 font-medium">
-                MoMo payment will be recorded manually (provider not yet connected).
+              <div className="text-sm text-emerald-700 font-medium">
+                ✓ MoMo payment will be recorded. Verify customer&apos;s receipt before completing.
               </div>
             )}
             {requiresDiscountApproval && !discountApprovalReady && (
