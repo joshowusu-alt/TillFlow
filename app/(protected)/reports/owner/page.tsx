@@ -98,12 +98,14 @@ export default async function OwnerIntelligencePage() {
         />
         <div className="flex items-center gap-2 flex-shrink-0">
           <RefreshIndicator fetchedAt={brief.generatedAt} autoRefreshMs={60_000} />
-          <Link
-            href="/reports/owner/export"
+          <a
+            href="/reports/owner/export?format=html"
+            target="_blank"
+            rel="noopener noreferrer"
             className="btn-secondary text-sm"
           >
             Export Brief
-          </Link>
+          </a>
         </div>
       </div>
 
@@ -203,6 +205,20 @@ export default async function OwnerIntelligencePage() {
           value={formatMoney(kpis.outstandingAPPence, currency)}
         />
       </div>
+
+      {/* Data-quality warning: extremely negative GP means wrong cost prices */}
+      {kpis.gpPercent < -50 && kpis.totalSalesPence > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-semibold">⚠ Gross margin looks unusual ({kpis.gpPercent}%)</p>
+          <p className="mt-0.5 text-amber-700">
+            A margin this negative usually means product cost prices are set much higher than selling prices —
+            possibly entered in whole {currency} instead of minor units, or a per-case cost was applied to
+            individual units. Go to{' '}
+            <Link href="/products" className="underline font-medium">Products</Link>{' '}
+            and review the <strong>cost price</strong> for your top-selling items.
+          </p>
+        </div>
+      )}
 
       {/* 7-Day Cash Forecast Mini */}
       <div className="card p-4">
@@ -381,12 +397,12 @@ export default async function OwnerIntelligencePage() {
           <p className="text-xs text-muted">Print or save a snapshot of today's business health.</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/reports/owner/export?format=html" className="btn-secondary text-sm">
-            Print View
-          </Link>
-          <Link href="/reports/owner/export?format=csv" className="btn-secondary text-sm">
+          <a href="/reports/owner/export?format=html" target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm">
+            Print / Save PDF
+          </a>
+          <a href="/reports/owner/export?format=csv" className="btn-secondary text-sm">
             Export CSV
-          </Link>
+          </a>
         </div>
       </div>
     </div>
