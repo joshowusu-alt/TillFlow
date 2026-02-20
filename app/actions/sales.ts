@@ -178,9 +178,12 @@ export async function completeSaleAction(data: {
     }
     let discountApprovedByUserId: string | null = null;
 
-    if (momoPaid > 0 && !data.momoCollectionId) {
-      return { success: false, error: 'Confirm MoMo payment before completing sale.' };
-    }
+    // MoMo collection API not yet integrated — allow sales without a
+    // confirmed collectionId.  Staff verify receipts manually; reconciliation
+    // catches discrepancies at end-of-day.
+    // if (momoPaid > 0 && !data.momoCollectionId) {
+    //   return { success: false, error: 'Confirm MoMo payment before completing sale.' };
+    // }
 
     if (discountManagerPin) {
       const approvedBy = await verifyManagerPin({ businessId, pin: discountManagerPin });
