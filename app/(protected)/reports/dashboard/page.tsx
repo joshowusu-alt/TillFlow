@@ -300,6 +300,37 @@ export default async function DashboardPage({
   const fromIso = start.toISOString().slice(0, 10);
   const toIso = end.toISOString().slice(0, 10);
 
+  // Live status: last sale time today and open shift count
+  const [lastSaleRecord, openShifts] = await Promise.all([
+    prisma.salesInvoice.findFirst({
+      where: {
+        businessId: business.id,
+        ...storeFilter,
+        createdAt: { gte: todayStart },
+        paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+    prisma.shift.findMany({
+      where: {
+        till: {
+          store: {
+            businessId: business.id,
+            ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
+          },
+        },
+        closedAt: null,
+      },
+      select: { id: true, user: { select: { name: true } } },
+      take: 20,
+    }),
+  ]);
+  const lastSaleMinutesAgo = lastSaleRecord
+    ? Math.floor((Date.now() - lastSaleRecord.createdAt.getTime()) / 60_000)
+    : null;
+  const activeCashierCount = openShifts.length;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -336,6 +367,35 @@ export default async function DashboardPage({
           <button className="btn-secondary w-full" type="submit">Apply</button>
         </div>
       </form>
+
+      {/* Live status bar — today's pulse at a glance (only when viewing today) */}
+      {isToday && (
+        <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
+            <span className={`h-2 w-2 flex-shrink-0 rounded-full ${lastSaleRecord ? 'bg-success animate-pulse' : 'bg-black/20'}`} />
+            <span className="text-black/50">Last sale</span>
+            <span className="font-semibold text-ink">
+              {lastSaleMinutesAgo === null
+                ? 'No sales today yet'
+                : lastSaleMinutesAgo === 0
+                ? 'Just now'
+                : lastSaleMinutesAgo < 60
+                ? `${lastSaleMinutesAgo}m ago`
+                : `${Math.floor(lastSaleMinutesAgo / 60)}h ${lastSaleMinutesAgo % 60}m ago`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
+            <span className="text-black/50">Active cashiers</span>
+            <span className="font-semibold text-ink">{activeCashierCount}</span>
+            {activeCashierCount > 0 && (
+              <span className="text-black/40">
+                {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
+                {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

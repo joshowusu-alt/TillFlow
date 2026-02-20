@@ -64,6 +64,17 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
   const [overrideJustification, setOverrideJustification] = useState('');
   const isOwner = userRole === 'OWNER';
 
+  type ClosedSummary = {
+    tillName: string;
+    salesCount: number;
+    cashSalesPence: number;
+    floatRetainedPence: number;
+    handoverPence: number;
+    actualCashPence: number;
+    variancePence: number;
+  };
+  const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
+
   const handleOpenShift = () => {
     setError(null);
     const formData = new FormData();
@@ -91,6 +102,17 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
     formData.set('varianceReasonCode', varianceReasonCode);
     formData.set('varianceReason', varianceReason);
 
+    // Capture summary before data disappears on refresh
+    const summarySnapshot: ClosedSummary = {
+      tillName: openShift.till.name,
+      salesCount: openShift.salesCount,
+      cashSalesPence: openShift.cashByType?.CASH_SALE ?? 0,
+      floatRetainedPence: openShift.openingCashPence,
+      handoverPence: Math.max(0, openShift.expectedCash - openShift.openingCashPence),
+      actualCashPence: Math.round(Number(actualCash) * 100),
+      variancePence: Math.round(Number(actualCash) * 100) - openShift.expectedCash,
+    };
+
     if (showOwnerOverride) {
       formData.set('ownerPassword', ownerPassword);
       formData.set('overrideReasonCode', overrideReasonCode);
@@ -116,6 +138,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
         setOverrideReasonCode('');
         setOverrideJustification('');
         setShowOwnerOverride(false);
+        setClosedSummary(summarySnapshot);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
@@ -211,6 +234,42 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
           </div>
         </div>
       ) : (
+        <>
+        {closedSummary && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✓</span>
+                <div>
+                  <div className="font-semibold text-emerald-800">Shift Closed — {closedSummary.tillName}</div>
+                  <div className="text-xs text-emerald-600">{closedSummary.salesCount} transaction{closedSummary.salesCount !== 1 ? 's' : ''} during shift</div>
+                </div>
+              </div>
+              <button type="button" className="text-emerald-400 hover:text-emerald-600 text-xs" onClick={() => setClosedSummary(null)}>Dismiss</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                <div className="text-[10px] uppercase tracking-wider text-black/40">Cash Sales</div>
+                <div className="font-bold text-lg">{formatMoney(closedSummary.cashSalesPence, currency)}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3 border border-blue-100">
+                <div className="text-[10px] uppercase tracking-wider text-blue-400">Handover to Safe</div>
+                <div className="font-bold text-lg text-blue-700">{formatMoney(closedSummary.handoverPence, currency)}</div>
+                <div className="text-[10px] text-black/40">Float retained: {formatMoney(closedSummary.floatRetainedPence, currency)}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3 border border-black/10">
+                <div className="text-[10px] uppercase tracking-wider text-black/40">Variance</div>
+                <div className={`font-bold text-lg ${
+                  closedSummary.variancePence === 0 ? 'text-emerald-700' :
+                  closedSummary.variancePence > 0 ? 'text-accent' : 'text-rose-600'
+                }`}>
+                  {closedSummary.variancePence >= 0 ? '+' : ''}{formatMoney(closedSummary.variancePence, currency)}
+                </div>
+                <div className="text-[10px] text-black/40">Counted: {formatMoney(closedSummary.actualCashPence, currency)}</div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Start New Shift</h2>
           <p className="mt-1 text-sm text-black/60">
@@ -256,6 +315,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
             </div>
           </div>
         </div>
+        </>
       )}
 
       <div className="card p-6">
@@ -385,6 +445,21 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency, 
                 </span>
               </div>
             </div>
+
+            {/* Handover summary — float stays in drawer for the next shift */}
+            {openShift.openingCashPence > 0 && (
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
+                <div className="flex justify-between text-sm text-black/60">
+                  <span>Retain in drawer (opening float)</span>
+                  <span className="font-semibold">&minus;&nbsp;{formatMoney(openShift.openingCashPence, currency)}</span>
+                </div>
+                <div className="flex justify-between border-t border-blue-200 pt-1.5 text-sm font-bold text-blue-700">
+                  <span>Hand to safe / manager ↑</span>
+                  <span>{formatMoney(Math.max(0, openShift.expectedCash - openShift.openingCashPence), currency)}</span>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4">
               <label className="label">Actual Cash Counted</label>
