@@ -12,7 +12,7 @@ const PAGE_SIZE = 25;
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams?: { q?: string; page?: string; storeId?: string };
+  searchParams?: { q?: string; page?: string; storeId?: string; from?: string; to?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
@@ -27,6 +27,8 @@ export default async function SalesPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const fromParam = searchParams?.from ?? '';
+  const toParam = searchParams?.to ?? '';
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
     select: { id: true, name: true },
@@ -37,10 +39,22 @@ export default async function SalesPage({
       ? searchParams.storeId
       : 'ALL';
 
+  // Build date range filter
+  const dateFilter: { gte?: Date; lte?: Date } = {};
+  if (fromParam) {
+    const d = new Date(fromParam);
+    if (!isNaN(d.getTime())) dateFilter.gte = d;
+  }
+  if (toParam) {
+    const d = new Date(toParam + 'T23:59:59.999');
+    if (!isNaN(d.getTime())) dateFilter.lte = d;
+  }
+
   const where = {
     businessId: business.id,
     ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
     ...(q ? { customer: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
+    ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
   };
 
   const [totalCount, sales] = await Promise.all([
@@ -86,6 +100,14 @@ export default async function SalesPage({
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="label">From</label>
+            <input className="input" type="date" name="from" defaultValue={fromParam} />
+          </div>
+          <div>
+            <label className="label">To</label>
+            <input className="input" type="date" name="to" defaultValue={toParam} />
           </div>
           <div>
             <label className="label">Customer</label>
@@ -166,11 +188,9 @@ export default async function SalesPage({
                           returnTo="/sales"
                         />
                       )}
-                      {sale._count.lines > 1 && (
-                        <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
-                          Amend
-                        </Link>
-                      )}
+                      <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
+                        Amend
+                      </Link>
                       <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                         Return
                       </Link>
@@ -188,6 +208,8 @@ export default async function SalesPage({
           searchParams={{
             q: q || undefined,
             storeId: selectedStoreId === 'ALL' ? undefined : selectedStoreId,
+            from: fromParam || undefined,
+            to: toParam || undefined,
           }}
         />
       </div>
