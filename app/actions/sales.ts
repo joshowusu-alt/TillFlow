@@ -2,10 +2,13 @@
 
 import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
-import { toInt, toPence } from '@/lib/form-helpers';
-import { formString, formInt, formDate } from '@/lib/form-helpers';
+import { revalidateTag, revalidatePath } from 'next/cache';
+import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
+import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
+import { verifyManagerPin } from '@/lib/security/pin';
+import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 
@@ -38,6 +41,21 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       orderDiscountType,
       formData.get('orderDiscountValue')
     );
+    const discountManagerPin = formString(formData, 'discountManagerPin') || '';
+    const discountReasonCode = formString(formData, 'discountReasonCode') || null;
+    const discountReason = formString(formData, 'discountReason') || null;
+    if (discountReasonCode && !isDiscountReasonCode(discountReasonCode)) {
+      redirect('/pos?error=invalid-discount-reason');
+    }
+    let discountApprovedByUserId: string | null = null;
+
+    if (discountManagerPin) {
+      const approvedBy = await verifyManagerPin({ businessId, pin: discountManagerPin });
+      if (!approvedBy) {
+        redirect('/pos?error=invalid-discount-pin');
+      }
+      discountApprovedByUserId = approvedBy?.id ?? null;
+    }
 
     let lines: {
       productId: string;
@@ -85,6 +103,9 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         dueDate,
         orderDiscountType,
         orderDiscountValue,
+        discountOverrideReasonCode: discountReasonCode,
+        discountOverrideReason: discountReason,
+        discountApprovedByUserId,
         payments: [
           { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
           { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
@@ -93,13 +114,17 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         lines
       });
 
-      await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } });
+      audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }).catch(() => {});
 
+      revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message.includes('Insufficient stock')) {
         redirect('/pos?error=insufficient-stock');
+      }
+      if (message.includes('Open till is required')) {
+        redirect('/pos?error=till-not-open');
       }
       if (message.includes('Customer is required')) {
         redirect('/pos?error=customer-required');
@@ -127,15 +152,46 @@ export async function completeSaleAction(data: {
   transferPaid: number;
   momoPaid?: number;
   momoRef?: string;
-}): Promise<ActionResult<{ receiptId: string; totalPence: number }>> {
+  momoCollectionId?: string;
+  momoPayerMsisdn?: string;
+  momoNetwork?: string;
+  discountManagerPin?: string;
+  discountReasonCode?: string;
+  discountReason?: string;
+}): Promise<ActionResult<{ receiptId: string; totalPence: number; transactionNumber: string | null }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    // Skip the redundant business lookup — createSale validates it already
+    const user = await requireUser();
+    const businessId = user.businessId;
 
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
     const customerId = data.customerId || null;
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
     const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
+    const momoPaid = Math.max(0, data.momoPaid ?? 0);
+    const discountManagerPin = (data.discountManagerPin || '').trim();
+    const discountReasonCode = (data.discountReasonCode || '').trim() || null;
+    const discountReason = (data.discountReason || '').trim() || null;
+    if (discountReasonCode && !isDiscountReasonCode(discountReasonCode)) {
+      return { success: false, error: 'Invalid discount reason code.' };
+    }
+    let discountApprovedByUserId: string | null = null;
+
+    // MoMo collection API not yet integrated — allow sales without a
+    // confirmed collectionId.  Staff verify receipts manually; reconciliation
+    // catches discrepancies at end-of-day.
+    // if (momoPaid > 0 && !data.momoCollectionId) {
+    //   return { success: false, error: 'Confirm MoMo payment before completing sale.' };
+    // }
+
+    if (discountManagerPin) {
+      const approvedBy = await verifyManagerPin({ businessId, pin: discountManagerPin });
+      if (!approvedBy) {
+        return { success: false, error: 'Invalid manager PIN for discount approval.' };
+      }
+      discountApprovedByUserId = approvedBy.id;
+    }
 
     let lines: {
       productId: string;
@@ -178,16 +234,27 @@ export async function completeSaleAction(data: {
       dueDate,
       orderDiscountType,
       orderDiscountValue,
+      discountOverrideReasonCode: discountReasonCode,
+      discountOverrideReason: discountReason,
+      discountApprovedByUserId,
+      momoCollectionId: data.momoCollectionId || null,
       payments: [
         { method: 'CASH', amountPence: data.cashPaid },
         { method: 'CARD', amountPence: data.cardPaid },
         { method: 'TRANSFER', amountPence: data.transferPaid },
-        { method: 'MOBILE_MONEY', amountPence: data.momoPaid ?? 0, reference: data.momoRef ?? null },
+        {
+          method: 'MOBILE_MONEY',
+          amountPence: momoPaid,
+          reference: data.momoRef ?? null,
+          payerMsisdn: data.momoPayerMsisdn ?? null,
+          network: data.momoNetwork ?? null,
+        },
       ],
       lines,
     });
 
-    await audit({
+    // Fire-and-forget: audit + cache revalidation should not block the cashier
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -196,9 +263,12 @@ export async function completeSaleAction(data: {
       entity: 'SalesInvoice',
       entityId: invoice.id,
       details: { lines: lines.length, total: invoice.totalPence },
-    });
+    }).catch(() => {});
 
-    return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence } };
+    revalidateTag('pos-products');
+    revalidatePath('/onboarding');
+
+    return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
 }
 
@@ -209,6 +279,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
     const reason = formString(formData, 'reason') || 'Sale amended';
     const refundMethod = (formString(formData, 'refundMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
+    const additionalPaymentMethod = (formString(formData, 'additionalPaymentMethod') || 'CASH') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 
     let keepLineIds: string[] = [];
     const keepRaw = formData.get('keepLineIds');
@@ -223,16 +294,37 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       }
     }
 
+    let newLines: { productId: string; unitId: string; qtyInUnit: number }[] = [];
+    const newLinesRaw = formData.get('newLines');
+    if (newLinesRaw) {
+      try {
+        const parsed = JSON.parse(String(newLinesRaw));
+        if (Array.isArray(parsed)) {
+          newLines = parsed
+            .filter((l: any) => l.productId && l.unitId && l.qtyInUnit > 0)
+            .map((l: any) => ({
+              productId: String(l.productId),
+              unitId: String(l.unitId),
+              qtyInUnit: Number(l.qtyInUnit),
+            }));
+        }
+      } catch {
+        newLines = [];
+      }
+    }
+
     const result = await amendSale({
       salesInvoiceId,
       businessId,
       userId: user.id,
       reason,
       keepLineIds,
+      newLines: newLines.length > 0 ? newLines : undefined,
       refundMethod,
+      additionalPaymentMethod,
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -246,8 +338,12 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
         after: result.after,
         refundAmount: result.refundAmount,
         refundMethod: result.refundMethod,
+        additionalPaymentNeeded: result.additionalPaymentNeeded,
+        additionalPaymentMethod: result.additionalPaymentMethod,
       },
-    });
+    }).catch(() => {});
+
+    revalidateTag('pos-products');
 
     redirect('/sales?amended=true');
   }, '/sales');

@@ -29,7 +29,8 @@ export async function postJournalEntry({
   referenceId,
   entryDate,
   lines,
-  prismaClient
+  prismaClient,
+  accountMap: preloadedAccountMap
 }: {
   businessId: string;
   description: string;
@@ -38,13 +39,18 @@ export async function postJournalEntry({
   entryDate?: Date;
   lines: JournalLineInput[];
   prismaClient?: PrismaClient;
+  /** Pre-fetched account code → id map. Skips the DB lookup when provided. */
+  accountMap?: Map<string, string>;
 }) {
   const client = prismaClient ?? prisma;
-  const accounts = await client.account.findMany({
-    where: { businessId, code: { in: lines.map((line) => line.accountCode) } }
-  });
 
-  const accountMap = new Map(accounts.map((acc) => [acc.code, acc.id]));
+  let accountMap = preloadedAccountMap;
+  if (!accountMap) {
+    const accounts = await client.account.findMany({
+      where: { businessId, code: { in: lines.map((line) => line.accountCode) } }
+    });
+    accountMap = new Map(accounts.map((acc) => [acc.code, acc.id]));
+  }
   const totals = lines.reduce(
     (acc, line) => {
       acc.debit += line.debitPence ?? 0;

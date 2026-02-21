@@ -3,125 +3,146 @@
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { requireRole } from '@/lib/auth';
 import { audit } from '@/lib/audit';
+import { hashApprovalPin } from '@/lib/security/pin';
+import { withBusinessContext, formAction, err } from '@/lib/action-utils';
+import { formString, formOptionalString } from '@/lib/form-helpers';
 
-export async function createUserAction(formData: FormData) {
-  const owner = await requireRole(['OWNER']);
+export async function createUserAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user: owner, businessId } = await withBusinessContext(['OWNER']);
 
-  const name = String(formData.get('name') || '').trim();
-  const email = String(formData.get('email') || '').toLowerCase().trim();
-  const password = String(formData.get('password') || '');
-  const role = String(formData.get('role') || 'CASHIER');
+    const name = formString(formData, 'name');
+    const email = formString(formData, 'email').toLowerCase();
+    const password = String(formData.get('password') || '');
+    const approvalPin = formString(formData, 'approvalPin');
+    const role = formString(formData, 'role') || 'CASHIER';
 
-  if (!name || !email || !password) {
-    redirect('/users?error=missing');
-  }
+    if (!name || !email || !password) return err('Name, email, and password are required.');
+    if (password.length < 6) return err('Password must be at least 6 characters.');
 
-  if (password.length < 6) {
-    redirect('/users?error=password_short');
-  }
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return err('A user with that email already exists.');
 
-  // Check for duplicate email
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    redirect('/users?error=duplicate');
-  }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const approvalPinHash = approvalPin ? await hashApprovalPin(approvalPin) : null;
 
-  const passwordHash = await bcrypt.hash(password, 10);
+    const created = await prisma.user.create({
+      data: { businessId, name, email, passwordHash, approvalPinHash, role, active: true },
+      select: { id: true },
+    });
 
-  await prisma.user.create({
-    data: {
-      businessId: owner.businessId,
-      name,
-      email,
-      passwordHash,
-      role,
-      active: true,
-    },
-  });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } });
 
-  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', details: { name, email, role } });
-
-  redirect('/users?success=created');
+    redirect('/users?success=created');
+  }, '/users');
 }
 
-export async function updateUserAction(formData: FormData) {
-  const owner = await requireRole(['OWNER']);
+export async function updateUserAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user: owner, businessId } = await withBusinessContext(['OWNER']);
 
-  const userId = String(formData.get('userId') || '');
-  const name = String(formData.get('name') || '').trim();
-  const email = String(formData.get('email') || '').toLowerCase().trim();
-  const role = String(formData.get('role') || 'CASHIER');
-  const active = formData.get('active') === 'on';
-  const newPassword = String(formData.get('newPassword') || '');
+    const userId = formString(formData, 'userId');
+    const name = formString(formData, 'name');
+    const email = formString(formData, 'email').toLowerCase();
+    const role = formString(formData, 'role') || 'CASHIER';
+    const active = formData.get('active') === 'on';
+    const newPassword = String(formData.get('newPassword') || '');
+    const newApprovalPin = formString(formData, 'newApprovalPin');
 
-  if (!userId || !name || !email) {
-    redirect('/users?error=missing');
-  }
+    if (!userId || !name || !email) return err('User ID, name, and email are required.');
 
-  const targetUser = await prisma.user.findFirst({
-    where: { id: userId, businessId: owner.businessId },
-    select: { id: true },
-  });
-  if (!targetUser) {
-    redirect('/users?error=not_found');
-  }
+    const targetUser = await prisma.user.findFirst({
+      where: { id: userId, businessId },
+      select: { id: true },
+    });
+    if (!targetUser) return err('User not found. They may have been removed.');
 
-  // Check for duplicate email (excluding this user)
-  const existing = await prisma.user.findFirst({
-    where: { email, NOT: { id: targetUser.id } },
-  });
-  if (existing) {
-    redirect('/users?error=duplicate');
-  }
+    const duplicate = await prisma.user.findFirst({
+      where: { email, NOT: { id: targetUser.id } },
+      select: { id: true },
+    });
+    if (duplicate) return err('A user with that email already exists.');
 
-  const data: Record<string, unknown> = { name, email, role, active };
+    const data: Record<string, unknown> = { name, email, role, active };
 
-  if (newPassword) {
-    if (newPassword.length < 6) {
-      redirect('/users?error=password_short');
+    if (newPassword) {
+      if (newPassword.length < 6) return err('Password must be at least 6 characters.');
+      data.passwordHash = await bcrypt.hash(newPassword, 10);
     }
-    data.passwordHash = await bcrypt.hash(newPassword, 10);
-  }
+    if (newApprovalPin) {
+      data.approvalPinHash = await hashApprovalPin(newApprovalPin);
+    }
 
-  await prisma.user.update({ where: { id: targetUser.id }, data });
+    await prisma.user.update({ where: { id: targetUser.id }, data });
 
-  // Invalidate all sessions when password is changed or user is deactivated
-  if (newPassword || !active) {
-    await prisma.session.deleteMany({ where: { userId: targetUser.id } });
-  }
+    // Invalidate all sessions when password is changed or user is deactivated
+    if (newPassword || !active) {
+      await prisma.session.deleteMany({ where: { userId: targetUser.id } });
+    }
 
-  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
 
-  redirect('/users?success=updated');
+    redirect('/users?success=updated');
+  }, '/users');
 }
 
-export async function toggleUserActiveAction(formData: FormData) {
-  const owner = await requireRole(['OWNER']);
+export async function toggleUserActiveAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user: owner, businessId } = await withBusinessContext(['OWNER']);
 
-  const userId = String(formData.get('userId') || '');
-  const user = await prisma.user.findFirst({
-    where: { id: userId, businessId: owner.businessId },
-  });
-  if (!user) redirect('/users');
+    const userId = formString(formData, 'userId');
 
-  if (user.id === owner.id) {
-    redirect('/users?error=self_toggle');
-  }
+    const target = await prisma.user.findFirst({
+      where: { id: userId, businessId },
+      select: { id: true, name: true, active: true },
+    });
+    if (!target) return err('User not found.');
+    if (target.id === owner.id) return err('You cannot deactivate your own account.');
 
-  const nowActive = !user!.active;
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { active: nowActive },
-  });
+    const nowActive = !target.active;
+    await prisma.user.update({ where: { id: target.id }, data: { active: nowActive } });
 
-  // Invalidate all sessions when deactivating a user
-  if (!nowActive) {
-    await prisma.session.deleteMany({ where: { userId: user.id } });
-  }
+    if (!nowActive) {
+      await prisma.session.deleteMany({ where: { userId: target.id } });
+    }
 
-  await audit({ businessId: owner.businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: user.id, details: { name: user.name, active: nowActive } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } });
 
-  redirect('/users');
+    redirect('/users');
+  }, '/users');
 }
+
+export async function resetUserPasswordAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user: owner, businessId } = await withBusinessContext(['OWNER', 'MANAGER']);
+
+    const userId = formString(formData, 'userId');
+    const newPassword = String(formData.get('newPassword') || '');
+
+    if (!userId || !newPassword) return err('User ID and new password are required.');
+    if (newPassword.length < 6) return err('Password must be at least 6 characters.');
+
+    const target = await prisma.user.findFirst({
+      where: { id: userId, businessId },
+      select: { id: true, name: true, role: true },
+    });
+    if (!target) return err('User not found.');
+
+    // Prevent managers from resetting Owner passwords
+    if (target.role === 'OWNER' && owner.role !== 'OWNER') {
+      return err('Only an owner can reset another owner\'s password.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: target.id }, data: { passwordHash } });
+
+    // Invalidate all their sessions so they must log in with the new password
+    await prisma.session.deleteMany({ where: { userId: target.id } });
+
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
+
+    redirect('/users?success=password_reset');
+  }, '/users');
+}
+

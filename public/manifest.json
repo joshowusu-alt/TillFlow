@@ -6,7 +6,7 @@
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
-  "theme_color": "#059669",
+  "theme_color": "#1E40AF",
   "orientation": "any",
   "categories": [
     "business",
@@ -51,7 +51,7 @@
       "src": "/api/icon?size=512",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }

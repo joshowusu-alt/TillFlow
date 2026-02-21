@@ -70,7 +70,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       <div className="mb-4 max-w-xs">
         <Suspense><SearchFilter placeholder="Search suppliers…" /></Suspense>
       </div>
-      <div className="card p-6">
+      <div className="card p-6 overflow-x-auto">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>

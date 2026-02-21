@@ -32,7 +32,15 @@ type ReceiptClientProps = {
     totalPence: number;
     discountPence?: number;
   };
-  payments: { method: string; amountPence: number }[];
+  payments: {
+    method: string;
+    amountPence: number;
+    reference?: string | null;
+    network?: string | null;
+    payerMsisdn?: string | null;
+    provider?: string | null;
+    receivedAt?: string;
+  }[];
   lines: {
     name: string;
     qtyLabel: string;
@@ -69,6 +77,9 @@ export default function ReceiptClient({
   const momoPaid = payments
     .filter((payment) => payment.method === 'MOBILE_MONEY')
     .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const momoPayments = payments.filter(
+    (payment) => payment.method === 'MOBILE_MONEY' && payment.amountPence > 0
+  );
   const lineDiscountTotal = lines.reduce(
     (sum, line) => sum + line.lineDiscountPence + line.promoDiscountPence,
     0
@@ -168,8 +179,10 @@ export default function ReceiptClient({
         </div>
       </div>
       {directError ? (
-        <div className="no-print mb-4 rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-xs text-rose">
-          Direct print error: {directError}
+        <div className="no-print mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {directError.includes('qz-tray') || directError.toLowerCase().includes('qz')
+            ? <>QZ Tray isn&#39;t running on this computer. Click <strong>Print Receipt</strong> above to print using your browser instead. For automatic direct printing, <a href="https://qz.io" target="_blank" rel="noopener" className="underline font-medium">install QZ Tray</a>.</>
+            : <>Print error — {directError}. Try <strong>Print Receipt</strong> instead.</>}
         </div>
       ) : null}
       <div className="text-center">
@@ -256,10 +269,19 @@ export default function ReceiptClient({
           </div>
         ) : null}
         {momoPaid > 0 ? (
-          <div className="flex justify-between">
-            <span>Paid (MoMo)</span>
-            <span>{formatMoney(momoPaid, business.currency)}</span>
-          </div>
+          <>
+            <div className="flex justify-between">
+              <span>Paid (MoMo)</span>
+              <span>{formatMoney(momoPaid, business.currency)}</span>
+            </div>
+            {momoPayments.map((payment, index) => (
+              <div key={`${payment.reference ?? 'momo'}-${index}`} className="text-[11px] text-black/60">
+                {(payment.provider ?? payment.network ?? 'MoMo').toUpperCase()} |{' '}
+                {payment.payerMsisdn ?? 'payer'} | Ref: {payment.reference ?? 'pending'}
+                {payment.receivedAt ? ` | ${new Date(payment.receivedAt).toLocaleString('en-GB')}` : ''}
+              </div>
+            ))}
+          </>
         ) : null}
       </div>
 

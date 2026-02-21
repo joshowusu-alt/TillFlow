@@ -26,16 +26,21 @@ const ACTION_LABELS: Record<string, string> = {
   DISCOUNT_APPLIED: 'Discount Applied',
   SHIFT_OPEN: 'Shift Opened',
   SHIFT_CLOSE: 'Shift Closed',
+  CASH_DRAWER_ENTRY: 'Cash Drawer Entry',
+  CASH_DRAWER_OPEN: 'Cash Drawer Opened',
+  CASH_DRAWER_CLOSE: 'Cash Drawer Closed',
+  STOCK_TRANSFER_REQUEST: 'Stock Transfer Requested',
+  STOCK_TRANSFER_APPROVE: 'Stock Transfer Approved',
 };
 
 const ACTION_COLOURS: Record<string, string> = {
-  LOGIN: 'bg-blue-100 text-blue-800',
+  LOGIN: 'bg-accentSoft text-accent',
   SALE_CREATE: 'bg-green-100 text-green-800',
   SALE_VOID: 'bg-red-100 text-red-800',
   SALE_RETURN: 'bg-orange-100 text-orange-800',
   PRODUCT_CREATE: 'bg-emerald-100 text-emerald-800',
   PRODUCT_UPDATE: 'bg-yellow-100 text-yellow-800',
-  INVENTORY_ADJUST: 'bg-indigo-100 text-indigo-800',
+  INVENTORY_ADJUST: 'bg-accentSoft text-accent',
   PURCHASE_CREATE: 'bg-cyan-100 text-cyan-800',
   PURCHASE_RETURN: 'bg-orange-100 text-orange-800',
   EXPENSE_CREATE: 'bg-pink-100 text-pink-800',
@@ -44,8 +49,13 @@ const ACTION_COLOURS: Record<string, string> = {
   USER_DEACTIVATE: 'bg-red-100 text-red-800',
   SETTINGS_UPDATE: 'bg-gray-100 text-gray-800',
   PASSWORD_CHANGE: 'bg-amber-100 text-amber-800',
-  SHIFT_OPEN: 'bg-teal-100 text-teal-800',
-  SHIFT_CLOSE: 'bg-teal-100 text-teal-800',
+  SHIFT_OPEN: 'bg-accentSoft text-accent',
+  SHIFT_CLOSE: 'bg-accentSoft text-accent',
+  CASH_DRAWER_ENTRY: 'bg-amber-100 text-amber-800',
+  CASH_DRAWER_OPEN: 'bg-amber-100 text-amber-800',
+  CASH_DRAWER_CLOSE: 'bg-amber-100 text-amber-800',
+  STOCK_TRANSFER_REQUEST: 'bg-accentSoft text-accent',
+  STOCK_TRANSFER_APPROVE: 'bg-emerald-100 text-emerald-800',
 };
 
 export const dynamic = 'force-dynamic';

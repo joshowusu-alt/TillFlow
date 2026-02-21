@@ -5,7 +5,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import ReturnFormClient from './ReturnFormClient';
 
 export default async function SalesReturnPage({ params }: { params: { id: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -54,7 +54,7 @@ export default async function SalesReturnPage({ params }: { params: { id: string
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Return Sale" subtitle="Process a full return or void an unpaid sale." />
+      <PageHeader title="Return Sale" subtitle="Process a full return or void an unpaid sale." secondaryCta={{ label: '← Back to Sales', href: '/sales' }} />
 
       <div className="card p-6 space-y-2 text-sm">
         <div className="flex items-center gap-2">

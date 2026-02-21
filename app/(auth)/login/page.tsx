@@ -1,20 +1,32 @@
 ﻿import { login } from '@/app/actions/auth';
+import { getUser } from '@/lib/auth';
 import SubmitButton from '@/components/SubmitButton';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
-export default async function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
+  // If the user already has a valid session, send them to POS
+  const user = await getUser();
+  if (user) redirect('/pos');
+
   const error = searchParams?.error;
+  const success = searchParams?.success;
   return (
     <div className="space-y-6">
       <div className="text-center">
         <img src="/icon.svg" alt="TillFlow" className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" />
         <h1 className="text-3xl font-bold font-display">
-          <span className="text-emerald-600">Till</span>
+          <span className="text-accent">Till</span>
           <span className="text-gray-800">Flow</span>
         </h1>
         <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
         <p className="mt-4 text-sm text-black/60">Sign in to your account</p>
       </div>
+      {success === 'password_reset' && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          Your password has been reset. Please sign in with your new password.
+        </div>
+      )}
       {error && (
         <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error === 'missing'
@@ -25,6 +37,8 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
             ? 'This account requires a 2FA code from your authenticator app.'
             : error === 'otp_invalid'
             ? 'Invalid 2FA code. Please try again.'
+            : error === 'server'
+            ? 'Unable to connect. Please try again in a moment.'
             : 'Invalid credentials. Please try again.'}
         </div>
       )}
@@ -36,6 +50,14 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
         <div>
           <label className="label">Password</label>
           <input name="password" type="password" className="input" placeholder="••••••••" required />
+          <div className="mt-1 text-right">
+            <Link
+              href="/login/forgot-password"
+              className="text-xs text-accent hover:underline underline-offset-4"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
         <div>
           <label className="label">2FA Code (if enabled)</label>
@@ -52,7 +74,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-emerald-600 hover:text-emerald-700 underline underline-offset-4">
+          <Link href="/register" className="font-medium text-accent hover:text-accent underline underline-offset-4">
             Create one free
           </Link>
         </p>

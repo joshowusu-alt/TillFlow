@@ -70,7 +70,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       notes
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } });
 
     redirect('/expenses');
   }, '/expenses');

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { setStoreModeAction } from '@/app/actions/settings';
 
 interface StepProps {
   onNext: () => void;
@@ -18,8 +19,8 @@ function WelcomeStep({ onNext }: StepProps) {
   return (
     <div className={`transition-all duration-700 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
       <div className="relative mx-auto mb-8 flex h-24 w-24 items-center justify-center">
-        <div className="absolute inset-0 animate-ping rounded-full bg-emerald-200 opacity-20" />
-        <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-xl shadow-emerald-500/30">
+        <div className="absolute inset-0 animate-ping rounded-full bg-accent/20 opacity-20" />
+        <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent/80 shadow-xl shadow-accent/30">
           <svg className="h-12 w-12 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
           </svg>
@@ -35,8 +36,8 @@ function WelcomeStep({ onNext }: StepProps) {
           { icon: '2', label: 'Add your first products', desc: 'Or explore with demo products' },
           { icon: '3', label: 'Make your first sale', desc: 'Right here in the setup wizard' },
         ].map((item) => (
-          <div key={item.icon} className="flex items-center gap-4 rounded-xl bg-emerald-50/50 border border-emerald-100 p-4">
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 text-sm font-bold text-white shadow">
+          <div key={item.icon} className="flex items-center gap-4 rounded-xl bg-accentSoft/50 border border-accent/10 p-4">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-accent/80 text-sm font-bold text-white shadow">
               {item.icon}
             </div>
             <div>
@@ -49,7 +50,7 @@ function WelcomeStep({ onNext }: StepProps) {
 
       <p className="text-sm text-black/40 mb-8">This takes about 2 minutes. You can skip anytime.</p>
 
-      <button onClick={onNext} className="btn-primary w-full py-3.5 text-base shadow-lg shadow-emerald-600/20">
+      <button onClick={onNext} className="btn-primary w-full py-3.5 text-base shadow-lg shadow-blue-800/15">
         {"Let's Go"}
       </button>
     </div>
@@ -59,11 +60,20 @@ function WelcomeStep({ onNext }: StepProps) {
 /* ---------- Step 2: Business Config (inline) ---------- */
 function BusinessStep({ onNext, onBack }: StepProps) {
   const [show, setShow] = useState(false);
+  const [storeMode, setStoreMode] = useState<'SINGLE_STORE' | 'MULTI_STORE'>('SINGLE_STORE');
+  const [isSaving, startSaving] = useTransition();
   useEffect(() => { setShow(true); }, []);
+
+  const handleNext = () => {
+    startSaving(async () => {
+      await setStoreModeAction(storeMode);
+      onNext();
+    });
+  };
 
   return (
     <div className={`transition-all duration-500 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-      <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
+      <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent/80 shadow-lg shadow-accent/25">
         <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z" />
         </svg>
@@ -73,9 +83,9 @@ function BusinessStep({ onNext, onBack }: StepProps) {
       <p className="text-black/40 text-sm mb-6">You can change any of these later in Settings.</p>
 
       <div className="space-y-4 text-left">
-        <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-4">
+        <div className="rounded-xl bg-blue-50/50 border border-blue-100 p-4">
           <div className="flex items-center gap-3">
-            <svg className="h-5 w-5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+            <svg className="h-5 w-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
             <div>
               <div className="font-semibold text-sm">Business name and currency are set!</div>
               <div className="text-xs text-black/40 mt-0.5">You entered these during registration.</div>
@@ -93,11 +103,44 @@ function BusinessStep({ onNext, onBack }: StepProps) {
             <svg className="h-4 w-4 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
           </a>
         </div>
+
+        <div className="rounded-xl border border-black/5 bg-white p-4 space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-black/30">How many branches?</div>
+          <p className="text-xs text-black/40">This hides branch-related features if you only have one store, keeping your interface cleaner.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setStoreMode('SINGLE_STORE')}
+              className={`rounded-lg border p-3 text-left transition ${
+                storeMode === 'SINGLE_STORE'
+                  ? 'border-accent bg-accentSoft/50 ring-1 ring-accent/30'
+                  : 'border-black/10 hover:border-black/20'
+              }`}
+            >
+              <div className="font-semibold text-sm">Single store</div>
+              <div className="text-xs text-black/40 mt-0.5">Just one location</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStoreMode('MULTI_STORE')}
+              className={`rounded-lg border p-3 text-left transition ${
+                storeMode === 'MULTI_STORE'
+                  ? 'border-accent bg-accentSoft/50 ring-1 ring-accent/30'
+                  : 'border-black/10 hover:border-black/20'
+              }`}
+            >
+              <div className="font-semibold text-sm">Multiple stores</div>
+              <div className="text-xs text-black/40 mt-0.5">Branches &amp; transfers</div>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 flex gap-3">
         <button onClick={onBack} className="btn-ghost flex-1 py-3">Back</button>
-        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-emerald-600/20">Next</button>
+        <button onClick={handleNext} disabled={isSaving} className="btn-primary flex-1 py-3 shadow-lg shadow-blue-800/15 disabled:opacity-50">
+          {isSaving ? 'Saving...' : 'Next'}
+        </button>
       </div>
     </div>
   );
@@ -133,9 +176,9 @@ function ProductsStep({ onNext, onBack }: StepProps) {
           </div>
         </div>
 
-        <a href="/products" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-emerald-200 hover:shadow-md group">
+        <a href="/products" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-blue-200 hover:shadow-md group">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition group-hover:bg-emerald-100">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-accent transition group-hover:bg-blue-100">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
             </div>
             <div>
@@ -143,12 +186,12 @@ function ProductsStep({ onNext, onBack }: StepProps) {
               <div className="text-xs text-black/40">Enter names, prices, barcodes, and units</div>
             </div>
           </div>
-          <svg className="h-5 w-5 text-black/20 transition group-hover:text-emerald-500 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+          <svg className="h-5 w-5 text-black/20 transition group-hover:text-accent group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
         </a>
 
-        <a href="/products?tab=categories" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-blue-200 hover:shadow-md group">
+        <a href="/products?tab=categories" className="flex items-center justify-between rounded-xl border border-black/5 bg-white p-4 transition hover:border-accent/20 hover:shadow-md group">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition group-hover:bg-blue-100">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-accent transition group-hover:bg-accent/20">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
             </div>
             <div>
@@ -162,7 +205,7 @@ function ProductsStep({ onNext, onBack }: StepProps) {
 
       <div className="mt-8 flex gap-3">
         <button onClick={onBack} className="btn-ghost flex-1 py-3">Back</button>
-        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-emerald-600/20">Next</button>
+        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-blue-800/15">Next</button>
       </div>
     </div>
   );
@@ -191,7 +234,7 @@ function StaffStep({ onNext, onBack }: StepProps) {
           </div>
           {[
             { role: 'Owner', desc: 'Full access to everything', color: 'bg-emerald-100 text-emerald-700', check: 'Settings, Users, Reports, POS' },
-            { role: 'Manager', desc: 'Operations & reporting', color: 'bg-blue-100 text-blue-700', check: 'Inventory, Purchases, Reports, POS' },
+            { role: 'Manager', desc: 'Operations & reporting', color: 'bg-accentSoft text-accent', check: 'Inventory, Purchases, Reports, POS' },
             { role: 'Cashier', desc: 'Sales only', color: 'bg-amber-100 text-amber-700', check: 'POS, Shifts' },
           ].map((r) => (
             <div key={r.role} className="flex items-start gap-3 px-4 py-3 border-b last:border-0 border-black/5">
@@ -220,7 +263,7 @@ function StaffStep({ onNext, onBack }: StepProps) {
 
       <div className="mt-8 flex gap-3">
         <button onClick={onBack} className="btn-ghost flex-1 py-3">Back</button>
-        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-emerald-600/20">Next</button>
+        <button onClick={onNext} className="btn-primary flex-1 py-3 shadow-lg shadow-blue-800/15">Next</button>
       </div>
     </div>
   );
@@ -258,7 +301,7 @@ function LaunchStep({ onNext, onBack }: StepProps) {
                 style={{
                   width: `${6 + (i % 4) * 2}px`,
                   height: `${6 + (i % 4) * 2}px`,
-                  backgroundColor: ['#059669', '#0d9488', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'][i % 6],
+                  backgroundColor: ['#1E40AF', '#1D4ED8', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'][i % 6],
                   opacity: 0.5,
                 }}
               />
@@ -267,7 +310,7 @@ function LaunchStep({ onNext, onBack }: StepProps) {
         </div>
       )}
 
-      <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-xl shadow-emerald-500/30">
+      <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent/80 shadow-xl shadow-accent/30">
         <svg className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
         </svg>
@@ -283,15 +326,15 @@ function LaunchStep({ onNext, onBack }: StepProps) {
           { label: 'Works offline - sales sync when reconnected', key: '' },
           { label: 'Print receipts to any thermal printer', key: '' },
         ].map((tip) => (
-          <div key={tip.label} className="flex items-center gap-3 rounded-lg bg-emerald-50/50 px-4 py-2.5">
-            <svg className="h-4 w-4 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+          <div key={tip.label} className="flex items-center gap-3 rounded-lg bg-accentSoft/50 border border-accent/10 px-4 py-2.5">
+            <svg className="h-4 w-4 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
             <span className="text-sm flex-1">{tip.label}</span>
             {tip.key && <kbd className="rounded bg-black/10 px-2 py-0.5 text-[10px] font-mono text-black/50">{tip.key}</kbd>}
           </div>
         ))}
       </div>
 
-      <button onClick={onNext} className="btn-primary w-full py-4 text-base shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2">
+      <button onClick={onNext} className="btn-primary w-full py-4 text-base shadow-xl shadow-blue-800/20 flex items-center justify-center gap-2">
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
         </svg>
@@ -338,7 +381,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete?: () => vo
   const StepComponent = STEP_COMPONENTS[currentStep];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-accentSoft via-white to-accentSoft p-4">
       <div className="w-full max-w-lg">
         {/* Progress */}
         <div className="mb-6 flex items-center justify-between">
@@ -346,7 +389,7 @@ export default function OnboardingWizard({ onComplete }: { onComplete?: () => vo
             {STEP_COMPONENTS.map((_, index) => (
               <div key={index} className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-black/5">
                 <div
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-500"
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-accent to-accent/80 transition-all duration-500"
                   style={{ width: index <= currentStep ? '100%' : '0%' }}
                 />
               </div>

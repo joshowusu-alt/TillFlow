@@ -44,56 +44,59 @@ export async function createExpense(input: ExpenseInput) {
           ? 'PAID'
           : 'PART_PAID';
 
-  const expense = await prisma.expense.create({
-    data: {
+  return prisma.$transaction(async (tx) => {
+    const expense = await tx.expense.create({
+      data: {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        userId: input.userId,
+        accountId: input.accountId,
+        amountPence: input.amountPence,
+        paymentStatus,
+        method: amountPaid > 0 ? input.method ?? 'CASH' : null,
+        dueDate: input.dueDate ?? null,
+        vendorName: input.vendorName ?? null,
+        reference: input.reference ?? null,
+        attachmentPath: input.attachmentPath ?? null,
+        notes: input.notes ?? null,
+        payments:
+          amountPaid > 0
+            ? {
+                create: [
+                  {
+                    businessId: input.businessId,
+                    storeId: input.storeId,
+                    userId: input.userId,
+                    method: (input.method ?? 'CASH') as string,
+                    amountPence: amountPaid,
+                    reference: input.reference ?? null
+                  }
+                ]
+              }
+            : undefined
+      },
+      include: { account: true }
+    });
+
+    const method = input.method ?? 'CASH';
+    const split = splitPayments(
+      amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
+    );
+    const apCredit = Math.max(input.amountPence - amountPaid, 0);
+
+    await postJournalEntry({
       businessId: input.businessId,
-      storeId: input.storeId,
-      userId: input.userId,
-      accountId: input.accountId,
-      amountPence: input.amountPence,
-      paymentStatus,
-      method: amountPaid > 0 ? input.method ?? 'CASH' : null,
-      dueDate: input.dueDate ?? null,
-      vendorName: input.vendorName ?? null,
-      reference: input.reference ?? null,
-      attachmentPath: input.attachmentPath ?? null,
-      notes: input.notes ?? null,
-      payments:
-        amountPaid > 0
-          ? {
-              create: [
-                {
-                  businessId: input.businessId,
-                  storeId: input.storeId,
-                  userId: input.userId,
-                  method: (input.method ?? 'CASH') as string,
-                  amountPence: amountPaid,
-                  reference: input.reference ?? null
-                }
-              ]
-            }
-          : undefined
-    },
-    include: { account: true }
+      description: `Expense ${expense.id}`,
+      referenceType: 'EXPENSE',
+      referenceId: expense.id,
+      lines: [
+        { accountCode: expense.account.code, debitPence: input.amountPence },
+        ...creditCashBankLines(split),
+        apCredit > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apCredit } : null
+      ].filter(Boolean) as JournalLine[],
+      prismaClient: tx as any,
+    });
+
+    return expense;
   });
-
-  const method = input.method ?? 'CASH';
-  const split = splitPayments(
-    amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
-  );
-  const apCredit = Math.max(input.amountPence - amountPaid, 0);
-
-  await postJournalEntry({
-    businessId: input.businessId,
-    description: `Expense ${expense.id}`,
-    referenceType: 'EXPENSE',
-    referenceId: expense.id,
-    lines: [
-      { accountCode: expense.account.code, debitPence: input.amountPence },
-      ...creditCashBankLines(split),
-      apCredit > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apCredit } : null
-    ].filter(Boolean) as JournalLine[]
-  });
-
-  return expense;
 }

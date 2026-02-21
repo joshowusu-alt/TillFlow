@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="tillflow-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#10b981"/>
-      <stop offset="50%" style="stop-color:#059669"/>
-      <stop offset="100%" style="stop-color:#047857"/>
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="50%" style="stop-color:#1E40AF"/>
+      <stop offset="100%" style="stop-color:#1e3a8a"/>
     </linearGradient>
     <linearGradient id="flow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#34d399"/>
-      <stop offset="100%" style="stop-color:#10b981"/>
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
     </linearGradient>
   </defs>
   
@@ -20,7 +20,7 @@
     <rect x="100" y="180" width="200" height="160" rx="16" opacity="0.95"/>
     
     <!-- Display screen -->
-    <rect x="120" y="200" width="120" height="50" rx="8" fill="#059669"/>
+    <rect x="120" y="200" width="120" height="50" rx="8" fill="#1E40AF"/>
     
     <!-- Amount display -->
     <text x="180" y="235" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">$42.50</text>
@@ -35,8 +35,8 @@
       <rect x="192" y="300" width="28" height="28" rx="4"/>
     </g>
     
-    <!-- Green action button -->
-    <rect x="250" y="265" width="35" height="63" rx="6" fill="#10b981"/>
+    <!-- Action button -->
+    <rect x="250" y="265" width="35" height="63" rx="6" fill="#3b82f6"/>
   </g>
   
   <!-- Flow waves -->

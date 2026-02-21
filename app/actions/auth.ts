@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
@@ -43,6 +44,8 @@ export async function login(formData: FormData) {
 
   const ipAddress = getClientIpAddress();
   const userAgent = getClientUserAgent();
+
+  try {
 
   const throttleStatus = await getLoginThrottleStatus(email, ipAddress);
   if (throttleStatus.isBlocked) {
@@ -146,6 +149,12 @@ export async function login(formData: FormData) {
   }
 
   redirect('/pos');
+  } catch (err: unknown) {
+    // redirect() throws a special internal error — always re-throw it
+    if (isRedirectError(err)) throw err;
+    appLog('error', 'Login error', { error: String(err) });
+    redirect('/login?error=server');
+  }
 }
 
 export async function logout() {

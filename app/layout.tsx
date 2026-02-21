@@ -4,8 +4,8 @@ import { Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
 import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
-import InstallPrompt from '@/components/InstallPrompt';
 import ToastProvider from '@/components/ToastProvider';
+import InstallPrompt from '@/components/InstallPrompt';
 
 const displayFont = Space_Grotesk({
   subsets: ['latin'],
@@ -46,13 +46,18 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#059669'
+  viewportFit: 'cover',  // iPhone notch safe-area support
+  themeColor: '#1E40AF'  // enterprise primary blue
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`}>
-      <body className="min-h-screen bg-paper text-ink">
+    <html lang="en" className={`${displayFont.variable} ${bodyFont.variable}`} style={{ backgroundColor: '#f8fafc' }}>
+      <head>
+        {/* Inline critical background to prevent black flash during PWA cold start */}
+        <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#f8fafc}` }} />
+      </head>
+      <body className="min-h-screen bg-paper text-ink" style={{ backgroundColor: '#f8fafc' }}>
         <ServiceWorkerRegistration />
         <Suspense>
           <ToastProvider>
@@ -60,7 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </ToastProvider>
         </Suspense>
         <NetworkStatus />
-        <InstallPrompt />
+        <Suspense><InstallPrompt /></Suspense>
       </body>
     </html>
   );

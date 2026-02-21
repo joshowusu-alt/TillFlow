@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 6200",
     "build": "cross-env NODE_ENV=production next build",
+    "build:vercel": "prisma generate --schema=prisma/schema.postgres.prisma && prisma db push --schema=prisma/schema.postgres.prisma --skip-generate --accept-data-loss && cross-env NODE_ENV=production next build",
     "postinstall": "prisma generate --schema=prisma/schema.postgres.prisma",
     "start": "next start",
     "lint": "next lint",
@@ -12,6 +13,8 @@
     "test:watch": "vitest",
     "test:e2e:smoke": "node scripts/manual-e2e-check.js",
     "test:e2e:deep": "node scripts/manual-e2e-deep-check.js",
+    "test:qa:phase3a": "tsx scripts/phase3a-qa.ts",
+    "test:qa:phase3b": "tsx scripts/phase3b-qa.ts",
     "test:perf": "node scripts/page-speed-check.js",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
@@ -27,13 +30,15 @@
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.6.2",
     "chart.js": "^4.5.1",
+    "fflate": "^0.8.2",
     "idb": "^8.0.3",
     "next": "^14.2.35",
     "otplib": "^13.3.0",
     "qrcode": "^1.5.4",
     "react": "18.2.0",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "resend": "^6.9.2"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

@@ -9,6 +9,7 @@ Required checks are in `.github/workflows/ci.yml`:
 - `npm run build`
 - `node scripts/manual-e2e-check.js`
 - `node scripts/manual-e2e-deep-check.js`
+- `npm run test:qa:phase3a`
 - `node scripts/page-speed-check.js`
 
 Do not merge if any gate fails.
@@ -51,6 +52,7 @@ Run once per month:
 4. Run:
    - `node scripts/manual-e2e-check.js`
    - `node scripts/manual-e2e-deep-check.js`
+   - `npm run test:qa:phase3a`
 5. Confirm:
    - sales/purchases/returns still function
    - users can sign in

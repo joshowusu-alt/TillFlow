@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
+import ResetPasswordModal from '@/components/ResetPasswordModal';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
@@ -61,6 +62,11 @@ export default async function UsersPage({
           User updated successfully.
         </div>
       )}
+      {searchParams.success === 'password_reset' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+          Password reset successfully. The user has been logged out and must sign in with their new password.
+        </div>
+      )}
 
       {/* Add / Edit User form */}
       <div className="card p-6">
@@ -102,6 +108,24 @@ export default async function UsersPage({
             />
           </div>
           <div>
+            <label className="label">
+              {editUser ? 'Manager PIN (optional update)' : 'Manager PIN (optional)'}
+            </label>
+            <input
+              className="input"
+              name={editUser ? 'newApprovalPin' : 'approvalPin'}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              minLength={4}
+              maxLength={8}
+              placeholder="4-8 digits"
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Required for manager approvals like till close, voids and overrides.
+            </div>
+          </div>
+          <div>
             <label className="label">Role *</label>
             <select className="input" name="role" defaultValue={editUser?.role ?? 'CASHIER'}>
               <option value="CASHIER">Cashier — POS & shifts only</option>
@@ -135,8 +159,8 @@ export default async function UsersPage({
       <div className="card p-4">
         <h3 className="text-sm font-semibold mb-2">Role Permissions</h3>
         <div className="grid gap-2 text-xs text-black/60 sm:grid-cols-3">
-          <div className="rounded-lg bg-blue-50 p-3">
-            <span className="font-semibold text-blue-700">Cashier</span>
+          <div className="rounded-lg bg-accentSoft p-3">
+            <span className="font-semibold text-accent">Cashier</span>
             <p className="mt-1">POS, shifts, own sales. Cannot access products, reports, or settings.</p>
           </div>
           <div className="rounded-lg bg-amber-50 p-3">
@@ -176,7 +200,7 @@ export default async function UsersPage({
                           ? 'bg-emerald-100 text-emerald-700'
                           : user.role === 'MANAGER'
                           ? 'bg-amber-100 text-amber-700'
-                          : 'bg-blue-100 text-blue-700'
+                          : 'bg-accentSoft text-accent'
                       }`}
                     >
                       {user.role}
@@ -193,10 +217,11 @@ export default async function UsersPage({
                     <div className="flex justify-end gap-2">
                       <a
                         href={`/users?edit=${user.id}`}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-accent hover:underline"
                       >
                         Edit
                       </a>
+                      <ResetPasswordModal userId={user.id} userName={user.name} isSelf={user.id === owner.id} />
                       {user.id !== owner.id && (
                         <form action={toggleUserActiveAction} className="inline">
                           <input type="hidden" name="userId" value={user.id} />

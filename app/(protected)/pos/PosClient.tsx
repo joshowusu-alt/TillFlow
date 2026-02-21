@@ -6,10 +6,16 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { completeSaleAction } from '@/app/actions/sales';
+import {
+  checkMomoCollectionStatusAction,
+  initiateMomoCollectionAction,
+} from '@/app/actions/mobile-money';
+import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
+import QuickAddCustomer from './components/QuickAddCustomer';
 
 type UnitDto = {
   id: string;
@@ -37,9 +43,17 @@ type ProductDto = {
 type CategoryDto = { id: string; name: string; colour: string };
 
 type PosClientProps = {
-  business: { currency: string; vatEnabled: boolean };
+  business: {
+    currency: string;
+    vatEnabled: boolean;
+    momoEnabled?: boolean;
+    momoProvider?: string | null;
+    requireOpenTillForSales?: boolean;
+    discountApprovalThresholdBps?: number;
+  };
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
+  openShiftTillIds: string[];
   products: ProductDto[];
   customers: { id: string; name: string }[];
   units: { id: string; name: string }[];
@@ -57,6 +71,8 @@ type CartLine = {
 
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
+type CollectionNetwork = 'MTN' | 'TELECEL' | 'AIRTELTIGO' | 'UNKNOWN';
+type MomoCollectionState = 'IDLE' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'TIMEOUT';
 
 const CART_STORAGE_KEY = 'pos.savedCart';
 const CART_CUSTOMER_KEY = 'pos.savedCustomer';
@@ -71,7 +87,16 @@ type ParkedCart = {
   itemCount: number;
 };
 
-export default function PosClient({ business, store, tills, products, customers, units, categories }: PosClientProps) {
+export default function PosClient({
+  business,
+  store,
+  tills,
+  openShiftTillIds,
+  products,
+  customers,
+  units,
+  categories,
+}: PosClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const safeUnits = useMemo(() => units ?? [], [units]);
@@ -92,12 +117,23 @@ export default function PosClient({ business, store, tills, products, customers,
   const [transferPaid, setTransferPaid] = useState('');
   const [momoPaid, setMomoPaid] = useState('');
   const [momoRef, setMomoRef] = useState('');
+  const [momoPayerMsisdn, setMomoPayerMsisdn] = useState('');
+  const [momoNetwork, setMomoNetwork] = useState<CollectionNetwork>('MTN');
+  const [momoCollectionId, setMomoCollectionId] = useState('');
+  const [momoCollectionStatus, setMomoCollectionStatus] = useState<MomoCollectionState>('IDLE');
+  const [momoCollectionError, setMomoCollectionError] = useState<string | null>(null);
+  const [momoIdempotencyKey, setMomoIdempotencyKey] = useState('');
+  const [momoCollectionSignature, setMomoCollectionSignature] = useState('');
+  const [isInitiatingMomo, setIsInitiatingMomo] = useState(false);
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
   const [orderDiscountInput, setOrderDiscountInput] = useState('');
+  const [discountManagerPin, setDiscountManagerPin] = useState('');
+  const [discountReasonCode, setDiscountReasonCode] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
   const [lastReceiptId, setLastReceiptId] = useState('');
-  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number } | null>(null);
+  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number; transactionNumber: string | null } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
@@ -115,13 +151,19 @@ export default function PosClient({ business, store, tills, products, customers,
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
-
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  // Staged product: when a product with multiple units is picked, show unit
+  // toggle + qty row before adding to cart
+  const [stagedProduct, setStagedProduct] = useState<ProductDto | null>(null);
+  const [stagedUnitId, setStagedUnitId] = useState('');
+  const [stagedQty, setStagedQty] = useState('1');
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
   const maxUndoSteps = 10;
   const [cartRestored, setCartRestored] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState(customers);
+  const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const cartInitialized = useRef(false);
 
   // Park/hold state
@@ -199,6 +241,39 @@ export default function PosClient({ business, store, tills, products, customers,
     setQuickAddBarcode(barcodeValue ?? '');
   }, []);
 
+  const resetMomoCollection = useCallback(() => {
+    setMomoCollectionId('');
+    setMomoCollectionStatus('IDLE');
+    setMomoCollectionError(null);
+    setMomoIdempotencyKey('');
+    setMomoCollectionSignature('');
+    setMomoRef('');
+  }, []);
+
+  const applyMomoStatus = useCallback(
+    (next: {
+      status: string;
+      providerStatus?: string | null;
+      providerReference?: string | null;
+      providerTransactionId?: string | null;
+      failureReason?: string | null;
+    }) => {
+      const normalized = (next.status || 'IDLE').toUpperCase() as MomoCollectionState;
+      setMomoCollectionStatus(normalized);
+      const providerRef = next.providerTransactionId ?? next.providerReference ?? '';
+      if (providerRef) setMomoRef(providerRef);
+      if (normalized === 'FAILED' || normalized === 'TIMEOUT') {
+        setMomoCollectionError(
+          next.failureReason ||
+            `MoMo collection ${normalized.toLowerCase()}. You can retry safely.`
+        );
+      } else if (normalized === 'CONFIRMED') {
+        setMomoCollectionError(null);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     barcodeRef.current?.focus();
   }, []);
@@ -232,7 +307,7 @@ export default function PosClient({ business, store, tills, products, customers,
         }
       }
       if (savedCustomer) {
-        const customerExists = customers.some((c) => c.id === savedCustomer);
+        const customerExists = customerOptions.some((c) => c.id === savedCustomer);
         if (customerExists) {
           setCustomerId(savedCustomer);
         }
@@ -240,7 +315,7 @@ export default function PosClient({ business, store, tills, products, customers,
     } catch {
       // Ignore parse errors
     }
-  }, [productOptions, customers]);
+  }, [productOptions, customerOptions]);
 
   // Save cart to localStorage when it changes
   useEffect(() => {
@@ -304,14 +379,19 @@ export default function PosClient({ business, store, tills, products, customers,
     setCardPaid('');
     setTransferPaid('');
     setMomoPaid('');
-    setMomoRef('');
+    setMomoPayerMsisdn('');
+    setMomoNetwork('MTN');
+    resetMomoCollection();
     setPaymentMethods(['CASH']);
     setOrderDiscountType('NONE');
     setOrderDiscountInput('');
+    setDiscountManagerPin('');
+    setDiscountReasonCode('');
+    setDiscountReason('');
     setQtyDrafts({});
     setUndoStack([]);
     playBeep(true);
-  }, [cart, customerId, parkedCarts, saveParkedCarts, playBeep]);
+  }, [cart, customerId, parkedCarts, playBeep, resetMomoCollection, saveParkedCarts]);
 
   const recallParkedCart = useCallback((parkedId: string) => {
     const parked = parkedCarts.find((p) => p.id === parkedId);
@@ -338,20 +418,133 @@ export default function PosClient({ business, store, tills, products, customers,
     );
     setCart(validCart);
     if (parked.customerId) {
-      const customerExists = customers.some((c) => c.id === parked.customerId);
+      const customerExists = customerOptions.some((c) => c.id === parked.customerId);
       setCustomerId(customerExists ? parked.customerId : '');
     }
     playBeep(true);
-  }, [cart, customerId, customers, parkedCarts, productOptions, saveParkedCarts, playBeep]);
+  }, [cart, customerId, customerOptions, parkedCarts, productOptions, saveParkedCarts, playBeep]);
 
   const deleteParkedCart = useCallback((parkedId: string) => {
     saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
   }, [parkedCarts, saveParkedCarts]);
 
+  const handleInitiateMomoCollection = useCallback(async () => {
+    if (isInitiatingMomo) return;
+
+    const amountPence = Math.max(0, Math.round(parseCurrencyToPence(momoPaid)));
+    const payer = momoPayerMsisdn.trim();
+    if (amountPence <= 0) {
+      setMomoCollectionError('Enter a valid MoMo amount before requesting collection.');
+      return;
+    }
+    if (!payer) {
+      setMomoCollectionError('Enter the payer phone number to request collection.');
+      return;
+    }
+
+    setIsInitiatingMomo(true);
+    setMomoCollectionError(null);
+    setMomoCollectionStatus('PENDING');
+
+    const nextIdempotencyKey =
+      momoIdempotencyKey ||
+      (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
+
+    try {
+      const result = await initiateMomoCollectionAction({
+        storeId: store.id,
+        amountPence,
+        payerMsisdn: payer,
+        network: momoNetwork,
+        idempotencyKey: nextIdempotencyKey,
+      });
+
+      if (!result.success) {
+        setMomoCollectionStatus('FAILED');
+        setMomoCollectionError(result.error);
+        return;
+      }
+
+      setMomoIdempotencyKey(nextIdempotencyKey);
+      setMomoCollectionId(result.data.collectionId);
+      setMomoCollectionSignature(
+        `${amountPence}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`
+      );
+      applyMomoStatus({
+        status: result.data.status,
+        providerStatus: result.data.providerStatus,
+        providerReference: result.data.providerReference,
+        providerTransactionId: result.data.providerTransactionId,
+        failureReason: result.data.failureReason,
+      });
+    } catch {
+      setMomoCollectionStatus('FAILED');
+      setMomoCollectionError('Unable to initiate MoMo collection. Please retry.');
+    } finally {
+      setIsInitiatingMomo(false);
+    }
+  }, [
+    applyMomoStatus,
+    isInitiatingMomo,
+    momoIdempotencyKey,
+    momoNetwork,
+    momoPaid,
+    momoPayerMsisdn,
+    parseCurrencyToPence,
+    store.id,
+  ]);
+
+  useEffect(() => {
+    if (!momoCollectionId) return;
+    if (momoCollectionStatus !== 'PENDING') return;
+
+    let active = true;
+    const poll = async () => {
+      const result = await checkMomoCollectionStatusAction(momoCollectionId);
+      if (!active || !result.success) return;
+      applyMomoStatus({
+        status: result.data.status,
+        providerStatus: result.data.providerStatus,
+        providerReference: result.data.providerReference,
+        providerTransactionId: result.data.providerTransactionId,
+        failureReason: result.data.failureReason,
+      });
+    };
+
+    const interval = window.setInterval(() => {
+      poll().catch(() => null);
+    }, 5000);
+
+    poll().catch(() => null);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [applyMomoStatus, momoCollectionId, momoCollectionStatus]);
+
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
     setIsCompletingSale(true);
     setSaleError(null);
+
+    // Optimistic: decrement stock in local state immediately for instant feedback
+    const preOptimisticProducts = productOptions;
+    const stockDecrements = new Map<string, number>();
+    for (const line of cart) {
+      const product = productOptions.find(p => p.id === line.productId);
+      const unit = product?.units.find(u => u.id === line.unitId);
+      if (product && unit) {
+        const baseQty = line.qtyInUnit * unit.conversionToBase;
+        stockDecrements.set(line.productId, (stockDecrements.get(line.productId) ?? 0) + baseQty);
+      }
+    }
+    setProductOptions(prev => prev.map(p => {
+      const decrement = stockDecrements.get(p.id);
+      if (decrement) return { ...p, onHandBase: Math.max(0, p.onHandBase - decrement) };
+      return p;
+    }));
 
     try {
       const result = await completeSaleAction({
@@ -368,17 +561,23 @@ export default function PosClient({ business, store, tills, products, customers,
         transferPaid: Math.max(0, Math.round(transferPaidValue)),
         momoPaid: Math.max(0, Math.round(momoPaidValue)),
         momoRef: momoRef.trim() || undefined,
+        momoCollectionId: momoCollectionId || undefined,
+        momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
+        momoNetwork,
+        discountManagerPin: discountManagerPin.trim() || undefined,
+        discountReasonCode: discountReasonCode || undefined,
+        discountReason: discountReason.trim() || undefined,
       });
 
       if (result.success) {
-        const { receiptId, totalPence } = result.data;
+        const { receiptId, totalPence, transactionNumber } = result.data;
         // Store receipt ID for reprinting
         setLastReceiptId(receiptId);
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('lastReceiptId', receiptId);
         }
         // Show success toast
-        setSaleSuccess({ receiptId, totalPence });
+        setSaleSuccess({ receiptId, totalPence, transactionNumber });
         // Reset cart and payment fields
         setCart([]);
         clearSavedCart();
@@ -388,22 +587,32 @@ export default function PosClient({ business, store, tills, products, customers,
         setTransferPaid('');
         setMomoPaid('');
         setMomoRef('');
+        setMomoPayerMsisdn('');
+        setMomoNetwork('MTN');
+        resetMomoCollection();
         setPaymentStatus('PAID');
         setPaymentMethods(['CASH']);
         setOrderDiscountType('NONE');
         setOrderDiscountInput('');
+        setDiscountManagerPin('');
+        setDiscountReasonCode('');
+        setDiscountReason('');
         setQtyDrafts({});
         setUndoStack([]);
         playBeep(true);
-        // Auto-dismiss success toast after 8 seconds
-        setTimeout(() => setSaleSuccess(null), 8000);
-        // Refresh server data (product stock levels etc)
-        router.refresh();
+        // Auto-dismiss success toast after 3 seconds
+        setTimeout(() => setSaleSuccess(null), 3000);
+        // Refresh server data in background (non-blocking — don't slow down the POS)
+        requestAnimationFrame(() => router.refresh());
       } else {
+        // Revert optimistic stock on error
+        setProductOptions(preOptimisticProducts);
         setSaleError(result.error);
         playBeep(false);
       }
     } catch {
+      // Revert optimistic stock on error
+      setProductOptions(preOptimisticProducts);
       setSaleError('Something went wrong. Please try again.');
       playBeep(false);
     } finally {
@@ -486,7 +695,12 @@ export default function PosClient({ business, store, tills, products, customers,
       if (method === 'CASH') setCashTendered('');
       if (method === 'CARD') setCardPaid('');
       if (method === 'TRANSFER') setTransferPaid('');
-      if (method === 'MOBILE_MONEY') { setMomoPaid(''); setMomoRef(''); }
+      if (method === 'MOBILE_MONEY') {
+        setMomoPaid('');
+        setMomoPayerMsisdn('');
+        setMomoNetwork('MTN');
+        resetMomoCollection();
+      }
     }
     setPaymentMethods(next);
   };
@@ -602,6 +816,17 @@ export default function PosClient({ business, store, tills, products, customers,
     barcodeRef.current?.focus();
   };
 
+  const handleAddStaged = () => {
+    if (!stagedProduct) return;
+    const qty = Math.max(1, Math.floor(Number(stagedQty) || 1));
+    addToCart({ productId: stagedProduct.id, unitId: stagedUnitId, qtyInUnit: qty });
+    setStagedProduct(null);
+    setStagedQty('1');
+    setProductSearch('');
+    playBeep(true);
+    barcodeRef.current?.focus();
+  };
+
   const handleBarcodeScan = useCallback((code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
@@ -713,6 +938,14 @@ export default function PosClient({ business, store, tills, products, customers,
     orderDiscountType,
     orderDiscountInput
   );
+  const totalDiscountPence = totals.lineDiscount + totals.promoDiscount + orderDiscount;
+  const discountBps =
+    totals.subtotal > 0 ? Math.round((totalDiscountPence * 10_000) / totals.subtotal) : 0;
+  const requiresDiscountApproval =
+    discountBps > (business.discountApprovalThresholdBps ?? 1500);
+  const discountApprovalReady =
+    !requiresDiscountApproval ||
+    (!!discountManagerPin.trim() && (!!discountReasonCode || !!discountReason.trim()));
   const netAfterOrderDiscount = Math.max(totals.netSubtotal - orderDiscount, 0);
   const vatRatio =
     business.vatEnabled && totals.netSubtotal > 0
@@ -736,6 +969,30 @@ export default function PosClient({ business, store, tills, products, customers,
   const changeDue = Math.max(cashTenderedValue - cashDue, 0);
   const totalPaid = cashApplied + nonCashPaid;
   const balanceRemaining = Math.max(totalDue - totalPaid, 0);
+  const momoMethodEnabled = hasMethod('MOBILE_MONEY');
+  const needsMomoConfirmation = momoMethodEnabled && momoPaidValue > 0;
+  const momoConfirmed = momoCollectionStatus === 'CONFIRMED';
+  const momoSignature = `${momoPaidValue}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`;
+
+  useEffect(() => {
+    if (!momoCollectionId) return;
+    if (momoCollectionStatus === 'PENDING') return;
+    if (momoCollectionSignature && momoCollectionSignature !== momoSignature) {
+      resetMomoCollection();
+    }
+  }, [
+    momoCollectionId,
+    momoCollectionSignature,
+    momoCollectionStatus,
+    momoSignature,
+    resetMomoCollection,
+  ]);
+
+  useEffect(() => {
+    if (needsMomoConfirmation) return;
+    if (!momoCollectionId && momoCollectionStatus === 'IDLE') return;
+    resetMomoCollection();
+  }, [momoCollectionId, momoCollectionStatus, needsMomoConfirmation, resetMomoCollection]);
 
   const handleBarcodeKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
@@ -748,8 +1005,21 @@ export default function PosClient({ business, store, tills, products, customers,
   const requiresCustomer = paymentStatus !== 'PAID';
   const fullyPaid = paymentStatus === 'PAID' ? totalPaid >= totalDue : true;
   const hasPaymentError = nonCashOverpay;
+  // MoMo collection API not yet integrated — allow sales with MoMo as a
+  // manually-recorded payment method (same as cash/card/transfer).  Once
+  // providers are connected, flip this back to:
+  //   const momoReady = !needsMomoConfirmation || momoConfirmed;
+  const momoReady = true;
+  const tillReady =
+    !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
   const canSubmit =
-    cart.length > 0 && fullyPaid && !hasPaymentError && (!requiresCustomer || customerId);
+    cart.length > 0 &&
+    fullyPaid &&
+    !hasPaymentError &&
+    momoReady &&
+    discountApprovalReady &&
+    tillReady &&
+    (!requiresCustomer || customerId);
   const errorParam = searchParams.get('error');
 
   useEffect(() => {
@@ -908,7 +1178,7 @@ export default function PosClient({ business, store, tills, products, customers,
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 md:grid-cols-[3fr_1fr]">
+    <div className="grid gap-6 md:grid-cols-[3fr_1fr] pb-24 md:pb-0">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -983,17 +1253,27 @@ export default function PosClient({ business, store, tills, products, customers,
                           key={product.id}
                           type="button"
                           disabled={outOfStock}
-                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-emerald-50 active:bg-emerald-100'}`}
+                          className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'}`}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             if (!base || outOfStock) return;
-                            addToCart({ productId: product.id, unitId: base.id, qtyInUnit: 1 });
-                            setProductId(product.id);
-                            setUnitId(base.id);
-                            setProductSearch('');
-                            setProductDropdownOpen(false);
-                            playBeep(true);
-                            barcodeRef.current?.focus();
+                            if (product.units.length > 1) {
+                              // Multiple units — stage for unit selection
+                              setStagedProduct(product);
+                              setStagedUnitId(base.id);
+                              setStagedQty('1');
+                              setProductSearch('');
+                              setProductDropdownOpen(false);
+                            } else {
+                              // Single unit — add directly as before
+                              addToCart({ productId: product.id, unitId: base.id, qtyInUnit: 1 });
+                              setProductId(product.id);
+                              setUnitId(base.id);
+                              setProductSearch('');
+                              setProductDropdownOpen(false);
+                              playBeep(true);
+                              barcodeRef.current?.focus();
+                            }
                           }}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -1068,6 +1348,71 @@ export default function PosClient({ business, store, tills, products, customers,
           )}
         </div>
 
+        {/* ── Staged product: unit + qty picker ──────────────── */}
+        {stagedProduct && (
+          <div className="card p-4 border-2 border-accent/20 bg-accentSoft/30">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-bold text-ink">{stagedProduct.name}</div>
+                <div className="text-xs text-muted">Select how you want to sell</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setStagedProduct(null); barcodeRef.current?.focus(); }}
+                className="text-black/30 hover:text-black/60 text-xl leading-none px-1"
+              >
+                &times;
+              </button>
+            </div>
+            {/* Unit toggle */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {stagedProduct.units.map((u) => {
+                const baseU = stagedProduct.units.find((x) => x.isBaseUnit);
+                const label = u.conversionToBase > 1
+                  ? `${u.name} (${u.conversionToBase} ${baseU?.name ?? 'pcs'})`
+                  : u.name;
+                const available = getAvailableBase(stagedProduct.id);
+                const maxQty = u.conversionToBase > 0 ? Math.floor(available / u.conversionToBase) : available;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setStagedUnitId(u.id)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                      stagedUnitId === u.id
+                        ? 'bg-accent text-white shadow-sm'
+                        : 'bg-black/5 text-black/60 hover:bg-black/10'
+                    }`}
+                  >
+                    {label}
+                    {maxQty <= 5 && <span className="ml-1 text-xs opacity-70">({maxQty} left)</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Qty + Add */}
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={1}
+                step={0.001}
+                inputMode="decimal"
+                value={stagedQty}
+                onChange={(e) => setStagedQty(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleAddStaged(); }
+                  if (e.key === 'Escape') { setStagedProduct(null); barcodeRef.current?.focus(); }
+                }}
+                className="input w-24 text-center"
+                autoFocus
+              />
+              <button type="button" onClick={handleAddStaged} className="btn-primary flex-1">
+                Add to Cart →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Quick‑add product (collapsed by default) ──────── */}
         {quickAddOpen && (
           <QuickAddPanel
@@ -1084,17 +1429,25 @@ export default function PosClient({ business, store, tills, products, customers,
 
           {/* Success toast */}
           {saleSuccess && (
-            <div className="rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-4 text-white shadow-lg animate-in fade-in">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-scale-in">
+              {/* Confetti dots */}
+              <span className="confetti-dot" style={{ left: '30%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '50%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '70%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '40%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '60%', top: '50%' }} />
+              <span className="confetti-dot" style={{ left: '80%', top: '50%' }} />
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                  <div className="success-ring flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" className="animate-check-draw" />
                     </svg>
                   </div>
                   <div>
                     <div className="font-semibold">Sale Complete!</div>
-                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)} — Ready for next customer</div>
+                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
+                    <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1131,6 +1484,12 @@ export default function PosClient({ business, store, tills, products, customers,
                 ? 'Select a customer for credit or part-paid sales.'
                 : errorParam === 'insufficient-stock'
                   ? 'One or more items exceed available stock.'
+                  : errorParam === 'till-not-open'
+                    ? 'Open the till shift first before recording sales.'
+                    : errorParam === 'invalid-discount-pin'
+                      ? 'Manager PIN for discount override is invalid.'
+                    : errorParam === 'invalid-discount-reason'
+                      ? 'Discount reason code is invalid.'
                   : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
@@ -1146,7 +1505,7 @@ export default function PosClient({ business, store, tills, products, customers,
               </div>
               <div className="flex items-center gap-3">
                 {cartRestored && (
-                  <span className="text-xs text-blue-600 font-medium">Restored from last session</span>
+                  <span className="text-xs text-accent font-medium">Restored from last session</span>
                 )}
                 {cart.length > 0 && (
                   <button
@@ -1174,10 +1533,11 @@ export default function PosClient({ business, store, tills, products, customers,
               <div className="divide-y divide-black/5">
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
+                  const availBase = getAvailableBase(line.productId, line.id);
                   return (
                     <div
                       key={line.id}
-                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? 'bg-emerald-50/50' : 'hover:bg-black/[.02]'}`}
+                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
                       onClick={() => setActiveLineId(line.id)}
                     >
                       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-black/5 text-xs font-bold text-black/40">
@@ -1189,6 +1549,11 @@ export default function PosClient({ business, store, tills, products, customers,
                           <span className="text-xs text-black/40">{formatMoney(line.unitPrice, business.currency)} × {line.unit.name}</span>
                           {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
                           {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
+                          {availBase <= 10 && (
+                            <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
+                              {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -1211,8 +1576,8 @@ export default function PosClient({ business, store, tills, products, customers,
                           className="w-12 rounded-lg border border-black/10 bg-white px-1 py-1 text-center text-sm font-bold"
                           type="number"
                           min={0}
-                          step={1}
-                          inputMode="numeric"
+                          step={0.001}
+                          inputMode="decimal"
                           value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
                           onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))}
                           onBlur={() => commitLineQty(line)}
@@ -1240,7 +1605,7 @@ export default function PosClient({ business, store, tills, products, customers,
                       </div>
                       <button
                         type="button"
-                        className="flex-shrink-0 rounded-lg p-2 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
+                        className="flex-shrink-0 rounded-lg p-3 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
                         onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
                         title="Remove"
                       >
@@ -1326,6 +1691,11 @@ export default function PosClient({ business, store, tills, products, customers,
                 <select className="input" name="tillId" value={tillId} onChange={(e) => setTillId(e.target.value)}>
                   {tills.map((till) => (<option key={till.id} value={till.id}>{till.name}</option>))}
                 </select>
+                {business.requireOpenTillForSales ? (
+                  <div className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}>
+                    {tillReady ? 'Till is open' : 'Till is not open'}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className="label">Payment Status</label>
@@ -1343,7 +1713,7 @@ export default function PosClient({ business, store, tills, products, customers,
                       key={method}
                       type="button"
                       onClick={() => togglePaymentMethod(method)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-emerald-600 text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-accent text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
                     >
                       {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'}
                     </button>
@@ -1367,12 +1737,18 @@ export default function PosClient({ business, store, tills, products, customers,
                   onChange={(e) => setCustomerId(e.target.value)}
                 >
                   <option value="">{requiresCustomer ? 'Select a customer…' : 'Walk-in / None'}</option>
-                  {customers.map((customer) => (
+                  {customerOptions.map((customer) => (
                     <option key={customer.id} value={customer.id}>{customer.name}</option>
                   ))}
                 </select>
               </div>
-              <Link className="btn-secondary text-xs whitespace-nowrap mt-5" href="/customers">+ New</Link>
+              <button
+                type="button"
+                className="btn-secondary text-xs whitespace-nowrap mt-5"
+                onClick={() => setShowQuickCustomer(true)}
+              >
+                + New
+              </button>
             </div>
 
             {/* Order discount */}
@@ -1401,6 +1777,47 @@ export default function PosClient({ business, store, tills, products, customers,
               />
             </div>
 
+            {requiresDiscountApproval ? (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Manager Approval Required
+                </div>
+                <div className="mt-1 text-xs text-amber-700">
+                  Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
+                  {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <select
+                    className="input"
+                    value={discountReasonCode}
+                    onChange={(e) => setDiscountReasonCode(e.target.value)}
+                  >
+                    <option value="">Select reason code</option>
+                    {DISCOUNT_REASON_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {code.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Reason details"
+                  />
+                  <input
+                    className="input"
+                    type="password"
+                    value={discountManagerPin}
+                    onChange={(e) => setDiscountManagerPin(e.target.value)}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Manager PIN"
+                  />
+                </div>
+              </div>
+            ) : null}
+
             {/* Cash / Card / Transfer inputs */}
             <div className="grid gap-3 sm:grid-cols-3">
               {hasMethod('CASH') && (
@@ -1422,7 +1839,7 @@ export default function PosClient({ business, store, tills, products, customers,
                       <button
                         key={amount}
                         type="button"
-                        className="rounded-md border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold hover:bg-black/5"
+                        className="rounded-md border border-black/10 bg-white px-3 py-2 text-xs font-semibold hover:bg-black/5"
                         onClick={() => setCashTendered(String(amount))}
                       >
                         {formatMoney(amount * 100, business.currency)}
@@ -1430,7 +1847,7 @@ export default function PosClient({ business, store, tills, products, customers,
                     ))}
                     <button
                       type="button"
-                      className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
                       onClick={() => setCashTendered(String(totalDue / 100))}
                     >
                       Exact
@@ -1456,13 +1873,45 @@ export default function PosClient({ business, store, tills, products, customers,
                     <span className="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
                     MoMo Amount
                   </label>
-                  <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={momoPaid} onChange={(e) => setMomoPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} placeholder="0.00" />
-                  <input className="input mt-1.5" type="text" value={momoRef} onChange={(e) => setMomoRef(e.target.value)} placeholder="Transaction ID (optional)" />
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[10px] font-medium text-yellow-800">MTN</span>
-                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-800">Telecel</span>
-                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-800">AirtelTigo</span>
-                  </div>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={momoPaid}
+                    onChange={(e) => setMomoPaid(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    placeholder="0.00"
+                  />
+                  <select
+                    className="input mt-1.5"
+                    value={momoNetwork}
+                    onChange={(e) => setMomoNetwork(e.target.value as CollectionNetwork)}
+                  >
+                    <option value="MTN">MTN</option>
+                    <option value="TELECEL">Telecel</option>
+                    <option value="AIRTELTIGO">AirtelTigo</option>
+                  </select>
+                  <input
+                    className="input mt-1.5"
+                    type="tel"
+                    value={momoPayerMsisdn}
+                    onChange={(e) => setMomoPayerMsisdn(e.target.value)}
+                    placeholder="Payer number (e.g. 024xxxxxxx)"
+                  />
+                  {momoCollectionStatus === 'IDLE' ? (
+                    <div className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800">
+                      Enter the MoMo amount and payer number, then complete the sale. Verify the customer&apos;s payment confirmation on their phone before handing over goods.
+                    </div>
+                  ) : null}
+                  <input
+                    className="input mt-1.5"
+                    type="text"
+                    value={momoRef}
+                    onChange={(e) => setMomoRef(e.target.value)}
+                    placeholder="Transaction ref (optional)"
+                  />
                 </div>
               )}
             </div>
@@ -1473,6 +1922,21 @@ export default function PosClient({ business, store, tills, products, customers,
             )}
             {hasPaymentError && (
               <div className="text-sm text-amber-700 font-medium">Card/transfer/MoMo amounts cannot exceed the total due.</div>
+            )}
+            {!tillReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                Open this till shift before recording sales.
+              </div>
+            )}
+            {needsMomoConfirmation && !momoConfirmed && (
+              <div className="text-sm text-emerald-700 font-medium">
+                ✓ MoMo payment will be recorded. Verify customer&apos;s receipt before completing.
+              </div>
+            )}
+            {requiresDiscountApproval && !discountApprovalReady && (
+              <div className="text-sm text-amber-700 font-medium">
+                High discount requires manager PIN and reason before sale completion.
+              </div>
             )}
             {paymentStatus === 'PAID' && !fullyPaid && (
               <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>
@@ -1509,7 +1973,8 @@ export default function PosClient({ business, store, tills, products, customers,
         )}
       </div>
 
-      {/* ── Summary sidebar ─────────────────────────────── */}
+      {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
+      <div className="hidden md:block">
       <SummarySidebar
         business={business}
         store={store}
@@ -1530,11 +1995,43 @@ export default function PosClient({ business, store, tills, products, customers,
         onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
         onDeleteParked={deleteParkedCart}
       />
+      </div>
 
       <KeyboardHelpModal
         show={showKeyboardHelp}
         onClose={() => setShowKeyboardHelp(false)}
       />
+      {showQuickCustomer ? (
+        <QuickAddCustomer
+          currency={business.currency}
+          onCreated={(customer) => {
+            setCustomerOptions((prev) => [...prev, customer]);
+            setCustomerId(customer.id);
+            setShowQuickCustomer(false);
+          }}
+          onClose={() => setShowQuickCustomer(false)}
+        />
+      ) : null}
+
+      {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
+              <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
+            </div>
+            <button
+              type="button"
+              className="btn-primary px-5 py-3 text-sm font-bold whitespace-nowrap"
+              disabled={!canSubmit || isCompletingSale}
+              onClick={handleCompleteSale}
+            >
+              {isCompletingSale ? 'Processing…' : 'Complete Sale →'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

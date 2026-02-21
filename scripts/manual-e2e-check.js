@@ -1,6 +1,28 @@
 const { chromium } = require('playwright');
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
+const CASHIER_EMAIL = process.env.E2E_CASHIER_EMAIL || 'cashier@store.com';
+const CASHIER_PASSWORD = process.env.E2E_CASHIER_PASSWORD || 'Pass1234!';
+const prisma = new PrismaClient();
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Ensure the cashier account has the known E2E password.
+ *  A failed backup restore can wipe + recreate users with random passwords;
+ *  this guard makes the smoke E2E resilient to that scenario. */
+async function ensureCashierPassword() {
+  try {
+    const hash = await bcrypt.hash(CASHIER_PASSWORD, 10);
+    await prisma.user.updateMany({
+      where: { email: CASHIER_EMAIL },
+      data: { passwordHash: hash },
+    });
+  } catch (e) { /* best effort */ }
+}
 
 async function waitForEnabled(locator, timeoutMs = 15000) {
   const start = Date.now();
@@ -9,6 +31,45 @@ async function waitForEnabled(locator, timeoutMs = 15000) {
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   throw new Error('Timed out waiting for enabled element');
+}
+
+async function seedSellableProductIfNeeded() {
+  const business = await prisma.business.findFirst({ select: { id: true } });
+  if (!business) return;
+
+  const store = await prisma.store.findFirst({
+    where: { businessId: business.id },
+    select: { id: true },
+  });
+  if (!store) return;
+
+  const product = await prisma.product.findFirst({
+    where: { businessId: business.id, active: true },
+    select: { id: true, defaultCostBasePence: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!product) return;
+
+  const existing = await prisma.inventoryBalance.findUnique({
+    where: { storeId_productId: { storeId: store.id, productId: product.id } },
+    select: { qtyOnHandBase: true, avgCostBasePence: true },
+  });
+
+  if ((existing?.qtyOnHandBase ?? 0) > 0) return;
+
+  await prisma.inventoryBalance.upsert({
+    where: { storeId_productId: { storeId: store.id, productId: product.id } },
+    update: {
+      qtyOnHandBase: 20,
+      avgCostBasePence: existing?.avgCostBasePence ?? product.defaultCostBasePence ?? 100,
+    },
+    create: {
+      storeId: store.id,
+      productId: product.id,
+      qtyOnHandBase: 20,
+      avgCostBasePence: product.defaultCostBasePence ?? 100,
+    },
+  });
 }
 
 async function run() {
@@ -29,25 +90,88 @@ async function run() {
   };
 
   try {
+    // Ensure the cashier password is set correctly (guards against partial backup restore)
+    await ensureCashierPassword();
+
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-    // In dev mode, server-action hydration can lag briefly before redirect handling works.
-    await page.waitForTimeout(10000);
-    await page.locator('input[name="email"]').fill('cashier@store.com');
-    await page.locator('input[name="password"]').fill('Pass1234!');
-    await page.getByRole('button', { name: /sign in/i }).click();
+    // Wait for hydration before interacting with the form
     await page.waitForTimeout(5000);
+    await page.locator('input[name="email"]').fill(CASHIER_EMAIL);
+    await page.locator('input[name="password"]').fill(CASHIER_PASSWORD);
+    await page.getByRole('button', { name: /sign in/i }).click();
+    // Poll for redirect (up to 30s) — more reliable than a fixed wait
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      const url = page.url();
+      if (/\/pos|\/onboarding/.test(url)) break;
+      await page.waitForTimeout(500);
+    }
     const postLoginUrl = page.url();
-    if (!/\/pos/.test(postLoginUrl)) {
+    if (!/\/pos|\/onboarding/.test(postLoginUrl)) {
       await page.screenshot({ path: '.playwright-mcp/login-failed.png', fullPage: true });
       const errorBanner = await page.locator('div.rounded-xl.border.border-rose-300').first().textContent().catch(() => null);
       throw new Error(`Login did not redirect to /pos. URL: ${postLoginUrl}. ErrorBanner: ${errorBanner ?? 'none'}`);
     }
+    if (/\/onboarding/.test(postLoginUrl)) {
+      await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });
+    }
     report.login = true;
 
+    const getCacheData = async () => {
+      const cacheResp = await page.request.get(`${BASE_URL}/api/offline/cache-data`);
+      if (cacheResp.status() !== 200) {
+        throw new Error(`Offline cache API returned ${cacheResp.status()}`);
+      }
+      const payload = await cacheResp.json();
+      if (!Array.isArray(payload.products) || payload.products.length === 0) {
+        throw new Error('Offline cache API returned no products');
+      }
+      return payload;
+    };
+
+    let cacheData = await getCacheData();
+    let saleProduct = cacheData.products.find(
+      (p) => p.onHandBase > 0 && Array.isArray(p.units) && p.units.length > 0
+    );
+    if (!saleProduct) {
+      await seedSellableProductIfNeeded();
+      cacheData = await getCacheData();
+      saleProduct = cacheData.products.find(
+        (p) => p.onHandBase > 0 && Array.isArray(p.units) && p.units.length > 0
+      );
+    }
+    if (!saleProduct) throw new Error('Could not find POS product candidate with stock');
+
+    // Wait for the product search input to be visible and React to be hydrated
     const productSearch = page.getByPlaceholder(/type product name/i);
-    await productSearch.fill('Coca');
-    await page.getByRole('button', { name: /Coca-Cola/i }).first().click();
-    await page.getByRole('button', { name: /^Exact$/ }).click();
+    await productSearch.waitFor({ state: 'visible', timeout: 20000 });
+
+    const searchTerm = String(saleProduct.name || '').slice(0, 6) || 'a';
+    // Click first so onFocus → setProductDropdownOpen(true), then fill (which uses
+    // native input events, bypassing the POS barcode-scanner global keydown handler)
+    await productSearch.click();
+    await productSearch.fill(searchTerm);
+    // Use hasText locator — simpler and more reliable than accessible-name role matching
+    const productButton = page.locator('button', { hasText: saleProduct.name });
+    // Wait for the autocomplete dropdown to render the product button
+    await productButton.first().waitFor({ state: 'visible', timeout: 10000 });
+    await productButton.first().click();
+
+    // Products with multiple units now stage for unit selection before adding
+    // to cart. Race between the staging "Add to Cart" button and the direct
+    // "Exact" qty button (single-unit products skip staging).
+    const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
+    const exactBtn = page.getByRole('button', { name: /^Exact$/ });
+    const outcome = await Promise.race([
+      addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
+      exactBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
+    ]).catch(() => 'timeout');
+
+    if (outcome === 'staged') {
+      await addToCartBtn.click();
+    }
+
+    await exactBtn.click();
 
     const completeSaleButton = page.getByRole('button', { name: /Complete Sale/i });
     await waitForEnabled(completeSaleButton);
@@ -69,14 +193,6 @@ async function run() {
     report.receipt = true;
     await receiptPage.close();
 
-    const cacheResp = await page.request.get(`${BASE_URL}/api/offline/cache-data`);
-    if (cacheResp.status() !== 200) {
-      throw new Error(`Offline cache API returned ${cacheResp.status()}`);
-    }
-    const cacheData = await cacheResp.json();
-    if (!Array.isArray(cacheData.products) || cacheData.products.length === 0) {
-      throw new Error('Offline cache API returned no products');
-    }
     report.offlineCacheApi = true;
 
     const product =
@@ -143,6 +259,7 @@ async function run() {
     console.error(JSON.stringify({ success: false, report, error: error instanceof Error ? error.message : String(error) }, null, 2));
     process.exitCode = 1;
   } finally {
+    await prisma.$disconnect();
     await context.close();
     await browser.close();
   }

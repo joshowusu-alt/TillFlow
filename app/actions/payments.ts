@@ -24,24 +24,29 @@ function parsePayments(formData: FormData): PaymentInput[] {
 
 export async function recordCustomerPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext();
+    const { businessId, user } = await withBusinessContext();
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
 
-    await recordCustomerPayment(businessId, invoiceId, payments);
-    redirect('/payments/customer-receipts');
+    await recordCustomerPayment(businessId, invoiceId, payments, user.id);
+    const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
+    redirect(returnTo);
   }, '/payments/customer-receipts');
 }
 
 export async function recordSupplierPaymentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext();
+    const { businessId, user } = await withBusinessContext();
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
+    const paidAtStr = formString(formData, 'paidAt');
+    const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
+    const notes = formString(formData, 'notes') || undefined;
 
-    await recordSupplierPayment(businessId, invoiceId, payments);
-    redirect('/payments/supplier-payments');
+    await recordSupplierPayment(businessId, invoiceId, payments, paidAt, user.id, notes);
+    const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
+    redirect(returnTo);
   }, '/payments/supplier-payments');
 }

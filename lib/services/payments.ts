@@ -8,6 +8,7 @@ import {
   debitCashBankLines,
   type JournalLine
 } from './shared';
+import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 
 /**
  * Record additional payment(s) against an existing sales invoice.
@@ -15,7 +16,8 @@ import {
 export async function recordCustomerPayment(
   businessId: string,
   invoiceId: string,
-  payments: PaymentInput[]
+  payments: PaymentInput[],
+  actorUserId?: string
 ) {
   const invoice = await prisma.salesInvoice.findFirst({
     where: { id: invoiceId, businessId },
@@ -42,6 +44,31 @@ export async function recordCustomerPayment(
         reference: p.reference ?? null
       }))
     });
+
+    if (split.cashPence > 0 && actorUserId) {
+      const openShift =
+        (invoice.shiftId
+          ? await tx.shift.findFirst({
+              where: { id: invoice.shiftId, status: 'OPEN' },
+            })
+          : await getOpenShiftForTill(businessId, invoice.tillId, tx)) ?? null;
+      if (openShift) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          tillId: invoice.tillId,
+          shiftId: openShift.id,
+          createdByUserId: actorUserId,
+          cashierUserId: invoice.cashierUserId,
+          entryType: 'CASH_DEBTOR_PAYMENT',
+          amountPence: split.cashPence,
+          reasonCode: 'CUSTOMER_RECEIPT',
+          reason: 'Cash received against outstanding invoice',
+          referenceType: 'SALES_INVOICE',
+          referenceId: invoice.id,
+        });
+      }
+    }
 
     const updatedInvoice = await tx.salesInvoice.update({
       where: { id: invoice.id },
@@ -73,7 +100,10 @@ export async function recordCustomerPayment(
 export async function recordSupplierPayment(
   businessId: string,
   invoiceId: string,
-  payments: PaymentInput[]
+  payments: PaymentInput[],
+  paidAt?: Date,
+  recordedByUserId?: string,
+  notes?: string
 ) {
   const invoice = await prisma.purchaseInvoice.findFirst({
     where: { id: invoiceId, businessId },
@@ -97,7 +127,10 @@ export async function recordSupplierPayment(
         purchaseInvoiceId: invoice.id,
         method: p.method,
         amountPence: p.amountPence,
-        reference: p.reference ?? null
+        reference: p.reference ?? null,
+        ...(paidAt ? { paidAt } : {}),
+        ...(recordedByUserId ? { recordedByUserId } : {}),
+        ...(notes ? { notes } : {}),
       }))
     });
 

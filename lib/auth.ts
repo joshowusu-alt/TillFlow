@@ -9,43 +9,104 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
  * Wrapped with React cache() so that multiple calls within the same
  * server request (e.g. layout + page) only hit the database once.
  */
+/**
+ * Helper to delete the pos_session cookie so stale tokens
+ * don't cause redirect loops between middleware and auth.
+ */
+function clearSessionCookie() {
+  try {
+    cookies().delete('pos_session');
+  } catch {
+    // cookies().delete can throw in certain rendering contexts
+  }
+}
+
+/**
+ * Extract the browser family from a user-agent string for lenient comparison.
+ * Returns e.g. "Chrome/Android", "Safari/iOS", "Firefox/Windows" etc.
+ * Only compares the broad browser + OS family — not the full string — so that
+ * minor version bumps, middlebox injection, or reduced UA strings don't
+ * invalidate sessions (common on mobile networks in Africa).
+ */
+function browserFamily(ua: string | null): string | null {
+  if (!ua) return null;
+  const browser =
+    /Edg\//i.test(ua) ? 'Edge' :
+    /OPR\//i.test(ua) ? 'Opera' :
+    /Chrome\//i.test(ua) ? 'Chrome' :
+    /Safari\//i.test(ua) ? 'Safari' :
+    /Firefox\//i.test(ua) ? 'Firefox' :
+    'Other';
+  const os =
+    /Android/i.test(ua) ? 'Android' :
+    /iPhone|iPad|iPod/i.test(ua) ? 'iOS' :
+    /Windows/i.test(ua) ? 'Windows' :
+    /Mac OS/i.test(ua) ? 'Mac' :
+    /Linux/i.test(ua) ? 'Linux' :
+    'Other';
+  return `${browser}/${os}`;
+}
+
 export const getUser = cache(async () => {
   const token = cookies().get('pos_session')?.value;
   if (!token) return null;
 
-  const session = await prisma.session.findUnique({
-    where: { token },
-    select: {
-      id: true,
-      expiresAt: true,
-      userAgent: true,
-      ipAddress: true,
-      lastSeenAt: true,
-      user: {
-        select: {
-          id: true,
-          businessId: true,
-          name: true,
-          email: true,
-          role: true,
-          active: true,
-          twoFactorEnabled: true,
-          twoFactorTempSecret: true,
+  let session;
+  try {
+    session = await prisma.session.findUnique({
+      where: { token },
+      select: {
+        id: true,
+        expiresAt: true,
+        userAgent: true,
+        ipAddress: true,
+        lastSeenAt: true,
+        user: {
+          select: {
+            id: true,
+            businessId: true,
+            name: true,
+            email: true,
+            role: true,
+            active: true,
+            twoFactorEnabled: true,
+            twoFactorTempSecret: true,
+          }
         }
       }
-    }
-  });
-  if (!session) return null;
+    });
+  } catch (err) {
+    // DB connection failure — DON'T delete the cookie so the user can retry.
+    // Throwing lets the error boundary show "Try Again" instead of silently
+    // logging out (important for flaky connections, e.g. Africa/cold-starts).
+    console.error('[auth] DB lookup failed:', err);
+    throw new Error('Database temporarily unavailable. Please try again.');
+  }
+
+  if (!session) {
+    // Session token in cookie but not in DB — clear stale cookie
+    clearSessionCookie();
+    return null;
+  }
 
   if (session.expiresAt < new Date()) {
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    clearSessionCookie();
     return null;
   }
 
   const headerStore = headers();
   const currentUserAgent = (headerStore.get('user-agent') ?? '').slice(0, 255) || null;
-  if (session.userAgent && currentUserAgent && session.userAgent !== currentUserAgent) {
+
+  // Lenient UA check: only compare browser family + OS, not the full string.
+  // Full-string comparison causes false logouts on mobile networks where
+  // proxies modify UAs or browser versions change between requests.
+  const storedFamily = browserFamily(session.userAgent);
+  const currentFamily = browserFamily(currentUserAgent);
+  if (storedFamily && currentFamily && storedFamily !== currentFamily) {
+    console.warn('[auth] Browser family mismatch', { storedFamily, currentFamily });
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
+    clearSessionCookie();
     return null;
   }
 
@@ -68,6 +129,7 @@ export const getUser = cache(async () => {
 export async function requireUser() {
   const user = await getUser();
   if (!user) {
+    // getUser already clears the stale cookie, so redirect will work
     redirect('/login');
   }
   return user;
@@ -111,6 +173,20 @@ const _getBusiness = cache(async (businessId: string) => {
       momoProvider: true,
       momoNumber: true,
       openingCapitalPence: true,
+      requireOpenTillForSales: true,
+      varianceReasonRequired: true,
+      discountApprovalThresholdBps: true,
+      inventoryAdjustmentRiskThresholdBase: true,
+      cashVarianceRiskThresholdPence: true,
+      customerScope: true,
+      whatsappEnabled: true,
+      whatsappPhone: true,
+      whatsappScheduleTime: true,
+      whatsappBranchScope: true,
+      isDemo: true,
+      onboardingCompletedAt: true,
+      hasDemoData: true,
+      guidedSetup: true,
       createdAt: true,
     }
   });

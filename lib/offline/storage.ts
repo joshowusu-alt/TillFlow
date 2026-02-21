@@ -214,6 +214,16 @@ export async function getPendingSales(): Promise<OfflineSale[]> {
     return all.filter((sale) => !sale.synced);
 }
 
+export async function getOfflineSale(id: string): Promise<OfflineSale | undefined> {
+    const db = await getDB();
+    return db.get('salesQueue', id);
+}
+
+export async function updateOfflineSale(sale: OfflineSale): Promise<void> {
+    const db = await getDB();
+    await db.put('salesQueue', sale);
+}
+
 export async function markSaleSynced(id: string): Promise<void> {
     const db = await getDB();
     const sale = await db.get('salesQueue', id);

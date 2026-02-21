@@ -3,7 +3,7 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
-import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
+import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
@@ -65,7 +65,7 @@ export default async function ProductDetailPage({
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
         ) : (
-          <div className="w-24 h-24 rounded-xl bg-emerald-100 flex items-center justify-center text-3xl font-bold text-emerald-700 flex-shrink-0">
+          <div className="w-24 h-24 rounded-xl bg-accentSoft flex items-center justify-center text-3xl font-bold text-accent flex-shrink-0">
             {product.name.charAt(0)}
           </div>
         )}
@@ -132,26 +132,30 @@ export default async function ProductDetailPage({
               </div>
             </div>
             <div>
-              <label className="label">Base Price ({getMinorUnitLabel(business.currency)})</label>
+              <label className="label">Base Price ({getCurrencySymbol(business.currency)})</label>
               <input
                 className="input"
                 name="sellingPriceBasePence"
                 type="number"
                 min={0}
-                defaultValue={product.sellingPriceBasePence}
+                step="0.01"
+                inputMode="decimal"
+                defaultValue={(product.sellingPriceBasePence / 100).toFixed(2)}
               />
-              <div className="mt-1 text-xs text-black/50">Price per base unit in {getMinorUnitLabel(business.currency)}. E.g. {getCurrencySymbol(business.currency)}5.00 = 500.</div>
+              <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
             </div>
             <div>
-              <label className="label">Base Cost ({getMinorUnitLabel(business.currency)})</label>
+              <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
               <input
                 className="input"
                 name="defaultCostBasePence"
                 type="number"
                 min={0}
-                defaultValue={product.defaultCostBasePence}
+                step="0.01"
+                inputMode="decimal"
+                defaultValue={(product.defaultCostBasePence / 100).toFixed(2)}
               />
-              <div className="mt-1 text-xs text-black/50">Cost per base unit in {getMinorUnitLabel(business.currency)}.</div>
+              <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
             </div>
             <div>
               <label className="label">VAT Rate (bps)</label>

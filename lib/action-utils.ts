@@ -9,6 +9,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireUser, requireRole, type Role } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 
 // ---------------------------------------------------------------------------
 // Consistent result type
@@ -88,18 +89,8 @@ export async function safeAction<T>(
   try {
     return await fn();
   } catch (error: unknown) {
-    // Next.js redirect() throws a special error — rethrow it.
-    if (error instanceof Error && error.message === 'NEXT_REDIRECT') throw error;
-    // Also handle the digest-based redirect used in newer Next.js
-    if (
-      error &&
-      typeof error === 'object' &&
-      'digest' in error &&
-      typeof (error as any).digest === 'string' &&
-      (error as any).digest.startsWith('NEXT_REDIRECT')
-    ) {
-      throw error;
-    }
+    // Next.js redirect() throws a special internal error — always re-throw it.
+    if (isRedirectError(error)) throw error;
     // Return a user-friendly message instead of raw technical errors
     if (error instanceof Error) {
       const msg = error.message;

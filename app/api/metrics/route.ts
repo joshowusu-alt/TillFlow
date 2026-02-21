@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 function isAuthorized(request: Request) {
   const token = process.env.METRICS_TOKEN;
   if (!token) return true;

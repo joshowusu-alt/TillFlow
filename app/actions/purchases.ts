@@ -3,8 +3,8 @@
 import { createPurchase } from '@/lib/services/purchases';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { toInt, toPence } from '@/lib/form-helpers';
-import { formString, formInt, formDate } from '@/lib/form-helpers';
+import { revalidateTag } from 'next/cache';
+import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
@@ -52,9 +52,11 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       lines
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
 
-    redirect('/purchases');
+    revalidateTag('pos-products');
+
+    redirect(`/purchases?created=${Date.now()}`);
   }, '/purchases');
 }
 
@@ -105,7 +107,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId },
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -115,6 +117,8 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       entityId: purchaseId,
       details: { action: 'DELETE', lines: invoice.lines.length },
     });
+
+    revalidateTag('pos-products');
 
     return ok();
   });

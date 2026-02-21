@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { Prisma } from '@prisma/client';
 import { formString, formOptionalString, formInt, formPence } from '@/lib/form-helpers';
 import {
@@ -100,8 +101,9 @@ export async function createProductAction(formData: FormData): Promise<void> {
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_CREATE', entity: 'Product', entityId: product.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
+    revalidateTag('pos-products');
     redirect('/products');
   }, '/products');
 }
@@ -193,8 +195,9 @@ export async function updateProductAction(formData: FormData): Promise<void> {
       }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PRODUCT_UPDATE', entity: 'Product', entityId: existingProduct.id, details: { name: fields.name, price: fields.sellingPriceBasePence } });
 
+    revalidateTag('pos-products');
     redirect(`/products/${existingProduct.id}`);
   }, '/products');
 }
@@ -248,6 +251,7 @@ export async function quickCreateProductAction(input: {
         include: { productUnits: { include: { unit: true } } }
       });
 
+      revalidateTag('pos-products');
       return ok({
         id: created.id,
         name: created.name,
@@ -293,7 +297,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       data: { active: false },
     });
 
-    await audit({
+    audit({
       businessId,
       userId: user.id,
       userName: user.name,
@@ -304,6 +308,65 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       details: { name: product.name },
     });
 
+    revalidateTag('pos-products');
     return ok({ message: `"${product.name}" has been deactivated.` });
+  });
+}
+
+/**
+ * One-time repair: divide all product prices by 100 for products where
+ * prices look inflated (sellingPriceBasePence > threshold).
+ * This fixes the double-conversion bug where editing a product multiplied
+ * the price by 100 again. Only OWNER can run this.
+ */
+export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed: number }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    // Products where selling price > ₵1,000 (100000 pesewas) are likely inflated
+    const inflated = await prisma.product.findMany({
+      where: {
+        businessId,
+        active: true,
+        OR: [
+          { sellingPriceBasePence: { gt: 100000 } },
+          { defaultCostBasePence: { gt: 100000 } },
+        ],
+      },
+      select: { id: true, name: true, sellingPriceBasePence: true, defaultCostBasePence: true },
+    });
+
+    if (inflated.length === 0) {
+      return ok({ fixed: 0 });
+    }
+
+    await prisma.$transaction(
+      inflated.map((p) =>
+        prisma.product.update({
+          where: { id: p.id },
+          data: {
+            sellingPriceBasePence: Math.round(p.sellingPriceBasePence / 100),
+            defaultCostBasePence: Math.round(p.defaultCostBasePence / 100),
+          },
+        })
+      )
+    );
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRICE_REPAIR',
+      entity: 'Product',
+      entityId: 'bulk',
+      details: {
+        count: inflated.length,
+        products: inflated.map((p) => p.name),
+      },
+    });
+
+    revalidateTag('pos-products');
+    return ok({ fixed: inflated.length });
   });
 }

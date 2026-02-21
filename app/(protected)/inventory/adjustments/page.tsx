@@ -1,17 +1,26 @@
 import PageHeader from '@/components/PageHeader';
+import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime } from '@/lib/format';
 import StockAdjustmentClient from '../StockAdjustmentClient';
 
-export default async function StockAdjustmentsPage() {
+const PAGE_SIZE = 30;
+
+export default async function StockAdjustmentsPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }
 
-  const [products, adjustments] = await Promise.all([
+  const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+
+  const [products, adjustmentCount, adjustments] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       select: {
@@ -30,6 +39,9 @@ export default async function StockAdjustmentsPage() {
           select: { qtyOnHandBase: true }
         }
       }
+    }),
+    prisma.stockAdjustment.count({
+      where: { storeId: store.id },
     }),
     prisma.stockAdjustment.findMany({
       where: { storeId: store.id },
@@ -54,9 +66,12 @@ export default async function StockAdjustmentsPage() {
         user: { select: { name: true } }
       },
       orderBy: { createdAt: 'desc' },
-      take: 30
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     })
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(adjustmentCount / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -121,8 +136,11 @@ export default async function StockAdjustmentsPage() {
               );
             })}
           </tbody>
-        </table>
-      </div>
+        </table>        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          basePath="/inventory/adjustments"
+        />      </div>
     </div>
   );
 }

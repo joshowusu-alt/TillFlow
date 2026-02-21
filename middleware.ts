@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome'];
+const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome', '/demo'];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function forbiddenResponse(request: NextRequest, reason: string) {
@@ -43,12 +43,9 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Redirect logged-in users away from auth pages
-    if (sessionToken && (pathname === '/login' || pathname === '/register')) {
-        const posUrl = request.nextUrl.clone();
-        posUrl.pathname = '/pos';
-        return NextResponse.redirect(posUrl);
-    }
+    // Note: We intentionally do NOT redirect /login → /pos based on cookie existence.
+    // The cookie may reference a stale/invalid session. The login page itself
+    // validates the session via getUser() and redirects if truly authenticated.
 
     // --- Forward pathname header for server components ---
     const requestHeaders = new Headers(request.headers);

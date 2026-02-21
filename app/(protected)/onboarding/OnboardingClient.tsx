@@ -1,7 +1,8 @@
 'use client';
 
-import OnboardingWizard from '@/components/OnboardingWizard';
+import ReadinessJourney from '@/components/ReadinessJourney';
+import type { ReadinessData } from '@/app/actions/onboarding';
 
-export default function OnboardingClient() {
-    return <OnboardingWizard />;
+export default function OnboardingClient({ readiness }: { readiness: ReadinessData }) {
+    return <ReadinessJourney initial={readiness} />;
 }

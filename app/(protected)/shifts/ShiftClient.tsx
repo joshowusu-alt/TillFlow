@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
-import { openShiftAction, closeShiftAction } from '@/app/actions/shifts';
+import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction } from '@/app/actions/shifts';
 
 type Till = { id: string; name: string };
 
@@ -17,6 +18,7 @@ type OpenShift = {
   cardTotal: number;
   transferTotal: number;
   momoTotal: number;
+  cashByType?: Record<string, number>;
 };
 
 type RecentShift = {
@@ -41,16 +43,37 @@ type Props = {
   openShift: OpenShift | null;
   recentShifts: RecentShift[];
   currency: string;
+  userRole?: string;
 };
 
-export default function ShiftClient({ tills, openShift, recentShifts, currency }: Props) {
+export default function ShiftClient({ tills, openShift, recentShifts, currency, userRole }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
   const [openingCash, setOpeningCash] = useState('');
   const [actualCash, setActualCash] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
+  const [managerPin, setManagerPin] = useState('');
+  const [varianceReasonCode, setVarianceReasonCode] = useState('');
+  const [varianceReason, setVarianceReason] = useState('');
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showOwnerOverride, setShowOwnerOverride] = useState(false);
+  const [ownerPassword, setOwnerPassword] = useState('');
+  const [overrideReasonCode, setOverrideReasonCode] = useState('');
+  const [overrideJustification, setOverrideJustification] = useState('');
+  const isOwner = userRole === 'OWNER';
+
+  type ClosedSummary = {
+    tillName: string;
+    salesCount: number;
+    cashSalesPence: number;
+    floatRetainedPence: number;
+    handoverPence: number;
+    actualCashPence: number;
+    variancePence: number;
+  };
+  const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
 
   const handleOpenShift = () => {
     setError(null);
@@ -62,7 +85,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
       try {
         await openShiftAction(formData);
         setOpeningCash('');
-        window.location.reload();
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to open shift');
       }
@@ -76,14 +99,47 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
     formData.set('shiftId', openShift.id);
     formData.set('actualCash', actualCash);
     formData.set('notes', closeNotes);
+    formData.set('varianceReasonCode', varianceReasonCode);
+    formData.set('varianceReason', varianceReason);
+
+    // Capture summary before data disappears on refresh
+    const summarySnapshot: ClosedSummary = {
+      tillName: openShift.till.name,
+      salesCount: openShift.salesCount,
+      cashSalesPence: openShift.cashByType?.CASH_SALE ?? 0,
+      floatRetainedPence: openShift.openingCashPence,
+      handoverPence: Math.max(0, openShift.expectedCash - openShift.openingCashPence),
+      actualCashPence: Math.round(Number(actualCash) * 100),
+      variancePence: Math.round(Number(actualCash) * 100) - openShift.expectedCash,
+    };
+
+    if (showOwnerOverride) {
+      formData.set('ownerPassword', ownerPassword);
+      formData.set('overrideReasonCode', overrideReasonCode);
+      formData.set('overrideJustification', overrideJustification);
+    } else {
+      formData.set('managerPin', managerPin);
+    }
 
     startTransition(async () => {
       try {
-        await closeShiftAction(formData);
+        if (showOwnerOverride) {
+          await closeShiftOwnerOverrideAction(formData);
+        } else {
+          await closeShiftAction(formData);
+        }
         setShowCloseModal(false);
         setActualCash('');
         setCloseNotes('');
-        window.location.reload();
+        setManagerPin('');
+        setVarianceReasonCode('');
+        setVarianceReason('');
+        setOwnerPassword('');
+        setOverrideReasonCode('');
+        setOverrideJustification('');
+        setShowOwnerOverride(false);
+        setClosedSummary(summarySnapshot);
+        router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to close shift');
       }
@@ -106,6 +162,10 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
     const mins = Math.floor((ms % 3600000) / 60000);
     return `${hours}h ${mins}m`;
   };
+
+  const variancePence = actualCash ? Math.round(Number(actualCash) * 100) - (openShift?.expectedCash ?? 0) : 0;
+  const varianceNeedsReason = variancePence !== 0;
+  const cashSalesPence = openShift?.cashByType?.CASH_SALE ?? 0;
 
   return (
     <div className="mt-6 space-y-6">
@@ -174,6 +234,42 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
           </div>
         </div>
       ) : (
+        <>
+        {closedSummary && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✓</span>
+                <div>
+                  <div className="font-semibold text-emerald-800">Shift Closed — {closedSummary.tillName}</div>
+                  <div className="text-xs text-emerald-600">{closedSummary.salesCount} transaction{closedSummary.salesCount !== 1 ? 's' : ''} during shift</div>
+                </div>
+              </div>
+              <button type="button" className="text-emerald-400 hover:text-emerald-600 text-xs" onClick={() => setClosedSummary(null)}>Dismiss</button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-xl bg-white p-3 border border-emerald-100">
+                <div className="text-[10px] uppercase tracking-wider text-black/40">Cash Sales</div>
+                <div className="font-bold text-lg">{formatMoney(closedSummary.cashSalesPence, currency)}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3 border border-blue-100">
+                <div className="text-[10px] uppercase tracking-wider text-blue-400">Handover to Safe</div>
+                <div className="font-bold text-lg text-blue-700">{formatMoney(closedSummary.handoverPence, currency)}</div>
+                <div className="text-[10px] text-black/40">Float retained: {formatMoney(closedSummary.floatRetainedPence, currency)}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3 border border-black/10">
+                <div className="text-[10px] uppercase tracking-wider text-black/40">Variance</div>
+                <div className={`font-bold text-lg ${
+                  closedSummary.variancePence === 0 ? 'text-emerald-700' :
+                  closedSummary.variancePence > 0 ? 'text-accent' : 'text-rose-600'
+                }`}>
+                  {closedSummary.variancePence >= 0 ? '+' : ''}{formatMoney(closedSummary.variancePence, currency)}
+                </div>
+                <div className="text-[10px] text-black/40">Counted: {formatMoney(closedSummary.actualCashPence, currency)}</div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Start New Shift</h2>
           <p className="mt-1 text-sm text-black/60">
@@ -219,6 +315,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
             </div>
           </div>
         </div>
+        </>
       )}
 
       <div className="card p-6">
@@ -259,7 +356,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                           shift.variance === 0
                             ? 'text-emerald-700'
                             : shift.variance > 0
-                            ? 'text-blue-700'
+                            ? 'text-accent'
                             : 'text-rose-700'
                         }
                       >
@@ -314,9 +411,33 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
               <div className="mt-2 flex justify-between text-sm">
                 <span>Cash Sales</span>
                 <span className="font-semibold">
-                  + {formatMoney(openShift.expectedCash - openShift.openingCashPence, currency)}
+                  + {formatMoney(cashSalesPence, currency)}
                 </span>
               </div>
+              {openShift.cashByType?.CASH_DEBTOR_PAYMENT ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Cash Debtor Payments</span>
+                  <span className="font-semibold">
+                    + {formatMoney(openShift.cashByType.CASH_DEBTOR_PAYMENT, currency)}
+                  </span>
+                </div>
+              ) : null}
+              {openShift.cashByType?.PAID_OUT_EXPENSE ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Paid-outs / Expenses</span>
+                  <span className="font-semibold">
+                    - {formatMoney(Math.abs(openShift.cashByType.PAID_OUT_EXPENSE), currency)}
+                  </span>
+                </div>
+              ) : null}
+              {openShift.cashByType?.CASH_REFUND ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Cash Refunds</span>
+                  <span className="font-semibold">
+                    - {formatMoney(Math.abs(openShift.cashByType.CASH_REFUND), currency)}
+                  </span>
+                </div>
+              ) : null}
               <div className="mt-2 flex justify-between border-t border-black/10 pt-2">
                 <span className="font-semibold">Expected Cash</span>
                 <span className="text-lg font-bold text-emerald-700">
@@ -324,6 +445,21 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                 </span>
               </div>
             </div>
+
+            {/* Handover summary — float stays in drawer for the next shift */}
+            {openShift.openingCashPence > 0 && (
+              <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-blue-500">Cash Handover</p>
+                <div className="flex justify-between text-sm text-black/60">
+                  <span>Retain in drawer (opening float)</span>
+                  <span className="font-semibold">&minus;&nbsp;{formatMoney(openShift.openingCashPence, currency)}</span>
+                </div>
+                <div className="flex justify-between border-t border-blue-200 pt-1.5 text-sm font-bold text-blue-700">
+                  <span>Hand to safe / manager ↑</span>
+                  <span>{formatMoney(Math.max(0, openShift.expectedCash - openShift.openingCashPence), currency)}</span>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4">
               <label className="label">Actual Cash Counted</label>
@@ -345,7 +481,7 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                       Number(actualCash) * 100 === openShift.expectedCash
                         ? 'text-emerald-700 font-semibold'
                         : Number(actualCash) * 100 > openShift.expectedCash
-                        ? 'text-blue-700 font-semibold'
+                        ? 'text-accent font-semibold'
                         : 'text-rose-700 font-semibold'
                     }
                   >
@@ -369,6 +505,108 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
               />
             </div>
 
+            <div className="mt-4">
+              <label className="label">Variance Reason Code</label>
+              <select
+                className="input"
+                value={varianceReasonCode}
+                onChange={(e) => setVarianceReasonCode(e.target.value)}
+              >
+                <option value="">Select reason</option>
+                <option value="COUNT_ERROR">Counting error corrected</option>
+                <option value="MISSING_CASH">Missing cash</option>
+                <option value="EXTRA_CASH">Extra cash found</option>
+                <option value="LATE_POSTING">Late transaction posting</option>
+                <option value="OTHER">Other</option>
+              </select>
+              {varianceNeedsReason && !varianceReasonCode && !varianceReason ? (
+                <div className="mt-1 text-xs text-amber-700">
+                  Reason code or notes are required for non-zero variance.
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4">
+              <label className="label">Variance Details</label>
+              <input
+                className="input"
+                value={varianceReason}
+                onChange={(e) => setVarianceReason(e.target.value)}
+                placeholder="Describe why counted cash differs"
+              />
+            </div>
+
+            {!showOwnerOverride ? (
+              <div className="mt-4">
+                <label className="label">Manager PIN (required)</label>
+                <input
+                  className="input"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={managerPin}
+                  onChange={(e) => setManagerPin(e.target.value)}
+                  placeholder="Enter manager approval PIN"
+                />
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
+                <div>
+                  <label className="label">Your Password</label>
+                  <input
+                    className="input"
+                    type="password"
+                    value={ownerPassword}
+                    onChange={(e) => setOwnerPassword(e.target.value)}
+                    placeholder="Re-enter your login password"
+                  />
+                </div>
+                <div>
+                  <label className="label">Reason Code</label>
+                  <select
+                    className="input"
+                    value={overrideReasonCode}
+                    onChange={(e) => setOverrideReasonCode(e.target.value)}
+                  >
+                    <option value="">Select reason...</option>
+                    <option value="MANAGER_UNAVAILABLE">Manager unavailable</option>
+                    <option value="EMERGENCY_CLOSE">Emergency close</option>
+                    <option value="SYSTEM_ISSUE">System/PIN issue</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Justification</label>
+                  <textarea
+                    className="input"
+                    rows={2}
+                    value={overrideJustification}
+                    onChange={(e) => setOverrideJustification(e.target.value)}
+                    placeholder="Explain why owner override is needed"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isOwner ? (
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  className="text-xs text-black/50 underline hover:text-black/80"
+                  onClick={() => {
+                    setShowOwnerOverride(!showOwnerOverride);
+                    setManagerPin('');
+                    setOwnerPassword('');
+                    setOverrideReasonCode('');
+                    setOverrideJustification('');
+                  }}
+                >
+                  {showOwnerOverride ? 'Use Manager PIN instead' : 'Owner Override (no PIN)'}
+                </button>
+              </div>
+            ) : null}
+
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
@@ -381,7 +619,13 @@ export default function ShiftClient({ tills, openShift, recentShifts, currency }
                 type="button"
                 className="btn-primary flex-1 bg-rose-600 hover:bg-rose-700"
                 onClick={handleCloseShift}
-                disabled={isPending || !actualCash}
+                disabled={
+                  isPending ||
+                  !actualCash ||
+                  (!showOwnerOverride && !managerPin) ||
+                  (showOwnerOverride && (!ownerPassword || !overrideReasonCode || !overrideJustification.trim())) ||
+                  (varianceNeedsReason && !varianceReasonCode && !varianceReason.trim())
+                }
               >
                 {isPending ? 'Closing...' : 'Close Shift'}
               </button>

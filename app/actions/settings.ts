@@ -6,6 +6,27 @@ import { formString, formOptionalString } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 
+/** Lightweight action for onboarding wizard to set store mode */
+export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STORE'): Promise<ActionResult> {
+  const { user, businessId } = await withBusinessContext(['OWNER']);
+  const validated = storeMode === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { storeMode: validated },
+  });
+  audit({
+    businessId,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Business',
+    entityId: businessId,
+    details: { storeMode: validated, source: 'onboarding' },
+  });
+  return { success: true };
+}
+
 export async function updateBusinessAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
@@ -24,15 +45,56 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
+    const customerScopeRaw = (formString(formData, 'customerScope') || 'SHARED').toUpperCase();
+    const customerScope = customerScopeRaw === 'BRANCH' ? 'BRANCH' : 'SHARED';
+    const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
+    const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
+    const discountApprovalThresholdBps = Math.max(
+      0,
+      Math.min(10_000, parseInt(String(formData.get('discountApprovalThresholdBps') || '1500'), 10) || 0)
+    );
+    const inventoryAdjustmentRiskThresholdBase = Math.max(
+      1,
+      parseInt(String(formData.get('inventoryAdjustmentRiskThresholdBase') || '50'), 10) || 50
+    );
+    const cashVarianceRiskThresholdPence = Math.max(
+      0,
+      parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
+    );
     const openingCapitalRaw = parseInt((formData.get('openingCapitalPence') as string) || '0', 10) || 0;
     const openingCapitalPence = Math.max(0, openingCapitalRaw);
+    const storeModeRaw = (formString(formData, 'storeMode') || 'SINGLE_STORE').toUpperCase();
+    const storeMode = storeModeRaw === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { name, currency, vatEnabled, vatNumber, mode, receiptTemplate, printMode, printerName, tinNumber, phone, address, momoEnabled, momoProvider, momoNumber, openingCapitalPence }
+      data: {
+        name,
+        currency,
+        vatEnabled,
+        vatNumber,
+        mode,
+        receiptTemplate,
+        printMode,
+        printerName,
+        tinNumber,
+        phone,
+        address,
+        momoEnabled,
+        momoProvider,
+        momoNumber,
+        customerScope,
+        openingCapitalPence,
+        requireOpenTillForSales,
+        varianceReasonRequired,
+        discountApprovalThresholdBps,
+        inventoryAdjustmentRiskThresholdBase,
+        cashVarianceRiskThresholdPence,
+        storeMode,
+      }
     });
 
-    await audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
 
     redirect('/settings');
   }, '/settings');

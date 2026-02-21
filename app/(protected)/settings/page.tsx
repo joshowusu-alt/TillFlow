@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
+import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -99,6 +100,64 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               The initial cash the owner invested into the business, in minor units (pesewas/pence). E.g. {business.currency === 'GHS' ? '₵10,000 = 1000000' : '£10,000 = 1000000'}.
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="requireOpenTillForSales"
+              defaultChecked={(business as any).requireOpenTillForSales ?? false}
+            />
+            <label className="text-sm">Block sales until till is opened</label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              className="h-4 w-4"
+              type="checkbox"
+              name="varianceReasonRequired"
+              defaultChecked={(business as any).varianceReasonRequired ?? true}
+            />
+            <label className="text-sm">Require variance reason when closing till</label>
+          </div>
+          <div>
+            <label className="label">Discount Approval Threshold (bps)</label>
+            <input
+              className="input"
+              name="discountApprovalThresholdBps"
+              type="number"
+              min="0"
+              max="10000"
+              step="1"
+              defaultValue={(business as any).discountApprovalThresholdBps ?? 1500}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Manager PIN required for discounts above this threshold. Example: 1500 = 15%.
+            </div>
+          </div>
+          <div>
+            <label className="label">Inventory Adjustment Risk Threshold (base units)</label>
+            <input
+              className="input"
+              name="inventoryAdjustmentRiskThresholdBase"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={(business as any).inventoryAdjustmentRiskThresholdBase ?? 50}
+            />
+          </div>
+          <div>
+            <label className="label">Cash Variance Risk Threshold (minor units)</label>
+            <input
+              className="input"
+              name="cashVarianceRiskThresholdPence"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={(business as any).cashVarianceRiskThresholdPence ?? 2000}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Alert when till-close variance exceeds this amount. Example: 2000 = 20.00.
+            </div>
+          </div>
           <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
@@ -125,6 +184,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
           </div>
+          <div>
+            <label className="label">Customer Scope</label>
+            <select className="input" name="customerScope" defaultValue={(business as any).customerScope ?? 'SHARED'}>
+              <option value="SHARED">Shared across all branches</option>
+              <option value="BRANCH">Branch-specific customers</option>
+            </select>
+            <div className="mt-1 text-xs text-black/50">
+              Choose whether customer records are shared company-wide or isolated per branch.
+            </div>
+          </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
@@ -148,6 +217,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               </label>
             </div>
           </div>
+          <div>
+            <label className="label">Store Mode</label>
+            <select className="input" name="storeMode" defaultValue={(business as any).storeMode ?? 'SINGLE_STORE'}>
+              <option value="SINGLE_STORE">Single Store</option>
+              <option value="MULTI_STORE">Multi-Store</option>
+            </select>
+            <div className="mt-1 text-xs text-black/50">
+              Single Store hides Transfers and multi-branch features.
+            </div>
+          </div>
           <div className="md:col-span-2">
             <SubmitButton className="btn-primary" loadingText="Saving…">Save settings</SubmitButton>
           </div>
@@ -161,38 +240,12 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       </div>
       <CashDrawerSetup />
 
-      {/* Additional Settings Links */}
+      {/* Quick links */}
       <div className="grid gap-4 md:grid-cols-2">
-        <a href="/settings/backup" className="card p-6 transition hover:shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
-              <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-semibold">Data Backup</h3>
-              <p className="text-sm text-black/50">Export and restore your database</p>
-            </div>
-          </div>
-        </a>
-        <a href="/settings/receipt-design" className="card p-6 transition hover:shadow-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100">
-              <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-semibold">Receipt Design</h3>
-              <p className="text-sm text-black/50">Customize your receipt layout</p>
-            </div>
-          </div>
-        </a>
         <div className="card flex items-center justify-between p-6 transition hover:shadow-lg">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
-              <svg className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+              <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
@@ -203,7 +256,42 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           </div>
           <InstallButton />
         </div>
+        <a href="/onboarding" className="card flex items-center gap-4 p-6 transition hover:shadow-lg">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accentSoft">
+            <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold">Setup Guide</h3>
+            <p className="text-sm text-black/50">Restart the setup wizard anytime</p>
+          </div>
+        </a>
       </div>
+
+      {/* Data safety trust note */}
+      <div className="rounded-xl border border-black/5 bg-slate-50 px-5 py-4 flex items-start gap-3">
+        <svg className="h-5 w-5 flex-shrink-0 text-black/30 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        <p className="text-xs text-black/50 leading-relaxed">
+          Your data is <strong className="text-black/60">encrypted in transit and at rest</strong>, automatically backed up daily,
+          and stored on secure cloud infrastructure in Europe (Vercel&nbsp;/&nbsp;AWS&nbsp;eu-west-2).
+          TillFlow never shares your business data with third parties.
+        </p>
+      </div>
+
+      {/* Data management — clear demo/sample data */}
+      {user.role === 'OWNER' && (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-1">Sample Data</h3>
+          <p className="text-sm text-black/50 mb-4">
+            Remove demo products, sample customers, demo sales and expenses that were
+            created during setup. Your own data will not be affected.
+          </p>
+          <ClearSampleDataButton />
+        </div>
+      )}
     </div>
   );
 }

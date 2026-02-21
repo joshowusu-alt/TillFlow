@@ -72,7 +72,7 @@ export async function updateMyAccountAction(formData: FormData) {
     });
   }
 
-  await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PASSWORD_CHANGE', entity: 'User', entityId: user.id, details: { nameChanged: name !== dbUser.name, emailChanged: email !== dbUser.email, passwordChanged: !!newPassword } });
+  audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PASSWORD_CHANGE', entity: 'User', entityId: user.id, details: { nameChanged: name !== dbUser.name, emailChanged: email !== dbUser.email, passwordChanged: !!newPassword } });
 
   redirect('/account?success=updated');
 }
@@ -101,7 +101,7 @@ export async function beginTwoFactorSetupAction(formData: FormData) {
     data: { twoFactorTempSecret: secret }
   });
 
-  await audit({
+  audit({
     businessId: user.businessId,
     userId: user.id,
     userName: user.name,
@@ -137,7 +137,7 @@ export async function confirmTwoFactorSetupAction(formData: FormData) {
     }
   });
 
-  await audit({
+  audit({
     businessId: user.businessId,
     userId: user.id,
     userName: user.name,
@@ -185,7 +185,7 @@ export async function disableTwoFactorAction(formData: FormData) {
     }
   });
 
-  await audit({
+  audit({
     businessId: user.businessId,
     userId: user.id,
     userName: user.name,

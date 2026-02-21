@@ -9,6 +9,7 @@ import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format'
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
+import RepairPricesButton from './RepairPricesButton';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
@@ -93,6 +94,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       {/* ───── Products Tab ───── */}
       {activeTab === 'products' && (
         <>
+          {user.role === 'OWNER' && <RepairPricesButton />}
           {isManager ? (
             <div className="card p-6">
               <h2 className="text-lg font-display font-semibold">Add product</h2>
@@ -195,12 +197,12 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>
-                  <th></th>
+                  <th className="hidden sm:table-cell"></th>
                   <th>Product</th>
-                  <th>Category</th>
+                  <th className="hidden sm:table-cell">Category</th>
                   <th>Base Price</th>
-                  <th>Default Cost</th>
-                  <th>Unit Display</th>
+                  <th className="hidden md:table-cell">Default Cost</th>
+                  <th className="hidden md:table-cell">Unit Display</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,7 +221,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   });
                   return (
                     <tr key={product.id} className="rounded-xl bg-white">
-                      <td className="px-3 py-3 w-10">
+                      <td className="hidden sm:table-cell px-3 py-3 w-10">
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
@@ -227,7 +229,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                             className="w-8 h-8 rounded-md object-cover"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-md bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
+                          <div className="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent">
                             {product.name.charAt(0)}
                           </div>
                         )}
@@ -237,7 +239,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                           {product.name}
                         </Link>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="hidden sm:table-cell px-3 py-3">
                         {product.category ? (
                           <span
                             className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
@@ -250,8 +252,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                         )}
                       </td>
                       <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                      <td className="px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
-                      <td className="px-3 py-3 text-sm text-black/60">{preview}</td>
+                      <td className="hidden md:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                      <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
                     </tr>
                   );
                 })}

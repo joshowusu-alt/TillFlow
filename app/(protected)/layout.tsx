@@ -1,4 +1,5 @@
 import { requireBusiness } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import TopNav from '@/components/TopNav';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -6,34 +7,97 @@ import Link from 'next/link';
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
 
-  // Check if this is a new business that may need onboarding guidance
-  const needsOnboarding = business?.createdAt && (Date.now() - new Date(business.createdAt).getTime() < 1000 * 60 * 60 * 24);
+  // Get store name for the trust panel (no redirect if missing — handled per-page)
+  const store = await prisma.store.findFirst({
+    where: { businessId: business.id },
+    select: { id: true, name: true }
+  });
+
+  // Live sales counter — always fetch so MANAGER/OWNER can see today's pulse
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todaySalesAgg = await prisma.salesInvoice.aggregate({
+    where: {
+      businessId: business.id,
+      createdAt: { gte: todayStart },
+      paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+    },
+    _sum: { totalPence: true },
+    _count: { id: true },
+  });
+  const todaySales = {
+    totalPence: todaySalesAgg._sum.totalPence ?? 0,
+    txCount: todaySalesAgg._count.id,
+    currency: business.currency,
+  };
+
+  // Show onboarding banner when onboarding is not complete
+  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
+  // Compute lightweight readiness %
+  let readinessPct = 0;
+  if (needsOnboarding) {
+    const [productCount, staffCount, saleCount] = await Promise.all([
+      prisma.product.count({ where: { businessId: business.id } }),
+      prisma.user.count({ where: { businessId: business.id } }),
+      prisma.salesInvoice.count({
+        where: {
+          businessId: business.id,
+          OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+        },
+      }),
+    ]);
+    const hasAddress = !!(business.address || business.phone);
+    const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
+    readinessPct = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }
+
   return (
     <div className="min-h-screen">
-      <TopNav user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }} mode={(business?.mode as any) ?? 'SIMPLE'} />
+      <TopNav
+        user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
+        mode={(business?.mode as any) ?? 'SIMPLE'}
+        storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
+        storeName={store?.name}
+        momoEnabled={!!business.momoEnabled}
+        todaySales={todaySales}
+      />
 
-      {/* Setup banner for incomplete setup */}
-      {needsOnboarding && user.role === 'OWNER' && !pathname.includes('/onboarding') && (
-        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3">
+      {/* Setup banner for owners who haven't completed onboarding */}
+      {needsOnboarding && !pathname.includes('/onboarding') && (
+        <div className="border-b border-accent/20 bg-accentSoft px-4 sm:px-6 py-3">
           <div className="mx-auto flex max-w-[1600px] items-center justify-between">
-            <div className="flex items-center gap-3 text-white">
-              <span className="text-lg">👋</span>
-              <span className="font-medium">Welcome to TillFlow! Complete your setup to get started.</span>
+            <div className="flex items-center gap-3 text-accent">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-500"
+                    style={{ width: `${readinessPct}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
+              </div>
+              <span className="text-sm font-medium">
+                {readinessPct === 0
+                  ? 'Let\u2019s get your shop set up on TillFlow!'
+                  : readinessPct < 100
+                  ? 'You\u2019re making progress \u2014 keep going!'
+                  : 'Almost there \u2014 just finish up!'}
+              </span>
             </div>
             <Link
               href="/onboarding"
-              className="rounded-lg bg-white/20 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/30"
+              className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-accent/80 ml-4 flex-shrink-0"
             >
-              Complete Setup →
+              {readinessPct > 0 ? 'Continue Setup' : 'Get Started'} &rarr;
             </Link>
           </div>
         </div>
       )}
 
-      <main id="main-content" className="p-6">{children}</main>
+      <main id="main-content" className="p-4 sm:p-6 overflow-x-hidden">{children}</main>
     </div>
   );
 }
