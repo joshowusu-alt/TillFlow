@@ -94,11 +94,19 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="tinNumber" defaultValue={(business as any).tinNumber ?? ''} placeholder="e.g. C0012345678" />
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
-          <div>
+          <div id="opening-capital">
             <label className="label">Opening Capital ({business.currency})</label>
-            <input className="input" name="openingCapitalPence" type="number" min="0" step="1" defaultValue={(business as any).openingCapitalPence ?? 0} />
+            <input
+              className="input"
+              name="openingCapitalPence"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={((business as any).openingCapitalPence ?? 0) / 100}
+            />
             <div className="mt-1 text-xs text-black/50">
-              The initial cash the owner invested into the business, in minor units (pesewas/pence). E.g. {business.currency === 'GHS' ? '₵10,000 = 1000000' : '£10,000 = 1000000'}.
+              The total cash you personally invested to start this business. This appears as <strong>Owner&apos;s Capital</strong> on the Balance Sheet.
+              E.g. enter <code>5000</code> for {business.currency} 5,000.
             </div>
           </div>
           <div className="flex items-center gap-2">

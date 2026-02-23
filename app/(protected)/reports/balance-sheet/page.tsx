@@ -28,6 +28,15 @@ export default async function BalanceSheetPage({
     || sheet.equity.some(l => l.balancePence !== 0);
   const asOfStr = asOf.toISOString().slice(0, 10);
 
+  // Detect negative cash: cash from journals before opening capital was added.
+  // openingCapital is already baked into the Cash on Hand line by getBalanceSheet,
+  // so raw journal cash = cashLine.balancePence - openingCapitalPence.
+  const openingCapitalPence = (business as any).openingCapitalPence ?? 0;
+  const cashLine = sheet.assets.find(a => a.accountCode === '1000');
+  const rawCashBalance = cashLine ? cashLine.balancePence - openingCapitalPence : 0;
+  // Suggested Opening Capital = amount needed to bring cash to zero (in whole units)
+  const suggestedCapital = rawCashBalance < 0 ? Math.abs(rawCashBalance) / 100 : 0;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -69,14 +78,35 @@ export default async function BalanceSheetPage({
         <BalanceSheetDatePicker defaultValue={asOfStr} />
       </div>
 
-      {hasData && sheet.totalAssets === 0 && sheet.assets.some(l => l.balancePence > 0) && (
+      {/* Smart banner: negative cash = missing Opening Capital entry */}
+      {rawCashBalance < 0 && openingCapitalPence === 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold mb-1">Cash on Hand is showing negative — here&apos;s why and how to fix it</p>
+          <p className="mb-2">
+            When you buy inventory with your own money, the system correctly records:
+            Inventory ↑ and Cash ↓. But it doesn&apos;t yet know WHERE that cash came from (your pocket =
+            your capital investment). So Cash goes negative.
+          </p>
+          <p className="mb-3">
+            The fix: record your <strong>Opening Capital</strong> — the money you personally put into this business.
+            This creates a matching <em>Owner&apos;s Capital</em> entry in Equity, and your balance sheet will
+            balance: Inventory on one side, Owner&apos;s Capital on the other.
+          </p>
+          <a
+            href={`/settings#opening-capital`}
+            className="inline-block rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
+          >
+            Set Opening Capital (suggested: {business.currency} {suggestedCapital.toLocaleString()}) →
+          </a>
+        </div>
+      )}
+
+      {/* Generic tip for the zero-net-assets case (opening capital already set, assets net to 0) */}
+      {rawCashBalance >= 0 && hasData && sheet.totalAssets === 0 && sheet.assets.some(l => l.balancePence > 0) && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <strong>Tip — why is Total Assets GHS 0?</strong>{' '}
-          Buying inventory with cash moves money between two asset accounts (Inventory ↑, Cash ↓),
-          so they cancel out. Your balance sheet is <em>correct</em> — you can see each account
-          in the breakdown below. To show your owner&apos;s investment as equity, set an{' '}
-          <a href="/settings?tab=accounting" className="underline font-medium">Opening Capital</a>{' '}
-          in Settings.
+          <strong>Why is Total Assets 0?</strong>{' '}
+          Buying inventory with cash moves value between two asset accounts (Inventory ↑, Cash ↓) so they
+          cancel in the total. Your books are balanced — see the breakdown below.
         </div>
       )}
 

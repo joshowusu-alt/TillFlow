@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { formString, formOptionalString } from '@/lib/form-helpers';
+import { formString, formOptionalString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 
@@ -61,8 +61,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       0,
       parseInt(String(formData.get('cashVarianceRiskThresholdPence') || '2000'), 10) || 2000
     );
-    const openingCapitalRaw = parseInt((formData.get('openingCapitalPence') as string) || '0', 10) || 0;
-    const openingCapitalPence = Math.max(0, openingCapitalRaw);
+    // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
+    const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));
     const storeModeRaw = (formString(formData, 'storeMode') || 'SINGLE_STORE').toUpperCase();
     const storeMode = storeModeRaw === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
 
