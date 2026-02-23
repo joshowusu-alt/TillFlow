@@ -21,7 +21,11 @@ export default async function BalanceSheetPage({
 
   const asOf = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
   const sheet = await getBalanceSheet(business.id, asOf);
-  const hasData = sheet.totalAssets !== 0 || sheet.totalLiabilities !== 0 || sheet.totalEquity !== 0;
+  // Check if any individual account line has activity, not just the net total.
+  // (Buying inventory with cash nets totalAssets to 0, but data still exists.)
+  const hasData = sheet.assets.some(l => l.balancePence !== 0)
+    || sheet.liabilities.some(l => l.balancePence !== 0)
+    || sheet.equity.some(l => l.balancePence !== 0);
   const asOfStr = asOf.toISOString().slice(0, 10);
 
   return (
@@ -65,6 +69,17 @@ export default async function BalanceSheetPage({
         <BalanceSheetDatePicker defaultValue={asOfStr} />
       </div>
 
+      {hasData && sheet.totalAssets === 0 && sheet.assets.some(l => l.balancePence > 0) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <strong>Tip — why is Total Assets GHS 0?</strong>{' '}
+          Buying inventory with cash moves money between two asset accounts (Inventory ↑, Cash ↓),
+          so they cancel out. Your balance sheet is <em>correct</em> — you can see each account
+          in the breakdown below. To show your owner&apos;s investment as equity, set an{' '}
+          <a href="/settings?tab=accounting" className="underline font-medium">Opening Capital</a>{' '}
+          in Settings.
+        </div>
+      )}
+
       {!hasData ? (
         <EmptyState
           icon="chart"
@@ -79,7 +94,9 @@ export default async function BalanceSheetPage({
               {sheet.assets.map((line) => (
                 <div key={line.accountCode} className="flex justify-between">
                   <span>{line.name}</span>
-                  <span className="font-semibold">{formatMoney(line.balancePence, business.currency)}</span>
+                  <span className={`font-semibold ${line.balancePence < 0 ? 'text-red-600' : ''}`}>
+                    {formatMoney(line.balancePence, business.currency)}
+                  </span>
                 </div>
               ))}
               <div className="flex justify-between border-t border-black/10 pt-2 text-sm font-semibold">

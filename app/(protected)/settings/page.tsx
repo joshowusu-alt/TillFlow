@@ -7,6 +7,7 @@ import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
 import ClearSampleDataButton from '@/components/ClearSampleDataButton';
+import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -290,6 +291,18 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             created during setup. Your own data will not be affected.
           </p>
           <ClearSampleDataButton />
+        </div>
+      )}
+
+      {/* Data repair — fix missing accounting journal entries */}
+      {user.role === 'OWNER' && (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-1">Repair Accounting Entries</h3>
+          <p className="text-sm text-black/50 mb-4">
+            If your Balance Sheet shows GHS 0 for assets despite having recorded purchases,
+            use this to create any missing journal entries. Safe to run multiple times.
+          </p>
+          <RepairJournalEntriesButton />
         </div>
       )}
     </div>

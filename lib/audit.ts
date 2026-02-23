@@ -40,7 +40,8 @@ export type AuditAction =
   | 'STOCKTAKE_COMPLETE'
   | 'WHATSAPP_EOD_SENT'
   | 'PRICE_REPAIR'
-  | 'DEMO_RESET';
+  | 'DEMO_RESET'
+  | 'JOURNAL_REPAIR';
 
 /**
  * Write an entry to the audit trail — fire-and-forget, never throws.
