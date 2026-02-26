@@ -53,8 +53,8 @@ export function SalesTrendChart({ data, title = 'Sales Trend', currency = 'Â£' }
                 pointBackgroundColor: 'rgba(5, 150, 105, 1)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
+                pointRadius: 3,
+                pointHoverRadius: 5
             }
         ]
     };
@@ -75,24 +75,28 @@ export function SalesTrendChart({ data, title = 'Sales Trend', currency = 'Â£' }
             y: {
                 beginAtZero: true,
                 ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`
+                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
+                    maxTicksLimit: 5,
+                    font: { size: 10 }
                 },
                 grid: {
                     color: 'rgba(0, 0, 0, 0.05)'
                 }
             },
             x: {
-                grid: {
-                    display: false
+                grid: { display: false },
+                ticks: {
+                    maxRotation: 45,
+                    font: { size: 10 }
                 }
             }
         }
     };
 
     return (
-        <div className="card p-6">
-            <h3 className="mb-4 font-display font-semibold">{title}</h3>
-            <div className="h-64">
+        <div className="card p-4 sm:p-6">
+            <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
+            <div className="h-52 sm:h-64">
                 <Line data={chartData} options={options} />
             </div>
         </div>
@@ -119,14 +123,14 @@ export function HourlyHeatmap({ data, title = 'Sales by Hour' }: HourlyHeatmapPr
     };
 
     return (
-        <div className="card p-6">
-            <h3 className="mb-4 font-display font-semibold">{title}</h3>
-            <div className="overflow-x-auto">
-                <div className="min-w-96">
+        <div className="card p-4 sm:p-6">
+            <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
+            <div className="overflow-x-auto -mx-2 px-2">
+                <div className="min-w-[22rem]">
                     {/* Hour labels */}
-                    <div className="mb-1 flex gap-0.5 pl-12">
+                    <div className="mb-1 flex gap-px sm:gap-0.5 pl-10 sm:pl-12">
                         {hours.filter((h) => h % 3 === 0).map((h) => (
-                            <div key={h} className="w-8 text-center text-xs text-black/40">
+                            <div key={h} className="w-6 sm:w-8 text-center text-[10px] sm:text-xs text-black/40">
                                 {h.toString().padStart(2, '0')}
                             </div>
                         ))}
@@ -134,9 +138,9 @@ export function HourlyHeatmap({ data, title = 'Sales by Hour' }: HourlyHeatmapPr
 
                     {/* Grid */}
                     {days.map((day, dayIdx) => (
-                        <div key={day} className="flex items-center gap-0.5">
-                            <div className="w-10 text-right text-xs text-black/60">{day}</div>
-                            <div className="ml-2 flex gap-0.5">
+                        <div key={day} className="flex items-center gap-px sm:gap-0.5">
+                            <div className="w-8 sm:w-10 text-right text-[10px] sm:text-xs text-black/60">{day}</div>
+                            <div className="ml-1 sm:ml-2 flex gap-px sm:gap-0.5">
                                 {hours.map((hour) => {
                                     const intensity = getIntensity(dayIdx, hour);
                                     const bgColor = intensity === 0
@@ -147,7 +151,7 @@ export function HourlyHeatmap({ data, title = 'Sales by Hour' }: HourlyHeatmapPr
                                     return (
                                         <div
                                             key={hour}
-                                            className={`h-4 w-3 rounded-sm ${bgColor}`}
+                                            className={`h-3.5 w-2.5 sm:h-4 sm:w-3 rounded-sm ${bgColor}`}
                                             style={{ opacity }}
                                             title={`${day} ${hour}:00 - Sales: ${data.find((d) => d.day === days[dayIdx] && d.hour === hour)?.sales ?? 0}`}
                                         />
@@ -158,13 +162,13 @@ export function HourlyHeatmap({ data, title = 'Sales by Hour' }: HourlyHeatmapPr
                     ))}
 
                     {/* Legend */}
-                    <div className="mt-4 flex items-center justify-end gap-2 text-xs text-black/50">
+                    <div className="mt-3 sm:mt-4 flex items-center justify-end gap-2 text-[10px] sm:text-xs text-black/50">
                         <span>Less</span>
                         <div className="flex gap-0.5">
                             {[0.2, 0.4, 0.6, 0.8, 1].map((opacity) => (
                                 <div
                                     key={opacity}
-                                    className="h-3 w-3 rounded-sm bg-emerald-500"
+                                    className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-sm bg-emerald-500"
                                     style={{ opacity }}
                                 />
                             ))}
@@ -210,10 +214,11 @@ export function CategoryBreakdown({ data, title = 'Sales by Category', currency 
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                position: 'right' as const,
+                position: 'bottom' as const,
                 labels: {
-                    boxWidth: 12,
-                    padding: 12
+                    boxWidth: 10,
+                    padding: 8,
+                    font: { size: 11 }
                 }
             },
             tooltip: {
@@ -229,9 +234,9 @@ export function CategoryBreakdown({ data, title = 'Sales by Category', currency 
     };
 
     return (
-        <div className="card p-6">
-            <h3 className="mb-4 font-display font-semibold">{title}</h3>
-            <div className="h-64">
+        <div className="card p-4 sm:p-6">
+            <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
+            <div className="h-64 sm:h-72">
                 <Doughnut data={chartData} options={options} />
             </div>
         </div>
@@ -269,7 +274,8 @@ export function ProductPerformance({ data, title = 'Top Products', currency = 'Â
         indexAxis: 'y' as const,
         plugins: {
             legend: {
-                position: 'top' as const
+                position: 'top' as const,
+                labels: { font: { size: 11 } }
             },
             tooltip: {
                 callbacks: {
@@ -280,33 +286,33 @@ export function ProductPerformance({ data, title = 'Top Products', currency = 'Â
         scales: {
             x: {
                 ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`
+                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
+                    font: { size: 10 }
                 },
                 grid: {
                     color: 'rgba(0, 0, 0, 0.05)'
                 }
             },
             y: {
-                grid: {
-                    display: false
-                }
+                grid: { display: false },
+                ticks: { font: { size: 10 } }
             }
         }
     };
 
     return (
-        <div className="card p-6">
-            <h3 className="mb-4 font-display font-semibold">{title}</h3>
-            <div className="h-64">
+        <div className="card p-4 sm:p-6">
+            <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
+            <div className="h-52 sm:h-64">
                 <Bar data={chartData} options={options} />
             </div>
             {/* Margin table */}
-            <div className="mt-4 space-y-2">
+            <div className="mt-3 sm:mt-4 space-y-1.5 sm:space-y-2">
                 {data.slice(0, 5).map((product) => (
-                    <div key={product.name} className="flex items-center justify-between text-sm">
-                        <span className="truncate text-black/60">{product.name}</span>
-                        <span className={`font-semibold ${product.margin >= 30 ? 'text-emerald-600' : product.margin >= 15 ? 'text-amber-600' : 'text-rose-600'}`}>
-                            {product.margin.toFixed(1)}% margin
+                    <div key={product.name} className="flex items-center justify-between text-xs sm:text-sm gap-2">
+                        <span className="truncate text-black/60 min-w-0">{product.name}</span>
+                        <span className={`font-semibold whitespace-nowrap ${product.margin >= 30 ? 'text-emerald-600' : product.margin >= 15 ? 'text-amber-600' : 'text-rose-600'}`}>
+                            {product.margin.toFixed(1)}%
                         </span>
                     </div>
                 ))}
@@ -330,13 +336,13 @@ export function ComparisonChart({ data, title = 'Period Comparison', currency = 
         labels: data.labels,
         datasets: [
             {
-                label: 'Current Period',
+                label: 'Current',
                 data: data.current,
                 backgroundColor: 'rgba(5, 150, 105, 0.8)',
                 borderRadius: 4
             },
             {
-                label: 'Previous Period',
+                label: 'Previous',
                 data: data.previous,
                 backgroundColor: 'rgba(0, 0, 0, 0.2)',
                 borderRadius: 4
@@ -349,7 +355,8 @@ export function ComparisonChart({ data, title = 'Period Comparison', currency = 
         maintainAspectRatio: false,
         plugins: {
             legend: {
-                position: 'top' as const
+                position: 'top' as const,
+                labels: { font: { size: 11 } }
             },
             tooltip: {
                 callbacks: {
@@ -361,24 +368,28 @@ export function ComparisonChart({ data, title = 'Period Comparison', currency = 
             y: {
                 beginAtZero: true,
                 ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`
+                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
+                    maxTicksLimit: 5,
+                    font: { size: 10 }
                 },
                 grid: {
                     color: 'rgba(0, 0, 0, 0.05)'
                 }
             },
             x: {
-                grid: {
-                    display: false
+                grid: { display: false },
+                ticks: {
+                    maxRotation: 45,
+                    font: { size: 10 }
                 }
             }
         }
     };
 
     return (
-        <div className="card p-6">
-            <h3 className="mb-4 font-display font-semibold">{title}</h3>
-            <div className="h-64">
+        <div className="card p-4 sm:p-6">
+            <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
+            <div className="h-52 sm:h-64">
                 <Bar data={chartData} options={options} />
             </div>
         </div>
