@@ -31,6 +31,7 @@
     "better-sqlite3": "^12.6.2",
     "chart.js": "^4.5.1",
     "fflate": "^0.8.2",
+    "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",
     "next": "^14.2.35",
     "otplib": "^13.3.0",
