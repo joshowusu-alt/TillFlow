@@ -121,6 +121,18 @@ export async function createPurchase(input: CreatePurchaseInput) {
     productTotals.set(line.productId, existing);
   }
 
+  const split = splitPayments(payments);
+  const apAmount = total - split.totalPence;
+
+  const journalLines: JournalLine[] = [
+    { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
+    business.vatEnabled && vatTotal > 0
+      ? { accountCode: ACCOUNT_CODES.vatReceivable, debitPence: vatTotal }
+      : null,
+    ...creditCashBankLines(split),
+    apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
+  ].filter(Boolean) as JournalLine[];
+
   const invoice = await prisma.$transaction(async (tx) => {
     const created = await tx.purchaseInvoice.create({
       data: {
@@ -186,28 +198,18 @@ export async function createPurchase(input: CreatePurchaseInput) {
       }))
     });
 
+    await postJournalEntry({
+      businessId: input.businessId,
+      description: `Purchase ${created.id}`,
+      referenceType: 'PURCHASE_INVOICE',
+      referenceId: created.id,
+      lines: journalLines,
+      prismaClient: tx as any,
+    });
+
     return created;
-  });
-
-  const split = splitPayments(payments);
-  const apAmount = total - split.totalPence;
-
-  const journalLines: JournalLine[] = [
-    { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
-    business.vatEnabled && vatTotal > 0
-      ? { accountCode: ACCOUNT_CODES.vatReceivable, debitPence: vatTotal }
-      : null,
-    ...creditCashBankLines(split),
-    apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
-  ].filter(Boolean) as JournalLine[];
-
-  await postJournalEntry({
-    businessId: input.businessId,
-    description: `Purchase ${invoice.id}`,
-    referenceType: 'PURCHASE_INVOICE',
-    referenceId: invoice.id,
-    lines: journalLines
   });
 
   return invoice;
 }
+

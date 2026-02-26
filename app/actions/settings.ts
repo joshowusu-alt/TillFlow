@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { formString, formOptionalString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { ensureChartOfAccounts } from '@/lib/accounting';
 
 /** Lightweight action for onboarding wizard to set store mode */
 export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STORE'): Promise<ActionResult> {
@@ -93,6 +94,12 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         storeMode,
       }
     });
+
+    // When switching to ADVANCED mode, ensure the Chart of Accounts exists
+    // so financial reports work immediately without needing a manual repair.
+    if (mode === 'ADVANCED') {
+      await ensureChartOfAccounts(businessId);
+    }
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
 
