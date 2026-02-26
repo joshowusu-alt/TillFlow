@@ -11,6 +11,7 @@ import {
   initiateMomoCollectionAction,
 } from '@/app/actions/mobile-money';
 import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
+import { queueOfflineSale } from '@/lib/offline';
 import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
@@ -265,7 +266,7 @@ export default function PosClient({
       if (normalized === 'FAILED' || normalized === 'TIMEOUT') {
         setMomoCollectionError(
           next.failureReason ||
-            `MoMo collection ${normalized.toLowerCase()}. You can retry safely.`
+          `MoMo collection ${normalized.toLowerCase()}. You can retry safely.`
         );
       } else if (normalized === 'CONFIRMED') {
         setMomoCollectionError(null);
@@ -610,11 +611,66 @@ export default function PosClient({
         setSaleError(result.error);
         playBeep(false);
       }
-    } catch {
-      // Revert optimistic stock on error
-      setProductOptions(preOptimisticProducts);
-      setSaleError('Something went wrong. Please try again.');
-      playBeep(false);
+    } catch (err) {
+      // Network error — automatically queue sale offline
+      if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
+        try {
+          const offlineId = await queueOfflineSale({
+            storeId: store.id,
+            tillId,
+            customerId: customerId || null,
+            paymentStatus,
+            lines: cart.map(l => ({
+              productId: l.productId,
+              unitId: l.unitId,
+              qtyInUnit: l.qtyInUnit,
+              discountType: l.discountType ?? 'NONE',
+              discountValue: l.discountValue ?? '',
+            })),
+            payments: [
+              ...(cashApplied > 0 ? [{ method: 'CASH' as const, amountPence: Math.round(cashApplied) }] : []),
+              ...(cardPaidValue > 0 ? [{ method: 'CARD' as const, amountPence: Math.round(cardPaidValue) }] : []),
+              ...(transferPaidValue > 0 ? [{ method: 'TRANSFER' as const, amountPence: Math.round(transferPaidValue) }] : []),
+              ...(momoPaidValue > 0 ? [{ method: 'MOBILE_MONEY' as const, amountPence: Math.round(momoPaidValue) }] : []),
+            ],
+            orderDiscountType,
+            orderDiscountValue: orderDiscountInput,
+            createdAt: new Date().toISOString(),
+          });
+          // Show success with offline indicator
+          setSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' });
+          setCart([]);
+          clearSavedCart();
+          setCashTendered('');
+          setCardPaid('');
+          setTransferPaid('');
+          setMomoPaid('');
+          setMomoRef('');
+          setMomoPayerMsisdn('');
+          setMomoNetwork('MTN');
+          resetMomoCollection();
+          setPaymentStatus('PAID');
+          setPaymentMethods(['CASH']);
+          setOrderDiscountType('NONE');
+          setOrderDiscountInput('');
+          setDiscountManagerPin('');
+          setDiscountReasonCode('');
+          setDiscountReason('');
+          setQtyDrafts({});
+          setUndoStack([]);
+          playBeep(true);
+          setTimeout(() => setSaleSuccess(null), 4000);
+        } catch {
+          setProductOptions(preOptimisticProducts);
+          setSaleError('Offline queue failed. Please try again.');
+          playBeep(false);
+        }
+      } else {
+        // Revert optimistic stock on non-network error
+        setProductOptions(preOptimisticProducts);
+        setSaleError('Something went wrong. Please try again.');
+        playBeep(false);
+      }
     } finally {
       setIsCompletingSale(false);
     }
@@ -1378,11 +1434,10 @@ export default function PosClient({
                     key={u.id}
                     type="button"
                     onClick={() => setStagedUnitId(u.id)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-                      stagedUnitId === u.id
-                        ? 'bg-accent text-white shadow-sm'
-                        : 'bg-black/5 text-black/60 hover:bg-black/10'
-                    }`}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${stagedUnitId === u.id
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'bg-black/5 text-black/60 hover:bg-black/10'
+                      }`}
                   >
                     {label}
                     {maxQty <= 5 && <span className="ml-1 text-xs opacity-70">({maxQty} left)</span>}
@@ -1488,9 +1543,9 @@ export default function PosClient({
                     ? 'Open the till shift first before recording sales.'
                     : errorParam === 'invalid-discount-pin'
                       ? 'Manager PIN for discount override is invalid.'
-                    : errorParam === 'invalid-discount-reason'
-                      ? 'Discount reason code is invalid.'
-                  : 'Unable to complete sale. Please review the form.'}
+                      : errorParam === 'invalid-discount-reason'
+                        ? 'Discount reason code is invalid.'
+                        : 'Unable to complete sale. Please review the form.'}
             </div>
           ) : null}
 
@@ -1975,26 +2030,26 @@ export default function PosClient({
 
       {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
       <div className="hidden md:block">
-      <SummarySidebar
-        business={business}
-        store={store}
-        cartItemCount={cartDetails.length}
-        totals={totals}
-        orderDiscount={orderDiscount}
-        vatTotal={vatTotal}
-        totalDue={totalDue}
-        totalPaid={totalPaid}
-        balanceRemaining={balanceRemaining}
-        cashTenderedValue={cashTenderedValue}
-        changeDue={changeDue}
-        hasCash={hasMethod('CASH')}
-        lastReceiptId={lastReceiptId}
-        parkedCarts={parkedCarts}
-        showParkedPanel={showParkedPanel}
-        onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
-        onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
-        onDeleteParked={deleteParkedCart}
-      />
+        <SummarySidebar
+          business={business}
+          store={store}
+          cartItemCount={cartDetails.length}
+          totals={totals}
+          orderDiscount={orderDiscount}
+          vatTotal={vatTotal}
+          totalDue={totalDue}
+          totalPaid={totalPaid}
+          balanceRemaining={balanceRemaining}
+          cashTenderedValue={cashTenderedValue}
+          changeDue={changeDue}
+          hasCash={hasMethod('CASH')}
+          lastReceiptId={lastReceiptId}
+          parkedCarts={parkedCarts}
+          showParkedPanel={showParkedPanel}
+          onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
+          onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
+          onDeleteParked={deleteParkedCart}
+        />
       </div>
 
       <KeyboardHelpModal
