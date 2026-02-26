@@ -4,8 +4,6 @@ import EmptyState from '@/components/EmptyState';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getBalanceSheet } from '@/lib/reports/financials';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { isAdvancedMode } from '@/lib/features';
 import BalanceSheetDatePicker from './BalanceSheetDatePicker';
 
 export default async function BalanceSheetPage({
@@ -15,9 +13,6 @@ export default async function BalanceSheetPage({
 }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
-  if (!isAdvancedMode(business.mode as any)) {
-    return <AdvancedModeNotice title="Balance Sheet is an advanced report" />;
-  }
 
   const asOf = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
   const sheet = await getBalanceSheet(business.id, asOf);

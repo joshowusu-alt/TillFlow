@@ -4,8 +4,6 @@ import EmptyState from '@/components/EmptyState';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatement } from '@/lib/reports/financials';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { isAdvancedMode } from '@/lib/features';
 
 export default async function IncomeStatementPage({
   searchParams
@@ -14,9 +12,6 @@ export default async function IncomeStatementPage({
 }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
-  if (!isAdvancedMode(business.mode as any)) {
-    return <AdvancedModeNotice title="Income Statement is an advanced report" />;
-  }
 
   const now = new Date();
   const start = searchParams?.from ? new Date(searchParams.from) : new Date(now.getFullYear(), now.getMonth(), 1);

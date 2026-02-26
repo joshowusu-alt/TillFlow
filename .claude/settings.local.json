@@ -21,7 +21,14 @@
       "Bash(npx tsc:*)",
       "Bash(npx prisma validate:*)",
       "Bash(npm test:*)",
-      "Bash(npx prisma migrate dev:*)"
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(xargs grep -l \"overflow.*hidden\\\\|body.*scroll\\\\|scroll.*lock\")",
+      "Bash(grep -r \"DayClosure\\\\|dayClosures\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.ts\" ! -path \"./node_modules/*\" ! -path \"./.next/*\")",
+      "Bash(grep -r \"requireOpenTillForSales\\\\|closeShift\\\\|requireOpenShift\" --include=\"*.ts\" --include=\"*.tsx\" ! -path \"./node_modules/*\" ! -path \"./.next/*\")",
+      "Bash(git status -u)",
+      "Bash(git add \"app/\\(protected\\)/shifts/ShiftClient.tsx\" \"app/\\(protected\\)/shifts/page.tsx\" \"app/actions/repair.ts\")",
+      "Bash(git commit:*)",
+      "Bash(git push origin master)"
     ]
   }
 }
