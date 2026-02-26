@@ -95,6 +95,7 @@ export async function repairPurchaseJournalEntriesAction(): Promise<ActionResult
 
     revalidatePath('/reports/balance-sheet');
     revalidatePath('/reports/income-statement');
+    revalidatePath('/reports/cashflow');
 
     return ok({ repaired });
   });
@@ -193,6 +194,7 @@ export async function repairSalesJournalEntriesAction(): Promise<ActionResult<{ 
 
     revalidatePath('/reports/balance-sheet');
     revalidatePath('/reports/income-statement');
+    revalidatePath('/reports/cashflow');
     revalidatePath('/reports/dashboard');
 
     return ok({ repaired });

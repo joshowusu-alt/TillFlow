@@ -43,7 +43,7 @@ export default function RepairJournalEntriesButton() {
         } else {
           setResult({ success: true, purchasesRepaired, salesRepaired });
         }
-      } catch (err) {
+      } catch {
         setResult({ success: false, error: 'Unexpected error during repair.' });
       }
     });

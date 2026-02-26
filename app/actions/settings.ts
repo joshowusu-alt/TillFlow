@@ -95,8 +95,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       }
     });
 
-    // When switching to ADVANCED mode, ensure the Chart of Accounts exists
-    // so financial reports work immediately without needing a manual repair.
+    // When switching to ADVANCED, ensure Chart of Accounts exists so reports work immediately
     if (mode === 'ADVANCED') {
       await ensureChartOfAccounts(businessId);
     }
