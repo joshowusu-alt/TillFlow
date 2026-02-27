@@ -123,9 +123,13 @@ export async function login(formData: FormData) {
     });
   }
 
+  const isSecure =
+    process.env.NODE_ENV === 'production' &&
+    !process.env.BASE_URL?.startsWith('http://');
+
   cookies().set('pos_session', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
     expires: expiresAt
