@@ -210,7 +210,7 @@ async function _getCashflow(businessId: string, startIso: string, endIso: string
 
   const [business, income] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
-    _getIncomeStatement(businessId, startIso, endIso)
+    cachedIncomeStatement(businessId, startIso, endIso)
   ]);
 
   const openingCapital = business.openingCapitalPence ?? 0;

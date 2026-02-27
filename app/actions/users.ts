@@ -1,12 +1,17 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
 import { hashApprovalPin } from '@/lib/security/pin';
 import { withBusinessContext, formAction, err } from '@/lib/action-utils';
-import { formString, formOptionalString } from '@/lib/form-helpers';
+import { formString } from '@/lib/form-helpers';
+import {
+  hashPassword,
+  invalidateUserSessions,
+  assertEmailUnique,
+  assertActorCanModifyRole,
+} from '@/lib/services/users';
 
 export async function createUserAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -21,10 +26,13 @@ export async function createUserAction(formData: FormData): Promise<void> {
     if (!name || !email || !password) return err('Name, email, and password are required.');
     if (password.length < 6) return err('Password must be at least 6 characters.');
 
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return err('A user with that email already exists.');
+    try {
+      await assertEmailUnique(email);
+    } catch (e: unknown) {
+      return err(e instanceof Error ? e.message : 'Email already in use.');
+    }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
     const approvalPinHash = approvalPin ? await hashApprovalPin(approvalPin) : null;
 
     const created = await prisma.user.create({
@@ -58,17 +66,17 @@ export async function updateUserAction(formData: FormData): Promise<void> {
     });
     if (!targetUser) return err('User not found. They may have been removed.');
 
-    const duplicate = await prisma.user.findFirst({
-      where: { email, NOT: { id: targetUser.id } },
-      select: { id: true },
-    });
-    if (duplicate) return err('A user with that email already exists.');
+    try {
+      await assertEmailUnique(email, targetUser.id);
+    } catch (e: unknown) {
+      return err(e instanceof Error ? e.message : 'Email already in use.');
+    }
 
     const data: Record<string, unknown> = { name, email, role, active };
 
     if (newPassword) {
       if (newPassword.length < 6) return err('Password must be at least 6 characters.');
-      data.passwordHash = await bcrypt.hash(newPassword, 10);
+      data.passwordHash = await hashPassword(newPassword);
     }
     if (newApprovalPin) {
       data.approvalPinHash = await hashApprovalPin(newApprovalPin);
@@ -76,9 +84,8 @@ export async function updateUserAction(formData: FormData): Promise<void> {
 
     await prisma.user.update({ where: { id: targetUser.id }, data });
 
-    // Invalidate all sessions when password is changed or user is deactivated
     if (newPassword || !active) {
-      await prisma.session.deleteMany({ where: { userId: targetUser.id } });
+      await invalidateUserSessions(targetUser.id);
     }
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
@@ -104,7 +111,7 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
     await prisma.user.update({ where: { id: target.id }, data: { active: nowActive } });
 
     if (!nowActive) {
-      await prisma.session.deleteMany({ where: { userId: target.id } });
+      await invalidateUserSessions(target.id);
     }
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } });
@@ -129,16 +136,16 @@ export async function resetUserPasswordAction(formData: FormData): Promise<void>
     });
     if (!target) return err('User not found.');
 
-    // Prevent managers from resetting Owner passwords
-    if (target.role === 'OWNER' && owner.role !== 'OWNER') {
-      return err('Only an owner can reset another owner\'s password.');
+    try {
+      assertActorCanModifyRole(owner.role, target.role);
+    } catch (e: unknown) {
+      return err(e instanceof Error ? e.message : 'Role escalation not permitted.');
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     await prisma.user.update({ where: { id: target.id }, data: { passwordHash } });
 
-    // Invalidate all their sessions so they must log in with the new password
-    await prisma.session.deleteMany({ where: { userId: target.id } });
+    await invalidateUserSessions(target.id);
 
     audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
 

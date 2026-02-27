@@ -21,6 +21,23 @@ import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-mo
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
 
+function computeDiscount(
+  subtotal: number,
+  type?: DiscountType,
+  value?: number
+): number {
+  if (!subtotal || !type || type === 'NONE') return 0;
+  if (type === 'PERCENT') {
+    const pct = Math.min(Math.max(value ?? 0, 0), 100);
+    return Math.round((subtotal * pct) / 100);
+  }
+  if (type === 'AMOUNT') {
+    const amount = Math.max(value ?? 0, 0);
+    return Math.min(amount, subtotal);
+  }
+  return 0;
+}
+
 export type SalePaymentInput = PaymentInput;
 
 export type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
@@ -154,23 +171,6 @@ export async function createSale(input: CreateSaleInput) {
   );
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
-
-  const computeDiscount = (
-    subtotal: number,
-    type?: DiscountType,
-    value?: number
-  ) => {
-    if (!subtotal || !type || type === 'NONE') return 0;
-    if (type === 'PERCENT') {
-      const pct = Math.min(Math.max(value ?? 0, 0), 100);
-      return Math.round((subtotal * pct) / 100);
-    }
-    if (type === 'AMOUNT') {
-      const amount = Math.max(value ?? 0, 0);
-      return Math.min(amount, subtotal);
-    }
-    return 0;
-  };
 
   const lineDetails = input.lines.map((line) => {
     if (line.qtyInUnit <= 0) {
@@ -665,23 +665,6 @@ export async function amendSale(input: AmendSaleInput) {
     const unitMap = new Map(
       productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu])
     );
-
-    const computeDiscount = (
-      subtotal: number,
-      type?: DiscountType,
-      value?: number
-    ) => {
-      if (!subtotal || !type || type === 'NONE') return 0;
-      if (type === 'PERCENT') {
-        const pct = Math.min(Math.max(value ?? 0, 0), 100);
-        return Math.round((subtotal * pct) / 100);
-      }
-      if (type === 'AMOUNT') {
-        const amount = Math.max(value ?? 0, 0);
-        return Math.min(amount, subtotal);
-      }
-      return 0;
-    };
 
     newLineDetails = input.newLines!.map((line) => {
       if (line.qtyInUnit <= 0) {

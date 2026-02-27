@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { unstable_cache } from 'next/cache';
 
 export type WeeklyDigestData = {
   totalSalesPence: number;
@@ -20,11 +21,13 @@ export type WeeklyDigestData = {
   prevTxCount: number;
 };
 
-export async function getWeeklyDigestData(
+async function _getWeeklyDigestData(
   businessId: string,
-  weekStart: Date,
-  weekEnd: Date
+  weekStartIso: string,
+  weekEndIso: string
 ): Promise<WeeklyDigestData> {
+  const weekStart = new Date(weekStartIso);
+  const weekEnd = new Date(weekEndIso);
   // Previous week dates for comparison
   const prevStart = new Date(weekStart);
   prevStart.setDate(prevStart.getDate() - 7);
@@ -176,4 +179,18 @@ export async function getWeeklyDigestData(
     prevGrossProfitPence,
     prevTxCount: prevSalesAgg._count.id,
   };
+}
+
+const cachedWeeklyDigest = unstable_cache(
+  _getWeeklyDigestData,
+  ['report-weekly-digest'],
+  { revalidate: 3600, tags: ['reports'] }
+);
+
+export function getWeeklyDigestData(
+  businessId: string,
+  weekStart: Date,
+  weekEnd: Date
+): Promise<WeeklyDigestData> {
+  return cachedWeeklyDigest(businessId, weekStart.toISOString(), weekEnd.toISOString());
 }
