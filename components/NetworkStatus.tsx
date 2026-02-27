@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from '@/components/ToastProvider';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
     isOnline,
     setupAutoSync,
@@ -12,7 +13,7 @@ import {
 } from '@/lib/offline';
 
 export default function NetworkStatus() {
-    const [online, setOnline] = useState(true);
+    const online = useNetworkStatus();
     const [pendingCount, setPendingCount] = useState(0);
     const [syncing, setSyncing] = useState(false);
     const [lastSync, setLastSync] = useState<SyncResult | null>(null);
@@ -57,22 +58,18 @@ export default function NetworkStatus() {
     };
 
     useEffect(() => {
-        // Set initial state
-        const initial = isOnline();
-        setOnline(initial);
-        prevOnline.current = initial;
+        // Set initial prevOnline ref from real navigator state
+        prevOnline.current = isOnline();
         checkPending();
 
-        // Listen for online/offline events
+        // Listen for online/offline events (for transition toasts)
         const handleOnline = () => {
-            setOnline(true);
             if (!prevOnline.current) {
                 toast('Back online \u2014 syncing pending sales\u2026', 'info');
             }
             prevOnline.current = true;
         };
         const handleOffline = () => {
-            setOnline(false);
             prevOnline.current = false;
             toast('You\u2019re offline \u2014 sales will be saved locally', 'info');
         };

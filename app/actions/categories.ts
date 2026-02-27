@@ -1,10 +1,10 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, err } from '@/lib/action-utils';
+import { withBusinessContext, formAction } from '@/lib/action-utils';
+import { createCategory, updateCategory, deleteCategory } from '@/lib/services/categories';
 
 // ---------------------------------------------------------------------------
 // Categories CRUD
@@ -19,9 +19,7 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
     const imageUrl = formOptionalString(formData, 'imageUrl') || null;
     const sortOrder = formInt(formData, 'sortOrder') || 0;
 
-    await prisma.category.create({
-      data: { businessId, name, colour, imageUrl, sortOrder },
-    });
+    await createCategory(businessId, { name, colour, imageUrl, sortOrder });
 
     revalidateTag('pos-categories');
     redirect('/products?tab=categories');
@@ -38,16 +36,7 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
     const imageUrl = formOptionalString(formData, 'imageUrl') || null;
     const sortOrder = formInt(formData, 'sortOrder') || 0;
 
-    const category = await prisma.category.findFirst({
-      where: { id, businessId },
-      select: { id: true },
-    });
-    if (!category) return err('Category not found. It may have been removed.');
-
-    await prisma.category.update({
-      where: { id: category.id },
-      data: { name, colour, imageUrl, sortOrder },
-    });
+    await updateCategory(id, businessId, { name, colour, imageUrl, sortOrder });
 
     revalidateTag('pos-categories');
     redirect('/products?tab=categories');
@@ -60,19 +49,7 @@ export async function deleteCategoryAction(formData: FormData): Promise<void> {
 
     const id = formString(formData, 'id');
 
-    const category = await prisma.category.findFirst({
-      where: { id, businessId },
-      select: { id: true },
-    });
-    if (!category) return err('Category not found. It may have been removed.');
-
-    // Unlink products first, then delete
-    await prisma.product.updateMany({
-      where: { categoryId: category.id, businessId },
-      data: { categoryId: null },
-    });
-
-    await prisma.category.delete({ where: { id: category.id } });
+    await deleteCategory(id, businessId);
 
     revalidateTag('pos-categories');
     redirect('/products?tab=categories');

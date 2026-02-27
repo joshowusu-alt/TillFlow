@@ -1,42 +1,23 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { createCustomer, updateCustomer, quickCreateCustomer } from '@/lib/services/customers';
 
 export async function createCustomerAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: { customerScope: true },
-    });
-    if (!business) return err('Business not found.');
-
     const name = formString(formData, 'name');
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
-    const storeIdRaw = formOptionalString(formData, 'storeId');
+    const storeId = formOptionalString(formData, 'storeId');
 
     if (!name) return err('Please enter the customer name.');
 
-    let storeId: string | null = null;
-    if (business.customerScope === 'BRANCH') {
-      if (!storeIdRaw) return err('Select a branch/store for this customer.');
-      const store = await prisma.store.findFirst({
-        where: { id: storeIdRaw, businessId },
-        select: { id: true },
-      });
-      if (!store) return err('Invalid branch/store selected.');
-      storeId = store.id;
-    }
-
-    await prisma.customer.create({
-      data: { businessId, storeId, name, phone, email, creditLimitPence }
-    });
+    await createCustomer(businessId, { name, phone, email, creditLimitPence, storeId });
 
     redirect('/customers');
   }, '/customers');
@@ -54,18 +35,10 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
-    const customer = await prisma.customer.findFirst({
-      where: { id, businessId },
-      select: { id: true },
-    });
-    if (!customer) return err('Customer not found. It may have been removed.');
+    const updated = await updateCustomer(id, businessId, { name, phone, email, creditLimitPence });
+    if (!updated) return err('Customer not found. It may have been removed.');
 
-    await prisma.customer.update({
-      where: { id: customer.id },
-      data: { name, phone, email, creditLimitPence }
-    });
-
-    redirect(`/customers/${customer.id}`);
+    redirect(`/customers/${updated.id}`);
   }, '/customers');
 }
 
@@ -80,29 +53,7 @@ export async function quickCreateCustomerAction(data: {
 
     if (!data.name?.trim()) return err('Customer name is required.');
 
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: { customerScope: true, stores: { select: { id: true }, take: 1 } },
-    });
-    if (!business) return err('Business not found.');
-
-    let storeId: string | null = null;
-    if (business.customerScope === 'BRANCH') {
-      storeId = business.stores[0]?.id ?? null;
-    }
-
-    const customer = await prisma.customer.create({
-      data: {
-        businessId,
-        storeId,
-        name: data.name.trim(),
-        phone: data.phone?.trim() || null,
-        email: data.email?.trim() || null,
-        creditLimitPence: Math.max(0, data.creditLimitPence || 0),
-      },
-      select: { id: true, name: true },
-    });
-
+    const customer = await quickCreateCustomer(businessId, data);
     return ok(customer);
   });
 }

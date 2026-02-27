@@ -1,9 +1,9 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, formAction, err } from '@/lib/action-utils';
+import { createSupplier, updateSupplier } from '@/lib/services/suppliers';
 
 export async function createSupplierAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -16,9 +16,7 @@ export async function createSupplierAction(formData: FormData): Promise<void> {
 
     if (!name) return err('Please enter the supplier name.');
 
-    await prisma.supplier.create({
-      data: { businessId, name, phone, email, creditLimitPence }
-    });
+    await createSupplier(businessId, { name, phone, email, creditLimitPence });
 
     redirect('/suppliers');
   }, '/suppliers');
@@ -36,17 +34,9 @@ export async function updateSupplierAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
 
-    const supplier = await prisma.supplier.findFirst({
-      where: { id, businessId },
-      select: { id: true },
-    });
-    if (!supplier) return err('Supplier not found. It may have been removed.');
+    const updated = await updateSupplier(id, businessId, { name, phone, email, creditLimitPence });
+    if (!updated) return err('Supplier not found. It may have been removed.');
 
-    await prisma.supplier.update({
-      where: { id: supplier.id },
-      data: { name, phone, email, creditLimitPence }
-    });
-
-    redirect(`/suppliers/${supplier.id}`);
+    redirect(`/suppliers/${updated.id}`);
   }, '/suppliers');
 }

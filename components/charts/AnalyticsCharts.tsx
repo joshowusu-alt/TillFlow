@@ -14,6 +14,7 @@ import {
     Legend,
     Filler
 } from 'chart.js';
+import type { TooltipItem } from 'chart.js';
 
 // Register Chart.js components
 ChartJS.register(
@@ -28,6 +29,29 @@ ChartJS.register(
     Legend,
     Filler
 );
+
+// ─── Shared chart utilities ─────────────────────────────────────────────────
+
+/** Formats a pence value (or chart.js raw unknown) as a currency amount. */
+const penceToCurrency = (pence: unknown, currency: string) =>
+  `${currency}${((pence as number) / 100).toFixed(2)}`;
+
+/** Returns shared y-axis scale options for money charts. */
+const moneyYScale = (currency: string) => ({
+  beginAtZero: true,
+  ticks: {
+    callback: (value: number | string) => `${currency}${(Number(value) / 100).toFixed(0)}`,
+    maxTicksLimit: 5,
+    font: { size: 10 },
+  },
+  grid: { color: 'rgba(0, 0, 0, 0.05)' },
+});
+
+/** Standard x-axis scale (no grid, rotated labels). */
+const standardXScale = {
+  grid: { display: false },
+  ticks: { maxRotation: 45, font: { size: 10 } },
+};
 
 interface SalesTrendChartProps {
     data: {
@@ -67,28 +91,16 @@ export function SalesTrendChart({ data, title = 'Sales Trend', currency = '£' }
             title: { display: false },
             tooltip: {
                 callbacks: {
-                    label: (context: any) => `${currency}${(context.raw / 100).toFixed(2)}`
+                    label: (context: TooltipItem<'line'>) => penceToCurrency(context.raw, currency)
                 }
             }
         },
         scales: {
             y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
-                    maxTicksLimit: 5,
-                    font: { size: 10 }
-                },
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.05)'
-                }
+                ...moneyYScale(currency),
             },
             x: {
-                grid: { display: false },
-                ticks: {
-                    maxRotation: 45,
-                    font: { size: 10 }
-                }
+                ...standardXScale,
             }
         }
     };
@@ -223,10 +235,11 @@ export function CategoryBreakdown({ data, title = 'Sales by Category', currency 
             },
             tooltip: {
                 callbacks: {
-                    label: (context: any) => {
-                        const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                        const percentage = ((context.raw / total) * 100).toFixed(1);
-                        return `${currency}${(context.raw / 100).toFixed(2)} (${percentage}%)`;
+                    label: (context: TooltipItem<'doughnut'>) => {
+                        const data = context.dataset.data as number[];
+                        const total = data.reduce((a: number, b: number) => a + b, 0);
+                        const percentage = (((context.raw as number) / total) * 100).toFixed(1);
+                        return `${penceToCurrency(context.raw, currency)} (${percentage}%)`;
                     }
                 }
             }
@@ -279,19 +292,13 @@ export function ProductPerformance({ data, title = 'Top Products', currency = '�
             },
             tooltip: {
                 callbacks: {
-                    label: (context: any) => `${context.dataset.label}: ${currency}${(context.raw / 100).toFixed(2)}`
+                    label: (context: TooltipItem<'bar'>) => `${context.dataset.label}: ${penceToCurrency(context.raw, currency)}`
                 }
             }
         },
         scales: {
             x: {
-                ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
-                    font: { size: 10 }
-                },
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.05)'
-                }
+                ...moneyYScale(currency),
             },
             y: {
                 grid: { display: false },
@@ -360,28 +367,16 @@ export function ComparisonChart({ data, title = 'Period Comparison', currency = 
             },
             tooltip: {
                 callbacks: {
-                    label: (context: any) => `${context.dataset.label}: ${currency}${(context.raw / 100).toFixed(2)}`
+                    label: (context: TooltipItem<'bar'>) => `${context.dataset.label}: ${penceToCurrency(context.raw, currency)}`
                 }
             }
         },
         scales: {
             y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: (value: any) => `${currency}${(value / 100).toFixed(0)}`,
-                    maxTicksLimit: 5,
-                    font: { size: 10 }
-                },
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.05)'
-                }
+                ...moneyYScale(currency),
             },
             x: {
-                grid: { display: false },
-                ticks: {
-                    maxRotation: 45,
-                    font: { size: 10 }
-                }
+                ...standardXScale,
             }
         }
     };

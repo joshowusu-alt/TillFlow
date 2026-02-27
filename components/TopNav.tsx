@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { logout } from '@/app/actions/auth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
 import InstallButton from './InstallButton';
 import { formatMoney } from '@/lib/format';
@@ -96,21 +97,8 @@ export default function TopNav({
   const features = getFeatures(mode ?? 'SIMPLE', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(true);
+  const isOnline = useNetworkStatus();
   const navRef = useRef<HTMLDivElement>(null);
-
-  // Track online/offline state for the trust cue
-  useEffect(() => {
-    if (typeof navigator !== 'undefined') setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
   const advancedReportLinks = new Set<string>();
 
   const visibleGroups = useMemo(() => {

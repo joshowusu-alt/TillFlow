@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
@@ -271,19 +272,14 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   const router = useRouter();
   const [data, setData] = useState(initial);
   const [isPending, startTransition] = useTransition();
-  const [toast, setToast] = useState('');
   const [showCelebration, setShowCelebration] = useState(false);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 3000);
-  };
+  const { toast: showToast } = useToast();
 
   const handleGenerateDemo = () => {
     startTransition(async () => {
       const res = await generateDemoDay();
       if (res.ok && res.salesCount > 0) {
-        showToast(`${res.salesCount} demo sales generated!`);
+        showToast(`${res.salesCount} demo sales generated!`, 'success');
         // Refresh data
         setData(prev => ({
           ...prev,
@@ -292,7 +288,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           pct: Math.round(((prev.steps.filter(s => s.done).length + 1) / prev.steps.length) * 100),
         }));
       } else if (res.error) {
-        showToast(res.error);
+        showToast(res.error, 'error');
       }
       router.refresh();
     });
@@ -302,7 +298,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     startTransition(async () => {
       const res = await clearSampleData();
       if (res.ok) {
-        showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!');
+        showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!', 'success');
         setData(prev => ({
           ...prev,
           hasDemoData: false,
@@ -310,7 +306,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           pct: Math.round(((prev.steps.filter(s => s.done).length - 1) / prev.steps.length) * 100),
         }));
       } else if (res.error) {
-        showToast(res.error);
+        showToast(res.error, 'error');
       }
       router.refresh();
     });
@@ -332,7 +328,6 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
       <CelebrationOverlay show={showCelebration} />
-      <MicroWin message={toast} show={!!toast} />
 
       <div className="mx-auto max-w-xl px-4 py-8 sm:py-12">
         {/* Header */}
