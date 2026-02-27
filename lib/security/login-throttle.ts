@@ -24,6 +24,13 @@ const hasRedisEnv =
 
 const redisClient = hasRedisEnv ? Redis.fromEnv() : null;
 
+if (!hasRedisEnv && process.env.NODE_ENV === 'production') {
+  console.error(
+    '[security] Login throttle is using in-memory fallback — brute-force protection is NOT persistent.\n' +
+    'Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables to enable Redis-backed throttling.'
+  );
+}
+
 function normalizeThrottleOpts(opts?: ThrottleOptions) {
   return {
     windowMs: opts?.windowMs ?? DEFAULT_WINDOW_MS,
@@ -128,7 +135,8 @@ export async function getLoginThrottleStatus(
       retryAfterSeconds: isBlocked ? (lockTtl > 0 ? lockTtl : msToSeconds(lockoutMs)) : 0,
       remainingAttempts: Math.max(maxAttempts - attempts, 0)
     };
-  } catch {
+  } catch (e) {
+    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
     return getInMemoryLoginThrottleStatus(email, ipAddress, opts);
   }
 }
@@ -155,7 +163,8 @@ export async function recordLoginFailure(
     if (attempts >= maxAttempts) {
       await redisClient.set(lockKey, '1', { ex: msToSeconds(lockoutMs) });
     }
-  } catch {
+  } catch (e) {
+    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
     recordInMemoryLoginFailure(email, ipAddress, opts);
   }
 }
@@ -171,7 +180,8 @@ export async function clearLoginFailures(email: string, ipAddress: string) {
       redisAttemptsKey(email, ipAddress),
       redisLockKey(email, ipAddress)
     );
-  } catch {
+  } catch (e) {
+    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
     clearInMemoryLoginFailures(email, ipAddress);
   }
 }

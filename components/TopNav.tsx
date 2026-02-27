@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { logout } from '@/app/actions/auth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
 import InstallButton from './InstallButton';
-import { formatMoney } from '@/lib/format';
+import NavTrustPanel from './NavTrustPanel';
+import NavMobileMenu from './NavMobileMenu';
 
 const navGroups = [
   {
@@ -208,32 +208,7 @@ export default function TopNav({
 
           <div className="flex items-center gap-3">
             <InstallButton />
-            {/* Trust panel: user, role, branch, connectivity */}
-            <div className="hidden text-right text-xs sm:block">
-              <div className="flex items-center justify-end gap-1.5">
-                {/* Online/offline indicator dot */}
-                <span
-                  className={`inline-block h-2 w-2 rounded-full transition-colors ${isOnline ? 'bg-success' : 'bg-rose'
-                    }`}
-                  title={isOnline ? 'Online' : 'Offline — sales will sync when reconnected'}
-                />
-                <span className="font-semibold text-ink">{user.name}</span>
-              </div>
-              <div className="text-gray-500 uppercase tracking-[0.15em]">
-                {user.role}{storeName ? ` · ${storeName}` : ''}
-              </div>
-              {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') && (
-                <div className="text-gray-400 tabular-nums">
-                  {formatMoney(todaySales.totalPence, todaySales.currency)}
-                  {' · '}{todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
-                </div>
-              )}
-            </div>
-            <form action={logout} className="hidden sm:block">
-              <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
-                Sign out
-              </button>
-            </form>
+            <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
             <button
               type="button"
               className="flex items-center justify-center h-11 w-11 rounded-xl bg-black/5 hover:bg-black/10 active:bg-black/15 transition lg:hidden"
@@ -255,69 +230,17 @@ export default function TopNav({
         </div>
       </header>
 
-      {/* Mobile menu — rendered OUTSIDE <header> to avoid backdrop-filter containing block issue */}
-      {mobileOpen ? (
-        <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setMobileOpen(false)} />
-          {/* Menu panel — fixed overlay with independent scroll */}
-          <div className="fixed left-0 right-0 top-[65px] bottom-0 z-50 overflow-y-auto overscroll-contain bg-white px-6 pb-6 lg:hidden">
-            <div className="mt-4 space-y-4">
-              {/* Mobile user info */}
-              <div className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-success' : 'bg-rose'}`} />
-                    <span className="text-sm font-semibold text-ink">{user.name}</span>
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-muted mt-0.5">
-                    {user.role}{storeName ? ` · ${storeName}` : ''}
-                  </div>
-                </div>
-                <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                  {isOnline ? 'Online' : 'Offline'}
-                </div>
-              </div>
-              {visibleGroups.map((group) => (
-                <div key={group.id}>
-                  <div className="text-xs uppercase tracking-[0.2em] text-black/50">{group.label}</div>
-                  <div className="mt-2 grid gap-2">
-                    {group.items.map((item) => {
-                      const active = pathname === item.href;
-                      const isAdvanced = group.id === 'reports' && advancedReportLinks.has(item.href);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium ${active ? 'bg-accent text-white' : 'bg-white text-gray-600'
-                            }`}
-                          onClick={() => setMobileOpen(false)}
-                        >
-                          <span>{item.label}</span>
-                          {!features.advancedReports && isAdvanced ? (
-                            <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                              Advanced
-                            </span>
-                          ) : null}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              <div className="mt-4 flex justify-center">
-                <InstallButton />
-              </div>
-              <form action={logout}>
-                <button type="submit" className="btn-ghost w-full text-xs">
-                  Sign out
-                </button>
-              </form>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <NavMobileMenu
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+        visibleGroups={visibleGroups}
+        isOnline={isOnline}
+        user={user}
+        storeName={storeName}
+        features={features}
+        pathname={pathname}
+        advancedReportLinks={advancedReportLinks}
+      />
     </>
   );
 }

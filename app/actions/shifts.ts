@@ -7,7 +7,7 @@ import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/l
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
-import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
+import { performShiftClose } from '@/lib/services/shifts';
 
 export async function openShiftAction(
   formData: FormData
@@ -101,132 +101,22 @@ export async function closeShiftAction(
     const manager = await verifyManagerPin({ businessId, pin: managerPin });
     if (!manager) return err('Invalid manager PIN.');
 
-    const shift = await prisma.shift.findFirst({
-      where: {
-        id: shiftId,
-        till: { store: { businessId } },
-      },
-      include: {
-        till: { select: { id: true, storeId: true, name: true } },
-        salesInvoices: { include: { payments: true } },
-        cashDrawerEntries: {
-          select: { id: true, entryType: true, amountPence: true, createdAt: true },
-        },
-      },
-    });
-    if (!shift) return err('That shift could not be found. It may have been removed.');
-    if (shift.status !== 'OPEN') return err('Shift is already closed');
-
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: { varianceReasonRequired: true, cashVarianceRiskThresholdPence: true },
-    });
-
-    const expectedCash = shift.expectedCashPence;
-    const variance = actualCash - expectedCash;
-    if (variance !== 0 && business?.varianceReasonRequired && !varianceReasonCode && !varianceReason) {
-      return err('Variance reason is required when counted cash differs from expected.');
-    }
-
-    let cardTotal = 0;
-    let transferTotal = 0;
-    let momoTotal = 0;
-    for (const invoice of shift.salesInvoices) {
-      for (const payment of invoice.payments) {
-        if (payment.method === 'CARD') cardTotal += payment.amountPence;
-        else if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
-        else if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
-      }
-    }
-
-    const entriesSummary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
-    const snapshot = {
-      shiftId: shift.id,
-      tillId: shift.tillId,
-      tillName: shift.till.name,
-      openedAt: shift.openedAt.toISOString(),
-      closedAt: new Date().toISOString(),
-      openingCashPence: shift.openingCashPence,
-      expectedCashPence: expectedCash,
-      countedCashPence: actualCash,
-      variancePence: variance,
-      varianceReasonCode,
-      varianceReason,
-      cardTotalPence: cardTotal,
-      transferTotalPence: transferTotal,
-      momoTotalPence: momoTotal,
-      cashEntriesByType: entriesSummary.byType,
-      cashEntriesTotalPence: entriesSummary.totalPence,
-      managerApprovedByUserId: manager.id,
-    };
-
-    await prisma.$transaction(async (tx) => {
-      await recordCashDrawerEntryTx(tx, {
+    try {
+      const result = await performShiftClose({
         businessId,
-        storeId: shift.till.storeId,
-        tillId: shift.tillId,
-        shiftId: shift.id,
-        createdByUserId: user.id,
-        cashierUserId: user.id,
-        entryType: 'CLOSE_RECONCILIATION',
-        amountPence: 0,
-        reasonCode: variance === 0 ? 'RECONCILED' : variance > 0 ? 'OVER' : 'SHORT',
-        reason: varianceReason ?? notes ?? 'Till closed',
-        referenceType: 'SHIFT',
-        referenceId: shift.id,
-        actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
-      });
-
-      await tx.shift.update({
-        where: { id: shift.id },
-        data: {
-          closedAt: new Date(),
-          expectedCashPence: expectedCash,
-          actualCashPence: actualCash,
-          cardTotalPence: cardTotal,
-          transferTotalPence: transferTotal,
-          momoTotalPence: momoTotal,
-          variance,
-          varianceReasonCode,
-          varianceReason,
-          notes,
-          closedByUserId: user.id,
-          closeManagerApprovedByUserId: manager.id,
-          closeManagerApprovalMode: 'PIN',
-          closureSnapshotJson: JSON.stringify(snapshot),
-          status: 'CLOSED',
-        },
-      });
-    });
-
-    audit({
-      businessId,
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'CASH_DRAWER_CLOSE',
-      entity: 'Shift',
-      entityId: shift.id,
-      details: {
-        expectedCashPence: expectedCash,
-        countedCashPence: actualCash,
-        variancePence: variance,
+        actor: { userId: user.id, userName: user.name, userRole: user.role },
+        shiftId,
+        actualCash,
+        notes,
         varianceReasonCode,
-        managerApprovedByUserId: manager.id,
-      },
-    });
-
-    await detectCashVarianceRisk({
-      businessId,
-      storeId: shift.till.storeId,
-      cashierUserId: shift.userId,
-      shiftId: shift.id,
-      variancePence: variance,
-      thresholdPence: business?.cashVarianceRiskThresholdPence ?? 2000,
-    });
-
-    revalidatePath('/shifts');
-    return ok({ id: shift.id });
+        varianceReason,
+        approval: { mode: 'PIN', approvingManagerId: manager.id },
+      });
+      revalidatePath('/shifts');
+      return ok({ id: result.id });
+    } catch (e) {
+      return err((e as Error).message);
+    }
   });
 }
 
@@ -308,7 +198,6 @@ export async function closeShiftOwnerOverrideAction(
     if (!overrideReasonCode) return err('Override reason code is required.');
     if (!overrideJustification?.trim()) return err('Override justification is required.');
 
-    // Verify owner password
     const owner = await prisma.user.findUnique({
       where: { id: user.id },
       select: { passwordHash: true },
@@ -319,139 +208,26 @@ export async function closeShiftOwnerOverrideAction(
     const passwordValid = await bcrypt.compare(ownerPassword, owner.passwordHash);
     if (!passwordValid) return err('Incorrect password.');
 
-    const shift = await prisma.shift.findFirst({
-      where: {
-        id: shiftId,
-        till: { store: { businessId } },
-      },
-      include: {
-        till: { select: { id: true, storeId: true, name: true } },
-        salesInvoices: { include: { payments: true } },
-        cashDrawerEntries: {
-          select: { id: true, entryType: true, amountPence: true, createdAt: true },
-        },
-      },
-    });
-    if (!shift) return err('That shift could not be found. It may have been removed.');
-    if (shift.status !== 'OPEN') return err('Shift is already closed.');
-
-    const business = await prisma.business.findUnique({
-      where: { id: businessId },
-      select: { varianceReasonRequired: true, cashVarianceRiskThresholdPence: true },
-    });
-
-    const expectedCash = shift.expectedCashPence;
-    const variance = actualCash - expectedCash;
-    if (variance !== 0 && business?.varianceReasonRequired && !varianceReasonCode && !varianceReason) {
-      return err('Variance reason is required when counted cash differs from expected.');
-    }
-
-    let cardTotal = 0;
-    let transferTotal = 0;
-    let momoTotal = 0;
-    for (const invoice of shift.salesInvoices) {
-      for (const payment of invoice.payments) {
-        if (payment.method === 'CARD') cardTotal += payment.amountPence;
-        else if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
-        else if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
-      }
-    }
-
-    const entriesSummary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
-    const snapshot = {
-      shiftId: shift.id,
-      tillId: shift.tillId,
-      tillName: shift.till.name,
-      openedAt: shift.openedAt.toISOString(),
-      closedAt: new Date().toISOString(),
-      openingCashPence: shift.openingCashPence,
-      expectedCashPence: expectedCash,
-      countedCashPence: actualCash,
-      variancePence: variance,
-      varianceReasonCode,
-      varianceReason,
-      cardTotalPence: cardTotal,
-      transferTotalPence: transferTotal,
-      momoTotalPence: momoTotal,
-      cashEntriesByType: entriesSummary.byType,
-      cashEntriesTotalPence: entriesSummary.totalPence,
-      ownerOverride: true,
-      ownerOverrideReasonCode: overrideReasonCode,
-      ownerOverrideJustification: overrideJustification,
-      overrideByUserId: user.id,
-    };
-
-    await prisma.$transaction(async (tx) => {
-      await recordCashDrawerEntryTx(tx, {
+    try {
+      const result = await performShiftClose({
         businessId,
-        storeId: shift.till.storeId,
-        tillId: shift.tillId,
-        shiftId: shift.id,
-        createdByUserId: user.id,
-        cashierUserId: user.id,
-        entryType: 'CLOSE_RECONCILIATION',
-        amountPence: 0,
-        reasonCode: variance === 0 ? 'RECONCILED' : variance > 0 ? 'OVER' : 'SHORT',
-        reason: varianceReason ?? notes ?? 'Till closed (owner override)',
-        referenceType: 'SHIFT',
-        referenceId: shift.id,
-        actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
-      });
-
-      await tx.shift.update({
-        where: { id: shift.id },
-        data: {
-          closedAt: new Date(),
-          expectedCashPence: expectedCash,
-          actualCashPence: actualCash,
-          cardTotalPence: cardTotal,
-          transferTotalPence: transferTotal,
-          momoTotalPence: momoTotal,
-          variance,
-          varianceReasonCode,
-          varianceReason,
-          notes,
-          closedByUserId: user.id,
-          closeManagerApprovedByUserId: user.id,
-          closeManagerApprovalMode: 'OWNER_OVERRIDE',
-          ownerOverride: true,
-          ownerOverrideReasonCode: overrideReasonCode,
-          ownerOverrideJustification: overrideJustification,
-          closureSnapshotJson: JSON.stringify(snapshot),
-          status: 'CLOSED',
+        actor: { userId: user.id, userName: user.name, userRole: user.role },
+        shiftId,
+        actualCash,
+        notes,
+        varianceReasonCode,
+        varianceReason,
+        approval: {
+          mode: 'OWNER_OVERRIDE',
+          approvingManagerId: user.id,
+          overrideReasonCode,
+          overrideJustification,
         },
       });
-    });
-
-    audit({
-      businessId,
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'CASH_DRAWER_CLOSE',
-      entity: 'Shift',
-      entityId: shift.id,
-      details: {
-        expectedCashPence: expectedCash,
-        countedCashPence: actualCash,
-        variancePence: variance,
-        varianceReasonCode,
-        ownerOverride: true,
-        overrideReasonCode,
-        overrideJustification,
-      },
-    });
-
-    await detectCashVarianceRisk({
-      businessId,
-      storeId: shift.till.storeId,
-      cashierUserId: shift.userId,
-      shiftId: shift.id,
-      variancePence: variance,
-      thresholdPence: business?.cashVarianceRiskThresholdPence ?? 2000,
-    });
-
-    revalidatePath('/shifts');
-    return ok({ id: shift.id });
+      revalidatePath('/shifts');
+      return ok({ id: result.id });
+    } catch (e) {
+      return err((e as Error).message);
+    }
   });
 }
