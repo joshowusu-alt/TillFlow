@@ -38,6 +38,54 @@ function computeDiscount(
   return 0;
 }
 
+function buildLinePricing(
+  lines: SaleLineInput[],
+  unitMap: Map<string, { product: { sellingPriceBasePence: number; promoBuyQty: number | null; promoGetQty: number | null; vatRateBps: number; defaultCostBasePence: number; name: string }; conversionToBase: number; productId: string; unitId: string; [key: string]: any }>,
+  vatEnabled: boolean
+) {
+  return lines.map((line) => {
+    if (line.qtyInUnit <= 0) {
+      throw new Error('Quantity must be at least 1');
+    }
+    const productUnit = unitMap.get(`${line.productId}:${line.unitId}`);
+    if (!productUnit) {
+      throw new Error('Unit not configured for product');
+    }
+    const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
+    const unitPricePence = productUnit.product.sellingPriceBasePence * productUnit.conversionToBase;
+    const lineSubtotal = unitPricePence * line.qtyInUnit;
+    const lineDiscount = computeDiscount(lineSubtotal, line.discountType, line.discountValue);
+    const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
+    const promoGetQty = productUnit.product.promoGetQty ?? 0;
+    const promoGroup = promoBuyQty + promoGetQty;
+    const promoFreeUnits =
+      promoBuyQty > 0 && promoGetQty > 0 && promoGroup > 0
+        ? Math.floor(qtyBase / promoGroup) * promoGetQty
+        : 0;
+    const promoDiscount = Math.min(
+      promoFreeUnits * productUnit.product.sellingPriceBasePence,
+      Math.max(lineSubtotal - lineDiscount, 0)
+    );
+    const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);
+    const vatRate = vatEnabled ? productUnit.product.vatRateBps : 0;
+    const lineVat = vatEnabled ? Math.round((lineNetSubtotal * vatRate) / 10000) : 0;
+    const lineTotal = lineNetSubtotal + lineVat;
+    return {
+      ...line,
+      productUnit,
+      qtyBase,
+      unitPricePence,
+      lineSubtotal,
+      lineDiscount,
+      promoDiscount,
+      lineNetSubtotal,
+      lineVat,
+      lineTotal,
+      conversionToBase: productUnit.conversionToBase,
+    };
+  });
+}
+
 export type SalePaymentInput = PaymentInput;
 
 export type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
@@ -172,46 +220,7 @@ export async function createSale(input: CreateSaleInput) {
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
 
-  const lineDetails = input.lines.map((line) => {
-    if (line.qtyInUnit <= 0) {
-      throw new Error('Quantity must be at least 1');
-    }
-    const productUnit = unitMap.get(`${line.productId}:${line.unitId}`);
-    if (!productUnit) {
-      throw new Error('Unit not configured for product');
-    }
-    const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
-    const unitPricePence = productUnit.product.sellingPriceBasePence * productUnit.conversionToBase;
-    const lineSubtotal = unitPricePence * line.qtyInUnit;
-    const lineDiscount = computeDiscount(lineSubtotal, line.discountType, line.discountValue);
-    const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
-    const promoGetQty = productUnit.product.promoGetQty ?? 0;
-    const promoGroup = promoBuyQty + promoGetQty;
-    const promoFreeUnits =
-      promoBuyQty > 0 && promoGetQty > 0 && promoGroup > 0
-        ? Math.floor(qtyBase / promoGroup) * promoGetQty
-        : 0;
-    const promoDiscount = Math.min(
-      promoFreeUnits * productUnit.product.sellingPriceBasePence,
-      Math.max(lineSubtotal - lineDiscount, 0)
-    );
-    const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);
-    const vatRate = business.vatEnabled ? productUnit.product.vatRateBps : 0;
-    const lineVat = business.vatEnabled ? Math.round((lineNetSubtotal * vatRate) / 10000) : 0;
-    const lineTotal = lineNetSubtotal + lineVat;
-    return {
-      ...line,
-      productUnit,
-      qtyBase,
-      unitPricePence,
-      lineSubtotal,
-      lineDiscount,
-      promoDiscount,
-      lineNetSubtotal,
-      lineVat,
-      lineTotal
-    };
-  });
+  const lineDetails = buildLinePricing(input.lines, unitMap, business.vatEnabled);
 
   const qtyByProduct = buildQtyByProductMap(lineDetails);
 
@@ -634,21 +643,7 @@ export async function amendSale(input: AmendSaleInput) {
   }
 
   // ── Resolve new line details (product units, pricing) ─────────
-  let newLineDetails: Array<{
-    productId: string;
-    unitId: string;
-    qtyInUnit: number;
-    qtyBase: number;
-    unitPricePence: number;
-    lineSubtotal: number;
-    lineDiscount: number;
-    promoDiscount: number;
-    lineNetSubtotal: number;
-    lineVat: number;
-    lineTotal: number;
-    conversionToBase: number;
-    productUnit: any;
-  }> = [];
+  let newLineDetails: ReturnType<typeof buildLinePricing> = [];
 
   if (hasNewLines) {
     const productUnits = await prisma.productUnit.findMany({
@@ -666,56 +661,7 @@ export async function amendSale(input: AmendSaleInput) {
       productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu])
     );
 
-    newLineDetails = input.newLines!.map((line) => {
-      if (line.qtyInUnit <= 0) {
-        throw new Error('Quantity must be at least 1');
-      }
-      const productUnit = unitMap.get(`${line.productId}:${line.unitId}`);
-      if (!productUnit) {
-        throw new Error('Unit not configured for product');
-      }
-      const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
-      const unitPricePence =
-        productUnit.product.sellingPriceBasePence * productUnit.conversionToBase;
-      const lineSubtotal = unitPricePence * line.qtyInUnit;
-      const lineDiscount = computeDiscount(
-        lineSubtotal,
-        line.discountType,
-        line.discountValue
-      );
-      const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
-      const promoGetQty = productUnit.product.promoGetQty ?? 0;
-      const promoGroup = promoBuyQty + promoGetQty;
-      const promoFreeUnits =
-        promoBuyQty > 0 && promoGetQty > 0 && promoGroup > 0
-          ? Math.floor(qtyBase / promoGroup) * promoGetQty
-          : 0;
-      const promoDiscount = Math.min(
-        promoFreeUnits * productUnit.product.sellingPriceBasePence,
-        Math.max(lineSubtotal - lineDiscount, 0)
-      );
-      const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);
-      const vatRate = invoice.business.vatEnabled
-        ? productUnit.product.vatRateBps
-        : 0;
-      const lineVat = invoice.business.vatEnabled
-        ? Math.round((lineNetSubtotal * vatRate) / 10000)
-        : 0;
-      const lineTotal = lineNetSubtotal + lineVat;
-      return {
-        ...line,
-        productUnit,
-        qtyBase,
-        unitPricePence,
-        lineSubtotal,
-        lineDiscount,
-        promoDiscount,
-        lineNetSubtotal,
-        lineVat,
-        lineTotal,
-        conversionToBase: productUnit.conversionToBase,
-      };
-    });
+    newLineDetails = buildLinePricing(input.newLines!, unitMap, invoice.business.vatEnabled);
   }
 
   // Snapshot before state
