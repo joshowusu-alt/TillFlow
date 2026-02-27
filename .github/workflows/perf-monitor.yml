@@ -57,8 +57,12 @@ jobs:
       - name: Run speed monitor
         id: speed
         run: |
-          npm run test:perf > .perf-report.json
+          npm run test:perf > .perf-report.json || true
           cat .perf-report.json
+          echo "--- Server log (last 50 lines) ---"
+          tail -50 .perf-server.log || true
+          # Fail if report indicates failure
+          node -e "const r=JSON.parse(require('fs').readFileSync('.perf-report.json','utf8')); if(!r.success) process.exit(1);"
 
       - name: Evaluate speed budget
         id: budget

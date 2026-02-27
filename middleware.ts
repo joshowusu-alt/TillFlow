@@ -29,14 +29,17 @@ export function middleware(request: NextRequest) {
             try {
                 const originHost = new URL(origin).host;
                 if (originHost !== request.nextUrl.host) {
+                    console.warn(`[CSRF] origin_mismatch: origin=${origin} originHost=${originHost} nextUrlHost=${request.nextUrl.host} path=${pathname}`);
                     return forbiddenResponse(request, 'origin_mismatch');
                 }
             } catch {
+                console.warn(`[CSRF] origin_parse_error: origin=${origin} path=${pathname}`);
                 return forbiddenResponse(request, 'origin_mismatch');
             }
         }
 
         if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+            console.warn(`[CSRF] cross_site: secFetchSite=${secFetchSite} origin=${origin} path=${pathname}`);
             return forbiddenResponse(request, 'cross_site_request');
         }
     }
