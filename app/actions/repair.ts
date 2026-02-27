@@ -10,8 +10,9 @@ import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, type ActionResult } from '@/lib/action-utils';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 import { splitPayments, debitCashBankLines, creditCashBankLines, type PaymentMethod } from '@/lib/services/shared';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { audit } from '@/lib/audit';
+import { createSalesReturn } from '@/lib/services/returns';
 
 /**
  * Find purchase invoices that have no journal entry and create the missing entries.
@@ -335,5 +336,184 @@ export async function restoreOrphanedSaleProducts(): Promise<ActionResult<{ rest
     revalidatePath('/reports/income-statement');
 
     return ok({ restored });
+  });
+}
+
+/**
+ * Diagnose the current state of sales and journal data.
+ * Returns counts of sales by date and qaTag, orphaned journal entries, etc.
+ */
+export async function diagnoseDataAction(): Promise<ActionResult<{
+  salesByDate: { date: string; count: number; qaTag: string | null }[];
+  journalEntriesByRef: { referenceType: string; count: number }[];
+  orphanedJournalCount: number;
+  totalSales: number;
+  totalJournalEntries: number;
+}>> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER']);
+
+    // Get all sales grouped by date and qaTag
+    const allSales = await prisma.salesInvoice.findMany({
+      where: { businessId },
+      select: { createdAt: true, qaTag: true, paymentStatus: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const salesByDateMap = new Map<string, { count: number; qaTag: string | null }>();
+    for (const sale of allSales) {
+      const dateStr = sale.createdAt.toISOString().slice(0, 10);
+      const key = `${dateStr}|${sale.qaTag ?? 'REAL'}`;
+      const existing = salesByDateMap.get(key);
+      if (existing) {
+        existing.count++;
+      } else {
+        salesByDateMap.set(key, { count: 1, qaTag: sale.qaTag });
+      }
+    }
+    const salesByDate = Array.from(salesByDateMap.entries()).map(([key, val]) => ({
+      date: key.split('|')[0],
+      count: val.count,
+      qaTag: val.qaTag,
+    }));
+
+    // Journal entries by reference type
+    const allJournals = await prisma.journalEntry.findMany({
+      where: { businessId },
+      select: { referenceType: true, referenceId: true },
+    });
+    const journalByRefMap = new Map<string, number>();
+    for (const j of allJournals) {
+      const key = j.referenceType ?? 'NONE';
+      journalByRefMap.set(key, (journalByRefMap.get(key) ?? 0) + 1);
+    }
+    const journalEntriesByRef = Array.from(journalByRefMap.entries()).map(([type, count]) => ({
+      referenceType: type,
+      count,
+    }));
+
+    // Find orphaned journal entries (referencing sales that no longer exist)
+    const salesJournals = allJournals.filter(j => j.referenceType === 'SALES_INVOICE' && j.referenceId);
+    const allSaleIds = await prisma.salesInvoice.findMany({
+      where: { businessId },
+      select: { id: true },
+    });
+    const saleIdSet = new Set(allSaleIds.map(s => s.id));
+    const orphanedJournalCount = salesJournals.filter(j => !saleIdSet.has(j.referenceId!)).length;
+
+    return ok({
+      salesByDate,
+      journalEntriesByRef,
+      orphanedJournalCount,
+      totalSales: allSales.length,
+      totalJournalEntries: allJournals.length,
+    });
+  });
+}
+
+/**
+ * Delete journal entries that reference sales invoices which no longer exist.
+ * This fixes bloated income statements caused by deleted demo sales.
+ */
+export async function cleanOrphanedJournalEntriesAction(): Promise<ActionResult<{ cleaned: number }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    // Find all journal entries referencing sales invoices
+    const salesJournals = await prisma.journalEntry.findMany({
+      where: { businessId, referenceType: 'SALES_INVOICE', referenceId: { not: null } },
+      select: { id: true, referenceId: true },
+    });
+
+    if (salesJournals.length === 0) return ok({ cleaned: 0 });
+
+    // Find which sale IDs actually exist
+    const existingSaleIds = await prisma.salesInvoice.findMany({
+      where: { businessId },
+      select: { id: true },
+    });
+    const saleIdSet = new Set(existingSaleIds.map(s => s.id));
+
+    // Find orphaned journal entry IDs
+    const orphanedIds = salesJournals
+      .filter(j => !saleIdSet.has(j.referenceId!))
+      .map(j => j.id);
+
+    if (orphanedIds.length === 0) return ok({ cleaned: 0 });
+
+    // Delete lines first, then entries
+    await prisma.$transaction(async (tx) => {
+      await tx.journalLine.deleteMany({
+        where: { journalEntryId: { in: orphanedIds } },
+      });
+      await tx.journalEntry.deleteMany({
+        where: { id: { in: orphanedIds } },
+      });
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'JOURNAL_REPAIR',
+      entity: 'JournalEntry',
+      details: { type: 'orphan_cleanup', cleaned: orphanedIds.length },
+    });
+
+    revalidatePath('/reports/income-statement');
+    revalidatePath('/reports/balance-sheet');
+    revalidatePath('/reports/cashflow');
+    revalidatePath('/reports/dashboard');
+    revalidateTag('reports');
+
+    return ok({ cleaned: orphanedIds.length });
+  });
+}
+
+/**
+ * Void a sale as the owner — bypasses manager PIN requirement.
+ * This is for emergency data cleanup by the business owner.
+ */
+export async function ownerVoidSaleAction(salesInvoiceId: string): Promise<ActionResult<{ voided: boolean }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    const invoice = await prisma.salesInvoice.findFirst({
+      where: { id: salesInvoiceId, businessId },
+      select: { id: true, paymentStatus: true, totalPence: true },
+    });
+    if (!invoice) throw new Error('Sale not found');
+    if (['VOID', 'RETURNED'].includes(invoice.paymentStatus)) {
+      throw new Error('Sale already voided or returned');
+    }
+
+    await createSalesReturn({
+      businessId,
+      salesInvoiceId: invoice.id,
+      userId: user.id,
+      reasonCode: 'OTHER',
+      reason: 'Owner void — setup/test sale cleanup',
+      managerApprovedByUserId: user.id,
+      managerApprovalMode: 'OWNER_OVERRIDE',
+      type: 'VOID',
+    });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SALE_VOID',
+      entity: 'SalesInvoice',
+      entityId: salesInvoiceId,
+      details: { method: 'OWNER_OVERRIDE', reason: 'setup/test sale cleanup' },
+    });
+
+    revalidatePath('/sales');
+    revalidateTag('pos-products');
+    revalidateTag('reports');
+
+    return ok({ voided: true });
   });
 }

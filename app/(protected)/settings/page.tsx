@@ -9,6 +9,7 @@ import InstallButton from '@/components/InstallButton';
 import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
+import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -324,6 +325,18 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             use this to restore products that were accidentally removed. Safe to run multiple times.
           </p>
           <RestoreOrphanedProductsButton />
+        </div>
+      )}
+
+      {/* Data diagnostic and repair */}
+      {user.role === 'OWNER' && (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-1">Data Diagnostic &amp; Repair</h3>
+          <p className="text-sm text-black/50 mb-4">
+            Diagnose data issues, clean up orphaned journal entries from deleted sales,
+            and void test/setup sales without needing a manager PIN.
+          </p>
+          <DataDiagnosticPanel />
         </div>
       )}
     </div>

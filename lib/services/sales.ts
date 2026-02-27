@@ -12,6 +12,7 @@ import {
 import {
   buildQtyByProductMap,
   decrementInventoryBalance,
+  upsertInventoryBalance,
   fetchInventoryMap,
   resolveAvgCost,
 } from './shared';
