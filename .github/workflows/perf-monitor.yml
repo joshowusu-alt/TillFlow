@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       DATABASE_URL: file:./perf.db
-      BASE_URL: http://127.0.0.1:6200
+      BASE_URL: http://localhost:6200
       E2E_OWNER_EMAIL: owner@store.com
       E2E_OWNER_PASSWORD: Pass1234!
     steps:
@@ -57,12 +57,8 @@ jobs:
       - name: Run speed monitor
         id: speed
         run: |
-          npm run test:perf > .perf-report.json || true
+          npm run test:perf > .perf-report.json
           cat .perf-report.json
-          echo "--- Server log (last 50 lines) ---"
-          tail -50 .perf-server.log || true
-          # Fail if report indicates failure
-          node -e "const r=JSON.parse(require('fs').readFileSync('.perf-report.json','utf8')); if(!r.success) process.exit(1);"
 
       - name: Evaluate speed budget
         id: budget
