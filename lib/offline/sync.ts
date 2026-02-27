@@ -24,7 +24,7 @@ export interface SyncResult {
     errors: string[];
 }
 
-// Sync offline sales to server
+// Sync offline sales to server (batch with one-at-a-time fallback)
 export async function syncOfflineSales(): Promise<SyncResult> {
     const pending = await getPendingSales();
 
@@ -32,6 +32,58 @@ export async function syncOfflineSales(): Promise<SyncResult> {
         return { synced: 0, failed: 0, errors: [] };
     }
 
+    // Try batch sync first
+    const batchResult = await tryBatchSync(pending);
+    if (batchResult) return batchResult;
+
+    // Fall back to one-at-a-time if batch endpoint unavailable
+    return syncOneAtATime(pending);
+}
+
+async function tryBatchSync(pending: OfflineSale[]): Promise<SyncResult | null> {
+    try {
+        const response = await fetch('/api/offline/batch-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sales: pending })
+        });
+
+        // Batch endpoint not available — fall back
+        if (response.status === 404) return null;
+
+        if (!response.ok) {
+            // Server error on entire batch — fall back to one-at-a-time
+            return null;
+        }
+
+        const data = await response.json() as {
+            synced: string[];
+            failed: Array<{ id: string; error: string }>;
+        };
+
+        // Mark each synced sale individually
+        for (const id of data.synced) {
+            await markSaleSynced(id);
+        }
+
+        const result: SyncResult = {
+            synced: data.synced.length,
+            failed: data.failed.length,
+            errors: data.failed.map((f) => `Sale ${f.id}: ${f.error}`)
+        };
+
+        if (result.synced > 0) {
+            await removeSyncedSales();
+        }
+
+        return result;
+    } catch {
+        // Network error — fall back to one-at-a-time
+        return null;
+    }
+}
+
+async function syncOneAtATime(pending: OfflineSale[]): Promise<SyncResult> {
     const result: SyncResult = { synced: 0, failed: 0, errors: [] };
 
     for (const sale of pending) {
@@ -56,7 +108,6 @@ export async function syncOfflineSales(): Promise<SyncResult> {
         }
     }
 
-    // Clean up synced sales after successful sync
     if (result.synced > 0) {
         await removeSyncedSales();
     }
