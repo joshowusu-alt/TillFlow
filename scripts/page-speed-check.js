@@ -46,7 +46,16 @@ async function ensureOwnerPassword() {
 
 async function login(page) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(2000);
+
+  // Capture network responses for diagnostics
+  const responses = [];
+  page.on('response', (res) => {
+    if (res.status() >= 400) {
+      responses.push({ url: res.url(), status: res.status() });
+    }
+  });
+
   await page.locator('input[name="email"]').fill(OWNER_EMAIL);
   await page.locator('input[name="password"]').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: /sign in/i }).click();
@@ -59,7 +68,8 @@ async function login(page) {
     await page.waitForTimeout(500);
   }
   if (!/\/pos|\/onboarding/.test(page.url())) {
-    throw new Error(`Login failed — landed on ${page.url()}`);
+    const diag = { url: page.url(), failedResponses: responses };
+    throw new Error(`Login failed — landed on ${page.url()} | diag: ${JSON.stringify(diag)}`);
   }
   if (/\/onboarding/.test(page.url())) {
     await page.goto(`${BASE_URL}/pos`, { waitUntil: 'networkidle' });

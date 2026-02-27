@@ -22,8 +22,18 @@ export function middleware(request: NextRequest) {
         const origin = request.headers.get('origin');
         const secFetchSite = request.headers.get('sec-fetch-site');
 
-        if (origin && origin !== requestOrigin) {
-            return forbiddenResponse(request, 'origin_mismatch');
+        // Compare host only (ignore protocol) because Next.js production mode
+        // may report https: for request.nextUrl.protocol even when the actual
+        // server is running on plain HTTP (e.g. CI perf monitor).
+        if (origin) {
+            try {
+                const originHost = new URL(origin).host;
+                if (originHost !== request.nextUrl.host) {
+                    return forbiddenResponse(request, 'origin_mismatch');
+                }
+            } catch {
+                return forbiddenResponse(request, 'origin_mismatch');
+            }
         }
 
         if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
