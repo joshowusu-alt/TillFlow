@@ -29,16 +29,20 @@ export default function ReturnFormClient({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleOpenConfirm = () => {
     if (!reasonCode) {
       setFormError('Select a reason code before continuing.');
       return;
     }
     if (!isOwner && !managerPin.trim()) {
-      setFormError('Manager PIN is required for returns and voids.');
+      setFormError('Manager PIN is required.');
       return;
     }
+    setFormError(null);
+    setShowConfirm(true);
+  };
 
+  const handleSubmit = async () => {
     setFormError(null);
     setIsSubmitting(true);
     const formData = new FormData();
@@ -134,7 +138,7 @@ export default function ReturnFormClient({
           <button
             type="button"
             className="btn-primary"
-            onClick={() => setShowConfirm(true)}
+            onClick={handleOpenConfirm}
           >
             {isVoid ? 'Void Sale' : 'Process Return'}
           </button>
@@ -194,7 +198,7 @@ export default function ReturnFormClient({
                 type="button"
                 className="flex-1 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                 onClick={handleSubmit}
-                disabled={isSubmitting || !reasonCode || (!isOwner && !managerPin.trim())}
+                disabled={isSubmitting}
               >
                 {isSubmitting ? 'Processing...' : isVoid ? 'Void Sale' : 'Confirm Return'}
               </button>
