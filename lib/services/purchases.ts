@@ -30,37 +30,38 @@ export type CreatePurchaseInput = {
 };
 
 export async function createPurchase(input: CreatePurchaseInput) {
-  const business = await prisma.business.findUnique({ where: { id: input.businessId } });
-  if (!business) throw new Error('Business not found');
-
-  const store = await prisma.store.findFirst({
-    where: { id: input.storeId, businessId: input.businessId },
-    select: { id: true },
-  });
-  if (!store) throw new Error('Store not found');
-
-  if (input.supplierId) {
-    const supplier = await prisma.supplier.findFirst({
-      where: { id: input.supplierId, businessId: input.businessId },
-      select: { id: true },
-    });
-    if (!supplier) throw new Error('Supplier not found');
-  }
-
   if (!input.lines.length) {
     throw new Error('No items in purchase');
   }
 
-  const productUnits = await prisma.productUnit.findMany({
-    where: {
-      product: { businessId: input.businessId },
-      OR: input.lines.map((line) => ({
-        productId: line.productId,
-        unitId: line.unitId
-      }))
-    },
-    include: { product: true, unit: true }
-  });
+  // ── SINGLE BATCH: fire all validation lookups in parallel ──
+  const [business, store, supplier, productUnits] = await Promise.all([
+    prisma.business.findUnique({ where: { id: input.businessId } }),
+    prisma.store.findFirst({
+      where: { id: input.storeId, businessId: input.businessId },
+      select: { id: true },
+    }),
+    input.supplierId
+      ? prisma.supplier.findFirst({
+          where: { id: input.supplierId, businessId: input.businessId },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
+    prisma.productUnit.findMany({
+      where: {
+        product: { businessId: input.businessId },
+        OR: input.lines.map((line) => ({
+          productId: line.productId,
+          unitId: line.unitId
+        }))
+      },
+      include: { product: true, unit: true }
+    }),
+  ]);
+
+  if (!business) throw new Error('Business not found');
+  if (!store) throw new Error('Store not found');
+  if (input.supplierId && !supplier) throw new Error('Supplier not found');
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
 

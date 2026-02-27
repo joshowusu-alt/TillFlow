@@ -6,6 +6,8 @@ import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { requireBusiness } from '@/lib/auth';
+import { computeOutstandingBalance } from '@/lib/accounting';
+import { getBusinessStores } from '@/lib/services/stores';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,11 +43,7 @@ export default async function DashboardPage({
     );
   }
 
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
+  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -56,10 +54,7 @@ export default async function DashboardPage({
   const end = parseDate(searchParams?.to, todayEnd);
   end.setHours(23, 59, 59, 999);
 
-  const selectedStoreId =
-    searchParams?.storeId && stores.some((s) => s.id === searchParams.storeId)
-      ? searchParams.storeId
-      : 'ALL';
+  const selectedStoreId = rawStoreId ?? 'ALL';
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
   const isToday =
     start.toDateString() === todayStart.toDateString() &&
@@ -249,14 +244,8 @@ export default async function DashboardPage({
   }
 
   // AR / AP
-  const outstandingAR = outstandingSales.reduce((s, inv) => {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    return s + Math.max(inv.totalPence - paid, 0);
-  }, 0);
-  const outstandingAP = outstandingPurchases.reduce((s, inv) => {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    return s + Math.max(inv.totalPence - paid, 0);
-  }, 0);
+  const outstandingAR = outstandingSales.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
+  const outstandingAP = outstandingPurchases.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
 
   // Debtor ageing buckets
   const bucketKeys = ['0–30 d', '31–60 d', '61–90 d', '90+ d'] as const;

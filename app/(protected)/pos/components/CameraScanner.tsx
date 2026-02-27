@@ -69,6 +69,7 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
                         fps: 10,
                         qrbox: { width: 280, height: 160 },
                         aspectRatio: 1.5,
+                        // @ts-expect-error — supportedScanTypes exists at runtime but is absent from older type definitions
                         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
                     },
                     (decodedText: string) => {

@@ -4,12 +4,10 @@ import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
-
-const PAGE_SIZE = 25;
 
 export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
@@ -45,12 +43,12 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         user: { select: { name: true } }
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(expenseCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
 
   return (
     <div className="space-y-6">

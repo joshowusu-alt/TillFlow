@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { createSale, type DiscountType } from '@/lib/services/sales';
 import type { PaymentStatus } from '@/lib/services/shared';
+import { parseDiscountValue } from '@/lib/format';
 
 export interface OfflineSalePayload {
     id: string;
@@ -22,20 +23,6 @@ export interface OfflineSalePayload {
     orderDiscountType: string;
     orderDiscountValue: string;
     createdAt: string;
-}
-
-function parseDiscountValue(type: DiscountType, raw: unknown): number {
-    if (type === 'PERCENT') {
-        const pct = Number(raw);
-        if (Number.isNaN(pct)) return 0;
-        return Math.min(Math.max(pct, 0), 100);
-    }
-    if (type === 'AMOUNT') {
-        const amount = Number(raw);
-        if (Number.isNaN(amount)) return 0;
-        return Math.max(Math.round(amount * 100), 0);
-    }
-    return 0;
 }
 
 function toDiscountType(value: unknown): DiscountType {

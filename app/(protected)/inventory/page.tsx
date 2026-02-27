@@ -4,12 +4,10 @@ import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 import { Suspense } from 'react';
-
-const PAGE_SIZE = 25;
 
 export default async function InventoryPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
@@ -48,12 +46,12 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         }
       },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
 
   return (
     <div className="space-y-6">

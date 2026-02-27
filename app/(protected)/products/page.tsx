@@ -5,7 +5,7 @@ import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
+import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
@@ -14,10 +14,8 @@ import BarcodeScanInput from '@/components/BarcodeScanInput';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
-const PAGE_SIZE = 25;
-
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string } }) {
-  const { user, business } = await requireBusiness();
+  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const q = searchParams?.q?.trim() ?? '';
@@ -50,8 +48,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
         category: { select: { name: true, colour: true } }
       },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
     prisma.category.findMany({
       where: { businessId: business.id },
@@ -68,7 +66,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       select: { id: true, name: true }
     }),
   ]);
-  const totalProductPages = Math.max(1, Math.ceil(totalProductCount / PAGE_SIZE));
+  const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
 

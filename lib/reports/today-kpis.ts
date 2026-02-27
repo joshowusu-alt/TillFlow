@@ -37,8 +37,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const fourWeeksAgo = new Date(now);
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+  const thirtyFiveDaysAgo = new Date(now);
+  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
 
   const storeFilter = storeId ? { storeId } : {};
 
@@ -124,9 +124,9 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: { businessId, createdAt: { gte: sevenDaysAgo }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
-    // 4-week expenses — aggregate at DB level
+    // 4-week expenses (35 days ago → 7 days ago = 28 days = 4 weeks) — aggregate at DB level
     prisma.expense.aggregate({
-      where: { businessId, createdAt: { gte: fourWeeksAgo, lt: sevenDaysAgo }, paymentStatus: 'PAID' },
+      where: { businessId, createdAt: { gte: thirtyFiveDaysAgo, lt: sevenDaysAgo }, paymentStatus: 'PAID' },
       _sum: { amountPence: true },
     }),
     // MoMo pending
@@ -163,7 +163,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       select: {
         lineTotalPence: true,
         qtyBase: true,
-        product: { select: { defaultCostBasePence: true } },
+        product: { select: { id: true, defaultCostBasePence: true } },
       },
       take: 10000,
     }),
@@ -223,8 +223,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   const productMargins = new Map<string, { revenue: number; cost: number }>();
   for (const line of salesLines14d) {
     const cost = (line.product.defaultCostBasePence ?? 0) * line.qtyBase;
-    // Use a key combining product data; simplified here
-    const key = `${line.product.defaultCostBasePence}`;
+    const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineTotalPence;
     existing.cost += cost;
@@ -247,7 +246,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 
   const thisWeekExpensesPence = thisWeekExpensesAgg._sum.amountPence ?? 0;
   const fourWeekTotal = fourWeekExpensesAgg._sum.amountPence ?? 0;
-  const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 3); // 3 weeks in the period
+  const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 4); // 4-week window (35d ago to 7d ago)
 
   return {
     totalSalesPence,

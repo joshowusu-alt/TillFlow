@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 type PageHeaderProps = {
   title: string;
@@ -33,14 +34,14 @@ export default function PageHeader({
       {hasActions ? (
         <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
           {secondaryCta ? (
-            <a href={secondaryCta.href} className="btn-secondary text-sm">
+            <Link href={secondaryCta.href} className="btn-secondary text-sm">
               {secondaryCta.label}
-            </a>
+            </Link>
           ) : null}
           {primaryCta ? (
-            <a href={primaryCta.href} className="btn-primary text-sm">
+            <Link href={primaryCta.href} className="btn-primary text-sm">
               {primaryCta.label}
-            </a>
+            </Link>
           ) : null}
           {actions}
         </div>

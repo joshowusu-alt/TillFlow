@@ -141,13 +141,13 @@ export async function login(formData: FormData) {
   // Opportunistic cleanup of expired sessions and old audit logs
   cleanupStaleData(user.businessId).catch(() => {});
 
-  // Redirect owners to onboarding if the business still has the default name
+  // Redirect owners to onboarding if guided setup has not yet been completed
   if (user.role === 'OWNER') {
     const business = await prisma.business.findFirst({
       where: { id: user.businessId },
-      select: { name: true },
+      select: { guidedSetup: true },
     });
-    if (business?.name === 'Supermarket Demo') {
+    if (business?.guidedSetup) {
       redirect('/onboarding');
     }
   }

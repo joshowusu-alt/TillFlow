@@ -6,11 +6,10 @@ import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { computeOutstandingBalance } from '@/lib/accounting';
 import Link from 'next/link';
 import { Suspense } from 'react';
-
-const PAGE_SIZE = 25;
 
 export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string; q?: string; page?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -43,12 +42,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         }
       },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -98,13 +97,10 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
               </tr>
             )}
             {suppliers.map((supplier) => {
-              const balance = supplier.purchaseInvoices.reduce((sum, invoice) => {
-                if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
-                  return sum;
-                }
-                const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
-                return sum + Math.max(invoice.totalPence - paid, 0);
-              }, 0);
+              const balance = supplier.purchaseInvoices.reduce(
+                (sum, invoice) => sum + computeOutstandingBalance(invoice),
+                0
+              );
               return (
                 <tr key={supplier.id} className="rounded-xl bg-white">
                   <td className="px-3 py-3 font-semibold">

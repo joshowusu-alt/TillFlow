@@ -3,6 +3,7 @@ import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
+import { computeOutstandingBalance } from '@/lib/accounting';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
 
@@ -45,9 +46,9 @@ export default async function CustomerDetailPage({
   }
 
   const invoices = customer.salesInvoices.map((invoice) => {
-    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const balance = computeOutstandingBalance(invoice);
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-    const balance = isClosed ? 0 : Math.max(invoice.totalPence - paid, 0);
+    const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
     return { ...invoice, paid, balance, isClosed };
   });
 

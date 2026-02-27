@@ -3,15 +3,24 @@
 import { useState } from 'react';
 import { diagnoseDataAction, cleanOrphanedJournalEntriesAction, ownerVoidSaleAction } from '@/app/actions/repair';
 
+type DiagResult = {
+  totalSales: number;
+  totalJournalEntries: number;
+  orphanedJournalCount: number;
+  salesByDate: Array<{ date: string; count: number; qaTag: string | null }>;
+  journalEntriesByRef: Array<{ referenceType: string; count: number }>;
+};
+
 export default function DataDiagnosticPanel() {
-  const [loading, setLoading] = useState(false);
-  const [diagResult, setDiagResult] = useState<any>(null);
+  const [diagnosticLoading, setDiagnosticLoading] = useState(false);
+  const [repairLoading, setRepairLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [voidId, setVoidId] = useState('');
   const [voidLoading, setVoidLoading] = useState(false);
 
   const runDiagnostic = async () => {
-    setLoading(true);
+    setDiagnosticLoading(true);
     setMessage(null);
     try {
       const result = await diagnoseDataAction();
@@ -23,11 +32,11 @@ export default function DataDiagnosticPanel() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Error');
     }
-    setLoading(false);
+    setDiagnosticLoading(false);
   };
 
   const cleanOrphans = async () => {
-    setLoading(true);
+    setRepairLoading(true);
     setMessage(null);
     try {
       const result = await cleanOrphanedJournalEntriesAction();
@@ -41,7 +50,7 @@ export default function DataDiagnosticPanel() {
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Error');
     }
-    setLoading(false);
+    setRepairLoading(false);
   };
 
   const voidSale = async () => {
@@ -74,8 +83,8 @@ export default function DataDiagnosticPanel() {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button className="btn-secondary text-xs" onClick={runDiagnostic} disabled={loading}>
-          {loading ? 'Running...' : 'Run Data Diagnostic'}
+        <button className="btn-secondary text-xs" onClick={runDiagnostic} disabled={diagnosticLoading}>
+          {diagnosticLoading ? 'Running...' : 'Run Data Diagnostic'}
         </button>
       </div>
 
@@ -113,8 +122,8 @@ export default function DataDiagnosticPanel() {
           </div>
 
           {diagResult.orphanedJournalCount > 0 && (
-            <button className="btn-primary text-xs" onClick={cleanOrphans} disabled={loading}>
-              {loading ? 'Cleaning...' : `Clean ${diagResult.orphanedJournalCount} Orphaned Journal Entries`}
+            <button className="btn-primary text-xs" onClick={cleanOrphans} disabled={repairLoading}>
+              {repairLoading ? 'Cleaning...' : `Clean ${diagResult.orphanedJournalCount} Orphaned Journal Entries`}
             </button>
           )}
         </div>

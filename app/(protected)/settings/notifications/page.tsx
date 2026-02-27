@@ -36,7 +36,7 @@ export default async function NotificationsSettingsPage({
   let previewText = '';
   let previewLink = '';
   if (searchParams?.preview === '1') {
-    const result = await buildEodSummaryPayload(business.id);
+    const result = await buildEodSummaryPayload();
     previewText = result.text;
     previewLink = result.deepLink;
   }

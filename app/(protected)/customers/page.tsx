@@ -6,10 +6,11 @@ import Pagination from '@/components/Pagination';
 import SearchFilter from '@/components/SearchFilter';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
+import { Suspense } from 'react';
 import { createCustomerAction } from '@/app/actions/customers';
-import { formatMoney } from '@/lib/format';
-
-const PAGE_SIZE = 25;
+import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { computeOutstandingBalance } from '@/lib/accounting';
+import { getBusinessStores } from '@/lib/services/stores';
 
 export default async function CustomersPage({
   searchParams,
@@ -21,15 +22,8 @@ export default async function CustomersPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-  const selectedStoreId =
-    (searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
-      ? searchParams.storeId
-      : stores[0]?.id) ?? '';
+  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
 
   const where = {
     businessId: business.id,
@@ -57,12 +51,12 @@ export default async function CustomersPage({
         },
       },
       orderBy: { name: 'asc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
 
   return (
     <div className="space-y-6">
@@ -86,7 +80,7 @@ export default async function CustomersPage({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full max-w-sm">
-          <SearchFilter placeholder="Search customers by name..." />
+          <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>
         </div>
         {business.customerScope === 'BRANCH' ? (
           <form method="GET" className="flex items-end gap-3">
@@ -136,13 +130,10 @@ export default async function CustomersPage({
               </tr>
             )}
             {customers.map((customer) => {
-              const balance = customer.salesInvoices.reduce((sum, invoice) => {
-                if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
-                  return sum;
-                }
-                const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
-                return sum + Math.max(invoice.totalPence - paid, 0);
-              }, 0);
+              const balance = customer.salesInvoices.reduce(
+                (sum, invoice) => sum + computeOutstandingBalance(invoice),
+                0
+              );
               const branchName = customer.storeId
                 ? stores.find((store) => store.id === customer.storeId)?.name ?? 'Unknown'
                 : 'Shared';

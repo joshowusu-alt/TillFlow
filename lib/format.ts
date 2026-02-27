@@ -47,3 +47,30 @@ export function formatDate(value: Date) {
   });
 }
 
+/**
+ * Canonical discount-value parser used by both live POS sales and offline-sync.
+ *
+ * - PERCENT: returns the raw percentage number clamped to [0, 100].
+ * - AMOUNT:  strips commas, converts "major units → pence" via Math.round(× 100),
+ *            and clamps to ≥ 0 so negative discounts are impossible.
+ */
+export function parseDiscountValue(type: string | undefined, raw: unknown): number {
+  if (!type || type === 'NONE') return 0;
+  if (type === 'PERCENT') {
+    const pct = Number(raw);
+    if (Number.isNaN(pct)) return 0;
+    return Math.min(Math.max(pct, 0), 100);
+  }
+  if (type === 'AMOUNT') {
+    const cleaned = String(raw ?? '').replace(/,/g, '').trim();
+    if (!cleaned) return 0;
+    const amount = Number(cleaned);
+    if (Number.isNaN(amount)) return 0;
+    return Math.max(Math.round(amount * 100), 0);
+  }
+  return 0;
+}
+
+/** Default number of items per page for paginated list views. */
+export const DEFAULT_PAGE_SIZE = 25;
+

@@ -41,10 +41,17 @@ export const CHART_OF_ACCOUNTS = [
  * Safe to call multiple times — existing accounts are not modified.
  */
 export async function ensureChartOfAccounts(businessId: string, client: PrismaClient = prisma) {
-  await client.account.createMany({
-    data: CHART_OF_ACCOUNTS.map(a => ({ businessId, ...a })),
-    skipDuplicates: true,
-  });
+  // SQLite does not support createMany with skipDuplicates — use individual upserts instead.
+  // update:{} makes each upsert a no-op when the account already exists.
+  await Promise.all(
+    CHART_OF_ACCOUNTS.map(a =>
+      client.account.upsert({
+        where: { businessId_code: { businessId, code: a.code } },
+        update: {},
+        create: { businessId, ...a },
+      })
+    )
+  );
 }
 
 type JournalLineInput = {
@@ -141,4 +148,23 @@ export function sum(lines: { debitPence: number; creditPence: number }[]) {
     },
     { debit: 0, credit: 0 }
   );
+}
+
+/**
+ * Computes the outstanding (unpaid) balance for a single invoice.
+ *
+ * Returns 0 for RETURNED or VOID invoices. When `paymentStatus` is absent the
+ * check is skipped, which is safe when the calling query already filters those
+ * statuses at the DB level.
+ */
+export function computeOutstandingBalance(invoice: {
+  totalPence: number;
+  paymentStatus?: string;
+  payments: { amountPence: number }[];
+}): number {
+  if (invoice.paymentStatus && ['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+    return 0;
+  }
+  const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
+  return Math.max(invoice.totalPence - paid, 0);
 }

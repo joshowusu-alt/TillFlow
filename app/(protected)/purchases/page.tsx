@@ -5,12 +5,11 @@ import Pagination from '@/components/Pagination';
 import InlinePaymentForm from '@/components/InlinePaymentForm';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
-
-const PAGE_SIZE = 25;
+import { getBusinessStores } from '@/lib/services/stores';
 
 export default async function PurchasesPage({
   searchParams,
@@ -28,15 +27,8 @@ export default async function PurchasesPage({
     );
   }
 
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-  const selectedStoreId =
-    (searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
-      ? searchParams.storeId
-      : stores[0]?.id) ?? '';
+  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   const [products, suppliers, units, purchaseCount, purchases] = await Promise.all([
@@ -95,12 +87,12 @@ export default async function PurchasesPage({
         },
       },
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * DEFAULT_PAGE_SIZE,
+      take: DEFAULT_PAGE_SIZE,
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(purchaseCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(purchaseCount / DEFAULT_PAGE_SIZE));
 
   return (
     <div className="space-y-6">

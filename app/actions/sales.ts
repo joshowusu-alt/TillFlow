@@ -3,7 +3,8 @@
 import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
 import { revalidateTag, revalidatePath } from 'next/cache';
-import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
+import { toInt, formString, formInt, formDate } from '@/lib/form-helpers';
+import { parseDiscountValue } from '@/lib/format';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
 import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
@@ -11,18 +12,6 @@ import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
-
-const parseDiscountValue = (type: string | undefined, raw: any) => {
-  if (!type || type === 'NONE') return 0;
-  if (type === 'PERCENT') {
-    const parsed = Number(raw);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }
-  if (type === 'AMOUNT') {
-    return toPence(raw ?? '');
-  }
-  return 0;
-};
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {

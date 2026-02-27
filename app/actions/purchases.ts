@@ -11,7 +11,7 @@ import type { PaymentStatus } from '@/lib/services/shared';
 
 export async function createPurchaseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const storeId = formString(formData, 'storeId');
     const supplierId = formString(formData, 'supplierId') || null;

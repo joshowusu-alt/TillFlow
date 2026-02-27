@@ -215,6 +215,8 @@ model User {
   reorderActions             ReorderAction[]
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
   passwordResetTokens        PasswordResetToken[]
+
+  @@index([businessId, active])
 }
 
 model Session {
@@ -607,6 +609,7 @@ model PurchaseReturn {
   refundMethod      String?
   refundAmountPence Int      @default(0)
   reason            String?
+  reasonCode        String?
   createdAt         DateTime @default(now())
 
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
@@ -785,6 +788,7 @@ model StocktakeLine {
 
   @@unique([stocktakeId, productId])
   @@index([stocktakeId])
+  @@index([productId])
 }
 
 model AuditLog {
