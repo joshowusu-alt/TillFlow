@@ -132,6 +132,10 @@ export async function requireUser() {
     // getUser already clears the stale cookie, so redirect will work
     redirect('/login');
   }
+  if (!user.active) {
+    // Deactivated accounts must not pass any role checks
+    redirect('/login');
+  }
   return user;
 }
 

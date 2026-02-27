@@ -5,7 +5,9 @@ export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: Request) {
   const token = process.env.METRICS_TOKEN;
-  if (!token) return true;
+  if (!token) {
+    return false; // fail closed - misconfiguration should deny access
+  }
   const authHeader = request.headers.get('authorization') ?? '';
   const candidate = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   return candidate === token;

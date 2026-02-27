@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /** Routes that don't require authentication */
-const PUBLIC_PATHS = ['/login', '/register', '/offline', '/welcome', '/demo'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/offline',
+  '/welcome',
+  '/demo',
+  '/api/health',
+  '/api/seed-once',
+  '/api/cron/eod-summary',
+  '/api/payments/momo/webhook/mtn',
+];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function forbiddenResponse(request: NextRequest, reason: string) {
@@ -43,9 +53,8 @@ export function middleware(request: NextRequest) {
 
     // --- Auth guard: redirect unauthenticated users to /login ---
     const sessionToken = request.cookies.get('pos_session')?.value;
-    const isApiPath = pathname.startsWith('/api/');
     const isPublic =
-        pathname === '/' || isApiPath || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+        pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!sessionToken && !isPublic) {
         const loginUrl = request.nextUrl.clone();

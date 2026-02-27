@@ -39,16 +39,12 @@ export async function verifyManagerPin(input: {
     },
   });
 
-  for (const candidate of candidates) {
-    if (!candidate.approvalPinHash) continue;
-    const ok = await bcrypt.compare(normalized, candidate.approvalPinHash);
-    if (ok) {
-      return {
-        id: candidate.id,
-        name: candidate.name,
-        role: candidate.role,
-      };
-    }
-  }
-  return null;
+  const results = await Promise.all(
+    candidates.map(async (candidate) => {
+      if (!candidate.approvalPinHash) return null;
+      const ok = await bcrypt.compare(normalized, candidate.approvalPinHash);
+      return ok ? { id: candidate.id, name: candidate.name, role: candidate.role } : null;
+    })
+  );
+  return results.find(Boolean) ?? null;
 }

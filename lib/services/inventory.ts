@@ -85,38 +85,36 @@ export async function createStockAdjustment(input: {
     return created;
   });
 
-  // Fire-and-forget: risk detection + journal entry are non-critical background work
-  const bgWork = async () => {
-    await detectInventoryAdjustmentRisk({
-      businessId: input.businessId,
-      storeId: input.storeId,
-      cashierUserId: input.userId,
-      adjustmentId: adjustment.id,
-      qtyBase: signedQtyBase,
-      thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
-    });
+  // Journal entry must be awaited — a failure here means inventory and GL diverge permanently
+  const adjustmentValue = currentAvgCost * qtyBase;
+  const journalLines =
+    input.direction === 'DECREASE'
+      ? [
+          { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
+          { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
+        ]
+      : [
+          { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
+          { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
+        ];
 
-    const adjustmentValue = currentAvgCost * qtyBase;
-    const journalLines =
-      input.direction === 'DECREASE'
-        ? [
-            { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
-            { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
-          ]
-        : [
-            { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
-            { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
-          ];
+  await postJournalEntry({
+    businessId: input.businessId,
+    description: `Stock adjustment ${adjustment.id}`,
+    referenceType: 'STOCK_ADJUSTMENT',
+    referenceId: adjustment.id,
+    lines: journalLines
+  });
 
-    await postJournalEntry({
-      businessId: input.businessId,
-      description: `Stock adjustment ${adjustment.id}`,
-      referenceType: 'STOCK_ADJUSTMENT',
-      referenceId: adjustment.id,
-      lines: journalLines
-    });
-  };
-  bgWork().catch(() => {});
+  // Risk detection is non-critical — safe to be fire-and-forget
+  detectInventoryAdjustmentRisk({
+    businessId: input.businessId,
+    storeId: input.storeId,
+    cashierUserId: input.userId,
+    adjustmentId: adjustment.id,
+    qtyBase: signedQtyBase,
+    thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
+  }).catch(() => {});
 
   return adjustment;
 }

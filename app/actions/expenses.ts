@@ -12,10 +12,28 @@ import { withBusinessStoreContext, formAction, err, type ActionResult } from '@/
 import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
 
-/** Save an uploaded file and return its public path (or null). */
-async function saveAttachment(formData: FormData): Promise<string | null> {
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+type AttachmentResult = { error: string } | string | null;
+
+/** Save an uploaded file and return its public path, an error object, or null. */
+async function saveAttachment(formData: FormData): Promise<AttachmentResult> {
   const file = formData.get('attachment');
   if (!file || typeof file === 'string' || file.size === 0) return null;
+
+  // Vercel serverless has a read-only / ephemeral filesystem — uploads would be silently lost.
+  if (process.env.VERCEL) {
+    return { error: 'File attachments require object storage configuration. Please contact your administrator.' };
+  }
+
+  if (file.size > MAX_ATTACHMENT_SIZE) {
+    return { error: 'Attachment must not exceed 5 MB.' };
+  }
+
+  if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+    return { error: 'Only JPEG, PNG, WebP and PDF attachments are allowed.' };
+  }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'expenses');
@@ -40,7 +58,11 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     const reference = formOptionalString(formData, 'reference');
     const dueDate = formDate(formData, 'dueDate');
 
-    const attachmentPath = await saveAttachment(formData);
+    const attachmentResult = await saveAttachment(formData);
+    if (attachmentResult !== null && typeof attachmentResult === 'object' && 'error' in attachmentResult) {
+      return err(attachmentResult.error);
+    }
+    const attachmentPath = attachmentResult as string | null;
 
     let resolvedAccountId = accountId;
     if (useSimple || !resolvedAccountId) {

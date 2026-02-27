@@ -81,31 +81,34 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       return err('Cannot delete a purchase that has been returned.');
     }
 
-    // Reverse inventory: subtract the quantities that were added
-    for (const line of invoice.lines) {
-      const balance = await prisma.inventoryBalance.findFirst({
-        where: { storeId: invoice.storeId, productId: line.productId },
-      });
-      if (balance) {
-        await prisma.inventoryBalance.update({
-          where: { id: balance.id },
-          data: { qtyOnHandBase: Math.max(0, balance.qtyOnHandBase - line.qtyBase) },
+    // Atomically reverse inventory and delete all related records
+    await prisma.$transaction(async (tx) => {
+      // Reverse inventory: subtract the quantities that were added
+      for (const line of invoice.lines) {
+        const balance = await tx.inventoryBalance.findFirst({
+          where: { storeId: invoice.storeId, productId: line.productId },
         });
+        if (balance) {
+          await tx.inventoryBalance.update({
+            where: { id: balance.id },
+            data: { qtyOnHandBase: Math.max(0, balance.qtyOnHandBase - line.qtyBase) },
+          });
+        }
       }
-    }
 
-    // Delete related records then the invoice
-    await prisma.purchasePayment.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
-    await prisma.stockMovement.deleteMany({ where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } });
-    await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
-    await prisma.purchaseInvoice.delete({ where: { id: purchaseId } });
+      // Delete related records then the invoice
+      await tx.purchasePayment.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
+      await tx.stockMovement.deleteMany({ where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } });
+      await tx.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoiceId: purchaseId } });
+      await tx.purchaseInvoice.delete({ where: { id: purchaseId } });
 
-    // Delete accounting entries if any
-    await prisma.journalLine.deleteMany({
-      where: { journalEntry: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } },
-    });
-    await prisma.journalEntry.deleteMany({
-      where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId },
+      // Delete accounting entries if any
+      await tx.journalLine.deleteMany({
+        where: { journalEntry: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId } },
+      });
+      await tx.journalEntry.deleteMany({
+        where: { referenceType: 'PURCHASE_INVOICE', referenceId: purchaseId },
+      });
     });
 
     audit({
@@ -113,7 +116,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       userId: user.id,
       userName: user.name,
       userRole: user.role,
-      action: 'PURCHASE_CREATE',
+      action: 'PURCHASE_DELETE',
       entity: 'PurchaseInvoice',
       entityId: purchaseId,
       details: { action: 'DELETE', lines: invoice.lines.length },

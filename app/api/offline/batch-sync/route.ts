@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(result);
     } catch (error) {
-        console.error('Batch sync error:', error);
+        console.error('[batch-sync] error:', error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Batch sync failed' },
+            { error: 'An internal error occurred' },
             { status: 500 }
         );
     }

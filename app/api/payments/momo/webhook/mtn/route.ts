@@ -11,7 +11,7 @@ function headersToObject(request: NextRequest): Record<string, string> {
 
 function verifyWebhookSecret(headers: Record<string, string>): boolean {
   const secret = process.env.MTN_MOMO_COLLECTION_WEBHOOK_SECRET?.trim();
-  if (!secret) return true;
+  if (!secret) return false; // fail closed - misconfiguration should deny access
   const incoming =
     headers['x-momo-webhook-secret'] ??
     headers['x-webhook-secret'] ??

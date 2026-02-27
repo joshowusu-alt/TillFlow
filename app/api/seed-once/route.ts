@@ -11,15 +11,10 @@ import bcrypt from 'bcryptjs';
  */
 export const dynamic = 'force-dynamic';
 
-const SEED_TOKEN = process.env.SEED_SECRET || 'tillflow-seed-2024';
-
 export async function GET(request: Request) {
-  // Block in production — each store should register via /register
-  if (process.env.NODE_ENV === 'production' && !process.env.SEED_SECRET) {
-    return NextResponse.json(
-      { error: 'Seed endpoint is disabled in production. Register at /register.' },
-      { status: 403 }
-    );
+  const SEED_TOKEN = process.env.SEED_SECRET;
+  if (!SEED_TOKEN) {
+    return NextResponse.json({ error: 'SEED_SECRET env var not configured' }, { status: 503 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -186,10 +181,6 @@ export async function GET(request: Request) {
       status: 'ok',
       message: 'Seed completed',
       results,
-      loginCredentials: {
-        owner: { email: 'owner@store.com', password: 'Pass1234!' },
-        cashier: { email: 'cashier@store.com', password: 'Pass1234!' },
-      },
     });
   } catch (error: any) {
     console.error('[seed-once] Error:', error);

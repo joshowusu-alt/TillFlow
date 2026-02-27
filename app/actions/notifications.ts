@@ -3,14 +3,15 @@
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { audit } from '@/lib/audit';
+import { withBusinessContext } from '@/lib/action-utils';
 
 /** Currency-formatted with proper symbol for Ghana */
 function fmt(pence: number, currency: string) {
   return formatMoney(pence, currency);
 }
 
-/** Build the EOD WhatsApp message text for a business */
-export async function buildEodSummaryPayload(businessId: string): Promise<{
+/** Internal helper — build the EOD WhatsApp message text for a business (no auth check). */
+async function _buildEodSummaryPayload(businessId: string): Promise<{
   text: string;
   deepLink: string;
   recipient: string | null;
@@ -123,8 +124,21 @@ export async function buildEodSummaryPayload(businessId: string): Promise<{
   return { text, deepLink, recipient: phone || null };
 }
 
-/** Run the EOD summary send for a business and log it */
-export async function sendEodSummaryAction(businessId: string, triggeredBy = 'CRON') {
+/**
+ * Authenticated server action — build EOD summary payload for the currently
+ * signed-in user's business. Derives businessId from the session.
+ */
+export async function buildEodSummaryPayload(): Promise<{
+  text: string;
+  deepLink: string;
+  recipient: string | null;
+}> {
+  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  return _buildEodSummaryPayload(businessId);
+}
+
+/** Internal helper — run the EOD summary send for a business (no auth check, for cron use). */
+export async function _sendEodSummaryForBusiness(businessId: string, triggeredBy = 'CRON') {
   const startedAt = new Date();
   let jobId: string | null = null;
 
@@ -140,7 +154,7 @@ export async function sendEodSummaryAction(businessId: string, triggeredBy = 'CR
     });
     jobId = job.id;
 
-    const { text, deepLink, recipient } = await buildEodSummaryPayload(businessId);
+    const { text, deepLink, recipient } = await _buildEodSummaryPayload(businessId);
 
     if (!text) {
       await prisma.scheduledJob.update({
@@ -210,6 +224,15 @@ export async function sendEodSummaryAction(businessId: string, triggeredBy = 'CR
     }
     return { ok: false, error: err?.message };
   }
+}
+
+/**
+ * Authenticated server action — send EOD summary for the currently signed-in
+ * user's business. Derives businessId from the session.
+ */
+export async function sendEodSummaryAction() {
+  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  return _sendEodSummaryForBusiness(businessId, 'MANUAL');
 }
 
 /** Update WhatsApp notification settings for a business */

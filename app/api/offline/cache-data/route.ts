@@ -111,9 +111,9 @@ export async function GET() {
             tills: store.tills.map((t) => ({ id: t.id, name: t.name }))
         });
     } catch (error) {
-        console.error('Cache data error:', error);
+        console.error('[cache-data] error:', error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Failed to fetch cache data' },
+            { error: 'An internal error occurred' },
             { status: 500 }
         );
     }

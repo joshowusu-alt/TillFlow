@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendEodSummaryAction } from '@/app/actions/notifications';
+import { _sendEodSummaryForBusiness } from '@/app/actions/notifications';
 
 /**
  * GET /api/cron/eod-summary
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const providedSecret =
     req.headers.get('x-cron-secret') ?? req.nextUrl.searchParams.get('secret') ?? '';
 
-  if (secret && providedSecret !== secret) {
+  if (!secret || providedSecret !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   const results: Record<string, unknown> = {};
   for (const biz of businesses) {
-    results[biz.id] = await sendEodSummaryAction(biz.id, 'CRON');
+    results[biz.id] = await _sendEodSummaryForBusiness(biz.id, 'CRON');
   }
 
   return NextResponse.json({ ok: true, processed: businesses.length, results });
