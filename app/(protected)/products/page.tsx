@@ -10,6 +10,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import RepairPricesButton from './RepairPricesButton';
+import BarcodeScanInput from '@/components/BarcodeScanInput';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
@@ -110,7 +111,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                 </div>
                 <div>
                   <label className="label">Barcode</label>
-                  <input className="input" name="barcode" />
+                  <BarcodeScanInput name="barcode" />
                 </div>
                 <div>
                   <label className="label">Category</label>

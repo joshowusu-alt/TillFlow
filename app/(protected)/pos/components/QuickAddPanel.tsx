@@ -2,6 +2,7 @@
 
 import { memo, useState, useTransition, useCallback } from 'react';
 import { quickCreateProductAction } from '@/app/actions/products';
+import BarcodeScanInput from '@/components/BarcodeScanInput';
 
 type UnitDto = {
   id: string;
@@ -111,7 +112,7 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
         </div>
         <div>
           <label className="label">Barcode</label>
-          <input className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          <BarcodeScanInput name="barcode" value={barcode} onChange={(val) => setBarcode(val)} />
         </div>
         <div>
           <label className="label">Base Unit</label>

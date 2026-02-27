@@ -7,6 +7,7 @@ import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
+import BarcodeScanInput from '@/components/BarcodeScanInput';
 
 export default async function ProductDetailPage({
   params,
@@ -117,7 +118,7 @@ export default async function ProductDetailPage({
             </div>
             <div>
               <label className="label">Barcode</label>
-              <input className="input" name="barcode" defaultValue={product.barcode ?? ''} />
+              <BarcodeScanInput name="barcode" defaultValue={product.barcode ?? ''} />
             </div>
             <div>
               <label className="label">Category</label>
