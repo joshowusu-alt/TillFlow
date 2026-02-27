@@ -147,7 +147,8 @@ export default function ReturnFormClient({
 
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 overflow-y-auto flex-1">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100">
                 <svg
@@ -185,7 +186,8 @@ export default function ReturnFormClient({
                 </p>
               )}
             </div>
-            <div className="mt-6 flex gap-3">
+            </div>
+            <div className="mt-4 p-6 pt-0 flex gap-3 flex-shrink-0">
               <button
                 type="button"
                 className="btn-ghost flex-1"
