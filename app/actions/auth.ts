@@ -7,7 +7,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { audit } from '@/lib/audit';
-import { cleanupStaleData } from '@/lib/auth';
+import { cleanupStaleData } from '@/lib/services/maintenance';
 import { headers } from 'next/headers';
 import { clearLoginFailures, getLoginThrottleStatus, recordLoginFailure } from '@/lib/security/login-throttle';
 import { verifyTwoFactorCode } from '@/lib/security/two-factor';

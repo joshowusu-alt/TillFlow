@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import TopNav from '@/components/TopNav';
 import { headers } from 'next/headers';
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
@@ -13,45 +14,59 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     select: { id: true, name: true }
   });
 
-  // Live sales counter — always fetch so MANAGER/OWNER can see today's pulse
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todaySalesAgg = await prisma.salesInvoice.aggregate({
-    where: {
-      businessId: business.id,
-      createdAt: { gte: todayStart },
-      paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+  // Live sales counter — cached for 60 s per business so the nav stays snappy.
+  // Invalidated immediately when a sale is created (revalidateTag in sales.ts).
+  const todaySales = await unstable_cache(
+    async () => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const agg = await prisma.salesInvoice.aggregate({
+        where: {
+          businessId: business.id,
+          createdAt: { gte: todayStart },
+          paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+        },
+        _sum: { totalPence: true },
+        _count: { id: true },
+      });
+      return {
+        totalPence: agg._sum.totalPence ?? 0,
+        txCount: agg._count.id,
+        currency: business.currency,
+      };
     },
-    _sum: { totalPence: true },
-    _count: { id: true },
-  });
-  const todaySales = {
-    totalPence: todaySalesAgg._sum.totalPence ?? 0,
-    txCount: todaySalesAgg._count.id,
-    currency: business.currency,
-  };
+    ['today-sales', business.id],
+    { revalidate: 60, tags: [`today-sales-${business.id}`] }
+  )();
 
   // Show onboarding banner when onboarding is not complete
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
 
-  // Compute lightweight readiness %
+  // Compute lightweight readiness % — cached for 5 min per business.
+  // Invalidated when products, staff, or sales change (revalidateTag in relevant actions).
   let readinessPct = 0;
   if (needsOnboarding) {
-    const [productCount, staffCount, saleCount] = await Promise.all([
-      prisma.product.count({ where: { businessId: business.id } }),
-      prisma.user.count({ where: { businessId: business.id } }),
-      prisma.salesInvoice.count({
-        where: {
-          businessId: business.id,
-          OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
-        },
-      }),
-    ]);
-    const hasAddress = !!(business.address || business.phone);
-    const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
-    readinessPct = Math.round((checks.filter(Boolean).length / checks.length) * 100);
+    readinessPct = await unstable_cache(
+      async () => {
+        const [productCount, staffCount, saleCount] = await Promise.all([
+          prisma.product.count({ where: { businessId: business.id } }),
+          prisma.user.count({ where: { businessId: business.id } }),
+          prisma.salesInvoice.count({
+            where: {
+              businessId: business.id,
+              OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+            },
+          }),
+        ]);
+        const hasAddress = !!(business.address || business.phone);
+        const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
+        return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+      },
+      ['readiness', business.id],
+      { revalidate: 300, tags: [`readiness-${business.id}`] }
+    )();
   }
 
   return (

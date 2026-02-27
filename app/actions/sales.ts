@@ -105,6 +105,8 @@ export async function createSaleAction(formData: FormData): Promise<void> {
 
       audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }).catch(() => {});
 
+      revalidateTag(`today-sales-${businessId}`);
+      revalidateTag(`readiness-${businessId}`);
       revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
@@ -256,6 +258,8 @@ export async function completeSaleAction(data: {
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateTag(`today-sales-${businessId}`);
+    revalidateTag(`readiness-${businessId}`);
     revalidatePath('/onboarding');
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
