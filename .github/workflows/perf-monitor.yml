@@ -57,7 +57,7 @@ jobs:
       - name: Run speed monitor
         id: speed
         run: |
-          npm run test:perf > .perf-report.json
+          npm run --silent test:perf > .perf-report.json
           cat .perf-report.json
 
       - name: Evaluate speed budget
