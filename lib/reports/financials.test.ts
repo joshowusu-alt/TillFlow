@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Mock unstable_cache to be a pass-through in tests
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: any) => fn,
+}));
+
 const { prismaMock } = vi.hoisted(() => ({
   prismaMock: {
     business: { findUniqueOrThrow: vi.fn() },

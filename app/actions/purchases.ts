@@ -55,6 +55,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     redirect(`/purchases?created=${Date.now()}`);
   }, '/purchases');
@@ -119,6 +120,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
     });
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     return ok();
   });

@@ -8,6 +8,7 @@ import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
 import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
+import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -311,6 +312,18 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             use this to create any missing journal entries. Safe to run multiple times.
           </p>
           <RepairJournalEntriesButton />
+        </div>
+      )}
+
+      {/* Restore products deleted by Clear Sample Data */}
+      {user.role === 'OWNER' && (
+        <div className="card p-6">
+          <h3 className="font-semibold mb-1">Restore Deleted Products</h3>
+          <p className="text-sm text-black/50 mb-4">
+            If sales are missing from the sales list after clearing sample data,
+            use this to restore products that were accidentally removed. Safe to run multiple times.
+          </p>
+          <RestoreOrphanedProductsButton />
         </div>
       )}
     </div>

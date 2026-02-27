@@ -7,7 +7,7 @@ const {
   prismaMock,
   postJournalEntryMock,
   fetchInventoryMapMock,
-  upsertInventoryBalanceMock,
+  decrementInventoryBalanceMock,
   getOpenShiftForTillMock,
   recordCashDrawerEntryTxMock,
   detectExcessiveDiscountRiskMock,
@@ -29,7 +29,7 @@ const {
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
-  upsertInventoryBalanceMock: vi.fn(),
+  decrementInventoryBalanceMock: vi.fn(),
   getOpenShiftForTillMock: vi.fn(),
   recordCashDrawerEntryTxMock: vi.fn(),
   detectExcessiveDiscountRiskMock: vi.fn(),
@@ -55,7 +55,7 @@ vi.mock('./shared', async () => {
   return {
     ...actual,
     fetchInventoryMap: fetchInventoryMapMock,
-    upsertInventoryBalance: upsertInventoryBalanceMock,
+    decrementInventoryBalance: decrementInventoryBalanceMock,
   };
 });
 vi.mock('./cash-drawer', () => ({
@@ -163,7 +163,7 @@ beforeEach(() => {
   fetchInventoryMapMock.mockResolvedValue(
     new Map([[PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 300 }]])
   );
-  upsertInventoryBalanceMock.mockResolvedValue(undefined);
+  decrementInventoryBalanceMock.mockResolvedValue(97);
   getOpenShiftForTillMock.mockResolvedValue(null);
   recordCashDrawerEntryTxMock.mockResolvedValue(undefined);
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
@@ -324,13 +324,13 @@ describe('createSale — payments & stock', () => {
       lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 3 }],
     }));
 
-    // upsertInventoryBalance should be called with decreased qty
-    expect(upsertInventoryBalanceMock).toHaveBeenCalled();
-    const call = upsertInventoryBalanceMock.mock.calls[0];
-    // args: tx, storeId, productId, newQty, avgCost
+    // decrementInventoryBalance should be called with qty to subtract
+    expect(decrementInventoryBalanceMock).toHaveBeenCalled();
+    const call = decrementInventoryBalanceMock.mock.calls[0];
+    // args: tx, storeId, productId, qtyBase
     expect(call[1]).toBe(STORE_ID);
     expect(call[2]).toBe(PRODUCT_ID);
-    expect(call[3]).toBe(97); // 100 - 3
+    expect(call[3]).toBe(3); // atomic decrement by 3
   });
 
   it('posts journal entry for sale', async () => {

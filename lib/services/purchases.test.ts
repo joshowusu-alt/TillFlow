@@ -29,6 +29,7 @@ vi.mock('./shared', async () => {
     ...actual,
     fetchInventoryMap: vi.fn().mockResolvedValue(new Map()),
     upsertInventoryBalance: vi.fn(),
+    incrementInventoryBalance: vi.fn(),
   };
 });
 

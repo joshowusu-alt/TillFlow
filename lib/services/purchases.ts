@@ -8,7 +8,7 @@ import {
   type PaymentInput,
   type JournalLine
 } from './shared';
-import { fetchInventoryMap, upsertInventoryBalance } from './shared';
+import { fetchInventoryMap, incrementInventoryBalance } from './shared';
 
 export type PurchasePaymentInput = PaymentInput;
 
@@ -183,7 +183,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
       const existingValue = onHand * currentAvg;
       const newQty = onHand + totals.qtyBase;
       const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      await upsertInventoryBalance(tx, store.id, productId, newQty, newAvg);
+      await incrementInventoryBalance(tx, store.id, productId, totals.qtyBase, newAvg);
     }
 
     await tx.stockMovement.createMany({

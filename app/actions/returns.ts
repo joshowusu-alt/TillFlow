@@ -88,6 +88,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     });
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     redirect('/sales');
   }, '/sales');
@@ -116,6 +117,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     redirect('/purchases');
   }, '/purchases');

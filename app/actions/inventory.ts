@@ -34,6 +34,7 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'INVENTORY_ADJUST', entity: 'Product', entityId: productId, details: { direction, qtyInUnit, unitId, reason } }).catch(() => {});
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     redirect('/inventory/adjustments');
   }, '/inventory');

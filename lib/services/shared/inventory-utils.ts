@@ -76,6 +76,49 @@ export async function upsertInventoryBalance(
 }
 
 /**
+ * Atomically decrement inventory balance inside a transaction.
+ * Uses Prisma's `decrement` to avoid read-modify-write race conditions.
+ * Throws if the resulting quantity would be negative.
+ */
+export async function decrementInventoryBalance(
+  tx: any,
+  storeId: string,
+  productId: string,
+  qtyBase: number,
+): Promise<number> {
+  const updated = await tx.inventoryBalance.update({
+    where: { storeId_productId: { storeId, productId } },
+    data: { qtyOnHandBase: { decrement: qtyBase } },
+    select: { qtyOnHandBase: true },
+  });
+  if (updated.qtyOnHandBase < 0) {
+    throw new Error('Insufficient stock on hand');
+  }
+  return updated.qtyOnHandBase;
+}
+
+/**
+ * Atomically increment inventory balance inside a transaction.
+ * Uses Prisma's `increment` to avoid read-modify-write race conditions.
+ */
+export async function incrementInventoryBalance(
+  tx: any,
+  storeId: string,
+  productId: string,
+  qtyBase: number,
+  newAvgCostBasePence: number,
+): Promise<void> {
+  await tx.inventoryBalance.upsert({
+    where: { storeId_productId: { storeId, productId } },
+    update: {
+      qtyOnHandBase: { increment: qtyBase },
+      avgCostBasePence: newAvgCostBasePence,
+    },
+    create: { storeId, productId, qtyOnHandBase: qtyBase, avgCostBasePence: newAvgCostBasePence },
+  });
+}
+
+/**
  * Build a qty-per-product map from invoice lines.
  */
 export function buildQtyByProductMap(

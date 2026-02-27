@@ -11,9 +11,9 @@ import {
 } from './shared';
 import {
   buildQtyByProductMap,
+  decrementInventoryBalance,
   fetchInventoryMap,
   resolveAvgCost,
-  upsertInventoryBalance
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
@@ -483,13 +483,7 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
-      const avgCost = resolveAvgCost(
-        inventoryMap,
-        productId,
-        lineDetails.find((l) => l.productId === productId)?.productUnit.product.defaultCostBasePence ?? 0
-      );
-      txPromises.push(upsertInventoryBalance(tx, input.storeId, productId, onHand - qtyBase, avgCost));
+      txPromises.push(decrementInventoryBalance(tx, input.storeId, productId, qtyBase));
     }
 
     txPromises.push(

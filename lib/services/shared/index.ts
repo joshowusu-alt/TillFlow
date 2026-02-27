@@ -16,5 +16,7 @@ export {
   fetchInventoryMap,
   resolveAvgCost,
   upsertInventoryBalance,
+  decrementInventoryBalance,
+  incrementInventoryBalance,
   buildQtyByProductMap
 } from './inventory-utils';

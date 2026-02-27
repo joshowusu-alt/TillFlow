@@ -308,28 +308,60 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
         if (expDel.count > 0) removed.push(`${expDel.count} demo expenses`);
       }
 
-      // 2) Delete registration-seeded demo products by SKU
+      // 2) Delete registration-seeded demo products by SKU — but only if they
+      //    have NO real (non-demo) sales referencing them.
       const demoProducts = await tx.product.findMany({
         where: { businessId: business.id, sku: { in: DEMO_SKUS } },
         select: { id: true, name: true },
       });
       if (demoProducts.length > 0) {
-        const productIds = demoProducts.map(p => p.id);
+        // Check which products have real sales or purchases (non-demo)
+        const allDemoProductIds = demoProducts.map(p => p.id);
+        const [productsWithRealSales, productsWithPurchases] = await Promise.all([
+          tx.salesInvoiceLine.findMany({
+            where: {
+              productId: { in: allDemoProductIds },
+              salesInvoice: { qaTag: null },
+            },
+            select: { productId: true },
+            distinct: ['productId'],
+          }),
+          tx.purchaseInvoiceLine.findMany({
+            where: { productId: { in: allDemoProductIds } },
+            select: { productId: true },
+            distinct: ['productId'],
+          }),
+        ]);
+        const realSaleProductIds = new Set([
+          ...productsWithRealSales.map(p => p.productId),
+          ...productsWithPurchases.map(p => p.productId),
+        ]);
 
-        // Must delete dependent records first (in safe order)
-        await tx.salesInvoiceLine.deleteMany({
-          where: { productId: { in: productIds }, salesInvoice: { qaTag: DEMO_TAG } },
-        });
-        await tx.inventoryBalance.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.productUnit.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.stockAdjustment.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.purchaseInvoiceLine.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.stocktakeLine.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.stockTransferLine.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.reorderAction.deleteMany({ where: { productId: { in: productIds } } });
-        await tx.product.deleteMany({ where: { id: { in: productIds } } });
-        removed.push(`${demoProducts.length} sample products`);
+        // Only delete products that have NO real sales
+        const safeToDelete = demoProducts.filter(p => !realSaleProductIds.has(p.id));
+        const keptProducts = demoProducts.filter(p => realSaleProductIds.has(p.id));
+
+        if (safeToDelete.length > 0) {
+          const productIds = safeToDelete.map(p => p.id);
+
+          // Must delete dependent records first (in safe order)
+          await tx.salesInvoiceLine.deleteMany({
+            where: { productId: { in: productIds }, salesInvoice: { qaTag: DEMO_TAG } },
+          });
+          await tx.inventoryBalance.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.productUnit.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.stockAdjustment.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.purchaseInvoiceLine.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.stocktakeLine.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.stockTransferLine.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.reorderAction.deleteMany({ where: { productId: { in: productIds } } });
+          await tx.product.deleteMany({ where: { id: { in: productIds } } });
+          removed.push(`${safeToDelete.length} sample products`);
+        }
+        if (keptProducts.length > 0) {
+          removed.push(`${keptProducts.length} sample products kept (have real sales)`);
+        }
       }
 
       // 3) Delete demo categories that no longer have any products

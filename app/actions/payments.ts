@@ -2,6 +2,7 @@
 
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { toPence } from '@/lib/form-helpers';
 import { formString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
@@ -30,6 +31,7 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
     const payments = parsePayments(formData);
 
     await recordCustomerPayment(businessId, invoiceId, payments, user.id);
+    revalidateTag('reports');
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
     redirect(returnTo);
   }, '/payments/customer-receipts');
@@ -46,6 +48,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     const notes = formString(formData, 'notes') || undefined;
 
     await recordSupplierPayment(businessId, invoiceId, payments, paidAt, user.id, notes);
+    revalidateTag('reports');
     const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
     redirect(returnTo);
   }, '/payments/supplier-payments');

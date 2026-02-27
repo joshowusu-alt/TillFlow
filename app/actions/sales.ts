@@ -266,6 +266,7 @@ export async function completeSaleAction(data: {
     }).catch(() => {});
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
     revalidatePath('/onboarding');
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
@@ -344,6 +345,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
     }).catch(() => {});
 
     revalidateTag('pos-products');
+    revalidateTag('reports');
 
     redirect('/sales?amended=true');
   }, '/sales');

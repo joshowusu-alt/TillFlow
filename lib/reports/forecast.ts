@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
+import { unstable_cache } from 'next/cache';
 
 export type ForecastDay = {
   date: string;
@@ -95,9 +96,9 @@ export function projectCashflow(inputs: ForecastInputs): ForecastResult {
   };
 }
 
-export async function getCashflowForecast(
+async function _getCashflowForecast(
   businessId: string,
-  days: 7 | 14 | 30 = 14
+  days: number
 ): Promise<ForecastResult> {
   const now = new Date();
 
@@ -256,4 +257,17 @@ export async function getCashflowForecast(
     avgDailyCashSalesPence: avgDailyCashSales,
     days,
   });
+}
+
+const cachedCashflowForecast = unstable_cache(
+  _getCashflowForecast,
+  ['report-cashflow-forecast'],
+  { revalidate: 300, tags: ['reports'] }
+);
+
+export function getCashflowForecast(
+  businessId: string,
+  days: 7 | 14 | 30 = 14
+): Promise<ForecastResult> {
+  return cachedCashflowForecast(businessId, days);
 }

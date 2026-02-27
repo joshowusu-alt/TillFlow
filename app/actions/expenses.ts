@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createExpense } from '@/lib/services/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { redirect } from 'next/navigation';
+import { revalidateTag } from 'next/cache';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { formString, formOptionalString, formPence, formDate } from '@/lib/form-helpers';
@@ -72,6 +73,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } });
 
+    revalidateTag('reports');
     redirect('/expenses');
   }, '/expenses');
 }

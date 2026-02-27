@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
+import { unstable_cache } from 'next/cache';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -17,8 +18,10 @@ function applyBalance(type: AccountType, debit: number, credit: number) {
   return credit - debit;
 }
 
-export async function getIncomeStatement(businessId: string, start: Date, end: Date) {
-  // Aggregate journal lines at DB level grouped by account
+async function _getIncomeStatement(businessId: string, startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+
   const [grouped, accounts] = await Promise.all([
     prisma.journalLine.groupBy({
       by: ['accountId'],
@@ -67,8 +70,19 @@ export async function getIncomeStatement(businessId: string, start: Date, end: D
   };
 }
 
-export async function getBalanceSheet(businessId: string, asOf: Date) {
-  // Aggregate journal lines at DB level grouped by account
+const cachedIncomeStatement = unstable_cache(
+  _getIncomeStatement,
+  ['report-income-statement'],
+  { revalidate: 300, tags: ['reports'] }
+);
+
+export function getIncomeStatement(businessId: string, start: Date, end: Date) {
+  return cachedIncomeStatement(businessId, start.toISOString(), end.toISOString());
+}
+
+async function _getBalanceSheet(businessId: string, asOfIso: string) {
+  const asOf = new Date(asOfIso);
+
   const [business, grouped, accounts] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
     prisma.journalLine.groupBy({
@@ -159,6 +173,16 @@ export async function getBalanceSheet(businessId: string, asOf: Date) {
   return { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity };
 }
 
+const cachedBalanceSheet = unstable_cache(
+  _getBalanceSheet,
+  ['report-balance-sheet'],
+  { revalidate: 900, tags: ['reports'] }
+);
+
+export function getBalanceSheet(businessId: string, asOf: Date) {
+  return cachedBalanceSheet(businessId, asOf.toISOString());
+}
+
 async function getAccountBalance(businessId: string, code: string, asOf: Date) {
   const account = await prisma.account.findFirst({
     where: { businessId, code },
@@ -180,21 +204,26 @@ async function getAccountBalance(businessId: string, code: string, asOf: Date) {
   );
 }
 
-export async function getCashflow(businessId: string, start: Date, end: Date) {
+async function _getCashflow(businessId: string, startIso: string, endIso: string) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+
   const [business, income] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
-    getIncomeStatement(businessId, start, end)
+    _getIncomeStatement(businessId, startIso, endIso)
   ]);
 
   const openingCapital = business.openingCapitalPence ?? 0;
 
-  const startAr = await getAccountBalance(businessId, ACCOUNT_CODES.ar, start);
-  const endAr = await getAccountBalance(businessId, ACCOUNT_CODES.ar, end);
-  const startAp = await getAccountBalance(businessId, ACCOUNT_CODES.ap, start);
-  const endAp = await getAccountBalance(businessId, ACCOUNT_CODES.ap, end);
-  const startInv = await getAccountBalance(businessId, ACCOUNT_CODES.inventory, start);
-  const endInv = await getAccountBalance(businessId, ACCOUNT_CODES.inventory, end);
-  const startCash = await getAccountBalance(businessId, ACCOUNT_CODES.cash, start);
+  const [startAr, endAr, startAp, endAp, startInv, endInv, startCash] = await Promise.all([
+    getAccountBalance(businessId, ACCOUNT_CODES.ar, start),
+    getAccountBalance(businessId, ACCOUNT_CODES.ar, end),
+    getAccountBalance(businessId, ACCOUNT_CODES.ap, start),
+    getAccountBalance(businessId, ACCOUNT_CODES.ap, end),
+    getAccountBalance(businessId, ACCOUNT_CODES.inventory, start),
+    getAccountBalance(businessId, ACCOUNT_CODES.inventory, end),
+    getAccountBalance(businessId, ACCOUNT_CODES.cash, start),
+  ]);
 
   const arChange = endAr - startAr;
   const apChange = endAp - startAp;
@@ -214,4 +243,14 @@ export async function getCashflow(businessId: string, start: Date, end: Date) {
     beginningCash,
     endingCash
   };
+}
+
+const cachedCashflow = unstable_cache(
+  _getCashflow,
+  ['report-cashflow'],
+  { revalidate: 300, tags: ['reports'] }
+);
+
+export function getCashflow(businessId: string, start: Date, end: Date) {
+  return cachedCashflow(businessId, start.toISOString(), end.toISOString());
 }

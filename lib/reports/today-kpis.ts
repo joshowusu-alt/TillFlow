@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { unstable_cache } from 'next/cache';
 
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -25,7 +26,7 @@ export type TodayKPIs = {
   discountOverrideCount: number;
 };
 
-export async function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
+async function _getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
@@ -272,4 +273,14 @@ export async function getTodayKPIs(businessId: string, storeId?: string): Promis
     fourWeekAvgExpensesPence,
     discountOverrideCount: discountOverrides,
   };
+}
+
+const cachedTodayKPIs = unstable_cache(
+  _getTodayKPIs,
+  ['report-today-kpis'],
+  { revalidate: 120, tags: ['reports'] }
+);
+
+export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
+  return cachedTodayKPIs(businessId, storeId ?? '');
 }
