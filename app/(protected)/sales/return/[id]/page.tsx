@@ -5,7 +5,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import ReturnFormClient from './ReturnFormClient';
 
 export default async function SalesReturnPage({ params }: { params: { id: string } }) {
-  const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
+  const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -91,6 +91,7 @@ export default async function SalesReturnPage({ params }: { params: { id: string
           paid={paid}
           currency={business.currency}
           isVoid={isVoid}
+          userRole={user.role}
         />
       </div>
     </div>

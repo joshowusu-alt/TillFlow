@@ -10,14 +10,17 @@ type ReturnFormClientProps = {
   paid: number;
   currency: string;
   isVoid: boolean;
+  userRole?: string;
 };
 
 export default function ReturnFormClient({
   invoiceId,
   paid,
   currency,
-  isVoid
+  isVoid,
+  userRole
 }: ReturnFormClientProps) {
+  const isOwner = userRole === 'OWNER';
   const [showConfirm, setShowConfirm] = useState(false);
   const [refundMethod, setRefundMethod] = useState('CASH');
   const [reasonCode, setReasonCode] = useState('');
@@ -31,7 +34,7 @@ export default function ReturnFormClient({
       setFormError('Select a reason code before continuing.');
       return;
     }
-    if (!managerPin.trim()) {
+    if (!isOwner && !managerPin.trim()) {
       setFormError('Manager PIN is required for returns and voids.');
       return;
     }
@@ -94,18 +97,25 @@ export default function ReturnFormClient({
             ))}
           </select>
         </div>
-        <div>
-          <label className="label">Manager PIN</label>
-          <input
-            className="input"
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={managerPin}
-            onChange={(e) => setManagerPin(e.target.value)}
-            placeholder="Enter manager PIN"
-          />
-        </div>
+        {!isOwner && (
+          <div>
+            <label className="label">Manager PIN</label>
+            <input
+              className="input"
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={managerPin}
+              onChange={(e) => setManagerPin(e.target.value)}
+              placeholder="Enter manager PIN"
+            />
+          </div>
+        )}
+        {isOwner && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Owner approval — no PIN required.
+          </div>
+        )}
         <div className="md:col-span-3">
           <label className="label">Reason details (optional)</label>
           <input
@@ -184,7 +194,7 @@ export default function ReturnFormClient({
                 type="button"
                 className="flex-1 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                 onClick={handleSubmit}
-                disabled={isSubmitting || !reasonCode || !managerPin.trim()}
+                disabled={isSubmitting || !reasonCode || (!isOwner && !managerPin.trim())}
               >
                 {isSubmitting ? 'Processing...' : isVoid ? 'Void Sale' : 'Confirm Return'}
               </button>

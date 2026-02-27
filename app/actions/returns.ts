@@ -46,15 +46,24 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     if (!isVoidReturnReasonCode(reasonCode)) {
       await deny('Select a valid reason code for this return/void.', 'INVALID_REASON_CODE');
     }
-    if (!managerPin) {
-      await deny('Manager PIN is required for returns and voids.', 'MISSING_MANAGER_PIN');
-    }
+    let approvedByUserId: string;
+    let approvalMode: string;
 
-    const approvedBy = await verifyManagerPin({ businessId, pin: managerPin });
-    if (!approvedBy) {
-      await deny('Invalid manager PIN for return approval.', 'INVALID_MANAGER_PIN');
+    if (user.role === 'OWNER') {
+      // Owners can self-approve without a PIN
+      approvedByUserId = user.id;
+      approvalMode = 'SELF_OWNER';
+    } else {
+      if (!managerPin) {
+        await deny('Manager PIN is required for returns and voids.', 'MISSING_MANAGER_PIN');
+      }
+      const approvedBy = await verifyManagerPin({ businessId, pin: managerPin });
+      if (!approvedBy) {
+        await deny('Invalid manager PIN for return approval.', 'INVALID_MANAGER_PIN');
+      }
+      approvedByUserId = approvedBy!.id;
+      approvalMode = 'PIN';
     }
-    const approvedByUserId = approvedBy!.id;
 
     await createSalesReturn({
       businessId,
@@ -65,7 +74,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       refundAmountPence,
       reason,
       managerApprovedByUserId: approvedByUserId,
-      managerApprovalMode: 'PIN',
+      managerApprovalMode: approvalMode,
       type
     });
 
@@ -84,6 +93,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
         reason,
         refundAmountPence,
         managerApprovedByUserId: approvedByUserId,
+        approvalMode,
       },
     });
 
