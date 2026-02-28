@@ -40,6 +40,24 @@ export function err(message: string): ActionError {
 }
 
 // ---------------------------------------------------------------------------
+// UserError — safe, pre-sanitised messages for display in the UI
+// ---------------------------------------------------------------------------
+
+/**
+ * Throw this from service layer code to surface a user-friendly message
+ * that is safe to display directly in the UI without sanitisation.
+ *
+ * @example throw new UserError('Customer not found');
+ */
+export class UserError extends Error {
+  readonly isUserError = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Auth + context helpers
 // ---------------------------------------------------------------------------
 
@@ -66,10 +84,17 @@ export async function withBusinessContext(
 }
 
 export async function withBusinessStoreContext(
-  roles?: Role[]
+  roles?: Role[],
+  preferredStoreId?: string
 ): Promise<BusinessStoreContext> {
   const ctx = await withBusinessContext(roles);
-  const store = await prisma.store.findFirst({ where: { businessId: ctx.businessId } });
+  const store = await prisma.store.findFirst({
+    where: {
+      businessId: ctx.businessId,
+      ...(preferredStoreId ? { id: preferredStoreId } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+  });
   if (!store) redirect('/settings');
   return { ...ctx, storeId: store.id };
 }
@@ -91,6 +116,10 @@ export async function safeAction<T>(
   } catch (error: unknown) {
     // Next.js redirect() throws a special internal error — always re-throw it.
     if (isRedirectError(error)) throw error;
+    // UserError messages are pre-sanitised and safe for direct display
+    if (error instanceof UserError) {
+      return err(error.message);
+    }
     // Return a user-friendly message instead of raw technical errors
     if (error instanceof Error) {
       const msg = error.message;

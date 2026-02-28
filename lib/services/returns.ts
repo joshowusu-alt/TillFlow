@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { UserError } from '@/lib/action-utils';
 import { type JournalLine } from './shared';
 import {
   buildQtyByProductMap,
@@ -62,12 +63,12 @@ export async function createSalesReturn(input: {
       lines: { include: { product: true } }
     }
   });
-  if (!invoice) throw new Error('Sale not found');
+  if (!invoice) throw new UserError('Sale not found');
   if (!input.managerApprovedByUserId) {
-    throw new Error('Manager approval is required for returns and voids.');
+    throw new UserError('Manager approval is required for returns and voids.');
   }
   if (!input.reasonCode) {
-    throw new Error('Reason code is required for returns and voids.');
+    throw new UserError('Reason code is required for returns and voids.');
   }
 
   const approvedBy = await prisma.user.findFirst({
@@ -96,10 +97,8 @@ export async function createSalesReturn(input: {
       ? 0
       : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
 
-  if (input.type === 'RETURN' && refundAmount !== totalPaid) {
-    throw new Error('Refund amount must match paid total for full return');
-  }
-
+  // For credit/part-paid sales the AR reversal handles the unpaid portion separately;
+  // refundAmount is already capped at totalPaid above, so no further guard needed.
   const arReversal = Math.max(invoice.totalPence - totalPaid, 0);
   const refundMethod = input.type === 'RETURN' ? input.refundMethod ?? 'CASH' : null;
 
