@@ -8,6 +8,10 @@
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 
+// Prisma transaction clients are Omit<PrismaClient, connection methods>,
+// so we widen the tx parameter to accept both.
+type PrismaOrTx = PrismaClient | Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -28,7 +32,7 @@ export type InventorySnapshot = {
 export async function fetchInventoryMap(
   storeId: string,
   productIds: string[],
-  tx?: PrismaClient
+  tx?: PrismaOrTx
 ): Promise<Map<string, InventorySnapshot>> {
   const client = tx ?? defaultPrisma;
   const balances = await (client as any).inventoryBalance.findMany({

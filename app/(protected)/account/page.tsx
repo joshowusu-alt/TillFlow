@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import { requireUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import QRCode from 'qrcode';
 import { buildTwoFactorOtpAuthUrl } from '@/lib/security/two-factor';
 import {
@@ -17,8 +18,15 @@ export default async function AccountPage({
   searchParams: Promise<{ error?: string; success?: string; twofactor?: string }>;
 }) {
   const [user, params] = await Promise.all([requireUser(), searchParams]);
-  const twoFactorSetupUri = user.twoFactorTempSecret
-    ? buildTwoFactorOtpAuthUrl(user.twoFactorTempSecret, user.email)
+  // twoFactorTempSecret is intentionally excluded from the general session user;
+  // fetch it directly here as it's only needed on this specific page.
+  const userSecrets = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { twoFactorTempSecret: true },
+  });
+  const twoFactorTempSecret = userSecrets?.twoFactorTempSecret ?? null;
+  const twoFactorSetupUri = twoFactorTempSecret
+    ? buildTwoFactorOtpAuthUrl(twoFactorTempSecret, user.email)
     : null;
   const twoFactorQrDataUrl = twoFactorSetupUri ? await QRCode.toDataURL(twoFactorSetupUri) : null;
 
@@ -137,7 +145,7 @@ export default async function AccountPage({
           Add an authenticator app challenge to protect logins even if your password is exposed.
         </p>
 
-        {!user.twoFactorEnabled && !user.twoFactorTempSecret ? (
+        {!user.twoFactorEnabled && !twoFactorTempSecret ? (
           <form action={beginTwoFactorSetupAction} className="space-y-3">
             <div>
               <label className="label">Current Password</label>
@@ -153,7 +161,7 @@ export default async function AccountPage({
           </form>
         ) : null}
 
-        {!user.twoFactorEnabled && user.twoFactorTempSecret && twoFactorSetupUri ? (
+        {!user.twoFactorEnabled && twoFactorTempSecret && twoFactorSetupUri ? (
           <div className="space-y-4">
             <div className="rounded-xl border border-black/10 bg-black/5 p-4">
               <div className="text-sm font-semibold">Step 1: Scan QR code</div>
@@ -168,7 +176,7 @@ export default async function AccountPage({
                 If scanning fails, add this key manually:
               </div>
               <code className="mt-1 block break-all rounded-lg bg-white px-2 py-2 text-xs">
-                {user.twoFactorTempSecret}
+                {twoFactorTempSecret}
               </code>
             </div>
 
