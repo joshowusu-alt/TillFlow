@@ -1,15 +1,16 @@
 ﻿/** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV === 'development';
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typescript: {
-    // Type-checked locally via `tsc --noEmit`; skip during Vercel build to avoid
-    // platform-specific Prisma client generation differences.
-    ignoreBuildErrors: true,
+    // Type errors must be fixed before deploying — do not silence them.
+    ignoreBuildErrors: false,
   },
   eslint: {
-    // ESLint runs locally via `next lint`; skip the redundant Vercel pass.
-    ignoreDuringBuilds: true,
+    // ESLint errors must be fixed before deploying — do not silence them.
+    ignoreDuringBuilds: false,
   },
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
@@ -39,7 +40,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,  // unsafe-eval dev-only
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",

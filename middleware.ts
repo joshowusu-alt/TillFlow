@@ -46,7 +46,7 @@ export function middleware(request: NextRequest) {
             }
         }
 
-        if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+        if (secFetchSite && !['same-origin', 'same-site'].includes(secFetchSite)) {
             return forbiddenResponse(request, 'cross_site_request');
         }
     }
