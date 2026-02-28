@@ -64,7 +64,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
       entity: 'Product',
       entityId: product.id,
       details: { name: fields.name, price: fields.sellingPriceBasePence },
-    });
+    }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     redirect('/products');
@@ -90,7 +90,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
       entity: 'Product',
       entityId: productId,
       details: { name: fields.name, price: fields.sellingPriceBasePence },
-    });
+    }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     redirect(`/products/${productId}`);
@@ -124,7 +124,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
       entity: 'Product',
       entityId: productId,
       details: { name: product.name },
-    });
+    }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     return ok({ message: `"${product.name}" has been deactivated.` });
@@ -158,7 +158,7 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
         count: inflated.length,
         products: inflated.map((p) => p.name),
       },
-    });
+    }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     return ok({ fixed: inflated.length });

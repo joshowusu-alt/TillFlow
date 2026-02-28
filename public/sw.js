@@ -174,6 +174,34 @@ self.addEventListener('message', (event) => {
 
 // ---- Background sync helpers (raw IndexedDB, no idb lib in SW) ----
 
+// Dead-letter store for permanent (4xx) sync failures
+function openFailedSalesDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('pos-dead-letter', 1);
+    request.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore('failed-sales', { autoIncrement: true });
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+async function moveToDead(payload, statusCode, errorMessage) {
+  const db = await openFailedSalesDB();
+  const tx = db.transaction('failed-sales', 'readwrite');
+  const store = tx.objectStore('failed-sales');
+  store.add({ payload, statusCode, errorMessage, failedAt: new Date().toISOString() });
+  await new Promise((resolve, reject) => {
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  const clients = await self.clients.matchAll({ type: 'window' });
+  for (const client of clients) {
+    client.postMessage({ type: 'OFFLINE_SALE_FAILED', statusCode, errorMessage });
+  }
+}
+
 function openOfflineDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open('pos-offline-db', 1);
@@ -230,6 +258,14 @@ async function syncSalesDirectly() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sale),
       });
+      if (res.status >= 400 && res.status < 500) {
+        // Permanent failure — move to dead-letter, don't retry
+        await moveToDead(sale, res.status, `Server rejected: HTTP ${res.status}`);
+        continue; // skip markSaleSyncedInDB, don't throw (so Background Sync won't retry)
+      }
+      if (!res.ok) {
+        throw new Error(`Sync failed: HTTP ${res.status}`); // transient — retry-able
+      }
       if (res.ok) await markSaleSyncedInDB(db, sale.id);
     } catch (_) {
       // Network still down — the sync event will be retried by the browser

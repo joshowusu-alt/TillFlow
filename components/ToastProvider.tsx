@@ -69,14 +69,14 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
       {children}
       <div
         className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
-        aria-live="polite"
+        aria-live="assertive"
         aria-atomic="false"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
             className={`${styles[t.type]} animate-slide-in-right pointer-events-auto flex items-start gap-3 rounded-xl px-4 py-3 text-sm shadow-soft max-w-sm`}
-            role="status"
+            role={t.type === 'error' ? 'alert' : 'status'}
           >
             <ToastIcon type={t.type} />
             <span className="flex-1 leading-snug">{t.message}</span>

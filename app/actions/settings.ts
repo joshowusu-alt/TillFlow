@@ -24,7 +24,7 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
     entity: 'Business',
     entityId: businessId,
     details: { storeMode: validated, source: 'onboarding' },
-  });
+  }).catch((e) => console.error('[audit]', e));
   return { success: true };
 }
 
@@ -100,7 +100,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       await ensureChartOfAccounts(businessId);
     }
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } }).catch((e) => console.error('[audit]', e));
 
     redirect('/settings');
   }, '/settings');

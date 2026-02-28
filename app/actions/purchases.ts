@@ -52,7 +52,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       lines
     });
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } });
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     revalidateTag('reports');
@@ -120,7 +120,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       entity: 'PurchaseInvoice',
       entityId: purchaseId,
       details: { action: 'DELETE', lines: invoice.lines.length },
-    });
+    }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     revalidateTag('reports');

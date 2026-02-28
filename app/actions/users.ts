@@ -40,7 +40,7 @@ export async function createUserAction(formData: FormData): Promise<void> {
       select: { id: true },
     });
 
-    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_CREATE', entity: 'User', entityId: created.id, details: { name, email, role } }).catch((e) => console.error('[audit]', e));
 
     redirect('/users?success=created');
   }, '/users');
@@ -88,7 +88,7 @@ export async function updateUserAction(formData: FormData): Promise<void> {
       await invalidateUserSessions(targetUser.id);
     }
 
-    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'USER_UPDATE', entity: 'User', entityId: targetUser.id, details: { name, email, role, active } }).catch((e) => console.error('[audit]', e));
 
     redirect('/users?success=updated');
   }, '/users');
@@ -114,7 +114,7 @@ export async function toggleUserActiveAction(formData: FormData): Promise<void> 
       await invalidateUserSessions(target.id);
     }
 
-    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: nowActive ? 'USER_UPDATE' : 'USER_DEACTIVATE', entity: 'User', entityId: target.id, details: { name: target.name, active: nowActive } }).catch((e) => console.error('[audit]', e));
 
     redirect('/users');
   }, '/users');
@@ -147,7 +147,7 @@ export async function resetUserPasswordAction(formData: FormData): Promise<void>
 
     await invalidateUserSessions(target.id);
 
-    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } });
+    audit({ businessId, userId: owner.id, userName: owner.name, userRole: owner.role, action: 'PASSWORD_RESET', entity: 'User', entityId: target.id, details: { targetName: target.name, method: 'admin_reset' } }).catch((e) => console.error('[audit]', e));
 
     redirect('/users?success=password_reset');
   }, '/users');
