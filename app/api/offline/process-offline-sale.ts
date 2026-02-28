@@ -119,21 +119,39 @@ export async function processOfflineSale(
     const safeCreatedAt =
         createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : null;
 
-    const invoice = await createSale({
-        businessId: user.businessId,
-        storeId: store.id,
-        tillId: till.id,
-        cashierUserId: user.id,
-        customerId: payload.customerId || null,
-        paymentStatus: toPaymentStatus(payload.paymentStatus),
-        dueDate: null,
-        orderDiscountType,
-        orderDiscountValue,
-        externalRef,
-        createdAt: safeCreatedAt,
-        payments,
-        lines
-    });
-
-    return { success: true, invoiceId: invoice.id };
+    try {
+        const invoice = await createSale({
+            businessId: user.businessId,
+            storeId: store.id,
+            tillId: till.id,
+            cashierUserId: user.id,
+            customerId: payload.customerId || null,
+            paymentStatus: toPaymentStatus(payload.paymentStatus),
+            dueDate: null,
+            orderDiscountType,
+            orderDiscountValue,
+            externalRef,
+            createdAt: safeCreatedAt,
+            payments,
+            lines
+        });
+        return { success: true, invoiceId: invoice.id };
+    } catch (error: unknown) {
+        // Handle idempotency: unique constraint on externalRef means already synced
+        if (
+            error instanceof Error &&
+            'code' in (error as any) &&
+            (error as any).code === 'P2002' &&
+            (error as any).meta?.target?.includes('externalRef')
+        ) {
+            const existing = await prisma.salesInvoice.findFirst({
+                where: { businessId: user.businessId, externalRef },
+                select: { id: true },
+            });
+            if (existing) {
+                return { success: true, invoiceId: existing.id, message: 'Sale already synced' };
+            }
+        }
+        throw error;
+    }
 }

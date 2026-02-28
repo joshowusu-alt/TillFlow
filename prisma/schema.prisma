@@ -449,6 +449,7 @@ model SalesInvoice {
   storeId                    String
   tillId                     String
   transactionNumber          String?
+  externalRef                String?
   shiftId                    String?
   cashierUserId              String
   customerId                 String?
@@ -486,6 +487,7 @@ model SalesInvoice {
   salesReturn            SalesReturn?
 
   @@unique([businessId, transactionNumber])
+  @@unique([businessId, externalRef])
   @@index([businessId])
   @@index([storeId, createdAt])
   @@index([cashierUserId, createdAt])

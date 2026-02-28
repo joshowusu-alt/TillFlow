@@ -8,6 +8,18 @@ datasource db {
   directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
+enum Role {
+  CASHIER
+  MANAGER
+  OWNER
+}
+
+enum PaymentStatus {
+  PAID
+  PART_PAID
+  UNPAID
+}
+
 model Business {
   id                                   String   @id @default(cuid())
   name                                 String
@@ -180,7 +192,7 @@ model User {
   approvalPinHash     String?
   qaTag               String?
   qaRunId             String?
-  role                String
+  role                Role
   active              Boolean  @default(true)
   twoFactorEnabled    Boolean  @default(false)
   twoFactorSecret     String?
@@ -450,10 +462,11 @@ model SalesInvoice {
   storeId                    String
   tillId                     String
   transactionNumber          String?
+  externalRef                String?
   shiftId                    String?
   cashierUserId              String
   customerId                 String?
-  paymentStatus              String
+  paymentStatus              PaymentStatus
   dueDate                    DateTime?
   qaTag                      String?
   qaRunId                    String?
@@ -487,6 +500,7 @@ model SalesInvoice {
   salesReturn            SalesReturn?
 
   @@unique([businessId, transactionNumber])
+  @@unique([businessId, externalRef])
   @@index([businessId])
   @@index([storeId, createdAt])
   @@index([cashierUserId, createdAt])
@@ -578,7 +592,7 @@ model PurchaseInvoice {
   businessId    String
   storeId       String
   supplierId    String?
-  paymentStatus String
+  paymentStatus PaymentStatus
   dueDate       DateTime?
   qaTag         String?
   qaRunId       String?
@@ -684,7 +698,7 @@ model Expense {
   userId         String
   accountId      String
   amountPence    Int
-  paymentStatus  String    @default("PAID")
+  paymentStatus  PaymentStatus @default(PAID)
   method         String?
   dueDate        DateTime?
   vendorName     String?
