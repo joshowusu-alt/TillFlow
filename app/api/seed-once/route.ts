@@ -12,6 +12,11 @@ import bcrypt from 'bcryptjs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  // Block entirely in production unless explicitly enabled
+  if (process.env.NODE_ENV === 'production' && !process.env.SEED_ENABLED) {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
+
   const SEED_TOKEN = process.env.SEED_SECRET;
   if (!SEED_TOKEN) {
     return NextResponse.json({ error: 'SEED_SECRET env var not configured' }, { status: 503 });

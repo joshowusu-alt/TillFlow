@@ -70,7 +70,6 @@ export const getUser = cache(async () => {
             role: true,
             active: true,
             twoFactorEnabled: true,
-            twoFactorTempSecret: true,
           }
         }
       }

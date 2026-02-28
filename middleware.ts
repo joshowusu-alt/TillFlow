@@ -10,7 +10,7 @@ const PUBLIC_PATHS = [
   '/demo',
   '/api/health',
   '/api/seed-once',
-  '/api/cron/eod-summary',
+  '/api/cron/',
   '/api/payments/momo/webhook/mtn',
 ];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
