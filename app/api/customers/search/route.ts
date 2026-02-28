@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
 
     if (q.length > 0) {
         // mode:'insensitive' is only supported on PostgreSQL; omit on SQLite
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const nameFilter: any = isPostgres
-            ? { contains: q, mode: 'insensitive' }
-            : { contains: q };
+        const nameFilter: Prisma.StringFilter = {
+            contains: q,
+            ...(isPostgres ? { mode: 'insensitive' as const } : {}),
+        };
         where.OR = [
             { name: nameFilter },
             { phone: { contains: q } },
