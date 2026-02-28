@@ -39,13 +39,20 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyFiveDaysAgo = new Date(now);
   thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+  const sixtyDaysAgo = new Date(now);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
   const storeFilter = storeId ? { storeId } : {};
 
   const [
     salesAgg,
     paymentsByMethod,
-    outstandingSales,
+    arTotalAgg,
+    arOver60Agg,
+    arOver90Agg,
+    arPaymentsAgg,
     outstandingPurchases,
     openHighAlerts,
     balances,
@@ -76,16 +83,35 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       },
       _sum: { amountPence: true },
     }),
-    // Outstanding AR (need individual rows for aging calc, but limit sensibly)
-    prisma.salesInvoice.findMany({
+    // AR total (sum of invoice face values for open invoices)
+    prisma.salesInvoice.aggregate({
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      _sum: { totalPence: true },
+    }),
+    // AR over-60 bucket (by createdAt as approximation — avoids full table scan)
+    prisma.salesInvoice.aggregate({
       where: {
         businessId, ...storeFilter,
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        createdAt: { lt: sixtyDaysAgo },
       },
-      select: {
-        totalPence: true, dueDate: true, createdAt: true,
-        payments: { select: { amountPence: true } },
+      _sum: { totalPence: true },
+    }),
+    // AR over-90 bucket
+    prisma.salesInvoice.aggregate({
+      where: {
+        businessId, ...storeFilter,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        createdAt: { lt: ninetyDaysAgo },
       },
+      _sum: { totalPence: true },
+    }),
+    // Total payments already applied to open invoices (for net AR calculation)
+    prisma.salesPayment.aggregate({
+      where: {
+        salesInvoice: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      },
+      _sum: { amountPence: true },
     }),
     // Outstanding AP — aggregate at DB level
     prisma.purchaseInvoice.findMany({
@@ -180,21 +206,13 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
 
-  // AR
-  let outstandingARPence = 0;
-  let arOver60Pence = 0;
-  let arOver90Pence = 0;
-  for (const inv of outstandingSales) {
-    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
-    const balance = Math.max(inv.totalPence - paid, 0);
-    if (balance <= 0) continue;
-    outstandingARPence += balance;
-
-    const ref = inv.dueDate ?? inv.createdAt;
-    const ageDays = Math.floor((now.getTime() - new Date(ref).getTime()) / 86_400_000);
-    if (ageDays > 60) arOver60Pence += balance;
-    if (ageDays > 90) arOver90Pence += balance;
-  }
+  // AR — derived from DB-level aggregates; no row loading needed
+  const outstandingARPence = Math.max(
+    (arTotalAgg._sum.totalPence ?? 0) - (arPaymentsAgg._sum.amountPence ?? 0),
+    0,
+  );
+  const arOver60Pence = arOver60Agg._sum.totalPence ?? 0;
+  const arOver90Pence = arOver90Agg._sum.totalPence ?? 0;
 
   // AP
   const outstandingAPPence = outstandingPurchases.reduce((s, inv) => {
@@ -277,7 +295,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 const cachedTodayKPIs = unstable_cache(
   _getTodayKPIs,
   ['report-today-kpis'],
-  { revalidate: 120, tags: ['reports'] }
+  { revalidate: 30, tags: ['reports'] }
 );
 
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {

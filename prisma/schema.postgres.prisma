@@ -496,6 +496,8 @@ model SalesInvoice {
   @@index([customerId, createdAt])
   @@index([transactionNumber])
   @@index([branchId, createdAt])
+  @@index([customerId, paymentStatus])
+  @@index([businessId, createdAt])
 }
 
 model SalesReturn {

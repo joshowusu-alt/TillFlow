@@ -4,12 +4,11 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
 import SearchFilter from '@/components/SearchFilter';
-import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { Suspense } from 'react';
 import { createCustomerAction } from '@/app/actions/customers';
-import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
-import { computeOutstandingBalance } from '@/lib/accounting';
+import { formatMoney } from '@/lib/format';
+import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
 
 export default async function CustomersPage({
@@ -25,38 +24,11 @@ export default async function CustomersPage({
   const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
   const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
 
-  const where = {
-    businessId: business.id,
-    ...(business.customerScope === 'BRANCH' ? { storeId: selectedStoreId } : {}),
-    ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
-  };
-
-  const [totalCount, customers] = await Promise.all([
-    prisma.customer.count({ where }),
-    prisma.customer.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        creditLimitPence: true,
-        storeId: true,
-        salesInvoices: {
-          select: {
-            paymentStatus: true,
-            totalPence: true,
-            payments: { select: { amountPence: true } },
-          },
-        },
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const { customers, totalCount, totalPages } = await getCustomers(business.id, {
+    search: q || undefined,
+    page,
+    storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
+  });
 
   return (
     <div className="space-y-6">
@@ -130,10 +102,7 @@ export default async function CustomersPage({
               </tr>
             )}
             {customers.map((customer) => {
-              const balance = customer.salesInvoices.reduce(
-                (sum, invoice) => sum + computeOutstandingBalance(invoice),
-                0
-              );
+              const balance = customer.outstandingBalancePence;
               const branchName = customer.storeId
                 ? stores.find((store) => store.id === customer.storeId)?.name ?? 'Unknown'
                 : 'Shared';

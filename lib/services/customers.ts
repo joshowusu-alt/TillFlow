@@ -57,13 +57,8 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
         email: true,
         creditLimitPence: true,
         storeId: true,
-        salesInvoices: {
-          select: {
-            paymentStatus: true,
-            totalPence: true,
-            payments: { select: { amountPence: true } },
-          },
-        },
+        // salesInvoices intentionally omitted — balance loaded in a single
+        // batch query below to eliminate the previous N+1.
       },
       orderBy: { name: 'asc' },
       skip: (page - 1) * pageSize,
@@ -71,8 +66,40 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     }),
   ]);
 
+  // Batch-load unpaid/part-paid invoices for every customer on this page in a
+  // single round-trip, then compute the per-customer balance in JS.
+  const customerIds = customers.map((c) => c.id);
+  const arInvoices = customerIds.length
+    ? await prisma.salesInvoice.findMany({
+        where: {
+          customerId: { in: customerIds },
+          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        },
+        select: {
+          customerId: true,
+          totalPence: true,
+          payments: { select: { amountPence: true } },
+        },
+      })
+    : [];
+
+  const balanceMap = new Map<string, number>();
+  for (const inv of arInvoices) {
+    if (!inv.customerId) continue;
+    const paid = inv.payments.reduce((s, p) => s + p.amountPence, 0);
+    balanceMap.set(
+      inv.customerId,
+      (balanceMap.get(inv.customerId) ?? 0) + Math.max(inv.totalPence - paid, 0),
+    );
+  }
+
+  const customersWithBalance = customers.map((c) => ({
+    ...c,
+    outstandingBalancePence: balanceMap.get(c.id) ?? 0,
+  }));
+
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  return { customers, totalCount, totalPages };
+  return { customers: customersWithBalance, totalCount, totalPages };
 }
 
 /**
