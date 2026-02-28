@@ -105,13 +105,11 @@ export async function createSalesReturn(input: {
 
   const qtyByProduct = buildQtyByProductMap(invoice.lines);
 
-  const inventoryMap = await fetchInventoryMap(
-    invoice.storeId,
-    Array.from(qtyByProduct.keys())
-  );
-  const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
-
   const result = await prisma.$transaction(async (tx) => {
+    // Re-read inventory inside transaction to prevent TOCTOU race
+    const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
+    const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
+
     const created = await tx.salesReturn.create({
       data: {
         salesInvoiceId: invoice.id,
@@ -253,13 +251,11 @@ export async function createPurchaseReturn(input: {
 
   const qtyByProduct = buildQtyByProductMap(invoice.lines);
 
-  const inventoryMap = await fetchInventoryMap(
-    invoice.storeId,
-    Array.from(qtyByProduct.keys())
-  );
-  const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
-
   const result = await prisma.$transaction(async (tx) => {
+    // Re-read inventory inside transaction to prevent TOCTOU race
+    const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(qtyByProduct.keys()), tx);
+    const avgCostMap = buildAvgCostMap(invoice.lines, inventoryMap);
+
     const created = await tx.purchaseReturn.create({
       data: {
         purchaseInvoiceId: invoice.id,

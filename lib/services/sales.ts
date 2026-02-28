@@ -351,27 +351,6 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error('Customer is required for credit or part-paid sales');
   }
 
-  // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
-  if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
-    const outstandingBalance = await prisma.salesInvoice.aggregate({
-      where: {
-        customerId: input.customerId,
-        businessId: input.businessId,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-      },
-      _sum: { totalPence: true },
-    });
-    const outstanding = outstandingBalance._sum.totalPence ?? 0;
-    const newCreditExposure = outstanding + balanceDue;
-    if (newCreditExposure > customerResult.creditLimitPence) {
-      throw new Error(
-        `This sale would exceed the customer's credit limit. ` +
-        `Outstanding: ${outstanding}, New balance due: ${balanceDue}, ` +
-        `Limit: ${customerResult.creditLimitPence}`
-      );
-    }
-  }
-
   // When a confirmed MoMo collection exists, attach it; otherwise treat
   // MoMo as a manually-recorded payment (staff verify the receipt visually
   // and end-of-day reconciliation catches discrepancies).
@@ -413,6 +392,27 @@ export async function createSale(input: CreateSaleInput) {
 
   const invoice = await prisma.$transaction(
     async (tx) => {
+    // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
+    if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
+      const outstandingBalance = await tx.salesInvoice.aggregate({
+        where: {
+          customerId: input.customerId,
+          businessId: input.businessId,
+          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        },
+        _sum: { totalPence: true },
+      });
+      const outstanding = outstandingBalance._sum.totalPence ?? 0;
+      const newCreditExposure = outstanding + balanceDue;
+      if (newCreditExposure > customerResult.creditLimitPence) {
+        throw new Error(
+          `This sale would exceed the customer's credit limit. ` +
+          `Outstanding: ${outstanding}, New balance due: ${balanceDue}, ` +
+          `Limit: ${customerResult.creditLimitPence}`
+        );
+      }
+    }
+
     const created = await tx.salesInvoice.create({
       data: {
         businessId: input.businessId,
@@ -734,42 +734,40 @@ export async function amendSale(input: AmendSaleInput) {
     ...addedQtyByProduct.keys(),
   ]);
 
-  const inventoryMap = await fetchInventoryMap(
-    invoice.storeId,
-    Array.from(allAffectedProductIds)
-  );
-
-  // Validate stock for newly added items
-  for (const [productId, qtyBase] of addedQtyByProduct.entries()) {
-    const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
-    // Account for any stock being restored from removed lines of the same product
-    const restoredQty = removedQtyByProduct.get(productId) ?? 0;
-    if (onHand + restoredQty < qtyBase) {
-      throw new Error('Insufficient stock on hand');
-    }
-  }
-
-  // Build avg cost map for all affected items
-  const avgCostMap = new Map<string, number>();
-  for (const line of removedLines) {
-    if (avgCostMap.has(line.productId)) continue;
-    avgCostMap.set(
-      line.productId,
-      resolveAvgCost(inventoryMap, line.productId, line.product.defaultCostBasePence)
-    );
-  }
-  for (const line of newLineDetails) {
-    if (avgCostMap.has(line.productId)) continue;
-    avgCostMap.set(
-      line.productId,
-      resolveAvgCost(inventoryMap, line.productId, line.productUnit.product.defaultCostBasePence)
-    );
-  }
-
   const effectivePaid = oldTotalPaid - refundAmount + additionalPaymentNeeded;
   const newPaymentStatus = derivePaymentStatus(newTotal, effectivePaid);
 
   const result = await prisma.$transaction(async (tx) => {
+    // Re-read inventory inside transaction to prevent TOCTOU race
+    const inventoryMap = await fetchInventoryMap(invoice.storeId, Array.from(allAffectedProductIds), tx);
+
+    // Validate stock for newly added items
+    for (const [productId, qtyBase] of addedQtyByProduct.entries()) {
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
+      // Account for any stock being restored from removed lines of the same product
+      const restoredQty = removedQtyByProduct.get(productId) ?? 0;
+      if (onHand + restoredQty < qtyBase) {
+        throw new Error('Insufficient stock on hand');
+      }
+    }
+
+    // Build avg cost map for all affected items
+    const avgCostMap = new Map<string, number>();
+    for (const line of removedLines) {
+      if (avgCostMap.has(line.productId)) continue;
+      avgCostMap.set(
+        line.productId,
+        resolveAvgCost(inventoryMap, line.productId, line.product.defaultCostBasePence)
+      );
+    }
+    for (const line of newLineDetails) {
+      if (avgCostMap.has(line.productId)) continue;
+      avgCostMap.set(
+        line.productId,
+        resolveAvgCost(inventoryMap, line.productId, line.productUnit.product.defaultCostBasePence)
+      );
+    }
+
     const txPromises: Promise<any>[] = [];
 
     // 1. Delete removed lines
