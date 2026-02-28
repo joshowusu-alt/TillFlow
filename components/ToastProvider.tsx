@@ -42,19 +42,21 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
   }, []);
 
+  const successMsg = searchParams.get('success') ?? '';
+  const errorMsg = searchParams.get('error') ?? '';
+
   useEffect(() => {
-    const success = searchParams.get('success');
-    const error = searchParams.get('error');
-    if (success) addToast(success, 'success');
-    if (error && error !== 'locked' && error !== 'missing') addToast(error, 'error');
-    if (success || (error && error !== 'locked' && error !== 'missing')) {
+    if (successMsg) addToast(successMsg, 'success');
+    if (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing') addToast(errorMsg, 'error');
+    if (successMsg || (errorMsg && errorMsg !== 'locked' && errorMsg !== 'missing')) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete('success');
-      if (error !== 'locked' && error !== 'missing') params.delete('error');
+      if (errorMsg !== 'locked' && errorMsg !== 'missing') params.delete('error');
       const qs = params.toString();
       router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
     }
-  }, [searchParams, pathname, router, addToast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [successMsg, errorMsg, pathname, router, addToast]);
 
   const dismiss = (id: number) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
