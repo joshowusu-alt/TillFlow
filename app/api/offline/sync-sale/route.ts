@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
 import { processOfflineSale, type OfflineSalePayload } from '../process-offline-sale';
+import { checkSyncRateLimit } from '@/lib/security/sync-throttle';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,14 @@ export async function POST(request: NextRequest) {
         const user = await getUser();
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const throttle = await checkSyncRateLimit(user.id);
+        if (throttle.blocked) {
+            return NextResponse.json(
+                { error: 'Too many sync requests. Please wait before retrying.' },
+                { status: 429, headers: { 'Retry-After': String(throttle.retryAfterSeconds ?? 60) } }
+            );
         }
 
         const payload = await request.json() as OfflineSalePayload;

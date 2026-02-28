@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { UserError } from '@/lib/action-utils';
 import {
   filterPositivePayments,
   splitPayments,
@@ -120,7 +121,7 @@ export type CreateSaleInput = {
 
 export async function createSale(input: CreateSaleInput) {
   if (!input.lines.length) {
-    throw new Error('No items in cart');
+    throw new UserError('No items in cart');
   }
 
   // Pre-compute values available from input (no DB dependency)
@@ -203,7 +204,7 @@ export async function createSale(input: CreateSaleInput) {
   if (!store) throw new Error('Store not found');
   if (!till) throw new Error('Till not found');
   if (business.requireOpenTillForSales && !openShift) {
-    throw new Error('Open till is required before recording sales.');
+    throw new UserError('Open till is required before recording sales.');
   }
   if (input.customerId) {
     if (!customerResult) throw new Error('Customer not found');
@@ -227,7 +228,7 @@ export async function createSale(input: CreateSaleInput) {
   for (const [productId, qtyBase] of qtyByProduct.entries()) {
     const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
     if (onHand < qtyBase) {
-      throw new Error('Insufficient stock on hand');
+      throw new UserError('Insufficient on hand');
     }
   }
 
@@ -270,7 +271,7 @@ export async function createSale(input: CreateSaleInput) {
   }
   if (discountBps > business.discountApprovalThresholdBps) {
     if (!discountApprovedByUserId) {
-      throw new Error('Manager discount PIN approval is required for this discount.');
+      throw new UserError('Manager discount PIN approval is required for this discount.');
     }
     if (!input.discountOverrideReasonCode && !input.discountOverrideReason) {
       throw new Error('Discount reason is required for override approval.');
@@ -348,7 +349,7 @@ export async function createSale(input: CreateSaleInput) {
     balanceDue === 0 ? 'PAID' : totalPaid === 0 ? 'UNPAID' : 'PART_PAID';
 
   if (finalStatus !== 'PAID' && !input.customerId) {
-    throw new Error('Customer is required for credit or part-paid sales');
+    throw new UserError('Customer is required for credit or part-paid sales');
   }
 
   // When a confirmed MoMo collection exists, attach it; otherwise treat
@@ -405,10 +406,8 @@ export async function createSale(input: CreateSaleInput) {
       const outstanding = outstandingBalance._sum.totalPence ?? 0;
       const newCreditExposure = outstanding + balanceDue;
       if (newCreditExposure > customerResult.creditLimitPence) {
-        throw new Error(
-          `This sale would exceed the customer's credit limit. ` +
-          `Outstanding: ${outstanding}, New balance due: ${balanceDue}, ` +
-          `Limit: ${customerResult.creditLimitPence}`
+        throw new UserError(
+          `This sale would exceed the customer's credit limit.`
         );
       }
     }
@@ -986,8 +985,14 @@ export async function amendSale(input: AmendSaleInput) {
           : { accountCode: ACCOUNT_CODES.bank, debitPence: additionalPaymentNeeded }
       );
     }
+    // Reverse order-level discount that is cleared by the amendment (new discount is always 0)
+    const discountDelta = invoice.discountPence;
+    if (discountDelta > 0) {
+      journalLines.push({ accountCode: ACCOUNT_CODES.sales, debitPence: discountDelta });
+    }
+
     // AR adjustment
-    const netRevenueChange = (addedSubtotal + addedVat) - (removedSubtotal + removedVatTotal);
+    const netRevenueChange = (addedSubtotal + addedVat) - (removedSubtotal + removedVatTotal) - discountDelta;
     const netPaymentChange = additionalPaymentNeeded - refundAmount;
     const arChange = netRevenueChange - netPaymentChange;
     if (arChange > 0) {

@@ -6,7 +6,7 @@ import PosClient from './PosClient';
 // ── Cached lookups for data that rarely changes ───────────────────
 // Revalidates every 60 s or when explicitly invalidated.
 const getCachedUnits = unstable_cache(
-  () => prisma.unit.findMany({ select: { id: true, name: true } }),
+  (_businessId: string) => prisma.unit.findMany({ select: { id: true, name: true } }),
   ['pos-units'],
   { revalidate: 300, tags: ['pos-units'] }
 );
@@ -74,7 +74,7 @@ export default async function PosPage() {
     }),
     // Cached: products, units, categories change infrequently
     getCachedProducts(business.id),
-    getCachedUnits(),
+    getCachedUnits(business.id),
     prisma.customer.findMany({
       where: {
         businessId: business.id,
@@ -122,7 +122,7 @@ export default async function PosPage() {
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       openShiftTillIds={openShifts.map((shift) => shift.tillId)}
       products={productDtos}
-      customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
+      customers={[]}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
     />

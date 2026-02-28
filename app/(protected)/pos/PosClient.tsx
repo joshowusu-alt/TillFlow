@@ -166,6 +166,7 @@ export default function PosClient({
   const maxUndoSteps = 10;
   const [cartRestored, setCartRestored] = useState(false);
   const [customerOptions, setCustomerOptions] = useState(customers);
+  const [customerSearch, setCustomerSearch] = useState('');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const cartInitialized = useRef(false);
 
@@ -319,6 +320,22 @@ export default function PosClient({
       // Ignore parse errors
     }
   }, [productOptions, customerOptions]);
+
+  // Debounced customer search — fetches from /api/customers/search
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(customerSearch)}&limit=20`);
+        if (res.ok) {
+          const data: { customers: { id: string; name: string }[] } = await res.json();
+          setCustomerOptions(data.customers);
+        }
+      } catch {
+        // network error — keep existing options
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
 
   // Save cart to localStorage when it changes
   useEffect(() => {
@@ -1798,6 +1815,13 @@ export default function PosClient({
             <div className={`flex items-center gap-3 ${requiresCustomer && !customerId ? 'rounded-lg border-2 border-amber-400 bg-amber-50 p-3' : ''}`}>
               <div className="flex-1">
                 <label className="label">{requiresCustomer ? 'Customer (required)' : 'Customer'}</label>
+                <input
+                  type="text"
+                  className="input mb-1"
+                  placeholder="Search by name or phone…"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
                 <select
                   className="input"
                   name="customerId"
