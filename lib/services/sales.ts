@@ -161,7 +161,7 @@ export async function createSale(input: CreateSaleInput) {
   const customerLookup = input.customerId
     ? prisma.customer.findFirst({
         where: { id: input.customerId, businessId: input.businessId },
-        select: { id: true, storeId: true },
+        select: { id: true, storeId: true, creditLimitPence: true },
       })
     : Promise.resolve(null);
 
@@ -351,6 +351,27 @@ export async function createSale(input: CreateSaleInput) {
     throw new Error('Customer is required for credit or part-paid sales');
   }
 
+  // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
+  if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
+    const outstandingBalance = await prisma.salesInvoice.aggregate({
+      where: {
+        customerId: input.customerId,
+        businessId: input.businessId,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      },
+      _sum: { totalPence: true },
+    });
+    const outstanding = outstandingBalance._sum.totalPence ?? 0;
+    const newCreditExposure = outstanding + balanceDue;
+    if (newCreditExposure > customerResult.creditLimitPence) {
+      throw new Error(
+        `This sale would exceed the customer's credit limit. ` +
+        `Outstanding: ${outstanding}, New balance due: ${balanceDue}, ` +
+        `Limit: ${customerResult.creditLimitPence}`
+      );
+    }
+  }
+
   // When a confirmed MoMo collection exists, attach it; otherwise treat
   // MoMo as a manually-recorded payment (staff verify the receipt visually
   // and end-of-day reconciliation catches discrepancies).
@@ -411,6 +432,7 @@ export async function createSale(input: CreateSaleInput) {
         discountOverrideReason: input.discountOverrideReason ?? null,
         discountApprovedByUserId,
         grossMarginPence: grossMarginEstimate,
+        externalRef: input.externalRef ?? null,
         createdAt: input.createdAt ?? undefined,
         lines: {
           create: lineDetails.map((line) => ({

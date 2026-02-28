@@ -16,7 +16,7 @@ export async function createStockAdjustment(input: {
   if (input.qtyInUnit <= 0) throw new Error('Quantity must be at least 1');
 
   // ── Parallel batch: all independent lookups at once ───────────
-  const [business, store, productUnit, inventory] = await Promise.all([
+  const [business, store, productUnit] = await Promise.all([
     prisma.business.findUnique({
       where: { id: input.businessId },
       select: { inventoryAdjustmentRiskThresholdBase: true },
@@ -33,9 +33,6 @@ export async function createStockAdjustment(input: {
       },
       include: { product: true }
     }),
-    prisma.inventoryBalance.findUnique({
-      where: { storeId_productId: { storeId: input.storeId, productId: input.productId } }
-    }),
   ]);
   if (!store) throw new Error('Store not found');
   if (!productUnit) throw new Error('Unit not configured for product');
@@ -43,17 +40,23 @@ export async function createStockAdjustment(input: {
   const qtyBase = input.qtyInUnit * productUnit.conversionToBase;
   const signedQtyBase = input.direction === 'DECREASE' ? -qtyBase : qtyBase;
 
-  const onHand = inventory?.qtyOnHandBase ?? 0;
-  const invMap = new Map(
-    inventory
-      ? [[input.productId, { qtyOnHandBase: onHand, avgCostBasePence: inventory.avgCostBasePence }]]
-      : []
-  );
-  const currentAvgCost = resolveAvgCost(invMap, input.productId, productUnit.product.defaultCostBasePence);
-  const nextOnHand = onHand + signedQtyBase;
-  if (nextOnHand < 0) throw new Error('Adjustment would result in negative stock');
+  const { adjustment, currentAvgCost } = await prisma.$transaction(async (tx) => {
+    // Re-read inventory balance INSIDE the transaction to prevent TOCTOU race.
+    // In PostgreSQL, this read + the subsequent upsert form an atomic unit within the transaction.
+    const inventoryInTx = await tx.inventoryBalance.findUnique({
+      where: { storeId_productId: { storeId: store.id, productId: input.productId } },
+      select: { qtyOnHandBase: true, avgCostBasePence: true },
+    });
+    const onHand = inventoryInTx?.qtyOnHandBase ?? 0;
+    const invMap = new Map(
+      inventoryInTx
+        ? [[input.productId, { qtyOnHandBase: onHand, avgCostBasePence: inventoryInTx.avgCostBasePence }]]
+        : []
+    );
+    const currentAvgCost = resolveAvgCost(invMap, input.productId, productUnit.product.defaultCostBasePence);
+    const nextOnHand = onHand + signedQtyBase;
+    if (nextOnHand < 0) throw new Error('Adjustment would result in negative stock');
 
-  const adjustment = await prisma.$transaction(async (tx) => {
     const created = await tx.stockAdjustment.create({
       data: {
         storeId: store.id,
@@ -82,7 +85,7 @@ export async function createStockAdjustment(input: {
       }
     });
 
-    return created;
+    return { adjustment: created, currentAvgCost };
   });
 
   // Journal entry must be awaited — a failure here means inventory and GL diverge permanently
