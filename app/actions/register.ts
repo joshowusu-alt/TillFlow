@@ -1,10 +1,12 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { checkRegisterRateLimit } from '@/lib/security/register-throttle';
 
 /**
  * Self-service registration: creates a new Business, Store, Till, and OWNER user.
@@ -12,6 +14,14 @@ import { prisma } from '@/lib/prisma';
  * so the new owner can explore the system immediately.
  */
 export async function register(formData: FormData) {
+  // Rate limit by IP
+  const headersList = await headers();
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+  const throttle = await checkRegisterRateLimit(ip);
+  if (throttle.blocked) {
+    redirect('/register?error=throttled');
+  }
+
   const businessName = String(formData.get('businessName') || '').trim();
   const ownerName = String(formData.get('ownerName') || '').trim();
   const email = String(formData.get('email') || '').toLowerCase().trim();

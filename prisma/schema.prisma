@@ -819,7 +819,6 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id])
 
   @@index([businessId, createdAt])
-  @@index([action])
   @@index([actionType])
   @@index([userId])
   @@index([branchId, createdAt])

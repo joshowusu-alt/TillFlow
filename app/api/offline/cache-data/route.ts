@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
+import { checkCacheDataRateLimit } from '@/lib/security/sync-throttle';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,14 @@ export async function GET() {
         const user = await getUser();
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const throttle = await checkCacheDataRateLimit(user.id);
+        if (throttle.blocked) {
+            return NextResponse.json(
+                { error: 'Too many cache refresh requests. Please wait before retrying.' },
+                { status: 429, headers: { 'Retry-After': String(throttle.retryAfterSeconds ?? 3600) } }
+            );
         }
 
         const business = await prisma.business.findUnique({

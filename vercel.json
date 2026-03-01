@@ -1,4 +1,11 @@
 {
   "buildCommand": "npm run build:vercel",
-  "regions": ["lhr1"]
+  "regions": ["lhr1"],
+  "functions": {
+    "app/api/exports/**": { "maxDuration": 60 },
+    "app/api/cron/**": { "maxDuration": 60 },
+    "app/api/seed-once/**": { "maxDuration": 60 },
+    "app/api/offline/batch-sync/**": { "maxDuration": 30 },
+    "app/api/**": { "maxDuration": 15 }
+  }
 }

@@ -241,8 +241,8 @@ export async function createPurchaseReturn(input: {
       ? 0
       : Math.min(input.refundAmountPence ?? totalPaid, totalPaid);
 
-  if (input.type === 'RETURN' && refundAmount !== totalPaid) {
-    throw new Error('Refund amount must match paid total for full return');
+  if (input.type === 'RETURN' && refundAmount > totalPaid) {
+    throw new Error('Refund amount exceeds total paid');
   }
 
   const apReversal = Math.max(invoice.totalPence - totalPaid, 0);

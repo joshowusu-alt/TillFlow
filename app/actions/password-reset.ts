@@ -3,9 +3,11 @@
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { sendPasswordResetEmail } from '@/lib/email';
 import { appLog } from '@/lib/observability';
+import { checkPasswordResetRateLimit } from '@/lib/security/password-reset-throttle';
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -18,6 +20,14 @@ export async function requestPasswordReset(formData: FormData) {
 
   if (!email) {
     redirect('/login/forgot-password?error=missing');
+  }
+
+  // Rate limit by IP
+  const headersList = await headers();
+  const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+  const throttle = await checkPasswordResetRateLimit(ip);
+  if (throttle.blocked) {
+    redirect('/login/forgot-password?error=throttled');
   }
 
   try {
@@ -42,9 +52,8 @@ export async function requestPasswordReset(formData: FormData) {
       });
 
       // Build the reset URL
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
       const resetUrl = `${baseUrl}/login/reset-password?token=${token}`;
 
       const sent = await sendPasswordResetEmail(user.email, resetUrl, user.name || 'there');
