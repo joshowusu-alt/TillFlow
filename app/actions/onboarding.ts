@@ -12,7 +12,7 @@ export type ReadinessStep = {
   done: boolean;
   href: string;
   /** Icon name — mapped in the UI */
-  icon: 'store' | 'box' | 'users' | 'play' | 'receipt' | 'settings';
+  icon: 'store' | 'box' | 'inventory' | 'users' | 'play' | 'receipt' | 'settings';
 };
 
 export type ReadinessData = {
@@ -36,7 +36,7 @@ export type ReadinessData = {
 export async function getReadiness(): Promise<ReadinessData> {
   const { business } = await requireBusiness();
 
-  const [productCount, staffCount, saleCount, hasAddress] = await Promise.all([
+  const [productCount, staffCount, saleCount, hasAddress, purchaseCount] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
     prisma.salesInvoice.count({
@@ -46,6 +46,7 @@ export async function getReadiness(): Promise<ReadinessData> {
       },
     }),
     Promise.resolve(!!(business.address || business.phone)),
+    prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
   ]);
 
   const steps: ReadinessStep[] = [
@@ -68,6 +69,19 @@ export async function getReadiness(): Promise<ReadinessData> {
       done: productCount >= 3,
       href: '/products',
       icon: 'box',
+    },
+    {
+      key: 'opening-stock',
+      title: 'Record opening stock & cash',
+      subtitle:
+        (business as any).openingCapitalPence > 0 || purchaseCount > 0
+          ? 'Opening capital recorded'
+          : 'Enter the stock you have and cash in the till',
+      benefit: 'Your Balance Sheet starts accurate from day one',
+      estimatedMinutes: 5,
+      done: ((business as any).openingCapitalPence ?? 0) > 0 || purchaseCount > 0,
+      href: '/setup/opening-stock',
+      icon: 'inventory' as const,
     },
     {
       key: 'staff',

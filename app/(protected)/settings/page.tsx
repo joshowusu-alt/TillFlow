@@ -107,8 +107,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               defaultValue={((business as any).openingCapitalPence ?? 0) / 100}
             />
             <div className="mt-1 text-xs text-black/50">
-              The total cash you personally invested to start this business. This appears as <strong>Owner&apos;s Capital</strong> on the Balance Sheet.
-              E.g. enter <code>5000</code> for {business.currency} 5,000.
+              Cash you had on hand when you started (not stock value — stock is tracked automatically through Purchases). Appears as <strong>Owner&apos;s Capital</strong> on the Balance Sheet.
+              Use <a href="/setup/opening-stock" className="underline text-accent">Opening Stock &amp; Capital setup</a> to calculate this automatically.
             </div>
           </div>
           <div className="flex items-center gap-2">
