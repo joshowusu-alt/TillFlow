@@ -316,6 +316,22 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         </div>
       )}
 
+      {/* Import & Data */}
+      <div className="card p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold mb-1">Import &amp; Data</h3>
+            <p className="text-sm text-black/50">
+              Bulk-create your product catalogue and record opening stock quantities from a CSV or Excel spreadsheet.
+              Useful when migrating from another system.
+            </p>
+          </div>
+          <a href="/settings/import-stock" className="btn-primary shrink-0 text-sm">
+            Import stock from CSV / Excel →
+          </a>
+        </div>
+      </div>
+
       {/* Data repair — fix missing accounting journal entries */}
       {user.role === 'OWNER' && (
         <div className="card p-6">
