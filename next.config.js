@@ -13,10 +13,7 @@ const nextConfig = {
     ignoreDuringBuilds: false,
   },
   experimental: {
-    // xlsx is used client-side only (file parsing in the browser).
-    // Marking it external keeps it out of the server bundle, which prevents
-    // Vercel from bundling a 400 kB spreadsheet library into every server chunk.
-    serverComponentsExternalPackages: ['better-sqlite3', 'xlsx'],
+    serverComponentsExternalPackages: ['better-sqlite3'],
   },
   async rewrites() {
     return [

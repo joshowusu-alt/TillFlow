@@ -1,14 +1,11 @@
-import dynamic from 'next/dynamic';
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-// xlsx is a large parser library (~400 kB). Load it client-side only so it
-// doesn't enter the server bundle and cause Vercel output-deployment failures.
-const ImportStockClient = dynamic(() => import('./ImportStockClient'), {
-  ssr: false,
-  loading: () => <div className="card p-6 animate-pulse">Loading importer…</div>,
-});
+// ImportStockLoader is a "use client" component that dynamically loads
+// ImportStockClient (which imports xlsx). Importing it here gives RSC a
+// client reference — webpack never follows the xlsx import chain into the
+// server bundle, so the 7 MB xlsx package stays fully client-side.
+import ImportStockLoader from './ImportStockLoader';
 
 export default async function ImportStockPage() {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -25,7 +22,7 @@ export default async function ImportStockPage() {
         title="Import Stock"
         subtitle="Bulk-create your product catalogue and record opening stock from a CSV or Excel file."
       />
-      <ImportStockClient units={units} currency={business.currency} />
+      <ImportStockLoader units={units} currency={business.currency} />
     </div>
   );
 }
