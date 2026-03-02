@@ -1,7 +1,14 @@
+import dynamic from 'next/dynamic';
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import ImportStockClient from './ImportStockClient';
+
+// xlsx is a large parser library (~400 kB). Load it client-side only so it
+// doesn't enter the server bundle and cause Vercel output-deployment failures.
+const ImportStockClient = dynamic(() => import('./ImportStockClient'), {
+  ssr: false,
+  loading: () => <div className="card p-6 animate-pulse">Loading importer…</div>,
+});
 
 export default async function ImportStockPage() {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
