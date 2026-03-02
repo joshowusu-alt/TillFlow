@@ -1,6 +1,6 @@
 /**
  * Client-side file parser for the stock import feature.
- * Handles both .csv (manual split) and .xlsx (SheetJS dynamic import).
+ * Handles .csv files (RFC-4180 compliant).
  * Returns a normalised array of ParsedImportRow — no DB calls here.
  */
 
@@ -179,23 +179,12 @@ async function parseCsv(file: File): Promise<ParsedImportRow[]> {
   return parseMatrix(matrix);
 }
 
-/** Parse a .xlsx / .xls File and return normalised rows. */
-async function parseXlsx(file: File): Promise<ParsedImportRow[]> {
-  const XLSX = await import('xlsx');
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array' });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const matrix: string[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  return parseMatrix(matrix as string[][]);
-}
-
 /**
- * Main entry point — auto-detects CSV vs XLSX by file extension.
+ * Main entry point — CSV only.
  * Throws a descriptive Error if the format is unsupported.
  */
 export async function parseStockFile(file: File): Promise<ParsedImportRow[]> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'csv') return parseCsv(file);
-  if (ext === 'xlsx' || ext === 'xls') return parseXlsx(file);
-  throw new Error(`Unsupported file type ".${ext}". Please upload a .csv or .xlsx file.`);
+  throw new Error(`Unsupported file type ".${ext}". Please upload a .csv file. You can export your spreadsheet as CSV from Excel or Google Sheets.`);
 }

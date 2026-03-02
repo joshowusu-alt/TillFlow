@@ -294,12 +294,12 @@ export default function ImportStockClient({
           </div>
           <div>
             <p className="font-semibold text-black/70">Drag & drop your file here</p>
-            <p className="text-sm text-black/40">Supports .csv and .xlsx files</p>
+            <p className="text-sm text-black/40">Supports .csv files (export from Excel/Google Sheets)</p>
           </div>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv"
             className="hidden"
             onChange={onFileInput}
           />
