@@ -24,16 +24,11 @@ const hasRedisEnv =
 
 const redisClient = hasRedisEnv ? Redis.fromEnv() : null;
 
-if (!hasRedisEnv && process.env.NODE_ENV === 'production') {
-  throw new Error(
-    '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production. ' +
-    'Login throttling cannot fall back to in-memory state in a serverless environment.'
-  );
-}
-
 // In development and test environments the in-memory Map fallback is acceptable:
 // instances are long-lived, single-process, and brute-force protection is not a
-// production concern.  Never rely on this path in production (see throw above).
+// production concern.
+// In production this check is enforced at request time (inside each exported
+// function below) to avoid throwing during Next.js build-time static analysis.
 
 function normalizeThrottleOpts(opts?: ThrottleOptions) {
   return {
@@ -121,6 +116,12 @@ export async function getLoginThrottleStatus(
   const { maxAttempts, lockoutMs } = normalizeThrottleOpts(opts);
 
   if (!redisClient) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production. ' +
+        'Login throttling cannot fall back to in-memory state in a serverless environment.'
+      );
+    }
     return getInMemoryLoginThrottleStatus(email, ipAddress, opts);
   }
 
@@ -153,6 +154,11 @@ export async function recordLoginFailure(
   const { windowMs, maxAttempts, lockoutMs } = normalizeThrottleOpts(opts);
 
   if (!redisClient) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production.'
+      );
+    }
     recordInMemoryLoginFailure(email, ipAddress, opts);
     return;
   }
