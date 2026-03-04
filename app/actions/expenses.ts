@@ -6,7 +6,8 @@ import { ACCOUNT_CODES } from '@/lib/accounting';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formPence, formDate } from '@/lib/form-helpers';
-import { withBusinessStoreContext, formAction, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessStoreContext, withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { PaymentStatusEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
 import { saveExpenseAttachment, type AttachmentResult } from '@/lib/services/storage';
@@ -17,7 +18,15 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
 
     const amountPence = formPence(formData, 'amount');
     const method = (formString(formData, 'method') || 'CASH') as PaymentMethod;
+    const methodValidation = PaymentMethodEnum.safeParse(method);
+    if (!methodValidation.success) {
+      return err(methodValidation.error.errors[0].message);
+    }
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
+    const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
+    if (!psValidation.success) {
+      return err(psValidation.error.errors[0].message);
+    }
     let amountPaidPence = formPence(formData, 'amountPaid');
     const notes = formOptionalString(formData, 'notes');
     const accountId = formString(formData, 'accountId');
@@ -62,6 +71,28 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));
+
+    revalidateTag('reports');
+    redirect('/expenses');
+  }, '/expenses');
+}
+
+export async function deleteExpenseAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const id = formString(formData, 'id');
+    if (!id) return err('Expense ID is required.');
+
+    const expense = await prisma.expense.findFirst({
+      where: { id, businessId },
+      select: { id: true, amountPence: true, vendorName: true },
+    });
+    if (!expense) return err('Expense not found. It may have already been removed.');
+
+    await prisma.expense.delete({ where: { id: expense.id } });
+
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_DELETE', entity: 'Expense', entityId: id, details: { amountPence: expense.amountPence, vendorName: expense.vendorName } }).catch(() => {});
 
     revalidateTag('reports');
     redirect('/expenses');

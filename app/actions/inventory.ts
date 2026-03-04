@@ -4,6 +4,7 @@ import { createStockAdjustment } from '@/lib/services/inventory';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
+import { StockDirectionEnum } from '@/lib/validation/enums';
 import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 
@@ -17,6 +18,10 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
     const direction = (formString(formData, 'direction') || 'DECREASE') as 'INCREASE' | 'DECREASE';
+    const dirValidation = StockDirectionEnum.safeParse(direction);
+    if (!dirValidation.success) {
+      redirect('/inventory?error=invalid-direction');
+    }
     const reason = formString(formData, 'reason') || null;
 
     await createStockAdjustment({

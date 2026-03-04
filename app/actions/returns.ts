@@ -4,6 +4,7 @@ import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns'
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
+import { ReturnTypeEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
@@ -43,6 +44,13 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       throw new Error(message);
     };
 
+    const typeValidation = ReturnTypeEnum.safeParse(type);
+    if (!typeValidation.success) {
+      await deny(typeValidation.error.errors[0].message, 'INVALID_TYPE');
+    }
+    if (refundMethod && !PaymentMethodEnum.safeParse(refundMethod).success) {
+      await deny('Invalid refund method.', 'INVALID_REFUND_METHOD');
+    }
     if (!isVoidReturnReasonCode(reasonCode)) {
       await deny('Select a valid reason code for this return/void.', 'INVALID_REASON_CODE');
     }
@@ -112,6 +120,13 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
     const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
     const refundAmountPence = formInt(formData, 'refundAmountPence');
     const type = (formString(formData, 'type') || 'RETURN') as 'RETURN' | 'VOID';
+    const purchaseTypeValidation = ReturnTypeEnum.safeParse(type);
+    if (!purchaseTypeValidation.success) {
+      redirect('/purchases?error=invalid-return-type');
+    }
+    if (refundMethod && !PaymentMethodEnum.safeParse(refundMethod).success) {
+      redirect('/purchases?error=invalid-refund-method');
+    }
     const reason = formString(formData, 'reason') || null;
 
     await createPurchaseReturn({
