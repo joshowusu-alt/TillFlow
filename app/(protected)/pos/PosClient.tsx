@@ -622,8 +622,7 @@ export default function PosClient({
         playBeep(true);
         // Auto-dismiss success toast after 3 seconds
         setTimeout(() => setSaleSuccess(null), 3000);
-        // Refresh server data in background (non-blocking — don't slow down the POS)
-        requestAnimationFrame(() => router.refresh());
+        // Inventory already updated optimistically above — no server round-trip needed.
       } else {
         // Revert optimistic stock on error
         setProductOptions(preOptimisticProducts);
@@ -842,6 +841,7 @@ export default function PosClient({
 
   const addToCart = useCallback((line: { productId: string; unitId: string; qtyInUnit: number }) => {
     if (!line.productId || !line.unitId || line.qtyInUnit <= 0) return;
+    if (cart.length === 0) router.prefetch('/pos'); // prime RSC cache while cashier enters payment
     const id = `${line.productId}:${line.unitId}`;
     const existing = cart.find((item) => item.id === id);
     const desiredQty = (existing?.qtyInUnit ?? 0) + line.qtyInUnit;
@@ -856,7 +856,7 @@ export default function PosClient({
         { id, ...line, qtyInUnit: clampedQty, discountType: 'NONE', discountValue: '' }
       ];
     });
-  }, [cart, clampQtyInUnit]);
+  }, [cart, clampQtyInUnit, router]);
 
   const handleQuickCreated = useCallback((created: { id: string; name: string; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean }[] }, matchedScan: boolean) => {
     setQuickAddOpen(false);
@@ -996,7 +996,7 @@ export default function PosClient({
       >;
   }, [cart, productOptions, business.vatEnabled, computeDiscount]);
 
-  const totals = cartDetails.reduce(
+  const totals = useMemo(() => cartDetails.reduce(
     (acc, line) => {
       acc.subtotal += line.subtotal;
       acc.lineDiscount += line.lineDiscount;
@@ -1006,7 +1006,7 @@ export default function PosClient({
       return acc;
     },
     { subtotal: 0, lineDiscount: 0, promoDiscount: 0, netSubtotal: 0, vat: 0 }
-  );
+  ), [cartDetails]);
 
   const orderDiscount = computeDiscount(
     totals.netSubtotal,

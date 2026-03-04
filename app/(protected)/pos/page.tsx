@@ -51,37 +51,51 @@ const getCachedProducts = unstable_cache(
   { revalidate: 60, tags: ['pos-products'] }
 );
 
+const getCachedInventory = unstable_cache(
+  (storeId: string) =>
+    prisma.inventoryBalance.findMany({
+      where: { storeId },
+      select: { productId: true, qtyOnHandBase: true },
+    }),
+  ['pos-inventory'],
+  { revalidate: 30, tags: ['pos-inventory'] }
+);
+
+const getCachedTills = unstable_cache(
+  (storeId: string) =>
+    prisma.till.findMany({
+      where: { storeId, active: true },
+      select: { id: true, name: true },
+    }),
+  ['pos-tills'],
+  { revalidate: 300, tags: ['pos-tills'] }
+);
+
+const getCachedShifts = unstable_cache(
+  (storeId: string) =>
+    prisma.shift.findMany({
+      where: { till: { storeId }, status: 'OPEN' },
+      select: { tillId: true },
+    }),
+  ['pos-shifts'],
+  { revalidate: 10, tags: ['pos-shifts'] }
+);
+
 export default async function PosPage() {
   const { business, store: baseStore } = await requireBusinessStore();
   if (!business) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
-  // Layer 1 — cached (rarely-changing) + fresh (session-sensitive) in parallel
-  const [tills, openShifts, inventory, products, units, customers, categories] = await Promise.all([
-    // Fresh: till/shift state must be real-time
-    prisma.till.findMany({
-      where: { storeId: baseStore.id, active: true },
-      select: { id: true, name: true },
-    }),
-    prisma.shift.findMany({
-      where: { till: { storeId: baseStore.id }, status: 'OPEN' },
-      select: { tillId: true },
-    }),
-    prisma.inventoryBalance.findMany({
-      where: { storeId: baseStore.id },
-      select: { productId: true, qtyOnHandBase: true },
-    }),
+  // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
+  const [tills, openShifts, inventory, products, units, categories] = await Promise.all([
+    // Short-lived cache: till/shift/inventory bust quickly or on-demand
+    getCachedTills(baseStore.id),
+    getCachedShifts(baseStore.id),
+    getCachedInventory(baseStore.id),
     // Cached: products, units, categories change infrequently
     getCachedProducts(business.id),
     getCachedUnits(business.id),
-    prisma.customer.findMany({
-      where: {
-        businessId: business.id,
-        ...(business.customerScope === 'BRANCH' ? { storeId: baseStore.id } : {}),
-      },
-      select: { id: true, name: true },
-    }),
     getCachedCategories(business.id),
   ]);
 
