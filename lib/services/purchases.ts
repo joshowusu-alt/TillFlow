@@ -27,14 +27,19 @@ export type CreatePurchaseInput = {
   dueDate?: Date | null;
   payments: PurchasePaymentInput[];
   lines: PurchaseLineInput[];
+  userId?: string | null;
 };
 
-export async function createPurchase(input: CreatePurchaseInput) {
+export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   if (!input.lines.length) {
     throw new Error('No items in purchase');
   }
 
   // ── SINGLE BATCH: fire all validation lookups in parallel ──
+  // Business and store checks are stable reads; productUnits MUST use the
+  // active transaction (if any) so newly-created products/units are visible
+  // before the outer tx commits.
+  const dbClient = (db ?? prisma) as typeof prisma;
   const [business, store, supplier, productUnits] = await Promise.all([
     prisma.business.findUnique({ where: { id: input.businessId } }),
     prisma.store.findFirst({
@@ -47,7 +52,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
           select: { id: true },
         })
       : Promise.resolve(null),
-    prisma.productUnit.findMany({
+    dbClient.productUnit.findMany({
       where: {
         product: { businessId: input.businessId },
         OR: input.lines.map((line) => ({
@@ -134,7 +139,7 @@ export async function createPurchase(input: CreatePurchaseInput) {
     apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
   ].filter(Boolean) as JournalLine[];
 
-  const invoice = await prisma.$transaction(async (tx) => {
+  const _doWork = async (tx: any) => {
     const created = await tx.purchaseInvoice.create({
       data: {
         businessId: input.businessId,
@@ -195,7 +200,8 @@ export async function createPurchase(input: CreatePurchaseInput) {
         unitCostBasePence: line.unitCostBasePence,
         type: 'PURCHASE',
         referenceType: 'PURCHASE_INVOICE',
-        referenceId: created.id
+        referenceId: created.id,
+        userId: input.userId ?? null
       }))
     });
 
@@ -209,7 +215,11 @@ export async function createPurchase(input: CreatePurchaseInput) {
     });
 
     return created;
-  });
+  };
+
+  const invoice = db
+    ? await _doWork(db)
+    : await prisma.$transaction(_doWork);
 
   return invoice;
 }

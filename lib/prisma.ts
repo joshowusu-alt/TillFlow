@@ -13,6 +13,13 @@ const prismaClientSingleton = () => {
 
 export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
 
+// Enable SQLite foreign key enforcement (off by default in SQLite)
+if (process.env.DATABASE_URL?.includes('.db') || process.env.DATABASE_URL?.startsWith('file:')) {
+  prisma.$connect().then(() =>
+    prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON').catch(() => {})
+  );
+}
+
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }

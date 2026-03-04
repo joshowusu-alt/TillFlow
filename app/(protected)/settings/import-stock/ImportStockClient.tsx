@@ -294,12 +294,12 @@ export default function ImportStockClient({
           </div>
           <div>
             <p className="font-semibold text-black/70">Drag & drop your file here</p>
-            <p className="text-sm text-black/40">Supports .csv files (export from Excel/Google Sheets)</p>
+            <p className="text-sm text-black/40">Supports .csv and .xlsx files (Excel / Google Sheets)</p>
           </div>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             className="hidden"
             onChange={onFileInput}
           />
@@ -344,7 +344,7 @@ export default function ImportStockClient({
                 ['category', 'Category name — created automatically if new'],
                 ['selling_price *', 'Selling price, e.g. 12.00'],
                 ['cost_price *', 'Cost you paid per unit, e.g. 9.50'],
-                ['quantity *', 'How many you currently have'],
+                ['quantity', 'Opening stock count — blank or 0 means none on hand yet'],
                 ['base_unit *', 'Smallest unit you sell — e.g. Tin, Piece, kg'],
                 ['pack_unit', 'Container unit — e.g. Carton, Box (optional)'],
                 ['pack_size', 'Base units per pack — e.g. 12 (required if pack_unit set)'],
@@ -556,9 +556,7 @@ export default function ImportStockClient({
                         : <span className="text-red-500 text-xs">missing</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {row.quantity > 0
-                        ? row.quantity
-                        : <span className="text-red-500 text-xs">missing</span>}
+                      {row.quantity}
                     </td>
                     <td className="px-3 py-2">
                       {/* Base unit */}

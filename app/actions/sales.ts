@@ -4,6 +4,7 @@ import { createSale, amendSale } from '@/lib/services/sales';
 import { redirect } from 'next/navigation';
 import { revalidateTag, revalidatePath } from 'next/cache';
 import { toInt, formString, formInt, formDate } from '@/lib/form-helpers';
+import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { parseDiscountValue } from '@/lib/format';
 import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
 import { requireUser } from '@/lib/auth';
@@ -23,6 +24,10 @@ export async function createSaleAction(formData: FormData): Promise<void> {
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
+    const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
+    if (!psValidation.success) {
+      redirect('/pos?error=invalid-payment-status');
+    }
     const customerId = formString(formData, 'customerId') || null;
     const dueDate = formDate(formData, 'dueDate');
     const orderDiscountType = (formString(formData, 'orderDiscountType') || 'NONE') as DiscountType;
@@ -111,7 +116,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-      if (message.includes('Insufficient stock')) {
+      if (message.includes('Insufficient stock') || message.includes('Insufficient stock on hand')) {
         redirect('/pos?error=insufficient-stock');
       }
       if (message.includes('Open till is required')) {
@@ -156,6 +161,10 @@ export async function completeSaleAction(data: {
     const businessId = user.businessId;
 
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
+    const completePsValidation = PaymentStatusEnum.safeParse(paymentStatus);
+    if (!completePsValidation.success) {
+      return { success: false, error: completePsValidation.error.errors[0].message };
+    }
     const customerId = data.customerId || null;
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
@@ -256,9 +265,9 @@ export async function completeSaleAction(data: {
       details: { lines: lines.length, total: invoice.totalPence },
     }).catch(() => {});
 
-    revalidateTag('pos-products');
-    revalidateTag('reports');
+    revalidateTag('pos-inventory');
     revalidateTag(`today-sales-${businessId}`);
+    revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     revalidatePath('/onboarding');
 

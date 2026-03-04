@@ -19,23 +19,31 @@ export async function recordCustomerPayment(
   payments: PaymentInput[],
   actorUserId?: string
 ) {
-  const invoice = await prisma.salesInvoice.findFirst({
+  const invoiceBase = await prisma.salesInvoice.findFirst({
     where: { id: invoiceId, businessId },
-    include: { payments: true }
+    select: { id: true, totalPence: true, tillId: true, storeId: true, shiftId: true, cashierUserId: true },
   });
-  if (!invoice) throw new Error('Invoice not found');
+  if (!invoiceBase) throw new Error('Invoice not found');
 
   const newPayments = filterPositivePayments(payments);
-  if (newPayments.length === 0) return invoice;
+  if (newPayments.length === 0) return prisma.salesInvoice.findFirst({ where: { id: invoiceId }, include: { payments: true } });
 
-  const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
-  const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
-  const totalPaid = previouslyPaid + newPaid;
-  if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
-
-  const status = derivePaymentStatus(invoice.totalPence, totalPaid);
   const split = splitPayments(newPayments);
   const updated = await prisma.$transaction(async (tx) => {
+    // Re-read payments inside the transaction to prevent concurrent overpayment.
+    const invoice = await tx.salesInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      include: { payments: true },
+    });
+    if (!invoice) throw new Error('Invoice not found');
+
+    const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
+    const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
+    const totalPaid = previouslyPaid + newPaid;
+    if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
+
+    const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+
     await tx.salesPayment.createMany({
       data: newPayments.map((p) => ({
         salesInvoiceId: invoice.id,
@@ -105,23 +113,31 @@ export async function recordSupplierPayment(
   recordedByUserId?: string,
   notes?: string
 ) {
-  const invoice = await prisma.purchaseInvoice.findFirst({
+  const invoiceBase = await prisma.purchaseInvoice.findFirst({
     where: { id: invoiceId, businessId },
-    include: { payments: true }
+    select: { id: true, totalPence: true, storeId: true },
   });
-  if (!invoice) throw new Error('Invoice not found');
+  if (!invoiceBase) throw new Error('Invoice not found');
 
   const newPayments = filterPositivePayments(payments);
-  if (newPayments.length === 0) return invoice;
+  if (newPayments.length === 0) return prisma.purchaseInvoice.findFirst({ where: { id: invoiceId }, include: { payments: true } });
 
-  const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
-  const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
-  const totalPaid = previouslyPaid + newPaid;
-  if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
-
-  const status = derivePaymentStatus(invoice.totalPence, totalPaid);
   const split = splitPayments(newPayments);
   const updated = await prisma.$transaction(async (tx) => {
+    // Re-read payments inside the transaction to prevent concurrent overpayment.
+    const invoice = await tx.purchaseInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      include: { payments: true },
+    });
+    if (!invoice) throw new Error('Invoice not found');
+
+    const previouslyPaid = invoice.payments.reduce((s, p) => s + p.amountPence, 0);
+    const newPaid = newPayments.reduce((s, p) => s + p.amountPence, 0);
+    const totalPaid = previouslyPaid + newPaid;
+    if (totalPaid > invoice.totalPence) throw new Error('Payment exceeds outstanding balance');
+
+    const status = derivePaymentStatus(invoice.totalPence, totalPaid);
+
     await tx.purchasePayment.createMany({
       data: newPayments.map((p) => ({
         purchaseInvoiceId: invoice.id,

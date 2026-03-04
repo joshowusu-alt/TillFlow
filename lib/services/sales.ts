@@ -412,6 +412,11 @@ export async function createSale(input: CreateSaleInput) {
       }
     }
 
+    // Derive next sequential transactionNumber within the transaction so it
+    // is atomic with the invoice insert.
+    const existingInvoiceCount = await tx.salesInvoice.count({ where: { businessId: input.businessId } });
+    const transactionNumber = `INV-${String(existingInvoiceCount + 1).padStart(6, '0')}`;
+
     const created = await tx.salesInvoice.create({
       data: {
         businessId: input.businessId,
@@ -423,6 +428,7 @@ export async function createSale(input: CreateSaleInput) {
         customerId: input.customerId || null,
         paymentStatus: finalStatus,
         dueDate: input.dueDate || null,
+        transactionNumber,
         subtotalPence: subtotal,
         vatPence: vatTotal,
         totalPence: total,
@@ -485,6 +491,8 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     if (cashPence > 0 && openShift) {
+      // Use atomic increment to avoid lost-update race when two sales commit concurrently.
+      // The CashDrawerEntry snapshot uses the pre-tx value for the audit log — acceptable.
       const beforeCash = openShift.expectedCashPence ?? 0;
       const afterCash = beforeCash + cashPence;
       txPromises.push(
@@ -506,9 +514,10 @@ export async function createSale(input: CreateSaleInput) {
             afterExpectedCashPence: afterCash,
           },
         }),
+        // Atomic increment — safe under concurrent sales on the same shift.
         tx.shift.update({
           where: { id: openShift.id },
-          data: { expectedCashPence: afterCash },
+          data: { expectedCashPence: { increment: cashPence } },
         }),
       );
     }
@@ -519,16 +528,22 @@ export async function createSale(input: CreateSaleInput) {
 
     txPromises.push(
       tx.stockMovement.createMany({
-        data: lineDetails.map((line) => ({
-          storeId: input.storeId,
-          productId: line.productId,
-          qtyBase: -line.qtyBase,
-          unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-          type: 'SALE',
-          referenceType: 'SALES_INVOICE',
-          referenceId: created.id,
-          userId: input.cashierUserId
-        }))
+        data: lineDetails.map((line) => {
+          const beforeQtyBase = inventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+          const afterQtyBase = beforeQtyBase - line.qtyBase;
+          return {
+            storeId: input.storeId,
+            productId: line.productId,
+            qtyBase: -line.qtyBase,
+            beforeQtyBase,
+            afterQtyBase,
+            unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
+            type: 'SALE',
+            referenceType: 'SALES_INVOICE',
+            referenceId: created.id,
+            userId: input.cashierUserId,
+          };
+        }),
       }),
     );
 

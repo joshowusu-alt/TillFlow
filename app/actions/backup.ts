@@ -160,51 +160,57 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
 
     const list = <T = any>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
 
-    // Clear only this business data (multi-tenant safe) in FK-safe order.
-    await prisma.$transaction([
-      prisma.syncEvent.deleteMany({ where: { businessId } }),
-      prisma.dayClosure.deleteMany({ where: { businessId } }),
-      prisma.riskAlert.deleteMany({ where: { businessId } }),
-      prisma.cashDrawerEntry.deleteMany({ where: { businessId } }),
-      prisma.stockTransfer.deleteMany({ where: { businessId } }),
-      prisma.mobileMoneyStatusLog.deleteMany({ where: { collection: { businessId } } }),
-      prisma.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } }),
-      prisma.mobileMoneyCollection.deleteMany({ where: { businessId } }),
-      prisma.journalLine.deleteMany({ where: { journalEntry: { businessId } } }),
-      prisma.journalEntry.deleteMany({ where: { businessId } }),
-      prisma.expensePayment.deleteMany({ where: { businessId } }),
-      prisma.expense.deleteMany({ where: { businessId } }),
-      prisma.stockAdjustment.deleteMany({ where: { store: { businessId } } }),
-      prisma.stockMovement.deleteMany({ where: { store: { businessId } } }),
-      prisma.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } }),
-      prisma.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } }),
-      prisma.salesInvoice.deleteMany({ where: { businessId } }),
-      prisma.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } }),
-      prisma.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } }),
-      prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } }),
-      prisma.purchaseInvoice.deleteMany({ where: { businessId } }),
-      prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } }),
-      prisma.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId } } } }),
-      prisma.stocktake.deleteMany({ where: { store: { businessId } } }),
-      prisma.productUnit.deleteMany({ where: { product: { businessId } } }),
-      prisma.product.deleteMany({ where: { businessId } }),
-      prisma.category.deleteMany({ where: { businessId } }),
-      prisma.shift.deleteMany({ where: { till: { store: { businessId } } } }),
-      prisma.till.deleteMany({ where: { store: { businessId } } }),
-      prisma.customer.deleteMany({ where: { businessId } }),
-      prisma.supplier.deleteMany({ where: { businessId } }),
-      prisma.account.deleteMany({ where: { businessId } }),
-      prisma.auditLog.deleteMany({ where: { businessId } }),
-      prisma.device.deleteMany({ where: { businessId } }),
-      prisma.branch.deleteMany({ where: { businessId } }),
-      prisma.organization.deleteMany({ where: { businessId } }),
-      prisma.session.deleteMany({ where: { user: { businessId } } }),
-      prisma.user.deleteMany({ where: { businessId } }),
-      prisma.store.deleteMany({ where: { businessId } }),
-    ]);
+    // Pre-compute bcrypt hashes for users before opening the transaction (CPU-only, no DB).
+    const userHashes = new Map<string, string>();
+    for (const user of users) {
+      userHashes.set(user.id, await bcrypt.hash(randomBytes(32).toString('hex'), 10));
+    }
 
-    // Keep the same business row/id and restore settings into it
-    await prisma.business.update({
+    // Atomic restore: wipe + re-insert in one transaction so a partial failure rolls back fully.
+    await prisma.$transaction(async (tx) => {
+      // Clear only this business data (multi-tenant safe) in FK-safe order.
+      await tx.syncEvent.deleteMany({ where: { businessId } });
+      await tx.dayClosure.deleteMany({ where: { businessId } });
+      await tx.riskAlert.deleteMany({ where: { businessId } });
+      await tx.cashDrawerEntry.deleteMany({ where: { businessId } });
+      await tx.stockTransfer.deleteMany({ where: { businessId } });
+      await tx.mobileMoneyStatusLog.deleteMany({ where: { collection: { businessId } } });
+      await tx.salesPayment.deleteMany({ where: { salesInvoice: { businessId } } });
+      await tx.mobileMoneyCollection.deleteMany({ where: { businessId } });
+      await tx.journalLine.deleteMany({ where: { journalEntry: { businessId } } });
+      await tx.journalEntry.deleteMany({ where: { businessId } });
+      await tx.expensePayment.deleteMany({ where: { businessId } });
+      await tx.expense.deleteMany({ where: { businessId } });
+      await tx.stockAdjustment.deleteMany({ where: { store: { businessId } } });
+      await tx.stockMovement.deleteMany({ where: { store: { businessId } } });
+      await tx.salesReturn.deleteMany({ where: { salesInvoice: { businessId } } });
+      await tx.salesInvoiceLine.deleteMany({ where: { salesInvoice: { businessId } } });
+      await tx.salesInvoice.deleteMany({ where: { businessId } });
+      await tx.purchasePayment.deleteMany({ where: { purchaseInvoice: { businessId } } });
+      await tx.purchaseReturn.deleteMany({ where: { purchaseInvoice: { businessId } } });
+      await tx.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } });
+      await tx.purchaseInvoice.deleteMany({ where: { businessId } });
+      await tx.inventoryBalance.deleteMany({ where: { store: { businessId } } });
+      await tx.stocktakeLine.deleteMany({ where: { stocktake: { store: { businessId } } } });
+      await tx.stocktake.deleteMany({ where: { store: { businessId } } });
+      await tx.productUnit.deleteMany({ where: { product: { businessId } } });
+      await tx.product.deleteMany({ where: { businessId } });
+      await tx.category.deleteMany({ where: { businessId } });
+      await tx.shift.deleteMany({ where: { till: { store: { businessId } } } });
+      await tx.till.deleteMany({ where: { store: { businessId } } });
+      await tx.customer.deleteMany({ where: { businessId } });
+      await tx.supplier.deleteMany({ where: { businessId } });
+      await tx.account.deleteMany({ where: { businessId } });
+      await tx.auditLog.deleteMany({ where: { businessId } });
+      await tx.device.deleteMany({ where: { businessId } });
+      await tx.branch.deleteMany({ where: { businessId } });
+      await tx.organization.deleteMany({ where: { businessId } });
+      await tx.session.deleteMany({ where: { user: { businessId } } });
+      await tx.user.deleteMany({ where: { businessId } });
+      await tx.store.deleteMany({ where: { businessId } });
+
+      // Keep the same business row/id and restore settings into it
+      await tx.business.update({
       where: { id: businessId },
       data: {
         name: backup.business.name ?? 'Restored Business',
@@ -247,9 +253,9 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       },
     });
 
-    // Units are global/shared: upsert so we never delete other businesses' units.
-    for (const unit of list(backup.units)) {
-      await prisma.unit.upsert({
+      // Units are global/shared: upsert so we never delete other businesses' units.
+      for (const unit of list(backup.units)) {
+        await tx.unit.upsert({
         where: { id: unit.id },
         update: {
           name: unit.name,
@@ -262,117 +268,118 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
           pluralName: unit.pluralName,
           symbol: unit.symbol ?? null,
         },
-      });
-    }
+        });
+      }
 
-    for (const store of list(backup.stores)) {
-      await prisma.store.create({ data: { ...store, businessId } });
-    }
+      for (const store of list(backup.stores)) {
+        await tx.store.create({ data: { ...store, businessId } });
+      }
 
-    for (const user of users) {
-      const safeHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
-      await prisma.user.create({
-        data: {
-          ...user,
-          businessId,
-          passwordHash: safeHash
-        }
-      });
-    }
+      for (const user of users) {
+        const safeHash = userHashes.get(user.id)!;
+        await tx.user.create({
+          data: {
+            ...user,
+            businessId,
+            passwordHash: safeHash
+          }
+        });
+      }
 
-    for (const customer of list(backup.customers)) {
-      await prisma.customer.create({ data: { ...customer, businessId } });
-    }
+      for (const customer of list(backup.customers)) {
+        await tx.customer.create({ data: { ...customer, businessId } });
+      }
 
-    for (const supplier of list(backup.suppliers)) {
-      await prisma.supplier.create({ data: { ...supplier, businessId } });
-    }
+      for (const supplier of list(backup.suppliers)) {
+        await tx.supplier.create({ data: { ...supplier, businessId } });
+      }
 
-    for (const category of list(backup.categories)) {
-      await prisma.category.create({ data: { ...category, businessId } });
-    }
+      for (const category of list(backup.categories)) {
+        await tx.category.create({ data: { ...category, businessId } });
+      }
 
-    for (const product of list(backup.products)) {
-      await prisma.product.create({ data: { ...product, businessId } });
-    }
+      for (const product of list(backup.products)) {
+        await tx.product.create({ data: { ...product, businessId } });
+      }
 
-    for (const pu of list(backup.productUnits)) {
-      await prisma.productUnit.create({ data: pu });
-    }
+      for (const pu of list(backup.productUnits)) {
+        await tx.productUnit.create({ data: pu });
+      }
 
-    for (const account of list(backup.accounts)) {
-      await prisma.account.create({ data: { ...account, businessId } });
-    }
+      for (const account of list(backup.accounts)) {
+        await tx.account.create({ data: { ...account, businessId } });
+      }
 
-    for (const till of list(backup.tills)) {
-      await prisma.till.create({ data: till });
-    }
+      for (const till of list(backup.tills)) {
+        await tx.till.create({ data: till });
+      }
 
-    for (const balance of list(backup.inventoryBalances)) {
-      await prisma.inventoryBalance.create({ data: balance });
-    }
+      for (const balance of list(backup.inventoryBalances)) {
+        await tx.inventoryBalance.create({ data: balance });
+      }
 
-    for (const shift of list(backup.shifts)) {
-      await prisma.shift.create({ data: shift });
-    }
+      for (const shift of list(backup.shifts)) {
+        await tx.shift.create({ data: shift });
+      }
 
-    for (const invoice of list(backup.salesInvoices)) {
-      await prisma.salesInvoice.create({ data: { ...invoice, businessId } });
-    }
+      for (const invoice of list(backup.salesInvoices)) {
+        await tx.salesInvoice.create({ data: { ...invoice, businessId } });
+      }
 
-    for (const line of list(backup.salesInvoiceLines)) {
-      await prisma.salesInvoiceLine.create({ data: line });
-    }
+      for (const line of list(backup.salesInvoiceLines)) {
+        await tx.salesInvoiceLine.create({ data: line });
+      }
 
-    for (const payment of list(backup.salesPayments)) {
-      // collectionId refs MobileMoneyCollection which is not included in the backup export,
-      // so null it out to avoid FK constraint violation on restore.
-      await prisma.salesPayment.create({ data: { ...payment, collectionId: null } });
-    }
+      for (const payment of list(backup.salesPayments)) {
+        // collectionId refs MobileMoneyCollection which is not included in the backup export,
+        // so null it out to avoid FK constraint violation on restore.
+        await tx.salesPayment.create({ data: { ...payment, collectionId: null } });
+      }
 
-    for (const ret of list(backup.salesReturns)) {
-      await prisma.salesReturn.create({ data: ret });
-    }
+      for (const ret of list(backup.salesReturns)) {
+        await tx.salesReturn.create({ data: ret });
+      }
 
-    for (const invoice of list(backup.purchaseInvoices)) {
-      await prisma.purchaseInvoice.create({ data: { ...invoice, businessId } });
-    }
+      for (const invoice of list(backup.purchaseInvoices)) {
+        await tx.purchaseInvoice.create({ data: { ...invoice, businessId } });
+      }
 
-    for (const line of list(backup.purchaseInvoiceLines)) {
-      await prisma.purchaseInvoiceLine.create({ data: line });
-    }
+      for (const line of list(backup.purchaseInvoiceLines)) {
+        await tx.purchaseInvoiceLine.create({ data: line });
+      }
 
-    for (const payment of list(backup.purchasePayments)) {
-      await prisma.purchasePayment.create({ data: payment });
-    }
+      for (const payment of list(backup.purchasePayments)) {
+        await tx.purchasePayment.create({ data: payment });
+      }
 
-    for (const ret of list(backup.purchaseReturns)) {
-      await prisma.purchaseReturn.create({ data: ret });
-    }
+      for (const ret of list(backup.purchaseReturns)) {
+        await tx.purchaseReturn.create({ data: ret });
+      }
 
-    for (const expense of list(backup.expenses)) {
-      await prisma.expense.create({ data: { ...expense, businessId } });
-    }
+      for (const expense of list(backup.expenses)) {
+        await tx.expense.create({ data: { ...expense, businessId } });
+      }
 
-    for (const payment of list(backup.expensePayments)) {
-      await prisma.expensePayment.create({ data: { ...payment, businessId } });
-    }
+      for (const payment of list(backup.expensePayments)) {
+        await tx.expensePayment.create({ data: { ...payment, businessId } });
+      }
 
-    for (const movement of list(backup.stockMovements)) {
-      await prisma.stockMovement.create({ data: movement });
-    }
+      for (const movement of list(backup.stockMovements)) {
+        await tx.stockMovement.create({ data: movement });
+      }
 
-    for (const adjustment of list(backup.stockAdjustments)) {
-      await prisma.stockAdjustment.create({ data: adjustment });
-    }
+      for (const adjustment of list(backup.stockAdjustments)) {
+        await tx.stockAdjustment.create({ data: adjustment });
+      }
 
-    for (const entry of list(backup.journalEntries)) {
-      await prisma.journalEntry.create({ data: { ...entry, businessId } });
-    }
+      for (const entry of list(backup.journalEntries)) {
+        await tx.journalEntry.create({ data: { ...entry, businessId } });
+      }
 
-    for (const line of list(backup.journalLines)) {
-      await prisma.journalLine.create({ data: line });
-    }
+      for (const line of list(backup.journalLines)) {
+        await tx.journalLine.create({ data: line });
+      }
+    }, { timeout: 60000, maxWait: 10000 });
 
     // Imported users have random temporary passwords and sessions were cleared.
     cookies().delete('pos_session');

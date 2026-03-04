@@ -137,6 +137,7 @@ export async function performShiftClose(input: CloseShiftInput): Promise<{ id: s
         closeManagerApprovalMode: approval.mode === 'PIN' ? 'PIN' : 'OWNER_OVERRIDE',
         closureSnapshotJson: JSON.stringify(snapshot),
         status: 'CLOSED',
+        openKey: null,
         ...(approval.mode === 'OWNER_OVERRIDE' && {
           ownerOverride: true,
           ownerOverrideReasonCode: approval.overrideReasonCode,

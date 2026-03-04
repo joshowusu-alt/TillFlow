@@ -1,8 +1,10 @@
 /**
  * Client-side file parser for the stock import feature.
- * Handles .csv files (RFC-4180 compliant).
+ * Handles .csv files (RFC-4180 compliant) and .xlsx / .xls files (via SheetJS).
  * Returns a normalised array of ParsedImportRow — no DB calls here.
  */
+
+import * as XLSX from 'xlsx';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,7 +105,9 @@ function buildRow(raw: Record<string, string>): ParsedImportRow {
   const category = g('category');
   const sellingPricePence = parsePence(g('selling_price'));
   const costPricePence = parsePence(g('cost_price'));
-  const qtyRaw = parseFloat(g('quantity'));
+  // Blank quantity is valid (no opening stock); only non-numeric strings are errors.
+  const qtyStr = g('quantity');
+  const qtyRaw = qtyStr === '' ? 0 : parseFloat(qtyStr);
   const quantity = isNaN(qtyRaw) ? -1 : qtyRaw;
   const baseUnitName = g('base_unit');
   const packUnitName = g('pack_unit');
@@ -179,12 +183,25 @@ async function parseCsv(file: File): Promise<ParsedImportRow[]> {
   return parseMatrix(matrix);
 }
 
+/** Parse a .xlsx / .xls File and return normalised rows via SheetJS. */
+async function parseXlsx(file: File): Promise<ParsedImportRow[]> {
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const sheet = workbook.Sheets[sheetName];
+  // raw: false → all cells returned as formatted strings, consistent with the CSV path
+  const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
+  return parseMatrix(matrix as string[][]);
+}
+
 /**
- * Main entry point — CSV only.
+ * Main entry point — CSV, XLSX and XLS.
  * Throws a descriptive Error if the format is unsupported.
  */
 export async function parseStockFile(file: File): Promise<ParsedImportRow[]> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'csv') return parseCsv(file);
-  throw new Error(`Unsupported file type ".${ext}". Please upload a .csv file. You can export your spreadsheet as CSV from Excel or Google Sheets.`);
+  if (ext === 'xlsx' || ext === 'xls') return parseXlsx(file);
+  throw new Error(`Unsupported file type ".${ext}". Please upload a .csv or .xlsx file.`);
 }

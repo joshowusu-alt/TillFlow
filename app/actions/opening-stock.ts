@@ -52,6 +52,7 @@ export async function createOpeningStockAction(
           qtyInUnit: l.qtyInUnit,
           unitCostPence: l.unitCostPence,
         })),
+        userId: user.id,
       });
 
       inventoryValuePence = validLines.reduce(

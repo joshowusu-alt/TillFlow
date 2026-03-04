@@ -102,107 +102,130 @@ export async function importStockAction(
       existingCategories.map((c) => [c.name.toLowerCase(), c.id])
     );
 
-    // ── Process rows: create products, track skips ───────────────────────
-    const created: { row: ConfirmedImportRow; productId: string }[] = [];
-    const skippedNames: string[] = [];
+    // ── Pre-check for duplicate names outside the transaction (read-only) ──
+    // Fetch all current product names for this business and filter in-memory
+    // (mode:'insensitive' is not supported on all Prisma adapters).
+    const existingProductNames = await prisma.product.findMany({
+      where: { businessId },
+      select: { name: true },
+    });
+    const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
+    const skippedNames = resolvedRows
+      .filter((r) => existingNameSet.has(r.name.toLowerCase()))
+      .map((r) => r.name);
+    const rowsToCreate = resolvedRows.filter(
+      (r) => !existingNameSet.has(r.name.toLowerCase())
+    );
 
-    for (const row of resolvedRows) {
-      // Resolve / upsert category
-      let categoryId: string | null = null;
-      if (row.category) {
-        const key = row.category.toLowerCase();
-        if (categoryMap.has(key)) {
-          categoryId = categoryMap.get(key)!;
-        } else {
-          const newCat = await prisma.category.create({
-            data: { businessId, name: row.category },
-            select: { id: true },
-          });
-          categoryId = newCat.id;
-          categoryMap.set(key, newCat.id);
+    // ── Single atomic transaction: categories + products + purchase invoices ─
+    const createdItems = await prisma.$transaction(
+      async (tx) => {
+        // Work from a local copy of the category map so new categories
+        // created in this tx are visible to later rows in the same tx.
+        const txCategoryMap = new Map(categoryMap);
+        const items: { row: ConfirmedImportRow; productId: string }[] = [];
+
+        for (const row of rowsToCreate) {
+          let categoryId: string | null = null;
+          if (row.category) {
+            const key = row.category.toLowerCase();
+            if (txCategoryMap.has(key)) {
+              categoryId = txCategoryMap.get(key)!;
+            } else {
+              const newCat = await tx.category.create({
+                data: { businessId, name: row.category },
+                select: { id: true },
+              });
+              categoryId = newCat.id;
+              txCategoryMap.set(key, newCat.id);
+            }
+          }
+
+          const product = await quickCreateProduct(
+            businessId,
+            {
+              name: row.name,
+              sku: row.sku || null,
+              barcode: row.barcode || null,
+              sellingPriceBasePence: row.sellingPricePence,
+              defaultCostBasePence: row.costPricePence,
+              vatRateBps: 0,
+              baseUnitId: row.baseUnitId,
+              packagingUnitId: row.packUnitId ?? null,
+              packagingConversion: row.packSize > 1 ? row.packSize : null,
+            },
+            tx
+          );
+
+          if (categoryId) {
+            await tx.product.update({
+              where: { id: product.id },
+              data: { categoryId },
+            });
+          }
+
+          items.push({ row, productId: product.id });
         }
-      }
 
-      try {
-        const product = await quickCreateProduct(businessId, {
-          name: row.name,
-          sku: row.sku || null,
-          barcode: row.barcode || null,
-          sellingPriceBasePence: row.sellingPricePence,
-          defaultCostBasePence: row.costPricePence,
-          vatRateBps: 0,
-          baseUnitId: row.baseUnitId,
-          packagingUnitId: row.packUnitId ?? null,
-          packagingConversion: row.packSize > 1 ? row.packSize : null,
-        });
+        // Split into PAID / UNPAID buckets
+        const paidItems = items.filter((c) => c.row.paymentStatus === 'PAID');
+        const unpaidItems = items.filter((c) => c.row.paymentStatus === 'UNPAID');
 
-        // Attach category if present (quickCreateProduct doesn't accept categoryId)
-        if (categoryId) {
-          await prisma.product.update({
-            where: { id: product.id },
-            data: { categoryId },
-          });
+        const toPurchaseLines = (list: typeof items) =>
+          list.map(({ row, productId }) => ({
+            productId,
+            unitId: row.qtyInUnitId,
+            qtyInUnit: row.quantity,
+            unitCostPence: row.costPricePence,
+          }));
+
+        if (paidItems.length > 0) {
+          await createPurchase(
+            {
+              businessId,
+              storeId: store.id,
+              supplierId: null,
+              paymentStatus: 'PAID',
+              dueDate: null,
+              payments: [],
+              lines: toPurchaseLines(paidItems),
+              userId: user.id,
+            },
+            tx
+          );
         }
 
-        created.push({ row, productId: product.id });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        // Duplicate name is expected for existing products — skip gracefully
-        if (msg.toLowerCase().includes('already exists')) {
-          skippedNames.push(row.name);
-        } else {
-          // Re-throw unexpected errors so safeAction wraps them
-          throw e;
+        if (unpaidItems.length > 0) {
+          await createPurchase(
+            {
+              businessId,
+              storeId: store.id,
+              supplierId: null,
+              paymentStatus: 'UNPAID',
+              dueDate: null,
+              payments: [],
+              lines: toPurchaseLines(unpaidItems),
+              userId: user.id,
+            },
+            tx
+          );
         }
-      }
-    }
 
-    // ── Split created rows into PAID / UNPAID buckets ────────────────────
-    const paidRows = created.filter((c) => c.row.paymentStatus === 'PAID');
-    const unpaidRows = created.filter((c) => c.row.paymentStatus === 'UNPAID');
+        return items;
+      },
+      { timeout: 30000, maxWait: 5000 }
+    );
 
-    const toPurchaseLines = (items: typeof created) =>
-      items.map(({ row, productId }) => ({
-        productId,
-        unitId: row.qtyInUnitId,
-        qtyInUnit: row.quantity,
-        unitCostPence: row.costPricePence,
-      }));
-
-    let paidValuePence = 0;
-    let unpaidValuePence = 0;
-
-    if (paidRows.length > 0) {
-      await createPurchase({
-        businessId,
-        storeId: store.id,
-        supplierId: null,
-        paymentStatus: 'PAID',
-        dueDate: null,
-        payments: [],
-        lines: toPurchaseLines(paidRows),
-      });
-      paidValuePence = paidRows.reduce(
-        (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
-        0
-      );
-    }
-
-    if (unpaidRows.length > 0) {
-      await createPurchase({
-        businessId,
-        storeId: store.id,
-        supplierId: null,
-        paymentStatus: 'UNPAID',
-        dueDate: null,
-        payments: [],
-        lines: toPurchaseLines(unpaidRows),
-      });
-      unpaidValuePence = unpaidRows.reduce(
-        (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
-        0
-      );
-    }
+    const paidRows = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
+    const unpaidRows = createdItems.filter((c) => c.row.paymentStatus === 'UNPAID');
+    const paidValuePence = paidRows.reduce(
+      (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
+      0
+    );
+    const unpaidValuePence = unpaidRows.reduce(
+      (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
+      0
+    );
 
     // ── Audit + cache invalidation ────────────────────────────────────────
     audit({
@@ -214,7 +237,7 @@ export async function importStockAction(
       entity: 'Product',
       entityId: businessId,
       details: {
-        created: created.length,
+        created: createdItems.length,
         skipped: skippedNames.length,
         paidCount: paidRows.length,
         unpaidCount: unpaidRows.length,
@@ -225,7 +248,7 @@ export async function importStockAction(
     revalidateTag('reports');
 
     return ok<ImportStockResult>({
-      created: created.length,
+      created: createdItems.length,
       skipped: skippedNames.length,
       skippedNames,
       paidCount: paidRows.length,

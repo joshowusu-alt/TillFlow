@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
+import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
@@ -16,6 +17,10 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     const storeId = formString(formData, 'storeId');
     const supplierId = formString(formData, 'supplierId') || null;
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
+    const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
+    if (!psValidation.success) {
+      redirect('/purchases?error=invalid-payment-status');
+    }
     const dueDate = formDate(formData, 'dueDate');
 
     let lines: { productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }[] = [];
@@ -49,7 +54,8 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
         { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
         { method: 'TRANSFER', amountPence: formInt(formData, 'transferPaid') }
       ],
-      lines
+      lines,
+      userId: user.id
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));

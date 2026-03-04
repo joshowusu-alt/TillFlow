@@ -26,12 +26,12 @@ export async function openShiftAction(
     });
     if (!till) return err('Till not found for your business.');
 
-    const existingShift = await prisma.shift.findFirst({
-      where: { tillId: till.id, status: 'OPEN' },
-    });
-    if (existingShift) return err('There is already an open shift for this till');
-
     const shift = await prisma.$transaction(async (tx) => {
+      const existingShift = await tx.shift.findFirst({
+        where: { tillId: till.id, status: 'OPEN' },
+      });
+      if (existingShift) throw new Error('A shift is already open for this till');
+
       const created = await tx.shift.create({
         data: {
           tillId: till.id,
@@ -39,6 +39,7 @@ export async function openShiftAction(
           openingCashPence: openingCash,
           expectedCashPence: 0,
           status: 'OPEN',
+          openKey: till.id,
         },
       });
 

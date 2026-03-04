@@ -118,47 +118,61 @@ export async function completeStocktakeAction(data: {
       return { success: false, error: 'Stocktake not found or already completed.' };
     }
 
-    // Update all counts and calculate variances
+    // Wrap all mutations in a single transaction so a mid-loop crash cannot
+    // leave inventory in a partially-adjusted state.  On retry the idempotency
+    // guard (line.adjusted check) ensures already-processed lines are skipped.
     let adjustedCount = 0;
-    for (const count of data.counts) {
-      const line = stocktake.lines.find((l) => l.id === count.lineId);
-      if (!line) continue;
+    await prisma.$transaction(
+      async (tx) => {
+        for (const count of data.counts) {
+          const line = stocktake.lines.find((l) => l.id === count.lineId);
+          if (!line) continue;
 
-      const variance = count.countedBase - line.expectedBase;
+          // Idempotency guard: skip lines already adjusted in a previous partial run.
+          if (line.adjusted) continue;
 
-      await prisma.stocktakeLine.update({
-        where: { id: count.lineId },
-        data: {
-          countedBase: count.countedBase,
-          varianceBase: variance,
-          adjusted: variance !== 0,
-        },
-      });
+          const variance = count.countedBase - line.expectedBase;
 
-      // Create stock adjustment for non-zero variances
-      if (variance !== 0) {
-        const baseUnitId = line.product.productUnits[0]?.unitId;
-        if (baseUnitId) {
-          await createStockAdjustment({
-            businessId,
-            storeId,
-            productId: line.productId,
-            unitId: baseUnitId,
-            qtyInUnit: Math.abs(variance),
-            direction: variance > 0 ? 'INCREASE' : 'DECREASE',
-            reason: `Stocktake count adjustment`,
-            userId: user.id,
+          await tx.stocktakeLine.update({
+            where: { id: count.lineId },
+            data: {
+              countedBase: count.countedBase,
+              varianceBase: variance,
+              adjusted: variance !== 0,
+            },
           });
-          adjustedCount++;
+
+          // Create stock adjustment for non-zero variances
+          if (variance !== 0) {
+            const baseUnitId = line.product.productUnits[0]?.unitId;
+            if (baseUnitId) {
+              await createStockAdjustment(
+                {
+                  businessId,
+                  storeId,
+                  productId: line.productId,
+                  unitId: baseUnitId,
+                  qtyInUnit: Math.abs(variance),
+                  direction: variance > 0 ? 'INCREASE' : 'DECREASE',
+                  reason: `Stocktake count adjustment`,
+                  userId: user.id,
+                },
+                tx,
+              );
+              adjustedCount++;
+            }
+          }
         }
-      }
-    }
 
-    await prisma.stocktake.update({
-      where: { id: data.stocktakeId },
-      data: { status: 'COMPLETED', completedAt: new Date() },
-    });
+        await tx.stocktake.update({
+          where: { id: data.stocktakeId },
+          data: { status: 'COMPLETED', completedAt: new Date() },
+        });
+      },
+      { timeout: 30000, maxWait: 5000 },
+    );
 
+    // Audit log and cache invalidation are fire-and-forget; keep outside the tx.
     audit({
       businessId,
       userId: user.id,

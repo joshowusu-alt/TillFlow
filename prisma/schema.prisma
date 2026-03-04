@@ -154,6 +154,7 @@ model Shift {
   closureSnapshotJson          String?
   notes                        String?
   status                       String    @default("OPEN")
+  openKey                      String?   @unique
   ownerOverride              Boolean  @default(false)
   ownerOverrideReasonCode    String?
   ownerOverrideJustification String?
@@ -228,7 +229,7 @@ model Session {
   lastSeenAt DateTime @default(now())
   expiresAt  DateTime
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@index([userId, createdAt])
@@ -242,7 +243,7 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   expiresAt DateTime
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
 }
@@ -373,7 +374,7 @@ model ProductUnit {
   qaRunId          String?
   createdAt        DateTime @default(now())
 
-  product Product @relation(fields: [productId], references: [id])
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   unit    Unit    @relation(fields: [unitId], references: [id])
 
   @@unique([productId, unitId])
@@ -513,7 +514,7 @@ model SalesReturn {
   managerApprovalMode     String?
   createdAt               DateTime @default(now())
 
-  salesInvoice      SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice      SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Restrict)
   store             Store        @relation(fields: [storeId], references: [id])
   user              User         @relation(fields: [userId], references: [id])
   managerApprovedBy User?        @relation("SalesReturnApprovedBy", fields: [managerApprovedByUserId], references: [id])
@@ -543,7 +544,7 @@ model SalesInvoiceLine {
   lineTotalPence            Int
   createdAt                 DateTime @default(now())
 
-  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
   product      Product      @relation(fields: [productId], references: [id])
   unit         Unit         @relation(fields: [unitId], references: [id])
 
@@ -567,7 +568,7 @@ model SalesPayment {
   qaTag          String?
   qaRunId        String?
 
-  salesInvoice SalesInvoice           @relation(fields: [salesInvoiceId], references: [id])
+  salesInvoice SalesInvoice           @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
   collection   MobileMoneyCollection? @relation(fields: [collectionId], references: [id])
 
   @@index([salesInvoiceId, receivedAt])
@@ -615,7 +616,7 @@ model PurchaseReturn {
   reasonCode        String?
   createdAt         DateTime @default(now())
 
-  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
   store           Store           @relation(fields: [storeId], references: [id])
   user            User            @relation(fields: [userId], references: [id])
 
@@ -637,7 +638,7 @@ model PurchaseInvoiceLine {
   lineTotalPence    Int
   createdAt         DateTime @default(now())
 
-  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   product         Product         @relation(fields: [productId], references: [id])
   unit            Unit            @relation(fields: [unitId], references: [id])
 
@@ -657,7 +658,7 @@ model PurchasePayment {
   qaTag             String?
   qaRunId           String?
 
-  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   recordedBy      User?           @relation("PurchasePaymentRecordedBy", fields: [recordedByUserId], references: [id])
 
   @@index([purchaseInvoiceId, paidAt])
@@ -722,7 +723,7 @@ model ExpensePayment {
   business Business @relation(fields: [businessId], references: [id])
   store    Store    @relation(fields: [storeId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
-  expense  Expense  @relation(fields: [expenseId], references: [id])
+  expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
   @@index([expenseId, paidAt])
   @@index([businessId, paidAt])
@@ -753,7 +754,7 @@ model JournalLine {
   memo           String?
   createdAt      DateTime @default(now())
 
-  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id])
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
   account      Account      @relation(fields: [accountId], references: [id])
 
   @@index([journalEntryId])

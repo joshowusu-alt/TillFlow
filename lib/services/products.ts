@@ -65,20 +65,23 @@ export type InflatedProduct = {
 /**
  * Throws if a product with the same name (case-insensitive) already exists in
  * the business. Pass `excludeId` when updating so the product itself is ignored.
+ * Pass `db` to run inside an existing transaction.
  */
 async function assertNoDuplicateProductName(
   businessId: string,
   name: string,
-  excludeId?: string
+  excludeId?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any = prisma
 ): Promise<void> {
   const rows = excludeId
-    ? await prisma.$queryRaw<{ id: string }[]>`
+    ? await db.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "businessId" = ${businessId}
           AND lower("name") = lower(${name})
           AND id <> ${excludeId}
         LIMIT 1`
-    : await prisma.$queryRaw<{ id: string }[]>`
+    : await db.$queryRaw<{ id: string }[]>`
         SELECT id FROM "Product"
         WHERE "businessId" = ${businessId}
           AND lower("name") = lower(${name})
@@ -256,28 +259,32 @@ export async function updateProduct(
 }
 
 /**
- * Quick-create a product (used from the POS quick-add flow).
+ * Quick-create a product (used from the POS quick-add flow and bulk import).
  * Validates name and barcode uniqueness before writing.
  * Returns a typed snapshot of the new product for the caller to use immediately.
+ *
+ * Pass `db` to run all queries inside an existing Prisma transaction.
  */
 export async function quickCreateProduct(
   businessId: string,
-  input: QuickCreateProductInput
+  input: QuickCreateProductInput,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any = prisma
 ): Promise<QuickCreateProductResult> {
   const name = input.name.trim();
   if (!name) throw new Error('Please enter a product name.');
 
-  await assertNoDuplicateProductName(businessId, name);
+  await assertNoDuplicateProductName(businessId, name, undefined, db);
 
   if (input.barcode) {
-    const dup = await prisma.product.findFirst({
+    const dup = await db.product.findFirst({
       where: { businessId, barcode: input.barcode },
       select: { id: true },
     });
     if (dup) throw new Error('That barcode is already used by another product.');
   }
 
-  const created = await prisma.product.create({
+  const created = await db.product.create({
     data: {
       businessId,
       name,
@@ -307,7 +314,8 @@ export async function quickCreateProduct(
     promoBuyQty: created.promoBuyQty,
     promoGetQty: created.promoGetQty,
     onHandBase: 0,
-    units: created.productUnits.map((pu) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    units: created.productUnits.map((pu: any) => ({
       id: pu.unitId,
       name: pu.unit.name,
       pluralName: pu.unit.pluralName,
