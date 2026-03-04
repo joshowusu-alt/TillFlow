@@ -6,7 +6,7 @@ export interface CreateDayClosureInput {
   closedByUserId: string;
   /** Raw date — will be truncated to UTC midnight before writing. */
   date?: Date;
-  snapshotJson?: string | null;
+  summaryJson: string;
 }
 
 /**
@@ -33,7 +33,7 @@ export async function createDayClosure(input: CreateDayClosureInput) {
       storeId: input.storeId,
       closedByUserId: input.closedByUserId,
       closureDate: midnight,
-      snapshotJson: input.snapshotJson ?? null,
+      summaryJson: input.summaryJson,
     },
   });
 }

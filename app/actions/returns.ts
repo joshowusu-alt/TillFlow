@@ -46,7 +46,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
 
     const typeValidation = ReturnTypeEnum.safeParse(type);
     if (!typeValidation.success) {
-      await deny(typeValidation.error.errors[0].message, 'INVALID_TYPE');
+      await deny(typeValidation.error.issues[0].message, 'INVALID_TYPE');
     }
     if (refundMethod && !PaymentMethodEnum.safeParse(refundMethod).success) {
       await deny('Invalid refund method.', 'INVALID_REFUND_METHOD');

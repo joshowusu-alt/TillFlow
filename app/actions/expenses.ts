@@ -20,12 +20,12 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     const method = (formString(formData, 'method') || 'CASH') as PaymentMethod;
     const methodValidation = PaymentMethodEnum.safeParse(method);
     if (!methodValidation.success) {
-      return err(methodValidation.error.errors[0].message);
+      return err(methodValidation.error.issues[0].message);
     }
     const paymentStatus = (formString(formData, 'paymentStatus') || 'PAID') as PaymentStatus;
     const psValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!psValidation.success) {
-      return err(psValidation.error.errors[0].message);
+      return err(psValidation.error.issues[0].message);
     }
     let amountPaidPence = formPence(formData, 'amountPaid');
     const notes = formOptionalString(formData, 'notes');

@@ -163,7 +163,7 @@ export async function completeSaleAction(data: {
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
     const completePsValidation = PaymentStatusEnum.safeParse(paymentStatus);
     if (!completePsValidation.success) {
-      return { success: false, error: completePsValidation.error.errors[0].message };
+      return { success: false, error: completePsValidation.error.issues[0].message };
     }
     const customerId = data.customerId || null;
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
