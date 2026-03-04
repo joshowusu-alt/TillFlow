@@ -71,7 +71,6 @@ async function assertNoDuplicateProductName(
   businessId: string,
   name: string,
   excludeId?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any = prisma
 ): Promise<void> {
   const rows = excludeId
@@ -268,7 +267,6 @@ export async function updateProduct(
 export async function quickCreateProduct(
   businessId: string,
   input: QuickCreateProductInput,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any = prisma
 ): Promise<QuickCreateProductResult> {
   const name = input.name.trim();
@@ -314,7 +312,6 @@ export async function quickCreateProduct(
     promoBuyQty: created.promoBuyQty,
     promoGetQty: created.promoGetQty,
     onHandBase: 0,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     units: created.productUnits.map((pu: any) => ({
       id: pu.unitId,
       name: pu.unit.name,
