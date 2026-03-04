@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { resolveAvgCost, upsertInventoryBalance } from './shared';
@@ -12,20 +13,23 @@ export async function createStockAdjustment(input: {
   direction: 'INCREASE' | 'DECREASE';
   reason?: string | null;
   userId: string;
-}) {
+}, tx?: Prisma.TransactionClient) {
   if (input.qtyInUnit <= 0) throw new Error('Quantity must be at least 1');
+
+  // When an outer transaction client is provided, use it for reads; otherwise use the global client.
+  const client = tx ?? prisma;
 
   // ── Parallel batch: all independent lookups at once ───────────
   const [business, store, productUnit] = await Promise.all([
-    prisma.business.findUnique({
+    client.business.findUnique({
       where: { id: input.businessId },
       select: { inventoryAdjustmentRiskThresholdBase: true },
     }),
-    prisma.store.findFirst({
+    client.store.findFirst({
       where: { id: input.storeId, businessId: input.businessId },
       select: { id: true },
     }),
-    prisma.productUnit.findFirst({
+    client.productUnit.findFirst({
       where: {
         productId: input.productId,
         unitId: input.unitId,
@@ -40,10 +44,11 @@ export async function createStockAdjustment(input: {
   const qtyBase = input.qtyInUnit * productUnit.conversionToBase;
   const signedQtyBase = input.direction === 'DECREASE' ? -qtyBase : qtyBase;
 
-  const { adjustment, currentAvgCost } = await prisma.$transaction(async (tx) => {
+  // Core DB writes extracted so they can run inside an existing outer transaction or a new one.
+  const doWork = async (txClient: Prisma.TransactionClient) => {
     // Re-read inventory balance INSIDE the transaction to prevent TOCTOU race.
     // In PostgreSQL, this read + the subsequent upsert form an atomic unit within the transaction.
-    const inventoryInTx = await tx.inventoryBalance.findUnique({
+    const inventoryInTx = await txClient.inventoryBalance.findUnique({
       where: { storeId_productId: { storeId: store.id, productId: input.productId } },
       select: { qtyOnHandBase: true, avgCostBasePence: true },
     });
@@ -57,7 +62,7 @@ export async function createStockAdjustment(input: {
     const nextOnHand = onHand + signedQtyBase;
     if (nextOnHand < 0) throw new Error('Adjustment would result in negative stock');
 
-    const created = await tx.stockAdjustment.create({
+    const created = await txClient.stockAdjustment.create({
       data: {
         storeId: store.id,
         productId: input.productId,
@@ -70,9 +75,9 @@ export async function createStockAdjustment(input: {
       }
     });
 
-    await upsertInventoryBalance(tx, store.id, input.productId, nextOnHand, currentAvgCost);
+    await upsertInventoryBalance(txClient, store.id, input.productId, nextOnHand, currentAvgCost);
 
-    await tx.stockMovement.create({
+    await txClient.stockMovement.create({
       data: {
         storeId: store.id,
         productId: input.productId,
@@ -85,29 +90,34 @@ export async function createStockAdjustment(input: {
       }
     });
 
+    // Journal entry runs inside the same transaction — GL and inventory are always in sync
+    const adjustmentValue = currentAvgCost * qtyBase;
+    const journalLines =
+      input.direction === 'DECREASE'
+        ? [
+            { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
+            { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
+          ]
+        : [
+            { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
+            { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
+          ];
+
+    await postJournalEntry({
+      businessId: input.businessId,
+      description: `Stock adjustment ${created.id}`,
+      referenceType: 'STOCK_ADJUSTMENT',
+      referenceId: created.id,
+      lines: journalLines,
+      prismaClient: txClient as any
+    });
+
     return { adjustment: created, currentAvgCost };
-  });
+  };
 
-  // Journal entry must be awaited — a failure here means inventory and GL diverge permanently
-  const adjustmentValue = currentAvgCost * qtyBase;
-  const journalLines =
-    input.direction === 'DECREASE'
-      ? [
-          { accountCode: ACCOUNT_CODES.cogs, debitPence: adjustmentValue },
-          { accountCode: ACCOUNT_CODES.inventory, creditPence: adjustmentValue }
-        ]
-      : [
-          { accountCode: ACCOUNT_CODES.inventory, debitPence: adjustmentValue },
-          { accountCode: ACCOUNT_CODES.cogs, creditPence: adjustmentValue }
-        ];
-
-  await postJournalEntry({
-    businessId: input.businessId,
-    description: `Stock adjustment ${adjustment.id}`,
-    referenceType: 'STOCK_ADJUSTMENT',
-    referenceId: adjustment.id,
-    lines: journalLines
-  });
+  const { adjustment } = tx
+    ? await doWork(tx)
+    : await prisma.$transaction(doWork);
 
   // Risk detection is non-critical — safe to be fire-and-forget
   detectInventoryAdjustmentRisk({

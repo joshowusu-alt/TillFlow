@@ -25,11 +25,15 @@ const hasRedisEnv =
 const redisClient = hasRedisEnv ? Redis.fromEnv() : null;
 
 if (!hasRedisEnv && process.env.NODE_ENV === 'production') {
-  console.error(
-    '[security] Login throttle is using in-memory fallback — brute-force protection is NOT persistent.\n' +
-    'Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables to enable Redis-backed throttling.'
+  throw new Error(
+    '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production. ' +
+    'Login throttling cannot fall back to in-memory state in a serverless environment.'
   );
 }
+
+// In development and test environments the in-memory Map fallback is acceptable:
+// instances are long-lived, single-process, and brute-force protection is not a
+// production concern.  Never rely on this path in production (see throw above).
 
 function normalizeThrottleOpts(opts?: ThrottleOptions) {
   return {

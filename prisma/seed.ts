@@ -32,59 +32,66 @@ interface ProductSeed {
 }
 
 async function seedProduct(businessId: string, storeId: string, p: ProductSeed) {
-  // Try to find existing product by barcode or by name
-  let product = await prisma.product.findFirst({
-    where: { OR: [{ barcode: p.barcode }, { businessId, name: p.name }] },
-  });
+  return prisma.$transaction(async (tx) => {
+    // Try to find existing product by barcode or by name
+    let product = await tx.product.findFirst({
+      where: { OR: [{ barcode: p.barcode }, { businessId, name: p.name }] },
+    });
 
-  if (product) {
-    // Update categoryId on existing product
-    product = await prisma.product.update({
-      where: { id: product.id },
-      data: { categoryId: p.categoryId ?? null },
-    });
-  } else {
-    product = await prisma.product.create({
-      data: {
-        businessId,
-        sku: p.sku,
-        barcode: p.barcode,
-        name: p.name,
-        sellingPriceBasePence: p.sellingPriceBasePence,
-        defaultCostBasePence: p.defaultCostBasePence,
-        vatRateBps: p.vatRateBps ?? 0,
-        reorderPointBase: p.reorderPointBase,
-        promoBuyQty: p.promoBuyQty ?? 0,
-        promoGetQty: p.promoGetQty ?? 0,
-        categoryId: p.categoryId ?? null,
-      },
-    });
-  }
-
-  for (const u of p.units) {
-    const existing = await prisma.productUnit.findFirst({
-      where: { productId: product.id, unitId: u.unitId },
-    });
-    if (!existing) {
-      await prisma.productUnit.create({
-        data: { productId: product.id, unitId: u.unitId, isBaseUnit: u.isBaseUnit, conversionToBase: u.conversionToBase },
+    if (product) {
+      // Update categoryId on existing product
+      product = await tx.product.update({
+        where: { id: product.id },
+        data: { categoryId: p.categoryId ?? null },
+      });
+    } else {
+      product = await tx.product.create({
+        data: {
+          businessId,
+          sku: p.sku,
+          barcode: p.barcode,
+          name: p.name,
+          sellingPriceBasePence: p.sellingPriceBasePence,
+          defaultCostBasePence: p.defaultCostBasePence,
+          vatRateBps: p.vatRateBps ?? 0,
+          reorderPointBase: p.reorderPointBase,
+          promoBuyQty: p.promoBuyQty ?? 0,
+          promoGetQty: p.promoGetQty ?? 0,
+          categoryId: p.categoryId ?? null,
+        },
       });
     }
-  }
 
-  await prisma.inventoryBalance.upsert({
-    where: { storeId_productId: { storeId, productId: product.id } },
-    update: { qtyOnHandBase: p.stockQty, avgCostBasePence: p.defaultCostBasePence },
-    create: { storeId, productId: product.id, qtyOnHandBase: p.stockQty, avgCostBasePence: p.defaultCostBasePence },
+    for (const u of p.units) {
+      const existing = await tx.productUnit.findFirst({
+        where: { productId: product.id, unitId: u.unitId },
+      });
+      if (!existing) {
+        await tx.productUnit.create({
+          data: { productId: product.id, unitId: u.unitId, isBaseUnit: u.isBaseUnit, conversionToBase: u.conversionToBase },
+        });
+      }
+    }
+
+    await tx.inventoryBalance.upsert({
+      where: { storeId_productId: { storeId, productId: product.id } },
+      update: { qtyOnHandBase: p.stockQty, avgCostBasePence: p.defaultCostBasePence },
+      create: { storeId, productId: product.id, qtyOnHandBase: p.stockQty, avgCostBasePence: p.defaultCostBasePence },
+    });
+
+    return product;
   });
-
-  return product;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Main seed                                                         */
 /* ------------------------------------------------------------------ */
 async function main() {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
+    console.error('❌  Seed aborted: NODE_ENV=production. Set ALLOW_SEED=true to override.');
+    process.exit(1);
+  }
+
   /* ---------- Business ---------- */
   let business = await prisma.business.findFirst();
   if (!business) {

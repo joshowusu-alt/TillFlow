@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { resolveAvgCost, upsertInventoryBalance } from './shared';
 
 export async function requestStockTransfer(input: {
@@ -120,11 +121,14 @@ export async function approveAndCompleteStockTransfer(input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    let totalTransferCostPence = 0;
+
     for (const line of transfer.lines) {
       const source = sourceBalanceMap.get(line.productId)!;
       const sourceBefore = source.qtyOnHandBase;
       const sourceAfter = sourceBefore - line.qtyBase;
       const avgCost = resolveAvgCost(new Map([[line.productId, source]]), line.productId, source.avgCostBasePence);
+      totalTransferCostPence += Math.round(avgCost * line.qtyBase);
 
       await upsertInventoryBalance(tx, transfer.fromStoreId, line.productId, sourceAfter, avgCost);
 
@@ -164,6 +168,20 @@ export async function approveAndCompleteStockTransfer(input: {
             userId: approver.id,
           },
         ],
+      });
+    }
+
+    if (totalTransferCostPence > 0) {
+      await postJournalEntry({
+        businessId: input.businessId,
+        description: `Stock transfer ${transfer.id}`,
+        referenceType: 'STOCK_TRANSFER',
+        referenceId: transfer.id,
+        lines: [
+          { accountCode: ACCOUNT_CODES.inventory, debitPence: totalTransferCostPence },
+          { accountCode: ACCOUNT_CODES.inventory, creditPence: totalTransferCostPence },
+        ],
+        prismaClient: tx as any,
       });
     }
 
