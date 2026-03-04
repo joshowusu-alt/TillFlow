@@ -98,6 +98,22 @@ export async function approveStockTransferActionSafe(input: {
       },
     });
 
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'STOCK_TRANSFER_COMPLETE',
+      entity: 'StockTransfer',
+      entityId: transfer.id,
+      details: {
+        approvedByUserId: approvedBy.id,
+        fromStoreId: transfer.fromStoreId,
+        toStoreId: transfer.toStoreId,
+        lines: transfer.lines.map((line) => ({ productId: line.productId, qtyBase: line.qtyBase })),
+      },
+    });
+
     revalidateTag('pos-products');
 
     return ok({ transferId: transfer.id });

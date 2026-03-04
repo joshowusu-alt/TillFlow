@@ -5,6 +5,7 @@ import { revalidateTag } from 'next/cache';
 import { formString, formOptionalString, formInt } from '@/lib/form-helpers';
 import { withBusinessContext, formAction } from '@/lib/action-utils';
 import { createCategory, updateCategory, deleteCategory } from '@/lib/services/categories';
+import { audit } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
 // Categories CRUD
@@ -28,7 +29,7 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
 
 export async function updateCategoryAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
     const name = formString(formData, 'name');
@@ -38,6 +39,8 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
 
     await updateCategory(id, businessId, { name, colour, imageUrl, sortOrder });
 
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'CATEGORY_UPDATE', entity: 'Category', entityId: id, details: { name } }).catch(() => {});
+
     revalidateTag('pos-categories');
     redirect('/products?tab=categories');
   }, '/products?tab=categories');
@@ -45,11 +48,13 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
 
 export async function deleteCategoryAction(formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const id = formString(formData, 'id');
 
     await deleteCategory(id, businessId);
+
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'CATEGORY_DELETE', entity: 'Category', entityId: id }).catch(() => {});
 
     revalidateTag('pos-categories');
     redirect('/products?tab=categories');

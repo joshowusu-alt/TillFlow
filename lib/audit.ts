@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
+import { appError } from '@/lib/observability';
 
 export type AuditAction =
   | 'LOGIN'
@@ -19,6 +20,7 @@ export type AuditAction =
   | 'PURCHASE_RETURN'
   | 'EXPENSE_CREATE'
   | 'EXPENSE_UPDATE'
+  | 'EXPENSE_DELETE'
   | 'USER_CREATE'
   | 'USER_UPDATE'
   | 'USER_DEACTIVATE'
@@ -38,13 +40,19 @@ export type AuditAction =
   | 'MOMO_COLLECTION_RECONCILE'
   | 'STOCK_TRANSFER_REQUEST'
   | 'STOCK_TRANSFER_APPROVE'
+  | 'STOCK_TRANSFER_COMPLETE'
+  | 'STOCK_TRANSFER_CANCEL'
   | 'DATA_RESET'
   | 'STOCKTAKE_CREATE'
   | 'STOCKTAKE_COMPLETE'
   | 'WHATSAPP_EOD_SENT'
   | 'PRICE_REPAIR'
   | 'DEMO_RESET'
-  | 'JOURNAL_REPAIR';
+  | 'JOURNAL_REPAIR'
+  | 'CUSTOMER_DELETE'
+  | 'SUPPLIER_DELETE'
+  | 'CATEGORY_DELETE'
+  | 'CATEGORY_UPDATE';
 
 /**
  * Write an entry to the audit trail — fire-and-forget, never throws.
@@ -79,8 +87,9 @@ export async function audit(opts: {
         ipAddress: ip,
       },
     });
-  } catch {
+  } catch (err) {
     // Never let audit logging break the main action
-    console.error('[audit] Failed to write audit log');
+    console.error('[audit] Failed to write audit log:', err);
+    appError('[audit] Failed to write audit log', err, { action: opts.action, businessId: opts.businessId });
   }
 }
