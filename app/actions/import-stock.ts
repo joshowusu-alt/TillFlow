@@ -142,148 +142,111 @@ export async function importStockAction(
       return r;
     });
 
-    // ── Single atomic transaction: categories + products + purchase invoices ─
-    const createdItems = await prisma.$transaction(
-      async (tx) => {
-        // Work from a local copy of the category map so new categories
-        // created in this tx are visible to later rows in the same tx.
-        const txCategoryMap = new Map(categoryMap);
-        const items: { row: ConfirmedImportRow; productId: string }[] = [];
+    // ── Step 1: Pre-create all missing categories outside any transaction ──
+    // IDs are stable before product chunks start, so no repeated category
+    // creates inside the tx loop.
+    const allCategoryNames = [
+      ...new Set(rowsToCreate.filter((r) => r.category).map((r) => r.category)),
+    ];
+    for (const catName of allCategoryNames) {
+      const key = catName.toLowerCase();
+      if (!categoryMap.has(key)) {
+        const newCat = await prisma.category.create({
+          data: { businessId, name: catName },
+          select: { id: true },
+        });
+        categoryMap.set(key, newCat.id);
+      }
+    }
 
-        for (const row of rowsToCreate) {
-          let categoryId: string | null = null;
-          if (row.category) {
-            const key = row.category.toLowerCase();
-            if (txCategoryMap.has(key)) {
-              categoryId = txCategoryMap.get(key)!;
-            } else {
-              const newCat = await tx.category.create({
-                data: { businessId, name: row.category },
-                select: { id: true },
-              });
-              categoryId = newCat.id;
-              txCategoryMap.set(key, newCat.id);
-            }
-          }
-
-          const product = await quickCreateProduct(
-            businessId,
-            {
-              name: row.name,
-              sku: row.sku || null,
-              barcode: row.barcode || null,
-              sellingPriceBasePence: row.sellingPricePence,
-              defaultCostBasePence: row.costPricePence,
-              vatRateBps: 0,
-              baseUnitId: row.baseUnitId,
-              packagingUnitId: row.packUnitId ?? null,
-              packagingConversion: row.packSize > 1 ? row.packSize : null,
-            },
-            tx
-          );
-
-          if (categoryId) {
-            await tx.product.update({
-              where: { id: product.id },
-              data: { categoryId },
-            });
-          }
-
-          items.push({ row, productId: product.id });
-        }
-
-        // Split into PAID / UNPAID buckets
-        const paidItems = items.filter((c) => c.row.paymentStatus === 'PAID');
-        const unpaidItems = items.filter((c) => c.row.paymentStatus === 'UNPAID');
-
-        // Only include rows with quantity > 0 in the purchase invoice.
-        // Zero-qty rows still get a product record created — the owner can
-        // add stock later via a manual purchase.
-        //
-        // IMPORTANT: cost_price in the CSV is always per BASE unit (tin/piece).
-        // If the quantity was entered in pack units (e.g. 5 cartons), we must
-        // convert to base units before building the purchase line so that
-        // createPurchase records the correct total (5 cartons × 12 tins = 60 tins
-        // @ GH₴9.50/tin = GH₴570, not GH₴47.50).
-        const toPurchaseLines = (list: typeof items) =>
-          list
-            .filter(({ row }) => row.quantity > 0)
-            .map(({ row, productId }) => {
-              const isQtyInPackUnit =
-                row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
-              const qtyBase = isQtyInPackUnit
-                ? row.quantity * (row.packSize > 1 ? row.packSize : 1)
-                : row.quantity;
-              return {
-                productId,
-                unitId: row.baseUnitId,   // always base unit
-                qtyInUnit: qtyBase,        // total base units
-                unitCostPence: row.costPricePence, // cost per base unit (unchanged)
-              };
-            });
-
-        const paidLines = toPurchaseLines(paidItems);
-        const unpaidLines = toPurchaseLines(unpaidItems);
-
-        if (paidLines.length > 0) {
-          await createPurchase(
-            {
-              businessId,
-              storeId: store.id,
-              supplierId: null,
-              paymentStatus: 'PAID',
-              dueDate: null,
-              payments: [],
-              lines: paidLines,
-              userId: user.id,
-            },
-            tx
-          );
-        }
-
-        if (unpaidLines.length > 0) {
-          await createPurchase(
-            {
-              businessId,
-              storeId: store.id,
-              supplierId: null,
-              paymentStatus: 'UNPAID',
-              dueDate: null,
-              payments: [],
-              lines: unpaidLines,
-              userId: user.id,
-            },
-            tx
-          );
-        }
-
-        return items;
-      },
-      { timeout: 30000, maxWait: 5000 }
-    );
-
-    const paidRows = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
-    const unpaidRows = createdItems.filter((c) => c.row.paymentStatus === 'UNPAID');
-
-    // Apply the same base-unit conversion used in toPurchaseLines so the
-    // result summary matches what was actually recorded on the invoice.
-    const rowCostPence = (row: ConfirmedImportRow): number => {
-      const isQtyInPackUnit =
-        row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
-      const qtyBase = isQtyInPackUnit
-        ? row.quantity * (row.packSize > 1 ? row.packSize : 1)
-        : row.quantity;
+    // Helper shared by Step 2 and the result summary
+    const rowToBaseCost = (row: ConfirmedImportRow): number => {
+      const isQtyInPackUnit = row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
+      const qtyBase = isQtyInPackUnit ? row.quantity * (row.packSize > 1 ? row.packSize : 1) : row.quantity;
       return Math.round(row.costPricePence * qtyBase);
     };
 
-    const paidValuePence = paidRows.reduce(
-      (sum, { row }) => sum + rowCostPence(row),
-      0
-    );
-    const unpaidValuePence = unpaidRows.reduce(
-      (sum, { row }) => sum + rowCostPence(row),
-      0
-    );
+    const toPurchaseLine = (row: ConfirmedImportRow, productId: string) => {
+      const isQtyInPackUnit = row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
+      const qtyBase = isQtyInPackUnit ? row.quantity * (row.packSize > 1 ? row.packSize : 1) : row.quantity;
+      return { productId, unitId: row.baseUnitId, qtyInUnit: qtyBase, unitCostPence: row.costPricePence };
+    };
+
+    // ── Step 2: Create products in chunks of 100 ─────────────────────────
+    // One 30 s transaction per chunk avoids the server-function timeout that
+    // kills a single transaction covering 1 200+ products.
+    const PRODUCT_CHUNK = 100;
+    const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
+
+    for (let i = 0; i < rowsToCreate.length; i += PRODUCT_CHUNK) {
+      const chunk = rowsToCreate.slice(i, i + PRODUCT_CHUNK);
+      const chunkItems = await prisma.$transaction(
+        async (tx) => {
+          const items: { row: ConfirmedImportRow; productId: string }[] = [];
+          for (const row of chunk) {
+            const categoryId = row.category
+              ? (categoryMap.get(row.category.toLowerCase()) ?? null)
+              : null;
+
+            const product = await quickCreateProduct(
+              businessId,
+              {
+                name: row.name,
+                sku: row.sku || null,
+                barcode: row.barcode || null,
+                sellingPriceBasePence: row.sellingPricePence,
+                defaultCostBasePence: row.costPricePence,
+                vatRateBps: 0,
+                baseUnitId: row.baseUnitId,
+                packagingUnitId: row.packUnitId ?? null,
+                packagingConversion: row.packSize > 1 ? row.packSize : null,
+              },
+              tx
+            );
+
+            if (categoryId) {
+              await tx.product.update({ where: { id: product.id }, data: { categoryId } });
+            }
+
+            items.push({ row, productId: product.id });
+          }
+          return items;
+        },
+        { timeout: 30000, maxWait: 5000 }
+      );
+      allCreatedItems.push(...chunkItems);
+    }
+
+    const createdItems = allCreatedItems;
+
+    // ── Step 3: Create purchase invoices in chunks of 150 lines ──────────
+    // Products are fully committed — no shared transaction needed.
+    // Chunking avoids an oversized OR query in the DB driver.
+    const INVOICE_CHUNK = 150;
+    const paidItemsAll   = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
+    const unpaidItemsAll = createdItems.filter((c) => c.row.paymentStatus === 'UNPAID');
+    const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
+    const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
+
+    for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
+      await createPurchase({
+        businessId, storeId: store.id, supplierId: null,
+        paymentStatus: 'PAID', dueDate: null, payments: [],
+        lines: paidLinesAll.slice(i, i + INVOICE_CHUNK), userId: user.id,
+      });
+    }
+    for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
+      await createPurchase({
+        businessId, storeId: store.id, supplierId: null,
+        paymentStatus: 'UNPAID', dueDate: null, payments: [],
+        lines: unpaidLinesAll.slice(i, i + INVOICE_CHUNK), userId: user.id,
+      });
+    }
+
+    const paidRows   = paidItemsAll;
+    const unpaidRows = unpaidItemsAll;
+    const paidValuePence   = paidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
+    const unpaidValuePence = unpaidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
 
     // ── Audit + cache invalidation ────────────────────────────────────────
     audit({
