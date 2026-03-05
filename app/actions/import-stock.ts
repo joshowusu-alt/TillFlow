@@ -1,10 +1,10 @@
-'use server';
+﻿'use server';
 
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { createPurchase } from '@/lib/services/purchases';
-import { quickCreateProduct } from '@/lib/services/products';
+import { buildProductUnitCreates } from '@/lib/services/products';
 import { audit } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
@@ -181,51 +181,65 @@ export async function importStockAction(
       return { productId, unitId: row.baseUnitId, qtyInUnit: qtyBase, unitCostPence: row.costPricePence };
     };
 
-    // ── Step 2: Create products individually — no transactions ───────────
-    // Interactive transactions on Neon/PgBouncer are unreliable at scale:
-    // the global prisma timeout, connection-pool limits, and Vercel’s
-    // serverless cold-start all conspire to abort them. Since names and
-    // barcodes are pre-validated above, individual creates are safe:
-    // a single row failure skips that row without aborting the whole import.
+
+    // -- Step 2: Create products in parallel batches of 25 -------------------
+    // Sequential creates (1230 x 3 DB round-trips each) take ~110 s and hit
+    // Vercel's 60 s limit. Running 25 direct prisma.product.create calls in
+    // parallel per batch reduces wall-clock time to ~2 s total.
+    // Names and barcodes are pre-validated above so we call prisma.product.create
+    // directly -- 1 round-trip per product instead of 3.
+    const PARALLEL_BATCH = 25;
     const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
 
-    for (const row of rowsToCreate) {
-      const categoryId = row.category
-        ? (categoryMap.get(row.category.toLowerCase()) ?? null)
-        : null;
+    for (let i = 0; i < rowsToCreate.length; i += PARALLEL_BATCH) {
+      const batch = rowsToCreate.slice(i, i + PARALLEL_BATCH);
+      const results = await Promise.allSettled(
+        batch.map(async (row) => {
+          const categoryId = row.category
+            ? (categoryMap.get(row.category.toLowerCase()) ?? null)
+            : null;
 
-      try {
-        const product = await quickCreateProduct(businessId, {
-          name: row.name,
-          sku: row.sku || null,
-          barcode: row.barcode || null,
-          sellingPriceBasePence: row.sellingPricePence,
-          defaultCostBasePence: row.costPricePence,
-          vatRateBps: 0,
-          baseUnitId: row.baseUnitId,
-          packagingUnitId: row.packUnitId ?? null,
-          packagingConversion: row.packSize > 1 ? row.packSize : null,
-        });
-
-        if (categoryId) {
-          await prisma.product.update({
-            where: { id: product.id },
-            data: { categoryId },
+          const product = await prisma.product.create({
+            data: {
+              businessId,
+              name: row.name,
+              sku: row.sku || null,
+              barcode: row.barcode || null,
+              categoryId,
+              sellingPriceBasePence: row.sellingPricePence,
+              defaultCostBasePence: row.costPricePence,
+              vatRateBps: 0,
+              productUnits: {
+                create: buildProductUnitCreates(
+                  row.baseUnitId,
+                  row.packUnitId ?? '',
+                  row.packSize > 1 ? row.packSize : 0
+                ),
+              },
+            },
+            select: { id: true },
           });
-        }
 
-        allCreatedItems.push({ row, productId: product.id });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[import-stock] skipping "${row.name}": ${msg}`);
-        skippedNames.push(row.name);
-      }
+          return { row, productId: product.id };
+        })
+      );
+
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          allCreatedItems.push(result.value);
+        } else {
+          const row = batch[idx];
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          console.error(`[import-stock] skipping "${row?.name}": ${msg}`);
+          if (row) skippedNames.push(row.name);
+        }
+      });
     }
 
     const createdItems = allCreatedItems;
 
-    // ── Step 3: Create purchase invoices in chunks of 150 lines ──────────
-    // Products are fully committed — no shared transaction needed.
+    // -- Step 3: Create purchase invoices in chunks of 150 lines ----------
+    // Products are fully committed -- no shared transaction needed.
     // Chunking avoids an oversized OR query in the DB driver.
     const INVOICE_CHUNK = 150;
     const paidItemsAll   = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
@@ -253,7 +267,6 @@ export async function importStockAction(
     const paidValuePence   = paidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
     const unpaidValuePence = unpaidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
 
-    // ── Audit + cache invalidation ────────────────────────────────────────
     audit({
       businessId,
       userId: user.id,
