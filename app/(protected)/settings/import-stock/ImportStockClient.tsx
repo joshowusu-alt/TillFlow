@@ -402,7 +402,10 @@ export default function ImportStockClient({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: 'Products created', value: String(result.created) },
-            { label: 'Skipped (duplicates)', value: String(result.skipped) },
+            {
+              label: result.stockUpdated > 0 ? 'Existing (stock recorded)' : 'Skipped (duplicates)',
+              value: String(result.skipped),
+            },
             {
               label: 'Paid stock',
               value: formatMoney(result.paidValuePence, currency),
@@ -429,11 +432,26 @@ export default function ImportStockClient({
         {result.skipped > 0 && (
           <details className="rounded-xl border border-black/10 p-4 text-sm">
             <summary className="cursor-pointer font-medium text-black/70">
-              {result.skipped} product{result.skipped !== 1 ? 's' : ''} skipped (already exist in catalogue)
+              {result.skipped} product{result.skipped !== 1 ? 's' : ''} already in catalogue
+              {result.stockUpdated > 0 && (
+                <span className="ml-2 text-emerald-700">
+                  — opening stock recorded for {result.stockUpdated} of them
+                  {result.stockUpdatedValuePence > 0 && ` (${formatMoney(result.stockUpdatedValuePence, currency)})`}
+                </span>
+              )}
             </summary>
-            <p className="mt-2 text-xs text-black/50 mb-2">
-              These products were not changed. To update them, edit them individually under Products.
-            </p>
+            {result.stockUpdated > 0 ? (
+              <p className="mt-2 text-xs text-black/50 mb-2">
+                The products already existed so no duplicates were created. Their opening stock
+                quantities and costs from the CSV have been recorded as purchase invoices and
+                posted to the balance sheet. To update prices or other details, edit them
+                individually under Products.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-black/50 mb-2">
+                These products were not changed. To update them, edit them individually under Products.
+              </p>
+            )}
             <ul className="mt-1 list-disc list-inside space-y-1 text-black/60">
               {result.skippedNames.map((n) => (
                 <li key={n}>{n}</li>

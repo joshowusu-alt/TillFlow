@@ -40,6 +40,9 @@ export type ImportStockResult = {
   unpaidCount: number;
   paidValuePence: number;
   unpaidValuePence: number;
+  /** Existing products for which opening stock was recorded (had quantity > 0 in the CSV). */
+  stockUpdated: number;
+  stockUpdatedValuePence: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -238,12 +241,39 @@ export async function importStockAction(
 
     const createdItems = allCreatedItems;
 
-    // -- Step 3: Create purchase invoices in chunks of 150 lines ----------
+    // -- Step 3: Record opening stock for EXISTING products in the import ----
+    // Products already in the catalogue were skipped above (no new record),
+    // but the CSV may specify opening quantity + cost for them. We look up
+    // their IDs and include them in the purchase invoice step so that the
+    // correct journal entries are posted (DR Inventory / CR Cash or AP).
+    const skippedRowsWithStock = resolvedRows.filter(
+      (r) => existingNameSet.has(r.name.toLowerCase()) && r.quantity > 0
+    );
+    const existingProductIdMap = new Map<string, string>();
+    if (skippedRowsWithStock.length > 0) {
+      const existingProducts = await prisma.product.findMany({
+        where: { businessId, name: { in: skippedRowsWithStock.map((r) => r.name) } },
+        select: { id: true, name: true },
+      });
+      for (const p of existingProducts) {
+        existingProductIdMap.set(p.name.toLowerCase(), p.id);
+      }
+    }
+    const skippedWithStockItems = skippedRowsWithStock
+      .map((row) => {
+        const productId = existingProductIdMap.get(row.name.toLowerCase());
+        return productId ? { row, productId } : null;
+      })
+      .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
+
+    // -- Step 4: Create purchase invoices in chunks of 150 lines ----------
     // Products are fully committed -- no shared transaction needed.
     // Chunking avoids an oversized OR query in the DB driver.
+    // Both newly-created and existing-with-stock items are included.
     const INVOICE_CHUNK = 150;
-    const paidItemsAll   = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
-    const unpaidItemsAll = createdItems.filter((c) => c.row.paymentStatus === 'UNPAID');
+    const allItems = [...createdItems, ...skippedWithStockItems];
+    const paidItemsAll   = allItems.filter((c) => c.row.paymentStatus === 'PAID');
+    const unpaidItemsAll = allItems.filter((c) => c.row.paymentStatus === 'UNPAID');
     const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
     const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
 
@@ -266,6 +296,9 @@ export async function importStockAction(
     const unpaidRows = unpaidItemsAll;
     const paidValuePence   = paidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
     const unpaidValuePence = unpaidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
+    const stockUpdatedValuePence = skippedWithStockItems.reduce(
+      (sum, { row }) => sum + rowToBaseCost(row), 0
+    );
 
     audit({
       businessId,
@@ -278,6 +311,7 @@ export async function importStockAction(
       details: {
         created: createdItems.length,
         skipped: skippedNames.length,
+        stockUpdated: skippedWithStockItems.length,
         paidCount: paidRows.length,
         unpaidCount: unpaidRows.length,
       },
@@ -295,6 +329,8 @@ export async function importStockAction(
       unpaidCount: unpaidRows.length,
       paidValuePence,
       unpaidValuePence,
+      stockUpdated: skippedWithStockItems.length,
+      stockUpdatedValuePence,
     });
   });
 }
