@@ -351,7 +351,7 @@ export default function ImportStockClient({
                 ['base_unit *', 'Smallest unit you sell — e.g. Tin, Piece, kg'],
                 ['pack_unit', 'Container unit — e.g. Carton, Box (optional)'],
                 ['pack_size', 'Base units per pack — e.g. 12 (required if pack_unit set)'],
-                ['qty_in', 'Unit your quantity is in — defaults to pack_unit if set'],
+                ['qty_in', 'Unit quantity is counted in — leave blank to use base_unit, or set to Carton/Box to enter pack counts'],
                 ['payment_status', '"paid" or "unpaid" — blank defaults to unpaid'],
               ] as [string, string][]).map(([col, desc]) => (
                 <div key={col} className="flex gap-1.5">
@@ -360,8 +360,20 @@ export default function ImportStockClient({
                 </div>
               ))}
             </div>
+
+            {/* Cost / qty rule callout */}
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 space-y-1.5">
+              <p className="font-semibold">cost_price and quantity are per base unit — unless you set qty_in</p>
+              <p className="font-medium">Example: Milo sold in Tins (12 Tins per Carton)</p>
+              <ul className="list-disc list-inside space-y-0.5 ml-1 text-amber-800">
+                <li><code className="font-mono bg-amber-100 px-0.5 rounded">cost_price = 9.50</code> — cost of 1 Tin</li>
+                <li><code className="font-mono bg-amber-100 px-0.5 rounded">quantity = 60</code> — Tins on hand; system records 60 × GH¢9.50 = GH¢570.00</li>
+                <li>To enter by Carton instead: set <code className="font-mono bg-amber-100 px-0.5 rounded">qty_in = Carton</code> and <code className="font-mono bg-amber-100 px-0.5 rounded">quantity = 5</code> → 5 × 12 = 60 Tins</li>
+              </ul>
+            </div>
+
             <p className="mt-2 text-black/50 italic">
-              Example: <code>Milo 500g, , 6001234567, Drinks, 12.00, 9.50, 5, Tin, Carton, 12, Carton, unpaid</code>
+              Example: <code>Milo 500g, , 6001234567, Drinks, 12.00, 9.50, 60, Tin, Carton, 12, , unpaid</code>
             </p>
           </div>
         </div>
@@ -559,13 +571,14 @@ export default function ImportStockClient({
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
                 <th className="px-3 py-2 text-left font-medium min-w-[160px]">Unit</th>
                 <th className="px-3 py-2 text-left font-medium">Payment</th>
+                <th className="px-3 py-2 text-right font-medium">Line Total</th>
                 <th className="px-3 py-2 text-left font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-black/40">
+                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-black/40">
                     {statusFilter === 'error' ? 'No errors — all fixed! 🎉' :
                      statusFilter === 'warning' ? 'No warnings — all resolved! 🎉' :
                      statusFilter === 'ready' ? 'No ready rows yet.' : 'No rows.'}
@@ -603,12 +616,20 @@ export default function ImportStockClient({
                         : <span className="text-red-500 text-xs">missing</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {row.costPricePence > 0
-                        ? moneyCell(row.costPricePence, currency)
-                        : <span className="text-red-500 text-xs">missing</span>}
+                      {row.costPricePence > 0 ? (
+                        <>
+                          {moneyCell(row.costPricePence, currency)}
+                          <div className="text-xs text-black/40">/{row.baseUnitName || '…'}</div>
+                        </>
+                      ) : <span className="text-red-500 text-xs">missing</span>}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      {row.quantity}
+                      {row.quantity > 0 ? (
+                        <>
+                          {row.quantity}
+                          <div className="text-xs text-black/40">{row.qtyInName}</div>
+                        </>
+                      ) : <span className="text-black/30">0</span>}
                     </td>
                     <td className="px-3 py-2">
                       {/* Base unit */}
@@ -670,6 +691,17 @@ export default function ImportStockClient({
                         status={row.resolvedPaymentStatus}
                         onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })}
                       />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {row.costPricePence > 0 && row.quantity > 0 ? (() => {
+                        const cf =
+                          row.packUnitName &&
+                          row.resolvedPackSize > 1 &&
+                          row.qtyInName.toLowerCase() === row.packUnitName.toLowerCase()
+                            ? row.resolvedPackSize
+                            : 1;
+                        return moneyCell(Math.round(row.costPricePence * row.quantity * cf), currency);
+                      })() : <span className="text-black/30">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       <StatusBadge status={status} errors={row.errors} warnings={row.warnings} />

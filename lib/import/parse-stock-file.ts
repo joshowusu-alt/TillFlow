@@ -115,7 +115,9 @@ function buildRow(raw: Record<string, string>): ParsedImportRow {
   const packSizeRaw = parseInt(g('pack_size'), 10);
   const packSize = isNaN(packSizeRaw) || packSizeRaw <= 1 ? 0 : packSizeRaw;
   const qtyInRaw = g('qty_in');
-  const qtyInName = qtyInRaw || (packUnitName || baseUnitName);
+  // Default to base unit — not pack unit — so blank qty_in always means
+  // "the quantity column is already in base units" (e.g. Tins, not Cartons).
+  const qtyInName = qtyInRaw || baseUnitName;
   const paymentStatus = normalisePaymentStatus(g('payment_status'));
 
   const errors: string[] = [];
