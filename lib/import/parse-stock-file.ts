@@ -105,10 +105,11 @@ function buildRow(raw: Record<string, string>): ParsedImportRow {
   const category = g('category');
   const sellingPricePence = parsePence(g('selling_price'));
   const costPricePence = parsePence(g('cost_price'));
-  // Blank quantity is valid (no opening stock); only non-numeric strings are errors.
+  // Blank or non-numeric quantity means no opening stock — treat as 0.
+  // Spreadsheets commonly use "-", "N/A", "nil", "OOS" etc. for out-of-stock items.
   const qtyStr = g('quantity');
-  const qtyRaw = qtyStr === '' ? 0 : parseFloat(qtyStr);
-  const quantity = isNaN(qtyRaw) ? -1 : qtyRaw;
+  const qtyRaw = parseFloat(qtyStr);
+  const quantity = isNaN(qtyRaw) ? 0 : qtyRaw;
   const baseUnitName = g('base_unit');
   const packUnitName = g('pack_unit');
   const packSizeRaw = parseInt(g('pack_size'), 10);
@@ -123,7 +124,6 @@ function buildRow(raw: Record<string, string>): ParsedImportRow {
   if (!name) errors.push('Product name is required');
   if (sellingPricePence < 0) errors.push('selling_price must be a number');
   if (costPricePence < 0) errors.push('cost_price must be a number');
-  if (quantity < 0) errors.push('quantity must be a number');
   if (!baseUnitName) errors.push('base_unit is required');
 
   if (packUnitName && packSize === 0) {
