@@ -442,6 +442,19 @@ export default function ImportStockClient({
           </details>
         )}
 
+        {result.barcodesCleared > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">
+              {result.barcodesCleared} barcode{result.barcodesCleared !== 1 ? 's' : ''} cleared
+            </p>
+            <p className="mt-1 text-amber-800 text-xs">
+              These barcodes were already assigned to other products, so they were removed from the
+              imported rows to avoid conflicts. The products were still created — you can set their
+              barcodes manually under Products.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-3">
           <Link href="/products" className="btn-primary">
             View Products →

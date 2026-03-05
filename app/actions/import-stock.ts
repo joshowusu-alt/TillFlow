@@ -34,6 +34,8 @@ export type ImportStockResult = {
   created: number;
   skipped: number;
   skippedNames: string[];
+  /** Number of barcodes that were stripped because they conflicted with an existing product. */
+  barcodesCleared: number;
   paidCount: number;
   unpaidCount: number;
   paidValuePence: number;
@@ -113,9 +115,32 @@ export async function importStockAction(
     const skippedNames = resolvedRows
       .filter((r) => existingNameSet.has(r.name.toLowerCase()))
       .map((r) => r.name);
-    const rowsToCreate = resolvedRows.filter(
+    const rowsAfterNameFilter = resolvedRows.filter(
       (r) => !existingNameSet.has(r.name.toLowerCase())
     );
+
+    // ── Pre-check for duplicate barcodes — strip conflicts rather than abort ──
+    // A single duplicate barcode would otherwise throw inside the transaction
+    // and roll back all 1000+ products. Instead we null out the offending
+    // barcode so the product still gets created (can be set manually later).
+    const existingBarcodesRaw = await prisma.product.findMany({
+      where: { businessId, barcode: { not: null } },
+      select: { barcode: true },
+    });
+    const existingBarcodeSet = new Set(existingBarcodesRaw.map((p) => p.barcode as string));
+
+    // Also deduplicate within the batch itself (two rows with the same barcode).
+    const seenBarcodesInBatch = new Set<string>();
+    let barcodesCleared = 0;
+    const rowsToCreate = rowsAfterNameFilter.map((r) => {
+      if (!r.barcode) return r;
+      if (existingBarcodeSet.has(r.barcode) || seenBarcodesInBatch.has(r.barcode)) {
+        barcodesCleared++;
+        return { ...r, barcode: '' }; // strip duplicate; product still created
+      }
+      seenBarcodesInBatch.add(r.barcode);
+      return r;
+    });
 
     // ── Single atomic transaction: categories + products + purchase invoices ─
     const createdItems = await prisma.$transaction(
@@ -284,6 +309,7 @@ export async function importStockAction(
       created: createdItems.length,
       skipped: skippedNames.length,
       skippedNames,
+      barcodesCleared,
       paidCount: paidRows.length,
       unpaidCount: unpaidRows.length,
       paidValuePence,
