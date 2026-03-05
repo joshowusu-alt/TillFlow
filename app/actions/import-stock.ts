@@ -112,12 +112,21 @@ export async function importStockAction(
       select: { name: true },
     });
     const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
-    const skippedNames = resolvedRows
+    const skippedNames: string[] = resolvedRows
       .filter((r) => existingNameSet.has(r.name.toLowerCase()))
       .map((r) => r.name);
-    const rowsAfterNameFilter = resolvedRows.filter(
-      (r) => !existingNameSet.has(r.name.toLowerCase())
-    );
+    // Also deduplicate within the batch — keep only the first occurrence of
+    // each name. A within-batch duplicate would pass the existingNameSet
+    // check, then hit a unique-constraint error inside the tx and roll back
+    // the entire chunk (or the whole import).
+    const seenNamesInBatch = new Set<string>();
+    const rowsAfterNameFilter = resolvedRows.filter((r) => {
+      const key = r.name.toLowerCase();
+      if (existingNameSet.has(key)) return false;
+      if (seenNamesInBatch.has(key)) { skippedNames.push(r.name); return false; }
+      seenNamesInBatch.add(key);
+      return true;
+    });
 
     // ── Pre-check for duplicate barcodes — strip conflicts rather than abort ──
     // A single duplicate barcode would otherwise throw inside the transaction
@@ -172,49 +181,45 @@ export async function importStockAction(
       return { productId, unitId: row.baseUnitId, qtyInUnit: qtyBase, unitCostPence: row.costPricePence };
     };
 
-    // ── Step 2: Create products in chunks of 100 ─────────────────────────
-    // One 30 s transaction per chunk avoids the server-function timeout that
-    // kills a single transaction covering 1 200+ products.
-    const PRODUCT_CHUNK = 100;
+    // ── Step 2: Create products individually — no transactions ───────────
+    // Interactive transactions on Neon/PgBouncer are unreliable at scale:
+    // the global prisma timeout, connection-pool limits, and Vercel’s
+    // serverless cold-start all conspire to abort them. Since names and
+    // barcodes are pre-validated above, individual creates are safe:
+    // a single row failure skips that row without aborting the whole import.
     const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
 
-    for (let i = 0; i < rowsToCreate.length; i += PRODUCT_CHUNK) {
-      const chunk = rowsToCreate.slice(i, i + PRODUCT_CHUNK);
-      const chunkItems = await prisma.$transaction(
-        async (tx) => {
-          const items: { row: ConfirmedImportRow; productId: string }[] = [];
-          for (const row of chunk) {
-            const categoryId = row.category
-              ? (categoryMap.get(row.category.toLowerCase()) ?? null)
-              : null;
+    for (const row of rowsToCreate) {
+      const categoryId = row.category
+        ? (categoryMap.get(row.category.toLowerCase()) ?? null)
+        : null;
 
-            const product = await quickCreateProduct(
-              businessId,
-              {
-                name: row.name,
-                sku: row.sku || null,
-                barcode: row.barcode || null,
-                sellingPriceBasePence: row.sellingPricePence,
-                defaultCostBasePence: row.costPricePence,
-                vatRateBps: 0,
-                baseUnitId: row.baseUnitId,
-                packagingUnitId: row.packUnitId ?? null,
-                packagingConversion: row.packSize > 1 ? row.packSize : null,
-              },
-              tx
-            );
+      try {
+        const product = await quickCreateProduct(businessId, {
+          name: row.name,
+          sku: row.sku || null,
+          barcode: row.barcode || null,
+          sellingPriceBasePence: row.sellingPricePence,
+          defaultCostBasePence: row.costPricePence,
+          vatRateBps: 0,
+          baseUnitId: row.baseUnitId,
+          packagingUnitId: row.packUnitId ?? null,
+          packagingConversion: row.packSize > 1 ? row.packSize : null,
+        });
 
-            if (categoryId) {
-              await tx.product.update({ where: { id: product.id }, data: { categoryId } });
-            }
+        if (categoryId) {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: { categoryId },
+          });
+        }
 
-            items.push({ row, productId: product.id });
-          }
-          return items;
-        },
-        { timeout: 30000, maxWait: 5000 }
-      );
-      allCreatedItems.push(...chunkItems);
+        allCreatedItems.push({ row, productId: product.id });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[import-stock] skipping "${row.name}": ${msg}`);
+        skippedNames.push(row.name);
+      }
     }
 
     const createdItems = allCreatedItems;
