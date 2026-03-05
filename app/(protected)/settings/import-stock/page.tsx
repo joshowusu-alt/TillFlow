@@ -7,6 +7,11 @@ import { prisma } from '@/lib/prisma';
 // server bundle, so the 7 MB xlsx package stays fully client-side.
 import ImportStockLoader from './ImportStockLoader';
 
+// Server actions called from this route (importStockAction) can take up to
+// 60 s for large catalogues — raise the Vercel function timeout accordingly.
+// Without this, Vercel enforces a 10 s default and kills the action mid-import.
+export const maxDuration = 60;
+
 export default async function ImportStockPage() {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
