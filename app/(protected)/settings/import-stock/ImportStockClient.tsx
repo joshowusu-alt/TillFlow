@@ -174,6 +174,7 @@ export default function ImportStockClient({
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [statusFilter, setStatusFilter] = useState<'all' | 'error' | 'warning' | 'ready'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── File handling ────────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ export default function ImportStockClient({
           return;
         }
         setPreviewRows(parsed.map((r) => autoResolve(r, units)));
+        setStatusFilter('all');
         setStage('preview');
       } catch (e: unknown) {
         setParseError(e instanceof Error ? e.message : 'Could not parse the file.');
@@ -453,12 +455,17 @@ export default function ImportStockClient({
   const errorCount = previewRows.filter((r) => rowStatus(r) === 'error').length;
   const warningCount = previewRows.filter((r) => rowStatus(r) === 'warning').length;
 
+  // Filtered rows preserve original file indices so row numbers stay meaningful.
+  const filteredRows = previewRows
+    .map((r, i) => ({ row: r, originalIdx: i }))
+    .filter(({ row }) => statusFilter === 'all' || rowStatus(row) === statusFilter);
+
   return (
     <div className="space-y-4">
       {/* Header controls */}
       <div className="card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="btn-ghost border border-black/10 text-sm"
@@ -466,14 +473,49 @@ export default function ImportStockClient({
             >
               ← Re-upload
             </button>
-            <div className="text-sm text-black/60">
-              <span className="font-semibold text-black/80">{previewRows.length}</span> rows
-              {errorCount > 0 && (
-                <span className="ml-2 font-medium text-red-600">{errorCount} error{errorCount !== 1 ? 's' : ''}</span>
-              )}
+            <span className="text-sm text-black/50">
+              <span className="font-semibold text-black/70">{previewRows.length}</span> rows
+            </span>
+            {/* Live filter pills — counts update instantly as issues are resolved */}
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('all')}
+                className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                  statusFilter === 'all' ? 'bg-black/15 text-black/80' : 'bg-black/5 text-black/40 hover:bg-black/10'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'error' ? 'all' : 'error')}
+                className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                  statusFilter === 'error' ? 'bg-red-200 text-red-800' : 'bg-red-100 text-red-600 hover:bg-red-200'
+                }`}
+              >
+                ✕ Errors {errorCount}
+              </button>
               {warningCount > 0 && (
-                <span className="ml-2 font-medium text-amber-600">{warningCount} warning{warningCount !== 1 ? 's' : ''}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'warning' ? 'all' : 'warning')}
+                  className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                    statusFilter === 'warning' ? 'bg-amber-200 text-amber-800' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                  }`}
+                >
+                  ! Warnings {warningCount}
+                </button>
               )}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(statusFilter === 'ready' ? 'all' : 'ready')}
+                className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                  statusFilter === 'ready' ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                }`}
+              >
+                ✓ Ready {readyCount}
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -521,7 +563,16 @@ export default function ImportStockClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
-              {previewRows.map((row, idx) => {
+              {filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-black/40">
+                    {statusFilter === 'error' ? 'No errors — all fixed! 🎉' :
+                     statusFilter === 'warning' ? 'No warnings — all resolved! 🎉' :
+                     statusFilter === 'ready' ? 'No ready rows yet.' : 'No rows.'}
+                  </td>
+                </tr>
+              )}
+              {filteredRows.map(({ row, originalIdx }) => {
                 const status = rowStatus(row);
                 const needsBaseUnit = !row.resolvedBaseUnitId;
                 const needsPackUnit = !!row.packUnitName && !row.resolvedPackUnitId;
@@ -538,7 +589,7 @@ export default function ImportStockClient({
                         : ''
                     }`}
                   >
-                    <td className="px-3 py-2 text-black/40 text-xs">{idx + 1}</td>
+                    <td className="px-3 py-2 text-black/40 text-xs">{originalIdx + 1}</td>
                     <td className="px-3 py-2 font-medium">
                       {row.name || <span className="text-red-500 italic">missing</span>}
                       {row.sku && <div className="text-xs text-black/40">{row.sku}</div>}
