@@ -174,15 +174,28 @@ export async function importStockAction(
         // Only include rows with quantity > 0 in the purchase invoice.
         // Zero-qty rows still get a product record created — the owner can
         // add stock later via a manual purchase.
+        //
+        // IMPORTANT: cost_price in the CSV is always per BASE unit (tin/piece).
+        // If the quantity was entered in pack units (e.g. 5 cartons), we must
+        // convert to base units before building the purchase line so that
+        // createPurchase records the correct total (5 cartons × 12 tins = 60 tins
+        // @ GH₴9.50/tin = GH₴570, not GH₴47.50).
         const toPurchaseLines = (list: typeof items) =>
           list
             .filter(({ row }) => row.quantity > 0)
-            .map(({ row, productId }) => ({
-              productId,
-              unitId: row.qtyInUnitId,
-              qtyInUnit: row.quantity,
-              unitCostPence: row.costPricePence,
-            }));
+            .map(({ row, productId }) => {
+              const isQtyInPackUnit =
+                row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
+              const qtyBase = isQtyInPackUnit
+                ? row.quantity * (row.packSize > 1 ? row.packSize : 1)
+                : row.quantity;
+              return {
+                productId,
+                unitId: row.baseUnitId,   // always base unit
+                qtyInUnit: qtyBase,        // total base units
+                unitCostPence: row.costPricePence, // cost per base unit (unchanged)
+              };
+            });
 
         const paidLines = toPurchaseLines(paidItems);
         const unpaidLines = toPurchaseLines(unpaidItems);
@@ -226,12 +239,24 @@ export async function importStockAction(
 
     const paidRows = createdItems.filter((c) => c.row.paymentStatus === 'PAID');
     const unpaidRows = createdItems.filter((c) => c.row.paymentStatus === 'UNPAID');
+
+    // Apply the same base-unit conversion used in toPurchaseLines so the
+    // result summary matches what was actually recorded on the invoice.
+    const rowCostPence = (row: ConfirmedImportRow): number => {
+      const isQtyInPackUnit =
+        row.packUnitId !== null && row.qtyInUnitId === row.packUnitId;
+      const qtyBase = isQtyInPackUnit
+        ? row.quantity * (row.packSize > 1 ? row.packSize : 1)
+        : row.quantity;
+      return Math.round(row.costPricePence * qtyBase);
+    };
+
     const paidValuePence = paidRows.reduce(
-      (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
+      (sum, { row }) => sum + rowCostPence(row),
       0
     );
     const unpaidValuePence = unpaidRows.reduce(
-      (sum, { row }) => sum + Math.round(row.costPricePence * row.quantity),
+      (sum, { row }) => sum + rowCostPence(row),
       0
     );
 
