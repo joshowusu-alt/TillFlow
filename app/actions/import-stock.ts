@@ -171,15 +171,23 @@ export async function importStockAction(
         const paidItems = items.filter((c) => c.row.paymentStatus === 'PAID');
         const unpaidItems = items.filter((c) => c.row.paymentStatus === 'UNPAID');
 
+        // Only include rows with quantity > 0 in the purchase invoice.
+        // Zero-qty rows still get a product record created — the owner can
+        // add stock later via a manual purchase.
         const toPurchaseLines = (list: typeof items) =>
-          list.map(({ row, productId }) => ({
-            productId,
-            unitId: row.qtyInUnitId,
-            qtyInUnit: row.quantity,
-            unitCostPence: row.costPricePence,
-          }));
+          list
+            .filter(({ row }) => row.quantity > 0)
+            .map(({ row, productId }) => ({
+              productId,
+              unitId: row.qtyInUnitId,
+              qtyInUnit: row.quantity,
+              unitCostPence: row.costPricePence,
+            }));
 
-        if (paidItems.length > 0) {
+        const paidLines = toPurchaseLines(paidItems);
+        const unpaidLines = toPurchaseLines(unpaidItems);
+
+        if (paidLines.length > 0) {
           await createPurchase(
             {
               businessId,
@@ -188,14 +196,14 @@ export async function importStockAction(
               paymentStatus: 'PAID',
               dueDate: null,
               payments: [],
-              lines: toPurchaseLines(paidItems),
+              lines: paidLines,
               userId: user.id,
             },
             tx
           );
         }
 
-        if (unpaidItems.length > 0) {
+        if (unpaidLines.length > 0) {
           await createPurchase(
             {
               businessId,
@@ -204,7 +212,7 @@ export async function importStockAction(
               paymentStatus: 'UNPAID',
               dueDate: null,
               payments: [],
-              lines: toPurchaseLines(unpaidItems),
+              lines: unpaidLines,
               userId: user.id,
             },
             tx

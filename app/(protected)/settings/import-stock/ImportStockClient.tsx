@@ -238,7 +238,8 @@ export default function ImportStockClient({
 
   const hasErrors = previewRows.some((r) => rowStatus(r) === 'error');
   const hasUnresolvedWarnings = previewRows.some((r) => rowStatus(r) === 'warning');
-  const canConfirm = !hasErrors && !hasUnresolvedWarnings && previewRows.length > 0;
+  const readyCount = previewRows.filter((r) => rowStatus(r) === 'ready').length;
+  const canConfirm = !hasErrors && previewRows.length > 0 && readyCount > 0;
 
   // ── Confirm ──────────────────────────────────────────────────────────────
 
@@ -597,7 +598,7 @@ export default function ImportStockClient({
                                   min={2}
                                   className="input w-16 py-0.5 text-xs"
                                   placeholder="size"
-                                  value={row.resolvedPackSize > 1 ? row.resolvedPackSize : ''}
+                                  value={row.resolvedPackSize > 0 ? row.resolvedPackSize : ''}
                                   onChange={(e) =>
                                     updateRow(row._id, {
                                       resolvedPackSize: parseInt(e.target.value, 10) || 0,
@@ -658,13 +659,22 @@ export default function ImportStockClient({
                 disabled={!canConfirm || isPending}
                 onClick={handleConfirm}
               >
-                {isPending ? 'Importing…' : `Confirm Import (${previewRows.filter((r) => rowStatus(r) === 'ready').length} products)`}
+                {isPending
+                  ? 'Importing…'
+                  : hasUnresolvedWarnings
+                    ? `Confirm Import (${readyCount} ready, ${previewRows.filter((r) => rowStatus(r) === 'warning').length} skipped)`
+                    : `Confirm Import (${readyCount} products)`}
               </button>
               {!canConfirm && (
                 <div className="absolute bottom-full mb-1.5 right-0 hidden group-hover:block w-56 rounded-lg bg-black/80 px-3 py-2 text-xs text-white shadow-lg">
                   {hasErrors
                     ? 'Fix all red errors first (re-upload the corrected file).'
-                    : 'Resolve all amber warnings in the table above.'}
+                    : 'No ready rows to import.'}
+                </div>
+              )}
+              {canConfirm && hasUnresolvedWarnings && (
+                <div className="absolute bottom-full mb-1.5 right-0 hidden group-hover:block w-64 rounded-lg bg-black/80 px-3 py-2 text-xs text-white shadow-lg">
+                  Rows with amber warnings will be skipped — you can add their units/pack sizes later via the product edit screen.
                 </div>
               )}
             </div>
