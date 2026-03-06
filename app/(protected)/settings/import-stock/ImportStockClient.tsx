@@ -267,6 +267,12 @@ export default function ImportStockClient({
     startTransition(async () => {
       try {
         const res = await importStockAction(confirmedRows);
+        // res is undefined when Next.js redirects (expired session) or a network
+        // error causes the action to return nothing — guard before accessing .success
+        if (!res) {
+          setConfirmError('Session expired or request failed. Please refresh the page and try again.');
+          return;
+        }
         if (!res.success) {
           setConfirmError(res.error);
           return;

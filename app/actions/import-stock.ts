@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 import { createPurchase } from '@/lib/services/purchases';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { audit } from '@/lib/audit';
@@ -52,10 +53,27 @@ export type ImportStockResult = {
 export async function importStockAction(
   rows: ConfirmedImportRow[]
 ): Promise<ActionResult<ImportStockResult>> {
+  // Auth resolved OUTSIDE safeAction.
+  // withBusinessContext calls Next.js redirect() when the session is expired.
+  // safeAction re-throws redirect errors so Next.js handles them as navigations —
+  // but that makes the client-side `await importStockAction()` resolve to undefined
+  // instead of an ActionResult, causing "Cannot read properties of undefined
+  // (reading 'success')". Catching here converts it to a typed err() so the
+  // client always receives a proper result object, never undefined.
+  let authContext: Awaited<ReturnType<typeof withBusinessContext>>;
+  try {
+    authContext = await withBusinessContext(['MANAGER', 'OWNER']);
+  } catch (e) {
+    if (isRedirectError(e)) {
+      return err('Your session has expired. Please refresh the page and sign in again.');
+    }
+    throw e;
+  }
+
   return safeAction(async () => {
     if (!rows.length) return err('No rows to import.');
 
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = authContext;
 
     const store = await prisma.store.findFirst({
       where: { businessId },
