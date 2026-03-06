@@ -552,22 +552,22 @@ export default function AmendSaleClient({
               )}
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
-                className="btn-ghost flex-1"
-                onClick={() => setShowConfirm(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                className="w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
                 onClick={handleSubmit}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Processing…' : 'Confirm Amendment'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost w-full"
+                onClick={() => setShowConfirm(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
               </button>
             </div>
           </div>

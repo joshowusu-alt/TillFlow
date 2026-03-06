@@ -67,8 +67,8 @@ export default function ReturnFormClient({
     <div className="grid gap-4 md:grid-cols-3">
       {/* Fixed modal overlay — floats above form on all screen sizes */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4 pb-4 sm:pb-0">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100">
                 <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,19 +99,19 @@ export default function ReturnFormClient({
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                className="w-full rounded-xl bg-rose-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Processing…' : isVoid ? 'Void Sale' : 'Confirm Return'}
-              </button>
-              <button
-                type="button"
-                className="w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-sm font-semibold hover:bg-black/5"
+                className="w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-sm font-semibold hover:bg-black/5 disabled:opacity-50"
                 onClick={() => setShowConfirm(false)}
                 disabled={isSubmitting}
               >
                 Cancel
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-xl bg-rose-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Processing…' : isVoid ? 'Void Sale' : 'Confirm Return'}
               </button>
             </div>
           </div>
