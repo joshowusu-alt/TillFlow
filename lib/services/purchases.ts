@@ -154,7 +154,16 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   }
   const preloadedAccountMap = new Map(glAccountRows.map((a) => [a.code, a.id]));
 
-  const _doWork = async (tx: any) => {
+  // ── Core transaction: ONLY invoice creation + GL entry ─────────────────
+  // Keeping $transaction scope minimal is critical for libSQL/Turso because
+  // every `await` inside the tx is a separate network round-trip.  The default
+  // Prisma transaction timeout is 5 s; 150 sequential inventory upserts at
+  // ~30 ms RTT = 4.5 s — right at the limit, causing SQLITE_BUSY / "Transaction
+  // already closed" which surfaces as the generic "Something went wrong" message.
+  // Inventory balances and stock movements are written OUTSIDE the transaction
+  // via _doInventory(), which is safe: each product row is independent, and
+  // incrementInventoryBalance() uses atomic DB-side `increment` operations.
+  const _doInvoice = async (tx: any) => {
     const created = await tx.purchaseInvoice.create({
       data: {
         businessId: input.businessId,
@@ -188,38 +197,6 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
       }
     });
 
-    const inventoryMap = await fetchInventoryMap(
-      store.id,
-      Array.from(productTotals.keys()),
-      tx as any
-    );
-
-    for (const [productId, totals] of productTotals.entries()) {
-      const inv = inventoryMap.get(productId);
-      const onHand = inv?.qtyOnHandBase ?? 0;
-      const currentAvg =
-        inv?.avgCostBasePence && inv.avgCostBasePence > 0
-          ? inv.avgCostBasePence
-          : totals.defaultCostBasePence;
-      const existingValue = onHand * currentAvg;
-      const newQty = onHand + totals.qtyBase;
-      const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      await incrementInventoryBalance(tx, store.id, productId, totals.qtyBase, newAvg);
-    }
-
-    await tx.stockMovement.createMany({
-      data: lineDetails.map((line) => ({
-        storeId: store.id,
-        productId: line.productId,
-        qtyBase: line.qtyBase,
-        unitCostBasePence: line.unitCostBasePence,
-        type: 'PURCHASE',
-        referenceType: 'PURCHASE_INVOICE',
-        referenceId: created.id,
-        userId: input.userId ?? null
-      }))
-    });
-
     await postJournalEntry({
       businessId: input.businessId,
       description: `Purchase ${created.id}`,
@@ -233,9 +210,52 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     return created;
   };
 
-  const invoice = db
-    ? await _doWork(db)
-    : await prisma.$transaction(_doWork);
+  // Inventory + stock movements — runs on any Prisma client (tx or prisma).
+  const _doInventory = async (client: any, invoiceId: string) => {
+    const inventoryMap = await fetchInventoryMap(
+      store.id,
+      Array.from(productTotals.keys()),
+      client
+    );
+
+    for (const [productId, totals] of productTotals.entries()) {
+      const inv = inventoryMap.get(productId);
+      const onHand = inv?.qtyOnHandBase ?? 0;
+      const currentAvg =
+        inv?.avgCostBasePence && inv.avgCostBasePence > 0
+          ? inv.avgCostBasePence
+          : totals.defaultCostBasePence;
+      const existingValue = onHand * currentAvg;
+      const newQty = onHand + totals.qtyBase;
+      const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
+      await incrementInventoryBalance(client, store.id, productId, totals.qtyBase, newAvg);
+    }
+
+    await client.stockMovement.createMany({
+      data: lineDetails.map((line) => ({
+        storeId: store.id,
+        productId: line.productId,
+        qtyBase: line.qtyBase,
+        unitCostBasePence: line.unitCostBasePence,
+        type: 'PURCHASE',
+        referenceType: 'PURCHASE_INVOICE',
+        referenceId: invoiceId,
+        userId: input.userId ?? null
+      }))
+    });
+  };
+
+  let invoice: Awaited<ReturnType<typeof _doInvoice>>;
+  if (db) {
+    // Called inside a caller-supplied transaction — keep all writes in same tx.
+    invoice = await _doInvoice(db);
+    await _doInventory(db, invoice.id);
+  } else {
+    // Normal path: $transaction covers only the invoice + GL entry (2 writes).
+    // Inventory upserts run after the tx commits to avoid the 5 s tx timeout.
+    invoice = await prisma.$transaction(_doInvoice);
+    await _doInventory(prisma as any, invoice.id);
+  }
 
   return invoice;
 }
