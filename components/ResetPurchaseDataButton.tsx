@@ -46,9 +46,9 @@ export default function ResetPurchaseDataButton() {
   };
 
   return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-      <h3 className="mb-1 font-semibold text-rose-800">Reset purchase &amp; inventory data</h3>
-      <p className="mb-4 text-sm text-rose-700">
+    <div className="card p-5" style={{ border: '1px solid #fecaca', background: '#fff1f2' }}>
+      <h3 className="mb-1 font-semibold" style={{ color: '#991b1b' }}>Reset purchase &amp; inventory data</h3>
+      <p className="mb-4 text-sm" style={{ color: '#b91c1c' }}>
         If you imported stock multiple times due to earlier errors, your inventory totals and balance
         sheet will be inflated. Use this to wipe all purchase invoices, journal entries, and stock
         balances — keeping your product catalogue — then re-run the import once to get clean
@@ -71,13 +71,13 @@ export default function ResetPurchaseDataButton() {
       )}
 
       {status === 'error' && errorMsg && (
-        <p className="mb-4 text-sm font-medium text-rose-700">{errorMsg}</p>
+        <p className="mb-4 text-sm font-medium" style={{ color: '#b91c1c' }}>{errorMsg}</p>
       )}
 
       <button
         onClick={handleReset}
         disabled={status === 'loading'}
-        className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+        className="btn-destructive"
       >
         {status === 'loading' ? 'Resetting…' : 'Reset purchase & inventory data'}
       </button>
