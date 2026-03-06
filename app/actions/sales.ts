@@ -265,14 +265,11 @@ export async function completeSaleAction(data: {
       details: { lines: lines.length, total: invoice.totalPence },
     }).catch(() => {});
 
-    // pos-inventory deliberately NOT revalidated here — the POS client already
-    // decrements stock optimistically, so triggering a server re-render after
-    // every sale would add 3–5 s of Neon round-trip latency for zero benefit.
-    // The 30 s unstable_cache TTL handles freshness on page navigation.
-    revalidateTag(`today-sales-${businessId}`);
-    revalidateTag('reports');
-    revalidateTag(`readiness-${businessId}`);
-    revalidatePath('/onboarding');
+    // No revalidation here — every revalidateTag/revalidatePath call during a
+    // server action causes Next.js to re-render affected RSC segments inline
+    // (before the response is returned), adding a Neon round-trip per tag.
+    // The (protected)/layout's today-sales and readiness caches use 60 s / 5 min
+    // TTLs — good enough for live POS use. Reports refresh on next navigation.
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
