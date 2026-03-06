@@ -217,58 +217,61 @@ async function _runImport(
     };
 
 
-    // -- Step 2: Create products in parallel batches of 25 -------------------
-    // Sequential creates (1230 x 3 DB round-trips each) take ~110 s and hit
-    // Vercel's 60 s limit. Running 25 direct prisma.product.create calls in
-    // parallel per batch reduces wall-clock time to ~2 s total.
-    // Names and barcodes are pre-validated above so we call prisma.product.create
-    // directly -- 1 round-trip per product instead of 3.
-    const PARALLEL_BATCH = 25;
+    // -- Step 2: Create products in 2 DB calls (createManyAndReturn + productUnit createMany) --
+    // Previous approach: 25-concurrent batches × ceil(N/25) sequential iterations.
+    // At 30ms Neon RTT that's still ceil(614/25)=25 iterations × ~1.5s = ~37s just for
+    // products — and we still need purchase invoice calls after.
+    // New approach: 1 createManyAndReturn for all products (1 RTT), then 1 productUnit
+    // createMany for all unit records (1 RTT). Total: 2 RTTs regardless of row count.
     const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
 
-    for (let i = 0; i < rowsToCreate.length; i += PARALLEL_BATCH) {
-      const batch = rowsToCreate.slice(i, i + PARALLEL_BATCH);
-      const results = await Promise.allSettled(
-        batch.map(async (row) => {
-          const categoryId = row.category
-            ? (categoryMap.get(row.category.toLowerCase()) ?? null)
-            : null;
+    if (rowsToCreate.length > 0) {
+      const productData = rowsToCreate.map((row) => ({
+        businessId,
+        name: row.name,
+        sku: row.sku || null,
+        barcode: row.barcode || null,
+        categoryId: row.category ? (categoryMap.get(row.category.toLowerCase()) ?? null) : null,
+        sellingPriceBasePence: row.sellingPricePence,
+        defaultCostBasePence: row.costPricePence,
+        vatRateBps: 0,
+      }));
 
-          const product = await prisma.product.create({
-            data: {
-              businessId,
-              name: row.name,
-              sku: row.sku || null,
-              barcode: row.barcode || null,
-              categoryId,
-              sellingPriceBasePence: row.sellingPricePence,
-              defaultCostBasePence: row.costPricePence,
-              vatRateBps: 0,
-              productUnits: {
-                create: buildProductUnitCreates(
-                  row.baseUnitId,
-                  row.packUnitId ?? '',
-                  row.packSize > 1 ? row.packSize : 0
-                ),
-              },
-            },
-            select: { id: true },
-          });
-
-          return { row, productId: product.id };
-        })
-      );
-
-      results.forEach((result, idx) => {
-        if (result.status === 'fulfilled') {
-          allCreatedItems.push(result.value);
-        } else {
-          const row = batch[idx];
-          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
-          console.error(`[import-stock] skipping "${row?.name}": ${msg}`);
-          if (row) skippedNames.push(row.name);
-        }
+      // createManyAndReturn: 1 INSERT returning id,name — available in Prisma ≥ 5.14
+      const createdProducts = await prisma.product.createManyAndReturn({
+        data: productData,
+        select: { id: true, name: true },
       });
+
+      // Build a name→id map to pair returned IDs back to the input rows
+      const createdNameToId = new Map(createdProducts.map((p) => [p.name.toLowerCase(), p.id]));
+
+      // Build all productUnit records — 1 createMany INSERT for the entire set
+      const productUnitData: {
+        productId: string; unitId: string; isBaseUnit: boolean; conversionToBase: number;
+      }[] = [];
+
+      for (const row of rowsToCreate) {
+        const productId = createdNameToId.get(row.name.toLowerCase());
+        if (!productId) {
+          console.error(`[import-stock] no returned ID for "${row.name}" — skipping`);
+          skippedNames.push(row.name);
+          continue;
+        }
+        allCreatedItems.push({ row, productId });
+        const units = buildProductUnitCreates(
+          row.baseUnitId,
+          row.packUnitId ?? '',
+          row.packSize > 1 ? row.packSize : 0
+        );
+        for (const u of units) {
+          productUnitData.push({ productId, ...u });
+        }
+      }
+
+      if (productUnitData.length > 0) {
+        await prisma.productUnit.createMany({ data: productUnitData });
+      }
     }
 
     const createdItems = allCreatedItems;
@@ -327,20 +330,30 @@ async function _runImport(
     const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
     const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
 
+    // Run paid and unpaid invoice chunks in parallel to halve wall-clock time.
+    const paidChunks: Promise<void>[] = [];
     for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
-      await createPurchase({
-        businessId, storeId: store.id, supplierId: null,
-        paymentStatus: 'PAID', dueDate: null, payments: [],
-        lines: paidLinesAll.slice(i, i + INVOICE_CHUNK), userId: user.id,
-      });
+      const chunk = paidLinesAll.slice(i, i + INVOICE_CHUNK);
+      paidChunks.push(
+        createPurchase({
+          businessId, storeId: store.id, supplierId: null,
+          paymentStatus: 'PAID', dueDate: null, payments: [],
+          lines: chunk, userId: user.id,
+        }).then(() => undefined)
+      );
     }
+    const unpaidChunks: Promise<void>[] = [];
     for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
-      await createPurchase({
-        businessId, storeId: store.id, supplierId: null,
-        paymentStatus: 'UNPAID', dueDate: null, payments: [],
-        lines: unpaidLinesAll.slice(i, i + INVOICE_CHUNK), userId: user.id,
-      });
+      const chunk = unpaidLinesAll.slice(i, i + INVOICE_CHUNK);
+      unpaidChunks.push(
+        createPurchase({
+          businessId, storeId: store.id, supplierId: null,
+          paymentStatus: 'UNPAID', dueDate: null, payments: [],
+          lines: chunk, userId: user.id,
+        }).then(() => undefined)
+      );
     }
+    await Promise.all([...paidChunks, ...unpaidChunks]);
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
