@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { downloadTemplate } from '@/lib/import/stock-template';
@@ -173,7 +173,7 @@ export default function ImportStockClient({
   const [result, setResult] = useState<ImportStockResult | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [isImporting, setIsImporting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'error' | 'warning' | 'ready'>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -245,8 +245,10 @@ export default function ImportStockClient({
 
   // ── Confirm ──────────────────────────────────────────────────────────────
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (isImporting) return;
     setConfirmError(null);
+    setIsImporting(true);
     const confirmedRows = previewRows
       .filter((r) => rowStatus(r) === 'ready')
       .map((r) => ({
@@ -264,31 +266,32 @@ export default function ImportStockClient({
         paymentStatus: r.resolvedPaymentStatus,
       }));
 
-    startTransition(async () => {
-      try {
-        const res = await importStockAction(confirmedRows);
-        // res is undefined when Next.js redirects (expired session) or a network
-        // error causes the action to return nothing — guard before accessing .success
-        if (!res) {
-          setConfirmError('Session expired or request failed. Please refresh the page and try again.');
-          return;
-        }
-        if (!res.success) {
-          setConfirmError(res.error);
-          return;
-        }
-        setResult((res as { success: true; data: ImportStockResult }).data);
-        setStage('result');
-      } catch (e: unknown) {
-        // Catches network errors, Vercel timeouts, and any uncaught server-side
-        // throws that escape safeAction — prevents the error boundary from firing.
-        setConfirmError(
-          e instanceof Error
-            ? e.message
-            : 'Import failed. Please try again or contact support.'
-        );
+    try {
+      // IMPORTANT: do NOT call server actions inside startTransition in Next.js 14 /
+      // React 18. Next.js intercepts server action calls made inside startTransition
+      // to handle RSC cache invalidation, and in that path the return value is
+      // discarded — the client receives undefined instead of the ActionResult.
+      // Using plain await here guarantees we always get the typed return value.
+      const res = await importStockAction(confirmedRows);
+      if (!res) {
+        setConfirmError('Request failed — no response received. Please try again.');
+        return;
       }
-    });
+      if (!res.success) {
+        setConfirmError(res.error);
+        return;
+      }
+      setResult((res as { success: true; data: ImportStockResult }).data);
+      setStage('result');
+    } catch (e: unknown) {
+      setConfirmError(
+        e instanceof Error
+          ? e.message
+          : 'Import failed. Please try again or contact support.'
+      );
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   // ────────────────────────────────────────────────────────────────────────
@@ -796,10 +799,10 @@ export default function ImportStockClient({
               <button
                 type="button"
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!canConfirm || isPending}
+                disabled={!canConfirm || isImporting}
                 onClick={handleConfirm}
               >
-                {isPending
+                {isImporting
                   ? 'Importing…'
                   : hasUnresolvedWarnings
                     ? `Confirm Import (${readyCount} ready, ${previewRows.filter((r) => rowStatus(r) === 'warning').length} skipped)`

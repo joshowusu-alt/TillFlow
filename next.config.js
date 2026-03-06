@@ -15,10 +15,10 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
     // Large imports (1000+ products) produce ~2-3 MB in the server-action request body.
-    // IMPORTANT: Next.js 14 uses the FLAT key `serverActionsBodySizeLimit`.
-    // The nested `serverActions: { bodySizeLimit }` form is Next.js 15+ only and is
-    // SILENTLY IGNORED by v14, leaving the 1 MB default in place.
-    serverActionsBodySizeLimit: '4mb',
+    // Next.js 14.1+ supports bodySizeLimit via the nested serverActions object.
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
   },
   async rewrites() {
     return [
