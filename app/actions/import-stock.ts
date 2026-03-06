@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
-import { isRedirectError } from 'next/dist/client/components/redirect';
 import { createPurchase } from '@/lib/services/purchases';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { audit } from '@/lib/audit';
@@ -53,21 +52,32 @@ export type ImportStockResult = {
 export async function importStockAction(
   rows: ConfirmedImportRow[]
 ): Promise<ActionResult<ImportStockResult>> {
-  // Auth resolved OUTSIDE safeAction.
-  // withBusinessContext calls Next.js redirect() when the session is expired.
-  // safeAction re-throws redirect errors so Next.js handles them as navigations —
-  // but that makes the client-side `await importStockAction()` resolve to undefined
-  // instead of an ActionResult, causing "Cannot read properties of undefined
-  // (reading 'success')". Catching here converts it to a typed err() so the
-  // client always receives a proper result object, never undefined.
+  // ── Outermost safety net ────────────────────────────────────────────────
+  // This try/catch guarantees the function ALWAYS returns an ActionResult
+  // and NEVER lets anything (redirect errors, runtime errors, Prisma panics)
+  // escape unhandled. When a redirect/error escapes a Next.js 14 server action
+  // the client-side await resolves to `undefined` — causing the crash.
+  try {
+    return await _runImport(rows);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[importStockAction] unhandled top-level error:', e);
+    return err(`Import failed: ${msg}`);
+  }
+}
+
+async function _runImport(
+  rows: ConfirmedImportRow[]
+): Promise<ActionResult<ImportStockResult>> {
+  // Auth resolved OUTSIDE safeAction so a redirect() from withBusinessContext
+  // is caught here and converted to a typed err() instead of escaping.
   let authContext: Awaited<ReturnType<typeof withBusinessContext>>;
   try {
     authContext = await withBusinessContext(['MANAGER', 'OWNER']);
-  } catch (e) {
-    if (isRedirectError(e)) {
-      return err('Your session has expired. Please refresh the page and sign in again.');
-    }
-    throw e;
+  } catch (_authErr) {
+    // Any failure here (redirect, role error, DB error) = session/auth problem.
+    console.error('[importStockAction] auth error:', _authErr);
+    return err('Your session has expired. Please refresh the page and sign in again.');
   }
 
   return safeAction(async () => {
