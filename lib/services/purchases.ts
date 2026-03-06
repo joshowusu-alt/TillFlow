@@ -154,17 +154,18 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   }
   const preloadedAccountMap = new Map(glAccountRows.map((a) => [a.code, a.id]));
 
-  // ── Core transaction: ONLY invoice creation + GL entry ─────────────────
-  // Keeping $transaction scope minimal is critical for libSQL/Turso because
-  // every `await` inside the tx is a separate network round-trip.  The default
-  // Prisma transaction timeout is 5 s; 150 sequential inventory upserts at
-  // ~30 ms RTT = 4.5 s — right at the limit, causing SQLITE_BUSY / "Transaction
-  // already closed" which surfaces as the generic "Something went wrong" message.
-  // Inventory balances and stock movements are written OUTSIDE the transaction
-  // via _doInventory(), which is safe: each product row is independent, and
-  // incrementInventoryBalance() uses atomic DB-side `increment` operations.
-  const _doInvoice = async (tx: any) => {
-    const created = await tx.purchaseInvoice.create({
+  // ── Create invoice + lines + payments + GL entry ────────────────────────
+  // Key constraint: libSQL/Turso interactive $transaction has a ~5 s timeout.
+  // Nested `lines: { create: [...150] }` inside a $transaction generates
+  // 150 sequential round-trips (150 × 30 ms RTT = 4.5 s) — right at the limit.
+  //
+  // Solution: avoid $transaction for the normal path. Use createMany for all
+  // child records — each createMany is ONE SQL INSERT statement = 1 RTT.
+  // For inventory: use array-form $transaction([...ops]) which sends all upserts
+  // in a single HTTP batch to Turso (~30 ms total regardless of count).
+  const _doInvoice = async (client: any) => {
+    // 1. Invoice header — 1 RTT
+    const created = await client.purchaseInvoice.create({
       data: {
         businessId: input.businessId,
         storeId: store.id,
@@ -174,43 +175,51 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
         subtotalPence: subtotal,
         vatPence: vatTotal,
         totalPence: total,
-        lines: {
-          create: lineDetails.map((line) => ({
-            productId: line.productId,
-            unitId: line.unitId,
-            qtyInUnit: line.qtyInUnit,
-            conversionToBase: line.productUnit.conversionToBase,
-            qtyBase: line.qtyBase,
-            unitCostPence: line.unitCostPence,
-            lineSubtotalPence: line.lineSubtotal,
-            lineVatPence: line.lineVat,
-            lineTotalPence: line.lineTotal
-          }))
-        },
-        payments: {
-          create: payments.map((payment) => ({
-            method: payment.method,
-            amountPence: payment.amountPence,
-            reference: payment.reference ?? null
-          }))
-        }
       }
     });
 
+    // 2. All lines in one SQL INSERT — 1 RTT regardless of line count
+    await client.purchaseInvoiceLine.createMany({
+      data: lineDetails.map((line) => ({
+        purchaseInvoiceId: created.id,
+        productId: line.productId,
+        unitId: line.unitId,
+        qtyInUnit: line.qtyInUnit,
+        conversionToBase: line.productUnit.conversionToBase,
+        qtyBase: line.qtyBase,
+        unitCostPence: line.unitCostPence,
+        lineSubtotalPence: line.lineSubtotal,
+        lineVatPence: line.lineVat,
+        lineTotalPence: line.lineTotal,
+      }))
+    });
+
+    // 3. Payments — 1 RTT
+    if (payments.length > 0) {
+      await client.purchasePayment.createMany({
+        data: payments.map((payment) => ({
+          purchaseInvoiceId: created.id,
+          method: payment.method,
+          amountPence: payment.amountPence,
+          reference: payment.reference ?? null,
+        }))
+      });
+    }
+
+    // 4. GL entry — 2 RTTs (entry header + lines createMany in postJournalEntry)
     await postJournalEntry({
       businessId: input.businessId,
       description: `Purchase ${created.id}`,
       referenceType: 'PURCHASE_INVOICE',
       referenceId: created.id,
       lines: journalLines,
-      prismaClient: tx as any,
+      prismaClient: client as any,
       accountMap: preloadedAccountMap,
     });
 
     return created;
   };
 
-  // Inventory + stock movements — runs on any Prisma client (tx or prisma).
   const _doInventory = async (client: any, invoiceId: string) => {
     const inventoryMap = await fetchInventoryMap(
       store.id,
@@ -218,7 +227,8 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
       client
     );
 
-    for (const [productId, totals] of productTotals.entries()) {
+    // Pre-compute avg cost for all products
+    const upsertArgs = Array.from(productTotals.entries()).map(([productId, totals]) => {
       const inv = inventoryMap.get(productId);
       const onHand = inv?.qtyOnHandBase ?? 0;
       const currentAvg =
@@ -228,10 +238,33 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
       const existingValue = onHand * currentAvg;
       const newQty = onHand + totals.qtyBase;
       const newAvg = newQty > 0 ? Math.round((existingValue + totals.costPence) / newQty) : 0;
-      await incrementInventoryBalance(client, store.id, productId, totals.qtyBase, newAvg);
+      return { productId, qtyBase: totals.qtyBase, newAvg };
+    });
+
+    if (db) {
+      // Inside a caller-supplied tx — must use the tx client sequentially.
+      // This path is used for single-invoice flows (small N), not bulk import.
+      for (const { productId, qtyBase, newAvg } of upsertArgs) {
+        await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
+      }
+    } else {
+      // No outer tx: batch all upserts in ONE array-form $transaction.
+      // The libSQL/Turso driver sends the entire array as a single HTTP batch
+      // request — ~30 ms total vs N×30 ms for sequential individual calls.
+      if (upsertArgs.length > 0) {
+        await prisma.$transaction(
+          upsertArgs.map(({ productId, qtyBase, newAvg }) =>
+            prisma.inventoryBalance.upsert({
+              where: { storeId_productId: { storeId: store.id, productId } },
+              update: { qtyOnHandBase: { increment: qtyBase }, avgCostBasePence: newAvg },
+              create: { storeId: store.id, productId, qtyOnHandBase: qtyBase, avgCostBasePence: newAvg },
+            })
+          )
+        );
+      }
     }
 
-    await client.stockMovement.createMany({
+    await (client as typeof prisma).stockMovement.createMany({
       data: lineDetails.map((line) => ({
         storeId: store.id,
         productId: line.productId,
@@ -247,13 +280,12 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
   if (db) {
-    // Called inside a caller-supplied transaction — keep all writes in same tx.
+    // Called inside a caller-supplied transaction — all writes in the same tx.
     invoice = await _doInvoice(db);
     await _doInventory(db, invoice.id);
   } else {
-    // Normal path: $transaction covers only the invoice + GL entry (2 writes).
-    // Inventory upserts run after the tx commits to avoid the 5 s tx timeout.
-    invoice = await prisma.$transaction(_doInvoice);
+    // Normal path: no outer $transaction needed — createMany = 1 RTT per step.
+    invoice = await _doInvoice(prisma);
     await _doInventory(prisma as any, invoice.id);
   }
 

@@ -127,6 +127,9 @@ export async function postJournalEntry({
     return null as any;
   }
 
+  // Use createMany for lines — single SQL INSERT regardless of line count.
+  // Nested `create: [...]` in an interactive tx generates N round-trips;
+  // `createMany` is always 1 round-trip.
   return client.journalEntry.create({
     data: {
       businessId,
@@ -135,12 +138,14 @@ export async function postJournalEntry({
       referenceId,
       entryDate: entryDate ?? new Date(),
       lines: {
-        create: lines.map((line) => ({
-          accountId: accountMap!.get(line.accountCode) as string,
-          debitPence: line.debitPence ?? 0,
-          creditPence: line.creditPence ?? 0,
-          memo: line.memo
-        }))
+        createMany: {
+          data: lines.map((line) => ({
+            accountId: accountMap!.get(line.accountCode) as string,
+            debitPence: line.debitPence ?? 0,
+            creditPence: line.creditPence ?? 0,
+            memo: line.memo ?? null,
+          }))
+        }
       }
     }
   });
