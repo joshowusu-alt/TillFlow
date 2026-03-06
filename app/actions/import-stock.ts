@@ -343,7 +343,10 @@ export async function importStockAction(
     return ok<ImportStockResult>({
       created: createdItems.length,
       skipped: skippedNames.length,
-      skippedNames,
+      // Cap the inline name list to avoid oversized action responses on large
+      // re-imports where every product already exists (e.g. full 1200-row file
+      // re-uploaded). The count is still accurate; the UI shows a truncation note.
+      skippedNames: skippedNames.slice(0, 200),
       barcodesCleared,
       paidCount: paidLinesAll.length,
       unpaidCount: unpaidLinesAll.length,

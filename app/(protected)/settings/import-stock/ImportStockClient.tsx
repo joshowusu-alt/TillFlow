@@ -265,13 +265,23 @@ export default function ImportStockClient({
       }));
 
     startTransition(async () => {
-      const res = await importStockAction(confirmedRows);
-      if (!res.success) {
-        setConfirmError(res.error);
-        return;
+      try {
+        const res = await importStockAction(confirmedRows);
+        if (!res.success) {
+          setConfirmError(res.error);
+          return;
+        }
+        setResult((res as { success: true; data: ImportStockResult }).data);
+        setStage('result');
+      } catch (e: unknown) {
+        // Catches network errors, Vercel timeouts, and any uncaught server-side
+        // throws that escape safeAction — prevents the error boundary from firing.
+        setConfirmError(
+          e instanceof Error
+            ? e.message
+            : 'Import failed. Please try again or contact support.'
+        );
       }
-      setResult((res as { success: true; data: ImportStockResult }).data);
-      setStage('result');
     });
   };
 
@@ -462,6 +472,11 @@ export default function ImportStockClient({
                 <li key={n}>{n}</li>
               ))}
             </ul>
+            {result.skipped > result.skippedNames.length && (
+              <p className="mt-1 text-xs text-black/40 italic">
+                …and {result.skipped - result.skippedNames.length} more (list truncated)
+              </p>
+            )}
           </details>
         )}
 

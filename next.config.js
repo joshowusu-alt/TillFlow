@@ -14,6 +14,11 @@ const nextConfig = {
   },
   experimental: {
     serverComponentsExternalPackages: ['better-sqlite3'],
+    // Large imports (1000+ products) can produce ~2–3 MB of JSON in the
+    // server-action request body. Raise the default 1 MB limit to 4 MB.
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
   },
   async rewrites() {
     return [
