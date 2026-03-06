@@ -41,17 +41,17 @@ export const CHART_OF_ACCOUNTS = [
  * Safe to call multiple times — existing accounts are not modified.
  */
 export async function ensureChartOfAccounts(businessId: string, client: PrismaClient = prisma) {
-  // SQLite does not support createMany with skipDuplicates — use individual upserts instead.
-  // update:{} makes each upsert a no-op when the account already exists.
-  await Promise.all(
-    CHART_OF_ACCOUNTS.map(a =>
-      client.account.upsert({
-        where: { businessId_code: { businessId, code: a.code } },
-        update: {},
-        create: { businessId, ...a },
-      })
-    )
-  );
+  // Sequential upserts — NOT Promise.all — because libSQL/Turso only allows
+  // one write operation at a time per connection inside a $transaction.
+  // Parallel upserts inside a transaction cause SQLITE_BUSY errors that
+  // surface as the generic "Something went wrong" message.
+  for (const a of CHART_OF_ACCOUNTS) {
+    await client.account.upsert({
+      where: { businessId_code: { businessId, code: a.code } },
+      update: {},
+      create: { businessId, ...a },
+    });
+  }
 }
 
 type JournalLineInput = {
@@ -118,6 +118,13 @@ export async function postJournalEntry({
 
   if (totals.debit !== totals.credit) {
     throw new Error(`Unbalanced journal entry: ${totals.debit} != ${totals.credit}`);
+  }
+
+  // Skip writing a degenerate zero-amount entry (e.g. all-free-goods purchase).
+  // A balanced entry where both sides are 0 has no accounting effect and
+  // pollutes the GL with ghost rows.
+  if (totals.debit === 0 && totals.credit === 0) {
+    return null as any;
   }
 
   return client.journalEntry.create({

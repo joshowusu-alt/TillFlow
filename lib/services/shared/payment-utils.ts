@@ -61,6 +61,10 @@ export function splitPayments(payments: PaymentInput[]): PaymentSplit {
 
 /** Derive the correct payment status from total and paid amounts. */
 export function derivePaymentStatus(totalPence: number, paidPence: number): PaymentStatus {
+  // A zero-total invoice (free goods, $0 cost) is inherently paid — there is
+  // nothing to owe. Without this guard derivePaymentStatus(0,0) returns 'UNPAID'
+  // and the invoice sits in AP aging forever.
+  if (totalPence === 0) return 'PAID';
   if (paidPence <= 0) return 'UNPAID';
   if (paidPence >= totalPence) return 'PAID';
   return 'PART_PAID';

@@ -370,7 +370,7 @@ model ProductUnit {
   productId        String
   unitId           String
   isBaseUnit       Boolean  @default(false)
-  conversionToBase Int
+  conversionToBase Int     @default(1)
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())
@@ -531,7 +531,7 @@ model SalesInvoiceLine {
   productId                 String
   unitId                    String
   qtyInUnit                 Int
-  conversionToBase          Int
+  conversionToBase          Int     @default(1)
   qtyBase                   Int
   unitPricePence            Int
   lineDiscountPence         Int      @default(0)
@@ -631,7 +631,7 @@ model PurchaseInvoiceLine {
   productId         String
   unitId            String
   qtyInUnit         Int
-  conversionToBase  Int
+  conversionToBase  Int     @default(1)
   qtyBase           Int
   unitCostPence     Int
   lineSubtotalPence Int

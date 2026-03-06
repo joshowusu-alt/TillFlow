@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import {
   filterPositivePayments,
   splitPayments,
@@ -55,10 +55,7 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     dbClient.productUnit.findMany({
       where: {
         product: { businessId: input.businessId },
-        OR: input.lines.map((line) => ({
-          productId: line.productId,
-          unitId: line.unitId
-        }))
+        productId: { in: [...new Set(input.lines.map((l) => l.productId))] },
       },
       include: { product: true, unit: true }
     }),
@@ -139,6 +136,24 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     apAmount > 0 ? { accountCode: ACCOUNT_CODES.ap, creditPence: apAmount } : null
   ].filter(Boolean) as JournalLine[];
 
+  // Pre-fetch GL account IDs OUTSIDE the transaction.
+  // ensureChartOfAccounts must never run inside $transaction on libSQL/Turso
+  // because it issues multiple writes and only one write is allowed at a time —
+  // running it inside the tx causes SQLITE_BUSY which becomes the generic error.
+  const glAccountCodes = journalLines.map((l) => l.accountCode);
+  let glAccountRows = await prisma.account.findMany({
+    where: { businessId: input.businessId, code: { in: glAccountCodes } },
+    select: { id: true, code: true },
+  });
+  if (glAccountRows.length < glAccountCodes.filter((c, i, a) => a.indexOf(c) === i).length) {
+    await ensureChartOfAccounts(input.businessId);
+    glAccountRows = await prisma.account.findMany({
+      where: { businessId: input.businessId, code: { in: glAccountCodes } },
+      select: { id: true, code: true },
+    });
+  }
+  const preloadedAccountMap = new Map(glAccountRows.map((a) => [a.code, a.id]));
+
   const _doWork = async (tx: any) => {
     const created = await tx.purchaseInvoice.create({
       data: {
@@ -212,6 +227,7 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
       referenceId: created.id,
       lines: journalLines,
       prismaClient: tx as any,
+      accountMap: preloadedAccountMap,
     });
 
     return created;

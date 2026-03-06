@@ -112,9 +112,13 @@ export async function importStockAction(
     // (mode:'insensitive' is not supported on all Prisma adapters).
     const existingProductNames = await prisma.product.findMany({
       where: { businessId },
-      select: { name: true },
+      select: { id: true, name: true },
     });
     const existingNameSet = new Set(existingProductNames.map((p) => p.name.toLowerCase()));
+    // Build id map keyed by lowercase — reused in Step 3 so no second round-trip needed.
+    const existingNameToIdMap = new Map(
+      existingProductNames.map((p) => [p.name.toLowerCase(), p.id])
+    );
     const skippedNames: string[] = resolvedRows
       .filter((r) => existingNameSet.has(r.name.toLowerCase()))
       .map((r) => r.name);
@@ -243,25 +247,16 @@ export async function importStockAction(
 
     // -- Step 3: Record opening stock for EXISTING products in the import ----
     // Products already in the catalogue were skipped above (no new record),
-    // but the CSV may specify opening quantity + cost for them. We look up
-    // their IDs and include them in the purchase invoice step so that the
-    // correct journal entries are posted (DR Inventory / CR Cash or AP).
+    // but the CSV may specify opening quantity + cost for them.
+    // existingNameToIdMap was built from the same pre-fetch used for name
+    // deduplication — no second DB round-trip, and matching is case-insensitive
+    // because both keys are lowercased (mode:'insensitive' not supported on all adapters).
     const skippedRowsWithStock = resolvedRows.filter(
       (r) => existingNameSet.has(r.name.toLowerCase()) && r.quantity > 0
     );
-    const existingProductIdMap = new Map<string, string>();
-    if (skippedRowsWithStock.length > 0) {
-      const existingProducts = await prisma.product.findMany({
-        where: { businessId, name: { in: skippedRowsWithStock.map((r) => r.name) } },
-        select: { id: true, name: true },
-      });
-      for (const p of existingProducts) {
-        existingProductIdMap.set(p.name.toLowerCase(), p.id);
-      }
-    }
     const skippedWithStockItems = skippedRowsWithStock
       .map((row) => {
-        const productId = existingProductIdMap.get(row.name.toLowerCase());
+        const productId = existingNameToIdMap.get(row.name.toLowerCase());
         return productId ? { row, productId } : null;
       })
       .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
@@ -292,10 +287,8 @@ export async function importStockAction(
       });
     }
 
-    const paidRows   = paidItemsAll;
-    const unpaidRows = unpaidItemsAll;
-    const paidValuePence   = paidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
-    const unpaidValuePence = unpaidRows.reduce((sum, { row }) => sum + rowToBaseCost(row), 0);
+    const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
+    const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const stockUpdatedValuePence = skippedWithStockItems.reduce(
       (sum, { row }) => sum + rowToBaseCost(row), 0
     );
@@ -312,8 +305,8 @@ export async function importStockAction(
         created: createdItems.length,
         skipped: skippedNames.length,
         stockUpdated: skippedWithStockItems.length,
-        paidCount: paidRows.length,
-        unpaidCount: unpaidRows.length,
+        paidCount: paidLinesAll.length,
+        unpaidCount: unpaidLinesAll.length,
       },
     }).catch((e) => console.error('[audit]', e));
 
@@ -325,8 +318,8 @@ export async function importStockAction(
       skipped: skippedNames.length,
       skippedNames,
       barcodesCleared,
-      paidCount: paidRows.length,
-      unpaidCount: unpaidRows.length,
+      paidCount: paidLinesAll.length,
+      unpaidCount: unpaidLinesAll.length,
       paidValuePence,
       unpaidValuePence,
       stockUpdated: skippedWithStockItems.length,
