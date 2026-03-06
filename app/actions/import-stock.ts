@@ -5,6 +5,7 @@ import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { createPurchase } from '@/lib/services/purchases';
 import { buildProductUnitCreates } from '@/lib/services/products';
+import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
 
 // ---------------------------------------------------------------------------
@@ -330,8 +331,17 @@ async function _runImport(
     const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
     const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
 
+    // Pre-seed the full chart of accounts ONCE before launching parallel invoice
+    // creation. Without this, concurrent createPurchase calls each see the AP
+    // account missing and all call ensureChartOfAccounts simultaneously — a race
+    // that can cause silent failures on the Neon/PostgreSQL connection pool.
+    await ensureChartOfAccounts(businessId);
+
     // Run paid and unpaid invoice chunks in parallel to halve wall-clock time.
-    const paidChunks: Promise<void>[] = [];
+    // NOTE: do NOT use `.then(() => undefined)` here — that pattern forwards
+    // rejections correctly but obscures the error message. Use plain promises so
+    // any createPurchase failure propagates clearly to Promise.all → safeAction.
+    const paidChunks: Promise<unknown>[] = [];
     for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = paidLinesAll.slice(i, i + INVOICE_CHUNK);
       paidChunks.push(
@@ -339,10 +349,10 @@ async function _runImport(
           businessId, storeId: store.id, supplierId: null,
           paymentStatus: 'PAID', dueDate: null, payments: [],
           lines: chunk, userId: user.id,
-        }).then(() => undefined)
+        })
       );
     }
-    const unpaidChunks: Promise<void>[] = [];
+    const unpaidChunks: Promise<unknown>[] = [];
     for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = unpaidLinesAll.slice(i, i + INVOICE_CHUNK);
       unpaidChunks.push(
@@ -350,10 +360,13 @@ async function _runImport(
           businessId, storeId: store.id, supplierId: null,
           paymentStatus: 'UNPAID', dueDate: null, payments: [],
           lines: chunk, userId: user.id,
-        }).then(() => undefined)
+        })
       );
     }
+
+    console.log(`[importStock] launching ${paidChunks.length} paid chunk(s) + ${unpaidChunks.length} unpaid chunk(s) in parallel`);
     await Promise.all([...paidChunks, ...unpaidChunks]);
+    console.log(`[importStock] all invoice chunks complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);

@@ -6,6 +6,7 @@ import { formatMoney } from '@/lib/format';
 import { downloadTemplate } from '@/lib/import/stock-template';
 import { parseStockFile, type ParsedImportRow, type PaymentStatus } from '@/lib/import/parse-stock-file';
 import type { ImportStockResult } from '@/app/actions/import-stock';
+import ResetPurchaseDataButton from '@/components/ResetPurchaseDataButton';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -411,6 +412,9 @@ export default function ImportStockClient({
             </p>
           </div>
         </div>
+
+        {/* Reset panel — visible inline so it's never below the fold */}
+        <ResetPurchaseDataButton />
       </div>
     );
   }
@@ -527,6 +531,9 @@ export default function ImportStockClient({
             Import another file
           </button>
         </div>
+
+        {/* Offer reset in case the numbers look wrong */}
+        <ResetPurchaseDataButton />
       </div>
     );
   }

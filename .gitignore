@@ -26,3 +26,5 @@ perf.db-journal
 /prisma/ci.db-journal
 /prisma/perf.db
 /prisma/perf.db-journal
+
+.env*.local
