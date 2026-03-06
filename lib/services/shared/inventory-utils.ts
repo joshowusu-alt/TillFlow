@@ -5,7 +5,7 @@
  * Centralises the repeated "fetch balances → build map → upsert" pattern.
  */
 
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/prisma';
 
 // Prisma transaction clients are Omit<PrismaClient, connection methods>,
@@ -99,6 +99,48 @@ export async function decrementInventoryBalance(
     throw new Error('Insufficient stock on hand');
   }
   return updated.qtyOnHandBase;
+}
+
+/**
+ * Atomically decrement inventory balances for multiple products in a single
+ * SQL statement. Collapses N round-trips into 1 regardless of cart size —
+ * critical for large sales (30 items = 1 RTT instead of 30).
+ * Throws if any resulting quantity would go negative (concurrent oversell guard).
+ */
+export async function batchDecrementInventoryBalance(
+  tx: any,
+  storeId: string,
+  decrements: Map<string, number>, // productId -> qtyBase to subtract
+): Promise<void> {
+  if (decrements.size === 0) return;
+
+  const entries = Array.from(decrements.entries());
+
+  // Build a parameterized CASE expression:
+  // CASE "productId" WHEN $1 THEN $2 WHEN $3 THEN $4 ... END
+  const caseWhen = Prisma.join(
+    entries.map(([productId, qty]) => Prisma.sql`WHEN ${productId} THEN ${qty}`),
+    ' '
+  );
+  const productIdList = Prisma.join(entries.map(([id]) => id));
+
+  const result = await tx.$queryRaw<{ productId: string; qtyOnHandBase: number }[]>`
+    UPDATE "InventoryBalance"
+    SET "qtyOnHandBase" = "qtyOnHandBase" - CASE "productId" ${caseWhen} END
+    WHERE "storeId" = ${storeId}
+      AND "productId" IN (${productIdList})
+    RETURNING "productId", "qtyOnHandBase"
+  `;
+
+  for (const row of result) {
+    if (row.qtyOnHandBase < 0) {
+      throw new Error('Insufficient stock on hand');
+    }
+  }
+
+  if (result.length !== decrements.size) {
+    throw new Error('One or more product inventory records not found');
+  }
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 import {
   buildQtyByProductMap,
   decrementInventoryBalance,
+  batchDecrementInventoryBalance,
   upsertInventoryBalance,
   fetchInventoryMap,
   resolveAvgCost,
@@ -520,11 +521,39 @@ export async function createSale(input: CreateSaleInput) {
       );
     }
 
-    for (const [productId, qtyBase] of qtyByProduct.entries()) {
-      txPromises.push(decrementInventoryBalance(tx, input.storeId, productId, qtyBase));
-    }
+    // Single SQL UPDATE for all products — 1 RTT regardless of cart size
+    txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
 
-    // Execute all parallel tx operations at once
+    // Journal entry inside tx — accounting must be atomic with the sale
+    const paymentSplit = splitPayments(payments);
+    const arAmount = total - paymentSplit.totalPence;
+    const journalLines: JournalLine[] = [
+      ...debitCashBankLines(paymentSplit),
+      arAmount > 0 ? { accountCode: ACCOUNT_CODES.ar, debitPence: arAmount } : null,
+      { accountCode: ACCOUNT_CODES.sales, creditPence: subtotal },
+      business.vatEnabled && vatTotal > 0
+        ? { accountCode: ACCOUNT_CODES.vatPayable, creditPence: vatTotal }
+        : null
+    ].filter(Boolean) as JournalLine[];
+    const cogsTotal = lineDetails.reduce((sum, line) => {
+      const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;
+      return sum + cost * line.qtyBase;
+    }, 0);
+    journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
+    journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
+    txPromises.push(
+      postJournalEntry({
+        businessId: input.businessId,
+        description: `Sale ${created.id}`,
+        referenceType: 'SALES_INVOICE',
+        referenceId: created.id,
+        lines: journalLines,
+        prismaClient: tx as any,
+        accountMap,
+      }),
+    );
+
+    // Run inventory batch + journal entry in parallel
     await Promise.all(txPromises);
 
     return created;
@@ -532,55 +561,25 @@ export async function createSale(input: CreateSaleInput) {
   { maxWait: 10000, timeout: 15000 },
   );
 
-  // Post-tx: stock movements and GL journal entries don't need atomicity
-  // with the sale record. Running outside the interactive tx eliminates
-  // ~300ms of serialised Neon round-trips.
-  void Promise.allSettled([
-    prisma.stockMovement.createMany({
-      data: lineDetails.map((line) => {
-        const beforeQtyBase = inventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-        const afterQtyBase = beforeQtyBase - line.qtyBase;
-        return {
-          storeId: input.storeId,
-          productId: line.productId,
-          qtyBase: -line.qtyBase,
-          beforeQtyBase,
-          afterQtyBase,
-          unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-          type: 'SALE' as const,
-          referenceType: 'SALES_INVOICE' as const,
-          referenceId: invoice.id,
-          userId: input.cashierUserId,
-        };
-      }),
-    }),
-    (() => {
-      const paymentSplit = splitPayments(payments);
-      const arAmount = total - paymentSplit.totalPence;
-      const journalLines: JournalLine[] = [
-        ...debitCashBankLines(paymentSplit),
-        arAmount > 0 ? { accountCode: ACCOUNT_CODES.ar, debitPence: arAmount } : null,
-        { accountCode: ACCOUNT_CODES.sales, creditPence: subtotal },
-        business.vatEnabled && vatTotal > 0
-          ? { accountCode: ACCOUNT_CODES.vatPayable, creditPence: vatTotal }
-          : null
-      ].filter(Boolean) as JournalLine[];
-      const cogsTotal = lineDetails.reduce((sum, line) => {
-        const cost = costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence;
-        return sum + cost * line.qtyBase;
-      }, 0);
-      journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
-      journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
-      return postJournalEntry({
-        businessId: input.businessId,
-        description: `Sale ${invoice.id}`,
-        referenceType: 'SALES_INVOICE',
+  // Post-tx: stock movement audit trail — non-critical, fire-and-forget
+  void prisma.stockMovement.createMany({
+    data: lineDetails.map((line) => {
+      const beforeQtyBase = inventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+      const afterQtyBase = beforeQtyBase - line.qtyBase;
+      return {
+        storeId: input.storeId,
+        productId: line.productId,
+        qtyBase: -line.qtyBase,
+        beforeQtyBase,
+        afterQtyBase,
+        unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
+        type: 'SALE' as const,
+        referenceType: 'SALES_INVOICE' as const,
         referenceId: invoice.id,
-        lines: journalLines,
-        accountMap,
-      });
-    })(),
-  ]);
+        userId: input.cashierUserId,
+      };
+    }),
+  }).catch(() => {});
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale
   detectExcessiveDiscountRisk({

@@ -17,6 +17,7 @@ export {
   resolveAvgCost,
   upsertInventoryBalance,
   decrementInventoryBalance,
+  batchDecrementInventoryBalance,
   incrementInventoryBalance,
   buildQtyByProductMap
 } from './inventory-utils';
