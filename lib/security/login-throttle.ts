@@ -117,10 +117,7 @@ export async function getLoginThrottleStatus(
 
   if (!redisClient) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production. ' +
-        'Login throttling cannot fall back to in-memory state in a serverless environment.'
-      );
+      console.warn('[security] Redis not configured — using in-memory login throttle fallback.');
     }
     return getInMemoryLoginThrottleStatus(email, ipAddress, opts);
   }
@@ -154,11 +151,6 @@ export async function recordLoginFailure(
   const { windowMs, maxAttempts, lockoutMs } = normalizeThrottleOpts(opts);
 
   if (!redisClient) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        '[security] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production.'
-      );
-    }
     recordInMemoryLoginFailure(email, ipAddress, opts);
     return;
   }
