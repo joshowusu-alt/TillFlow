@@ -6,6 +6,7 @@
     "app/api/cron/**": { "maxDuration": 60 },
     "app/api/seed-once/**": { "maxDuration": 60 },
     "app/api/import-stock/**": { "maxDuration": 60 },
+    "app/api/reset-purchase-data/**": { "maxDuration": 30 },
     "app/api/offline/batch-sync/**": { "maxDuration": 30 },
     "app/api/**": { "maxDuration": 15 }
   }

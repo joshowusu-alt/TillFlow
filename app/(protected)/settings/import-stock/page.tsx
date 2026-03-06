@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 // client reference — webpack never follows the xlsx import chain into the
 // server bundle, so the 7 MB xlsx package stays fully client-side.
 import ImportStockLoader from './ImportStockLoader';
+import ResetPurchaseDataButton from '@/components/ResetPurchaseDataButton';
 
 // Server actions called from this route (importStockAction) can take up to
 // 60 s for large catalogues — raise the Vercel function timeout accordingly.
@@ -28,6 +29,7 @@ export default async function ImportStockPage() {
         subtitle="Bulk-create your product catalogue and record opening stock from a CSV or Excel file."
       />
       <ImportStockLoader units={units} currency={business.currency} />
+      <ResetPurchaseDataButton />
     </div>
   );
 }
