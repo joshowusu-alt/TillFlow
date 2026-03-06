@@ -265,7 +265,10 @@ export async function completeSaleAction(data: {
       details: { lines: lines.length, total: invoice.totalPence },
     }).catch(() => {});
 
-    revalidateTag('pos-inventory');
+    // pos-inventory deliberately NOT revalidated here — the POS client already
+    // decrements stock optimistically, so triggering a server re-render after
+    // every sale would add 3–5 s of Neon round-trip latency for zero benefit.
+    // The 30 s unstable_cache TTL handles freshness on page navigation.
     revalidateTag(`today-sales-${businessId}`);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
