@@ -27,10 +27,13 @@ type ReceiptClientProps = {
   invoice: {
     id: string;
     createdAt: string;
+    transactionNumber?: string | null;
     subtotalPence: number;
     vatPence: number;
     totalPence: number;
     discountPence?: number;
+    cashReceivedPence?: number;
+    changeDuePence?: number;
   };
   payments: {
     method: string;
@@ -195,7 +198,7 @@ export default function ReceiptClient({
       </div>
 
       <div className="mt-4 space-y-1 text-xs text-black/60">
-        <div>Receipt: {invoice.id.slice(0, 8)}</div>
+        <div>Receipt: {invoice.transactionNumber ?? invoice.id.slice(0, 8)}</div>
         <div>Date: {formatDateTime(new Date(invoice.createdAt))}</div>
         <div>Cashier: {cashier.name}</div>
         {customer ? <div>Customer: {customer.name}</div> : null}
@@ -284,6 +287,13 @@ export default function ReceiptClient({
           </>
         ) : null}
       </div>
+
+      {invoice.changeDuePence != null && invoice.changeDuePence > 0 ? (
+        <div className="mt-2 flex justify-between text-xs font-semibold text-emerald-700">
+          <span>Change Due</span>
+          <span>{formatMoney(invoice.changeDuePence, business.currency)}</span>
+        </div>
+      ) : null}
 
       {/* MoMo payment info */}
       {business.momoNumber && momoPaid > 0 && (

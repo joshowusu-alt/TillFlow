@@ -10,10 +10,13 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
     select: {
       id: true,
       createdAt: true,
+      transactionNumber: true,
       subtotalPence: true,
       vatPence: true,
       totalPence: true,
       discountPence: true,
+      cashReceivedPence: true,
+      changeDuePence: true,
       store: { select: { name: true } },
       cashierUser: { select: { name: true } },
       customer: { select: { name: true, phone: true } },
@@ -117,10 +120,13 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       invoice={{
         id: invoice.id,
         createdAt: invoice.createdAt.toISOString(),
+        transactionNumber: invoice.transactionNumber,
         subtotalPence: invoice.subtotalPence,
         vatPence: invoice.vatPence,
         totalPence: invoice.totalPence,
-        discountPence: invoice.discountPence
+        discountPence: invoice.discountPence,
+        cashReceivedPence: invoice.cashReceivedPence ?? undefined,
+        changeDuePence: invoice.changeDuePence ?? undefined,
       }}
       payments={invoice.payments.map((payment) => ({
         method: payment.method,

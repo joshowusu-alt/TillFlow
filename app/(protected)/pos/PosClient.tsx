@@ -622,6 +622,8 @@ export default function PosClient({
         playBeep(true);
         // Auto-dismiss success toast after 3 seconds
         setTimeout(() => setSaleSuccess(null), 3000);
+        // Refocus barcode/search input for next customer — zero clicks needed
+        setTimeout(() => barcodeRef.current?.focus(), 100);
         // Inventory already updated optimistically above — no server round-trip needed.
       } else {
         // Revert optimistic stock on error

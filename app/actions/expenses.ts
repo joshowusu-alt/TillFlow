@@ -90,6 +90,11 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
     });
     if (!expense) return err('Expense not found. It may have already been removed.');
 
+    // Delete associated journal entries before removing the expense
+    // (JournalLine cascades via schema, so only JournalEntry needs explicit deletion)
+    await prisma.journalEntry.deleteMany({
+      where: { referenceType: 'EXPENSE', referenceId: expense.id },
+    });
     await prisma.expense.delete({ where: { id: expense.id } });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_DELETE', entity: 'Expense', entityId: id, details: { amountPence: expense.amountPence, vendorName: expense.vendorName } }).catch(() => {});

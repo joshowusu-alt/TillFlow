@@ -235,6 +235,7 @@ export default async function DashboardPage({
   const totalSales = salesAgg._sum.totalPence ?? 0;
   const totalGrossMargin = salesAgg._sum.grossMarginPence ?? 0;
   const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
+  const npPercent = totalSales > 0 ? Math.round((income.netProfit / totalSales) * 100) : 0;
 
   // Payment split — already grouped by DB
   const paymentSplit = { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 };
@@ -387,12 +388,18 @@ export default async function DashboardPage({
       )}
 
       {/* KPI row */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Sales" value={formatMoney(totalSales, currency)} tone="accent" />
         <StatCard
           label={`Gross Profit (${gpPercent}%)`}
           value={formatMoney(totalGrossMargin, currency)}
           tone={gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger'}
+        />
+        <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} />
+        <StatCard
+          label={`Net Profit (${npPercent}%)`}
+          value={formatMoney(income.netProfit, currency)}
+          tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
         />
         <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} />
         <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} />

@@ -19,7 +19,8 @@ export default async function IncomeStatementPage({
 
   const statement = await getIncomeStatement(business.id, start, end);
   const gpPct = statement.revenue > 0 ? Math.round((statement.grossProfit / statement.revenue) * 100) : 0;
-  const hasData = statement.revenue !== 0 || statement.cogs !== 0;
+  const npPct = statement.revenue > 0 ? Math.round((statement.netProfit / statement.revenue) * 100) : 0;
+  const hasData = statement.revenue !== 0 || statement.cogs !== 0 || statement.otherExpenses !== 0;
 
   const fromStr = start.toISOString().slice(0, 10);
   const toStr = end.toISOString().slice(0, 10);
@@ -28,7 +29,7 @@ export default async function IncomeStatementPage({
     <div className="space-y-6">
       <PageHeader
         title="Income Statement"
-        subtitle="Revenue, COGS, and profit."
+        subtitle="Revenue, COGS, expenses, and profit."
         actions={
           <div className="flex gap-2">
             <a
@@ -43,7 +44,7 @@ export default async function IncomeStatementPage({
       />
 
       {/* KPI Summary */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Revenue"
           value={formatMoney(statement.revenue, business.currency)}
@@ -57,6 +58,11 @@ export default async function IncomeStatementPage({
           label={`Gross Profit (${gpPct}%)`}
           value={formatMoney(statement.grossProfit, business.currency)}
           tone={gpPct >= 20 ? 'success' : gpPct >= 0 ? 'warn' : 'danger'}
+        />
+        <StatCard
+          label={`Net Profit (${npPct}%)`}
+          value={formatMoney(statement.netProfit, business.currency)}
+          tone={npPct >= 10 ? 'success' : npPct >= 0 ? 'warn' : 'danger'}
         />
       </div>
 
@@ -98,6 +104,18 @@ export default async function IncomeStatementPage({
           <div className="flex justify-between border-t border-black/10 pt-2 text-base">
             <span>Gross Profit</span>
             <span className="font-semibold">{formatMoney(statement.grossProfit, business.currency)}</span>
+          </div>
+          {statement.otherExpenses !== 0 && (
+            <div className="flex justify-between">
+              <span className="text-black/70">Operating Expenses</span>
+              <span className="font-semibold text-rose-600">({formatMoney(statement.otherExpenses, business.currency)})</span>
+            </div>
+          )}
+          <div className="flex justify-between border-t border-black/10 pt-2 text-base font-semibold">
+            <span>Net Profit</span>
+            <span className={statement.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+              {formatMoney(statement.netProfit, business.currency)}
+            </span>
           </div>
         </div>
       )}

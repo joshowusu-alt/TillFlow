@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 
 const DEMO_TAG = 'DEMO_DAY';
 
@@ -176,10 +177,11 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
 
   // Demo expenses
   const expenseBatch: {
-    businessId: string; storeId: string; userId: string; accountId: string;
+    id: string; businessId: string; storeId: string; userId: string; accountId: string;
     amountPence: number; paymentStatus: string; method: string;
     vendorName: string; notes: string; qaTag: string; createdAt: Date;
   }[] = [];
+  const expenseJournalInfo: { id: string; accountCode: string; amountPence: number; vendorName: string; createdAt: Date }[] = [];
 
   if (expenseAccounts.length > 0) {
     const demoExpenses = [
@@ -190,7 +192,10 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
     ];
     for (const de of demoExpenses) {
       const acct = expenseAccounts.find(a => a.name === de.acctName) ?? expenseAccounts[0];
+      const expId = genId();
+      const expCreatedAt = randTime(de.daysAgo);
       expenseBatch.push({
+        id: expId,
         businessId: business.id,
         storeId: store.id,
         userId: user.id,
@@ -201,7 +206,14 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
         vendorName: de.name,
         notes: `[Demo] ${de.name}`,
         qaTag: DEMO_TAG,
-        createdAt: randTime(de.daysAgo),
+        createdAt: expCreatedAt,
+      });
+      expenseJournalInfo.push({
+        id: expId,
+        accountCode: acct.code,
+        amountPence: de.amount,
+        vendorName: de.name,
+        createdAt: expCreatedAt,
       });
     }
   }
@@ -220,6 +232,75 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
         data: { hasDemoData: true },
       });
     });
+
+    // Post GL journal entries and update inventory OUTSIDE the main transaction
+    // to avoid Neon interactive-transaction timeout (transaction kept minimal above).
+    try {
+      await ensureChartOfAccounts(business.id);
+      const accounts = await prisma.account.findMany({
+        where: { businessId: business.id },
+        select: { id: true, code: true },
+      });
+      const accountMap = new Map(accounts.map(a => [a.code, a.id]));
+
+      // Journal entries for each demo sale
+      for (const invoice of invoiceBatch) {
+        const costPence = invoice.totalPence - invoice.grossMarginPence;
+        const payMethod = paymentBatch.find(p => p.salesInvoiceId === invoice.id)?.method;
+        const cashCode = payMethod === 'MOBILE_MONEY' ? ACCOUNT_CODES.bank : ACCOUNT_CODES.cash;
+        if (invoice.totalPence > 0) {
+          await postJournalEntry({
+            businessId: business.id,
+            description: `Demo sale ${invoice.transactionNumber}`,
+            referenceType: 'SALES_INVOICE',
+            referenceId: invoice.id,
+            entryDate: invoice.createdAt,
+            lines: [
+              { accountCode: cashCode, debitPence: invoice.totalPence },
+              { accountCode: ACCOUNT_CODES.sales, creditPence: invoice.totalPence },
+              ...(costPence > 0 ? [
+                { accountCode: ACCOUNT_CODES.cogs, debitPence: costPence },
+                { accountCode: ACCOUNT_CODES.inventory, creditPence: costPence },
+              ] : []),
+            ],
+            accountMap,
+          });
+        }
+      }
+
+      // Journal entries for each demo expense
+      for (const exp of expenseJournalInfo) {
+        if (exp.amountPence > 0) {
+          await postJournalEntry({
+            businessId: business.id,
+            description: `Demo expense: ${exp.vendorName}`,
+            referenceType: 'EXPENSE',
+            referenceId: exp.id,
+            entryDate: exp.createdAt,
+            lines: [
+              { accountCode: exp.accountCode, debitPence: exp.amountPence },
+              { accountCode: ACCOUNT_CODES.cash, creditPence: exp.amountPence },
+            ],
+            accountMap,
+          });
+        }
+      }
+
+      // Decrement inventory balances per product
+      const inventoryDecrements = new Map<string, number>();
+      for (const line of lineBatch) {
+        inventoryDecrements.set(line.productId, (inventoryDecrements.get(line.productId) ?? 0) + line.qtyBase);
+      }
+      for (const [productId, qtyBase] of inventoryDecrements) {
+        await prisma.inventoryBalance.upsert({
+          where: { storeId_productId: { storeId: store.id, productId } },
+          update: { qtyOnHandBase: { decrement: qtyBase } },
+          create: { storeId: store.id, productId, qtyOnHandBase: -qtyBase },
+        });
+      }
+    } catch (glErr) {
+      console.error('[demo-day] GL/inventory post failed (non-fatal):', glErr);
+    }
 
     revalidatePath('/', 'layout');
     return { ok: true, salesCount: salesPerDay.reduce((a, b) => a + b, 0) };
@@ -245,18 +326,58 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
       // Delete in dependency order: payments → lines → invoices
       const demoInvoices = await tx.salesInvoice.findMany({
         where: { businessId: business.id, qaTag: DEMO_TAG },
-        select: { id: true },
+        select: { id: true, storeId: true },
       });
       const invoiceIds = demoInvoices.map(i => i.id);
+      const demoStoreId = demoInvoices[0]?.storeId;
+
+      // Find demo expenses up-front so we can clean their journals
+      const demoExpenses = await tx.expense.findMany({
+        where: { businessId: business.id, qaTag: DEMO_TAG },
+        select: { id: true },
+      });
+      const expenseIds = demoExpenses.map(e => e.id);
 
       if (invoiceIds.length > 0) {
+        // Capture line quantities for inventory restoration before deletion
+        const demoLines = await tx.salesInvoiceLine.findMany({
+          where: { salesInvoiceId: { in: invoiceIds } },
+          select: { productId: true, qtyBase: true },
+        });
+
+        // Delete journal entries for demo sales (JournalLine cascades via schema)
+        await tx.journalEntry.deleteMany({
+          where: { referenceType: 'SALES_INVOICE', referenceId: { in: invoiceIds } },
+        });
         await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
         await tx.salesInvoiceLine.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
         await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
+
+        // Restore inventory balances that were decremented during demo generation
+        if (demoStoreId) {
+          const inventoryRestores = new Map<string, number>();
+          for (const line of demoLines) {
+            inventoryRestores.set(line.productId, (inventoryRestores.get(line.productId) ?? 0) + line.qtyBase);
+          }
+          for (const [productId, qty] of inventoryRestores) {
+            await tx.inventoryBalance.updateMany({
+              where: { productId, storeId: demoStoreId },
+              data: { qtyOnHandBase: { increment: qty } },
+            });
+          }
+        }
       }
 
-      // Delete demo expenses
-      await tx.expense.deleteMany({ where: { businessId: business.id, qaTag: DEMO_TAG } });
+      if (expenseIds.length > 0) {
+        // Delete expense journal entries (JournalLine cascades via schema)
+        await tx.journalEntry.deleteMany({
+          where: { referenceType: 'EXPENSE', referenceId: { in: expenseIds } },
+        });
+        await tx.expense.deleteMany({ where: { id: { in: expenseIds } } });
+      } else {
+        // Fallback: no IDs to look up, just delete by tag (no journals to clean)
+        await tx.expense.deleteMany({ where: { businessId: business.id, qaTag: DEMO_TAG } });
+      }
 
       // Reset flag
       await tx.business.update({
@@ -295,17 +416,54 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
       if (business.hasDemoData) {
         const demoInvoices = await tx.salesInvoice.findMany({
           where: { businessId: business.id, qaTag: DEMO_TAG },
-          select: { id: true },
+          select: { id: true, storeId: true },
         });
         const invoiceIds = demoInvoices.map(i => i.id);
+        const demoStoreId = demoInvoices[0]?.storeId;
+        const csaDemoExpenses = await tx.expense.findMany({
+          where: { businessId: business.id, qaTag: DEMO_TAG },
+          select: { id: true },
+        });
+        const csaExpenseIds = csaDemoExpenses.map(e => e.id);
+
         if (invoiceIds.length > 0) {
+          // Capture line quantities for inventory restoration before deletion
+          const demoLines = await tx.salesInvoiceLine.findMany({
+            where: { salesInvoiceId: { in: invoiceIds } },
+            select: { productId: true, qtyBase: true },
+          });
+          await tx.journalEntry.deleteMany({
+            where: { referenceType: 'SALES_INVOICE', referenceId: { in: invoiceIds } },
+          });
           await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
           await tx.salesInvoiceLine.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
           await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
           removed.push(`${invoiceIds.length} demo sales`);
+
+          // Restore inventory balances
+          if (demoStoreId) {
+            const inventoryRestores = new Map<string, number>();
+            for (const line of demoLines) {
+              inventoryRestores.set(line.productId, (inventoryRestores.get(line.productId) ?? 0) + line.qtyBase);
+            }
+            for (const [productId, qty] of inventoryRestores) {
+              await tx.inventoryBalance.updateMany({
+                where: { productId, storeId: demoStoreId },
+                data: { qtyOnHandBase: { increment: qty } },
+              });
+            }
+          }
         }
-        const expDel = await tx.expense.deleteMany({ where: { businessId: business.id, qaTag: DEMO_TAG } });
-        if (expDel.count > 0) removed.push(`${expDel.count} demo expenses`);
+
+        if (csaExpenseIds.length > 0) {
+          await tx.journalEntry.deleteMany({
+            where: { referenceType: 'EXPENSE', referenceId: { in: csaExpenseIds } },
+          });
+          await tx.expense.deleteMany({ where: { id: { in: csaExpenseIds } } });
+        } else {
+          await tx.expense.deleteMany({ where: { businessId: business.id, qaTag: DEMO_TAG } });
+        }
+        if (csaDemoExpenses.length > 0) removed.push(`${csaDemoExpenses.length} demo expenses`);
       }
 
       // 2) Delete registration-seeded demo products by SKU — but only if they
