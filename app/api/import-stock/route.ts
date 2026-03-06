@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { importStockAction, type ConfirmedImportRow } from '@/app/actions/import-stock';
 
-// Explicit 60-second timeout — set in vercel.json under "app/api/import-stock/**"
-// so Vercel enforces it regardless of account plan defaults.
-export const maxDuration = 60;
+// Generous timeout for bulk imports — 1500+ products with inventory upserts.
+// vercel.json also sets maxDuration: 300 for this route.
+// Vercel Hobby caps at 60 s; Pro allows up to 300 s.
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {

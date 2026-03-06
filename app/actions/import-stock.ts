@@ -320,53 +320,51 @@ async function _runImport(
       })
       .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 
-    // -- Step 4: Create purchase invoices in chunks of 150 lines ----------
-    // Products are fully committed -- no shared transaction needed.
-    // Chunking avoids an oversized OR query in the DB driver.
+    // -- Step 4: Create purchase invoices in chunks of 500 lines ----------
+    // Products are fully committed — no shared transaction needed.
+    // Chunking avoids an oversized IN (...) clause in the DB driver.
     // Both newly-created and existing-with-stock items are included.
-    const INVOICE_CHUNK = 150;
+    const INVOICE_CHUNK = 500;
     const allItems = [...createdItems, ...skippedWithStockItems];
     const paidItemsAll   = allItems.filter((c) => c.row.paymentStatus === 'PAID');
     const unpaidItemsAll = allItems.filter((c) => c.row.paymentStatus === 'UNPAID');
     const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
     const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
 
-    // Pre-seed the full chart of accounts ONCE before launching parallel invoice
-    // creation. Without this, concurrent createPurchase calls each see the AP
-    // account missing and all call ensureChartOfAccounts simultaneously — a race
-    // that can cause silent failures on the Neon/PostgreSQL connection pool.
+    // Pre-seed the full chart of accounts ONCE before launching invoice
+    // creation. Without this, multiple createPurchase calls may each try
+    // to seed the AP account concurrently — a race that can cause silent
+    // failures on the Neon/PostgreSQL connection pool.
     await ensureChartOfAccounts(businessId);
 
-    // Run paid and unpaid invoice chunks in parallel to halve wall-clock time.
-    // NOTE: do NOT use `.then(() => undefined)` here — that pattern forwards
-    // rejections correctly but obscures the error message. Use plain promises so
-    // any createPurchase failure propagates clearly to Promise.all → safeAction.
-    const paidChunks: Promise<unknown>[] = [];
+    // Run invoice chunks SEQUENTIALLY to avoid connection-pool contention.
+    // The old parallel Promise.all approach caused pool exhaustion on Neon
+    // when 5+ chunks competed for the same limited connection pool.
+    // With the raw SQL inventory upsert fix in createPurchase, each call
+    // is fast (~500 ms) so sequential processing is negligible even for
+    // 1500 items (≤ 3 chunks × ~500 ms = ~1.5 s).
+    let paidChunkCount = 0;
     for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = paidLinesAll.slice(i, i + INVOICE_CHUNK);
-      paidChunks.push(
-        createPurchase({
-          businessId, storeId: store.id, supplierId: null,
-          paymentStatus: 'PAID', dueDate: null, payments: [],
-          lines: chunk, userId: user.id,
-        })
-      );
+      await createPurchase({
+        businessId, storeId: store.id, supplierId: null,
+        paymentStatus: 'PAID', dueDate: null, payments: [],
+        lines: chunk, userId: user.id,
+      });
+      paidChunkCount++;
     }
-    const unpaidChunks: Promise<unknown>[] = [];
+    let unpaidChunkCount = 0;
     for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = unpaidLinesAll.slice(i, i + INVOICE_CHUNK);
-      unpaidChunks.push(
-        createPurchase({
-          businessId, storeId: store.id, supplierId: null,
-          paymentStatus: 'UNPAID', dueDate: null, payments: [],
-          lines: chunk, userId: user.id,
-        })
-      );
+      await createPurchase({
+        businessId, storeId: store.id, supplierId: null,
+        paymentStatus: 'UNPAID', dueDate: null, payments: [],
+        lines: chunk, userId: user.id,
+      });
+      unpaidChunkCount++;
     }
 
-    console.log(`[importStock] launching ${paidChunks.length} paid chunk(s) + ${unpaidChunks.length} unpaid chunk(s) in parallel`);
-    await Promise.all([...paidChunks, ...unpaidChunks]);
-    console.log(`[importStock] all invoice chunks complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
+    console.log(`[importStock] ${paidChunkCount} paid chunk(s) + ${unpaidChunkCount} unpaid chunk(s) complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);

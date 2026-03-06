@@ -125,6 +125,7 @@ export async function safeAction<T>(
       const msg = error.message;
       // Hide Prisma / database internals from end users
       if (msg.includes('prisma') || msg.includes('P2002') || msg.includes('P2025') || msg.includes('42P01') || msg.includes('Raw query failed')) {
+        console.error('[safeAction] Prisma/DB error suppressed from user:', msg, error);
         return err('Something went wrong saving your data. Please try again or contact support.');
       }
       return err(msg);
