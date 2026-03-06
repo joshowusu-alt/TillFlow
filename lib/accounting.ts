@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PrismaClient } from '@prisma/client';
 
@@ -41,16 +42,30 @@ export const CHART_OF_ACCOUNTS = [
  * Safe to call multiple times — existing accounts are not modified.
  */
 export async function ensureChartOfAccounts(businessId: string, client: PrismaClient = prisma) {
-  // Sequential upserts — NOT Promise.all — because libSQL/Turso only allows
-  // one write operation at a time per connection inside a $transaction.
-  // Parallel upserts inside a transaction cause SQLITE_BUSY errors that
-  // surface as the generic "Something went wrong" message.
-  for (const a of CHART_OF_ACCOUNTS) {
-    await client.account.upsert({
-      where: { businessId_code: { businessId, code: a.code } },
-      update: {},
-      create: { businessId, ...a },
-    });
+  const isPostgres = !!(process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL_NON_POOLING);
+
+  if (isPostgres) {
+    // Single raw SQL INSERT ... ON CONFLICT DO NOTHING = 1 RTT for all accounts.
+    // The old sequential-upsert approach was 17 round-trips (~510 ms at 30 ms RTT)
+    // and 17 independent chances for a transient failure — unacceptable as a
+    // blocking step before invoice chunk creation.
+    const values = CHART_OF_ACCOUNTS.map(
+      (a) => Prisma.sql`(gen_random_uuid()::text, ${businessId}, ${a.code}, ${a.name}, ${a.type}, NOW())`
+    );
+    await (client as any).$executeRaw`
+      INSERT INTO "Account" ("id", "businessId", "code", "name", "type", "createdAt")
+      VALUES ${Prisma.join(values)}
+      ON CONFLICT ("businessId", "code") DO NOTHING
+    `;
+  } else {
+    // SQLite / dev: sequential upserts — libSQL only allows 1 write at a time.
+    for (const a of CHART_OF_ACCOUNTS) {
+      await client.account.upsert({
+        where: { businessId_code: { businessId, code: a.code } },
+        update: {},
+        create: { businessId, ...a },
+      });
+    }
   }
 }
 

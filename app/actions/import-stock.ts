@@ -168,8 +168,11 @@ async function _runImport(
     // A single duplicate barcode would otherwise throw inside the transaction
     // and roll back all 1000+ products. Instead we null out the offending
     // barcode so the product still gets created (can be set manually later).
+    // IMPORTANT: barcode has a GLOBAL @unique constraint (not scoped to businessId).
+    // Must query ALL businesses — not just { businessId } — or a cross-business
+    // collision still causes a P2002 that kills the entire createMany batch.
     const existingBarcodesRaw = await prisma.product.findMany({
-      where: { businessId, barcode: { not: null } },
+      where: { barcode: { not: null } },
       select: { barcode: true },
     });
     const existingBarcodeSet = new Set(existingBarcodesRaw.map((p) => p.barcode as string));
@@ -238,9 +241,14 @@ async function _runImport(
         vatRateBps: 0,
       }));
 
-      // createManyAndReturn: 1 INSERT returning id,name — available in Prisma ≥ 5.14
-      const createdProducts = await prisma.product.createManyAndReturn({
-        data: productData,
+      // createMany (skipDuplicates:true) + findMany — 2 RTTs, resilient to
+      // last-moment unique violations. createManyAndReturn has NO skipDuplicates
+      // support: a single barcode/name collision kills the entire 614-row batch.
+      // With skipDuplicates, any colliding row is silently skipped so the rest
+      // still commit. We then fetch back the IDs with a single findMany.
+      await prisma.product.createMany({ data: productData, skipDuplicates: true });
+      const createdProducts = await prisma.product.findMany({
+        where: { businessId, name: { in: rowsToCreate.map((r) => r.name) } },
         select: { id: true, name: true },
       });
 
@@ -338,32 +346,47 @@ async function _runImport(
     await ensureChartOfAccounts(businessId);
 
     // Run invoice chunks SEQUENTIALLY to avoid connection-pool contention.
-    // The old parallel Promise.all approach caused pool exhaustion on Neon
-    // when 5+ chunks competed for the same limited connection pool.
-    // With the raw SQL inventory upsert fix in createPurchase, each call
-    // is fast (~500 ms) so sequential processing is negligible even for
-    // 1500 items (≤ 3 chunks × ~500 ms = ~1.5 s).
+    // Each chunk is wrapped in try/catch so a transient failure on one chunk
+    // does NOT abort the remaining chunks — partial progress is preserved.
+    // Products are already committed above; losing an invoice chunk is far
+    // better than rolling back everything.
+    const invoiceErrors: string[] = [];
     let paidChunkCount = 0;
     for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = paidLinesAll.slice(i, i + INVOICE_CHUNK);
-      await createPurchase({
-        businessId, storeId: store.id, supplierId: null,
-        paymentStatus: 'PAID', dueDate: null, payments: [],
-        lines: chunk, userId: user.id,
-      });
-      paidChunkCount++;
+      try {
+        await createPurchase({
+          businessId, storeId: store.id, supplierId: null,
+          paymentStatus: 'PAID', dueDate: null, payments: [],
+          lines: chunk, userId: user.id,
+        });
+        paidChunkCount++;
+      } catch (chunkErr: unknown) {
+        const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+        console.error(`[importStock] paid chunk ${Math.floor(i / INVOICE_CHUNK) + 1} failed:`, chunkErr);
+        invoiceErrors.push(`Paid chunk ${Math.floor(i / INVOICE_CHUNK) + 1}: ${msg}`);
+      }
     }
     let unpaidChunkCount = 0;
     for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
       const chunk = unpaidLinesAll.slice(i, i + INVOICE_CHUNK);
-      await createPurchase({
-        businessId, storeId: store.id, supplierId: null,
-        paymentStatus: 'UNPAID', dueDate: null, payments: [],
-        lines: chunk, userId: user.id,
-      });
-      unpaidChunkCount++;
+      try {
+        await createPurchase({
+          businessId, storeId: store.id, supplierId: null,
+          paymentStatus: 'UNPAID', dueDate: null, payments: [],
+          lines: chunk, userId: user.id,
+        });
+        unpaidChunkCount++;
+      } catch (chunkErr: unknown) {
+        const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+        console.error(`[importStock] unpaid chunk ${Math.floor(i / INVOICE_CHUNK) + 1} failed:`, chunkErr);
+        invoiceErrors.push(`Unpaid chunk ${Math.floor(i / INVOICE_CHUNK) + 1}: ${msg}`);
+      }
     }
 
+    if (invoiceErrors.length > 0) {
+      console.error('[importStock] invoice chunk errors (products ARE created):', invoiceErrors);
+    }
     console.log(`[importStock] ${paidChunkCount} paid chunk(s) + ${unpaidChunkCount} unpaid chunk(s) complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
