@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { downloadTemplate } from '@/lib/import/stock-template';
 import { parseStockFile, type ParsedImportRow, type PaymentStatus } from '@/lib/import/parse-stock-file';
-import { importStockAction, type ImportStockResult } from '@/app/actions/import-stock';
+import type { ImportStockResult } from '@/app/actions/import-stock';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -272,13 +272,23 @@ export default function ImportStockClient({
       // to handle RSC cache invalidation, and in that path the return value is
       // discarded — the client receives undefined instead of the ActionResult.
       // Using plain await here guarantees we always get the typed return value.
-      const res = await importStockAction(confirmedRows);
+      const httpRes = await fetch('/api/import-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(confirmedRows),
+      });
+      if (!httpRes.ok && httpRes.status !== 200) {
+        const text = await httpRes.text().catch(() => '');
+        setConfirmError(`Import failed (HTTP ${httpRes.status})${text ? ': ' + text.slice(0, 200) : ''}. Please try again.`);
+        return;
+      }
+      const res = await httpRes.json() as { success: boolean; data?: ImportStockResult; error?: string };
       if (!res) {
         setConfirmError('Request failed — no response received. Please try again.');
         return;
       }
       if (!res.success) {
-        setConfirmError(res.error);
+        setConfirmError(res.error ?? 'Import failed. Please try again.');
         return;
       }
       setResult((res as { success: true; data: ImportStockResult }).data);
