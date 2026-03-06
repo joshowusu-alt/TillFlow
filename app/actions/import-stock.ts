@@ -248,16 +248,43 @@ export async function importStockAction(
     // -- Step 3: Record opening stock for EXISTING products in the import ----
     // Products already in the catalogue were skipped above (no new record),
     // but the CSV may specify opening quantity + cost for them.
-    // existingNameToIdMap was built from the same pre-fetch used for name
-    // deduplication — no second DB round-trip, and matching is case-insensitive
-    // because both keys are lowercased (mode:'insensitive' not supported on all adapters).
+    // IMPORTANT: the unitId in the CSV row (row.baseUnitId) was resolved by
+    // the preview UI from the global Unit table by name. But the existing
+    // product's productUnit record was created in a prior session with whatever
+    // unit ID was current at that time — it should be the same ID but we
+    // must use the DB's actual record to avoid "Unit not configured for product".
+    // Fetch the actual base productUnit (conversionToBase = 1) for each
+    // existing product and use that unit ID in the purchase lines.
     const skippedRowsWithStock = resolvedRows.filter(
       (r) => existingNameSet.has(r.name.toLowerCase()) && r.quantity > 0
     );
+    // Build map: productId → actual base unitId from DB
+    const existingProductBaseUnitMap = new Map<string, string>();
+    const skippedProductIds = skippedRowsWithStock
+      .map((r) => existingNameToIdMap.get(r.name.toLowerCase()))
+      .filter(Boolean) as string[];
+    if (skippedProductIds.length > 0) {
+      const existingUnits = await prisma.productUnit.findMany({
+        where: {
+          productId: { in: [...new Set(skippedProductIds)] },
+          conversionToBase: 1,
+        },
+        select: { productId: true, unitId: true },
+      });
+      // If multiple units have conversionToBase=1 take the first encountered.
+      for (const pu of existingUnits) {
+        if (!existingProductBaseUnitMap.has(pu.productId)) {
+          existingProductBaseUnitMap.set(pu.productId, pu.unitId);
+        }
+      }
+    }
     const skippedWithStockItems = skippedRowsWithStock
       .map((row) => {
         const productId = existingNameToIdMap.get(row.name.toLowerCase());
-        return productId ? { row, productId } : null;
+        if (!productId) return null;
+        // Use the unit the DB actually has for this product, override CSV value.
+        const actualBaseUnitId = existingProductBaseUnitMap.get(productId) ?? row.baseUnitId;
+        return { row: { ...row, baseUnitId: actualBaseUnitId }, productId };
       })
       .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 

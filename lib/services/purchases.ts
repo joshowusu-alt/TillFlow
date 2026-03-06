@@ -66,12 +66,23 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   if (input.supplierId && !supplier) throw new Error('Supplier not found');
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
+  // Fallback map keyed by productId only (base unit, conversionToBase=1).
+  // Used when the exact productId:unitId match is missing — e.g. existing
+  // products whose DB unit ID was created in a prior import session.
+  const baseUnitFallbackMap = new Map<string, typeof productUnits[0]>();
+  for (const pu of productUnits) {
+    if (pu.conversionToBase === 1 && !baseUnitFallbackMap.has(pu.productId)) {
+      baseUnitFallbackMap.set(pu.productId, pu);
+    }
+  }
 
   const lineDetails = input.lines.map((line) => {
     if (line.qtyInUnit <= 0) {
       throw new Error('Quantity must be at least 1');
     }
-    const productUnit = unitMap.get(`${line.productId}:${line.unitId}`);
+    const productUnit =
+      unitMap.get(`${line.productId}:${line.unitId}`) ??
+      baseUnitFallbackMap.get(line.productId);
     if (!productUnit) throw new Error('Unit not configured for product');
     const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
     const unitCostPence =
