@@ -299,20 +299,25 @@ export default function ImportStockClient({
             <p className="font-semibold text-black/70">Drag & drop your file here</p>
             <p className="text-sm text-black/40">Supports .csv and .xlsx files (Excel / Google Sheets)</p>
           </div>
+          {/* sr-only keeps the input in the accessibility tree and avoids
+              the iOS Safari bug where display:none inputs never open the
+              file picker when clicked programmatically. Using a <label>
+              triggers the picker natively with no JS — works on all browsers
+              including mobile Safari, Chrome Android, and Samsung Internet. */}
           <input
             ref={fileInputRef}
+            id="stock-file-input"
             type="file"
             accept=".csv,.xlsx,.xls"
-            className="hidden"
+            className="sr-only"
             onChange={onFileInput}
           />
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => fileInputRef.current?.click()}
+          <label
+            htmlFor="stock-file-input"
+            className="btn-primary cursor-pointer"
           >
             Browse files
-          </button>
+          </label>
           {parseError && (
             <p className="mt-1 text-sm font-medium text-red-600">{parseError}</p>
           )}
