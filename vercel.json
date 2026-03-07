@@ -1,6 +1,12 @@
 {
   "buildCommand": "npm run build:vercel",
   "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/eod-summary",
+      "schedule": "0 * * * *"
+    }
+  ],
   "functions": {
     "app/api/exports/**": { "maxDuration": 60 },
     "app/api/cron/**": { "maxDuration": 60 },
