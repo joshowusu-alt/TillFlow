@@ -70,11 +70,17 @@ export function middleware(request: NextRequest) {
     // The cookie may reference a stale/invalid session. The login page itself
     // validates the session via getUser() and redirects if truly authenticated.
 
-    // CRON_SECRET_PATHS require Authorization: Bearer <CRON_SECRET> instead of a session.
+    // CRON_SECRET_PATHS require CRON_SECRET via header or query param.
     if (CRON_SECRET_PATHS.some((p) => pathname.startsWith(p))) {
       const cronSecret = process.env.CRON_SECRET;
-      const authHeader = request.headers.get('authorization');
-      if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      const authHeader = request.headers.get('authorization') ?? '';
+      const bearerValue = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      const providedSecret =
+        bearerValue ||
+        request.headers.get('x-cron-secret') ||
+        request.nextUrl.searchParams.get('secret') ||
+        '';
+      if (!cronSecret || providedSecret !== cronSecret) {
         return NextResponse.json({ error: 'forbidden', reason: 'invalid_cron_secret' }, { status: 401 });
       }
       // Authorised cron call — skip the normal session check below.
