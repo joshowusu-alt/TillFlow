@@ -351,3 +351,17 @@ main#main-content { animation: fade-in-up .25s ease-out; }
 .empty-state-body  { @apply mt-1 max-w-sm text-sm text-muted; }
 .empty-state-actions { @apply mt-6 flex flex-wrap justify-center gap-3; }
 
+/* ---- POS cart scrollable list ---- */
+.divide-y.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.divide-y.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.divide-y.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+.divide-y.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}

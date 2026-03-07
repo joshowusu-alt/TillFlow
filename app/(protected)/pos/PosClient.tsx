@@ -1617,7 +1617,7 @@ export default function PosClient({
                 <div className="mt-1 text-xs text-black/30">Items will appear here instantly</div>
               </div>
             ) : (
-              <div className="divide-y divide-black/5">
+              <div className="divide-y divide-black/5 overflow-y-auto max-h-[380px] md:max-h-[440px] lg:max-h-[520px] scroll-smooth">
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
                   const availBase = getAvailableBase(line.productId, line.id);
