@@ -4,16 +4,17 @@ import { _sendEodSummaryForBusiness } from '@/app/actions/notifications';
 
 /**
  * GET /api/cron/eod-summary
- * Protected by CRON_SECRET header (Vercel Cron sets Authorization: Bearer <secret>)
- * or x-cron-secret header or ?secret= query param for manual triggers.
+ * Protected by CRON_SECRET via Authorization: Bearer, x-cron-secret header,
+ * or ?secret= query param for manual triggers.
  *
- * Called hourly by Vercel Cron (schedule: "0 * * * *").
- * Each run compares the current UTC hour to each business's whatsappScheduleTime
- * so that only businesses whose configured time matches the current hour are notified.
+ * Scheduled daily at 20:00 UTC (8 PM Ghana time) by Vercel Cron.
+ * On Hobby plan only one run per day is allowed, so ALL whatsappEnabled
+ * businesses are notified at that single daily fire — per-business schedule
+ * time filtering is skipped for the standard cron run.
  *
  * Query params:
- *   businessId - optional; bypass time-matching and run immediately for this business
- *   force      - optional; set to "1" to bypass time-matching for all businesses (manual test)
+ *   businessId - optional; run immediately for a single business only
+ *   force      - optional; set to "1" (same effect for manual test triggers)
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -31,36 +32,24 @@ export async function GET(req: NextRequest) {
   }
 
   const specificId = req.nextUrl.searchParams.get('businessId');
-  const force = req.nextUrl.searchParams.get('force') === '1';
 
-  // Current UTC hour (0-23). Ghana is UTC+0, so this is also local time.
-  const nowUtcHour = new Date().getUTCHours();
-
-  const allBusinesses = specificId
-    ? await prisma.business.findMany({
-        where: { id: specificId, whatsappEnabled: true, isDemo: false },
-        select: { id: true, name: true, whatsappScheduleTime: true },
-      })
-    : await prisma.business.findMany({
-        where: { whatsappEnabled: true, isDemo: false },
-        select: { id: true, name: true, whatsappScheduleTime: true },
-      });
-
-  // Filter to businesses whose schedule hour matches the current UTC hour,
-  // unless force=1 or a specific businessId was requested (manual run).
-  const businesses =
-    force || specificId
-      ? allBusinesses
-      : allBusinesses.filter((biz) => {
-          const scheduleHour = parseInt((biz.whatsappScheduleTime ?? '20:00').split(':')[0], 10);
-          return scheduleHour === nowUtcHour;
-        });
+  // Notify all whatsappEnabled businesses (or just the requested one).
+  // Per-business schedule time filtering removed: on the Hobby plan the cron
+  // fires once daily at 8 PM, so every enabled business is notified at that time.
+  const businesses = await prisma.business.findMany({
+    where: {
+      ...(specificId ? { id: specificId } : {}),
+      whatsappEnabled: true,
+      isDemo: false,
+    },
+    select: { id: true, name: true },
+  });
 
   if (businesses.length === 0) {
     return NextResponse.json({
       ok: true,
       processed: 0,
-      message: `No businesses scheduled for UTC hour ${nowUtcHour}`,
+      message: 'No whatsapp-enabled businesses found',
     });
   }
 
