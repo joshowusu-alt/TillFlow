@@ -14,18 +14,44 @@ const config: Config = {
       },
       colors: {
         // Enterprise palette — deep indigo/blue for trust
-        ink: '#111827',       // gray-900  (was #141414)
-        paper: '#F8FAFC',     // slate-50  (was warm #f8f7f4)
-        accent: '#1E40AF',    // blue-800  (was teal; now enterprise primary)
-        accentSoft: '#EFF6FF',// blue-50   (was teal-tint)
-        amber: '#D97706',     // amber-600 (was bright #f4b400; now proper warning)
-        rose: '#DC2626',      // red-600   (was dark #b13b3b)
+        ink: '#111827',       // gray-900
+        paper: '#F8FAFC',     // slate-50
+        accent: '#1E40AF',    // blue-800 — enterprise primary
+        accentSoft: '#EFF6FF',// blue-50
         // Additional semantic tokens
         success: '#059669',   // emerald-600 — profit / synced / positive
         successSoft: '#D1FAE5',// emerald-100
         muted: '#6B7280',     // gray-500  — secondary text
         surface: '#FFFFFF',   // pure white for cards
         border: '#E5E7EB',    // gray-200  — default border
+        // amber & rose as full scales with DEFAULT key so both
+        // bare (bg-amber) AND numbered (bg-amber-600) forms generate CSS.
+        amber: {
+          DEFAULT: '#D97706',
+          50:  '#FFFBEB',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#F59E0B',
+          600: '#D97706',
+          700: '#B45309',
+          800: '#92400E',
+          900: '#78350F',
+        },
+        rose: {
+          DEFAULT: '#DC2626',
+          50:  '#FFF1F2',
+          100: '#FFE4E6',
+          200: '#FECDD3',
+          300: '#FDA4AF',
+          400: '#FB7185',
+          500: '#F43F5E',
+          600: '#E11D48',
+          700: '#BE123C',
+          800: '#9F1239',
+          900: '#881337',
+        },
       },
       boxShadow: {
         soft: '0 4px 6px -1px rgba(30, 64, 175, 0.05), 0 10px 30px rgba(30, 64, 175, 0.08)',
