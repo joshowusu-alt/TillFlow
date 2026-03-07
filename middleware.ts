@@ -56,7 +56,8 @@ export function middleware(request: NextRequest) {
     }
 
     // --- Auth guard: redirect unauthenticated users to /login ---
-    const sessionToken = request.cookies.get('pos_session')?.value;
+    // Cookie is business-scoped (pos_session_<businessId>) — scan for any match.
+    const sessionToken = request.cookies.getAll().find(c => c.name.startsWith('pos_session_'))?.value;
     const isPublic =
         pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 

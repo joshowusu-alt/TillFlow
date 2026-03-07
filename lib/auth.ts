@@ -15,7 +15,10 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
  */
 function clearSessionCookie() {
   try {
-    cookies().delete('pos_session');
+    const cs = cookies();
+    cs.getAll()
+      .filter(c => c.name.startsWith('pos_session_'))
+      .forEach(c => cs.delete(c.name));
   } catch {
     // cookies().delete can throw in certain rendering contexts
   }
@@ -48,7 +51,9 @@ function browserFamily(ua: string | null): string | null {
 }
 
 export const getUser = cache(async () => {
-  const token = cookies().get('pos_session')?.value;
+  // Cookie is business-scoped (pos_session_<businessId>) — scan for any match.
+  const sessionCookie = cookies().getAll().find(c => c.name.startsWith('pos_session_'));
+  const token = sessionCookie?.value;
   if (!token) return null;
 
   let session;

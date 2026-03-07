@@ -127,7 +127,20 @@ export async function login(formData: FormData) {
     process.env.NODE_ENV === 'production' &&
     !process.env.BASE_URL?.startsWith('http://');
 
-  cookies().set('pos_session', token, {
+  // Use business-scoped cookie name so logging into a second business
+  // does not overwrite the first business's session cookie.
+  // Clear any other business sessions first so tabs don't silently
+  // serve the wrong business's data.
+  const cookieStore = cookies();
+  const oldBusinessCookies = cookieStore.getAll().filter(c => c.name.startsWith('pos_session_'));
+  if (oldBusinessCookies.length > 0) {
+    const oldTokens = oldBusinessCookies.map(c => c.value).filter(Boolean);
+    if (oldTokens.length > 0) {
+      await prisma.session.deleteMany({ where: { token: { in: oldTokens } } });
+    }
+    for (const c of oldBusinessCookies) { cookieStore.delete(c.name); }
+  }
+  cookieStore.set(`pos_session_${user.businessId}`, token, {
     httpOnly: true,
     secure: isSecure,
     sameSite: 'lax',
@@ -163,10 +176,13 @@ export async function login(formData: FormData) {
 
 export async function logout() {
   const cookieStore = cookies();
-  const token = cookieStore.get('pos_session')?.value;
-  if (token) {
-    await prisma.session.deleteMany({ where: { token } });
-    cookieStore.delete('pos_session');
+  const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith('pos_session_'));
+  if (sessionCookies.length > 0) {
+    const tokens = sessionCookies.map(c => c.value).filter(Boolean);
+    if (tokens.length > 0) {
+      await prisma.session.deleteMany({ where: { token: { in: tokens } } });
+    }
+    for (const c of sessionCookies) { cookieStore.delete(c.name); }
   }
   redirect('/login');
 }

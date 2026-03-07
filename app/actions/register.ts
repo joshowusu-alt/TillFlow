@@ -97,7 +97,7 @@ export async function register(formData: FormData) {
   await prisma.session.create({
     data: { token, userId: result.owner.id, expiresAt },
   });
-  cookies().set('pos_session', token, {
+  cookies().set(`pos_session_${result.business.id}`, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
