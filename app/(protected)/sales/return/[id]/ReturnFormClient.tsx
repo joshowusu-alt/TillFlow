@@ -68,43 +68,37 @@ export default function ReturnFormClient({
       {/* Fixed modal overlay — floats above form on all screen sizes */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100">
-                <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100">
+                  <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Confirm {isVoid ? 'Void' : 'Return'}</h3>
+                  <p className="text-sm text-black/60">This action cannot be undone.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">Confirm {isVoid ? 'Void' : 'Return'}</h3>
-                <p className="text-sm text-black/60">This action cannot be undone.</p>
+              <div className="rounded-xl border border-black/10 bg-black/5 p-4 text-sm">
+                {isVoid ? (
+                  <p>This will <strong>void the sale</strong> and restore all items back to inventory.</p>
+                ) : (
+                  <p>
+                    This will <strong>process a full return</strong> of{' '}
+                    <strong>{formatMoney(paid, currency)}</strong> via {refundMethod.toLowerCase()} and restore all items to inventory.
+                  </p>
+                )}
               </div>
-            </div>
-            <div className="rounded-xl border border-black/10 bg-black/5 p-4 text-sm">
-              {isVoid ? (
-                <p>This will <strong>void the sale</strong> and restore all items back to inventory.</p>
-              ) : (
-                <p>
-                  This will <strong>process a full return</strong> of{' '}
-                  <strong>{formatMoney(paid, currency)}</strong> via {refundMethod.toLowerCase()} and restore all items to inventory.
-                </p>
+              {confirmError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {confirmError}
+                </div>
               )}
             </div>
-            {confirmError && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {confirmError}
-              </div>
-            )}
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                className="w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-sm font-semibold hover:bg-black/5 disabled:opacity-50"
-                onClick={() => setShowConfirm(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
+            <div className="flex flex-col gap-3 px-6 pb-6 pt-3 border-t border-black/10">
               <button
                 type="button"
                 className="w-full rounded-xl bg-rose-600 px-4 py-3.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
@@ -112,6 +106,14 @@ export default function ReturnFormClient({
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Processing…' : isVoid ? 'Void Sale' : 'Confirm Return'}
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-xl border border-black/15 bg-white px-4 py-3 text-sm font-semibold hover:bg-black/5 disabled:opacity-50"
+                onClick={() => setShowConfirm(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
               </button>
             </div>
           </div>

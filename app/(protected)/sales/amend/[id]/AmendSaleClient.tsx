@@ -485,74 +485,76 @@ export default function AmendSaleClient({
       {/* Confirmation modal */}
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
-                <svg className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
+            <div className="overflow-y-auto flex-1 p-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+                  <svg className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Confirm Amendment</h3>
+                  <p className="text-sm text-black/60">This action cannot be undone.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">Confirm Amendment</h3>
-                <p className="text-sm text-black/60">This action cannot be undone.</p>
+
+              <div className="mt-4 space-y-2 text-sm">
+                {removedLines.length > 0 && (
+                  <>
+                    <div className="font-semibold text-black/70">Items to remove:</div>
+                    {removedLines.map((line) => (
+                      <div key={line.id} className="flex justify-between rounded-lg bg-rose-50 px-3 py-2">
+                        <span className="text-rose-800">
+                          {line.qtyInUnit}× {line.productName}
+                        </span>
+                        <span className="font-semibold text-rose-700">
+                          −{formatMoney(line.lineTotalPence, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {newItems.length > 0 && (
+                  <>
+                    <div className="font-semibold text-black/70 pt-1">Items to add:</div>
+                    {newItems.map((item) => (
+                      <div key={item.productId} className="flex justify-between rounded-lg bg-emerald-50 px-3 py-2">
+                        <span className="text-emerald-800">
+                          {item.qtyInUnit}× {item.productName}
+                        </span>
+                        <span className="font-semibold text-emerald-700">
+                          +{formatMoney(item.lineTotalPence, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                <div className="flex justify-between border-t pt-2 font-semibold">
+                  <span>New Total</span>
+                  <span>{formatMoney(newTotal, currency)}</span>
+                </div>
+                {refundAmount > 0 && (
+                  <div className="flex justify-between text-accent font-semibold">
+                    <span>Refund ({refundMethod})</span>
+                    <span>{formatMoney(refundAmount, currency)}</span>
+                  </div>
+                )}
+                {additionalPaymentNeeded > 0 && (
+                  <div className="flex justify-between text-amber-700 font-semibold">
+                    <span>Extra Payment ({additionalPaymentMethod})</span>
+                    <span>+{formatMoney(additionalPaymentNeeded, currency)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="mt-4 space-y-2 text-sm">
-              {removedLines.length > 0 && (
-                <>
-                  <div className="font-semibold text-black/70">Items to remove:</div>
-                  {removedLines.map((line) => (
-                    <div key={line.id} className="flex justify-between rounded-lg bg-rose-50 px-3 py-2">
-                      <span className="text-rose-800">
-                        {line.qtyInUnit}× {line.productName}
-                      </span>
-                      <span className="font-semibold text-rose-700">
-                        −{formatMoney(line.lineTotalPence, currency)}
-                      </span>
-                    </div>
-                  ))}
-                </>
-              )}
-              {newItems.length > 0 && (
-                <>
-                  <div className="font-semibold text-black/70 pt-1">Items to add:</div>
-                  {newItems.map((item) => (
-                    <div key={item.productId} className="flex justify-between rounded-lg bg-emerald-50 px-3 py-2">
-                      <span className="text-emerald-800">
-                        {item.qtyInUnit}× {item.productName}
-                      </span>
-                      <span className="font-semibold text-emerald-700">
-                        +{formatMoney(item.lineTotalPence, currency)}
-                      </span>
-                    </div>
-                  ))}
-                </>
-              )}
-              <div className="flex justify-between border-t pt-2 font-semibold">
-                <span>New Total</span>
-                <span>{formatMoney(newTotal, currency)}</span>
-              </div>
-              {refundAmount > 0 && (
-                <div className="flex justify-between text-accent font-semibold">
-                  <span>Refund ({refundMethod})</span>
-                  <span>{formatMoney(refundAmount, currency)}</span>
-                </div>
-              )}
-              {additionalPaymentNeeded > 0 && (
-                <div className="flex justify-between text-amber-700 font-semibold">
-                  <span>Extra Payment ({additionalPaymentMethod})</span>
-                  <span>+{formatMoney(additionalPaymentNeeded, currency)}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 px-6 pb-6 pt-3 border-t border-black/10">
               <button
                 type="button"
                 className="w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
