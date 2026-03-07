@@ -549,8 +549,28 @@ export default function PosClient({
     setIsCompletingSale(true);
     setSaleError(null);
 
-    // Optimistic: decrement stock in local state immediately for instant feedback
+    // Snapshot current state for rollback on error
     const preOptimisticProducts = productOptions;
+    const savedCart = [...cart];
+    const savedCustomerId = customerId;
+    const savedCashTendered = cashTendered;
+    const savedCardPaid = cardPaid;
+    const savedTransferPaid = transferPaid;
+    const savedMomoPaid = momoPaid;
+    const savedMomoRef = momoRef;
+    const savedMomoPayerMsisdn = momoPayerMsisdn;
+    const savedMomoNetwork = momoNetwork;
+    const savedPaymentStatus = paymentStatus;
+    const savedPaymentMethods = [...paymentMethods];
+    const savedOrderDiscountType = orderDiscountType;
+    const savedOrderDiscountInput = orderDiscountInput;
+    const savedDiscountManagerPin = discountManagerPin;
+    const savedDiscountReasonCode = discountReasonCode;
+    const savedDiscountReason = discountReason;
+    const savedQtyDrafts = { ...qtyDrafts };
+    const savedUndoStack = [...undoStack];
+
+    // Optimistic: decrement stock in local state immediately for instant feedback
     const stockDecrements = new Map<string, number>();
     for (const line of cart) {
       const product = productOptions.find(p => p.id === line.productId);
@@ -565,6 +585,33 @@ export default function PosClient({
       if (decrement) return { ...p, onHandBase: Math.max(0, p.onHandBase - decrement) };
       return p;
     }));
+
+    // Optimistic reset: clear cart + payment fields BEFORE server round-trip
+    // so the cashier can start scanning the next customer instantly (~16ms).
+    // If server fails, we restore from the saved snapshot above.
+    setCart([]);
+    clearSavedCart();
+    setCustomerId('');
+    setCashTendered('');
+    setCardPaid('');
+    setTransferPaid('');
+    setMomoPaid('');
+    setMomoRef('');
+    setMomoPayerMsisdn('');
+    setMomoNetwork('MTN');
+    resetMomoCollection();
+    setPaymentStatus('PAID');
+    setPaymentMethods(['CASH']);
+    setOrderDiscountType('NONE');
+    setOrderDiscountInput('');
+    setDiscountManagerPin('');
+    setDiscountReasonCode('');
+    setDiscountReason('');
+    setQtyDrafts({});
+    setUndoStack([]);
+    playBeep(true);
+    // Refocus barcode input immediately — zero wait for next customer
+    barcodeRef.current?.focus();
 
     try {
       const result = await completeSaleAction({
@@ -598,36 +645,30 @@ export default function PosClient({
         }
         // Show success toast
         setSaleSuccess({ receiptId, totalPence, transactionNumber });
-        // Reset cart and payment fields
-        setCart([]);
-        clearSavedCart();
-        setCustomerId('');
-        setCashTendered('');
-        setCardPaid('');
-        setTransferPaid('');
-        setMomoPaid('');
-        setMomoRef('');
-        setMomoPayerMsisdn('');
-        setMomoNetwork('MTN');
-        resetMomoCollection();
-        setPaymentStatus('PAID');
-        setPaymentMethods(['CASH']);
-        setOrderDiscountType('NONE');
-        setOrderDiscountInput('');
-        setDiscountManagerPin('');
-        setDiscountReasonCode('');
-        setDiscountReason('');
-        setQtyDrafts({});
-        setUndoStack([]);
-        playBeep(true);
+        // Inventory already updated optimistically above — no server round-trip needed.
         // Auto-dismiss success toast after 3 seconds
         setTimeout(() => setSaleSuccess(null), 3000);
-        // Refocus barcode/search input for next customer — zero clicks needed
-        setTimeout(() => barcodeRef.current?.focus(), 100);
-        // Inventory already updated optimistically above — no server round-trip needed.
       } else {
-        // Revert optimistic stock on error
+        // Revert everything on error — restore cart, payment fields, and stock
         setProductOptions(preOptimisticProducts);
+        setCart(savedCart);
+        setCustomerId(savedCustomerId);
+        setCashTendered(savedCashTendered);
+        setCardPaid(savedCardPaid);
+        setTransferPaid(savedTransferPaid);
+        setMomoPaid(savedMomoPaid);
+        setMomoRef(savedMomoRef);
+        setMomoPayerMsisdn(savedMomoPayerMsisdn);
+        setMomoNetwork(savedMomoNetwork);
+        setPaymentStatus(savedPaymentStatus);
+        setPaymentMethods(savedPaymentMethods);
+        setOrderDiscountType(savedOrderDiscountType);
+        setOrderDiscountInput(savedOrderDiscountInput);
+        setDiscountManagerPin(savedDiscountManagerPin);
+        setDiscountReasonCode(savedDiscountReasonCode);
+        setDiscountReason(savedDiscountReason);
+        setQtyDrafts(savedQtyDrafts);
+        setUndoStack(savedUndoStack);
         setSaleError(result.error);
         playBeep(false);
       }
@@ -638,9 +679,9 @@ export default function PosClient({
           const offlineId = await queueOfflineSale({
             storeId: store.id,
             tillId,
-            customerId: customerId || null,
+            customerId: savedCustomerId || null,
             paymentStatus,
-            lines: cart.map(l => ({
+            lines: savedCart.map(l => ({
               productId: l.productId,
               unitId: l.unitId,
               qtyInUnit: l.qtyInUnit,
@@ -657,37 +698,54 @@ export default function PosClient({
             orderDiscountValue: orderDiscountInput,
             createdAt: new Date().toISOString(),
           });
-          // Show success with offline indicator
+          // Show success with offline indicator — cart already cleared optimistically
           setSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' });
-          setCart([]);
-          clearSavedCart();
-          setCashTendered('');
-          setCardPaid('');
-          setTransferPaid('');
-          setMomoPaid('');
-          setMomoRef('');
-          setMomoPayerMsisdn('');
-          setMomoNetwork('MTN');
-          resetMomoCollection();
-          setPaymentStatus('PAID');
-          setPaymentMethods(['CASH']);
-          setOrderDiscountType('NONE');
-          setOrderDiscountInput('');
-          setDiscountManagerPin('');
-          setDiscountReasonCode('');
-          setDiscountReason('');
-          setQtyDrafts({});
-          setUndoStack([]);
-          playBeep(true);
           setTimeout(() => setSaleSuccess(null), 4000);
         } catch {
+          // Restore everything on offline queue failure
           setProductOptions(preOptimisticProducts);
+          setCart(savedCart);
+          setCustomerId(savedCustomerId);
+          setCashTendered(savedCashTendered);
+          setCardPaid(savedCardPaid);
+          setTransferPaid(savedTransferPaid);
+          setMomoPaid(savedMomoPaid);
+          setMomoRef(savedMomoRef);
+          setMomoPayerMsisdn(savedMomoPayerMsisdn);
+          setMomoNetwork(savedMomoNetwork);
+          setPaymentStatus(savedPaymentStatus);
+          setPaymentMethods(savedPaymentMethods);
+          setOrderDiscountType(savedOrderDiscountType);
+          setOrderDiscountInput(savedOrderDiscountInput);
+          setDiscountManagerPin(savedDiscountManagerPin);
+          setDiscountReasonCode(savedDiscountReasonCode);
+          setDiscountReason(savedDiscountReason);
+          setQtyDrafts(savedQtyDrafts);
+          setUndoStack(savedUndoStack);
           setSaleError('Offline queue failed. Please try again.');
           playBeep(false);
         }
       } else {
-        // Revert optimistic stock on non-network error
+        // Revert everything on non-network error
         setProductOptions(preOptimisticProducts);
+        setCart(savedCart);
+        setCustomerId(savedCustomerId);
+        setCashTendered(savedCashTendered);
+        setCardPaid(savedCardPaid);
+        setTransferPaid(savedTransferPaid);
+        setMomoPaid(savedMomoPaid);
+        setMomoRef(savedMomoRef);
+        setMomoPayerMsisdn(savedMomoPayerMsisdn);
+        setMomoNetwork(savedMomoNetwork);
+        setPaymentStatus(savedPaymentStatus);
+        setPaymentMethods(savedPaymentMethods);
+        setOrderDiscountType(savedOrderDiscountType);
+        setOrderDiscountInput(savedOrderDiscountInput);
+        setDiscountManagerPin(savedDiscountManagerPin);
+        setDiscountReasonCode(savedDiscountReasonCode);
+        setDiscountReason(savedDiscountReason);
+        setQtyDrafts(savedQtyDrafts);
+        setUndoStack(savedUndoStack);
         setSaleError('Something went wrong. Please try again.');
         playBeep(false);
       }
@@ -696,9 +754,12 @@ export default function PosClient({
     }
   };
 
+  // O(1) product lookup via Map — avoids O(n) find() per cart line
+  const productMap = useMemo(() => new Map(productOptions.map(p => [p.id, p])), [productOptions]);
+
   const getProduct = useCallback(
-    (id: string) => productOptions.find((product) => product.id === id),
-    [productOptions]
+    (id: string) => productMap.get(id),
+    [productMap]
   );
   const getUnit = useCallback(
     (product: ProductDto | undefined, unitIdValue: string) =>
@@ -930,7 +991,7 @@ export default function PosClient({
   const cartDetails = useMemo(() => {
     return cart
       .map((line) => {
-        const product = productOptions.find((p) => p.id === line.productId);
+        const product = productMap.get(line.productId);
         const unit = product?.units.find((u) => u.id === line.unitId);
         if (!product || !unit) return null;
         const qtyBase = line.qtyInUnit * unit.conversionToBase;
@@ -996,7 +1057,25 @@ export default function PosClient({
           promoLabel: string | null;
         }
       >;
-  }, [cart, productOptions, business.vatEnabled, computeDiscount]);
+  }, [cart, productMap, business.vatEnabled, computeDiscount]);
+
+  // Pre-compute available stock per product once per cart change — O(n) instead of O(n²)
+  const availableBaseMap = useMemo(() => {
+    const usedMap = new Map<string, number>();
+    for (const line of cart) {
+      const product = productMap.get(line.productId);
+      const unit = product?.units.find(u => u.id === line.unitId);
+      if (product && unit) {
+        usedMap.set(line.productId, (usedMap.get(line.productId) ?? 0) + line.qtyInUnit * unit.conversionToBase);
+      }
+    }
+    const result = new Map<string, number>();
+    for (const [pid, used] of usedMap) {
+      const product = productMap.get(pid);
+      result.set(pid, Math.max((product?.onHandBase ?? 0) - used, 0));
+    }
+    return result;
+  }, [cart, productMap]);
 
   const totals = useMemo(() => cartDetails.reduce(
     (acc, line) => {
@@ -1620,7 +1699,7 @@ export default function PosClient({
               <div className="divide-y divide-black/5 overflow-y-auto max-h-[380px] md:max-h-[440px] lg:max-h-[520px] scroll-smooth">
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
-                  const availBase = getAvailableBase(line.productId, line.id);
+                  const availBase = availableBaseMap.get(line.productId) ?? getAvailableBase(line.productId, line.id);
                   return (
                     <div
                       key={line.id}
