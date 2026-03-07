@@ -295,7 +295,9 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 const cachedTodayKPIs = unstable_cache(
   _getTodayKPIs,
   ['report-today-kpis'],
-  { revalidate: 30, tags: ['reports'] }
+  // 5 s TTL so Owner Intelligence stays within 5 seconds of reality after a sale.
+  // (was 30 s — long enough to show stale totals while a cashier was mid-session)
+  { revalidate: 5, tags: ['reports'] }
 );
 
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {

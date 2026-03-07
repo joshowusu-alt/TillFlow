@@ -81,8 +81,7 @@ export default async function DashboardPage({
         createdAt: { gte: start, lte: end },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      _sum: { totalPence: true, grossMarginPence: true },
-      _count: { id: true },
+      _sum: { totalPence: true },
     }),
     // Payments grouped by method — aggregate at DB level
     prisma.salesPayment.groupBy({
@@ -233,8 +232,10 @@ export default async function DashboardPage({
 
   // Summarise sales — already aggregated by DB
   const totalSales = salesAgg._sum.totalPence ?? 0;
-  const totalGrossMargin = salesAgg._sum.grossMarginPence ?? 0;
-  const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
+  // Use journal-based gross profit so the dashboard always agrees with the Income Statement.
+  // salesInvoice.grossMarginPence is a denormalized snapshot that can diverge from COGS journals.
+  const totalGrossMargin = income.grossProfit;
+  const gpPercent = totalSales > 0 ? Math.round((income.grossProfit / totalSales) * 100) : 0;
   const npPercent = totalSales > 0 ? Math.round((income.netProfit / totalSales) * 100) : 0;
 
   // Payment split — already grouped by DB
