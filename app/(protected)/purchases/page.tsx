@@ -154,6 +154,7 @@ export default async function PurchasesPage({
             units: product.productUnits.map((pu) => ({
               id: pu.unitId,
               name: pu.unit.name,
+              pluralName: pu.unit.pluralName ?? undefined,
               conversionToBase: pu.conversionToBase,
               isBaseUnit: pu.isBaseUnit,
             })),

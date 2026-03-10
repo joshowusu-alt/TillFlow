@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 
 type UnitDto = {
   id: string;
@@ -71,9 +72,11 @@ export default function PurchaseFormClient({
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
   const [barcodeLookup, setBarcodeLookup] = useState('');
+  const [lookupCameraOpen, setLookupCameraOpen] = useState(false);
+  const [quickCameraOpen, setQuickCameraOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
-  const [isCreating, startTransition] = useTransition();
+  const [isCreating, setIsCreating] = useState(false);
   const [quickName, setQuickName] = useState('');
   const [quickSku, setQuickSku] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
@@ -158,8 +161,8 @@ export default function PurchaseFormClient({
     }
   };
 
-  const handleBarcodeLookup = () => {
-    const code = barcodeLookup.trim();
+  const handleBarcodeLookup = (codeOverride?: string) => {
+    const code = (codeOverride ?? barcodeLookup).trim();
     if (!code) return;
     const match = productOptions.find((product) => product.barcode === code);
     if (match) {
@@ -178,7 +181,7 @@ export default function PurchaseFormClient({
     }
   };
 
-  const handleQuickCreate = () => {
+  const handleQuickCreate = async () => {
     setQuickAddError(null);
     if (!quickName.trim()) {
       setQuickAddError('Please enter a product name.');
@@ -194,38 +197,39 @@ export default function PurchaseFormClient({
       setQuickAddError('Please enter both the selling price and cost.');
       return;
     }
-    startTransition(async () => {
-      try {
-        const result = await quickCreateProductAction({
-          name: quickName.trim(),
-          sku: quickSku.trim() || null,
-          barcode: quickBarcode.trim() || null,
-          sellingPriceBasePence: selling,
-          defaultCostBasePence: cost,
-          vatRateBps: Math.max(0, parseInt(quickVatRate, 10) || 0),
-          baseUnitId: quickBaseUnitId,
-          packagingUnitId: quickPackagingUnitId || null,
-          packagingConversion: parseInt(quickPackagingConversion, 10) || 1
-        });
-        if (!result.success) throw new Error(result.error);
-        const created = result.data;
-        setProductOptions((prev) => [...prev, created]);
-        setProductId(created.id);
-        setProductSearch(created.name);
-        const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
-        setUnitId(baseUnit?.id ?? '');
-        setUnitCostTouched(false);
-        setQtyInput('1');
-        setUnitCostInput((created.defaultCostBasePence / 100).toFixed(2));
-        setQuickAddOpen(false);
-        setQuickAddError(null);
-        resetQuickForm();
-        setBarcodeLookup('');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to create product.';
-        setQuickAddError(message);
-      }
-    });
+    setIsCreating(true);
+    try {
+      const result = await quickCreateProductAction({
+        name: quickName.trim(),
+        sku: quickSku.trim() || null,
+        barcode: quickBarcode.trim() || null,
+        sellingPriceBasePence: selling,
+        defaultCostBasePence: cost,
+        vatRateBps: Math.max(0, parseInt(quickVatRate, 10) || 0),
+        baseUnitId: quickBaseUnitId,
+        packagingUnitId: quickPackagingUnitId || null,
+        packagingConversion: parseInt(quickPackagingConversion, 10) || 1
+      });
+      if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
+      const created = result.data;
+      setProductOptions((prev) => [...prev, created]);
+      setProductId(created.id);
+      setProductSearch(created.name);
+      const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
+      setUnitId(baseUnit?.id ?? '');
+      setUnitCostTouched(false);
+      setQtyInput('1');
+      setUnitCostInput((created.defaultCostBasePence / 100).toFixed(2));
+      setQuickAddOpen(false);
+      setQuickAddError(null);
+      resetQuickForm();
+      setBarcodeLookup('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create product.';
+      setQuickAddError(message);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const addToCart = () => {
@@ -391,7 +395,20 @@ export default function PurchaseFormClient({
             </div>
             <div>
               <label className="label">Barcode</label>
-              <input className="input" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
+              <div className="relative">
+                <input className="input pr-11" value={quickBarcode} onChange={(e) => setQuickBarcode(e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setQuickCameraOpen(true)}
+                  className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
+                  title="Scan with camera"
+                >
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div>
               <label className="label">Single Unit (smallest)</label>
@@ -509,18 +526,31 @@ export default function PurchaseFormClient({
         <div className="grid gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
             <label className="label">Barcode Lookup</label>
-            <input
-              className="input"
-              value={barcodeLookup}
-              onChange={(event) => setBarcodeLookup(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  handleBarcodeLookup();
-                }
-              }}
-              placeholder="Scan barcode to select product"
-            />
+            <div className="relative">
+              <input
+                className="input pr-11"
+                value={barcodeLookup}
+                onChange={(event) => setBarcodeLookup(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleBarcodeLookup();
+                  }
+                }}
+                placeholder="Scan barcode to select product"
+              />
+              <button
+                type="button"
+                onClick={() => setLookupCameraOpen(true)}
+                className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
+                title="Scan with camera"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div className="flex items-end">
             <button
@@ -865,6 +895,17 @@ export default function PurchaseFormClient({
           <ReceivePurchaseButton disabled={cart.length === 0 || overpay} />
         </div>
       </form>
+
+      <CameraScanner
+        open={lookupCameraOpen}
+        onScan={(code) => { setLookupCameraOpen(false); handleBarcodeLookup(code); }}
+        onClose={() => setLookupCameraOpen(false)}
+      />
+      <CameraScanner
+        open={quickCameraOpen}
+        onScan={(code) => { setQuickBarcode(code); setQuickCameraOpen(false); }}
+        onClose={() => setQuickCameraOpen(false)}
+      />
     </div>
   );
 }

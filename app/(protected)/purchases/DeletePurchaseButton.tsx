@@ -1,23 +1,28 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState } from 'react';
 import { deletePurchaseAction } from '@/app/actions/purchases';
 import { useRouter } from 'next/navigation';
 
 export default function DeletePurchaseButton({ purchaseId }: { purchaseId: string }) {
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const router = useRouter();
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirm('Delete this purchase? Inventory will be reversed.')) return;
-    startTransition(async () => {
+    setIsPending(true);
+    try {
       const result = await deletePurchaseAction(purchaseId);
-      if (!result.success) {
-        alert(result.error);
+      if (!result || !result.success) {
+        alert(result?.error ?? 'Could not delete this purchase. Please try again.');
       } else {
         router.refresh();
       }
-    });
+    } catch {
+      alert('Could not delete this purchase. Please try again.');
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (

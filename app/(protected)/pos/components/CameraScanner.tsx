@@ -19,12 +19,20 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
     const [error, setError] = useState<string | null>(null);
     const [scanning, setScanning] = useState(false);
     const hasScannedRef = useRef(false);
+    // Store callbacks in refs so the scanner effect never needs them as deps.
+    // This prevents the scanner from restarting when the parent re-renders and
+    // passes new inline arrow functions as props.
+    const onScanRef = useRef(onScan);
+    const onCloseRef = useRef(onClose);
+    useEffect(() => { onScanRef.current = onScan; }, [onScan]);
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
     const stopScanner = useCallback(async () => {
         try {
             if (html5QrCodeRef.current) {
                 const state = html5QrCodeRef.current.getState?.();
-                if (state === 2 /* SCANNING */) {
+                // Stop when SCANNING (2) or PAUSED (3)
+                if (state === 2 || state === 3) {
                     await html5QrCodeRef.current.stop();
                 }
                 html5QrCodeRef.current.clear();
@@ -47,7 +55,7 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
 
         const startScanner = async () => {
             try {
-                const { Html5Qrcode, Html5QrcodeScanType } = await import('html5-qrcode');
+                const { Html5Qrcode, Html5QrcodeScanType, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
                 if (cancelled) return;
 
                 const scannerId = 'camera-scanner-reader';
@@ -64,21 +72,35 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
                 html5QrCodeRef.current = scanner;
 
                 await scanner.start(
-                    { facingMode: 'environment' },
+                    { facingMode: { ideal: 'environment' } },
                     {
-                        fps: 10,
-                        qrbox: { width: 280, height: 160 },
-                        aspectRatio: 1.5,
+                        fps: 15,
+                        // Responsive scan box — adapts to the actual video frame size
+                        qrbox: (w: number, h: number) => ({
+                            width: Math.min(280, Math.round(w * 0.85)),
+                            height: Math.min(160, Math.round(h * 0.55)),
+                        }),
                         // @ts-expect-error — supportedScanTypes exists at runtime but is absent from older type definitions
                         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+                        // Explicitly enumerate the 1-D and 2-D formats most common in retail
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.UPC_E,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.DATA_MATRIX,
+                        ],
                     },
                     (decodedText: string) => {
                         if (hasScannedRef.current) return;
                         hasScannedRef.current = true;
-                        onScan(decodedText);
+                        onScanRef.current(decodedText);
                         stopScanner();
                     },
-                    () => { /* ignore scan errors */ }
+                    () => { /* ignore per-frame decode errors */ }
                 );
 
                 if (cancelled) {
@@ -109,7 +131,9 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
             clearTimeout(timer);
             stopScanner();
         };
-    }, [open, onScan, stopScanner]);
+        // onScan / onClose are intentionally omitted — they are stored in refs above
+        // so the scanner never restarts just because the parent re-renders.
+    }, [open, stopScanner]);
 
     if (!open) return null;
 

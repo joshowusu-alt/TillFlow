@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useTransition, useCallback } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { quickCreateProductAction } from '@/app/actions/products';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 
@@ -50,9 +50,9 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
   const [costPrice, setCostPrice] = useState('');
   const [vatRate, setVatRate] = useState('0');
   const [error, setError] = useState<string | null>(null);
-  const [isCreating, startTransition] = useTransition();
+  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     setError(null);
     if (!name.trim()) {
       setError('Please enter a product name.');
@@ -68,29 +68,30 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
       setError('Please enter both the selling price and cost.');
       return;
     }
-    startTransition(async () => {
-      try {
-        const result = await quickCreateProductAction({
-          name: name.trim(),
-          sku: sku.trim() || null,
-          barcode: barcode.trim() || null,
-          sellingPriceBasePence: selling,
-          defaultCostBasePence: cost,
-          vatRateBps: Math.max(0, parseInt(vatRate, 10) || 0),
-          baseUnitId,
-          packagingUnitId: packagingUnitId || null,
-          packagingConversion: parseInt(packagingConversion, 10) || 1,
-        });
-        if (!result.success) throw new Error(result.error);
-        const created = result.data;
-        const scanBarcode = pendingScan ?? barcode.trim();
-        const matchedScan = !!(scanBarcode && created.barcode === scanBarcode);
-        onCreated(created, matchedScan);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unable to create product.';
-        setError(message);
-      }
-    });
+    setIsCreating(true);
+    try {
+      const result = await quickCreateProductAction({
+        name: name.trim(),
+        sku: sku.trim() || null,
+        barcode: barcode.trim() || null,
+        sellingPriceBasePence: selling,
+        defaultCostBasePence: cost,
+        vatRateBps: Math.max(0, parseInt(vatRate, 10) || 0),
+        baseUnitId,
+        packagingUnitId: packagingUnitId || null,
+        packagingConversion: parseInt(packagingConversion, 10) || 1,
+      });
+      if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
+      const created = result.data;
+      const scanBarcode = pendingScan ?? barcode.trim();
+      const matchedScan = !!(scanBarcode && created.barcode === scanBarcode);
+      onCreated(created, matchedScan);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to create product.';
+      setError(message);
+    } finally {
+      setIsCreating(false);
+    }
   }, [name, sku, barcode, baseUnitId, packagingUnitId, packagingConversion, sellPrice, costPrice, vatRate, pendingScan, onCreated]);
 
   return (
