@@ -125,7 +125,7 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
                 if (!cancelled) {
                     const msg = (err?.message ?? String(err)).toLowerCase();
                     if (msg.includes('permission') || msg.includes('notallowed') || msg.includes('not allow')) {
-                        setError('Camera access denied. Tap your browser's address bar → Site settings → Camera → Allow, then try again.');
+                        setError('Camera access denied. Open your browser settings, allow camera access for this site, then tap Retry.');
                     } else if (msg.includes('notfound') || msg.includes('not found') || msg.includes('no cameras')) {
                         setError('No camera found on this device.');
                     } else {
