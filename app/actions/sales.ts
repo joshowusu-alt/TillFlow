@@ -112,6 +112,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
 
       revalidateTag(`today-sales-${businessId}`);
       revalidateTag(`readiness-${businessId}`);
+      revalidateTag('reports');
       revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
@@ -265,11 +266,10 @@ export async function completeSaleAction(data: {
       details: { lines: lines.length, total: invoice.totalPence },
     }).catch(() => {});
 
-    // No revalidation here — every revalidateTag/revalidatePath call during a
-    // server action causes Next.js to re-render affected RSC segments inline
-    // (before the response is returned), adding a Neon round-trip per tag.
-    // The (protected)/layout's today-sales and readiness caches use 60 s / 5 min
-    // TTLs — good enough for live POS use. Reports refresh on next navigation.
+    // Keep owner/reporting surfaces fresh after a sale lands. This is a single
+    // lightweight tag invalidation, so the dashboard reflects new tickets
+    // promptly without a manual refresh cycle.
+    revalidateTag('reports');
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });

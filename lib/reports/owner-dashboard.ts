@@ -5,6 +5,11 @@ import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getTodayKPIs } from './today-kpis';
 import { getCashflowForecast } from './forecast';
+import {
+	ensureSqliteReportDateColumnsNormalized,
+	isDateWithinRange,
+	isSqliteRuntime,
+} from './sqlite-report-date-normalization';
 
 type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -170,6 +175,8 @@ export async function getOwnerDashboardSnapshot(
 	currency: string,
 	storeId?: string,
 ): Promise<OwnerDashboardSnapshot> {
+	await ensureSqliteReportDateColumnsNormalized();
+
 	const todayStart = startOfDay();
 	const todayEnd = endOfDay();
 	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000));
@@ -178,29 +185,43 @@ export async function getOwnerDashboardSnapshot(
 
 	const storeFilter = storeId ? { storeId } : {};
 	const tillStoreFilter = storeId ? { id: storeId } : {};
+	const sqliteRuntime = isSqliteRuntime();
 
 	const [brief, kpis, forecast, yesterdaySales, yesterdayCashPayments, openTillCash, overdueDebtors, duePurchases, inventoryBalances, recentSales, recentSupplierPayments, recentStockAdjustments, recentDiscountOverrides, recentTillVariances, recentPurchases, recentCustomers, recentMoMo] = await Promise.all([
 		getOwnerBrief(businessId, currency, storeId),
 		getTodayKPIs(businessId, storeId),
 		getCashflowForecast(businessId, 14),
-		prisma.salesInvoice.aggregate({
-			where: {
-				businessId,
-				...storeFilter,
-				createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-				paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-			},
-			_sum: { totalPence: true, grossMarginPence: true },
-			_count: { id: true },
-		}),
-		prisma.salesPayment.aggregate({
-			where: {
-				method: 'CASH',
-				receivedAt: { gte: yesterdayStart, lte: yesterdayEnd },
-				salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
-			},
-			_sum: { amountPence: true },
-		}),
+		sqliteRuntime
+			? prisma.salesInvoice.findMany({
+				where: { businessId, ...storeFilter },
+				select: { totalPence: true, grossMarginPence: true, createdAt: true, paymentStatus: true },
+			})
+			: prisma.salesInvoice.aggregate({
+				where: {
+					businessId,
+					...storeFilter,
+					createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+				},
+				_sum: { totalPence: true, grossMarginPence: true },
+				_count: { id: true },
+			}),
+		sqliteRuntime
+			? prisma.salesPayment.findMany({
+				where: {
+					method: 'CASH',
+					salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+				},
+				select: { amountPence: true, receivedAt: true },
+			})
+			: prisma.salesPayment.aggregate({
+				where: {
+					method: 'CASH',
+					receivedAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+				},
+				_sum: { amountPence: true },
+			}),
 		prisma.shift.aggregate({
 			where: {
 				closedAt: null,
@@ -385,6 +406,31 @@ export async function getOwnerDashboardSnapshot(
 		}),
 	]);
 
+	const normalizedYesterdaySales = sqliteRuntime
+		? (yesterdaySales as Array<{ totalPence: number; grossMarginPence: number; createdAt: Date; paymentStatus: string }>).reduce(
+			(acc, sale) => {
+				if (!isDateWithinRange(sale.createdAt, yesterdayStart, yesterdayEnd)) return acc;
+				if (['RETURNED', 'VOID'].includes(sale.paymentStatus)) return acc;
+				acc._sum.totalPence += sale.totalPence;
+				acc._sum.grossMarginPence += sale.grossMarginPence ?? 0;
+				acc._count.id += 1;
+				return acc;
+			},
+			{ _sum: { totalPence: 0, grossMarginPence: 0 }, _count: { id: 0 } }
+		)
+		: yesterdaySales as { _sum: { totalPence: number | null; grossMarginPence: number | null }; _count: { id: number } };
+
+	const normalizedYesterdayCashPayments = sqliteRuntime
+		? {
+			_sum: {
+				amountPence: (yesterdayCashPayments as Array<{ amountPence: number; receivedAt: Date }>).reduce(
+					(sum, payment) => sum + (isDateWithinRange(payment.receivedAt, yesterdayStart, yesterdayEnd) ? payment.amountPence : 0),
+					0,
+				),
+			},
+		}
+		: yesterdayCashPayments as { _sum: { amountPence: number | null } };
+
 	const overdueBalances = overdueDebtors
 		.map((invoice) => ({
 			...invoice,
@@ -428,13 +474,13 @@ export async function getOwnerDashboardSnapshot(
 	const stockoutCount = inventoryRows.filter((item) => item.state === 'stockout').length;
 	const criticalCount = inventoryRows.filter((item) => item.state !== 'low').length;
 
-	const salesTrend = describeChange(kpis.totalSalesPence, yesterdaySales._sum.totalPence ?? 0);
-	const grossProfitTrend = describeChange(kpis.grossMarginPence, yesterdaySales._sum.grossMarginPence ?? 0);
-	const transactionTrend = describeChange(kpis.txCount, yesterdaySales._count.id);
+	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
+	const grossProfitTrend = describeChange(kpis.grossMarginPence, normalizedYesterdaySales._sum.grossMarginPence ?? 0);
+	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);
 	const cashTodayPence = openTillCash._sum.expectedCashPence && openTillCash._sum.expectedCashPence > 0
 		? openTillCash._sum.expectedCashPence
 		: kpis.paymentSplit.CASH ?? 0;
-	const cashTrend = describeChange(kpis.paymentSplit.CASH ?? 0, yesterdayCashPayments._sum.amountPence ?? 0);
+	const cashTrend = describeChange(kpis.paymentSplit.CASH ?? 0, normalizedYesterdayCashPayments._sum.amountPence ?? 0);
 
 	const overviewCards: BusinessHealthCard[] = [
 		{

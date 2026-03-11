@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
+import {
+  coerceReportDate,
+  ensureSqliteReportDateColumnsNormalized,
+  isDateBefore,
+  isDateOnOrAfter,
+  isDateWithinRange,
+  isSqliteRuntime,
+} from './sqlite-report-date-normalization';
 
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -26,8 +34,211 @@ export type TodayKPIs = {
   discountOverrideCount: number;
 };
 
+async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date): Promise<TodayKPIs> {
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyFiveDaysAgo = new Date(now);
+  thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+  const sixtyDaysAgo = new Date(now);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
+
+  const storeFilter = storeId ? { storeId } : {};
+
+  const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d] = await Promise.all([
+    prisma.salesInvoice.findMany({
+      where: { businessId, ...storeFilter },
+      select: {
+        totalPence: true,
+        grossMarginPence: true,
+        createdAt: true,
+        paymentStatus: true,
+        discountOverrideReason: true,
+      },
+    }),
+    prisma.salesPayment.findMany({
+      where: {
+        salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+      },
+      select: {
+        method: true,
+        amountPence: true,
+        receivedAt: true,
+      },
+    }),
+    prisma.salesInvoice.findMany({
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      select: {
+        totalPence: true,
+        createdAt: true,
+        payments: { select: { amountPence: true } },
+      },
+    }),
+    prisma.purchaseInvoice.findMany({
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      select: { totalPence: true, payments: { select: { amountPence: true } } },
+    }),
+    prisma.riskAlert.findMany({
+      where: { businessId, severity: 'HIGH', status: 'OPEN' },
+      select: { occurredAt: true },
+    }),
+    prisma.inventoryBalance.findMany({
+      where: storeId ? { storeId } : { store: { businessId } },
+      select: {
+        qtyOnHandBase: true,
+        product: { select: { reorderPointBase: true, active: true } },
+      },
+    }),
+    prisma.expense.findMany({
+      where: { businessId, paymentStatus: 'PAID' },
+      select: { amountPence: true, createdAt: true },
+    }),
+    prisma.mobileMoneyCollection.count({
+      where: { businessId, status: 'PENDING' },
+    }),
+    prisma.shift.findMany({
+      where: {
+        till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
+        variance: { not: null },
+      },
+      select: { variance: true, closedAt: true },
+      take: 200,
+    }),
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+      },
+      select: {
+        lineTotalPence: true,
+        qtyBase: true,
+        product: { select: { id: true, defaultCostBasePence: true } },
+        salesInvoice: { select: { createdAt: true, paymentStatus: true } },
+      },
+      take: 10000,
+    }),
+  ]);
+
+  const validTodaySales = salesRows.filter((row) =>
+    isDateWithinRange(row.createdAt, todayStart, todayEnd) && !['RETURNED', 'VOID'].includes(row.paymentStatus)
+  );
+
+  const totalSalesPence = validTodaySales.reduce((sum, row) => sum + row.totalPence, 0);
+  const grossMarginPence = validTodaySales.reduce((sum, row) => sum + (row.grossMarginPence ?? 0), 0);
+  const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
+
+  const paymentSplit: Record<string, number> = {};
+  paymentRows
+    .filter((row) => isDateWithinRange(row.receivedAt, todayStart, todayEnd))
+    .forEach((row) => {
+      paymentSplit[row.method] = (paymentSplit[row.method] ?? 0) + row.amountPence;
+    });
+
+  const outstandingARPence = Math.max(
+    openSalesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0) -
+      openSalesInvoices.reduce((sum, invoice) => sum + invoice.payments.reduce((paid, payment) => paid + payment.amountPence, 0), 0),
+    0,
+  );
+  const arOver60Pence = openSalesInvoices
+    .filter((invoice) => isDateBefore(invoice.createdAt, sixtyDaysAgo))
+    .reduce((sum, invoice) => sum + invoice.totalPence, 0);
+  const arOver90Pence = openSalesInvoices
+    .filter((invoice) => isDateBefore(invoice.createdAt, ninetyDaysAgo))
+    .reduce((sum, invoice) => sum + invoice.totalPence, 0);
+
+  const outstandingAPPence = outstandingPurchases.reduce((sum, inv) => {
+    const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
+    return sum + Math.max(inv.totalPence - paid, 0);
+  }, 0);
+
+  const activeBalances = balances.filter((b) => b.product.active);
+  const trackedProducts = activeBalances.filter((b) => b.product.reorderPointBase > 0);
+  const productsAboveReorderPoint = trackedProducts.filter(
+    (b) => b.qtyOnHandBase > b.product.reorderPointBase
+  ).length;
+
+  const totalExpenses30d = paidExpenses
+    .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyDaysAgo))
+    .reduce((sum, expense) => sum + expense.amountPence, 0);
+  const avgDailyExpensesPence = Math.round(totalExpenses30d / 30);
+  const thisWeekExpensesPence = paidExpenses
+    .filter((expense) => isDateOnOrAfter(expense.createdAt, sevenDaysAgo))
+    .reduce((sum, expense) => sum + expense.amountPence, 0);
+  const fourWeekTotal = paidExpenses
+    .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyFiveDaysAgo) && !isDateOnOrAfter(expense.createdAt, sevenDaysAgo))
+    .reduce((sum, expense) => sum + expense.amountPence, 0);
+  const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 4);
+
+  const cashVarianceTotalPence = cashVarShifts
+    .filter((shift) => shift.closedAt && isDateOnOrAfter(shift.closedAt, sevenDaysAgo))
+    .reduce((sum, shift) => sum + Math.abs(shift.variance ?? 0), 0);
+
+  const productMargins = new Map<string, { revenue: number; cost: number }>();
+  for (const line of salesLines14d) {
+    if (!isDateOnOrAfter(line.salesInvoice.createdAt, fourteenDaysAgo)) continue;
+    if (['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)) continue;
+
+    const cost = (line.product.defaultCostBasePence ?? 0) * line.qtyBase;
+    const key = line.product.id;
+    const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
+    existing.revenue += line.lineTotalPence;
+    existing.cost += cost;
+    productMargins.set(key, existing);
+  }
+
+  const negativeMarginProductCount = Array.from(productMargins.values()).filter(
+    (p) => p.revenue > 0 && p.revenue < p.cost
+  ).length;
+
+  const stockoutImminentCount = trackedProducts.filter(
+    (b) => b.qtyOnHandBase > 0 && b.qtyOnHandBase <= Math.ceil(b.product.reorderPointBase * 0.5)
+  ).length;
+  const urgentReorderCount = trackedProducts.filter(
+    (b) => b.qtyOnHandBase <= b.product.reorderPointBase
+  ).length;
+
+  return {
+    totalSalesPence,
+    grossMarginPence,
+    gpPercent,
+    txCount: validTodaySales.length,
+    outstandingARPence,
+    outstandingAPPence,
+    arOver60Pence,
+    arOver90Pence,
+    cashVarianceTotalPence,
+    openHighAlerts: alertRows.filter((row) => isDateOnOrAfter(row.occurredAt, sevenDaysAgo)).length,
+    totalTrackedProducts: trackedProducts.length,
+    productsAboveReorderPoint,
+    paymentSplit,
+    avgDailyExpensesPence,
+    cashOnHandEstimatePence: totalSalesPence,
+    negativeMarginProductCount,
+    momoPendingCount: momoPending,
+    stockoutImminentCount,
+    urgentReorderCount,
+    thisWeekExpensesPence,
+    fourWeekAvgExpensesPence,
+    discountOverrideCount: salesRows.filter((row) => !!row.discountOverrideReason && isDateOnOrAfter(row.createdAt, sevenDaysAgo)).length,
+  };
+}
+
 async function _getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
+  await ensureSqliteReportDateColumnsNormalized();
+
   const now = new Date();
+  if (isSqliteRuntime()) {
+    return getTodayKPIsSqlite(businessId, storeId, now);
+  }
+
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
   const todayEnd = new Date(now);
