@@ -52,10 +52,25 @@ const config: Config = {
           800: '#9F1239',
           900: '#881337',
         },
+        gold: {
+          DEFAULT: '#F59E0B',
+          50:  '#FFFBEB',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#F59E0B',
+          600: '#D97706',
+          700: '#B45309',
+          800: '#92400E',
+          900: '#78350F',
+        },
       },
       boxShadow: {
-        soft: '0 4px 6px -1px rgba(30, 64, 175, 0.05), 0 10px 30px rgba(30, 64, 175, 0.08)',
-        card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.04)',
+        soft:   '0 4px 12px -2px rgba(30, 64, 175, 0.08), 0 12px 32px rgba(30, 64, 175, 0.10)',
+        card:   '0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.06)',
+        raised: '0 4px 8px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(15, 23, 42, 0.08)',
+        glow:   '0 0 24px rgba(30, 64, 175, 0.20)',
       },
       keyframes: {
         shimmer: {

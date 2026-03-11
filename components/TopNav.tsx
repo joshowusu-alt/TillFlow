@@ -142,7 +142,7 @@ export default function TopNav({
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur shadow-sm" role="banner">
+      <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/95 backdrop-blur-xl shadow-[0_1px_16px_rgba(15,23,42,0.07)]" role="banner">
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
@@ -151,8 +151,8 @@ export default function TopNav({
             <a href="/pos" className="flex items-center gap-2" aria-label="TillFlow — go to POS">
               <img src="/icon.svg" alt="" width="32" height="32" className="h-8 w-8 rounded-lg" aria-hidden="true" />
               <div className="text-lg font-display font-bold">
-                <span className="text-accent">Till</span>
-                <span className="text-gray-700">Flow</span>
+                <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
+                <span className="text-gray-800">Flow</span>
               </div>
             </a>
           </div>
@@ -169,14 +169,14 @@ export default function TopNav({
                     onClick={() => setOpenGroup((prev) => (prev === group.id ? null : group.id))}
                     aria-expanded={openGroup === group.id}
                     aria-haspopup="true"
-                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors duration-150 ${isActive ? 'bg-accent text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition-all duration-150 ${isActive ? 'bg-gradient-to-r from-blue-800 to-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100/80 hover:text-gray-900'
                       }`}
                   >
                     {group.label}
                   </button>
                   {openGroup === group.id ? (
                     <div
-                      className="absolute left-0 mt-2 min-w-[220px] rounded-xl border border-gray-200 bg-white p-2 shadow-soft animate-scale-in"
+                      className="absolute left-0 mt-2.5 min-w-[220px] rounded-2xl border border-slate-200/60 bg-white p-2 shadow-raised animate-scale-in"
                       onMouseLeave={() => setOpenGroup(null)}
                     >
                       {group.items.map((item) => {
@@ -186,7 +186,7 @@ export default function TopNav({
                           <Link
                             key={item.href}
                             href={item.href}
-                            className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${active ? 'bg-accentSoft text-accent font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-colors ${active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50/80 hover:text-gray-900'
                               }`}
                             onClick={() => setOpenGroup(null)}
                           >

@@ -1,21 +1,21 @@
 ﻿import './globals.css';
 import type { Metadata, Viewport } from 'next';
-import { Space_Grotesk, IBM_Plex_Sans } from 'next/font/google';
+import { Plus_Jakarta_Sans, DM_Sans } from 'next/font/google';
 import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
 import InstallPrompt from '@/components/InstallPrompt';
 
-const displayFont = Space_Grotesk({
+const displayFont = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700', '800'],
   variable: '--font-display'
 });
 
-const bodyFont = IBM_Plex_Sans({
+const bodyFont = DM_Sans({
   subsets: ['latin'],
-  weight: ['400', '500', '600'],
+  weight: ['300', '400', '500'],
   variable: '--font-sans'
 });
 

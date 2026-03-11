@@ -40,7 +40,7 @@ export default function NavMobileMenu({
       {/* Backdrop */}
       <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setMobileOpen(false)} />
       {/* Menu panel — fixed overlay with independent scroll */}
-      <div className="fixed left-0 right-0 top-[65px] bottom-0 z-50 overflow-y-auto overscroll-contain bg-white px-6 pb-6 lg:hidden">
+      <div className="fixed left-0 right-0 top-[65px] bottom-0 z-50 overflow-y-auto overscroll-contain bg-slate-50 px-6 pb-6 lg:hidden">
         <div className="mt-4 space-y-4">
           {/* Mobile user info */}
           <div className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
@@ -69,7 +69,7 @@ export default function NavMobileMenu({
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium ${active ? 'bg-accent text-white' : 'bg-white text-gray-600'
+                      className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-100' : 'bg-white text-gray-700 hover:bg-gray-50 border border-transparent'
                         }`}
                       onClick={() => setMobileOpen(false)}
                     >
