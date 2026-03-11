@@ -9,25 +9,25 @@ type SkeletonProps = {
 const base = 'animate-shimmer rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%]';
 
 function SkeletonLine({ className }: { className?: string }) {
-  return <div className={`${base} h-4 w-full ${className ?? ''}`} />;
+  return <div className={`${base} h-4 w-full rounded-full ${className ?? ''}`} />;
 }
 
 function SkeletonStat() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-card">
-      <div className={`${base} mb-3 h-3 w-24`} />
-      <div className={`${base} h-7 w-32`} />
+    <div className="rounded-[1.4rem] border border-slate-200/80 bg-white/95 p-5 shadow-card">
+      <div className={`${base} mb-3 h-3 w-24 rounded-full`} />
+      <div className={`${base} h-8 w-32 rounded-2xl`} />
     </div>
   );
 }
 
 function SkeletonCard() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-card space-y-3">
-      <div className={`${base} h-5 w-40`} />
-      <div className={`${base} h-4 w-full`} />
-      <div className={`${base} h-4 w-3/4`} />
-      <div className={`${base} h-4 w-5/6`} />
+    <div className="space-y-3 rounded-[1.6rem] border border-slate-200/80 bg-white/95 p-6 shadow-card">
+      <div className={`${base} h-5 w-40 rounded-full`} />
+      <div className={`${base} h-4 w-full rounded-full`} />
+      <div className={`${base} h-4 w-3/4 rounded-full`} />
+      <div className={`${base} h-4 w-5/6 rounded-full`} />
     </div>
   );
 }
@@ -46,9 +46,9 @@ function SkeletonTableRow() {
 
 function SkeletonChart() {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-card">
-      <div className={`${base} mb-4 h-5 w-40`} />
-      <div className={`${base} h-48 w-full rounded-lg`} />
+    <div className="rounded-[1.6rem] border border-slate-200/80 bg-white/95 p-6 shadow-card">
+      <div className={`${base} mb-4 h-5 w-40 rounded-full`} />
+      <div className={`${base} h-48 w-full rounded-[1.25rem]`} />
     </div>
   );
 }

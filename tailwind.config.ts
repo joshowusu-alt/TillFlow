@@ -16,6 +16,10 @@ const config: Config = {
         // Enterprise palette — deep indigo/blue for trust
         ink: '#111827',       // gray-900
         paper: '#F8FAFC',     // slate-50
+        surfaceBase: '#F8FAFC',
+        surfaceCard: '#FFFFFF',
+        surfaceMuted: '#F1F5F9',
+        surfaceElevated: '#FCFDFE',
         accent: '#1E40AF',    // blue-800 — enterprise primary
         accentSoft: '#EFF6FF',// blue-50
         // Additional semantic tokens
@@ -24,6 +28,8 @@ const config: Config = {
         muted: '#6B7280',     // gray-500  — secondary text
         surface: '#FFFFFF',   // pure white for cards
         border: '#E5E7EB',    // gray-200  — default border
+        borderSubtle: '#EDF2F7',
+        borderStrong: '#CBD5E1',
         // amber & rose as full scales with DEFAULT key so both
         // bare (bg-amber) AND numbered (bg-amber-600) forms generate CSS.
         amber: {
@@ -71,6 +77,17 @@ const config: Config = {
         card:   '0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.06)',
         raised: '0 4px 8px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(15, 23, 42, 0.08)',
         glow:   '0 0 24px rgba(30, 64, 175, 0.20)',
+        nav:    '0 10px 35px rgba(15, 23, 42, 0.08), 0 2px 10px rgba(15, 23, 42, 0.05)',
+        floating: '0 18px 50px rgba(15, 23, 42, 0.10), 0 8px 24px rgba(15, 23, 42, 0.06)',
+      },
+      maxWidth: {
+        shell: '1680px',
+      },
+      transitionTimingFunction: {
+        executive: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      },
+      backgroundImage: {
+        'shell-glow': 'radial-gradient(circle at top, rgba(30, 64, 175, 0.12), transparent 58%)',
       },
       keyframes: {
         shimmer: {

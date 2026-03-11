@@ -48,12 +48,13 @@ export default function InstallButton() {
     return (
         <button
             onClick={handleInstall}
-            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/80 active:scale-95 min-h-[44px]"
+            aria-label="Install app"
+            className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/80 active:scale-95 min-h-[44px] sm:px-4"
         >
             <svg width="16" height="16" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span className="font-semibold">Install App</span>
+            <span className="hidden font-semibold sm:inline">Install App</span>
         </button>
     );
 }

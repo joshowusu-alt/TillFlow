@@ -51,13 +51,13 @@ const icons: Record<string, React.ReactNode> = {
 
 export default function EmptyState({ icon = 'chart', title, subtitle, cta, secondaryCta, hint }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center py-10 text-center animate-fade-in-up">
-      <div className="rounded-full bg-gray-100 p-4">
+    <div className="animate-fade-in-up rounded-[1.75rem] border border-slate-200/80 bg-white/90 px-6 py-10 text-center shadow-card backdrop-blur-xl">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-gradient-to-br from-slate-50 via-white to-blue-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
         {icons[icon]}
       </div>
-      <h3 className="mt-4 text-sm font-semibold text-ink">{title}</h3>
-      {subtitle && <p className="mt-1 max-w-xs text-sm text-muted">{subtitle}</p>}
-      <div className="mt-4 flex items-center gap-2">
+      <h3 className="mt-5 text-lg font-display font-semibold text-ink">{title}</h3>
+      {subtitle && <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">{subtitle}</p>}
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
         {cta && (
           <Link href={cta.href} className="btn-primary text-sm">
             {cta.label}
@@ -69,7 +69,7 @@ export default function EmptyState({ icon = 'chart', title, subtitle, cta, secon
           </Link>
         )}
       </div>
-      {hint && <p className="mt-2 text-[11px] text-muted italic">{hint}</p>}
+      {hint && <p className="mt-3 text-[11px] italic text-muted">{hint}</p>}
     </div>
   );
 }

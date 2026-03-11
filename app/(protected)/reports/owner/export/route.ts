@@ -22,16 +22,16 @@ export async function GET(request: Request) {
       ['Top Drivers', ...brief.healthScore.topDrivers],
       [],
       ['MONEY PULSE'],
-      ['Cash on hand', formatMoney(brief.moneyPulse.cashTodayPence / 100, brief.currency)],
-      ['AR due 7 days', formatMoney(brief.moneyPulse.arDue7DaysPence / 100, brief.currency)],
-      ['AP due 7 days', formatMoney(brief.moneyPulse.apDue7DaysPence / 100, brief.currency)],
-      ['Forecast lowest (14d)', formatMoney(brief.moneyPulse.forecastLowestPence / 100, brief.currency)],
+      ['Cash on hand', formatMoney(brief.moneyPulse.cashTodayPence, brief.currency)],
+      ['AR due 7 days', formatMoney(brief.moneyPulse.arDue7DaysPence, brief.currency)],
+      ['AP due 7 days', formatMoney(brief.moneyPulse.apDue7DaysPence, brief.currency)],
+      ['Forecast lowest (14d)', formatMoney(brief.moneyPulse.forecastLowestPence, brief.currency)],
       ['Days until negative', brief.moneyPulse.daysUntilNegative?.toString() ?? 'N/A'],
       [],
       ['LEAKAGE WATCH'],
       ['Discount overrides (7d)', brief.leakageWatch.discountOverrideCount.toString()],
       ['Items below cost', brief.leakageWatch.negativeMarginProductCount.toString()],
-      ['Cash variances (7d)', formatMoney(brief.leakageWatch.cashVariancePence / 100, brief.currency)],
+      ['Cash variances (7d)', formatMoney(brief.leakageWatch.cashVariancePence, brief.currency)],
       [],
       ['STOCK RISK'],
       ['Near stockout', brief.stockRisk.stockoutImminentCount.toString()],
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
   const sevBorder = (s: string) =>
     s === 'critical' ? '#FECACA' : s === 'warn' ? '#FDE68A' : '#BFDBFE';
 
-  const m = (pence: number) => formatMoney(pence / 100, brief.currency);
+  const m = (pence: number) => formatMoney(pence, brief.currency);
   const forecastNeg = brief.moneyPulse.forecastLowestPence < 0;
 
   // HTML print view

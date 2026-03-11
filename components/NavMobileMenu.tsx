@@ -37,62 +37,71 @@ export default function NavMobileMenu({
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/20 lg:hidden" onClick={() => setMobileOpen(false)} />
-      {/* Menu panel — fixed overlay with independent scroll */}
-      <div className="fixed left-0 right-0 top-[65px] bottom-0 z-50 overflow-y-auto overscroll-contain bg-slate-50 px-6 pb-6 lg:hidden">
-        <div className="mt-4 space-y-4">
-          {/* Mobile user info */}
-          <div className="flex items-center justify-between rounded-xl bg-gray-50 border border-gray-200 px-4 py-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${isOnline ? 'bg-success' : 'bg-rose'}`} />
-                <span className="text-sm font-semibold text-ink">{user.name}</span>
+      <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
+      <div className="fixed inset-x-3 bottom-3 top-[76px] z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
+        <div className="flex h-full flex-col">
+          <div className="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={isOnline ? 'status-dot-online' : 'status-dot-offline'} />
+                  <span className="truncate text-base font-semibold text-ink">{user.name}</span>
+                </div>
+                <div className="mt-1 text-[11px] uppercase tracking-[0.22em] text-muted">
+                  {user.role}{storeName ? ` · ${storeName}` : ''}
+                </div>
               </div>
-              <div className="text-[10px] uppercase tracking-[0.15em] text-muted mt-0.5">
-                {user.role}{storeName ? ` · ${storeName}` : ''}
-              </div>
+              <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
             </div>
-            <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-              }`}>
-              {isOnline ? 'Online' : 'Offline'}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="metric-chip">
+                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+                Navigation
+              </div>
+              <InstallButton />
             </div>
           </div>
-          {visibleGroups.map((group) => (
-            <div key={group.id}>
-              <div className="text-xs uppercase tracking-[0.2em] text-black/50">{group.label}</div>
-              <div className="mt-2 grid gap-2">
-                {group.items.map((item) => {
-                  const active = pathname === item.href;
-                  const isAdvanced = group.id === 'reports' && advancedReportLinks.has(item.href);
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-100' : 'bg-white text-gray-700 hover:bg-gray-50 border border-transparent'
-                        }`}
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      <span>{item.label}</span>
-                      {!features.advancedReports && isAdvanced ? (
-                        <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                          Advanced
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
-              </div>
+
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="space-y-5">
+              {visibleGroups.map((group) => (
+                <section key={group.id}>
+                  <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{group.label}</div>
+                  <div className="grid gap-2">
+                    {group.items.map((item) => {
+                      const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const isAdvanced = group.id === 'reports' && advancedReportLinks.has(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={active ? 'shell-nav-link shell-nav-link-active border border-blue-100' : 'shell-nav-link border border-slate-200/70 bg-white'}
+                          onClick={() => setMobileOpen(false)}
+                        >
+                          <span>{item.label}</span>
+                          {!features.advancedReports && isAdvanced ? (
+                            <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
+                              Advanced
+                            </span>
+                          ) : null}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
-          ))}
-          <div className="mt-4 flex justify-center">
-            <InstallButton />
           </div>
-          <form action={logout}>
-            <button type="submit" className="btn-ghost w-full text-xs">
-              Sign out
-            </button>
-          </form>
+
+          <div className="border-t border-slate-200/80 bg-slate-50/80 p-4">
+            <form action={logout}>
+              <button type="submit" className="btn-ghost w-full text-sm">
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </>

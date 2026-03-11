@@ -25,14 +25,17 @@ export default function PageHeader({
 }: PageHeaderProps) {
   const hasActions = actions || primaryCta || secondaryCta;
   return (
-    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-ink leading-tight">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
-        {description ? <p className="mt-1.5 max-w-2xl text-sm text-muted leading-relaxed">{description}</p> : null}
+    <div className="flex flex-col gap-4 rounded-[1.75rem] border border-slate-200/80 bg-white/80 px-5 py-5 shadow-card backdrop-blur-xl md:flex-row md:items-start md:justify-between md:px-6 md:py-6">
+      <div className="min-w-0">
+        <div className="mb-2 inline-flex items-center rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">
+          Executive view
+        </div>
+        <h1 className="text-2xl font-display font-bold leading-tight text-ink md:text-[2rem]">{title}</h1>
+        {subtitle ? <p className="mt-1.5 text-sm font-medium text-slate-600">{subtitle}</p> : null}
+        {description ? <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted md:text-[15px]">{description}</p> : null}
       </div>
       {hasActions ? (
-        <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2 md:max-w-[45%] md:justify-end">
           {secondaryCta ? (
             <Link href={secondaryCta.href} className="btn-secondary text-sm">
               {secondaryCta.label}

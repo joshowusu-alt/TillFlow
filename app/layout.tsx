@@ -5,7 +5,6 @@ import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
-import InstallPrompt from '@/components/InstallPrompt';
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -57,15 +56,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Inline critical background to prevent black flash during PWA cold start */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#f8fafc}` }} />
       </head>
-      <body className="min-h-screen bg-paper text-ink" style={{ backgroundColor: '#f8fafc' }}>
-        <ServiceWorkerRegistration />
-        <Suspense>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </Suspense>
-        <NetworkStatus />
-        <Suspense><InstallPrompt /></Suspense>
+      <body className="min-h-screen bg-paper text-ink antialiased selection:bg-accent/15 selection:text-accent" style={{ backgroundColor: '#f8fafc' }}>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[26rem] bg-shell-glow opacity-80"
+        />
+        <div className="relative z-10">
+          <ServiceWorkerRegistration />
+          <Suspense>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </Suspense>
+          <NetworkStatus />
+        </div>
       </body>
     </html>
   );

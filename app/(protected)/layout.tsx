@@ -1,5 +1,6 @@
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import TopNav from '@/components/TopNav';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -14,30 +15,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     select: { id: true, name: true }
   });
 
-  // Live sales counter — cached for 60 s per business so the nav stays snappy.
-  // Invalidated immediately when a sale is created (revalidateTag in sales.ts).
-  const todaySales = await unstable_cache(
-    async () => {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const agg = await prisma.salesInvoice.aggregate({
-        where: {
-          businessId: business.id,
-          createdAt: { gte: todayStart },
-          paymentStatus: { notIn: ['VOID', 'RETURNED'] },
-        },
-        _sum: { totalPence: true },
-        _count: { id: true },
-      });
-      return {
-        totalPence: agg._sum.totalPence ?? 0,
-        txCount: agg._count.id,
-        currency: business.currency,
-      };
-    },
-    ['today-sales', business.id],
-    { revalidate: 60, tags: [`today-sales-${business.id}`] }
-  )();
+  // Keep nav and owner/dashboard summaries on the exact same KPI source so they
+  // never disagree about today's trading position.
+  const kpis = await getTodayKPIs(business.id);
+  const todaySales = {
+    totalPence: kpis.totalSalesPence,
+    txCount: kpis.txCount,
+    currency: business.currency,
+  };
 
   // Show onboarding banner when onboarding is not complete
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
@@ -82,10 +67,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
       {/* Setup banner for owners who haven't completed onboarding */}
       {needsOnboarding && !pathname.includes('/onboarding') && (
-        <div className="border-b border-accent/20 bg-accentSoft px-4 sm:px-6 py-3">
-          <div className="mx-auto flex max-w-[1600px] items-center justify-between">
+        <div className="border-b border-blue-200/70 bg-gradient-to-r from-blue-50 via-white to-indigo-50/80 px-4 py-3 sm:px-6">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3 text-accent">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/80 px-3 py-2 shadow-sm">
                 <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
                   <div
                     className="h-full rounded-full bg-accent transition-all duration-500"
@@ -94,17 +79,20 @@ export default async function ProtectedLayout({ children }: { children: React.Re
                 </div>
                 <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
               </div>
-              <span className="text-sm font-medium">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">Setup guide</div>
+                <span className="text-sm font-medium text-accent">
                 {readinessPct === 0
                   ? 'Let\u2019s get your shop set up on TillFlow!'
                   : readinessPct < 100
                   ? 'You\u2019re making progress \u2014 keep going!'
                   : 'Almost there \u2014 just finish up!'}
-              </span>
+                </span>
+              </div>
             </div>
             <Link
               href="/onboarding"
-              className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-accent/80 ml-4 flex-shrink-0"
+              className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
             >
               {readinessPct > 0 ? 'Continue Setup' : 'Get Started'} &rarr;
             </Link>
@@ -112,7 +100,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main id="main-content" className="p-4 sm:p-6 overflow-x-hidden">{children}</main>
+      <main id="main-content" className="w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8 overflow-x-hidden">
+        {children}
+      </main>
     </div>
   );
 }

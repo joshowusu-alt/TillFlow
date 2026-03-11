@@ -21,17 +21,19 @@ export default function Pagination({ currentPage, totalPages, basePath, searchPa
   }
 
   return (
-    <div className="mt-4 flex items-center justify-between text-sm">
+    <div className="mt-5 flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 text-sm shadow-card">
       {currentPage > 1 ? (
         <Link className="btn-ghost text-xs" href={buildHref(currentPage - 1)}>← Prev</Link>
       ) : (
-        <span />
+        <span className="w-[76px]" />
       )}
-      <span className="text-sm text-muted">Page {currentPage} of {totalPages}</span>
+      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+        Page {currentPage} of {totalPages}
+      </span>
       {currentPage < totalPages ? (
         <Link className="btn-ghost text-xs" href={buildHref(currentPage + 1)}>Next →</Link>
       ) : (
-        <span />
+        <span className="w-[76px]" />
       )}
     </div>
   );

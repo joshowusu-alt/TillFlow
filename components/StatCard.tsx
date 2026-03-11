@@ -6,11 +6,11 @@ type StatCardProps = {
 };
 
 const tones = {
-  default: 'border-gray-100 bg-white',
-  accent:  'border-blue-100 bg-blue-50/60',
-  danger:  'border-red-100 bg-red-50/60',
-  success: 'border-emerald-100 bg-emerald-50/60',
-  warn:    'border-amber-100 bg-amber-50/60',
+  default: 'border-slate-200/80 bg-white/95',
+  accent:  'border-blue-100/90 bg-gradient-to-br from-blue-50 via-white to-blue-50/70',
+  danger:  'border-red-100/90 bg-gradient-to-br from-red-50 via-white to-red-50/70',
+  success: 'border-emerald-100/90 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/70',
+  warn:    'border-amber-100/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/70',
 };
 
 const stripColors = {
@@ -31,13 +31,17 @@ const valueColors = {
 
 export default function StatCard({ label, value, tone = 'default', helper }: StatCardProps) {
   return (
-    <div className={`relative overflow-hidden rounded-2xl border p-4 transition-shadow hover:shadow-md ${tones[tone]}`}
-         style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(15,23,42,0.06)' }}>
-      {/* Colored accent strip */}
-      <div className={`absolute inset-x-0 top-0 h-[3px] ${stripColors[tone]}`} />
-      <div className="pt-1 text-xs font-semibold uppercase tracking-widest text-muted">{label}</div>
-      <div className={`mt-1.5 text-2xl font-display font-bold tabular-nums tracking-tight ${valueColors[tone]}`}>{value}</div>
-      {helper ? <div className="mt-1 text-xs text-muted">{helper}</div> : null}
+    <div
+      className={`relative overflow-hidden rounded-[1.4rem] border p-5 transition-all duration-200 ${tones[tone]}`}
+      style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 10px 30px rgba(15,23,42,0.06)' }}
+    >
+      <div className={`absolute inset-x-0 top-0 h-1 ${stripColors[tone]}`} />
+      <div className="absolute right-4 top-4 h-10 w-10 rounded-full bg-white/70 blur-xl" aria-hidden="true" />
+      <div className="relative">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{label}</div>
+        <div className={`mt-3 text-2xl font-display font-bold tabular-nums tracking-tight md:text-[2rem] ${valueColors[tone]}`}>{value}</div>
+        {helper ? <div className="mt-2 text-xs leading-relaxed text-slate-500">{helper}</div> : null}
+      </div>
     </div>
   );
 }
