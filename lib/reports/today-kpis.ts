@@ -232,7 +232,15 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 }
 
 async function _getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
-  await ensureSqliteReportDateColumnsNormalized();
+  try {
+    await ensureSqliteReportDateColumnsNormalized();
+  } catch (error) {
+    console.error('[today-kpis] SQLite date normalization failed', {
+      businessId,
+      storeId,
+      error,
+    });
+  }
 
   const now = new Date();
   if (isSqliteRuntime()) {

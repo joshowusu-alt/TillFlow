@@ -175,7 +175,18 @@ export async function getOwnerDashboardSnapshot(
 	currency: string,
 	storeId?: string,
 ): Promise<OwnerDashboardSnapshot> {
-	await ensureSqliteReportDateColumnsNormalized();
+	let sqliteRuntime = false;
+
+	try {
+		await ensureSqliteReportDateColumnsNormalized();
+		sqliteRuntime = isSqliteRuntime();
+	} catch (error) {
+		console.error('[owner-dashboard] SQLite date normalization failed', {
+			businessId,
+			storeId: storeId ?? null,
+			error,
+		});
+	}
 
 	const todayStart = startOfDay();
 	const todayEnd = endOfDay();
@@ -185,7 +196,6 @@ export async function getOwnerDashboardSnapshot(
 
 	const storeFilter = storeId ? { storeId } : {};
 	const tillStoreFilter = storeId ? { id: storeId } : {};
-	const sqliteRuntime = isSqliteRuntime();
 
 	const [brief, kpis, forecast, yesterdaySales, yesterdayCashPayments, openTillCash, overdueDebtors, duePurchases, inventoryBalances, recentSales, recentSupplierPayments, recentStockAdjustments, recentDiscountOverrides, recentTillVariances, recentPurchases, recentCustomers, recentMoMo] = await Promise.all([
 		getOwnerBrief(businessId, currency, storeId),
