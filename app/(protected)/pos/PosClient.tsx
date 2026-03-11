@@ -1334,7 +1334,7 @@ export default function PosClient({
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 md:grid-cols-[3fr_1fr] pb-24 md:pb-0">
+    <div className="grid gap-6 pb-36 md:grid-cols-[3fr_1fr] md:pb-0">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -1873,13 +1873,13 @@ export default function PosClient({
               </div>
               <div>
                 <label className="label">Method</label>
-                <div className="mt-1.5 flex flex-wrap gap-2">
+                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                   {(['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'] as PaymentMethod[]).map((method) => (
                     <button
                       key={method}
                       type="button"
                       onClick={() => togglePaymentMethod(method)}
-                      className={`rounded-full px-4 py-2 text-sm font-semibold transition ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-accent text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
+                      className={`rounded-full px-3 py-2 text-sm font-semibold transition sm:px-4 ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-accent text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
                     >
                       {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'}
                     </button>
@@ -1893,7 +1893,7 @@ export default function PosClient({
             </div>
 
             {/* Customer */}
-            <div className={`flex items-center gap-3 ${requiresCustomer && !customerId ? 'rounded-lg border-2 border-amber-400 bg-amber-50 p-3' : ''}`}>
+            <div className={`flex flex-col gap-3 sm:flex-row sm:items-end ${requiresCustomer && !customerId ? 'rounded-lg border-2 border-amber-400 bg-amber-50 p-3' : ''}`}>
               <div className="flex-1">
                 <label className="label">{requiresCustomer ? 'Customer (required)' : 'Customer'}</label>
                 <input
@@ -1917,7 +1917,7 @@ export default function PosClient({
               </div>
               <button
                 type="button"
-                className="btn-secondary text-xs whitespace-nowrap mt-5"
+                className="btn-secondary w-full text-xs sm:mt-0 sm:w-auto sm:whitespace-nowrap"
                 onClick={() => setShowQuickCustomer(true)}
               >
                 + New
@@ -1925,10 +1925,10 @@ export default function PosClient({
             </div>
 
             {/* Order discount */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">
               <label className="label whitespace-nowrap">Order Discount</label>
               <select
-                className="input w-24"
+                className="input w-full"
                 value={orderDiscountType}
                 onChange={(e) => { const t = e.target.value as DiscountType; setOrderDiscountType(t); if (t === 'NONE') setOrderDiscountInput(''); }}
               >
@@ -1937,7 +1937,7 @@ export default function PosClient({
                 <option value="AMOUNT">Amount</option>
               </select>
               <input
-                className="input w-28"
+                className="input w-full"
                 type="number"
                 min={0}
                 step={orderDiscountType === 'PERCENT' ? '1' : '0.01'}
@@ -2007,12 +2007,12 @@ export default function PosClient({
                     onChange={(e) => setCashTendered(e.target.value)}
                     onFocus={(e) => e.currentTarget.select()}
                   />
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <div className="mt-1.5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
                     {[1, 2, 5, 10, 20, 50, 100, 200].map((amount) => (
                       <button
                         key={amount}
                         type="button"
-                        className="rounded-md border border-black/10 bg-white px-3 py-2 text-xs font-semibold hover:bg-black/5"
+                        className="rounded-md border border-black/10 bg-white px-3 py-2 text-center text-xs font-semibold hover:bg-black/5"
                         onClick={() => setCashTendered(String(amount))}
                       >
                         {formatMoney(amount * 100, business.currency)}
@@ -2020,7 +2020,7 @@ export default function PosClient({
                     ))}
                     <button
                       type="button"
-                      className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 sm:min-w-[5rem]"
                       onClick={() => setCashTendered(String(totalDue / 100))}
                     >
                       Exact
@@ -2115,21 +2115,70 @@ export default function PosClient({
               <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>
             )}
 
-            <div className="flex gap-2">
-              <button className="btn-primary flex-1 text-lg py-3" type="submit" disabled={!canSubmit || isCompletingSale}>
+            {parkedCarts.length > 0 && (
+              <div className="card overflow-hidden md:hidden">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
+                  onClick={() => setShowParkedPanel(!showParkedPanel)}
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Parked Sales ({parkedCarts.length})
+                  </span>
+                  <svg className={`h-4 w-4 transition-transform ${showParkedPanel ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showParkedPanel && (
+                  <div className="divide-y divide-black/5">
+                    {parkedCarts.map((parked) => (
+                      <div key={parked.id} className="space-y-1 px-4 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold">{parked.label}</span>
+                          <span className="text-[10px] text-black/40">{new Date(parked.parkedAt).toLocaleTimeString()}</span>
+                        </div>
+                        <div className="text-xs text-black/50">{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</div>
+                        <div className="mt-1 flex gap-3">
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-emerald-600 hover:text-emerald-800"
+                            onClick={() => { recallParkedCart(parked.id); setShowParkedPanel(false); }}
+                          >
+                            Recall
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-red-500 hover:text-red-700"
+                            onClick={() => deleteParkedCart(parked.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 md:flex-row">
+              <button className="btn-primary hidden flex-1 py-3 text-lg md:inline-flex md:items-center md:justify-center" type="submit" disabled={!canSubmit || isCompletingSale}>
                 {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
               </button>
               {cart.length > 0 && (
                 <button
                   type="button"
-                  className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 md:w-auto"
                   onClick={() => setShowParkModal(true)}
                   title="Park this sale and serve another customer"
                 >
-                  <svg className="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
-                  <span className="text-[10px]">Park</span>
+                  <span>Park Sale</span>
                 </button>
               )}
             </div>
@@ -2198,19 +2247,40 @@ export default function PosClient({
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
-              <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
+                <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
+              </div>
+              {parkedCarts.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowParkedPanel((prev) => !prev)}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700"
+                >
+                  {parkedCarts.length} parked
+                </button>
+              ) : null}
             </div>
-            <button
-              type="button"
-              className="btn-primary px-5 py-3 text-sm font-bold whitespace-nowrap"
-              disabled={!canSubmit || isCompletingSale}
-              onClick={handleCompleteSale}
-            >
-              {isCompletingSale ? 'Processing…' : 'Complete Sale →'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                onClick={() => setShowParkModal(true)}
+                title="Park this sale"
+              >
+                Park
+              </button>
+              <button
+                type="button"
+                className="btn-primary flex-1 px-5 py-3 text-sm font-bold"
+                disabled={!canSubmit || isCompletingSale}
+                onClick={handleCompleteSale}
+              >
+                {isCompletingSale ? 'Processing…' : 'Complete Sale →'}
+              </button>
+            </div>
           </div>
         </div>
       )}
