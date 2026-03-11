@@ -129,7 +129,24 @@ export async function getPendingSaleCount(): Promise<number> {
 export async function refreshOfflineCache(): Promise<void> {
     try {
         const response = await fetch('/api/offline/cache-data');
-        if (!response.ok) throw new Error('Failed to fetch cache data');
+        if (!response.ok) {
+            let message = `Failed to fetch cache data (${response.status})`;
+            const contentType = response.headers.get('content-type') ?? '';
+
+            if (contentType.includes('application/json')) {
+                const errorData = await response.json().catch(() => null) as { error?: string } | null;
+                if (errorData?.error) {
+                    message = errorData.error;
+                }
+            } else {
+                const body = await response.text().catch(() => '');
+                if (body && /^<!DOCTYPE|^<html/i.test(body.trim())) {
+                    message = 'Offline cache endpoint returned HTML instead of JSON';
+                }
+            }
+
+            throw new Error(message);
+        }
 
         const data = await response.json() as {
             products: OfflineProduct[];

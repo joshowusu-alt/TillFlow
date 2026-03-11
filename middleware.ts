@@ -76,6 +76,10 @@ export function middleware(request: NextRequest) {
         PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!sessionToken && !isPublic) {
+        if (pathname.startsWith('/api/')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const loginUrl = request.nextUrl.clone();
         loginUrl.pathname = '/login';
         return NextResponse.redirect(loginUrl);

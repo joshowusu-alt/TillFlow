@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { useToast } from '@/components/ToastProvider';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import {
@@ -13,6 +14,7 @@ import {
 } from '@/lib/offline';
 
 export default function NetworkStatus() {
+    const pathname = usePathname();
     const online = useNetworkStatus();
     const [pendingCount, setPendingCount] = useState(0);
     const [syncing, setSyncing] = useState(false);
@@ -20,6 +22,10 @@ export default function NetworkStatus() {
     const [showDetails, setShowDetails] = useState(false);
     const { toast } = useToast();
     const prevOnline = useRef(true);
+
+    const isProtectedSurface = pathname
+        ? !['/welcome', '/login', '/register', '/demo'].some((route) => pathname.startsWith(route))
+        : true;
 
     // Check pending sales count
     const checkPending = useCallback(async () => {
@@ -58,6 +64,12 @@ export default function NetworkStatus() {
     };
 
     useEffect(() => {
+        if (!isProtectedSurface) {
+            setSyncing(false);
+            setShowDetails(false);
+            return;
+        }
+
         // Set initial prevOnline ref from real navigator state
         prevOnline.current = isOnline();
         checkPending();
@@ -106,7 +118,11 @@ export default function NetworkStatus() {
             cleanup();
             clearInterval(interval);
         };
-    }, [checkPending, toast]);
+    }, [checkPending, isProtectedSurface, toast]);
+
+    if (!isProtectedSurface) {
+        return null;
+    }
 
     // Don't show status pill if fully online with nothing pending
     if (online && pendingCount === 0 && !syncing) {
