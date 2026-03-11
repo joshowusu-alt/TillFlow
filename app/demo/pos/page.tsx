@@ -1,20 +1,12 @@
 import { prisma } from '@/lib/prisma';
-import { getDemoBusiness, seedDemoAction } from '@/app/actions/demo';
+import { ensureDemoBusiness } from '@/app/actions/demo';
 import { getCurrencySymbol } from '@/lib/format';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DemoPosPage() {
-  let demo = await getDemoBusiness();
-
-  // Auto-seed on first visit
-  if (!demo) {
-    const result = await seedDemoAction().catch(() => null);
-    if (result?.businessId) {
-      demo = await getDemoBusiness();
-    }
-  }
+  const demo = await ensureDemoBusiness().catch(() => null);
 
   if (!demo) {
     return (

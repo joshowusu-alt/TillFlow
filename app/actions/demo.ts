@@ -9,17 +9,9 @@ export async function getDemoBusiness() {
   return prisma.business.findFirst({ where: { isDemo: true } });
 }
 
-/**
- * Seed a demo business with sample products, customers, and a few sales.
- * Idempotent: if the demo business already exists, just returns it.
- */
-export async function seedDemoAction(): Promise<{ ok: boolean; businessId?: string; error?: string }> {
-  // Must be an OWNER/MANAGER of a real business to trigger seeding
-  const { business: callerBusiness } = await requireBusiness(['OWNER', 'MANAGER']);
-  if (!callerBusiness) return { ok: false, error: 'Unauthorized' };
-
+async function ensureDemoBusinessInternal() {
   const existing = await getDemoBusiness();
-  if (existing) return { ok: true, businessId: existing.id };
+  if (existing) return existing;
 
   const demo = await prisma.business.create({
     data: {
@@ -32,6 +24,7 @@ export async function seedDemoAction(): Promise<{ ok: boolean; businessId?: stri
       momoProvider: 'MTN',
       momoNumber: '0240000000',
       isDemo: true,
+      hasDemoData: true,
     },
   });
 
@@ -86,6 +79,25 @@ export async function seedDemoAction(): Promise<{ ok: boolean; businessId?: stri
   }
 
   revalidatePath('/demo');
+  revalidatePath('/demo/pos');
+
+  return demo;
+}
+
+export async function ensureDemoBusiness() {
+  return ensureDemoBusinessInternal();
+}
+
+/**
+ * Seed a demo business with sample products, customers, and a few sales.
+ * Idempotent: if the demo business already exists, just returns it.
+ */
+export async function seedDemoAction(): Promise<{ ok: boolean; businessId?: string; error?: string }> {
+  // Must be an OWNER/MANAGER of a real business to trigger seeding
+  const { business: callerBusiness } = await requireBusiness(['OWNER', 'MANAGER']);
+  if (!callerBusiness) return { ok: false, error: 'Unauthorized' };
+
+  const demo = await ensureDemoBusinessInternal();
   return { ok: true, businessId: demo.id };
 }
 

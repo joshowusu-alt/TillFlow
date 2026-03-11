@@ -276,12 +276,13 @@ function CelebrationOverlay({ show }: { show: boolean }) {
 export default function ReadinessJourney({ initial }: { initial: ReadinessData }) {
   const router = useRouter();
   const [data, setData] = useState(initial);
-  const [isPending, startTransition] = useTransition();
+  const [isBusy, setIsBusy] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const { toast: showToast } = useToast();
 
-  const handleGenerateDemo = () => {
-    startTransition(async () => {
+  const handleGenerateDemo = async () => {
+    setIsBusy(true);
+    try {
       const res = await generateDemoDay();
       if (res.ok && res.salesCount > 0) {
         showToast(`${res.salesCount} demo sales generated!`, 'success');
@@ -296,11 +297,14 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         showToast(res.error, 'error');
       }
       router.refresh();
-    });
+    } finally {
+      setIsBusy(false);
+    }
   };
 
-  const handleWipeDemo = () => {
-    startTransition(async () => {
+  const handleWipeDemo = async () => {
+    setIsBusy(true);
+    try {
       const res = await clearSampleData();
       if (res.ok) {
         showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!', 'success');
@@ -314,18 +318,23 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         showToast(res.error, 'error');
       }
       router.refresh();
-    });
+    } finally {
+      setIsBusy(false);
+    }
   };
 
-  const handleComplete = () => {
-    startTransition(async () => {
+  const handleComplete = async () => {
+    setIsBusy(true);
+    try {
       await completeOnboarding();
       if (data.pct === 100) {
         setShowCelebration(true);
         setTimeout(() => setShowCelebration(false), 3000);
       }
       router.push('/pos');
-    });
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const allDone = data.pct === 100;
@@ -363,10 +372,10 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
               {data.nextStep.key === 'demo' ? (
                 <button
                   onClick={handleGenerateDemo}
-                  disabled={isPending}
+                  disabled={isBusy}
                   className="btn-primary mt-3 w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {isPending ? 'Generating...' : 'Run Demo Day'}
+                  {isBusy ? 'Generating...' : 'Run Demo Day'}
                 </button>
               ) : (
                 <Link
@@ -393,7 +402,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             hasDemoData={data.hasDemoData}
             onGenerate={handleGenerateDemo}
             onWipe={handleWipeDemo}
-            isPending={isPending}
+            isPending={isBusy}
           />
         </div>
 
