@@ -9,15 +9,48 @@ import { unstable_cache } from 'next/cache';
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
 
-  // Get store name for the trust panel (no redirect if missing — handled per-page)
-  const store = await prisma.store.findFirst({
-    where: { businessId: business.id },
-    select: { id: true, name: true }
-  });
+  const [store, kpisResult] = await Promise.all([
+    prisma.store.findFirst({
+      where: { businessId: business.id },
+      select: { id: true, name: true }
+    }),
+    getTodayKPIs(business.id).catch((error) => {
+      console.error('[protected-layout] Failed to load today KPIs', {
+        businessId: business.id,
+        userId: user.id,
+        error,
+      });
+
+      return {
+        totalSalesPence: 0,
+        grossMarginPence: 0,
+        gpPercent: 0,
+        txCount: 0,
+        outstandingARPence: 0,
+        outstandingAPPence: 0,
+        arOver60Pence: 0,
+        arOver90Pence: 0,
+        cashVarianceTotalPence: 0,
+        openHighAlerts: 0,
+        totalTrackedProducts: 0,
+        productsAboveReorderPoint: 0,
+        paymentSplit: {},
+        avgDailyExpensesPence: 0,
+        cashOnHandEstimatePence: 0,
+        negativeMarginProductCount: 0,
+        momoPendingCount: 0,
+        stockoutImminentCount: 0,
+        urgentReorderCount: 0,
+        thisWeekExpensesPence: 0,
+        fourWeekAvgExpensesPence: 0,
+        discountOverrideCount: 0,
+      };
+    })
+  ]);
 
   // Keep nav and owner/dashboard summaries on the exact same KPI source so they
   // never disagree about today's trading position.
-  const kpis = await getTodayKPIs(business.id);
+  const kpis = kpisResult;
   const todaySales = {
     totalPence: kpis.totalSalesPence,
     txCount: kpis.txCount,
