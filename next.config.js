@@ -17,6 +17,10 @@ const nextConfig = {
     // Large imports (1000+ products) produce ~2-3 MB in the server-action request body.
     // Next.js 14.1+ supports bodySizeLimit via the nested serverActions object.
     serverActions: {
+      // Local browser automation and mixed localhost/127.0.0.1 dev sessions can
+      // otherwise trip Next.js origin checks and surface as 403s on legitimate
+      // form submissions.
+      allowedOrigins: ['localhost:6200', '127.0.0.1:6200', 'localhost:6201', '127.0.0.1:6201'],
       bodySizeLimit: '4mb',
     },
   },

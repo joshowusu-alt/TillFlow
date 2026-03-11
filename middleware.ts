@@ -50,7 +50,11 @@ export function middleware(request: NextRequest) {
             }
         }
 
-        if (secFetchSite && !['same-origin', 'same-site'].includes(secFetchSite)) {
+        // Some legitimate browser contexts (including top-level form submits,
+        // installed/PWA launches, and browser automation) can send
+        // `sec-fetch-site: none`. Once the Origin host matches, that request is
+        // still same-origin enough for our CSRF model.
+        if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
             return forbiddenResponse(request, 'cross_site_request');
         }
     }
@@ -58,8 +62,18 @@ export function middleware(request: NextRequest) {
     // --- Auth guard: redirect unauthenticated users to /login ---
     // Cookie is business-scoped (pos_session_<businessId>) — scan for any match.
     const sessionToken = request.cookies.getAll().find(c => c.name.startsWith('pos_session_'))?.value;
+
+    // Root route should never appear as an empty shell in the browser.
+    // Redirect immediately to the correct landing page and let downstream
+    // auth checks validate any stale session cookie on /pos.
+    if (pathname === '/') {
+        const rootUrl = request.nextUrl.clone();
+        rootUrl.pathname = sessionToken ? '/pos' : '/welcome';
+        return NextResponse.redirect(rootUrl);
+    }
+
     const isPublic =
-        pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+        PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
     if (!sessionToken && !isPublic) {
         const loginUrl = request.nextUrl.clone();
