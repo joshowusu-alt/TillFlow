@@ -37,12 +37,29 @@ export const CHART_OF_ACCOUNTS = [
   { code: '6600', name: 'Marketing',              type: 'EXPENSE' as const },
 ];
 
+function isSqliteRuntime() {
+  const databaseUrl = process.env.DATABASE_URL ?? '';
+  return databaseUrl.startsWith('file:') || databaseUrl.includes('.db');
+}
+
+function isPostgresRuntime() {
+  const primaryUrl = process.env.DATABASE_URL ?? '';
+  const pooledUrl = process.env.POSTGRES_PRISMA_URL ?? '';
+  const directUrl = process.env.POSTGRES_URL_NON_POOLING ?? '';
+
+  if (isSqliteRuntime()) return false;
+
+  return [primaryUrl, pooledUrl, directUrl].some((url) =>
+    url.startsWith('postgres://') || url.startsWith('postgresql://')
+  );
+}
+
 /**
  * Idempotently ensures all standard chart-of-accounts entries exist for a business.
  * Safe to call multiple times — existing accounts are not modified.
  */
 export async function ensureChartOfAccounts(businessId: string, client: PrismaClient = prisma) {
-  const isPostgres = !!(process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL_NON_POOLING);
+  const isPostgres = isPostgresRuntime();
 
   if (isPostgres) {
     // Single raw SQL INSERT ... ON CONFLICT DO NOTHING = 1 RTT for all accounts.
