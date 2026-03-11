@@ -154,8 +154,11 @@ export default function PosClient({
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const [productDropdownViewport, setProductDropdownViewport] = useState({ top: 112, maxHeight: 320 });
   const [cameraOpen, setCameraOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  const productSearchShellRef = useRef<HTMLDivElement>(null);
   // Staged product: when a product with multiple units is picked, show unit
   // toggle + qty row before adding to cart
   const [stagedProduct, setStagedProduct] = useState<ProductDto | null>(null);
@@ -900,6 +903,49 @@ export default function PosClient({
       .slice(0, 10);
   }, [productOptions, productSearch]);
 
+  const updateProductDropdownViewport = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const compact = window.innerWidth < 640;
+    setIsCompactViewport(compact);
+    if (!compact) return;
+
+    const visualViewport = window.visualViewport;
+    const viewportHeight = visualViewport?.height ?? window.innerHeight;
+    const viewportOffsetTop = visualViewport?.offsetTop ?? 0;
+    const rect = productSearchShellRef.current?.getBoundingClientRect();
+    const preferredTop = rect ? rect.bottom + 8 : viewportOffsetTop + 96;
+    const minTop = viewportOffsetTop + 12;
+    const top = Math.max(minTop, Math.min(preferredTop, viewportOffsetTop + viewportHeight - 220));
+    const maxHeight = Math.max(180, Math.floor(viewportOffsetTop + viewportHeight - top - 12));
+
+    setProductDropdownViewport({ top, maxHeight });
+  }, []);
+
+  useEffect(() => {
+    updateProductDropdownViewport();
+  }, [updateProductDropdownViewport]);
+
+  useEffect(() => {
+    if (!productDropdownOpen) return;
+
+    updateProductDropdownViewport();
+    const handleViewportChange = () => {
+      window.requestAnimationFrame(updateProductDropdownViewport);
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', handleViewportChange);
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('orientationchange', handleViewportChange);
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [productDropdownOpen, updateProductDropdownViewport]);
+
 
 
   const addToCart = useCallback((line: { productId: string; unitId: string; qtyInUnit: number }) => {
@@ -1338,8 +1384,8 @@ export default function PosClient({
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex-1 min-w-[200px]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="w-full sm:min-w-[200px] sm:flex-1">
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
                   <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1371,9 +1417,9 @@ export default function PosClient({
               </div>
             </div>
 
-            <div className="text-center text-xs text-black/30 font-semibold">OR</div>
+            <div className="hidden text-center text-xs font-semibold text-black/30 sm:block">OR</div>
 
-            <div className="flex-1 min-w-[200px] relative">
+            <div ref={productSearchShellRef} className="relative w-full sm:min-w-[200px] sm:flex-1">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center z-10">
                 <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1386,9 +1432,11 @@ export default function PosClient({
                 onChange={(event) => {
                   setProductSearch(event.target.value);
                   setProductDropdownOpen(true);
+                  window.requestAnimationFrame(updateProductDropdownViewport);
                 }}
                 onFocus={() => {
                   setProductDropdownOpen(true);
+                  window.requestAnimationFrame(updateProductDropdownViewport);
                 }}
                 onBlur={() => {
                   setTimeout(() => setProductDropdownOpen(false), 200);
@@ -1397,7 +1445,13 @@ export default function PosClient({
                 autoComplete="off"
               />
               {productDropdownOpen && productSearch.trim() && (
-                <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-black/10 bg-white shadow-xl">
+                <div
+                  className={isCompactViewport
+                    ? 'fixed inset-x-3 z-40 overflow-auto rounded-2xl border border-black/10 bg-white shadow-2xl'
+                    : 'absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-auto rounded-xl border border-black/10 bg-white shadow-xl'
+                  }
+                  style={isCompactViewport ? { top: productDropdownViewport.top, maxHeight: productDropdownViewport.maxHeight } : undefined}
+                >
                   {filteredProducts.length === 0 ? (
                     <div className="px-4 py-3 text-sm text-black/50">
                       No products match &ldquo;{productSearch}&rdquo;
@@ -1470,7 +1524,7 @@ export default function PosClient({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-end sm:self-auto">
               {undoStack.length > 0 && (
                 <button
                   type="button"
