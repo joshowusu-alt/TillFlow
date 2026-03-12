@@ -93,6 +93,32 @@ export default async function PurchasesPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(purchaseCount / DEFAULT_PAGE_SIZE));
+  const purchaseRows = purchases.map((purchase) => {
+    const lineCount = purchase._count.lines;
+    const line = purchase.lines[0];
+    const baseUnit = line?.product.productUnits.find((unit) => unit.isBaseUnit);
+    const packaging = getPrimaryPackagingUnit(
+      line?.product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit })) ?? []
+    );
+    const qtyLabel = line
+      ? formatMixedUnit({
+          qtyBase: line.qtyBase,
+          baseUnit: baseUnit?.unit.name ?? 'unit',
+          baseUnitPlural: baseUnit?.unit.pluralName,
+          packagingUnit: packaging?.unit.name,
+          packagingUnitPlural: packaging?.unit.pluralName,
+          packagingConversion: packaging?.conversionToBase,
+        })
+      : '-';
+    const lineLabel = lineCount > 1 ? `${lineCount} lines` : qtyLabel;
+    const outstandingPence = purchase.totalPence - purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+
+    return {
+      purchase,
+      lineLabel,
+      outstandingPence,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -114,10 +140,10 @@ export default async function PurchasesPage({
         </div>
       )}
 
-      <form method="GET" className="card flex flex-wrap items-end gap-3 p-4">
-        <div>
+      <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <div className="min-w-0">
           <label className="label">Branch / Store</label>
-          <select className="input" name="storeId" defaultValue={selectedStoreId}>
+          <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
             {stores.map((store) => (
               <option key={store.id} value={store.id}>
                 {store.name}
@@ -125,15 +151,18 @@ export default async function PurchasesPage({
             ))}
           </select>
         </div>
-        <button className="btn-secondary" type="submit">
+        <button className="btn-secondary w-full sm:w-auto" type="submit">
           Apply
         </button>
       </form>
 
-      <div className="card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-display font-semibold">Receive stock</h2>
-          <Link className="btn-secondary text-xs" href="/suppliers">
+      <div className="card p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-display font-semibold">Receive stock</h2>
+            <p className="mt-1 text-sm text-black/55">Add supplier purchases quickly and update stock in one flow.</p>
+          </div>
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/suppliers">
             Add supplier
           </Link>
         </div>
@@ -162,9 +191,78 @@ export default async function PurchasesPage({
         />
       </div>
 
-      <div className="card p-6 overflow-x-auto">
-        <h2 className="text-lg font-display font-semibold">Recent purchases</h2>
-        <table className="table mt-4 w-full border-separate border-spacing-y-2">
+      <div className="card p-4 sm:p-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-display font-semibold">Recent purchases</h2>
+            <p className="text-sm text-black/55">Review the latest invoices, outstanding balances, and returns.</p>
+          </div>
+          <div className="text-xs text-black/45">{purchaseCount} total invoices</div>
+        </div>
+
+        <div className="mt-4 space-y-3 md:hidden">
+          {purchaseRows.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
+              No purchases recorded yet.
+            </div>
+          ) : (
+            purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => (
+              <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-ink">#{purchase.id.slice(0, 8)}</div>
+                    <div className="mt-1 text-sm text-black/60">{purchase.supplier?.name ?? 'Supplier not set'}</div>
+                  </div>
+                  <span className={`pill-${purchase.paymentStatus.toLowerCase().replace('_', '-')}`}>{purchase.paymentStatus.replace('_', ' ')}</span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Date</div>
+                    <div className="mt-1 text-black/70">{formatDateTime(purchase.createdAt)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Lines</div>
+                    <div className="mt-1 text-black/70">{lineLabel}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Total</div>
+                    <div className="mt-1 font-semibold text-ink">{formatMoney(purchase.totalPence, business.currency)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Outstanding</div>
+                    <div className="mt-1 text-black/70">{formatMoney(Math.max(0, outstandingPence), business.currency)}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus) ? (
+                    <span className="text-xs text-black/40">Returned</span>
+                  ) : (
+                    <>
+                      {['UNPAID', 'PART_PAID'].includes(purchase.paymentStatus) && (
+                        <InlinePaymentForm
+                          invoiceId={purchase.id}
+                          outstandingPence={outstandingPence}
+                          currency={business.currency}
+                          type="supplier"
+                          returnTo="/purchases"
+                        />
+                      )}
+                      <Link className="btn-ghost text-xs" href={`/purchases/return/${purchase.id}`}>
+                        Return
+                      </Link>
+                      <DeletePurchaseButton purchaseId={purchase.id} />
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 hidden overflow-x-auto md:block">
+          <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Invoice</th>
@@ -177,24 +275,7 @@ export default async function PurchasesPage({
             </tr>
           </thead>
           <tbody>
-            {purchases.map((purchase) => {
-              const lineCount = purchase._count.lines;
-              const line = purchase.lines[0];
-              const baseUnit = line?.product.productUnits.find((unit) => unit.isBaseUnit);
-              const packaging = getPrimaryPackagingUnit(
-                line?.product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit })) ?? []
-              );
-              const qtyLabel = line
-                ? formatMixedUnit({
-                    qtyBase: line.qtyBase,
-                    baseUnit: baseUnit?.unit.name ?? 'unit',
-                    baseUnitPlural: baseUnit?.unit.pluralName,
-                    packagingUnit: packaging?.unit.name,
-                    packagingUnitPlural: packaging?.unit.pluralName,
-                    packagingConversion: packaging?.conversionToBase,
-                  })
-                : '-';
-              const lineLabel = lineCount > 1 ? `${lineCount} lines` : qtyLabel;
+            {purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => {
               return (
                 <tr key={purchase.id} className="rounded-xl bg-white">
                   <td className="px-3 py-3 text-sm">{purchase.id.slice(0, 8)}</td>
@@ -215,7 +296,7 @@ export default async function PurchasesPage({
                         {['UNPAID', 'PART_PAID'].includes(purchase.paymentStatus) && (
                           <InlinePaymentForm
                             invoiceId={purchase.id}
-                            outstandingPence={purchase.totalPence - purchase.payments.reduce((s, p) => s + p.amountPence, 0)}
+                            outstandingPence={outstandingPence}
                             currency={business.currency}
                             type="supplier"
                             returnTo="/purchases"
@@ -232,7 +313,8 @@ export default async function PurchasesPage({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
         <Pagination
           currentPage={page}
           totalPages={totalPages}

@@ -48,6 +48,8 @@ export default async function StocktakePage() {
       select: { id: true },
     }),
   ]);
+  const completedCount = pastStocktakes.filter((stocktake) => stocktake.status === 'COMPLETED').length;
+  const cancelledCount = pastStocktakes.filter((stocktake) => stocktake.status !== 'COMPLETED').length;
 
   return (
     <div className="space-y-6">
@@ -55,11 +57,26 @@ export default async function StocktakePage() {
         title="Stocktake"
         subtitle="Physical inventory count with variance reconciliation."
         actions={
-          <Link className="btn-secondary text-xs" href="/inventory">
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory">
             ← Back to Inventory
           </Link>
         }
       />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Active products</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-ink">{products.length}</div>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Completed</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-emerald-700">{completedCount}</div>
+        </div>
+        <div className="rounded-2xl border border-black/10 bg-slate-50 px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-black/45">Cancelled</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-black/70">{cancelledCount}</div>
+        </div>
+      </div>
 
       {inProgress ? (
         <StocktakeClient
@@ -78,7 +95,7 @@ export default async function StocktakePage() {
           startedAt={inProgress.createdAt.toISOString()}
         />
       ) : (
-        <div className="card p-8 text-center space-y-4">
+        <div className="card space-y-4 p-5 text-center sm:p-8">
           <div className="rounded-full bg-accentSoft p-4 mx-auto w-fit">
             <svg className="h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -110,7 +127,25 @@ export default async function StocktakePage() {
       {pastStocktakes.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-black/50 uppercase tracking-wider">Past Stocktakes</h3>
-          <div className="card overflow-hidden">
+          <div className="space-y-3 md:hidden">
+            {pastStocktakes.map((st) => (
+              <div key={st.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-ink">{formatDateTime(st.createdAt)}</div>
+                    <div className="mt-1 text-sm text-black/60">By {st.user.name}</div>
+                  </div>
+                  {st.status === 'COMPLETED' ? (
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Completed</span>
+                  ) : (
+                    <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/50">Cancelled</span>
+                  )}
+                </div>
+                <div className="mt-4 text-sm text-black/65">{st._count.lines} products counted</div>
+              </div>
+            ))}
+          </div>
+          <div className="card hidden overflow-hidden md:block">
             <table className="table w-full">
               <thead>
                 <tr>

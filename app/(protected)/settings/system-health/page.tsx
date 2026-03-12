@@ -100,43 +100,43 @@ export default async function SystemHealthPage() {
 
       {/* Details row */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="card p-5 overflow-x-auto">
+        <div className="card p-4 sm:p-5">
           <h3 className="mb-3 font-semibold text-sm">Observability</h3>
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-black/5">
-              <tr className="py-1">
-                <td className="py-2 text-black/50 pr-4">Last Sync Event</td>
-                <td className="py-2 font-medium">
-                  {lastSyncEvent
-                    ? `${lastSyncEvent.eventType} · ${new Date(lastSyncEvent.appliedAt).toLocaleString()}`
-                    : '—'}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-black/50 pr-4">Last Day Closure</td>
-                <td className="py-2 font-medium">
-                  {lastBackup
-                    ? new Date(lastBackup.closureDate).toLocaleDateString()
-                    : <span className="text-amber-600">No closure on record</span>}
-                </td>
-              </tr>
-              <tr>
-                <td className="py-2 text-black/50 pr-4">Total Messages Logged</td>
-                <td className="py-2 font-medium">{totalMessageLogs}</td>
-              </tr>
-              <tr>
-                <td className="py-2 text-black/50 pr-4">Open Risk Alerts</td>
-                <td className="py-2 font-medium">
+          <div className="space-y-3 text-sm">
+            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last sync event</div>
+              <div className="mt-1 font-medium text-ink">
+                {lastSyncEvent
+                  ? `${lastSyncEvent.eventType} · ${new Date(lastSyncEvent.appliedAt).toLocaleString()}`
+                  : '—'}
+              </div>
+            </div>
+            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last day closure</div>
+              <div className="mt-1 font-medium text-ink">
+                {lastBackup
+                  ? new Date(lastBackup.closureDate).toLocaleDateString()
+                  : <span className="text-amber-600">No closure on record</span>}
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Total messages logged</div>
+                <div className="mt-1 font-medium text-ink">{totalMessageLogs}</div>
+              </div>
+              <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
+                <div className="text-xs uppercase tracking-[0.16em] text-black/40">Open risk alerts</div>
+                <div className="mt-1 font-medium text-ink">
                   {openRiskAlerts === 0
                     ? <span className="text-emerald-600">None</span>
                     : <a href="/reports/risk-monitor" className="text-rose-600 hover:underline">{openRiskAlerts} open →</a>}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="card p-5">
+        <div className="card p-4 sm:p-5">
           <h3 className="mb-3 font-semibold text-sm">API Endpoints</h3>
           <div className="space-y-2 text-sm">
             {[
@@ -146,7 +146,7 @@ export default async function SystemHealthPage() {
               { label: 'Demo Reset', url: '/api/cron/demo-reset', hint: 'Needs CRON_SECRET' },
               { label: 'Offline Sync', url: '/api/offline/sync', hint: 'POST, device auth' },
             ].map((ep) => (
-              <div key={ep.url} className="flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2">
+              <div key={ep.url} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <span className="font-medium">{ep.label}</span>
                   <span className="ml-2 text-xs text-black/40">{ep.hint}</span>
@@ -159,14 +159,14 @@ export default async function SystemHealthPage() {
       </div>
 
       {/* Scheduler job history */}
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <h3 className="mb-4 font-semibold text-sm">Scheduler Job History</h3>
         {recentJobs.length === 0 ? (
           <p className="text-sm text-black/40">No scheduler jobs recorded yet.</p>
         ) : (
           <div className="space-y-2">
             {recentJobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between rounded-xl border border-black/5 px-4 py-3 hover:bg-black/[0.02]">
+              <div key={job.id} className="flex flex-col gap-3 rounded-xl border border-black/5 px-4 py-3 hover:bg-black/[0.02] sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   {jobStatusChip(job.status)}
                   <div>

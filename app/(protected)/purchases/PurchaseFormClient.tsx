@@ -384,7 +384,7 @@ export default function PurchaseFormClient({
           </button>
         </div>
         {quickAddOpen ? (
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div>
               <label className="label">Name</label>
               <input className="input" value={quickName} onChange={(e) => setQuickName(e.target.value)} />
@@ -493,17 +493,17 @@ export default function PurchaseFormClient({
               />
             </div>
             {quickAddError ? (
-              <div className="md:col-span-3 rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose">
+              <div className="rounded-xl border border-rose/30 bg-rose/10 px-3 py-2 text-sm text-rose sm:col-span-2 xl:col-span-3">
                 {quickAddError}
               </div>
             ) : null}
-            <div className="md:col-span-3 flex flex-wrap gap-3">
-              <button type="button" className="btn-primary" onClick={handleQuickCreate} disabled={isCreating}>
+            <div className="flex flex-col gap-3 sm:col-span-2 sm:flex-row xl:col-span-3">
+              <button type="button" className="btn-primary w-full sm:w-auto" onClick={handleQuickCreate} disabled={isCreating}>
                 {isCreating ? 'Creating...' : 'Create product'}
               </button>
               <button
                 type="button"
-                className="btn-ghost"
+                className="btn-ghost w-full sm:w-auto"
                 onClick={() => {
                   setQuickAddOpen(false);
                   setQuickAddError(null);
@@ -523,8 +523,17 @@ export default function PurchaseFormClient({
         <input type="hidden" name="cardPaid" value={Math.max(0, cardPaidPence)} />
         <input type="hidden" name="transferPaid" value={Math.max(0, transferPaidPence)} />
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="md:col-span-2">
+        <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-[0.2em] text-black/40">Build purchase</div>
+              <div className="mt-1 text-sm text-black/60">Look up a product, choose the purchase unit, then add the line to the cart.</div>
+            </div>
+            <div className="text-xs text-black/45">{cart.length} line{cart.length === 1 ? '' : 's'} in cart</div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="sm:col-span-2 xl:col-span-2">
             <label className="label">Barcode Lookup</label>
             <div className="relative">
               <input
@@ -551,8 +560,8 @@ export default function PurchaseFormClient({
                 </svg>
               </button>
             </div>
-          </div>
-          <div className="flex items-end">
+            </div>
+            <div className="flex items-end">
             <button
               type="button"
               className="btn-secondary w-full"
@@ -566,8 +575,8 @@ export default function PurchaseFormClient({
             >
               Find / Add
             </button>
-          </div>
-          <div>
+            </div>
+            <div>
             <label className="label">Supplier</label>
             <select className="input" name="supplierId">
               <option value="">No supplier selected</option>
@@ -577,8 +586,8 @@ export default function PurchaseFormClient({
                 </option>
               ))}
             </select>
-          </div>
-          <div>
+            </div>
+            <div className="sm:col-span-2 xl:col-span-1">
             <label className="label">Product</label>
             <div className="relative">
               <input
@@ -627,10 +636,10 @@ export default function PurchaseFormClient({
               )}
             </div>
           </div>
-          <div>
+          <div className="sm:col-span-2 xl:col-span-3">
             <label className="label">Purchase in</label>
             {hasMultipleUnits ? (
-              <div className="mt-1 flex gap-1">
+              <div className="mt-1 flex flex-wrap gap-2">
                 {unitsForProduct.map((unit) => (
                   <button
                     key={unit.id}
@@ -716,13 +725,93 @@ export default function PurchaseFormClient({
             </button>
           </div>
         </div>
+        </div>
 
-        <div className="card p-4 overflow-x-auto">
+        <div className="card p-4 sm:p-5">
           <div className="text-xs uppercase tracking-[0.2em] text-black/40">Purchase cart</div>
           {cartDetails.length === 0 ? (
             <div className="mt-3 text-sm text-black/50">No items yet.</div>
           ) : (
-            <table className="table mt-3 w-full border-separate border-spacing-y-2">
+            <>
+              <div className="mt-3 space-y-3 md:hidden">
+                {cartDetails.map((line) => (
+                  <div key={line.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-ink">{line.product.name}</div>
+                        <div className="mt-1 text-xs text-black/50">{line.qtyLabel}</div>
+                      </div>
+                      <button type="button" className="btn-ghost text-xs" onClick={() => removeLine(line.id)}>
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="label">Qty</label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setQtyDrafts((prev) => ({ ...prev, [line.id]: value }));
+                          }}
+                          onBlur={() => {
+                            const draft = qtyDrafts[line.id];
+                            if (draft === undefined) return;
+                            const parsed = Number(draft);
+                            if (!Number.isFinite(parsed) || parsed <= 0) {
+                              removeLine(line.id);
+                              return;
+                            }
+                            updateLine(line.id, { qtyInUnit: Math.floor(parsed) });
+                          }}
+                          onFocus={(event) => event.currentTarget.select()}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Unit cost</label>
+                        <input
+                          className="input"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          inputMode="decimal"
+                          value={costDrafts[line.id] ?? line.unitCostInput}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setCostDrafts((prev) => ({ ...prev, [line.id]: value }));
+                          }}
+                          onBlur={() => {
+                            const draft = costDrafts[line.id];
+                            if (draft === undefined) return;
+                            updateLine(line.id, { unitCostInput: draft });
+                          }}
+                          onFocus={(event) => event.currentTarget.select()}
+                        />
+                        <div className="mt-1 text-xs text-black/50">
+                          {formatMoney(line.unitCostPence, currency)} per {line.unit.name}
+                          {line.unit.conversionToBase > 1 ? (
+                            <> · {formatMoney(Math.round(line.unitCostPence / line.unit.conversionToBase), currency)} per {line.product.units.find((u) => u.isBaseUnit)?.name ?? 'unit'}</>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2 text-sm">
+                      <span className="text-black/50">Line total</span>
+                      <span className="ml-2 font-semibold text-ink">{formatMoney(line.lineTotal, currency)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 hidden overflow-x-auto md:block">
+                <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>
                   <th>Item</th>
@@ -799,11 +888,13 @@ export default function PurchaseFormClient({
                   </tr>
                 ))}
               </tbody>
-            </table>
+                </table>
+              </div>
+            </>
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="label">Payment Status</label>
             <select className="input" name="paymentStatus">
@@ -840,7 +931,7 @@ export default function PurchaseFormClient({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {hasMethod('CASH') ? (
             <div>
               <label className="label">Cash Paid</label>
@@ -891,7 +982,11 @@ export default function PurchaseFormClient({
           </div>
         ) : null}
 
-        <div>
+        <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-black/60">
+            Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
+            <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.
+          </div>
           <ReceivePurchaseButton disabled={cart.length === 0 || overpay} />
         </div>
       </form>
@@ -913,7 +1008,7 @@ export default function PurchaseFormClient({
 function ReceivePurchaseButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <button className="btn-primary" disabled={disabled || pending}>
+    <button className="btn-primary w-full sm:w-auto" disabled={disabled || pending}>
       {pending ? 'Submitting…' : 'Receive Purchase'}
     </button>
   );

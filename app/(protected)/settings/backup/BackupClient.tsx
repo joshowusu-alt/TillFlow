@@ -143,6 +143,21 @@ export default function BackupClient() {
                 subtitle="Export and restore your business data."
             />
 
+            <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.2em] text-black/40">Export format</div>
+                    <div className="mt-1 text-base font-display font-semibold text-ink">JSON backup</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Use case</div>
+                    <div className="mt-1 text-base font-display font-semibold text-emerald-700">Backup & restore</div>
+                </div>
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                    <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Danger zone</div>
+                    <div className="mt-1 text-base font-display font-semibold text-rose-700">Reset all data</div>
+                </div>
+            </div>
+
             {message && (
                 <div
                     className={`rounded-xl p-4 ${message.type === 'success'
@@ -156,7 +171,7 @@ export default function BackupClient() {
 
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* Export Section */}
-                <div className="card p-6">
+                <div className="card p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Export Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
                         Download a complete backup of your database as a JSON file. Store this file safely for disaster recovery.
@@ -167,7 +182,7 @@ export default function BackupClient() {
                     <button
                         onClick={handleExport}
                         disabled={exporting}
-                        className="btn-primary mt-4"
+                        className="btn-primary mt-4 w-full sm:w-auto"
                     >
                         {exporting ? (
                             <>
@@ -189,7 +204,7 @@ export default function BackupClient() {
                 </div>
 
                 {/* Import Section */}
-                <div className="card p-6">
+                <div className="card p-4 sm:p-6">
                     <h2 className="text-lg font-display font-semibold">Restore Backup</h2>
                     <p className="mt-2 text-sm text-black/60">
                         Restore your database from a previously exported backup file.
@@ -212,27 +227,45 @@ export default function BackupClient() {
                         <div className="mt-4 space-y-4">
                             <div className="rounded-xl border border-black/10 bg-black/5 p-4">
                                 <h3 className="font-semibold">Backup Preview</h3>
-                                <div className="mt-2 space-y-1 text-sm text-black/60">
-                                    <div>Exported: {new Date(previewData.exportedAt).toLocaleString()}</div>
-                                    <div>Business: {previewData.business.name}</div>
-                                    <div>Products: {previewData.products?.length ?? 0}</div>
-                                    <div>Customers: {previewData.customers?.length ?? 0}</div>
-                                    <div>Sales: {previewData.salesInvoices?.length ?? 0}</div>
-                                    <div>Purchases: {previewData.purchaseInvoices?.length ?? 0}</div>
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2 text-sm text-black/60">
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Exported</div>
+                                        <div className="mt-1">{new Date(previewData.exportedAt).toLocaleString()}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Business</div>
+                                        <div className="mt-1">{previewData.business.name}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Products</div>
+                                        <div className="mt-1">{previewData.products?.length ?? 0}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Customers</div>
+                                        <div className="mt-1">{previewData.customers?.length ?? 0}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Sales</div>
+                                        <div className="mt-1">{previewData.salesInvoices?.length ?? 0}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs uppercase tracking-[0.16em] text-black/40">Purchases</div>
+                                        <div className="mt-1">{previewData.purchaseInvoices?.length ?? 0}</div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row">
                                 <button
                                     onClick={handleImport}
                                     disabled={importing}
-                                    className="btn bg-rose-600 text-white hover:bg-rose-700"
+                                    className="btn bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto"
                                 >
                                     {importing ? 'Restoring...' : 'Restore Backup'}
                                 </button>
                                 <button
                                     onClick={cancelImport}
                                     disabled={importing}
-                                    className="btn-ghost"
+                                    className="btn-ghost w-full sm:w-auto"
                                 >
                                     Cancel
                                 </button>
@@ -243,7 +276,7 @@ export default function BackupClient() {
             </div>
 
             {/* Reset Section */}
-            <div className="card border-2 border-rose-200 p-6">
+            <div className="card border-2 border-rose-200 p-4 sm:p-6">
                 <h2 className="text-lg font-display font-semibold text-rose-700">Start Fresh</h2>
                 <p className="mt-2 text-sm text-black/60">
                     Delete all products, inventory, sales, purchases, expenses, customers, and suppliers.
@@ -255,7 +288,7 @@ export default function BackupClient() {
                 <button
                     onClick={handleReset}
                     disabled={resetting}
-                    className="btn mt-4 bg-rose-600 text-white hover:bg-rose-700"
+                    className="btn mt-4 bg-rose-600 text-white hover:bg-rose-700 w-full sm:w-auto"
                 >
                     {resetting ? (
                         <>
@@ -277,7 +310,7 @@ export default function BackupClient() {
             </div>
 
             {/* Best Practices */}
-            <div className="card p-6">
+            <div className="card p-4 sm:p-6">
                 <h2 className="text-lg font-display font-semibold">Backup Best Practices</h2>
                 <ul className="mt-4 space-y-2 text-sm text-black/60">
                     <li className="flex items-start gap-2">

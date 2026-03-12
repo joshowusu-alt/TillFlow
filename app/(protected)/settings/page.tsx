@@ -2,7 +2,6 @@ import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
 import InstallButton from '@/components/InstallButton';
@@ -20,9 +19,20 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
   return (
     <div className="space-y-6">
       <PageHeader title="Business Settings" subtitle="VAT settings and company profile." />
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
         <form action={updateBusinessAction} className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-black/40">Business profile</div>
+            <div className="mt-1 text-sm text-black/60">
+              Configure receipts, tax settings, payments, and operational guardrails for your store.
+            </div>
+          </div>
+
+          <div className="md:col-span-2 pt-1">
+            <h2 className="text-base font-display font-semibold">Identity & receipts</h2>
+            <p className="mt-1 text-sm text-black/55">How your business appears on receipts and across the app.</p>
+          </div>
           <div>
             <label className="label">Business Name</label>
             <input className="input" name="name" defaultValue={business.name} />
@@ -63,6 +73,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           <div className="flex items-center gap-2">
             <input className="h-4 w-4" type="checkbox" name="vatEnabled" defaultChecked={business.vatEnabled} />
             <label className="text-sm">VAT Enabled</label>
+          </div>
+
+          <div className="md:col-span-2 pt-2">
+            <h2 className="text-base font-display font-semibold">Printing & tax</h2>
+            <p className="mt-1 text-sm text-black/55">Receipt output, printer setup, and tax registration details.</p>
           </div>
           <div>
             <label className="label">Receipt Template</label>
@@ -112,6 +127,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Cash you had on hand when you started (not stock value — stock is tracked automatically through Purchases). Appears as <strong>Owner&apos;s Capital</strong> on the Balance Sheet.
               Use <a href="/setup/opening-stock" className="underline text-accent">Opening Stock &amp; Capital setup</a> to calculate this automatically.
             </div>
+          </div>
+
+          <div className="md:col-span-2 pt-2">
+            <h2 className="text-base font-display font-semibold">Operations & risk controls</h2>
+            <p className="mt-1 text-sm text-black/55">Guardrails for till opening, variances, discounts, and stock adjustments.</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -171,6 +191,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Alert when till-close variance exceeds this amount. Example: 2000 = {currencySymbol}20.00.
             </div>
           </div>
+
+          <div className="md:col-span-2 pt-2">
+            <h2 className="text-base font-display font-semibold">Contacts & customer flow</h2>
+            <p className="mt-1 text-sm text-black/55">Phone, address, Mobile Money, and how customers are shared across branches.</p>
+          </div>
           <div>
             <label className="label">Phone Number</label>
             <input className="input" name="phone" defaultValue={business.phone ?? ''} placeholder="+233 XX XXX XXXX" />
@@ -207,6 +232,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Choose whether customer records are shared company-wide or isolated per branch.
             </div>
           </div>
+
+          <div className="md:col-span-2 pt-2">
+            <h2 className="text-base font-display font-semibold">Operating mode</h2>
+            <p className="mt-1 text-sm text-black/55">Choose the feature depth and whether you run one store or multiple branches.</p>
+          </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
             <div className="mt-2 flex flex-wrap gap-4 text-sm">
@@ -240,7 +270,10 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Single Store hides Transfers and multi-branch features.
             </div>
           </div>
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-black/55">
+              Save once you finish updating your business profile and operational rules.
+            </div>
             <SubmitButton className="btn-primary" loadingText="Saving…">Save settings</SubmitButton>
           </div>
         </form>
@@ -254,8 +287,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       <CashDrawerSetup />
 
       {/* Quick links */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="card flex items-center justify-between p-6 transition hover:shadow-lg">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="card flex flex-col gap-4 p-5 transition hover:shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div className="flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
               <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -267,9 +300,9 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               <p className="text-sm text-black/50">Install on this device</p>
             </div>
           </div>
-          <InstallButton />
+          <div className="w-full sm:w-auto"><InstallButton /></div>
         </div>
-        <a href="/settings/data-repair" className="card flex items-center gap-4 p-6 transition hover:shadow-lg">
+        <a href="/settings/data-repair" className="card flex items-center gap-4 p-5 transition hover:shadow-lg sm:p-6">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-rose-100">
             <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -281,7 +314,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <p className="text-sm text-black/50">Diagnose &amp; fix data issues</p>
           </div>
         </a>
-        <a href="/onboarding" className="card flex items-center gap-4 p-6 transition hover:shadow-lg">
+        <a href="/onboarding" className="card flex items-center gap-4 p-5 transition hover:shadow-lg sm:p-6">
           <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accentSoft">
             <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -295,7 +328,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       </div>
 
       {/* Data safety trust note */}
-      <div className="rounded-xl border border-black/5 bg-slate-50 px-5 py-4 flex items-start gap-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-black/5 bg-slate-50 px-5 py-4 sm:flex-row sm:items-start">
         <svg className="h-5 w-5 flex-shrink-0 text-black/30 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         </svg>
@@ -319,8 +352,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       )}
 
       {/* Import & Data */}
-      <div className="card p-6">
-        <div className="flex items-start justify-between gap-4">
+      <div className="card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="font-semibold mb-1">Import &amp; Data</h3>
             <p className="text-sm text-black/50">
@@ -328,7 +361,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Useful when migrating from another system.
             </p>
           </div>
-          <a href="/settings/import-stock" className="btn-primary shrink-0 text-sm">
+          <a href="/settings/import-stock" className="btn-primary w-full shrink-0 text-center text-sm sm:w-auto">
             Import stock from CSV / Excel →
           </a>
         </div>

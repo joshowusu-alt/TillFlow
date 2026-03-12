@@ -149,7 +149,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
     <div className="space-y-4">
       {/* Progress bar */}
       <div className="card p-4">
-        <div className="flex items-center justify-between text-sm mb-2">
+        <div className="mb-2 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span className="font-medium">
             {stats.counted}/{stats.total} counted
             {stats.variances > 0 && (
@@ -171,15 +171,15 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
       </div>
 
       {/* Search & filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <input
           ref={searchRef}
-          className="input flex-1 min-w-[200px]"
+          className="input min-w-[200px] flex-1"
           placeholder="Search product or barcode…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {[
             { key: 'all' as const, label: `All (${stats.total})` },
             { key: 'uncounted' as const, label: `Uncounted (${stats.uncounted})` },
@@ -207,7 +207,83 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
       )}
 
       {/* Count sheet */}
-      <div className="card overflow-hidden">
+      <div className="space-y-3 md:hidden">
+        {filteredLines.map((line) => {
+          const countedVal = counts[line.id];
+          const hasCounted = countedVal !== '' && countedVal !== undefined;
+          const counted = hasCounted ? Number(countedVal) : null;
+          const variance = counted !== null ? counted - line.expectedBase : null;
+          const unit = line.expectedBase === 1 ? line.baseUnit : line.baseUnitPlural;
+
+          return (
+            <div
+              key={line.id}
+              className={`rounded-2xl border px-4 py-4 shadow-sm ${
+                variance !== null && variance !== 0
+                  ? 'border-amber-200 bg-amber-50/60'
+                  : hasCounted
+                  ? 'border-emerald-100 bg-emerald-50/40'
+                  : 'border-black/5 bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium text-ink">{line.productName}</div>
+                  <div className="mt-1 text-xs font-mono text-black/40">{line.barcode || 'No barcode'}</div>
+                </div>
+                <div className="text-right text-sm">
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">System</div>
+                  <div className="mt-1 font-semibold text-ink">{line.expectedBase} <span className="font-normal text-black/50">{unit}</span></div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label">Counted</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="input text-center text-sm tabular-nums"
+                    placeholder="—"
+                    value={countedVal ?? ''}
+                    onChange={(e) => updateCount(line.id, e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                  />
+                </div>
+                <div>
+                  <div className="label">Variance</div>
+                  <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2 text-sm tabular-nums">
+                    {variance !== null ? (
+                      <span
+                        className={`font-semibold ${
+                          variance > 0
+                            ? 'text-emerald-600'
+                            : variance < 0
+                            ? 'text-red-600'
+                            : 'text-black/40'
+                        }`}
+                      >
+                        {variance > 0 ? '+' : ''}
+                        {variance}
+                      </span>
+                    ) : (
+                      <span className="text-black/20">—</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {filteredLines.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center text-sm text-black/40">
+            No products match your filter.
+          </div>
+        )}
+      </div>
+
+      <div className="card hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-black/[0.02]">
@@ -291,27 +367,29 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2 justify-between">
-        <div className="flex gap-2">
-          <button className="btn-primary text-sm" onClick={handleSave} disabled={pending}>
+      <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-black/[0.02] p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <button type="button" className="btn-primary text-sm w-full sm:w-auto" onClick={handleSave} disabled={pending}>
             {pending ? 'Saving…' : 'Save Progress'}
           </button>
           {stats.counted > 0 && (
             confirmComplete ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <span className="text-sm text-amber-700">
                   Apply {stats.variances} variance{stats.variances !== 1 ? 's' : ''} to stock?
                 </span>
-                <button className="btn-primary text-sm" onClick={handleComplete} disabled={pending}>
+                <button type="button" className="btn-primary text-sm w-full sm:w-auto" onClick={handleComplete} disabled={pending}>
                   Yes, Complete
                 </button>
-                <button className="btn-secondary text-sm" onClick={() => setConfirmComplete(false)}>
+                <button type="button" className="btn-secondary text-sm w-full sm:w-auto" onClick={() => setConfirmComplete(false)}>
                   No
                 </button>
               </div>
             ) : (
               <button
-                className="btn-secondary text-sm"
+                type="button"
+                className="btn-secondary text-sm w-full sm:w-auto"
                 onClick={() => setConfirmComplete(true)}
                 disabled={pending}
               >
@@ -319,20 +397,21 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
               </button>
             )
           )}
-        </div>
-        <div>
+          </div>
+        <div className="sm:ml-auto">
           {confirmCancel ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <span className="text-sm text-red-700">Cancel this stocktake?</span>
-              <button className="text-sm font-medium text-red-600 hover:text-red-800" onClick={handleCancel} disabled={pending}>
+              <button type="button" className="text-sm font-medium text-red-600 hover:text-red-800" onClick={handleCancel} disabled={pending}>
                 Yes, Cancel
               </button>
-              <button className="btn-secondary text-sm" onClick={() => setConfirmCancel(false)}>
+              <button type="button" className="btn-secondary text-sm w-full sm:w-auto" onClick={() => setConfirmCancel(false)}>
                 No
               </button>
             </div>
           ) : (
             <button
+              type="button"
               className="text-sm text-black/40 hover:text-red-600 transition-colors"
               onClick={() => setConfirmCancel(true)}
               disabled={pending}
@@ -341,6 +420,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

@@ -354,8 +354,8 @@ export default function ImportStockClient({
         </div>
 
         {/* Template download */}
-        <div className="card p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4">
+        <div className="card space-y-4 p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="font-semibold text-sm">Don't have a file yet?</h3>
               <p className="text-xs text-black/50 mt-0.5">
@@ -364,7 +364,7 @@ export default function ImportStockClient({
             </div>
             <button
               type="button"
-              className="btn-ghost border border-black/10 shrink-0 text-sm"
+              className="btn-ghost border border-black/10 shrink-0 text-sm w-full sm:w-auto"
               onClick={downloadTemplate}
             >
               ↓ Download Template
@@ -553,7 +553,7 @@ export default function ImportStockClient({
     <div className="space-y-4">
       {/* Header controls */}
       <div className="card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -607,7 +607,7 @@ export default function ImportStockClient({
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-black/50">Mark all:</span>
             <button
               type="button"
@@ -635,7 +635,134 @@ export default function ImportStockClient({
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden p-0">
+      <div className="space-y-3 md:hidden">
+        {filteredRows.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-black/10 px-4 py-10 text-center text-sm text-black/40">
+            {statusFilter === 'error' ? 'No errors — all fixed! 🎉' :
+             statusFilter === 'warning' ? 'No warnings — all resolved! 🎉' :
+             statusFilter === 'ready' ? 'No ready rows yet.' : 'No rows.'}
+          </div>
+        )}
+        {filteredRows.map(({ row, originalIdx }) => {
+          const status = rowStatus(row);
+          const needsBaseUnit = !row.resolvedBaseUnitId;
+          const needsPackUnit = !!row.packUnitName && !row.resolvedPackUnitId;
+          const needsPackSize = !!row.packUnitName && row.resolvedPackSize <= 1;
+          const lineTotal = row.costPricePence > 0 && row.quantity > 0
+            ? (() => {
+                const cf =
+                  row.packUnitName &&
+                  row.resolvedPackSize > 1 &&
+                  row.qtyInName.toLowerCase() === row.packUnitName.toLowerCase()
+                    ? row.resolvedPackSize
+                    : 1;
+                return moneyCell(Math.round(row.costPricePence * row.quantity * cf), currency);
+              })()
+            : null;
+
+          return (
+            <div
+              key={row._id}
+              className={`rounded-2xl border px-4 py-4 shadow-sm ${
+                status === 'error'
+                  ? 'border-red-200 bg-red-50'
+                  : status === 'warning'
+                  ? 'border-amber-200 bg-amber-50/60'
+                  : 'border-black/5 bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-black/40">Row {originalIdx + 1}</div>
+                  <div className="mt-1 font-medium text-ink">{row.name || <span className="text-red-500 italic">missing</span>}</div>
+                  {row.sku && <div className="mt-1 text-xs text-black/40">{row.sku}</div>}
+                </div>
+                <StatusBadge status={status} errors={row.errors} warnings={row.warnings} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Category</div>
+                  <div className="mt-1 text-black/65">{row.category || '—'}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Payment</div>
+                  <div className="mt-1"><PaymentPill status={row.resolvedPaymentStatus} onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })} /></div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Sell</div>
+                  <div className="mt-1">{row.sellingPricePence > 0 ? moneyCell(row.sellingPricePence, currency) : <span className="text-red-500 text-xs">missing</span>}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Cost</div>
+                  <div className="mt-1">{row.costPricePence > 0 ? moneyCell(row.costPricePence, currency) : <span className="text-red-500 text-xs">missing</span>}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Qty</div>
+                  <div className="mt-1">{row.quantity > 0 ? `${row.quantity} ${row.qtyInName}` : '0'}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Line total</div>
+                  <div className="mt-1">{lineTotal ?? <span className="text-black/30">—</span>}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Units</div>
+                  <div className="mt-2 space-y-2">
+                    {needsBaseUnit ? (
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-amber-700">Base: "{row.baseUnitName}" unknown</div>
+                        <UnitSelector
+                          value={row.resolvedBaseUnitId}
+                          unitName={row.baseUnitName}
+                          units={units}
+                          onChange={(v) => updateRow(row._id, { resolvedBaseUnitId: v })}
+                        />
+                      </div>
+                    ) : needsPackUnit ? (
+                      <div className="space-y-1">
+                        <div className="text-xs text-black/70">{unitLabel(row, units)}</div>
+                        <div className="text-xs font-medium text-amber-700">Pack: "{row.packUnitName}" unknown</div>
+                        <UnitSelector
+                          value={row.resolvedPackUnitId}
+                          unitName={row.packUnitName}
+                          units={units}
+                          onChange={(v) => updateRow(row._id, { resolvedPackUnitId: v })}
+                        />
+                      </div>
+                    ) : needsPackSize ? (
+                      <div className="space-y-1">
+                        <div className="text-xs text-black/70">
+                          {displayUnitId(row.resolvedBaseUnitId, units)} / {displayUnitId(row.resolvedPackUnitId, units)}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-amber-700">×</span>
+                          <input
+                            type="number"
+                            min={2}
+                            className="input w-20 py-0.5 text-xs"
+                            placeholder="size"
+                            value={row.resolvedPackSize > 0 ? row.resolvedPackSize : ''}
+                            onChange={(e) =>
+                              updateRow(row._id, {
+                                resolvedPackSize: parseInt(e.target.value, 10) || 0,
+                              })
+                            }
+                          />
+                          <span className="text-black/40">per pack</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-black/70">{unitLabel(row, units)}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card hidden overflow-hidden p-0 md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-black/10 bg-black/[0.02] text-xs text-black/50">
@@ -792,9 +919,9 @@ export default function ImportStockClient({
       </div>
 
       {/* Sticky summary + confirm */}
-      <div className="card p-4 sticky bottom-4 shadow-lg">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-4 text-sm">
+      <div className="card sticky bottom-4 p-4 shadow-lg">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-4">
             <div>
               <span className="text-black/50">Paid stock: </span>
               <span className="font-semibold text-emerald-700">{formatMoney(paidValuePence, currency)}</span>
@@ -808,14 +935,14 @@ export default function ImportStockClient({
               <span className="font-semibold">{formatMoney(paidValuePence + unpaidValuePence, currency)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {confirmError && (
               <p className="text-xs text-red-600">{confirmError}</p>
             )}
             <div className="relative group">
               <button
                 type="button"
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed sm:w-auto"
                 disabled={!canConfirm || isImporting}
                 onClick={handleConfirm}
               >

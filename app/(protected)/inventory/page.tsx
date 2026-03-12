@@ -52,6 +52,39 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
+  const inventoryRows = products.map((product) => {
+    const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
+    const packaging = getPrimaryPackagingUnit(
+      product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
+    );
+    const balance = product.inventoryBalances[0];
+    const qtyOnHand = balance?.qtyOnHandBase ?? 0;
+    const avgCostBase = balance?.avgCostBasePence ?? product.defaultCostBasePence;
+    const formatted = formatMixedUnit({
+      qtyBase: qtyOnHand,
+      baseUnit: baseUnit?.unit.name ?? 'unit',
+      baseUnitPlural: baseUnit?.unit.pluralName,
+      packagingUnit: packaging?.unit.name,
+      packagingUnitPlural: packaging?.unit.pluralName,
+      packagingConversion: packaging?.conversionToBase
+    });
+    const isLow = product.reorderPointBase > 0 && qtyOnHand <= product.reorderPointBase;
+    const isOut = qtyOnHand <= 0;
+
+    return {
+      product,
+      baseUnit,
+      packaging,
+      qtyOnHand,
+      avgCostBase,
+      formatted,
+      isLow,
+      isOut,
+    };
+  });
+  const outOfStockCount = inventoryRows.filter((row) => row.isOut).length;
+  const lowStockCount = inventoryRows.filter((row) => row.isLow && !row.isOut).length;
+  const healthyCount = Math.max(0, inventoryRows.length - outOfStockCount - lowStockCount);
 
   return (
     <div className="space-y-6">
@@ -60,19 +93,86 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         subtitle="Real-time balances in mixed units."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
-      <div className="mb-4 max-w-xs">
-        <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Products</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-ink">{totalCount}</div>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-amber-700/70">Low stock</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-amber-800">{lowStockCount}</div>
+        </div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Out of stock</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-rose-700">{outOfStockCount}</div>
+        </div>
       </div>
-      <div className="flex justify-end gap-2">
-        <Link className="btn-secondary text-xs" href="/inventory/stocktake">
-          Stocktake
-        </Link>
-        <Link className="btn-secondary text-xs" href="/inventory/adjustments">
-          Record adjustment
-        </Link>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="w-full max-w-xl">
+          <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row lg:flex-shrink-0">
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory/stocktake">
+            Stocktake
+          </Link>
+          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory/adjustments">
+            Record adjustment
+          </Link>
+        </div>
       </div>
-      <div className="card p-6 overflow-x-auto">
-        <table className="table w-full border-separate border-spacing-y-2">
+      <div className="card p-4 sm:p-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-display font-semibold">Current stock</h2>
+            <p className="mt-1 text-sm text-black/55">
+              {healthyCount} healthy, {lowStockCount} low, {outOfStockCount} out of stock.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3 md:hidden">
+          {inventoryRows.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
+              No products found.
+            </div>
+          ) : (
+            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, isLow, isOut }) => (
+              <div
+                key={product.id}
+                className={`rounded-2xl border px-4 py-4 shadow-sm ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-ink">{product.name}</div>
+                    <div className="mt-1 text-sm text-black/60">On hand: <span className="font-semibold text-black/75">{formatted}</span></div>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isOut ? 'bg-rose-100 text-rose-700' : isLow ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {isOut ? 'Out of stock' : isLow ? 'Low stock' : 'OK'}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Avg cost</div>
+                    <div className="mt-1 font-semibold text-ink">{formatMoney(avgCostBase, business.currency)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Base unit</div>
+                    <div className="mt-1 text-black/65">{baseUnit?.unit.name ?? '-'}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Packaging</div>
+                    <div className="mt-1 text-black/65">
+                      {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : 'No pack/carton unit set'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Product</th>
@@ -84,24 +184,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => {
-              const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
-              const packaging = getPrimaryPackagingUnit(
-                product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
-              );
-              const balance = product.inventoryBalances[0];
-              const qtyOnHand = balance?.qtyOnHandBase ?? 0;
-              const avgCostBase = balance?.avgCostBasePence ?? product.defaultCostBasePence;
-              const formatted = formatMixedUnit({
-                qtyBase: qtyOnHand,
-                baseUnit: baseUnit?.unit.name ?? 'unit',
-                baseUnitPlural: baseUnit?.unit.pluralName,
-                packagingUnit: packaging?.unit.name,
-                packagingUnitPlural: packaging?.unit.pluralName,
-                packagingConversion: packaging?.conversionToBase
-              });
-              const isLow = product.reorderPointBase > 0 && qtyOnHand <= product.reorderPointBase;
-              const isOut = qtyOnHand <= 0;
+            {inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, isLow, isOut }) => {
               return (
                 <tr key={product.id} className={`rounded-xl ${isOut ? 'bg-rose-50' : isLow ? 'bg-amber-50' : 'bg-white'}`}>
                   <td className="px-3 py-3 font-semibold">{product.name}</td>
@@ -126,7 +209,8 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
         <Pagination currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
       </div>
     </div>

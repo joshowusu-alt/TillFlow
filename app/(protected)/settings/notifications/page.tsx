@@ -13,7 +13,7 @@ export default async function NotificationsSettingsPage({
 }: {
   searchParams?: { error?: string; preview?: string };
 }) {
-  const { user, business } = await requireBusiness(['OWNER']);
+  const { business } = await requireBusiness(['OWNER']);
   if (!business) return <div className="card p-6">Owners only.</div>;
 
   // Last 5 message logs
@@ -49,10 +49,13 @@ export default async function NotificationsSettingsPage({
       />
 
       {/* Settings form */}
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <h2 className="mb-4 text-base font-semibold">WhatsApp Daily Summary</h2>
         <FormError error={searchParams?.error} />
         <form action={updateWhatsappSettingsAction} className="grid gap-4 md:grid-cols-2">
+          <div className="md:col-span-2 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/60">
+            Configure the owner's end-of-day WhatsApp summary, schedule window, and message preview in one place.
+          </div>
           <div className="md:col-span-2 flex items-center gap-3">
             <input
               className="h-4 w-4"
@@ -94,9 +97,9 @@ export default async function NotificationsSettingsPage({
               <option value="MAIN">Main store only</option>
             </select>
           </div>
-          <div className="md:col-span-2 flex gap-3">
+          <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row">
             <SubmitButton>Save Settings</SubmitButton>
-            <a href="?preview=1" className="btn-secondary">Preview Message</a>
+            <a href="?preview=1" className="btn-secondary text-center">Preview Message</a>
           </div>
         </form>
         <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
@@ -109,7 +112,7 @@ export default async function NotificationsSettingsPage({
 
       {/* Message preview */}
       {previewText && (
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="mb-4 text-base font-semibold">Message Preview</h2>
           <pre className="whitespace-pre-wrap rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-black/80 font-mono">
             {previewText}
@@ -132,16 +135,16 @@ export default async function NotificationsSettingsPage({
 
       {/* Recent message logs */}
       {recentMessages.length > 0 && (
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="mb-4 text-base font-semibold">Recent Messages Sent</h2>
           <div className="space-y-2 text-sm">
             {recentMessages.map((msg) => (
-              <div key={msg.id} className="flex items-center justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+              <div key={msg.id} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <span className="font-medium">{msg.messageType.replace(/_/g, ' ')}</span>
                   <span className="ml-2 text-xs text-black/40">to {msg.recipient}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <span className={`text-xs rounded-full px-2 py-0.5 ${msg.status === 'SENT' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                     {msg.status}
                   </span>
@@ -160,11 +163,11 @@ export default async function NotificationsSettingsPage({
 
       {/* Recent job runs */}
       {recentJobs.length > 0 && (
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <h2 className="mb-4 text-base font-semibold">Scheduler Run History</h2>
           <div className="space-y-2 text-sm">
             {recentJobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+              <div key={job.id} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <span className={`text-xs rounded-full px-2 py-0.5 mr-2 ${
                     job.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' :
