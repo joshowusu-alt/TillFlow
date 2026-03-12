@@ -88,7 +88,7 @@ export default async function OwnerIntelligencePage() {
         title="Act on the risks that can hurt cash, stock, or control"
         description="The highest-priority problems surface first so the owner knows what needs action right now."
       >
-        <div className="grid items-stretch gap-6 lg:grid-cols-[1.9fr_1fr]">
+        <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)] xl:grid-cols-[minmax(0,1.75fr)_minmax(380px,1fr)]">
           <section className="card min-w-0 overflow-hidden border-red-100/90 bg-white/95 shadow-raised">
             <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-4 py-4 sm:px-6 sm:py-5">
               <div className="flex items-center justify-between gap-3">
@@ -119,7 +119,7 @@ export default async function OwnerIntelligencePage() {
             )}
           </section>
 
-          <div className="flex min-w-0 h-full flex-col gap-6">
+          <div className="flex min-w-0 flex-col gap-6 lg:self-start">
             <PriorityActionsPanel actions={snapshot.brief.priorityActions} />
             <MoneyPulsePanel snapshot={snapshot} currency={currency} />
           </div>
@@ -317,9 +317,9 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
     <section className="card min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 shadow-card">
       <div className="border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold text-ink">Priority actions</h2>
-            <p className="mt-1 text-sm text-muted">The fastest high-value moves the owner can make from the current report signals.</p>
+            <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">The fastest high-value moves the owner can make from the current report signals.</p>
           </div>
           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
             {actions.length} action{actions.length === 1 ? '' : 's'}
@@ -327,7 +327,7 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
         </div>
       </div>
 
-      <div className="space-y-3 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="space-y-3 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 lg:max-h-[34rem] lg:pr-4">
         {actions.length === 0 ? (
           <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/70 p-4 text-sm leading-relaxed text-emerald-800">
             No urgent owner actions are queued right now. That’s the good kind of quiet.
@@ -351,10 +351,10 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
 
             return (
               <div key={action.id} className={`rounded-[1.1rem] border p-4 ${styles.shell}`}>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-3">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold text-ink">{action.title}</p>
+                    <div className="flex flex-wrap items-start gap-2">
+                      <p className="text-sm font-semibold leading-snug text-ink sm:text-[15px]">{action.title}</p>
                       <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${styles.badge}`}>
                         {action.severity === 'critical' ? 'Critical' : action.severity === 'warn' ? 'Watch' : 'Info'}
                       </span>
@@ -362,7 +362,7 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
                     <p className="mt-2 text-sm leading-relaxed text-slate-600">{action.why}</p>
                     <p className="mt-2 text-sm font-medium text-ink">Recommended next step: {action.recommendation}</p>
                   </div>
-                  <Link href={action.href} className="btn-secondary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
+                  <Link href={action.href} className="btn-secondary w-full justify-center text-sm sm:w-auto sm:self-start">
                     Open
                   </Link>
                 </div>
