@@ -10,10 +10,12 @@ import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
 import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
+import { getCurrencySymbol } from '@/lib/format';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const currencySymbol = getCurrencySymbol(business.currency);
 
   return (
     <div className="space-y-6">
@@ -34,9 +36,6 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               list="currency-options"
             />
             <datalist id="currency-options">
-              <option value="GBP">GBP - British Pound (£)</option>
-              <option value="USD">USD - US Dollar ($)</option>
-              <option value="EUR">EUR - Euro (€)</option>
               <option value="GHS">GHS - Ghanaian Cedi (₵)</option>
               <option value="NGN">NGN - Nigerian Naira (₦)</option>
               <option value="KES">KES - Kenyan Shilling</option>
@@ -50,13 +49,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               <option value="BWP">BWP - Botswana Pula</option>
               <option value="MZN">MZN - Mozambican Metical</option>
               <option value="ZMW">ZMW - Zambian Kwacha</option>
+              <option value="GBP">GBP - British Pound (£)</option>
+              <option value="USD">USD - US Dollar ($)</option>
+              <option value="EUR">EUR - Euro (€)</option>
               <option value="CAD">CAD - Canadian Dollar</option>
               <option value="AUD">AUD - Australian Dollar</option>
               <option value="INR">INR - Indian Rupee (₹)</option>
               <option value="JPY">JPY - Japanese Yen (¥)</option>
               <option value="CNY">CNY - Chinese Yuan (¥)</option>
             </datalist>
-            <div className="mt-1 text-xs text-black/50">Type any ISO code or pick from the list.</div>
+            <div className="mt-1 text-xs text-black/50">Type any ISO code or pick from the list. Common African retail currencies are listed first.</div>
           </div>
           <div className="flex items-center gap-2">
             <input className="h-4 w-4" type="checkbox" name="vatEnabled" defaultChecked={business.vatEnabled} />
@@ -97,7 +99,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
           <div id="opening-capital">
-            <label className="label">Opening Capital ({business.currency})</label>
+            <label className="label">Opening Capital ({currencySymbol} / {business.currency})</label>
             <input
               className="input"
               name="openingCapitalPence"
@@ -166,7 +168,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               defaultValue={(business as any).cashVarianceRiskThresholdPence ?? 2000}
             />
             <div className="mt-1 text-xs text-black/50">
-              Alert when till-close variance exceeds this amount. Example: 2000 = 20.00.
+              Alert when till-close variance exceeds this amount. Example: 2000 = {currencySymbol}20.00.
             </div>
           </div>
           <div>

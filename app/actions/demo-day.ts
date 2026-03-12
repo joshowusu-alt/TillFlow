@@ -399,12 +399,12 @@ const DEMO_SKUS = [
   'CARN-001', 'COCA-001', 'MILO-001', 'SUGAR-001', 'RICE-001',
   'OIL-001', 'INDO-001', 'SOAP-001', 'CORB-001', 'COLG-001',
 ];
-const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa'];
+const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa', 'Emmanuel Asante', 'Abena Pokua'];
 
 /**
  * Clear ALL sample/demo data from a business — both Demo Day transactions
  * (tagged DEMO_DAY) AND registration-seeded products, categories, customers,
- * and supplier.  Leaves chart of accounts, Walk-in Customer, and units intact.
+ * and supplier. Leaves chart of accounts, Walk-in Customer, and units intact.
  */
 export async function clearSampleData(): Promise<{ ok: boolean; removed: string[]; error?: string }> {
   const { business } = await requireBusiness(['OWNER']);
@@ -541,14 +541,14 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
       });
       if (custDel.count > 0) removed.push(`${custDel.count} sample customers`);
 
-      // 5) Delete "Default Supplier" if no purchase invoices reference it
+      // 5) Delete the seeded sample supplier if no purchase invoices reference it
       const defaultSupplier = await tx.supplier.findFirst({
-        where: { businessId: business.id, name: 'Default Supplier' },
+        where: { businessId: business.id, name: 'Makola Wholesale' },
         select: { id: true, _count: { select: { purchaseInvoices: true } } },
       });
       if (defaultSupplier && defaultSupplier._count.purchaseInvoices === 0) {
         await tx.supplier.delete({ where: { id: defaultSupplier.id } });
-        removed.push('default supplier');
+        removed.push('sample supplier');
       }
 
       // 6) Reset demo data flag

@@ -198,7 +198,7 @@ export default async function PurchasesPage({
               return (
                 <tr key={purchase.id} className="rounded-xl bg-white">
                   <td className="px-3 py-3 text-sm">{purchase.id.slice(0, 8)}</td>
-                  <td className="px-3 py-3 text-sm">{purchase.supplier?.name ?? 'Default Supplier'}</td>
+                  <td className="px-3 py-3 text-sm">{purchase.supplier?.name ?? 'Supplier not set'}</td>
                   <td className="px-3 py-3 text-sm">{formatDateTime(purchase.createdAt)}</td>
                   <td className="px-3 py-3 text-sm">{lineLabel}</td>
                   <td className="px-3 py-3">

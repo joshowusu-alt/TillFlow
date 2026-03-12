@@ -313,7 +313,7 @@ export default function ReceiptClient({
               `Total: ${formatMoney(invoice.totalPence, business.currency)}\n` +
               `Receipt #${invoice.id.slice(0, 8)}\n\n` +
               lines.map((l) => `${l.name} (${l.qtyLabel}) — ${formatMoney(l.lineTotalPence, business.currency)}`).join('\n') +
-              `\n\nThank you for your patronage!`
+              `\n\nThank you for shopping with us.`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -325,7 +325,7 @@ export default function ReceiptClient({
         </div>
       )}
 
-      <div className="mt-6 text-center text-xs text-black/50">Thank you for shopping.</div>
+      <div className="mt-6 text-center text-xs text-black/50">Thank you for shopping with us.</div>
     </div>
   );
 }

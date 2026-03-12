@@ -7,6 +7,7 @@ import {
   buildDebtorsListingCsv,
   buildStockMovementsCsv,
 } from '@/lib/exports/csv-writers';
+import { prisma } from '@/lib/prisma';
 import { strToU8, zipSync } from 'fflate';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,13 @@ export async function GET(request: NextRequest) {
   const range = { from, to };
 
   const businessId = user.businessId;
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { currency: true },
+  });
+  const currency = business?.currency ?? 'GHS';
+
+  const withCurrency = (csv: string) => `Currency,${currency}\n${csv}`;
 
   // Generate all CSVs in parallel
   const [salesCsv, purchasesCsv, vatCsv, debtorsCsv, stockCsv] = await Promise.all([
@@ -42,11 +50,11 @@ export async function GET(request: NextRequest) {
 
   // Zip all CSVs using fflate
   const zip = zipSync({
-    [`sales_ledger_${label}.csv`]: strToU8(salesCsv),
-    [`purchases_ledger_${label}.csv`]: strToU8(purchasesCsv),
-    [`vat_report_${label}.csv`]: strToU8(vatCsv),
-    [`debtors_listing.csv`]: strToU8(debtorsCsv),
-    [`stock_movements_${label}.csv`]: strToU8(stockCsv),
+    [`sales_ledger_${label}.csv`]: strToU8(withCurrency(salesCsv)),
+    [`purchases_ledger_${label}.csv`]: strToU8(withCurrency(purchasesCsv)),
+    [`vat_report_${label}.csv`]: strToU8(withCurrency(vatCsv)),
+    [`debtors_listing.csv`]: strToU8(withCurrency(debtorsCsv)),
+    [`stock_movements_${label}.csv`]: strToU8(withCurrency(stockCsv)),
   });
 
   return new NextResponse(Buffer.from(zip), {

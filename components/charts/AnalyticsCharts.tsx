@@ -62,7 +62,7 @@ interface SalesTrendChartProps {
     currency?: string;
 }
 
-export function SalesTrendChart({ data, title = 'Sales Trend', currency = '£' }: SalesTrendChartProps) {
+export function SalesTrendChart({ data, title = 'Sales Trend', currency = '₵' }: SalesTrendChartProps) {
     const chartData = {
         labels: data.labels,
         datasets: [
@@ -199,7 +199,7 @@ interface CategoryBreakdownProps {
     currency?: string;
 }
 
-export function CategoryBreakdown({ data, title = 'Sales by Category', currency = '£' }: CategoryBreakdownProps) {
+export function CategoryBreakdown({ data, title = 'Sales by Category', currency = '₵' }: CategoryBreakdownProps) {
     const colors = [
         'rgba(5, 150, 105, 0.8)',
         'rgba(59, 130, 246, 0.8)',
@@ -262,7 +262,7 @@ interface ProductPerformanceProps {
     currency?: string;
 }
 
-export function ProductPerformance({ data, title = 'Top Products', currency = '£' }: ProductPerformanceProps) {
+export function ProductPerformance({ data, title = 'Top Products', currency = '₵' }: ProductPerformanceProps) {
     const chartData = {
         labels: data.map((d) => d.name.length > 15 ? d.name.slice(0, 15) + '...' : d.name),
         datasets: [
@@ -338,7 +338,7 @@ interface ComparisonChartProps {
     currency?: string;
 }
 
-export function ComparisonChart({ data, title = 'Period Comparison', currency = '£' }: ComparisonChartProps) {
+export function ComparisonChart({ data, title = 'Period Comparison', currency = '₵' }: ComparisonChartProps) {
     const chartData = {
         labels: data.labels,
         datasets: [

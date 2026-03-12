@@ -338,12 +338,14 @@ async function seedDemoData(businessId: string, storeId: string) {
           { businessId, name: 'Walk-in Customer' },
           { businessId, name: 'Kofi Mensah', phone: '0241234567' },
           { businessId, name: 'Ama Serwaa', phone: '0551234567' },
+          { businessId, name: 'Emmanuel Asante', phone: '0271234567' },
+          { businessId, name: 'Abena Pokua', phone: '0201234567' },
         ],
       });
 
       // Demo supplier
       await tx.supplier.create({
-        data: { businessId, name: 'Default Supplier' },
+        data: { businessId, name: 'Makola Wholesale' },
       });
     });
 

@@ -37,11 +37,11 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
               </span>
               Demo Mode
             </div>
-            <p className="text-sm text-black/60">Create a demo store with sample products to explore TillFlow instantly.</p>
+            <p className="text-sm text-black/60">Create a demo store with Ghana-ready sample products and Mobile Money flows so you can explore TillFlow instantly.</p>
           </div>
         ) : (
           <div className="mt-4">
-            <p className="text-sm text-black/60">Create your store from scratch - just your products, your way.</p>
+            <p className="text-sm text-black/60">Create your store from scratch — your products, your prices, your currency.</p>
           </div>
         )}
       </div>
@@ -92,11 +92,12 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
             <option value="USD">USD — US Dollar</option>
             <option value="EUR">EUR — Euro</option>
           </select>
+          <div className="mt-1 text-xs text-black/50">Start with GHS if you trade in Ghana. You can change your currency later in settings.</div>
         </div>
 
         {isDemo && (
           <div className="rounded-xl bg-accentSoft border border-accent/10 px-4 py-3 text-sm text-accent">
-            <span className="font-semibold">Demo includes:</span> 10 products, 7 categories, 3 customers, and 1 supplier loaded automatically.
+            <span className="font-semibold">Demo includes:</span> everyday supermarket products, sample customers, supplier data, and a ready-to-test Ghanaian setup.
           </div>
         )}
 

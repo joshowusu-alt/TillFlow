@@ -62,7 +62,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
               return (
                 <tr key={invoice.id} className="rounded-xl bg-white align-top">
                   <td className="px-3 py-3 text-sm">{invoice.id.slice(0, 8)}</td>
-                  <td className="px-3 py-3 text-sm">{invoice.supplier?.name ?? 'Default Supplier'}</td>
+                  <td className="px-3 py-3 text-sm">{invoice.supplier?.name ?? 'Supplier not set'}</td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {formatMoney(outstanding, business.currency)}
                   </td>
@@ -142,7 +142,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                     {new Date(payment.paidAt).toLocaleDateString()}
                   </td>
                   <td className="px-3 py-2 text-sm">
-                    {payment.purchaseInvoice.supplier?.name ?? 'Default Supplier'}
+                    {payment.purchaseInvoice.supplier?.name ?? 'Supplier not set'}
                   </td>
                   <td className="px-3 py-2 text-sm">{payment.method}</td>
                   <td className="px-3 py-2 text-sm font-semibold">

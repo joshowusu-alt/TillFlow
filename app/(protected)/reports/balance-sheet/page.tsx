@@ -35,7 +35,7 @@ export default async function BalanceSheetPage({
   const cashLine = sheet.assets.find(a => a.accountCode === '1000');
   const rawCashBalance = cashLine ? cashLine.balancePence - openingCapitalPence : 0;
   // Suggested Opening Capital = amount needed to bring cash to zero (in whole units)
-  const suggestedCapital = rawCashBalance < 0 ? Math.abs(rawCashBalance) / 100 : 0;
+  const suggestedCapitalPence = rawCashBalance < 0 ? Math.abs(rawCashBalance) : 0;
 
   return (
     <div className="space-y-6">
@@ -96,7 +96,7 @@ export default async function BalanceSheetPage({
             href={`/settings#opening-capital`}
             className="inline-block rounded bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800"
           >
-            Set Opening Capital (suggested: {business.currency} {suggestedCapital.toLocaleString()}) →
+            Set Opening Capital (suggested: {formatMoney(suggestedCapitalPence, business.currency)}) →
           </a>
         </div>
       )}

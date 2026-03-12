@@ -96,7 +96,7 @@ async function main() {
   let business = await prisma.business.findFirst();
   if (!business) {
     business = await prisma.business.create({
-      data: { name: 'Supermarket Demo', currency: 'GBP', vatEnabled: false, mode: 'SIMPLE', openingCapitalPence: 2000000 },
+      data: { name: 'Supermarket Demo', currency: 'GHS', vatEnabled: false, mode: 'SIMPLE', openingCapitalPence: 2000000 },
     });
   }
 
@@ -456,8 +456,8 @@ async function main() {
   /* ---------- Suppliers ---------- */
   await prisma.supplier.upsert({
     where: { id: 'default-supplier' },
-    update: {},
-    create: { id: 'default-supplier', businessId: business.id, name: 'Default Supplier' },
+    update: { name: 'Makola Wholesale' },
+    create: { id: 'default-supplier', businessId: business.id, name: 'Makola Wholesale' },
   });
 
   const demoSuppliers = [

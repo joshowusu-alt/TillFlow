@@ -111,7 +111,7 @@ async function _buildEodSummaryPayload(businessId: string): Promise<{
   if (voids > 0) lines.push(`⚠️ *Voids:* ${voids}`);
   if (returns > 0) lines.push(`🔄 *Returns:* ${returns}`);
   if (lowStock > 0) lines.push(`📦 *Low Stock Items:* ${lowStock}`);
-  if (cashVar > 0) lines.push(`💲 *Cash Variance:* ${fmt(cashVar, currency)}`);
+  if (cashVar > 0) lines.push(`⚠️ *Cash Variance:* ${fmt(cashVar, currency)}`);
   lines.push(``, `_Sent by TillFlow POS_`);
 
   const text = lines.join('\n');

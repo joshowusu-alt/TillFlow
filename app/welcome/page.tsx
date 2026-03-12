@@ -65,6 +65,12 @@ const stats = [
   { value: '100%', label: 'Offline Ready' },
 ];
 
+const previewCartItems = [
+  { name: 'Coca-Cola 500ml', qty: 3, price: 'GH₵3.60', unit: 'bottles' },
+  { name: 'Milo 400g', qty: 1, price: 'GH₵5.50', unit: 'tin' },
+  { name: 'Indomie Noodles', qty: 6, price: 'GH₵4.00', unit: 'packs', promo: 'Buy 5 Get 1 Free!' },
+];
+
 export default function WelcomePage() {
   return (
     <div className="min-h-screen overflow-hidden">
@@ -151,7 +157,7 @@ export default function WelcomePage() {
             <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-black/40">
               <span className="flex items-center gap-1.5">
                 <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                No credit card required
+                Start without card setup
               </span>
               <span className="flex items-center gap-1.5">
                 <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
@@ -190,11 +196,7 @@ export default function WelcomePage() {
                     <span className="text-sm text-black/30 font-mono">Scan barcode or search...</span>
                   </div>
                   {/* Demo cart items */}
-                  {[
-                    { name: 'Coca-Cola 500ml', qty: 3, price: '3.60', unit: 'bottles' },
-                    { name: 'Milo 400g', qty: 1, price: '5.50', unit: 'tin' },
-                    { name: 'Indomie Noodles', qty: 6, price: '4.00', unit: 'packs', promo: 'Buy 5 Get 1 Free!' },
-                  ].map((item, i) => (
+                  {previewCartItems.map((item, i) => (
                     <div key={i} className="flex items-center gap-3 rounded-xl border border-black/5 bg-white p-3.5">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accentSoft text-xs font-bold text-accent">{i + 1}</div>
                       <div className="flex-1 min-w-0">
@@ -214,17 +216,17 @@ export default function WelcomePage() {
                     <div className="text-xs font-semibold uppercase tracking-widest text-black/30">Summary</div>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between"><span className="text-black/50">Items</span><span className="font-semibold">3</span></div>
-                      <div className="flex justify-between"><span className="text-black/50">Subtotal</span><span className="font-semibold">14.30</span></div>
-                      <div className="flex justify-between text-accent"><span>Promo discount</span><span className="font-semibold">-0.80</span></div>
+                      <div className="flex justify-between"><span className="text-black/50">Subtotal</span><span className="font-semibold">GH₵14.30</span></div>
+                      <div className="flex justify-between text-accent"><span>Promo discount</span><span className="font-semibold">-GH₵0.80</span></div>
                     </div>
                     <div className="border-t border-black/5 pt-3 flex justify-between items-center">
                       <span className="text-lg font-semibold">Total</span>
-                      <span className="text-2xl font-bold">13.50</span>
+                      <span className="text-2xl font-bold">GH₵13.50</span>
                     </div>
                   </div>
                   <div className="rounded-2xl bg-gradient-to-br from-accent to-accent/80 p-5 text-center text-white shadow-lg">
                     <div className="text-[10px] font-medium uppercase tracking-[0.3em] opacity-80">Change Due</div>
-                    <div className="mt-1 text-3xl font-bold">6.50</div>
+                    <div className="mt-1 text-3xl font-bold">GH₵6.50</div>
                   </div>
                 </div>
               </div>
@@ -255,7 +257,7 @@ export default function WelcomePage() {
               Everything Your Store Needs
             </h2>
             <p className="mt-4 text-lg text-black/50">
-              From your first sale to your annual balance sheet - one system handles it all.
+              From your first sale to your month-end reports, one system handles it all.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -284,7 +286,7 @@ export default function WelcomePage() {
           </div>
           <div className="grid gap-8 md:grid-cols-3">
             {[
-              { step: '01', title: 'Create Account', desc: 'Enter your business name, currency, and go. Takes 30 seconds.', color: 'from-accent to-accent/80' },
+              { step: '01', title: 'Create Account', desc: 'Enter your business name, local currency, and go. Takes about 30 seconds.', color: 'from-accent to-accent/80' },
               { step: '02', title: 'Add Products', desc: 'Type or scan your products. Set prices, units, and categories.', color: 'from-accent/80 to-accent' },
               { step: '03', title: 'Start Selling', desc: 'Open the POS, scan items, collect payment. That simple.', color: 'from-accent to-accent/80' },
             ].map((s) => (
@@ -307,7 +309,7 @@ export default function WelcomePage() {
             Ready to Transform Your Business?
           </h2>
           <p className="mt-4 text-lg text-black/50">
-            Join businesses across Africa using TillFlow to simplify their operations.
+            Join retailers across Ghana and Africa using TillFlow to simplify daily operations.
             Start with a free demo or create your business today.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">

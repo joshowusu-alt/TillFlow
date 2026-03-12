@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     filename = `income-statement-${from.toISOString().slice(0, 10)}.csv`;
     rows = [
       ['Income Statement', `${from.toDateString()} - ${to.toDateString()}`],
+      ['Currency', currency],
       [],
       ['Line Item', 'Amount'],
       ['Revenue', formatMoney(data.revenue, currency)],
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
     filename = `balance-sheet-${to.toISOString().slice(0, 10)}.csv`;
     rows = [
       ['Balance Sheet', `As of ${to.toDateString()}`],
+      ['Currency', currency],
       [],
       ['ASSETS'],
       ...data.assets.map((a) => [a.name, formatMoney(a.balancePence, currency)]),
@@ -58,6 +60,7 @@ export async function GET(request: Request) {
     filename = `cashflow-${from.toISOString().slice(0, 10)}.csv`;
     rows = [
       ['Cashflow Statement', `${from.toDateString()} - ${to.toDateString()}`],
+      ['Currency', currency],
       [],
       ['Line Item', 'Amount'],
       ['Net Profit', formatMoney(data.netProfit, currency)],

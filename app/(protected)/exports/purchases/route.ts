@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         csvEscape(purchase.id.slice(0, 8)),
         csvEscape(purchase.createdAt.toISOString()),
         csvEscape(purchase.store?.name ?? ''),
-        csvEscape(purchase.supplier?.name ?? 'Default Supplier'),
+        csvEscape(purchase.supplier?.name ?? 'Supplier not set'),
         csvEscape(purchase.paymentStatus),
         csvEscape(formatPence(purchase.subtotalPence)),
         csvEscape(formatPence(purchase.vatPence)),

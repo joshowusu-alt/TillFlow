@@ -570,7 +570,7 @@ export default function PurchaseFormClient({
           <div>
             <label className="label">Supplier</label>
             <select className="input" name="supplierId">
-              <option value="">Default Supplier</option>
+              <option value="">No supplier selected</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.name}

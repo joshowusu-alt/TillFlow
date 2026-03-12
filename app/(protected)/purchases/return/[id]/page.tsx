@@ -38,7 +38,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
       <div className="card p-6 space-y-2 text-sm">
         <div>Invoice: {invoice.id.slice(0, 8)}</div>
         <div>Date: {formatDateTime(invoice.createdAt)}</div>
-        <div>Supplier: {invoice.supplier?.name ?? 'Default Supplier'}</div>
+        <div>Supplier: {invoice.supplier?.name ?? 'Supplier not set'}</div>
         <div>Total: {formatMoney(invoice.totalPence, business.currency)}</div>
         <div>Paid: {formatMoney(paid, business.currency)}</div>
         <div>Balance: {formatMoney(balance, business.currency)}</div>

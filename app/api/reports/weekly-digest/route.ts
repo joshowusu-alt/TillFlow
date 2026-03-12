@@ -31,6 +31,7 @@ export async function GET(request: Request) {
 
   const rows: string[][] = [
     ['Weekly Digest', `${wStart.toDateString()} - ${wEnd.toDateString()}`],
+    ['Currency', currency],
     [],
     ['Metric', 'Value'],
     ['Total Sales', formatMoney(data.totalSalesPence, currency)],

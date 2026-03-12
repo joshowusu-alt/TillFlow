@@ -33,7 +33,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const name = formString(formData, 'name');
-    const currency = formString(formData, 'currency') || 'GBP';
+    const currency = formString(formData, 'currency') || 'GHS';
     const vatEnabled = formData.get('vatEnabled') === 'on';
     const vatNumber = formOptionalString(formData, 'vatNumber');
     const mode = (formString(formData, 'mode') || 'SIMPLE').toUpperCase();
