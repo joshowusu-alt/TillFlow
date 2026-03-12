@@ -453,9 +453,14 @@ export async function getOwnerDashboardSnapshot(
 
 	const inventoryRows = inventoryBalances
 		.filter((balance) => balance.qtyOnHandBase <= balance.product.reorderPointBase)
-		.map((balance) => {
+		.map((balance): InventoryRiskRow | null => {
 			const state = classifyInventoryState(balance.qtyOnHandBase, balance.product.reorderPointBase);
 			if (state === 'healthy') return null;
+			const ctaLabel: InventoryRiskRow['ctaLabel'] = state === 'stockout'
+				? 'Receive stock'
+				: balance.product.preferredSupplier
+					? 'Reorder'
+					: 'View item';
 			return {
 				id: balance.id,
 				productId: balance.product.id,
@@ -467,7 +472,7 @@ export async function getOwnerDashboardSnapshot(
 				reorderQtyBase: balance.product.reorderQtyBase,
 				supplierName: balance.product.preferredSupplier?.name,
 				state,
-				ctaLabel: state === 'stockout' ? 'Receive stock' : balance.product.preferredSupplier ? 'Reorder' : 'View item',
+				ctaLabel,
 				href: `/products/${balance.product.id}`,
 			};
 		})
