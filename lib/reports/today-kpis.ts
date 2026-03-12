@@ -1,13 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import {
-  coerceReportDate,
   ensureSqliteReportDateColumnsNormalized,
-  isDateBefore,
   isDateOnOrAfter,
   isDateWithinRange,
   isSqliteRuntime,
 } from './sqlite-report-date-normalization';
+import { summarizeInventoryRisk, summarizeReceivables } from './operational-metrics';
 
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -46,10 +45,6 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyFiveDaysAgo = new Date(now);
   thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
-  const sixtyDaysAgo = new Date(now);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(now);
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
 
   const storeFilter = storeId ? { storeId } : {};
@@ -79,6 +74,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
       select: {
         totalPence: true,
+        dueDate: true,
         createdAt: true,
         payments: { select: { amountPence: true } },
       },
@@ -142,17 +138,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       paymentSplit[row.method] = (paymentSplit[row.method] ?? 0) + row.amountPence;
     });
 
-  const outstandingARPence = Math.max(
-    openSalesInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0) -
-      openSalesInvoices.reduce((sum, invoice) => sum + invoice.payments.reduce((paid, payment) => paid + payment.amountPence, 0), 0),
-    0,
-  );
-  const arOver60Pence = openSalesInvoices
-    .filter((invoice) => isDateBefore(invoice.createdAt, sixtyDaysAgo))
-    .reduce((sum, invoice) => sum + invoice.totalPence, 0);
-  const arOver90Pence = openSalesInvoices
-    .filter((invoice) => isDateBefore(invoice.createdAt, ninetyDaysAgo))
-    .reduce((sum, invoice) => sum + invoice.totalPence, 0);
+  const receivables = summarizeReceivables(openSalesInvoices, now);
 
   const outstandingAPPence = outstandingPurchases.reduce((sum, inv) => {
     const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
@@ -160,10 +146,12 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   }, 0);
 
   const activeBalances = balances.filter((b) => b.product.active);
-  const trackedProducts = activeBalances.filter((b) => b.product.reorderPointBase > 0);
-  const productsAboveReorderPoint = trackedProducts.filter(
-    (b) => b.qtyOnHandBase > b.product.reorderPointBase
-  ).length;
+  const inventorySummary = summarizeInventoryRisk(
+    activeBalances.map((balance) => ({
+      qtyOnHandBase: balance.qtyOnHandBase,
+      reorderPointBase: balance.product.reorderPointBase,
+    }))
+  );
 
   const totalExpenses30d = paidExpenses
     .filter((expense) => isDateOnOrAfter(expense.createdAt, thirtyDaysAgo))
@@ -198,33 +186,26 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     (p) => p.revenue > 0 && p.revenue < p.cost
   ).length;
 
-  const stockoutImminentCount = trackedProducts.filter(
-    (b) => b.qtyOnHandBase > 0 && b.qtyOnHandBase <= Math.ceil(b.product.reorderPointBase * 0.5)
-  ).length;
-  const urgentReorderCount = trackedProducts.filter(
-    (b) => b.qtyOnHandBase <= b.product.reorderPointBase
-  ).length;
-
   return {
     totalSalesPence,
     grossMarginPence,
     gpPercent,
     txCount: validTodaySales.length,
-    outstandingARPence,
+    outstandingARPence: receivables.outstandingTotalPence,
     outstandingAPPence,
-    arOver60Pence,
-    arOver90Pence,
+    arOver60Pence: receivables.over60Pence,
+    arOver90Pence: receivables.over90Pence,
     cashVarianceTotalPence,
     openHighAlerts: alertRows.filter((row) => isDateOnOrAfter(row.occurredAt, sevenDaysAgo)).length,
-    totalTrackedProducts: trackedProducts.length,
-    productsAboveReorderPoint,
+    totalTrackedProducts: inventorySummary.totalTrackedProducts,
+    productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: totalSalesPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
-    stockoutImminentCount,
-    urgentReorderCount,
+    stockoutImminentCount: inventorySummary.stockoutImminentCount,
+    urgentReorderCount: inventorySummary.urgentReorderCount,
     thisWeekExpensesPence,
     fourWeekAvgExpensesPence,
     discountOverrideCount: salesRows.filter((row) => !!row.discountOverrideReason && isDateOnOrAfter(row.createdAt, sevenDaysAgo)).length,
@@ -258,20 +239,13 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyFiveDaysAgo = new Date(now);
   thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
-  const sixtyDaysAgo = new Date(now);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(now);
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
   const storeFilter = storeId ? { storeId } : {};
 
   const [
     salesAgg,
     paymentsByMethod,
-    arTotalAgg,
-    arOver60Agg,
-    arOver90Agg,
-    arPaymentsAgg,
+    openSalesInvoices,
     outstandingPurchases,
     openHighAlerts,
     balances,
@@ -302,35 +276,14 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       },
       _sum: { amountPence: true },
     }),
-    // AR total (sum of invoice face values for open invoices)
-    prisma.salesInvoice.aggregate({
+    prisma.salesInvoice.findMany({
       where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-      _sum: { totalPence: true },
-    }),
-    // AR over-60 bucket (by createdAt as approximation — avoids full table scan)
-    prisma.salesInvoice.aggregate({
-      where: {
-        businessId, ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        createdAt: { lt: sixtyDaysAgo },
+      select: {
+        totalPence: true,
+        dueDate: true,
+        createdAt: true,
+        payments: { select: { amountPence: true } },
       },
-      _sum: { totalPence: true },
-    }),
-    // AR over-90 bucket
-    prisma.salesInvoice.aggregate({
-      where: {
-        businessId, ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        createdAt: { lt: ninetyDaysAgo },
-      },
-      _sum: { totalPence: true },
-    }),
-    // Total payments already applied to open invoices (for net AR calculation)
-    prisma.salesPayment.aggregate({
-      where: {
-        salesInvoice: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-      },
-      _sum: { amountPence: true },
     }),
     // Outstanding AP — aggregate at DB level
     prisma.purchaseInvoice.findMany({
@@ -425,13 +378,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
 
-  // AR — derived from DB-level aggregates; no row loading needed
-  const outstandingARPence = Math.max(
-    (arTotalAgg._sum.totalPence ?? 0) - (arPaymentsAgg._sum.amountPence ?? 0),
-    0,
-  );
-  const arOver60Pence = arOver60Agg._sum.totalPence ?? 0;
-  const arOver90Pence = arOver90Agg._sum.totalPence ?? 0;
+  // AR — computed from open invoice balances so ageing buckets align with dashboard logic
+  const receivables = summarizeReceivables(openSalesInvoices, now);
 
   // AP
   const outstandingAPPence = outstandingPurchases.reduce((s, inv) => {
@@ -441,10 +389,12 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 
   // Inventory
   const activeBalances = balances.filter((b) => b.product.active);
-  const trackedProducts = activeBalances.filter((b) => b.product.reorderPointBase > 0);
-  const productsAboveReorderPoint = trackedProducts.filter(
-    (b) => b.qtyOnHandBase > b.product.reorderPointBase
-  ).length;
+  const inventorySummary = summarizeInventoryRisk(
+    activeBalances.map((balance) => ({
+      qtyOnHandBase: balance.qtyOnHandBase,
+      reorderPointBase: balance.product.reorderPointBase,
+    }))
+  );
 
   // Expenses — already aggregated by DB
   const totalExpenses30d = recentExpensesAgg._sum.amountPence ?? 0;
@@ -473,14 +423,6 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 
   // Stockout imminent (products with stock but very low relative to demand)
   // Simplified: products at or below reorder point with stock > 0
-  const stockoutImminentCount = trackedProducts.filter(
-    (b) => b.qtyOnHandBase > 0 && b.qtyOnHandBase <= Math.ceil(b.product.reorderPointBase * 0.5)
-  ).length;
-
-  const urgentReorderCount = trackedProducts.filter(
-    (b) => b.qtyOnHandBase <= b.product.reorderPointBase
-  ).length;
-
   const thisWeekExpensesPence = thisWeekExpensesAgg._sum.amountPence ?? 0;
   const fourWeekTotal = fourWeekExpensesAgg._sum.amountPence ?? 0;
   const fourWeekAvgExpensesPence = Math.round(fourWeekTotal / 4); // 4-week window (35d ago to 7d ago)
@@ -490,21 +432,21 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     grossMarginPence,
     gpPercent,
     txCount: salesAgg._count.id,
-    outstandingARPence,
+    outstandingARPence: receivables.outstandingTotalPence,
     outstandingAPPence,
-    arOver60Pence,
-    arOver90Pence,
+    arOver60Pence: receivables.over60Pence,
+    arOver90Pence: receivables.over90Pence,
     cashVarianceTotalPence,
     openHighAlerts,
-    totalTrackedProducts: trackedProducts.length,
-    productsAboveReorderPoint,
+    totalTrackedProducts: inventorySummary.totalTrackedProducts,
+    productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
-    stockoutImminentCount,
-    urgentReorderCount,
+    stockoutImminentCount: inventorySummary.stockoutImminentCount,
+    urgentReorderCount: inventorySummary.urgentReorderCount,
     thisWeekExpensesPence,
     fourWeekAvgExpensesPence,
     discountOverrideCount: discountOverrides,

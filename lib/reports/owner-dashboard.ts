@@ -5,6 +5,7 @@ import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getTodayKPIs } from './today-kpis';
 import { getCashflowForecast } from './forecast';
+import { classifyInventoryState, summarizeInventoryRisk } from './operational-metrics';
 import {
 	ensureSqliteReportDateColumnsNormalized,
 	isDateWithinRange,
@@ -117,12 +118,6 @@ function endOfDay(date = new Date()) {
 
 function daysFromToday(date: Date) {
 	return Math.floor((startOfDay(date).getTime() - startOfDay().getTime()) / 86_400_000);
-}
-
-function classifyInventoryState(qtyOnHandBase: number, reorderPointBase: number): InventoryRiskRow['state'] {
-	if (qtyOnHandBase <= 0) return 'stockout';
-	if (qtyOnHandBase <= Math.max(1, Math.floor(reorderPointBase * 0.5))) return 'critical';
-	return 'low';
 }
 
 function describeChange(current: number, previous: number): DashboardTrend {
@@ -480,9 +475,16 @@ export async function getOwnerDashboardSnapshot(
 			return rank[a.state] - rank[b.state] || a.currentQtyBase - b.currentQtyBase;
 		});
 
-	const lowStockCount = inventoryRows.length;
-	const stockoutCount = inventoryRows.filter((item) => item.state === 'stockout').length;
-	const criticalCount = inventoryRows.filter((item) => item.state !== 'low').length;
+	const inventorySummary = summarizeInventoryRisk(
+		inventoryBalances.map((balance) => ({
+			qtyOnHandBase: balance.qtyOnHandBase,
+			reorderPointBase: balance.product.reorderPointBase,
+		}))
+	);
+
+	const lowStockCount = inventorySummary.lowStockCount;
+	const stockoutCount = inventorySummary.stockoutCount;
+	const criticalCount = inventorySummary.criticalCount;
 
 	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
 	const grossProfitTrend = describeChange(kpis.grossMarginPence, normalizedYesterdaySales._sum.grossMarginPence ?? 0);

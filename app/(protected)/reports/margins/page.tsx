@@ -1,3 +1,4 @@
+import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
@@ -148,10 +149,11 @@ export default async function MarginsPage({
       {/* Top and Low Margin */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="card p-4">
-          <h2 className="text-lg font-display font-semibold text-emerald-700">
-            Top Profit Contributors
-          </h2>
-          <p className="text-sm text-black/50">Products generating the most profit</p>
+          <ReportSectionHeader
+            title="Top Profit Contributors"
+            subtitle="Products generating the most profit"
+            titleClassName="text-emerald-700"
+          />
           <div className="mt-4 space-y-3">
             {topPerformers.map((p) => (
               <div key={p.id} className="flex items-center justify-between rounded-xl bg-emerald-50 p-3">
@@ -176,10 +178,11 @@ export default async function MarginsPage({
         </div>
 
         <div className="card p-4">
-          <h2 className="text-lg font-display font-semibold text-amber-700">
-            Low Margin Products
-          </h2>
-          <p className="text-sm text-black/50">Consider reviewing pricing or costs</p>
+          <ReportSectionHeader
+            title="Low Margin Products"
+            subtitle="Consider reviewing pricing or costs"
+            titleClassName="text-amber-700"
+          />
           <div className="mt-4 space-y-3">
             {lowMarginProducts.map((p) => (
               <div key={p.id} className="flex items-center justify-between rounded-xl bg-amber-50 p-3">
@@ -208,7 +211,7 @@ export default async function MarginsPage({
 
       {/* Full Product Table */}
       <div className="mt-6 card p-4">
-        <h2 className="text-lg font-display font-semibold">All Products</h2>
+        <ReportSectionHeader title="All Products" />
         <div className="mt-4 overflow-x-auto">
           <table className="table w-full text-sm">
             <thead>

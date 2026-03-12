@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import RefreshIndicator from '@/components/RefreshIndicator';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -8,24 +9,10 @@ import { getIncomeStatement } from '@/lib/reports/financials';
 import { requireBusiness } from '@/lib/auth';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { getBusinessStores } from '@/lib/services/stores';
+import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 
 export const dynamic = 'force-dynamic';
-
-function parseDate(value: string | undefined, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
-
-function ageBucket(dueDate: Date | null | undefined, createdAt: Date): string {
-  const ref = dueDate ?? createdAt;
-  const ageDays = Math.floor((Date.now() - ref.getTime()) / 86_400_000);
-  if (ageDays <= 30) return '0–30 d';
-  if (ageDays <= 60) return '31–60 d';
-  if (ageDays <= 90) return '61–90 d';
-  return '90+ d';
-}
 
 export default async function DashboardPage({
   searchParams,
@@ -50,9 +37,7 @@ export default async function DashboardPage({
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  const start = parseDate(searchParams?.from, todayStart);
-  const end = parseDate(searchParams?.to, todayEnd);
-  end.setHours(23, 59, 59, 999);
+  const { start, end, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, todayStart, todayEnd);
 
   const selectedStoreId = rawStoreId ?? 'ALL';
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
@@ -257,7 +242,7 @@ export default async function DashboardPage({
     const paid = inv.payments.reduce((t, p) => t + p.amountPence, 0);
     const balance = Math.max(inv.totalPence - paid, 0);
     if (balance <= 0) continue;
-    const bucket = ageBucket(inv.dueDate, inv.createdAt);
+    const bucket = getReceivableAgeBucket(inv.dueDate, inv.createdAt);
     ageingBuckets[bucket] += balance;
     if (inv.customer) {
       const d = debtorMap.get(inv.customer.id) ?? { name: inv.customer.name, balance: 0 };
@@ -269,7 +254,7 @@ export default async function DashboardPage({
 
   // Low stock
   const lowStock = balances
-    .filter((b) => b.product.reorderPointBase > 0 && b.qtyOnHandBase <= b.product.reorderPointBase)
+    .filter((b) => classifyInventoryState(b.qtyOnHandBase, b.product.reorderPointBase) !== 'healthy')
     .slice(0, 8);
 
   // Best sellers by revenue
@@ -287,9 +272,6 @@ export default async function DashboardPage({
   const returnTotal = todayReturns.reduce((s, r) => s + r.refundAmountPence, 0);
   const cashVarTotal = todayCashVar.reduce((s, v) => s + Math.abs(v.variance ?? 0), 0);
   const hasActivity = todayAdj.length > 0 || todayVoids.length > 0 || todayReturns.length > 0 || cashVarTotal > 0;
-
-  const fromIso = start.toISOString().slice(0, 10);
-  const toIso = end.toISOString().slice(0, 10);
 
   // Live status: last sale time today and open shift count
   const [lastSaleRecord, openShifts] = await Promise.all([
@@ -336,7 +318,7 @@ export default async function DashboardPage({
       />
 
       {/* Filter */}
-      <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
+      <ReportFilterCard columnsClassName="sm:grid-cols-4" submitLabel="Apply" submitTone="secondary">
         <div>
           <label className="label">Branch / Store</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
@@ -354,10 +336,7 @@ export default async function DashboardPage({
           <label className="label">To</label>
           <input className="input" type="date" name="to" defaultValue={toIso} />
         </div>
-        <div className="flex items-end">
-          <button className="btn-secondary w-full" type="submit">Apply</button>
-        </div>
-      </form>
+      </ReportFilterCard>
 
       {/* Live status bar — today's pulse at a glance (only when viewing today) */}
       {isToday && (

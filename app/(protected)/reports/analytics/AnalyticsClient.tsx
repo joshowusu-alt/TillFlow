@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SalesTrendChart, HourlyHeatmap, CategoryBreakdown, ProductPerformance, ComparisonChart } from '@/components/charts';
+import { getCurrencySymbol } from '@/lib/format';
 
 interface AnalyticsData {
     currency: string;
@@ -22,17 +23,6 @@ interface AnalyticsData {
         topSellingProduct: string;
         peakHour: string;
     };
-}
-
-// Get currency symbol from ISO code
-function getCurrencySymbol(currency: string): string {
-    const symbols: Record<string, string> = {
-        GBP: '£', USD: '$', EUR: '€',
-        GHS: '₵', NGN: '₦', KES: 'KSh', ZAR: 'R',
-        UGX: 'USh', TZS: 'TSh', CAD: 'C$', AUD: 'A$',
-        INR: '₹', JPY: '¥', CNY: '¥'
-    };
-    return symbols[currency] || currency + ' ';
 }
 
 const PERIOD_OPTIONS = [

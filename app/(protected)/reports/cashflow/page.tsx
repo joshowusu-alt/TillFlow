@@ -1,9 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
+import ReportActionGroup from '@/components/reports/ReportActionGroup';
+import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
+import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getCashflow } from '@/lib/reports/financials';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 
 export default async function CashflowPage({
   searchParams
@@ -14,14 +18,11 @@ export default async function CashflowPage({
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const now = new Date();
-  const start = searchParams?.from ? new Date(searchParams.from) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = searchParams?.to ? new Date(searchParams.to) : now;
+  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
 
   const cashflow = await getCashflow(business.id, start, end);
   const hasData = cashflow.beginningCash !== 0 || cashflow.netProfit !== 0 || cashflow.endingCash !== 0;
-
-  const fromStr = start.toISOString().slice(0, 10);
-  const toStr = end.toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -29,7 +30,7 @@ export default async function CashflowPage({
         title="Cashflow"
         subtitle="Indirect cashflow (operations)."
         actions={
-          <div className="flex gap-2">
+          <ReportActionGroup>
             <a
               href={`/api/reports/financials?type=cashflow&from=${fromStr}&to=${toStr}`}
               className="btn-secondary text-sm"
@@ -38,7 +39,7 @@ export default async function CashflowPage({
             </a>
             <a href="/reports/cashflow-forecast" className="btn-secondary text-sm">Cashflow Forecast</a>
             <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
-          </div>
+          </ReportActionGroup>
         }
       />
 
@@ -65,21 +66,7 @@ export default async function CashflowPage({
         />
       </div>
 
-      <div className="card p-6">
-        <form className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={fromStr} />
-          </div>
-          <div>
-            <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={toStr} />
-          </div>
-          <div className="flex items-end">
-            <button className="btn-primary w-full">Update</button>
-          </div>
-        </form>
-      </div>
+      <DateRangeFilterCard from={fromStr} to={toStr} />
 
       {!hasData ? (
         <EmptyState
@@ -91,43 +78,49 @@ export default async function CashflowPage({
           hint="Demo Day generates realistic transactions to preview reports."
         />
       ) : (
-        <div className="card p-6 space-y-2 text-sm">
-          <div className="flex justify-between text-black/60">
-            <span>Beginning Cash Balance</span>
-            <span className="font-semibold">{formatMoney(cashflow.beginningCash, business.currency)}</span>
-          </div>
+        <ReportSummaryCard spacingClassName="space-y-2">
+          <ReportSummaryRow
+            label="Beginning Cash Balance"
+            value={formatMoney(cashflow.beginningCash, business.currency)}
+            tone="muted"
+          />
           {cashflow.openingCapital > 0 && (
-            <div className="flex justify-between text-xs text-black/40 pl-4">
-              <span>Includes owner&apos;s capital</span>
-              <span>{formatMoney(cashflow.openingCapital, business.currency)}</span>
-            </div>
+            <ReportSummaryRow
+              label="Includes owner&apos;s capital"
+              value={formatMoney(cashflow.openingCapital, business.currency)}
+              inset
+              tone="muted"
+            />
           )}
-          <div className="border-t border-black/5 pt-2" />
-          <div className="flex justify-between">
-            <span>Net Profit</span>
-            <span className="font-semibold">{formatMoney(cashflow.netProfit, business.currency)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Change in Accounts Receivable</span>
-            <span className="font-semibold">{formatMoney(cashflow.arChange, business.currency)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Change in Inventory</span>
-            <span className="font-semibold">{formatMoney(cashflow.invChange, business.currency)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Change in Accounts Payable</span>
-            <span className="font-semibold">{formatMoney(cashflow.apChange, business.currency)}</span>
-          </div>
-          <div className="flex justify-between border-t border-black/10 pt-2 font-semibold">
-            <span>Net Cash from Operations</span>
-            <span>{formatMoney(cashflow.netCashFromOps, business.currency)}</span>
-          </div>
-          <div className="flex justify-between border-t border-black/10 pt-2 text-base font-semibold">
-            <span>Ending Cash Balance</span>
-            <span>{formatMoney(cashflow.endingCash, business.currency)}</span>
-          </div>
-        </div>
+          <ReportSummaryRow
+            label="Net Profit"
+            value={formatMoney(cashflow.netProfit, business.currency)}
+            divider="subtle"
+          />
+          <ReportSummaryRow
+            label="Change in Accounts Receivable"
+            value={formatMoney(cashflow.arChange, business.currency)}
+          />
+          <ReportSummaryRow
+            label="Change in Inventory"
+            value={formatMoney(cashflow.invChange, business.currency)}
+          />
+          <ReportSummaryRow
+            label="Change in Accounts Payable"
+            value={formatMoney(cashflow.apChange, business.currency)}
+          />
+          <ReportSummaryRow
+            label="Net Cash from Operations"
+            value={formatMoney(cashflow.netCashFromOps, business.currency)}
+            divider="default"
+          />
+          <ReportSummaryRow
+            label="Ending Cash Balance"
+            value={formatMoney(cashflow.endingCash, business.currency)}
+            divider="default"
+            emphasis="strong"
+          />
+        </ReportSummaryCard>
       )}
     </div>
   );

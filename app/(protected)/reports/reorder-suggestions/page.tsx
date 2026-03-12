@@ -4,6 +4,8 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
+import ReportActionGroup from '@/components/reports/ReportActionGroup';
+import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { markAsOrdered } from '@/app/actions/reorder';
 
 type QueryParams = {
@@ -192,7 +194,7 @@ export default async function ReorderSuggestionsPage({
         title="Reorder Suggestions"
         subtitle={`Velocity-based reorder: avg daily demand x ${leadDays}-day lead time + safety stock.`}
         actions={
-          <div className="flex gap-2">
+          <ReportActionGroup>
             <a
               href={`?${baseSearchParams}&group=${groupBySupplier ? '' : 'supplier'}`}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -201,7 +203,7 @@ export default async function ReorderSuggestionsPage({
             >
               {groupBySupplier ? 'Grouped by Supplier' : 'Group by Supplier'}
             </a>
-          </div>
+          </ReportActionGroup>
         }
       />
 
@@ -244,10 +246,10 @@ export default async function ReorderSuggestionsPage({
         <div className="space-y-6">
           {supplierGroups.map(([supplierName, items]) => (
             <div key={supplierName} className="card overflow-x-auto p-6">
-              <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-lg font-display font-semibold">{supplierName}</h2>
-                <Badge tone="neutral">{items.length} item{items.length !== 1 ? 's' : ''}</Badge>
-              </div>
+              <ReportSectionHeader
+                title={supplierName}
+                trailing={<Badge tone="neutral">{items.length} item{items.length !== 1 ? 's' : ''}</Badge>}
+              />
               <ReorderTable items={items} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
             </div>
           ))}

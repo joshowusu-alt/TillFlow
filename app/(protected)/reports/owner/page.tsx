@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { requireBusiness } from '@/lib/auth';
 import { getOwnerDashboardSnapshot, type ActivityItem, type AttentionItem, type BusinessHealthCard, type LeakageMetric, type InventoryRiskRow } from '@/lib/reports/owner-dashboard';
+import type { PriorityAction } from '@/lib/owner-intel';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
@@ -65,14 +66,16 @@ export default async function OwnerIntelligencePage() {
         title="Read the business in one glance"
         description="Today’s trading position, gross profit discipline, till cash, debtors, supplier obligations, and shelf pressure — tuned for supermarket operations, not vanity analytics."
       >
-        <div className="grid gap-4 lg:grid-cols-[1.25fr_3fr]">
-          <HealthOverviewCard
-            score={snapshot.brief.healthScore.score}
-            grade={snapshot.brief.healthScore.grade}
-            topDrivers={snapshot.brief.healthScore.topDrivers}
-            href={snapshot.brief.healthScore.scoreUrl}
-          />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 stagger-children">
+        <div className="grid items-stretch gap-4 lg:grid-cols-[1.25fr_3fr]">
+          <div className="min-w-0">
+            <HealthOverviewCard
+              score={snapshot.brief.healthScore.score}
+              grade={snapshot.brief.healthScore.grade}
+              topDrivers={snapshot.brief.healthScore.topDrivers}
+              href={snapshot.brief.healthScore.scoreUrl}
+            />
+          </div>
+          <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 stagger-children">
             {snapshot.overviewCards.map((card) => (
               <MetricCard key={card.id} card={card} currency={currency} />
             ))}
@@ -85,8 +88,8 @@ export default async function OwnerIntelligencePage() {
         title="Act on the risks that can hurt cash, stock, or control"
         description="The highest-priority problems surface first so the owner knows what needs action right now."
       >
-        <div className="grid gap-6 lg:grid-cols-[1.9fr_1fr]">
-          <section className="card overflow-hidden border-red-100/90 bg-white/95 shadow-raised">
+        <div className="grid items-stretch gap-6 lg:grid-cols-[1.9fr_1fr]">
+          <section className="card min-w-0 overflow-hidden border-red-100/90 bg-white/95 shadow-raised">
             <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-4 py-4 sm:px-6 sm:py-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -116,7 +119,10 @@ export default async function OwnerIntelligencePage() {
             )}
           </section>
 
-          <MoneyPulsePanel snapshot={snapshot} currency={currency} />
+          <div className="flex min-w-0 h-full flex-col gap-6">
+            <PriorityActionsPanel actions={snapshot.brief.priorityActions} />
+            <MoneyPulsePanel snapshot={snapshot} currency={currency} />
+          </div>
         </div>
       </LayerShell>
 
@@ -126,15 +132,19 @@ export default async function OwnerIntelligencePage() {
         description="This layer turns TillFlow into a control surface: inventory risk, money leakage, and the activity stream that tells you what happened across the store."
       >
         <div className="space-y-6">
-          <div className="grid gap-6 2xl:grid-cols-[1.25fr_1.1fr_1.65fr] xl:grid-cols-2">
-            <LeakageWatchPanel metrics={snapshot.leakageMetrics} currency={currency} />
-            <InventoryRiskPanel inventory={snapshot.inventoryRisk} />
-            <div className="hidden 2xl:block">
+          <div className="grid items-stretch gap-6 2xl:grid-cols-[1.25fr_1.1fr_1.65fr] xl:grid-cols-2">
+            <div className="min-w-0">
+              <LeakageWatchPanel metrics={snapshot.leakageMetrics} currency={currency} />
+            </div>
+            <div className="min-w-0">
+              <InventoryRiskPanel inventory={snapshot.inventoryRisk} />
+            </div>
+            <div className="hidden min-w-0 2xl:block">
               <RecentActivityPanel items={snapshot.recentActivity} />
             </div>
           </div>
 
-          <div className="2xl:hidden">
+          <div className="min-w-0 2xl:hidden">
             <RecentActivityPanel items={snapshot.recentActivity} />
           </div>
         </div>
@@ -144,7 +154,7 @@ export default async function OwnerIntelligencePage() {
             <Link
               key={link.href}
               href={link.href}
-              className="card animate-fade-in-up flex items-start justify-between gap-3 rounded-[1.35rem] border border-slate-200/80 bg-white/95 p-4 transition-transform hover:-translate-y-0.5"
+              className="card animate-fade-in-up flex h-full items-start justify-between gap-3 rounded-[1.35rem] border border-slate-200/80 bg-white/95 p-4 transition-transform hover:-translate-y-0.5"
             >
               <div>
                 <p className="text-sm font-semibold text-ink">{link.label}</p>
@@ -178,8 +188,8 @@ export default async function OwnerIntelligencePage() {
 
 function LayerShell({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
   return (
-    <section className="rounded-[1.8rem] border border-slate-200/80 bg-white/70 px-4 py-4 shadow-card backdrop-blur-sm sm:px-5 sm:py-5 md:px-6 md:py-6">
-      <div className="mb-5">
+    <section className="min-w-0 rounded-[1.8rem] border border-slate-200/80 bg-white/70 px-4 py-4 shadow-card backdrop-blur-sm sm:px-5 sm:py-5 md:px-6 md:py-6">
+      <div className="mb-6">
         <div className="inline-flex rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
           {eyebrow}
         </div>
@@ -196,7 +206,7 @@ function HealthOverviewCard({ score, grade, topDrivers, href }: { score: number;
   const gradeTone = grade === 'GREEN' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : grade === 'AMBER' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200';
 
   return (
-    <section className="card animate-fade-in-up overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-4 text-white shadow-floating sm:p-6">
+    <section className="card animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-4 text-white shadow-floating sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-blue-100/80">Business health score</p>
@@ -210,7 +220,7 @@ function HealthOverviewCard({ score, grade, topDrivers, href }: { score: number;
         </span>
       </div>
 
-      <div className="mt-5 space-y-2">
+      <div className="mt-5 flex-1 space-y-2">
         {topDrivers.slice(0, 3).map((driver, index) => (
           <div key={`${driver}-${index}`} className="flex items-start gap-3 text-sm text-blue-50/90">
             <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -244,18 +254,18 @@ function MetricCard({ card, currency }: { card: BusinessHealthCard; currency: st
     : 'border-slate-200 bg-slate-50 text-slate-600';
 
   return (
-    <Link href={card.href} className={`animate-fade-in-up overflow-hidden rounded-[1.35rem] border p-5 shadow-card transition-transform hover:-translate-y-0.5 ${toneClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{card.label}</p>
-          <p className="mt-3 text-[1.95rem] font-display font-bold leading-none tracking-tight text-ink tabular-nums">{value}</p>
+    <Link href={card.href} className={`animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border p-5 shadow-card transition-transform hover:-translate-y-0.5 ${toneClass}`}>
+      <div className="flex min-w-0 flex-col gap-3">
+        <p className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{card.label}</p>
+        <div className="flex min-w-0 justify-start sm:justify-end">
+          <span className={`inline-flex max-w-full items-start gap-1 rounded-full border px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.18em] leading-[1.15] whitespace-normal sm:max-w-[10.5rem] sm:text-right ${trendClass}`}>
+            <TrendIcon direction={card.trend.direction} />
+            {card.trend.label}
+          </span>
         </div>
-        <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${trendClass}`}>
-          <TrendIcon direction={card.trend.direction} />
-          {card.trend.label}
-        </span>
       </div>
-      <p className="mt-4 text-sm leading-relaxed text-slate-600">{card.subtitle}</p>
+      <p className="mt-3 pr-1 text-[1.95rem] font-display font-bold leading-none tracking-tight text-ink tabular-nums">{value}</p>
+      <p className="mt-4 min-h-[3.5rem] flex-1 text-sm leading-relaxed text-slate-600">{card.subtitle}</p>
     </Link>
   );
 }
@@ -281,7 +291,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
 
   return (
     <div className={`animate-fade-in-up rounded-[1.25rem] border p-4 sm:p-5 ${styles.shell}`}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <span className={`mt-2 h-2.5 w-2.5 flex-shrink-0 rounded-full ${styles.dot}`} />
           <div className="min-w-0">
@@ -294,7 +304,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.whyItMatters}</p>
           </div>
         </div>
-        <Link href={item.href} className="btn-primary flex-shrink-0 text-xs sm:text-sm">
+        <Link href={item.href} className="btn-primary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
           {item.ctaLabel}
         </Link>
       </div>
@@ -302,11 +312,74 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   );
 }
 
+function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
+  return (
+    <section className="card min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 shadow-card">
+      <div className="border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Priority actions</h2>
+            <p className="mt-1 text-sm text-muted">The fastest high-value moves the owner can make from the current report signals.</p>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
+            {actions.length} action{actions.length === 1 ? '' : 's'}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-3 px-4 py-4 sm:px-6 sm:py-5">
+        {actions.length === 0 ? (
+          <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/70 p-4 text-sm leading-relaxed text-emerald-800">
+            No urgent owner actions are queued right now. That’s the good kind of quiet.
+          </div>
+        ) : (
+          actions.map((action) => {
+            const styles = action.severity === 'critical'
+              ? {
+                  shell: 'border-red-200 bg-red-50/70',
+                  badge: 'border-red-200 bg-red-100 text-red-700',
+                }
+              : action.severity === 'warn'
+              ? {
+                  shell: 'border-amber-200 bg-amber-50/70',
+                  badge: 'border-amber-200 bg-amber-100 text-amber-700',
+                }
+              : {
+                  shell: 'border-blue-200 bg-blue-50/70',
+                  badge: 'border-blue-200 bg-blue-100 text-blue-700',
+                };
+
+            return (
+              <div key={action.id} className={`rounded-[1.1rem] border p-4 ${styles.shell}`}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold text-ink">{action.title}</p>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${styles.badge}`}>
+                        {action.severity === 'critical' ? 'Critical' : action.severity === 'warn' ? 'Watch' : 'Info'}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">{action.why}</p>
+                    <p className="mt-2 text-sm font-medium text-ink">Recommended next step: {action.recommendation}</p>
+                  </div>
+                  <Link href={action.href} className="btn-secondary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
+                    Open
+                  </Link>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
 function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<typeof getOwnerDashboardSnapshot>>; currency: string }) {
   const seriesMax = Math.max(...snapshot.moneyPulseSeries.map((day) => Math.abs(day.projectedBalancePence)), 1);
 
   return (
-    <section className="card overflow-hidden rounded-[1.5rem] border border-blue-100/90 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 text-white shadow-floating">
+    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-blue-100/90 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 text-white shadow-floating">
       <div className="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -319,7 +392,7 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
         </div>
       </div>
 
-      <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="flex-1 space-y-4 px-4 py-4 sm:px-6 sm:py-5">
         <MoneyPulseRow label="Cash balance today" value={formatMoney(snapshot.brief.moneyPulse.cashTodayPence, currency)} tone="positive" />
         <MoneyPulseRow label="Receivables due (7d)" value={formatMoney(snapshot.brief.moneyPulse.arDue7DaysPence, currency)} tone="positive" />
         <MoneyPulseRow label="Payables due (7d)" value={formatMoney(snapshot.brief.moneyPulse.apDue7DaysPence, currency)} tone="warning" />
@@ -371,14 +444,14 @@ function LeakageWatchPanel({ metrics, currency }: { metrics: LeakageMetric[]; cu
             : 'text-slate-700 bg-slate-50 border-slate-200';
 
           return (
-            <Link key={metric.id} href={metric.href} className="animate-fade-in-up block rounded-[1.1rem] border border-slate-200/80 bg-slate-50/80 p-4 hover:border-primary/25 hover:bg-white">
+            <Link key={metric.id} href={metric.href} className="animate-fade-in-up flex min-w-0 flex-col overflow-hidden rounded-[1.1rem] border border-slate-200/80 bg-slate-50/80 p-4 hover:border-primary/25 hover:bg-white">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">{metric.label}</p>
                   <p className="mt-3 text-2xl font-display font-bold tracking-tight text-ink tabular-nums">{value}</p>
                   <p className="mt-2 text-sm text-slate-600">{metric.helper}</p>
                 </div>
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${toneClass}`}>
+                <span className={`flex-shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${toneClass}`}>
                   {metric.tone === 'danger' ? 'Critical' : metric.tone === 'warning' ? 'Watch' : metric.tone === 'success' ? 'Healthy' : 'Stable'}
                 </span>
               </div>
@@ -410,9 +483,9 @@ function InventoryRiskPanel({ inventory }: { inventory: Awaited<ReturnType<typeo
           </div>
         ) : (
           inventory.rows.map((row) => (
-            <div key={row.id} className="animate-fade-in-up rounded-[1.1rem] border border-slate-200/80 bg-slate-50/70 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
+            <div key={row.id} className="animate-fade-in-up min-w-0 overflow-hidden rounded-[1.1rem] border border-slate-200/80 bg-slate-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-ink">{row.name}</p>
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${inventoryStateClass(row.state)}`}>
@@ -426,7 +499,7 @@ function InventoryRiskPanel({ inventory }: { inventory: Awaited<ReturnType<typeo
                     {row.supplierName ? <span>Supplier: <strong className="font-semibold text-ink">{row.supplierName}</strong></span> : null}
                   </div>
                 </div>
-                <Link href={row.href} className="btn-secondary flex-shrink-0 text-xs sm:text-sm">
+                <Link href={row.href} className="btn-secondary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
                   {row.ctaLabel}
                 </Link>
               </div>
@@ -469,9 +542,9 @@ function RecentActivityPanel({ items }: { items: ActivityItem[] }) {
 
 function PanelShell({ title, description, action, children }: { title: string; description: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="card rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-5 shadow-card sm:p-6">
+    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-5 shadow-card sm:p-6">
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold text-ink">{title}</h3>
           <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
         </div>
@@ -486,7 +559,7 @@ function MoneyPulseRow({ label, value, tone }: { label: string; value: string; t
   const valueClass = tone === 'danger' ? 'text-red-300' : tone === 'warning' ? 'text-amber-200' : 'text-emerald-200';
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
+    <div className="flex flex-col gap-1 border-b border-white/10 pb-3 last:border-b-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <span className="text-sm text-blue-100/80">{label}</span>
       <span className={`text-sm font-semibold tabular-nums ${valueClass}`}>{value}</span>
     </div>

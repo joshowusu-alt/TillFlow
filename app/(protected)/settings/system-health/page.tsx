@@ -129,7 +129,7 @@ export default async function SystemHealthPage() {
                 <td className="py-2 font-medium">
                   {openRiskAlerts === 0
                     ? <span className="text-emerald-600">None</span>
-                    : <a href="/qa" className="text-rose-600 hover:underline">{openRiskAlerts} open →</a>}
+                    : <a href="/reports/risk-monitor" className="text-rose-600 hover:underline">{openRiskAlerts} open →</a>}
                 </td>
               </tr>
             </tbody>

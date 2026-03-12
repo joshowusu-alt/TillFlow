@@ -1,15 +1,14 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import StatCard from '@/components/StatCard';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
+import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatDateTime, formatMoney } from '@/lib/format';
-
-function parseDate(value: string | undefined, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
 
 function severityClass(severity: string) {
   if (severity === 'HIGH') return 'bg-rose-100 text-rose-700';
@@ -35,10 +34,9 @@ export default async function RiskMonitorPage({
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
-  const from = parseDate(searchParams?.from, weekAgo);
-  const to = parseDate(searchParams?.to, today);
-  to.setHours(23, 59, 59, 999);
-  const storeId = searchParams?.storeId || 'ALL';
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
+  const storeId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
   const status = searchParams?.status || 'OPEN';
 
   const alertWhere: any = {
@@ -52,12 +50,7 @@ export default async function RiskMonitorPage({
     alertWhere.status = status;
   }
 
-  const [stores, alerts, discountedSales] = await Promise.all([
-    prisma.store.findMany({
-      where: { businessId: business.id },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
+  const [alerts, discountedSales] = await Promise.all([
     prisma.riskAlert.findMany({
       where: alertWhere,
       include: {
@@ -139,8 +132,6 @@ export default async function RiskMonitorPage({
     return acc;
   }, {});
 
-  const fromIso = from.toISOString().slice(0, 10);
-  const toIso = to.toISOString().slice(0, 10);
   const highCount = alerts.filter((alert) => alert.severity === 'HIGH').length;
   const openCount = alerts.filter((alert) => alert.status === 'OPEN').length;
   const totalOverrides = discountedSales.filter((sale) => !!sale.discountApprovedByUserId).length;
@@ -160,7 +151,7 @@ export default async function RiskMonitorPage({
         }
       />
 
-      <form className="card grid gap-3 p-4 sm:grid-cols-5" method="GET">
+      <ReportFilterCard columnsClassName="sm:grid-cols-5" submitLabel="Apply" submitTone="primary">
         <div>
           <label className="label">From</label>
           <input className="input" type="date" name="from" defaultValue={fromIso} />
@@ -188,34 +179,17 @@ export default async function RiskMonitorPage({
             <option value="ALL">All statuses</option>
           </select>
         </div>
-        <div className="flex items-end">
-          <button className="btn-primary w-full" type="submit">
-            Apply
-          </button>
-        </div>
-      </form>
+      </ReportFilterCard>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Alerts in Range</div>
-          <div className="text-2xl font-semibold">{alerts.length}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Open Alerts</div>
-          <div className="text-2xl font-semibold">{openCount}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-black/50">High Severity</div>
-          <div className="text-2xl font-semibold text-rose">{highCount}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Discount Overrides</div>
-          <div className="text-2xl font-semibold">{totalOverrides}</div>
-        </div>
+        <StatCard label="Alerts in Range" value={String(alerts.length)} />
+        <StatCard label="Open Alerts" value={String(openCount)} />
+        <StatCard label="High Severity" value={String(highCount)} tone="danger" />
+        <StatCard label="Discount Overrides" value={String(totalOverrides)} />
       </div>
 
       <div className="card p-4">
-        <h2 className="text-lg font-display font-semibold">Alert Types</h2>
+        <ReportSectionHeader title="Alert Types" />
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(typeCounts).map(([type, count]) => (
             <div key={type} className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm">
@@ -283,27 +257,62 @@ export default async function RiskMonitorPage({
               <tr key={alert.id} className="rounded-xl bg-white">
                 <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
                 <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
-                <td className="px-3 py-3 text-sm">
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
-                    {alert.severity}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
-                <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
-                <td className="px-3 py-3 text-xs">{alert.status}</td>
-                <td className="px-3 py-3 text-sm">{alert.summary}</td>
-              </tr>
-            ))}
-            {alerts.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-black/50">
-                  No alerts found.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+                <ReportTableCard title="Cashier Trends">
+                  <thead>
+                    <tr>
+                      <th>Cashier</th>
+                      <th>Alerts</th>
+                      <th>High Alerts</th>
+                      <th>Discount Total</th>
+                      <th>Overrides</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashierRows.map((row) => (
+                      <tr key={row.cashierUserId} className="rounded-xl bg-white">
+                        <td className="px-3 py-3 text-sm">{row.name}</td>
+                        <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
+                        <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
+                        <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
+                        <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
+                      </tr>
+                    ))}
+                    {cashierRows.length === 0 ? (
+                      <ReportTableEmptyRow colSpan={5} message="No cashier trend data found." />
+                    ) : null}
+                  </tbody>
+                </ReportTableCard>
+      
+                <ReportTableCard title="Recent Alerts">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Type</th>
+                      <th>Severity</th>
+                      <th>Cashier</th>
+                      <th>Branch</th>
+                      <th>Status</th>
+                      <th>Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alerts.map((alert) => (
+                      <tr key={alert.id} className="rounded-xl bg-white">
+                        <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
+                        <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
+                        <td className="px-3 py-3 text-sm">
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
+                            {alert.severity}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
+                        <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
+                        <td className="px-3 py-3 text-xs">{alert.status}</td>
+                        <td className="px-3 py-3 text-sm">{alert.summary}</td>
+                      </tr>
+                    ))}
+                    {alerts.length === 0 ? (
+                      <ReportTableEmptyRow colSpan={7} message="No alerts found." />
+                    ) : null}
+                  </tbody>
+                </ReportTableCard>

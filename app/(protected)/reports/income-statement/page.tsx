@@ -1,9 +1,13 @@
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
+import ReportActionGroup from '@/components/reports/ReportActionGroup';
+import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
+import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatement } from '@/lib/reports/financials';
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 
 export default async function IncomeStatementPage({
   searchParams
@@ -14,16 +18,13 @@ export default async function IncomeStatementPage({
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const now = new Date();
-  const start = searchParams?.from ? new Date(searchParams.from) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = searchParams?.to ? new Date(searchParams.to) : now;
+  const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { start, end, fromInputValue: fromStr, toInputValue: toStr } = resolveReportDateRange(searchParams, defaultStart, now);
 
   const statement = await getIncomeStatement(business.id, start, end);
   const gpPct = statement.revenue > 0 ? Math.round((statement.grossProfit / statement.revenue) * 100) : 0;
   const npPct = statement.revenue > 0 ? Math.round((statement.netProfit / statement.revenue) * 100) : 0;
   const hasData = statement.revenue !== 0 || statement.cogs !== 0 || statement.otherExpenses !== 0;
-
-  const fromStr = start.toISOString().slice(0, 10);
-  const toStr = end.toISOString().slice(0, 10);
 
   return (
     <div className="space-y-6">
@@ -31,7 +32,7 @@ export default async function IncomeStatementPage({
         title="Income Statement"
         subtitle="Revenue, COGS, expenses, and profit."
         actions={
-          <div className="flex gap-2">
+          <ReportActionGroup>
             <a
               href={`/api/reports/financials?type=income-statement&from=${fromStr}&to=${toStr}`}
               className="btn-secondary text-sm"
@@ -39,7 +40,7 @@ export default async function IncomeStatementPage({
               Export CSV
             </a>
             <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
-          </div>
+          </ReportActionGroup>
         }
       />
 
@@ -66,21 +67,7 @@ export default async function IncomeStatementPage({
         />
       </div>
 
-      <div className="card p-6">
-        <form className="grid gap-4 md:grid-cols-3">
-          <div>
-            <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={fromStr} />
-          </div>
-          <div>
-            <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={toStr} />
-          </div>
-          <div className="flex items-end">
-            <button className="btn-primary w-full">Update</button>
-          </div>
-        </form>
-      </div>
+      <DateRangeFilterCard from={fromStr} to={toStr} />
 
       {!hasData ? (
         <EmptyState
@@ -92,32 +79,34 @@ export default async function IncomeStatementPage({
           hint="Demo Day generates a week of sample data so you can preview reports."
         />
       ) : (
-        <div className="card p-6 space-y-3 text-sm">
-          <div className="flex justify-between">
-            <span>Sales Revenue</span>
-            <span className="font-semibold">{formatMoney(statement.revenue, business.currency)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Cost of Goods Sold</span>
-            <span className="font-semibold">{formatMoney(statement.cogs, business.currency)}</span>
-          </div>
-          <div className="flex justify-between border-t border-black/10 pt-2 text-base">
-            <span>Gross Profit</span>
-            <span className="font-semibold">{formatMoney(statement.grossProfit, business.currency)}</span>
-          </div>
+        <ReportSummaryCard>
+          <ReportSummaryRow
+            label="Sales Revenue"
+            value={formatMoney(statement.revenue, business.currency)}
+          />
+          <ReportSummaryRow
+            label="Cost of Goods Sold"
+            value={formatMoney(statement.cogs, business.currency)}
+          />
+          <ReportSummaryRow
+            label="Gross Profit"
+            value={formatMoney(statement.grossProfit, business.currency)}
+            divider="default"
+            emphasis="strong"
+          />
           {statement.otherExpenses !== 0 && (
-            <div className="flex justify-between">
-              <span className="text-black/70">Operating Expenses</span>
-              <span className="font-semibold text-rose-600">({formatMoney(statement.otherExpenses, business.currency)})</span>
-            </div>
+            <ReportSummaryRow
+              label={<span className="text-black/70">Operating Expenses</span>}
+              value={<span className="text-rose-600">({formatMoney(statement.otherExpenses, business.currency)})</span>}
+            />
           )}
-          <div className="flex justify-between border-t border-black/10 pt-2 text-base font-semibold">
-            <span>Net Profit</span>
-            <span className={statement.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-              {formatMoney(statement.netProfit, business.currency)}
-            </span>
-          </div>
-        </div>
+          <ReportSummaryRow
+            label="Net Profit"
+            value={<span className={statement.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>{formatMoney(statement.netProfit, business.currency)}</span>}
+            divider="default"
+            emphasis="strong"
+          />
+        </ReportSummaryCard>
       )}
     </div>
   );

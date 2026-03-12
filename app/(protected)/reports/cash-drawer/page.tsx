@@ -1,15 +1,13 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import StatCard from '@/components/StatCard';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-function parseDate(value: string | undefined, fallback: Date) {
-  if (!value) return fallback;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return fallback;
-  return parsed;
-}
+import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
 
 export default async function CashDrawerReportPage({
   searchParams,
@@ -21,18 +19,9 @@ export default async function CashDrawerReportPage({
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
 
-  const from = parseDate(searchParams?.from, weekAgo);
-  const to = parseDate(searchParams?.to, today);
-  to.setHours(23, 59, 59, 999);
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-  const selectedStoreId =
-    searchParams?.storeId && stores.some((store) => store.id === searchParams.storeId)
-      ? searchParams.storeId
-      : 'ALL';
+  const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
+  const selectedStoreId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
 
   const shifts = await prisma.shift.findMany({
     where: {
@@ -69,9 +58,6 @@ export default async function CashDrawerReportPage({
   const totalActual = shifts.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
   const totalVariance = shifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
 
-  const fromIso = from.toISOString().slice(0, 10);
-  const toIso = to.toISOString().slice(0, 10);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -79,7 +65,27 @@ export default async function CashDrawerReportPage({
         subtitle="Daily cash summary by branch/store, till and cashier."
       />
 
-      <form className="card grid gap-3 p-4 sm:grid-cols-5" method="GET">
+      <ReportFilterCard
+        actions={
+          <>
+            <Link
+              href={`/exports/eod-csv?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+              className="btn-ghost w-full text-center text-xs"
+            >
+              Export CSV
+            </Link>
+            <Link
+              href={`/exports/eod-pdf?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+              className="btn-ghost w-full text-center text-xs"
+            >
+              Export PDF
+            </Link>
+          </>
+        }
+        columnsClassName="sm:grid-cols-5"
+        submitLabel="Apply"
+        submitTone="secondary"
+      >
         <div>
           <label className="label">Branch / Store</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
@@ -99,107 +105,79 @@ export default async function CashDrawerReportPage({
           <label className="label">To</label>
           <input className="input" type="date" name="to" defaultValue={toIso} />
         </div>
-        <div className="flex items-end">
-          <button className="btn-secondary w-full" type="submit">
-            Apply
-          </button>
-        </div>
-        <div className="flex items-end gap-2">
-          <Link
-            href={`/exports/eod-csv?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
-            className="btn-ghost w-full text-center text-xs"
-          >
-            Export CSV
-          </Link>
-          <Link
-            href={`/exports/eod-pdf?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
-            className="btn-ghost w-full text-center text-xs"
-          >
-            Export PDF
-          </Link>
-        </div>
-      </form>
+      </ReportFilterCard>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Expected Cash</div>
-          <div className="text-2xl font-semibold">{formatMoney(totalExpected, business.currency)}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Counted Cash</div>
-          <div className="text-2xl font-semibold">{formatMoney(totalActual, business.currency)}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-black/50">Variance</div>
-          <div
-            className={`text-2xl font-semibold ${totalVariance === 0 ? '' : totalVariance > 0 ? 'text-accent' : 'text-rose'}`}
-          >
-            {formatMoney(totalVariance, business.currency)}
-          </div>
-        </div>
+        <StatCard
+          label="Expected Cash"
+          value={formatMoney(totalExpected, business.currency)}
+        />
+        <StatCard
+          label="Counted Cash"
+          value={formatMoney(totalActual, business.currency)}
+        />
+        <StatCard
+          label="Variance"
+          value={formatMoney(totalVariance, business.currency)}
+          tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'accent' : 'danger'}
+        />
       </div>
 
-      <div className="card overflow-x-auto p-4">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Branch</th>
-              <th>Till</th>
-              <th>Cashier</th>
-              <th>Expected</th>
-              <th>Counted</th>
-              <th>Variance</th>
-              <th>Approved By</th>
+      <ReportTableCard tableClassName="table w-full border-separate border-spacing-y-2">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Branch</th>
+            <th>Till</th>
+            <th>Cashier</th>
+            <th>Expected</th>
+            <th>Counted</th>
+            <th>Variance</th>
+            <th>Approved By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shifts.map((shift) => (
+            <tr key={shift.id} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
+              <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
+              <td className="px-3 py-3 text-sm">{shift.till.name}</td>
+              <td className="px-3 py-3 text-sm">{shift.user.name}</td>
+              <td className="px-3 py-3 text-sm font-semibold">
+                {formatMoney(shift.expectedCashPence, business.currency)}
+              </td>
+              <td className="px-3 py-3 text-sm font-semibold">
+                {shift.actualCashPence !== null
+                  ? formatMoney(shift.actualCashPence, business.currency)
+                  : '-'}
+              </td>
+              <td className="px-3 py-3 text-sm">
+                {shift.variance !== null ? (
+                  <span
+                    className={
+                      shift.variance === 0
+                        ? 'text-emerald-700'
+                        : shift.variance > 0
+                          ? 'text-accent'
+                          : 'text-rose'
+                    }
+                  >
+                    {formatMoney(shift.variance, business.currency)}
+                  </span>
+                ) : (
+                  <span className="text-black/40">-</span>
+                )}
+              </td>
+              <td className="px-3 py-3 text-xs">
+                {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {shifts.map((shift) => (
-              <tr key={shift.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
-                <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
-                <td className="px-3 py-3 text-sm">{shift.till.name}</td>
-                <td className="px-3 py-3 text-sm">{shift.user.name}</td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(shift.expectedCashPence, business.currency)}
-                </td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {shift.actualCashPence !== null
-                    ? formatMoney(shift.actualCashPence, business.currency)
-                    : '-'}
-                </td>
-                <td className="px-3 py-3 text-sm">
-                  {shift.variance !== null ? (
-                    <span
-                      className={
-                        shift.variance === 0
-                          ? 'text-emerald-700'
-                          : shift.variance > 0
-                            ? 'text-accent'
-                            : 'text-rose'
-                      }
-                    >
-                      {formatMoney(shift.variance, business.currency)}
-                    </span>
-                  ) : (
-                    <span className="text-black/40">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-xs">
-                  {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
-                </td>
-              </tr>
-            ))}
-            {shifts.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-black/50">
-                  No shifts found in this date range.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {shifts.length === 0 ? (
+            <ReportTableEmptyRow colSpan={8} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
     </div>
   );
 }
