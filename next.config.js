@@ -1,5 +1,6 @@
 ﻿/** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV === 'development';
+const localDevPorts = [6200, 6201, 6202, 6203, 6204];
 
 const nextConfig = {
   reactStrictMode: true,
@@ -20,7 +21,7 @@ const nextConfig = {
       // Local browser automation and mixed localhost/127.0.0.1 dev sessions can
       // otherwise trip Next.js origin checks and surface as 403s on legitimate
       // form submissions.
-      allowedOrigins: ['localhost:6200', '127.0.0.1:6200', 'localhost:6201', '127.0.0.1:6201'],
+      allowedOrigins: localDevPorts.flatMap((port) => [`localhost:${port}`, `127.0.0.1:${port}`]),
       bodySizeLimit: '4mb',
     },
   },
