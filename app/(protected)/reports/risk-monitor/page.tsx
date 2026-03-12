@@ -205,114 +205,65 @@ export default async function RiskMonitorPage({
         </div>
       </div>
 
-      <div className="card overflow-x-auto p-4">
-        <h2 className="text-lg font-display font-semibold">Cashier Trends</h2>
-        <table className="table mt-3 w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Cashier</th>
-              <th>Alerts</th>
-              <th>High Alerts</th>
-              <th>Discount Total</th>
-              <th>Overrides</th>
+      <ReportTableCard title="Cashier Trends">
+        <thead>
+          <tr>
+            <th>Cashier</th>
+            <th>Alerts</th>
+            <th>High Alerts</th>
+            <th>Discount Total</th>
+            <th>Overrides</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cashierRows.map((row) => (
+            <tr key={row.cashierUserId} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-sm">{row.name}</td>
+              <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
+              <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
+              <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
+              <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
             </tr>
-          </thead>
-          <tbody>
-            {cashierRows.map((row) => (
-              <tr key={row.cashierUserId} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-sm">{row.name}</td>
-                <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
-                <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
-              </tr>
-            ))}
-            {cashierRows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-sm text-black/50">
-                  No cashier trend data found.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+          ))}
+          {cashierRows.length === 0 ? (
+            <ReportTableEmptyRow colSpan={5} message="No cashier trend data found." />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
 
-      <div className="card overflow-x-auto p-4">
-        <h2 className="text-lg font-display font-semibold">Recent Alerts</h2>
-        <table className="table mt-3 w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Type</th>
-              <th>Severity</th>
-              <th>Cashier</th>
-              <th>Branch</th>
-              <th>Status</th>
-              <th>Summary</th>
+      <ReportTableCard title="Recent Alerts">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Cashier</th>
+            <th>Branch</th>
+            <th>Status</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alerts.map((alert) => (
+            <tr key={alert.id} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
+              <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
+              <td className="px-3 py-3 text-sm">
+                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
+                  {alert.severity}
+                </span>
+              </td>
+              <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
+              <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
+              <td className="px-3 py-3 text-xs">{alert.status}</td>
+              <td className="px-3 py-3 text-sm">{alert.summary}</td>
             </tr>
-          </thead>
-          <tbody>
-            {alerts.map((alert) => (
-              <tr key={alert.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
-                <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
-                <ReportTableCard title="Cashier Trends">
-                  <thead>
-                    <tr>
-                      <th>Cashier</th>
-                      <th>Alerts</th>
-                      <th>High Alerts</th>
-                      <th>Discount Total</th>
-                      <th>Overrides</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cashierRows.map((row) => (
-                      <tr key={row.cashierUserId} className="rounded-xl bg-white">
-                        <td className="px-3 py-3 text-sm">{row.name}</td>
-                        <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
-                        <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
-                        <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
-                        <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
-                      </tr>
-                    ))}
-                    {cashierRows.length === 0 ? (
-                      <ReportTableEmptyRow colSpan={5} message="No cashier trend data found." />
-                    ) : null}
-                  </tbody>
-                </ReportTableCard>
-      
-                <ReportTableCard title="Recent Alerts">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Type</th>
-                      <th>Severity</th>
-                      <th>Cashier</th>
-                      <th>Branch</th>
-                      <th>Status</th>
-                      <th>Summary</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alerts.map((alert) => (
-                      <tr key={alert.id} className="rounded-xl bg-white">
-                        <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
-                        <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
-                        <td className="px-3 py-3 text-sm">
-                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
-                            {alert.severity}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
-                        <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
-                        <td className="px-3 py-3 text-xs">{alert.status}</td>
-                        <td className="px-3 py-3 text-sm">{alert.summary}</td>
-                      </tr>
-                    ))}
-                    {alerts.length === 0 ? (
-                      <ReportTableEmptyRow colSpan={7} message="No alerts found." />
-                    ) : null}
-                  </tbody>
-                </ReportTableCard>
+          ))}
+          {alerts.length === 0 ? (
+            <ReportTableEmptyRow colSpan={7} message="No alerts found." />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
+    </div>
+  );
+}
