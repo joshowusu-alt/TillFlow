@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
+import { formatMoney } from '@/lib/format';
 import InstallButton from './InstallButton';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
@@ -222,7 +223,7 @@ export default function TopNav({
             })}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <InstallButton />
             <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
             <button
@@ -244,6 +245,23 @@ export default function TopNav({
             </button>
           </div>
         </div>
+
+        <div className="border-t border-slate-200/60 bg-white/80 px-4 py-2 lg:hidden sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="metric-chip">
+              <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+              {storeName || 'Main store'}
+            </span>
+            <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
+              {isOnline ? 'Sync ready' : 'Offline mode'}
+            </span>
+          </div>
+          {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+            <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
+              {formatMoney(todaySales.totalPence, todaySales.currency)} · {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <NavMobileMenu
@@ -256,6 +274,7 @@ export default function TopNav({
         features={features}
         pathname={pathname}
         advancedReportLinks={advancedReportLinks}
+        todaySales={todaySales}
       />
     </>
   );

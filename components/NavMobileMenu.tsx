@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { logout } from '@/app/actions/auth';
 import { getFeatures } from '@/lib/features';
+import { formatMoney } from '@/lib/format';
 import InstallButton from './InstallButton';
 import type { TopNavUser } from './TopNav';
 
@@ -20,6 +21,7 @@ interface NavMobileMenuProps {
   features: ReturnType<typeof getFeatures>;
   pathname: string;
   advancedReportLinks: Set<string>;
+  todaySales?: { totalPence: number; txCount: number; currency: string };
 }
 
 export default function NavMobileMenu({
@@ -32,6 +34,7 @@ export default function NavMobileMenu({
   features,
   pathname,
   advancedReportLinks,
+  todaySales,
 }: NavMobileMenuProps) {
   if (!mobileOpen) return null;
 
@@ -62,6 +65,20 @@ export default function NavMobileMenu({
               </div>
               <InstallButton />
             </div>
+            {(user.role === 'MANAGER' || user.role === 'OWNER') && todaySales ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Today sales</div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums text-ink">
+                    {formatMoney(todaySales.totalPence, todaySales.currency)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-right">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Transactions</div>
+                  <div className="mt-1 text-sm font-semibold tabular-nums text-ink">{todaySales.txCount}</div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
@@ -95,7 +112,7 @@ export default function NavMobileMenu({
             </div>
           </div>
 
-          <div className="border-t border-slate-200/80 bg-slate-50/80 p-4">
+          <div className="border-t border-slate-200/80 bg-slate-50/80 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <form action={logout}>
               <button type="submit" className="btn-ghost w-full text-sm">
                 Sign out
