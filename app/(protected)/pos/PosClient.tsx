@@ -4,7 +4,16 @@ import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
-import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import { useParkedCarts } from '@/hooks/useParkedCarts';
+import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
+import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
+import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
+import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
+import { calculateCheckoutSummary, parseCurrencyToPence } from '@/lib/payments/pos-checkout';
+import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
+import { getEnabledPosPaymentMethods, getMomoManualGuidance } from '@/lib/payments/pos-momo';
+import { calculateCompactDropdownViewport, handleScannerEnter, resetScannerBuffer, updateScannerBufferState } from '@/lib/payments/pos-scanner';
+import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
 import {
   checkMomoCollectionStatusAction,
@@ -18,6 +27,21 @@ import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
 import QuickAddCustomer from './components/QuickAddCustomer';
 import CameraScanner from './components/CameraScanner';
+
+function formatRelativeTime(timestamp: string) {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return 'just now';
+
+  const diffMinutes = Math.round(diffMs / 60000);
+  if (diffMinutes <= 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hr ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
 
 type UnitDto = {
   id: string;
@@ -75,19 +99,15 @@ type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 type CollectionNetwork = 'MTN' | 'TELECEL' | 'AIRTELTIGO' | 'UNKNOWN';
 type MomoCollectionState = 'IDLE' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'TIMEOUT';
-
-const CART_STORAGE_KEY = 'pos.savedCart';
-const CART_CUSTOMER_KEY = 'pos.savedCustomer';
-const PARKED_CARTS_KEY = 'pos.parkedCarts';
-
-type ParkedCart = {
-  id: string;
-  label: string;
-  cart: CartLine[];
-  customerId: string;
-  parkedAt: string;
-  itemCount: number;
-};
+type SaleCompletionSnapshot = PosCompletionSnapshot<
+  CartLine,
+  ProductDto,
+  'PAID' | 'PART_PAID' | 'UNPAID',
+  PaymentMethod,
+  DiscountType,
+  CollectionNetwork,
+  MomoCollectionState
+>;
 
 export default function PosClient({
   business,
@@ -109,8 +129,6 @@ export default function PosClient({
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
   const [barcode, setBarcode] = useState('');
   const [tillId, setTillId] = useState(tills[0]?.id ?? '');
-  const [customerId, setCustomerId] = useState('');
-  const [cart, setCart] = useState<CartLine[]>([]);
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
@@ -138,6 +156,7 @@ export default function PosClient({
   const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number; transactionNumber: string | null } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
   const [isCompletingSale, setIsCompletingSale] = useState(false);
+  const [nextCustomerReady, setNextCustomerReady] = useState(false);
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const cashRef = useRef<HTMLInputElement>(null);
@@ -159,24 +178,49 @@ export default function PosClient({
   const [cameraOpen, setCameraOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
   const productSearchShellRef = useRef<HTMLDivElement>(null);
-  // Staged product: when a product with multiple units is picked, show unit
-  // toggle + qty row before adding to cart
-  const [stagedProduct, setStagedProduct] = useState<ProductDto | null>(null);
-  const [stagedUnitId, setStagedUnitId] = useState('');
-  const [stagedQty, setStagedQty] = useState('1');
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
   const maxUndoSteps = 10;
-  const [cartRestored, setCartRestored] = useState(false);
   const [customerOptions, setCustomerOptions] = useState(customers);
   const [customerSearch, setCustomerSearch] = useState('');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
-  const cartInitialized = useRef(false);
 
   // Park/hold state
-  const [parkedCarts, setParkedCarts] = useState<ParkedCart[]>([]);
   const [showParkModal, setShowParkModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
+  const {
+    parkedCarts,
+    parkCurrentCart,
+    recallParkedCart,
+    deleteParkedCart,
+  } = useParkedCarts<CartLine>();
+  const availablePaymentMethods = useMemo(
+    () => getEnabledPosPaymentMethods(business.momoEnabled ?? false),
+    [business.momoEnabled]
+  );
+  const momoGuidance = useMemo(
+    () => getMomoManualGuidance(business.momoProvider),
+    [business.momoProvider]
+  );
+  const productExists = useCallback(
+    (productId: string) => productOptions.some((product) => product.id === productId),
+    [productOptions]
+  );
+  const customerExists = useCallback(
+    (nextCustomerId: string) => customerOptions.some((customer) => customer.id === nextCustomerId),
+    [customerOptions]
+  );
+  const {
+    cart,
+    setCart,
+    customerId,
+    setCustomerId,
+    cartRestored,
+    clearSavedCart,
+  } = usePersistedPosCart<CartLine>({
+    productExists,
+    customerExists,
+  });
 
   const pushUndo = useCallback((currentCart: CartLine[]) => {
     setUndoStack((prev) => [...prev.slice(-(maxUndoSteps - 1)), currentCart]);
@@ -213,35 +257,6 @@ export default function PosClient({
   );
   const selectedUnits = selectedProduct?.units ?? [];
   const selectedUnit = selectedUnits.find((unit) => unit.id === unitId) ?? selectedUnits[0];
-
-  const parseCurrencyToPence = useCallback((value: string | undefined | null) => {
-    if (!value) return 0;
-    const trimmed = String(value).replace(/,/g, '').trim();
-    if (!trimmed) return 0;
-    const parsed = Number(trimmed);
-    return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
-  }, []);
-
-  const parsePercent = useCallback((value: string | undefined | null) => {
-    if (!value) return 0;
-    const trimmed = String(value).replace(/,/g, '').trim();
-    if (!trimmed) return 0;
-    const parsed = Number(trimmed);
-    return Number.isNaN(parsed) ? 0 : parsed;
-  }, []);
-
-  const computeDiscount = useCallback((subtotal: number, type?: DiscountType, value?: string) => {
-    if (!subtotal || !type || type === 'NONE') return 0;
-    if (type === 'PERCENT') {
-      const pct = Math.min(Math.max(parsePercent(value ?? ''), 0), 100);
-      return Math.round((subtotal * pct) / 100);
-    }
-    if (type === 'AMOUNT') {
-      const amount = Math.max(parseCurrencyToPence(value ?? ''), 0);
-      return Math.min(amount, subtotal);
-    }
-    return 0;
-  }, [parseCurrencyToPence, parsePercent]);
 
   const openQuickAdd = useCallback((barcodeValue?: string) => {
     setQuickAddOpen(true);
@@ -291,39 +306,6 @@ export default function PosClient({
     }
   }, []);
 
-  // Load saved cart from localStorage on mount
-  useEffect(() => {
-    if (typeof window === 'undefined' || cartInitialized.current) return;
-    cartInitialized.current = true;
-    try {
-      const savedCart = window.localStorage.getItem(CART_STORAGE_KEY);
-      const savedCustomer = window.localStorage.getItem(CART_CUSTOMER_KEY);
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart) as CartLine[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Validate cart items still exist in products
-          const validCart = parsed.filter((line) =>
-            productOptions.some((p) => p.id === line.productId)
-          );
-          if (validCart.length > 0) {
-            setCart(validCart);
-            setCartRestored(true);
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => setCartRestored(false), 5000);
-          }
-        }
-      }
-      if (savedCustomer) {
-        const customerExists = customerOptions.some((c) => c.id === savedCustomer);
-        if (customerExists) {
-          setCustomerId(savedCustomer);
-        }
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }, [productOptions, customerOptions]);
-
   // Debounced customer search — fetches from /api/customers/search
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -340,61 +322,7 @@ export default function PosClient({
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
-  // Save cart to localStorage when it changes
-  useEffect(() => {
-    if (typeof window === 'undefined' || !cartInitialized.current) return;
-    if (cart.length > 0) {
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
-      if (customerId) {
-        window.localStorage.setItem(CART_CUSTOMER_KEY, customerId);
-      }
-    } else {
-      window.localStorage.removeItem(CART_STORAGE_KEY);
-      window.localStorage.removeItem(CART_CUSTOMER_KEY);
-    }
-  }, [cart, customerId]);
-
-  // Clear saved cart after successful sale
-  const clearSavedCart = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(CART_STORAGE_KEY);
-      window.localStorage.removeItem(CART_CUSTOMER_KEY);
-    }
-  };
-
-  // ── Park/Hold Cart ──────────────────────────────────────
-  // Load parked carts on mount
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(PARKED_CARTS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ParkedCart[];
-        if (Array.isArray(parsed)) setParkedCarts(parsed);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  const saveParkedCarts = useCallback((carts: ParkedCart[]) => {
-    setParkedCarts(carts);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PARKED_CARTS_KEY, JSON.stringify(carts));
-    }
-  }, []);
-
-  const parkCurrentCart = useCallback((label: string) => {
-    if (cart.length === 0) return;
-    const parked: ParkedCart = {
-      id: Date.now().toString(36),
-      label: label.trim() || `Sale (${cart.length} items)`,
-      cart: [...cart],
-      customerId,
-      parkedAt: new Date().toISOString(),
-      itemCount: cart.length,
-    };
-    const updated = [...parkedCarts, parked];
-    saveParkedCarts(updated);
-    // Clear current cart
+  const resetActiveSale = useCallback((options?: { resetPaymentStatus?: boolean; playSuccessTone?: boolean }) => {
     setCart([]);
     clearSavedCart();
     setCustomerId('');
@@ -413,43 +341,64 @@ export default function PosClient({
     setDiscountReason('');
     setQtyDrafts({});
     setUndoStack([]);
-    playBeep(true);
-  }, [cart, customerId, parkedCarts, playBeep, resetMomoCollection, saveParkedCarts]);
-
-  const recallParkedCart = useCallback((parkedId: string) => {
-    const parked = parkedCarts.find((p) => p.id === parkedId);
-    if (!parked) return;
-    // If current cart has items, park it first (swap)
-    if (cart.length > 0) {
-      const currentParked: ParkedCart = {
-        id: Date.now().toString(36),
-        label: `Swapped sale (${cart.length} items)`,
-        cart: [...cart],
-        customerId,
-        parkedAt: new Date().toISOString(),
-        itemCount: cart.length,
-      };
-      const updated = parkedCarts.filter((p) => p.id !== parkedId);
-      updated.push(currentParked);
-      saveParkedCarts(updated);
-    } else {
-      saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
+    if (options?.resetPaymentStatus) {
+      setPaymentStatus('PAID');
     }
-    // Restore parked cart
-    const validCart = parked.cart.filter((line) =>
-      productOptions.some((p) => p.id === line.productId)
-    );
-    setCart(validCart);
-    if (parked.customerId) {
-      const customerExists = customerOptions.some((c) => c.id === parked.customerId);
-      setCustomerId(customerExists ? parked.customerId : '');
+    if (options?.playSuccessTone) {
+      playBeep(true);
     }
-    playBeep(true);
-  }, [cart, customerId, customerOptions, parkedCarts, productOptions, saveParkedCarts, playBeep]);
+  }, [clearSavedCart, playBeep, resetMomoCollection]);
 
-  const deleteParkedCart = useCallback((parkedId: string) => {
-    saveParkedCarts(parkedCarts.filter((p) => p.id !== parkedId));
-  }, [parkedCarts, saveParkedCarts]);
+  const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
+    setProductOptions(snapshot.productOptions);
+    setCart(snapshot.cart);
+    setCustomerId(snapshot.customerId);
+    setCashTendered(snapshot.cashTendered);
+    setCardPaid(snapshot.cardPaid);
+    setTransferPaid(snapshot.transferPaid);
+    setMomoPaid(snapshot.momoPaid);
+    setMomoRef(snapshot.momoRef);
+    setMomoPayerMsisdn(snapshot.momoPayerMsisdn);
+    setMomoNetwork(snapshot.momoNetwork);
+    setMomoCollectionId(snapshot.momoCollectionId);
+    setMomoCollectionStatus(snapshot.momoCollectionStatus);
+    setMomoCollectionError(snapshot.momoCollectionError);
+    setMomoIdempotencyKey(snapshot.momoIdempotencyKey);
+    setMomoCollectionSignature(snapshot.momoCollectionSignature);
+    setPaymentStatus(snapshot.paymentStatus);
+    setPaymentMethods(snapshot.paymentMethods);
+    setOrderDiscountType(snapshot.orderDiscountType);
+    setOrderDiscountInput(snapshot.orderDiscountInput);
+    setDiscountManagerPin(snapshot.discountManagerPin);
+    setDiscountReasonCode(snapshot.discountReasonCode);
+    setDiscountReason(snapshot.discountReason);
+    setQtyDrafts(snapshot.qtyDrafts);
+    setUndoStack(snapshot.undoStack);
+    setSaleError(errorMessage);
+    playBeep(false);
+  }, [playBeep]);
+
+  const handleParkCurrentCart = useCallback((label: string) => {
+    const result = parkCurrentCart({ cart, customerId, label });
+    if (!result) return;
+    resetActiveSale({ playSuccessTone: true });
+  }, [cart, customerId, parkCurrentCart, resetActiveSale]);
+
+  const handleRecallParkedCart = useCallback((parkedId: string) => {
+    const result = recallParkedCart({
+      parkedId,
+      currentCart: cart,
+      currentCustomerId: customerId,
+      productExists,
+      customerExists,
+    });
+    if (!result) return;
+
+    setCart(result.restoredCart);
+    setCustomerId(result.restoredCustomerId);
+    setNextCustomerReady(false);
+    playBeep(true);
+  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart]);
 
   const handleInitiateMomoCollection = useCallback(async () => {
     if (isInitiatingMomo) return;
@@ -552,67 +501,41 @@ export default function PosClient({
     setIsCompletingSale(true);
     setSaleError(null);
 
-    // Snapshot current state for rollback on error
-    const preOptimisticProducts = productOptions;
-    const savedCart = [...cart];
-    const savedCustomerId = customerId;
-    const savedCashTendered = cashTendered;
-    const savedCardPaid = cardPaid;
-    const savedTransferPaid = transferPaid;
-    const savedMomoPaid = momoPaid;
-    const savedMomoRef = momoRef;
-    const savedMomoPayerMsisdn = momoPayerMsisdn;
-    const savedMomoNetwork = momoNetwork;
-    const savedPaymentStatus = paymentStatus;
-    const savedPaymentMethods = [...paymentMethods];
-    const savedOrderDiscountType = orderDiscountType;
-    const savedOrderDiscountInput = orderDiscountInput;
-    const savedDiscountManagerPin = discountManagerPin;
-    const savedDiscountReasonCode = discountReasonCode;
-    const savedDiscountReason = discountReason;
-    const savedQtyDrafts = { ...qtyDrafts };
-    const savedUndoStack = [...undoStack];
+    const saleSnapshot = createSaleCompletionSnapshot<CartLine, ProductDto, 'PAID' | 'PART_PAID' | 'UNPAID', PaymentMethod, DiscountType, CollectionNetwork, MomoCollectionState>({
+      productOptions,
+      cart,
+      customerId,
+      cashTendered,
+      cardPaid,
+      transferPaid,
+      momoPaid,
+      momoRef,
+      momoPayerMsisdn,
+      momoNetwork,
+      momoCollectionId,
+      momoCollectionStatus,
+      momoCollectionError,
+      momoIdempotencyKey,
+      momoCollectionSignature,
+      paymentStatus,
+      paymentMethods,
+      orderDiscountType,
+      orderDiscountInput,
+      discountManagerPin,
+      discountReasonCode,
+      discountReason,
+      qtyDrafts,
+      undoStack,
+    });
 
     // Optimistic: decrement stock in local state immediately for instant feedback
-    const stockDecrements = new Map<string, number>();
-    for (const line of cart) {
-      const product = productOptions.find(p => p.id === line.productId);
-      const unit = product?.units.find(u => u.id === line.unitId);
-      if (product && unit) {
-        const baseQty = line.qtyInUnit * unit.conversionToBase;
-        stockDecrements.set(line.productId, (stockDecrements.get(line.productId) ?? 0) + baseQty);
-      }
-    }
-    setProductOptions(prev => prev.map(p => {
-      const decrement = stockDecrements.get(p.id);
-      if (decrement) return { ...p, onHandBase: Math.max(0, p.onHandBase - decrement) };
-      return p;
-    }));
+    const stockDecrements = buildOptimisticStockDecrements(cart, productOptions);
+    setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
 
     // Optimistic reset: clear cart + payment fields BEFORE server round-trip
     // so the cashier can start scanning the next customer instantly (~16ms).
     // If server fails, we restore from the saved snapshot above.
-    setCart([]);
-    clearSavedCart();
-    setCustomerId('');
-    setCashTendered('');
-    setCardPaid('');
-    setTransferPaid('');
-    setMomoPaid('');
-    setMomoRef('');
-    setMomoPayerMsisdn('');
-    setMomoNetwork('MTN');
-    resetMomoCollection();
-    setPaymentStatus('PAID');
-    setPaymentMethods(['CASH']);
-    setOrderDiscountType('NONE');
-    setOrderDiscountInput('');
-    setDiscountManagerPin('');
-    setDiscountReasonCode('');
-    setDiscountReason('');
-    setQtyDrafts({});
-    setUndoStack([]);
-    playBeep(true);
+    resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
     // Refocus barcode input immediately — zero wait for next customer
     barcodeRef.current?.focus();
 
@@ -648,32 +571,12 @@ export default function PosClient({
         }
         // Show success toast
         setSaleSuccess({ receiptId, totalPence, transactionNumber });
+        setNextCustomerReady(true);
         // Inventory already updated optimistically above — no server round-trip needed.
         // Auto-dismiss success toast after 3 seconds
         setTimeout(() => setSaleSuccess(null), 3000);
       } else {
-        // Revert everything on error — restore cart, payment fields, and stock
-        setProductOptions(preOptimisticProducts);
-        setCart(savedCart);
-        setCustomerId(savedCustomerId);
-        setCashTendered(savedCashTendered);
-        setCardPaid(savedCardPaid);
-        setTransferPaid(savedTransferPaid);
-        setMomoPaid(savedMomoPaid);
-        setMomoRef(savedMomoRef);
-        setMomoPayerMsisdn(savedMomoPayerMsisdn);
-        setMomoNetwork(savedMomoNetwork);
-        setPaymentStatus(savedPaymentStatus);
-        setPaymentMethods(savedPaymentMethods);
-        setOrderDiscountType(savedOrderDiscountType);
-        setOrderDiscountInput(savedOrderDiscountInput);
-        setDiscountManagerPin(savedDiscountManagerPin);
-        setDiscountReasonCode(savedDiscountReasonCode);
-        setDiscountReason(savedDiscountReason);
-        setQtyDrafts(savedQtyDrafts);
-        setUndoStack(savedUndoStack);
-        setSaleError(result.error);
-        playBeep(false);
+        restoreSaleSnapshot(saleSnapshot, result.error);
       }
     } catch (err) {
       // Network error — automatically queue sale offline
@@ -682,75 +585,29 @@ export default function PosClient({
           const offlineId = await queueOfflineSale({
             storeId: store.id,
             tillId,
-            customerId: savedCustomerId || null,
+            customerId: saleSnapshot.customerId || null,
             paymentStatus,
-            lines: savedCart.map(l => ({
+            lines: saleSnapshot.cart.map(l => ({
               productId: l.productId,
               unitId: l.unitId,
               qtyInUnit: l.qtyInUnit,
               discountType: l.discountType ?? 'NONE',
               discountValue: l.discountValue ?? '',
             })),
-            payments: [
-              ...(cashApplied > 0 ? [{ method: 'CASH' as const, amountPence: Math.round(cashApplied) }] : []),
-              ...(cardPaidValue > 0 ? [{ method: 'CARD' as const, amountPence: Math.round(cardPaidValue) }] : []),
-              ...(transferPaidValue > 0 ? [{ method: 'TRANSFER' as const, amountPence: Math.round(transferPaidValue) }] : []),
-              ...(momoPaidValue > 0 ? [{ method: 'MOBILE_MONEY' as const, amountPence: Math.round(momoPaidValue) }] : []),
-            ],
+            payments: buildOfflinePayments({ cashApplied, cardPaidValue, transferPaidValue, momoPaidValue }),
             orderDiscountType,
             orderDiscountValue: orderDiscountInput,
             createdAt: new Date().toISOString(),
           });
           // Show success with offline indicator — cart already cleared optimistically
           setSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' });
+          setNextCustomerReady(true);
           setTimeout(() => setSaleSuccess(null), 4000);
         } catch {
-          // Restore everything on offline queue failure
-          setProductOptions(preOptimisticProducts);
-          setCart(savedCart);
-          setCustomerId(savedCustomerId);
-          setCashTendered(savedCashTendered);
-          setCardPaid(savedCardPaid);
-          setTransferPaid(savedTransferPaid);
-          setMomoPaid(savedMomoPaid);
-          setMomoRef(savedMomoRef);
-          setMomoPayerMsisdn(savedMomoPayerMsisdn);
-          setMomoNetwork(savedMomoNetwork);
-          setPaymentStatus(savedPaymentStatus);
-          setPaymentMethods(savedPaymentMethods);
-          setOrderDiscountType(savedOrderDiscountType);
-          setOrderDiscountInput(savedOrderDiscountInput);
-          setDiscountManagerPin(savedDiscountManagerPin);
-          setDiscountReasonCode(savedDiscountReasonCode);
-          setDiscountReason(savedDiscountReason);
-          setQtyDrafts(savedQtyDrafts);
-          setUndoStack(savedUndoStack);
-          setSaleError('Offline queue failed. Please try again.');
-          playBeep(false);
+          restoreSaleSnapshot(saleSnapshot, 'Offline queue failed. Please try again.');
         }
       } else {
-        // Revert everything on non-network error
-        setProductOptions(preOptimisticProducts);
-        setCart(savedCart);
-        setCustomerId(savedCustomerId);
-        setCashTendered(savedCashTendered);
-        setCardPaid(savedCardPaid);
-        setTransferPaid(savedTransferPaid);
-        setMomoPaid(savedMomoPaid);
-        setMomoRef(savedMomoRef);
-        setMomoPayerMsisdn(savedMomoPayerMsisdn);
-        setMomoNetwork(savedMomoNetwork);
-        setPaymentStatus(savedPaymentStatus);
-        setPaymentMethods(savedPaymentMethods);
-        setOrderDiscountType(savedOrderDiscountType);
-        setOrderDiscountInput(savedOrderDiscountInput);
-        setDiscountManagerPin(savedDiscountManagerPin);
-        setDiscountReasonCode(savedDiscountReasonCode);
-        setDiscountReason(savedDiscountReason);
-        setQtyDrafts(savedQtyDrafts);
-        setUndoStack(savedUndoStack);
-        setSaleError('Something went wrong. Please try again.');
-        playBeep(false);
+        restoreSaleSnapshot(saleSnapshot, 'Something went wrong. Please try again.');
       }
     } finally {
       setIsCompletingSale(false);
@@ -758,44 +615,17 @@ export default function PosClient({
   };
 
   // O(1) product lookup via Map — avoids O(n) find() per cart line
-  const productMap = useMemo(() => new Map(productOptions.map(p => [p.id, p])), [productOptions]);
+  const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
 
   const getProduct = useCallback(
     (id: string) => productMap.get(id),
     [productMap]
   );
-  const getUnit = useCallback(
-    (product: ProductDto | undefined, unitIdValue: string) =>
-      product?.units.find((unit) => unit.id === unitIdValue),
-    []
-  );
+  const getUnit = useCallback(getUnitFromProduct, []);
 
   const getAvailableBase = useCallback((targetProductId: string, excludeLineId?: string) => {
-    const product = getProduct(targetProductId);
-    if (!product) return 0;
-    const usedBase = cart.reduce((sum, line) => {
-      if (line.productId !== targetProductId || line.id === excludeLineId) return sum;
-      const unit = getUnit(product, line.unitId);
-      if (!unit) return sum;
-      return sum + line.qtyInUnit * unit.conversionToBase;
-    }, 0);
-    return Math.max(product.onHandBase - usedBase, 0);
-  }, [cart, getProduct, getUnit]);
-
-  const formatAvailable = useCallback((product: ProductDto, availableBase: number) => {
-    const baseUnit = product.units.find((unit) => unit.isBaseUnit);
-    const packaging = getPrimaryPackagingUnit(
-      product.units.map((unit) => ({ conversionToBase: unit.conversionToBase, unit }))
-    );
-    return formatMixedUnit({
-      qtyBase: availableBase,
-      baseUnit: baseUnit?.name ?? 'unit',
-      baseUnitPlural: baseUnit?.pluralName,
-      packagingUnit: packaging?.unit.name,
-      packagingUnitPlural: packaging?.unit.pluralName,
-      packagingConversion: packaging?.conversionToBase
-    });
-  }, []);
+    return getAvailableBaseForCart(cart, productMap, targetProductId, excludeLineId);
+  }, [cart, productMap]);
 
   const clampQtyInUnit = useCallback((
     targetProductId: string,
@@ -892,16 +722,9 @@ export default function PosClient({
 
 
   const filteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return [];
-    const search = productSearch.toLowerCase();
-    return productOptions
-      .filter((p) =>
-        p.name.toLowerCase().includes(search) ||
-        (p.barcode && p.barcode.toLowerCase().includes(search)) ||
-        (p.categoryName && p.categoryName.toLowerCase().includes(search))
-      )
-      .slice(0, 10);
+    return filterPosProducts(productOptions, productSearch);
   }, [productOptions, productSearch]);
+  const productSearchMatches = filteredProducts.length;
 
   const updateProductDropdownViewport = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -910,15 +733,13 @@ export default function PosClient({
     if (!compact) return;
 
     const visualViewport = window.visualViewport;
-    const viewportHeight = visualViewport?.height ?? window.innerHeight;
-    const viewportOffsetTop = visualViewport?.offsetTop ?? 0;
-    const rect = productSearchShellRef.current?.getBoundingClientRect();
-    const preferredTop = rect ? rect.bottom + 8 : viewportOffsetTop + 96;
-    const minTop = viewportOffsetTop + 12;
-    const top = Math.max(minTop, Math.min(preferredTop, viewportOffsetTop + viewportHeight - 220));
-    const maxHeight = Math.max(180, Math.floor(viewportOffsetTop + viewportHeight - top - 12));
+    const viewport = calculateCompactDropdownViewport({
+      viewportHeight: visualViewport?.height ?? window.innerHeight,
+      viewportOffsetTop: visualViewport?.offsetTop ?? 0,
+      shellBottom: productSearchShellRef.current?.getBoundingClientRect().bottom ?? null,
+    });
 
-    setProductDropdownViewport({ top, maxHeight });
+    setProductDropdownViewport(viewport);
   }, []);
 
   useEffect(() => {
@@ -966,15 +787,25 @@ export default function PosClient({
       ];
     });
   }, [cart, clampQtyInUnit, router]);
+  const {
+    stagedProduct,
+    stagedUnitId,
+    setStagedUnitId,
+    stagedQty,
+    setStagedQty,
+    stageProduct,
+    clearStagedProduct,
+    commitStagedProduct,
+  } = useStagedProductSelection<ProductDto>({ onAddToCart: addToCart });
 
   const handleQuickCreated = useCallback((created: { id: string; name: string; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean }[] }, matchedScan: boolean) => {
     setQuickAddOpen(false);
     setProductId(created.id);
-    const baseUnit = created.units.find((unit) => unit.isBaseUnit) ?? created.units[0];
-    setUnitId(baseUnit?.id ?? '');
+    const baseUnitId = getProductBaseUnitId(created);
+    setUnitId(baseUnitId);
     setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
     if (matchedScan) {
-      addToCart({ productId: created.id, unitId: baseUnit?.id ?? '', qtyInUnit: 1 });
+      addToCart({ productId: created.id, unitId: baseUnitId, qtyInUnit: 1 });
     }
     setPendingScan(null);
     setBarcodeAlert(null);
@@ -1001,26 +832,22 @@ export default function PosClient({
   };
 
   const handleAddStaged = () => {
-    if (!stagedProduct) return;
-    const qty = Math.max(1, Math.floor(Number(stagedQty) || 1));
-    addToCart({ productId: stagedProduct.id, unitId: stagedUnitId, qtyInUnit: qty });
-    setStagedProduct(null);
-    setStagedQty('1');
+    if (!commitStagedProduct()) return;
     setProductSearch('');
     playBeep(true);
     barcodeRef.current?.focus();
   };
 
   const handleBarcodeScan = useCallback((code: string) => {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    const match = productOptions.find((product) => product.barcode === trimmed);
-    if (match) {
+    const resolution = resolveBarcodeScan(code, productOptions);
+    if (!resolution) return;
+
+    if (resolution.kind === 'matched') {
+      const { product, baseUnitId } = resolution;
       playBeep(true);
-      const base = match.units.find((unit) => unit.isBaseUnit) ?? match.units[0];
-      addToCart({ productId: match.id, unitId: base?.id ?? '', qtyInUnit: 1 });
-      setProductId(match.id);
-      setUnitId(base?.id ?? '');
+      addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
+      setProductId(product.id);
+      setUnitId(baseUnitId);
       setQtyInUnitInput('1');
       setBarcode('');
       setBarcodeAlert(null);
@@ -1028,153 +855,98 @@ export default function PosClient({
       barcodeRef.current?.focus();
     } else {
       playBeep(false);
-      setBarcodeAlert(`Barcode "${trimmed}" not found. Create the product now.`);
-      setPendingScan(trimmed);
-      openQuickAdd(trimmed);
+      setBarcodeAlert(`Barcode "${resolution.code}" not found. Create the product now.`);
+      setPendingScan(resolution.code);
+      openQuickAdd(resolution.code);
     }
   }, [addToCart, openQuickAdd, playBeep, productOptions]);
 
-  const cartDetails = useMemo(() => {
-    return cart
-      .map((line) => {
-        const product = productMap.get(line.productId);
-        const unit = product?.units.find((u) => u.id === line.unitId);
-        if (!product || !unit) return null;
-        const qtyBase = line.qtyInUnit * unit.conversionToBase;
-        const unitPrice = unit.conversionToBase * product.sellingPriceBasePence;
-        const subtotal = unitPrice * line.qtyInUnit;
-        const lineDiscount = computeDiscount(subtotal, line.discountType, line.discountValue);
-        const promoBuyQty = product.promoBuyQty ?? 0;
-        const promoGetQty = product.promoGetQty ?? 0;
-        const promoGroup = promoBuyQty + promoGetQty;
-        const promoFreeUnits =
-          promoBuyQty > 0 && promoGetQty > 0 && promoGroup > 0
-            ? Math.floor(qtyBase / promoGroup) * promoGetQty
-            : 0;
-        const promoDiscount = Math.min(
-          promoFreeUnits * product.sellingPriceBasePence,
-          Math.max(subtotal - lineDiscount, 0)
-        );
-        const netSubtotal = Math.max(subtotal - lineDiscount - promoDiscount, 0);
-        const vat = business.vatEnabled ? Math.round((netSubtotal * product.vatRateBps) / 10000) : 0;
-        const total = netSubtotal + vat;
-        const baseUnit = product.units.find((u) => u.isBaseUnit);
-        const packaging = getPrimaryPackagingUnit(
-          product.units.map((u) => ({ conversionToBase: u.conversionToBase, unit: u }))
-        );
-        const qtyLabel = formatMixedUnit({
-          qtyBase,
-          baseUnit: baseUnit?.name ?? 'unit',
-          baseUnitPlural: baseUnit?.pluralName,
-          packagingUnit: packaging?.unit.name,
-          packagingUnitPlural: packaging?.unit.pluralName,
-          packagingConversion: packaging?.conversionToBase
-        });
-        return {
-          ...line,
-          product,
-          unit,
-          qtyLabel,
-          unitPrice,
-          subtotal,
-          lineDiscount,
-          promoDiscount,
-          netSubtotal,
-          vat,
-          total,
-          promoLabel:
-            promoFreeUnits > 0
-              ? `Promo: ${promoBuyQty} + ${promoGetQty} (free ${promoFreeUnits})`
-              : null
-        };
-      })
-      .filter(Boolean) as Array<
-        CartLine & {
-          product: ProductDto;
-          unit: UnitDto;
-          qtyLabel: string;
-          unitPrice: number;
-          subtotal: number;
-          lineDiscount: number;
-          promoDiscount: number;
-          netSubtotal: number;
-          vat: number;
-          total: number;
-          promoLabel: string | null;
-        }
-      >;
-  }, [cart, productMap, business.vatEnabled, computeDiscount]);
+  const cartDetails = useMemo(
+    () => buildCartDetails(cart, productMap, business.vatEnabled),
+    [cart, productMap, business.vatEnabled]
+  );
 
   // Pre-compute available stock per product once per cart change — O(n) instead of O(n²)
-  const availableBaseMap = useMemo(() => {
-    const usedMap = new Map<string, number>();
-    for (const line of cart) {
-      const product = productMap.get(line.productId);
-      const unit = product?.units.find(u => u.id === line.unitId);
-      if (product && unit) {
-        usedMap.set(line.productId, (usedMap.get(line.productId) ?? 0) + line.qtyInUnit * unit.conversionToBase);
-      }
-    }
-    const result = new Map<string, number>();
-    for (const [pid, used] of usedMap) {
-      const product = productMap.get(pid);
-      result.set(pid, Math.max((product?.onHandBase ?? 0) - used, 0));
-    }
-    return result;
-  }, [cart, productMap]);
+  const availableBaseMap = useMemo(() => buildAvailableBaseMap(cart, productMap), [cart, productMap]);
 
-  const totals = useMemo(() => cartDetails.reduce(
-    (acc, line) => {
-      acc.subtotal += line.subtotal;
-      acc.lineDiscount += line.lineDiscount;
-      acc.promoDiscount += line.promoDiscount;
-      acc.netSubtotal += line.netSubtotal;
-      acc.vat += line.vat;
-      return acc;
-    },
-    { subtotal: 0, lineDiscount: 0, promoDiscount: 0, netSubtotal: 0, vat: 0 }
-  ), [cartDetails]);
+  const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
 
-  const orderDiscount = computeDiscount(
-    totals.netSubtotal,
+  const checkoutSummary = useMemo(() => calculateCheckoutSummary({
+    totals,
     orderDiscountType,
-    orderDiscountInput
-  );
-  const totalDiscountPence = totals.lineDiscount + totals.promoDiscount + orderDiscount;
-  const discountBps =
-    totals.subtotal > 0 ? Math.round((totalDiscountPence * 10_000) / totals.subtotal) : 0;
-  const requiresDiscountApproval =
-    discountBps > (business.discountApprovalThresholdBps ?? 1500);
-  const discountApprovalReady =
-    !requiresDiscountApproval ||
-    (!!discountManagerPin.trim() && (!!discountReasonCode || !!discountReason.trim()));
-  const netAfterOrderDiscount = Math.max(totals.netSubtotal - orderDiscount, 0);
-  const vatRatio =
-    business.vatEnabled && totals.netSubtotal > 0
-      ? netAfterOrderDiscount / totals.netSubtotal
-      : 1;
-  const vatTotal = business.vatEnabled ? Math.round(totals.vat * vatRatio) : 0;
-  const totalDue = netAfterOrderDiscount + vatTotal;
+    orderDiscountInput,
+    vatEnabled: business.vatEnabled,
+    discountApprovalThresholdBps: business.discountApprovalThresholdBps,
+    discountManagerPin,
+    discountReasonCode,
+    discountReason,
+    paymentMethods,
+    cashTendered,
+    cardPaid,
+    transferPaid,
+    momoPaid,
+    momoNetwork,
+    momoPayerMsisdn,
+    momoCollectionStatus,
+  }), [
+    totals,
+    orderDiscountType,
+    orderDiscountInput,
+    business.vatEnabled,
+    business.discountApprovalThresholdBps,
+    discountManagerPin,
+    discountReasonCode,
+    discountReason,
+    paymentMethods,
+    cashTendered,
+    cardPaid,
+    transferPaid,
+    momoPaid,
+    momoNetwork,
+    momoPayerMsisdn,
+    momoCollectionStatus,
+  ]);
 
-  const cashTenderedValue = hasMethod('CASH') ? parseCurrencyToPence(cashTendered) : 0;
-  const cardPaidRaw = hasMethod('CARD') ? parseCurrencyToPence(cardPaid) : 0;
-  const transferPaidRaw = hasMethod('TRANSFER') ? parseCurrencyToPence(transferPaid) : 0;
-  const momoPaidRaw = hasMethod('MOBILE_MONEY') ? parseCurrencyToPence(momoPaid) : 0;
-  const nonCashRaw = cardPaidRaw + transferPaidRaw + momoPaidRaw;
-  const nonCashOverpay = nonCashRaw > totalDue;
-  const cardPaidValue = cardPaidRaw;
-  const transferPaidValue = transferPaidRaw;
-  const momoPaidValue = momoPaidRaw;
-  const nonCashPaid = cardPaidValue + transferPaidValue + momoPaidValue;
-  const cashDue = Math.max(totalDue - nonCashPaid, 0);
-  const cashApplied = Math.min(cashTenderedValue, cashDue);
-  const changeDue = Math.max(cashTenderedValue - cashDue, 0);
-  const totalPaid = cashApplied + nonCashPaid;
-  const balanceRemaining = Math.max(totalDue - totalPaid, 0);
-  const momoMethodEnabled = hasMethod('MOBILE_MONEY');
-  const needsMomoConfirmation = momoMethodEnabled && momoPaidValue > 0;
-  const momoConfirmed = momoCollectionStatus === 'CONFIRMED';
-  const momoSignature = `${momoPaidValue}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`;
+  const {
+    orderDiscount,
+    discountBps,
+    requiresDiscountApproval,
+    discountApprovalReady,
+    vatTotal,
+    totalDue,
+    cashTenderedValue,
+    cardPaidValue,
+    transferPaidValue,
+    momoPaidValue,
+    nonCashOverpay,
+    totalPaid,
+    balanceRemaining,
+    cashApplied,
+    changeDue,
+    needsMomoConfirmation,
+    momoConfirmed,
+    momoSignature,
+  } = checkoutSummary;
+  const activePaymentMethodLabels = useMemo(
+    () => paymentMethods.map((method) =>
+      method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'
+    ),
+    [paymentMethods]
+  );
+  const latestParkedCart = useMemo(
+    () => parkedCarts[parkedCarts.length - 1] ?? null,
+    [parkedCarts]
+  );
+  const oldestParkedCart = useMemo(
+    () => parkedCarts[0] ?? null,
+    [parkedCarts]
+  );
+
+  useEffect(() => {
+    if (!nextCustomerReady) return;
+    const timer = window.setTimeout(() => setNextCustomerReady(false), 2600);
+    return () => window.clearTimeout(timer);
+  }, [nextCustomerReady]);
 
   useEffect(() => {
     if (!momoCollectionId) return;
@@ -1222,6 +994,36 @@ export default function PosClient({
     discountApprovalReady &&
     tillReady &&
     (!requiresCustomer || customerId);
+  const checkoutIssues = useMemo(() => {
+    const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
+    if (requiresCustomer && !customerId) {
+      issues.push({ tone: 'warning', message: 'Select a customer for credit or part-paid sales.' });
+    }
+    if (hasPaymentError) {
+      issues.push({ tone: 'warning', message: 'Card, transfer, or MoMo cannot exceed the total due.' });
+    }
+    if (!tillReady) {
+      issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
+    }
+    if (needsMomoConfirmation && !momoConfirmed) {
+      issues.push({ tone: 'success', message: 'MoMo will be recorded manually. Confirm payment on the customer phone before completion.' });
+    }
+    if (requiresDiscountApproval && !discountApprovalReady) {
+      issues.push({ tone: 'warning', message: 'High discount needs manager PIN and reason before completion.' });
+    }
+    if (paymentStatus === 'PAID' && !fullyPaid) {
+      issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
+    }
+    return issues;
+  }, [customerId, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady]);
+  const confidenceTone = !cart.length
+    ? 'neutral'
+    : canSubmit
+      ? 'ready'
+      : checkoutIssues.some((issue) => issue.tone === 'warning')
+        ? 'attention'
+        : 'neutral';
+  const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams.get('error');
 
   useEffect(() => {
@@ -1327,41 +1129,17 @@ export default function PosClient({
       const state = scanBufferRef.current;
 
       if (key === 'Enter') {
-        if (state.active && state.value.length >= 4) {
+        const enterResult = handleScannerEnter(state);
+        if (enterResult.shouldScan && enterResult.code) {
           event.preventDefault();
-          const code = state.value;
-          state.value = '';
-          state.fastCount = 0;
-          state.active = false;
           if (state.timer) clearTimeout(state.timer);
-          handleBarcodeScan(code);
-        } else {
-          state.value = '';
-          state.fastCount = 0;
-          state.active = false;
+          handleBarcodeScan(enterResult.code);
         }
         return;
       }
 
+      updateScannerBufferState(state, key, now);
       if (key.length !== 1) return;
-
-      const delta = state.lastTime ? now - state.lastTime : 0;
-      if (delta > 200) {
-        state.value = '';
-        state.fastCount = 0;
-        state.active = false;
-      }
-      if (delta > 0 && delta < 50) {
-        state.fastCount += 1;
-      } else {
-        state.fastCount = 0;
-      }
-      if (state.fastCount >= 2) {
-        state.active = true;
-      }
-
-      state.value += key;
-      state.lastTime = now;
 
       if (state.active && (!isEditable || target !== barcodeRef.current)) {
         event.preventDefault();
@@ -1369,9 +1147,7 @@ export default function PosClient({
 
       if (state.timer) clearTimeout(state.timer);
       state.timer = setTimeout(() => {
-        state.value = '';
-        state.fastCount = 0;
-        state.active = false;
+        resetScannerBuffer(state);
       }, 250);
     };
 
@@ -1380,7 +1156,7 @@ export default function PosClient({
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 pb-36 md:grid-cols-[3fr_1fr] md:pb-0">
+    <div className="grid gap-6 pb-36 md:grid-cols-[3fr_1fr] md:items-start md:pb-0">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -1453,20 +1229,38 @@ export default function PosClient({
                   style={isCompactViewport ? { top: productDropdownViewport.top, maxHeight: productDropdownViewport.maxHeight } : undefined}
                 >
                   {filteredProducts.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-black/50">
-                      No products match &ldquo;{productSearch}&rdquo;
-                      <button
-                        type="button"
-                        className="ml-2 font-semibold text-emerald-600 hover:underline"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => { openQuickAdd(); setProductSearch(''); }}
-                      >
-                        Create new
-                      </button>
+                    <div className="px-4 py-4 text-sm text-black/60">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16h8M8 12h8m-8-4h5M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-black">No products match &ldquo;{productSearch}&rdquo;</div>
+                          <div className="mt-1 text-xs text-black/45">Search across {productOptions.length} products or create a new SKU right away.</div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                            <button
+                              type="button"
+                              className="rounded-full bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => { openQuickAdd(); setProductSearch(''); }}
+                            >
+                              Create new product
+                            </button>
+                            <span className="rounded-full bg-black/5 px-2.5 py-1 text-black/45">F2 returns to barcode</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    filteredProducts.map((product) => {
-                      const base = product.units.find((u) => u.isBaseUnit) ?? product.units[0];
+                    <>
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35 backdrop-blur">
+                      <span>{productSearchMatches} of {productOptions.length} products</span>
+                      <span className="normal-case tracking-normal text-black/35">Enter adds • F2 scan</span>
+                    </div>
+                    {filteredProducts.map((product) => {
+                      const baseUnitId = getProductBaseUnitId(product);
                       const available = getAvailableBase(product.id);
                       const outOfStock = available <= 0;
                       return (
@@ -1477,19 +1271,17 @@ export default function PosClient({
                           className={`w-full px-4 py-3 text-left transition-colors ${outOfStock ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accentSoft active:bg-blue-100'}`}
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
-                            if (!base || outOfStock) return;
+                            if (!baseUnitId || outOfStock) return;
                             if (product.units.length > 1) {
                               // Multiple units — stage for unit selection
-                              setStagedProduct(product);
-                              setStagedUnitId(base.id);
-                              setStagedQty('1');
+                              stageProduct(product);
                               setProductSearch('');
                               setProductDropdownOpen(false);
                             } else {
                               // Single unit — add directly as before
-                              addToCart({ productId: product.id, unitId: base.id, qtyInUnit: 1 });
+                              addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
                               setProductId(product.id);
-                              setUnitId(base.id);
+                              setUnitId(baseUnitId);
                               setProductSearch('');
                               setProductDropdownOpen(false);
                               playBeep(true);
@@ -1518,7 +1310,8 @@ export default function PosClient({
                           </div>
                         </button>
                       );
-                    })
+                    })}
+                    </>
                   )}
                 </div>
               )}
@@ -1551,17 +1344,77 @@ export default function PosClient({
           </div>
 
           {barcodeAlert && (
-            <div className="mt-3 rounded-lg border border-rose/30 bg-rose/5 px-3 py-2 text-sm text-rose flex items-center justify-between">
-              <span>{barcodeAlert}</span>
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900 shadow-sm">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-200/70 text-amber-700">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M4.93 19h14.14c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.2 16c-.77 1.33.19 3 1.73 3z" />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <div className="font-semibold">Barcode not found</div>
+                  <div className="text-xs text-amber-800/80">{barcodeAlert}</div>
+                </div>
+              </div>
               <button
                 type="button"
-                className="btn-secondary text-xs ml-3"
+                className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-100"
                 onClick={() => openQuickAdd(pendingScan ?? '')}
               >
                 Create product
               </button>
             </div>
           )}
+          {nextCustomerReady && cart.length === 0 ? (
+            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-900 shadow-sm animate-scale-in">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">Ready for next customer</div>
+                <div className="text-xs text-emerald-700">Scanner focus is back on the till. Keep serving.</div>
+              </div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">F2 barcode</span>
+            </div>
+          ) : null}
+          {parkedCarts.length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white px-4 py-3 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-700/80">Parked sales ready</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-amber-950">
+                    <span className="font-semibold">{parkedCarts.length} sale{parkedCarts.length === 1 ? '' : 's'} waiting</span>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                      oldest {oldestParkedCart ? formatRelativeTime(oldestParkedCart.parkedAt) : 'just now'}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-amber-800/80">
+                    {latestParkedCart ? `Latest: ${latestParkedCart.label} • ${latestParkedCart.itemCount} item${latestParkedCart.itemCount === 1 ? '' : 's'}` : 'Recall a held basket when the customer returns.'}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {latestParkedCart ? (
+                    <button
+                      type="button"
+                      className="rounded-full bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-700"
+                      onClick={() => handleRecallParkedCart(latestParkedCart.id)}
+                    >
+                      Recall latest
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-100"
+                    onClick={() => setShowParkedPanel((prev) => !prev)}
+                  >
+                    {showParkedPanel ? 'Hide parked list' : 'View parked list'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {stockAlert && (
             <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
               {stockAlert}
@@ -1579,7 +1432,7 @@ export default function PosClient({
               </div>
               <button
                 type="button"
-                onClick={() => { setStagedProduct(null); barcodeRef.current?.focus(); }}
+                onClick={() => { clearStagedProduct(); barcodeRef.current?.focus(); }}
                 className="text-black/30 hover:text-black/60 text-xl leading-none px-1"
               >
                 &times;
@@ -1621,7 +1474,7 @@ export default function PosClient({
                 onChange={(e) => setStagedQty(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); handleAddStaged(); }
-                  if (e.key === 'Escape') { setStagedProduct(null); barcodeRef.current?.focus(); }
+                  if (e.key === 'Escape') { clearStagedProduct(); barcodeRef.current?.focus(); }
                 }}
                 className="input w-24 text-center"
                 autoFocus
@@ -1746,8 +1599,31 @@ export default function PosClient({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                   </svg>
                 </div>
-                <div className="text-sm font-medium text-black/50">Scan a barcode or search a product</div>
-                <div className="mt-1 text-xs text-black/30">Items will appear here instantly</div>
+                <div className="text-sm font-semibold text-black/60">Scan a barcode or search a product</div>
+                <div className="mt-1 text-xs text-black/35">This till is clear and ready. Items will appear here instantly.</div>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
+                    onClick={() => barcodeRef.current?.focus()}
+                  >
+                    F2 focus barcode
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
+                    onClick={() => setShowKeyboardHelp(true)}
+                  >
+                    ? keyboard help
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                    onClick={() => setCameraOpen(true)}
+                  >
+                    Scan with camera
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="divide-y divide-black/5 overflow-y-auto max-h-[38vh] md:max-h-[42vh] lg:max-h-[45vh] scroll-smooth">
@@ -1928,7 +1804,7 @@ export default function PosClient({
               <div>
                 <label className="label">Method</label>
                 <div className="mt-1.5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                  {(['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'] as PaymentMethod[]).map((method) => (
+                  {availablePaymentMethods.map((method) => (
                     <button
                       key={method}
                       type="button"
@@ -1963,7 +1839,7 @@ export default function PosClient({
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
                 >
-                  <option value="">{requiresCustomer ? 'Select a customer…' : 'Walk-in / None'}</option>
+                  <option value="">{requiresCustomer ? 'Select a customer…' : 'Walk-in / No customer'}</option>
                   {customerOptions.map((customer) => (
                     <option key={customer.id} value={customer.id}>{customer.name}</option>
                   ))}
@@ -2129,7 +2005,7 @@ export default function PosClient({
                   />
                   {momoCollectionStatus === 'IDLE' ? (
                     <div className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800">
-                      Enter the MoMo amount and payer number, then complete the sale. Verify the customer&apos;s payment confirmation on their phone before handing over goods.
+                      {momoGuidance}
                     </div>
                   ) : null}
                   <input
@@ -2143,31 +2019,68 @@ export default function PosClient({
               )}
             </div>
 
-            {/* Validation alerts */}
-            {requiresCustomer && !customerId && (
-              <div className="text-sm text-amber-700 font-medium">Select a customer for credit or part-paid sales.</div>
-            )}
-            {hasPaymentError && (
-              <div className="text-sm text-amber-700 font-medium">Card/transfer/MoMo amounts cannot exceed the total due.</div>
-            )}
-            {!tillReady && (
-              <div className="text-sm text-amber-700 font-medium">
-                Open this till shift before recording sales.
+            <div className={`rounded-2xl border px-4 py-3 shadow-sm transition ${confidenceTone === 'ready'
+              ? 'border-emerald-200 bg-emerald-50/80'
+              : confidenceTone === 'attention'
+                ? 'border-amber-200 bg-amber-50/80'
+                : 'border-black/10 bg-black/[.02]'
+              }`}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${confidenceTone === 'ready'
+                      ? 'bg-emerald-600 text-white'
+                      : confidenceTone === 'attention'
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-black/10 text-black/55'
+                      }`}>{paymentStatus.replace('_', ' ')}</span>
+                    {activePaymentMethodLabels.map((label) => (
+                      <span key={label} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-black/60 ring-1 ring-black/10">{label}</span>
+                    ))}
+                    {cart.length === 0 ? <span className="rounded-full bg-white px-2.5 py-1 text-xs text-black/45 ring-1 ring-black/10">Next customer standby</span> : null}
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">Payment check</div>
+                    <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1">
+                      <div>
+                        <div className="text-[11px] text-black/40">Due</div>
+                        <div className="text-lg font-bold text-ink">{formatMoney(totalDue, business.currency)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-black/40">Tendered</div>
+                        <div className="text-sm font-semibold text-black/70">{formatMoney(totalPaid, business.currency)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-black/40">Balance</div>
+                        <div className={`text-sm font-semibold ${balanceRemaining > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{formatMoney(balanceRemaining, business.currency)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-black/40">Change</div>
+                        <div className={`text-sm font-semibold ${changeDue > 0 ? 'text-accent' : 'text-black/55'}`}>{formatMoney(changeDue, business.currency)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="min-w-0 lg:max-w-sm">
+                  {checkoutIssues.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {checkoutIssues.map((issue) => (
+                        <div key={issue.message} className={`rounded-xl px-3 py-2 text-xs font-medium ${issue.tone === 'success'
+                          ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+                          : 'bg-white text-amber-900 ring-1 ring-amber-200'
+                          }`}>
+                          {issue.tone === 'success' ? '✓ ' : '• '}{issue.message}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                      ✓ Payment and till checks are clear. This sale is ready to complete.
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-            {needsMomoConfirmation && !momoConfirmed && (
-              <div className="text-sm text-emerald-700 font-medium">
-                ✓ MoMo payment will be recorded. Verify customer&apos;s receipt before completing.
-              </div>
-            )}
-            {requiresDiscountApproval && !discountApprovalReady && (
-              <div className="text-sm text-amber-700 font-medium">
-                High discount requires manager PIN and reason before sale completion.
-              </div>
-            )}
-            {paymentStatus === 'PAID' && !fullyPaid && (
-              <div className="text-sm text-amber-700 font-medium">Full payment required. Enter enough cash or switch to Part Paid/Unpaid.</div>
-            )}
+            </div>
 
             {parkedCarts.length > 0 && (
               <div className="card overflow-hidden md:hidden">
@@ -2187,25 +2100,28 @@ export default function PosClient({
                   </svg>
                 </button>
                 {showParkedPanel && (
-                  <div className="divide-y divide-black/5">
+                  <div className="divide-y divide-black/5 bg-white">
                     {parkedCarts.map((parked) => (
-                      <div key={parked.id} className="space-y-1 px-4 py-3">
+                      <div key={parked.id} className="space-y-2 px-4 py-3">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold">{parked.label}</span>
-                          <span className="text-[10px] text-black/40">{new Date(parked.parkedAt).toLocaleTimeString()}</span>
+                          <span className="truncate text-sm font-semibold text-black/80">{parked.label}</span>
+                          <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/45">{formatRelativeTime(parked.parkedAt)}</span>
                         </div>
-                        <div className="text-xs text-black/50">{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</div>
-                        <div className="mt-1 flex gap-3">
+                        <div className="flex items-center justify-between gap-3 text-xs text-black/50">
+                          <span>{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</span>
+                          <span>{new Date(parked.parkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                        </div>
+                        <div className="mt-1 flex gap-2">
                           <button
                             type="button"
-                            className="text-xs font-semibold text-emerald-600 hover:text-emerald-800"
-                            onClick={() => { recallParkedCart(parked.id); setShowParkedPanel(false); }}
+                            className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
+                            onClick={() => { handleRecallParkedCart(parked.id); setShowParkedPanel(false); }}
                           >
                             Recall
                           </button>
                           <button
                             type="button"
-                            className="text-xs font-semibold text-red-500 hover:text-red-700"
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50"
                             onClick={() => deleteParkedCart(parked.id)}
                           >
                             Delete
@@ -2243,14 +2159,14 @@ export default function PosClient({
         {showParkModal && (
           <ParkModal
             itemCount={cart.length}
-            onPark={(label) => { parkCurrentCart(label); setShowParkModal(false); }}
+            onPark={(label) => { handleParkCurrentCart(label); setShowParkModal(false); }}
             onClose={() => setShowParkModal(false)}
           />
         )}
       </div>
 
       {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
-      <div className="hidden md:block">
+      <div className="hidden md:block md:h-fit md:sticky md:top-24 md:self-start">
         <SummarySidebar
           business={business}
           store={store}
@@ -2268,7 +2184,7 @@ export default function PosClient({
           parkedCarts={parkedCarts}
           showParkedPanel={showParkedPanel}
           onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
-          onRecallParked={(id) => { recallParkedCart(id); setShowParkedPanel(false); }}
+          onRecallParked={(id) => { handleRecallParkedCart(id); setShowParkedPanel(false); }}
           onDeleteParked={deleteParkedCart}
         />
       </div>
@@ -2302,10 +2218,18 @@ export default function PosClient({
       {cart.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
           <div className="space-y-3">
+            <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
+              {canSubmit
+                ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
+                : primaryCheckoutIssue?.message ?? `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
+            </div>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs text-black/50">{cartDetails.length} item{cartDetails.length !== 1 ? 's' : ''}</div>
                 <div className="text-lg font-bold text-ink truncate">{formatMoney(totalDue, business.currency)}</div>
+                <div className="text-[11px] text-black/45">
+                  {balanceRemaining > 0 ? `Balance ${formatMoney(balanceRemaining, business.currency)}` : changeDue > 0 ? `Change ${formatMoney(changeDue, business.currency)}` : 'Fully covered'}
+                </div>
               </div>
               {parkedCarts.length > 0 ? (
                 <button

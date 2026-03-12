@@ -170,7 +170,6 @@ export async function completeSaleAction(data: {
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
     const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
-    const momoPaid = Math.max(0, data.momoPaid ?? 0);
     const discountManagerPin = (data.discountManagerPin || '').trim();
     const discountReasonCode = (data.discountReasonCode || '').trim() || null;
     const discountReason = (data.discountReason || '').trim() || null;

@@ -2,6 +2,21 @@ import { memo } from 'react';
 import { formatMoney } from '@/lib/format';
 import Link from 'next/link';
 
+function formatRelativeTime(timestamp: string) {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return 'just now';
+
+  const diffMinutes = Math.round(diffMs / 60000);
+  if (diffMinutes <= 1) return 'just now';
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hr ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+}
+
 interface ParkedCart {
   id: string;
   label: string;
@@ -51,7 +66,7 @@ function SummarySidebar({
   onDeleteParked,
 }: Props) {
   return (
-    <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+    <div className="space-y-4">
       <div className="card p-5">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold uppercase tracking-widest text-black/40">Summary</div>
@@ -147,26 +162,33 @@ function SummarySidebar({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
+          <div className="border-b border-amber-100 bg-gradient-to-r from-amber-50/90 to-white px-4 py-3 text-xs text-amber-900">
+            <div className="font-semibold">{parkedCarts.length} sale{parkedCarts.length === 1 ? '' : 's'} on hold</div>
+            <div className="mt-1 text-amber-800/80">Oldest parked {formatRelativeTime(parkedCarts[0].parkedAt)}. Use recall to resume without rebuilding the basket.</div>
+          </div>
           {showParkedPanel && (
             <div className="divide-y divide-black/5">
               {parkedCarts.map((parked) => (
-                <div key={parked.id} className="px-4 py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold truncate">{parked.label}</span>
-                    <span className="text-[10px] text-black/40">{new Date(parked.parkedAt).toLocaleTimeString()}</span>
+                <div key={parked.id} className="px-4 py-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold truncate text-black/80">{parked.label}</span>
+                    <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/45">{formatRelativeTime(parked.parkedAt)}</span>
                   </div>
-                  <div className="text-xs text-black/50">{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</div>
+                  <div className="flex items-center justify-between text-xs text-black/50">
+                    <span>{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</span>
+                    <span>{new Date(parked.parkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
                   <div className="flex gap-2 mt-1">
                     <button
                       type="button"
-                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-800"
+                      className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
                       onClick={() => onRecallParked(parked.id)}
                     >
                       Recall
                     </button>
                     <button
                       type="button"
-                      className="text-xs font-semibold text-red-500 hover:text-red-700"
+                      className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50"
                       onClick={() => onDeleteParked(parked.id)}
                     >
                       Delete
