@@ -144,7 +144,7 @@ export default async function RiskMonitorPage({
         actions={
           <Link
             href={`/exports/risk-summary?from=${fromIso}&to=${toIso}&storeId=${storeId}&status=${status}`}
-            className="btn-secondary text-xs"
+            className="btn-secondary w-full justify-center text-sm sm:w-auto sm:text-xs"
           >
             Export Summary CSV
           </Link>
@@ -181,14 +181,14 @@ export default async function RiskMonitorPage({
         </div>
       </ReportFilterCard>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Alerts in Range" value={String(alerts.length)} />
         <StatCard label="Open Alerts" value={String(openCount)} />
         <StatCard label="High Severity" value={String(highCount)} tone="danger" />
         <StatCard label="Discount Overrides" value={String(totalOverrides)} />
       </div>
 
-      <div className="card p-4">
+      <div className="card p-3.5 sm:p-4">
         <ReportSectionHeader title="Alert Types" />
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(typeCounts).map(([type, count]) => (

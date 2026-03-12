@@ -35,12 +35,12 @@ export default async function CashflowForecastPage({
         title="Cashflow Forecast"
         subtitle={`${days}-day projection based on current AR, AP, and daily revenue.`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             {([7, 14, 30] as const).map((d) => (
               <a
                 key={d}
                 href={`?days=${d}&scenario=${scenario}`}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors sm:flex-none sm:py-1.5 ${
                   d === days ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -53,7 +53,7 @@ export default async function CashflowForecastPage({
 
       {/* Risk Banner */}
       {isAtRisk && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 animate-fade-in-up">
+        <div className="animate-fade-in-up rounded-xl border border-rose-200 bg-rose-50 p-3.5 sm:p-4">
           <div className="flex items-start gap-3">
             <div className="rounded-full bg-rose-100 p-2">
               <svg className="h-5 w-5 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -101,12 +101,12 @@ export default async function CashflowForecastPage({
       </div>
 
       {/* Scenario Toggle */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(['expected', 'best', 'worst'] as const).map((s) => (
           <a
             key={s}
             href={`?days=${days}&scenario=${s}`}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+            className={`flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium capitalize transition-colors sm:flex-none sm:py-1.5 ${
               s === scenario ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -116,61 +116,65 @@ export default async function CashflowForecastPage({
       </div>
 
       {/* Forecast Table */}
-      <div className="card overflow-x-auto p-6">
-        <h2 className="mb-4 text-lg font-display font-semibold">Daily Projection</h2>
+      <div className="card overflow-hidden p-3.5 sm:p-6">
+        <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Daily Projection</h2>
         {forecast.days.length === 0 ? (
           <EmptyState icon="chart" title="No forecast data" subtitle="Record some sales and expenses to see projections." />
         ) : (
-          <table className="table w-full border-separate border-spacing-y-1 text-sm">
-            <thead>
-              <tr>
-                <th className="text-left">Date</th>
-                <th className="text-right">Inflow</th>
-                <th className="text-right">Outflow</th>
-                <th className="text-right">Balance (Expected)</th>
-                <th className="text-right">Best Case</th>
-                <th className="text-right">Worst Case</th>
-              </tr>
-            </thead>
-            <tbody>
-              {forecast.days.map((day) => {
-                const balanceField = scenario === 'best'
-                  ? day.scenarioBestPence
-                  : scenario === 'worst'
-                    ? day.scenarioWorstPence
-                    : day.projectedBalancePence;
-                return (
+          <div className="space-y-3 md:hidden">
+            {forecast.days.map((day) => (
+              <div key={day.date} className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">{day.date}</p>
+                    <p className="mt-1 text-xs text-muted">Scenario focus: {scenario}</p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${day.projectedBalancePence < 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    {formatMoney(day.projectedBalancePence, currency)}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm">
+                  <div className="flex items-center justify-between gap-3"><span className="text-muted">Inflow</span><span className="font-medium text-success">+{formatMoney(day.expectedInflowPence, currency)}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-muted">Outflow</span><span className="font-medium text-rose">-{formatMoney(day.expectedOutflowPence, currency)}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-muted">Best case</span><span className="font-medium text-ink">{formatMoney(day.scenarioBestPence, currency)}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-muted">Worst case</span><span className={`font-medium ${day.scenarioWorstPence < 0 ? 'text-rose' : 'text-ink'}`}>{formatMoney(day.scenarioWorstPence, currency)}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {forecast.days.length > 0 ? (
+          <div className="hidden overflow-x-auto md:block">
+            <table className="table w-full border-separate border-spacing-y-1 text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left">Date</th>
+                  <th className="text-right">Inflow</th>
+                  <th className="text-right">Outflow</th>
+                  <th className="text-right">Balance (Expected)</th>
+                  <th className="text-right">Best Case</th>
+                  <th className="text-right">Worst Case</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecast.days.map((day) => (
                   <tr key={day.date} className="rounded-lg bg-white">
                     <td className="px-3 py-2 font-medium">{day.date}</td>
-                    <td className="px-3 py-2 text-right text-success">
-                      +{formatMoney(day.expectedInflowPence, currency)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-rose">
-                      -{formatMoney(day.expectedOutflowPence, currency)}
-                    </td>
-                    <td className={`px-3 py-2 text-right font-semibold ${
-                      day.projectedBalancePence < 0 ? 'text-rose' : ''
-                    }`}>
-                      {formatMoney(day.projectedBalancePence, currency)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-muted">
-                      {formatMoney(day.scenarioBestPence, currency)}
-                    </td>
-                    <td className={`px-3 py-2 text-right ${
-                      day.scenarioWorstPence < 0 ? 'text-rose' : 'text-muted'
-                    }`}>
-                      {formatMoney(day.scenarioWorstPence, currency)}
-                    </td>
+                    <td className="px-3 py-2 text-right text-success">+{formatMoney(day.expectedInflowPence, currency)}</td>
+                    <td className="px-3 py-2 text-right text-rose">-{formatMoney(day.expectedOutflowPence, currency)}</td>
+                    <td className={`px-3 py-2 text-right font-semibold ${day.projectedBalancePence < 0 ? 'text-rose' : ''}`}>{formatMoney(day.projectedBalancePence, currency)}</td>
+                    <td className="px-3 py-2 text-right text-muted">{formatMoney(day.scenarioBestPence, currency)}</td>
+                    <td className={`px-3 py-2 text-right ${day.scenarioWorstPence < 0 ? 'text-rose' : 'text-muted'}`}>{formatMoney(day.scenarioWorstPence, currency)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Methodology Note */}
-      <div className="card p-4 text-xs text-muted">
+      <div className="card p-3.5 text-xs text-muted sm:p-4">
         <h3 className="font-semibold text-ink">How this forecast works</h3>
         <ul className="mt-2 list-disc pl-4 space-y-1">
           <li><strong>Inflows:</strong> AR collections at 85% expected rate + average daily cash/MoMo sales (14-day trailing).</li>

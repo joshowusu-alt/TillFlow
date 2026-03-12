@@ -57,18 +57,18 @@ export default async function WeeklyDigestPage({
         title="Weekly Digest"
         subtitle={dateLabel}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <a href={`?week=${weekOffset - 1}`} className="btn-secondary text-sm">Prev Week</a>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <a href={`?week=${weekOffset - 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Prev Week</a>
             {weekOffset < 0 && (
-              <a href={`?week=${weekOffset + 1}`} className="btn-secondary text-sm">Next Week</a>
+              <a href={`?week=${weekOffset + 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Next Week</a>
             )}
             <a
               href={`/api/reports/weekly-digest?week=${weekOffset}`}
-              className="btn-secondary text-sm"
+              className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none"
             >
               Export CSV
             </a>
-            <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
+            <a href="/reports/command-center" className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Command Center</a>
           </div>
         }
       />
@@ -107,7 +107,7 @@ export default async function WeeklyDigestPage({
       )}
 
       {/* Week-over-Week Comparison */}
-      <div className="card p-4">
+      <div className="card p-3.5 sm:p-4">
         <h2 className="mb-3 text-sm font-semibold text-ink">Week-over-Week</h2>
         <div className="grid gap-3 sm:grid-cols-3 text-sm">
           <div className="flex justify-between rounded-lg bg-gray-50 px-3 py-2">
@@ -140,14 +140,14 @@ export default async function WeeklyDigestPage({
       </div>
 
       {/* Payment split */}
-      <div className="card p-6">
-        <h2 className="mb-4 text-lg font-display font-semibold">Payment Split</h2>
+      <div className="card p-4 sm:p-6">
+        <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Payment Split</h2>
         {Object.keys(data.paymentSplit).length === 0 ? (
           <EmptyState icon="receipt" title="No payments this week" subtitle="Record sales to see payment breakdown." />
         ) : (
-          <div className="flex flex-wrap gap-4 text-sm">
+          <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
             {Object.entries(data.paymentSplit).map(([method, amount]) => (
-              <div key={method} className="flex flex-col items-center rounded-xl border border-black/5 bg-white px-6 py-4 shadow-card">
+              <div key={method} className="flex flex-col items-center rounded-xl border border-black/5 bg-white px-4 py-3.5 text-center shadow-card sm:px-6 sm:py-4">
                 <span className="text-xs text-muted uppercase">{method.replace('_', ' ')}</span>
                 <span className="mt-1 text-lg font-semibold">{formatMoney(amount, currency)}</span>
                 <span className="text-xs text-muted">
@@ -161,36 +161,36 @@ export default async function WeeklyDigestPage({
 
       {/* Top sellers + Top margin */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Top Sellers (by revenue)</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Sellers (by revenue)</h2>
           {data.topSellers.length === 0 ? (
             <EmptyState icon="chart" title="No sales data" subtitle="Record sales to see top products." />
           ) : (
             <div className="space-y-2 text-sm">
               {data.topSellers.map((p) => (
-                <div key={p.name} className="flex justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+                <div key={p.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <span>{p.name}</span>
-                  <span className="font-semibold">{formatMoney(p.revenue, currency)}</span>
+                  <span className="font-semibold sm:text-right">{formatMoney(p.revenue, currency)}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Top Margin Items (est.)</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Margin Items (est.)</h2>
           {data.topMargin.length === 0 ? (
             <EmptyState icon="chart" title="No margin data" subtitle="Record sales with cost prices to see margins." />
           ) : (
             <div className="space-y-2 text-sm">
               {data.topMargin.map((p) => (
-                <div key={p.name} className="flex items-center justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+                <div key={p.name} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <span>{p.name}</span>
-                  <div className="text-right">
+                  <div className="flex flex-wrap items-center gap-2 sm:text-right sm:justify-end">
                     <Badge tone={p.marginPct >= 20 ? 'success' : p.marginPct >= 0 ? 'warn' : 'danger'}>
                       {p.marginPct}% margin
                     </Badge>
-                    <span className="ml-2 text-xs text-muted">{formatMoney(p.revenue, currency)}</span>
+                    <span className="text-xs text-muted">{formatMoney(p.revenue, currency)}</span>
                   </div>
                 </div>
               ))}
@@ -201,27 +201,27 @@ export default async function WeeklyDigestPage({
 
       {/* Cashier Performance + Risk Trends */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Cashier Performance</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Cashier Performance</h2>
           {data.cashierPerf.length === 0 ? (
             <EmptyState icon="receipt" title="No sales this week" subtitle="Cashier performance will appear after recording sales." />
           ) : (
             <div className="space-y-2 text-sm">
               {data.cashierPerf.map((c) => (
-                <div key={c.name} className="flex items-center justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+                <div key={c.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <span className="font-medium">{c.name}</span>
                     <span className="ml-2 text-xs text-muted">{c.tx} tx</span>
                   </div>
-                  <span className="font-semibold">{formatMoney(c.sales, currency)}</span>
+                  <span className="font-semibold sm:text-right">{formatMoney(c.sales, currency)}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Risk Trends by Cashier</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Risk Trends by Cashier</h2>
           {data.riskCashiers.length === 0 ? (
             <EmptyState icon="check" title="No risk events" subtitle="No voids, discount overrides, or cash variances this week." />
           ) : (
