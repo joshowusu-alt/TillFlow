@@ -9,12 +9,14 @@ import {
     cacheStore,
     cacheCustomers,
     cacheTills,
+    setActiveOfflineScope,
     type OfflineProduct,
     type OfflineBusiness,
     type OfflineStore,
     type OfflineCustomer,
     type OfflineSale
 } from './storage';
+import { getClientActiveBusinessId, getOfflineCacheUrl } from '@/lib/business-scope';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -25,22 +27,23 @@ export interface SyncResult {
 }
 
 // Sync offline sales to server (batch with one-at-a-time fallback)
-export async function syncOfflineSales(): Promise<SyncResult> {
-    const pending = await getPendingSales();
+export async function syncOfflineSales(businessId?: string): Promise<SyncResult> {
+    const resolvedBusinessId = businessId ?? getClientActiveBusinessId() ?? undefined;
+    const pending = await getPendingSales(resolvedBusinessId);
 
     if (pending.length === 0) {
         return { synced: 0, failed: 0, errors: [] };
     }
 
     // Try batch sync first
-    const batchResult = await tryBatchSync(pending);
+    const batchResult = await tryBatchSync(pending, resolvedBusinessId);
     if (batchResult) return batchResult;
 
     // Fall back to one-at-a-time if batch endpoint unavailable
-    return syncOneAtATime(pending);
+    return syncOneAtATime(pending, resolvedBusinessId);
 }
 
-async function tryBatchSync(pending: OfflineSale[]): Promise<SyncResult | null> {
+async function tryBatchSync(pending: OfflineSale[], businessId?: string): Promise<SyncResult | null> {
     try {
         const response = await fetch('/api/offline/batch-sync', {
             method: 'POST',
@@ -63,7 +66,7 @@ async function tryBatchSync(pending: OfflineSale[]): Promise<SyncResult | null> 
 
         // Mark each synced sale individually
         for (const id of data.synced) {
-            await markSaleSynced(id);
+            await markSaleSynced(id, businessId);
         }
 
         const result: SyncResult = {
@@ -73,7 +76,7 @@ async function tryBatchSync(pending: OfflineSale[]): Promise<SyncResult | null> 
         };
 
         if (result.synced > 0) {
-            await removeSyncedSales();
+            await removeSyncedSales(businessId);
         }
 
         return result;
@@ -83,7 +86,7 @@ async function tryBatchSync(pending: OfflineSale[]): Promise<SyncResult | null> 
     }
 }
 
-async function syncOneAtATime(pending: OfflineSale[]): Promise<SyncResult> {
+async function syncOneAtATime(pending: OfflineSale[], businessId?: string): Promise<SyncResult> {
     const result: SyncResult = { synced: 0, failed: 0, errors: [] };
 
     for (const sale of pending) {
@@ -95,7 +98,7 @@ async function syncOneAtATime(pending: OfflineSale[]): Promise<SyncResult> {
             });
 
             if (response.ok) {
-                await markSaleSynced(sale.id);
+                await markSaleSynced(sale.id, businessId);
                 result.synced++;
             } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -109,7 +112,7 @@ async function syncOneAtATime(pending: OfflineSale[]): Promise<SyncResult> {
     }
 
     if (result.synced > 0) {
-        await removeSyncedSales();
+        await removeSyncedSales(businessId);
     }
 
     return result;
@@ -118,7 +121,7 @@ async function syncOneAtATime(pending: OfflineSale[]): Promise<SyncResult> {
 // Get count of pending offline sales
 export async function getPendingSaleCount(): Promise<number> {
     try {
-        const pending = await getPendingSales();
+        const pending = await getPendingSales(getClientActiveBusinessId() ?? undefined);
         return pending.length;
     } catch {
         return 0;
@@ -126,9 +129,14 @@ export async function getPendingSaleCount(): Promise<number> {
 }
 
 // Refresh local cache from server
-export async function refreshOfflineCache(): Promise<void> {
+export async function refreshOfflineCache(businessId?: string): Promise<void> {
     try {
-        const response = await fetch('/api/offline/cache-data');
+        const resolvedBusinessId = businessId ?? getClientActiveBusinessId() ?? undefined;
+        if (!resolvedBusinessId) {
+            throw new Error('No active business selected');
+        }
+
+        const response = await fetch(getOfflineCacheUrl(resolvedBusinessId));
         if (!response.ok) {
             let message = `Failed to fetch cache data (${response.status})`;
             const contentType = response.headers.get('content-type') ?? '';
@@ -157,11 +165,12 @@ export async function refreshOfflineCache(): Promise<void> {
         };
 
         await Promise.all([
-            cacheProducts(data.products),
+            cacheProducts({ businessId: data.business.id, storeId: data.store.id }, data.products),
             cacheBusiness(data.business),
             cacheStore(data.store),
-            cacheCustomers(data.customers),
-            cacheTills(data.tills)
+            cacheCustomers(data.business.id, data.customers),
+            cacheTills({ businessId: data.business.id, storeId: data.store.id }, data.tills),
+            setActiveOfflineScope({ businessId: data.business.id, storeId: data.store.id })
         ]);
     } catch (error) {
         console.error('Failed to refresh offline cache:', error);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v8';
+const CACHE_NAME = 'pos-cache-v9';
 const OFFLINE_URL = '/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
 
@@ -204,7 +204,7 @@ async function moveToDead(payload, statusCode, errorMessage) {
 
 function openOfflineDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('pos-offline-db', 1);
+    const req = indexedDB.open('pos-offline-db', 2);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
     // If DB hasn't been created by client yet, create stores so we don't crash
@@ -221,12 +221,23 @@ function openOfflineDB() {
   });
 }
 
-function getPendingSalesFromDB(db) {
+function getActiveBusinessIdFromDB(db) {
   return new Promise((resolve, reject) => {
+    const tx = db.transaction('syncMeta', 'readonly');
+    const store = tx.objectStore('syncMeta');
+    const req = store.get('active-business');
+    req.onsuccess = () => resolve(req.result?.value ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function getPendingSalesFromDB(db) {
+  return new Promise(async (resolve, reject) => {
     const tx = db.transaction('salesQueue', 'readonly');
     const store = tx.objectStore('salesQueue');
     const req = store.getAll();
-    req.onsuccess = () => resolve((req.result || []).filter((s) => !s.synced));
+    const activeBusinessId = await getActiveBusinessIdFromDB(db).catch(() => null);
+    req.onsuccess = () => resolve((req.result || []).filter((s) => !s.synced && (!activeBusinessId || s.businessId === activeBusinessId)));
     req.onerror = () => reject(req.error);
   });
 }

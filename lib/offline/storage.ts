@@ -1,8 +1,15 @@
 'use client';
 
 import { openDB, type IDBPDatabase } from 'idb';
+import {
+    getClientActiveBusinessId,
+    getOfflineActiveBusinessMetaKey,
+    getOfflineActiveStoreMetaKey,
+} from '@/lib/business-scope';
 
 export interface OfflineProduct {
+    businessId: string;
+    storeId: string;
     id: string;
     name: string;
     barcode: string | null;
@@ -27,17 +34,27 @@ export interface OfflineBusiness {
 }
 
 export interface OfflineStore {
+    businessId: string;
     id: string;
     name: string;
 }
 
 export interface OfflineCustomer {
+    businessId: string;
+    id: string;
+    name: string;
+}
+
+export interface OfflineTill {
+    businessId: string;
+    storeId: string;
     id: string;
     name: string;
 }
 
 export interface OfflineSale {
     id: string;
+    businessId: string;
     storeId: string;
     tillId: string;
     customerId: string | null;
@@ -59,10 +76,21 @@ export interface OfflineSale {
     synced: boolean;
 }
 
+type SyncMetaRecord = {
+    key: string;
+    value: string;
+    updatedAt: string;
+};
+
 const DB_NAME = 'pos-offline-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+const STORE_NAMES = ['products', 'business', 'store', 'customers', 'tills', 'salesQueue', 'syncMeta'] as const;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
+
+function resolveBusinessId(businessId?: string | null) {
+    return businessId ?? getClientActiveBusinessId() ?? undefined;
+}
 
 export function getDB(): Promise<IDBPDatabase> {
     if (typeof window === 'undefined') {
@@ -71,41 +99,42 @@ export function getDB(): Promise<IDBPDatabase> {
 
     if (!dbPromise) {
         dbPromise = openDB(DB_NAME, DB_VERSION, {
-            upgrade(db) {
-                // Products store
+            upgrade(db, oldVersion, _newVersion, tx) {
                 if (!db.objectStoreNames.contains('products')) {
                     db.createObjectStore('products', { keyPath: 'id' });
                 }
 
-                // Business settings store
                 if (!db.objectStoreNames.contains('business')) {
                     db.createObjectStore('business', { keyPath: 'id' });
                 }
 
-                // Store info
                 if (!db.objectStoreNames.contains('store')) {
                     db.createObjectStore('store', { keyPath: 'id' });
                 }
 
-                // Customers store
                 if (!db.objectStoreNames.contains('customers')) {
                     db.createObjectStore('customers', { keyPath: 'id' });
                 }
 
-                // Tills store
                 if (!db.objectStoreNames.contains('tills')) {
                     db.createObjectStore('tills', { keyPath: 'id' });
                 }
 
-                // Offline sales queue
                 if (!db.objectStoreNames.contains('salesQueue')) {
                     const salesStore = db.createObjectStore('salesQueue', { keyPath: 'id' });
                     salesStore.createIndex('synced', 'synced', { unique: false });
                 }
 
-                // Sync metadata
                 if (!db.objectStoreNames.contains('syncMeta')) {
                     db.createObjectStore('syncMeta', { keyPath: 'key' });
+                }
+
+                if (oldVersion < 2) {
+                    for (const storeName of STORE_NAMES) {
+                        if (db.objectStoreNames.contains(storeName)) {
+                            tx.objectStore(storeName).clear();
+                        }
+                    }
                 }
             }
         });
@@ -114,88 +143,155 @@ export function getDB(): Promise<IDBPDatabase> {
     return dbPromise;
 }
 
-// Product caching
-export async function cacheProducts(products: OfflineProduct[]): Promise<void> {
+async function updateSyncMeta(key: string, value: string): Promise<void> {
+    const db = await getDB();
+    await db.put('syncMeta', { key, value, updatedAt: new Date().toISOString() } satisfies SyncMetaRecord);
+}
+
+async function clearScopedRecords<T extends { id: string }>(
+    storeName: string,
+    matches: (record: T) => boolean
+): Promise<void> {
+    const db = await getDB();
+    const tx = db.transaction(storeName, 'readwrite');
+    const all = await tx.store.getAll() as T[];
+    for (const record of all) {
+        if (matches(record)) {
+            await tx.store.delete(record.id);
+        }
+    }
+    await tx.done;
+}
+
+export async function setActiveOfflineScope(scope: { businessId: string; storeId: string }): Promise<void> {
+    await Promise.all([
+        updateSyncMeta(getOfflineActiveBusinessMetaKey(), scope.businessId),
+        updateSyncMeta(getOfflineActiveStoreMetaKey(), scope.storeId),
+    ]);
+}
+
+export async function cacheProducts(
+    scope: { businessId: string; storeId: string },
+    products: OfflineProduct[]
+): Promise<void> {
+    await clearScopedRecords<OfflineProduct>('products', (record) =>
+        record.businessId === scope.businessId && record.storeId === scope.storeId
+    );
+
     const db = await getDB();
     const tx = db.transaction('products', 'readwrite');
-
-    // Clear existing and add new
-    await tx.store.clear();
     for (const product of products) {
-        await tx.store.put(product);
+        await tx.store.put({ ...product, businessId: scope.businessId, storeId: scope.storeId });
     }
     await tx.done;
 
-    // Update sync timestamp
-    await updateSyncMeta('products', new Date().toISOString());
+    await updateSyncMeta(`products:${scope.businessId}:${scope.storeId}`, new Date().toISOString());
 }
 
-export async function getCachedProducts(): Promise<OfflineProduct[]> {
+export async function getCachedProducts(
+    businessId?: string,
+    storeId?: string
+): Promise<OfflineProduct[]> {
     const db = await getDB();
-    return db.getAll('products');
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = await db.getAll('products') as OfflineProduct[];
+    return all.filter((product) => {
+        if (resolvedBusinessId && product.businessId !== resolvedBusinessId) return false;
+        if (storeId && product.storeId !== storeId) return false;
+        return true;
+    });
 }
 
-// Business caching
 export async function cacheBusiness(business: OfflineBusiness): Promise<void> {
     const db = await getDB();
     await db.put('business', business);
-    await updateSyncMeta('business', new Date().toISOString());
+    await updateSyncMeta(`business:${business.id}`, new Date().toISOString());
 }
 
-export async function getCachedBusiness(): Promise<OfflineBusiness | undefined> {
+export async function getCachedBusiness(businessId?: string): Promise<OfflineBusiness | undefined> {
     const db = await getDB();
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    if (resolvedBusinessId) {
+        return db.get('business', resolvedBusinessId);
+    }
     const all = await db.getAll('business');
     return all[0];
 }
 
-// Store caching
 export async function cacheStore(store: OfflineStore): Promise<void> {
     const db = await getDB();
     await db.put('store', store);
-    await updateSyncMeta('store', new Date().toISOString());
+    await updateSyncMeta(`store:${store.businessId}:${store.id}`, new Date().toISOString());
 }
 
-export async function getCachedStore(): Promise<OfflineStore | undefined> {
+export async function getCachedStore(businessId?: string, storeId?: string): Promise<OfflineStore | undefined> {
     const db = await getDB();
-    const all = await db.getAll('store');
-    return all[0];
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    if (storeId) {
+        const store = await db.get('store', storeId) as OfflineStore | undefined;
+        if (!store) return undefined;
+        if (resolvedBusinessId && store.businessId !== resolvedBusinessId) return undefined;
+        return store;
+    }
+
+    const all = await db.getAll('store') as OfflineStore[];
+    return all.find((store) => !resolvedBusinessId || store.businessId === resolvedBusinessId);
 }
 
-// Customers caching
-export async function cacheCustomers(customers: OfflineCustomer[]): Promise<void> {
+export async function cacheCustomers(businessId: string, customers: OfflineCustomer[]): Promise<void> {
+    await clearScopedRecords<OfflineCustomer>('customers', (record) => record.businessId === businessId);
+
     const db = await getDB();
     const tx = db.transaction('customers', 'readwrite');
-    await tx.store.clear();
     for (const customer of customers) {
-        await tx.store.put(customer);
+        await tx.store.put({ ...customer, businessId });
     }
     await tx.done;
-    await updateSyncMeta('customers', new Date().toISOString());
+
+    await updateSyncMeta(`customers:${businessId}`, new Date().toISOString());
 }
 
-export async function getCachedCustomers(): Promise<OfflineCustomer[]> {
+export async function getCachedCustomers(businessId?: string): Promise<OfflineCustomer[]> {
     const db = await getDB();
-    return db.getAll('customers');
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = await db.getAll('customers') as OfflineCustomer[];
+    return resolvedBusinessId
+        ? all.filter((customer) => customer.businessId === resolvedBusinessId)
+        : all;
 }
 
-// Tills caching
-export async function cacheTills(tills: Array<{ id: string; name: string }>): Promise<void> {
+export async function cacheTills(
+    scope: { businessId: string; storeId: string },
+    tills: Array<{ id: string; name: string }>
+): Promise<void> {
+    await clearScopedRecords<OfflineTill>('tills', (record) =>
+        record.businessId === scope.businessId && record.storeId === scope.storeId
+    );
+
     const db = await getDB();
     const tx = db.transaction('tills', 'readwrite');
-    await tx.store.clear();
     for (const till of tills) {
-        await tx.store.put(till);
+        await tx.store.put({ ...till, businessId: scope.businessId, storeId: scope.storeId } satisfies OfflineTill);
     }
     await tx.done;
-    await updateSyncMeta('tills', new Date().toISOString());
+
+    await updateSyncMeta(`tills:${scope.businessId}:${scope.storeId}`, new Date().toISOString());
 }
 
-export async function getCachedTills(): Promise<Array<{ id: string; name: string }>> {
+export async function getCachedTills(
+    businessId?: string,
+    storeId?: string
+): Promise<OfflineTill[]> {
     const db = await getDB();
-    return db.getAll('tills');
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = await db.getAll('tills') as OfflineTill[];
+    return all.filter((till) => {
+        if (resolvedBusinessId && till.businessId !== resolvedBusinessId) return false;
+        if (storeId && till.storeId !== storeId) return false;
+        return true;
+    });
 }
 
-// Offline sales queue
 export async function queueOfflineSale(sale: Omit<OfflineSale, 'id' | 'synced'>): Promise<string> {
     const db = await getDB();
     const id = `offline-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -208,15 +304,24 @@ export async function queueOfflineSale(sale: Omit<OfflineSale, 'id' | 'synced'>)
     return id;
 }
 
-export async function getPendingSales(): Promise<OfflineSale[]> {
+export async function getPendingSales(businessId?: string): Promise<OfflineSale[]> {
     const db = await getDB();
-    const all = await db.getAll('salesQueue');
-    return all.filter((sale) => !sale.synced);
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = await db.getAll('salesQueue') as OfflineSale[];
+    return all.filter((sale) => !sale.synced && (!resolvedBusinessId || sale.businessId === resolvedBusinessId));
 }
 
-export async function getOfflineSale(id: string): Promise<OfflineSale | undefined> {
+export async function getOfflineSale(id: string, businessId?: string): Promise<OfflineSale | undefined> {
     const db = await getDB();
-    return db.get('salesQueue', id);
+    const sale = await db.get('salesQueue', id) as OfflineSale | undefined;
+    if (!sale) return undefined;
+
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+        return undefined;
+    }
+
+    return sale;
 }
 
 export async function updateOfflineSale(sale: OfflineSale): Promise<void> {
@@ -224,19 +329,25 @@ export async function updateOfflineSale(sale: OfflineSale): Promise<void> {
     await db.put('salesQueue', sale);
 }
 
-export async function markSaleSynced(id: string): Promise<void> {
+export async function markSaleSynced(id: string, businessId?: string): Promise<void> {
     const db = await getDB();
-    const sale = await db.get('salesQueue', id);
-    if (sale) {
-        sale.synced = true;
-        await db.put('salesQueue', sale);
+    const sale = await db.get('salesQueue', id) as OfflineSale | undefined;
+    if (!sale) return;
+
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+        return;
     }
+
+    sale.synced = true;
+    await db.put('salesQueue', sale);
 }
 
-export async function removeSyncedSales(): Promise<number> {
+export async function removeSyncedSales(businessId?: string): Promise<number> {
     const db = await getDB();
-    const all = await db.getAll('salesQueue');
-    const synced = all.filter((sale) => sale.synced);
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = await db.getAll('salesQueue') as OfflineSale[];
+    const synced = all.filter((sale) => sale.synced && (!resolvedBusinessId || sale.businessId === resolvedBusinessId));
 
     const tx = db.transaction('salesQueue', 'readwrite');
     for (const sale of synced) {
@@ -247,50 +358,59 @@ export async function removeSyncedSales(): Promise<number> {
     return synced.length;
 }
 
-// Sync metadata
-async function updateSyncMeta(key: string, value: string): Promise<void> {
-    const db = await getDB();
-    await db.put('syncMeta', { key, value, updatedAt: new Date().toISOString() });
-}
-
 export async function getSyncMeta(key: string): Promise<string | null> {
     const db = await getDB();
-    const meta = await db.get('syncMeta', key);
+    const meta = await db.get('syncMeta', key) as SyncMetaRecord | undefined;
     return meta?.value ?? null;
 }
 
 export async function getLastSyncTime(): Promise<string | null> {
     const db = await getDB();
-    const all = await db.getAll('syncMeta');
+    const all = await db.getAll('syncMeta') as SyncMetaRecord[];
     if (all.length === 0) return null;
 
-    // Return the most recent sync time
-    const times = all.map((m) => m.updatedAt).filter(Boolean);
+    const times = all.map((meta) => meta.updatedAt).filter(Boolean);
     if (times.length === 0) return null;
 
     times.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     return times[0];
 }
 
-// Check if we have cached data
-export async function hasCachedData(): Promise<boolean> {
+export async function hasCachedData(scope?: { businessId?: string; storeId?: string }): Promise<boolean> {
     try {
-        const products = await getCachedProducts();
-        const business = await getCachedBusiness();
+        const products = await getCachedProducts(scope?.businessId, scope?.storeId);
+        const business = await getCachedBusiness(scope?.businessId);
         return products.length > 0 && !!business;
     } catch {
         return false;
     }
 }
 
-// Clear all offline data
-export async function clearOfflineData(): Promise<void> {
+export async function clearOfflineData(businessId?: string): Promise<void> {
     const db = await getDB();
+    const resolvedBusinessId = resolveBusinessId(businessId);
 
-    const stores = ['products', 'business', 'store', 'customers', 'tills', 'salesQueue', 'syncMeta'];
-    for (const store of stores) {
-        const tx = db.transaction(store, 'readwrite');
-        await tx.store.clear();
-        await tx.done;
+    if (!resolvedBusinessId) {
+        for (const storeName of STORE_NAMES) {
+            const tx = db.transaction(storeName, 'readwrite');
+            await tx.store.clear();
+            await tx.done;
+        }
+        return;
     }
+
+    await Promise.all([
+        clearScopedRecords<OfflineProduct>('products', (record) => record.businessId === resolvedBusinessId),
+        clearScopedRecords<OfflineCustomer>('customers', (record) => record.businessId === resolvedBusinessId),
+        clearScopedRecords<OfflineTill>('tills', (record) => record.businessId === resolvedBusinessId),
+        clearScopedRecords<OfflineSale>('salesQueue', (record) => record.businessId === resolvedBusinessId),
+    ]);
+
+    const stores = await db.getAll('store') as OfflineStore[];
+    for (const store of stores) {
+        if (store.businessId === resolvedBusinessId) {
+            await db.delete('store', store.id);
+        }
+    }
+    await db.delete('business', resolvedBusinessId);
 }

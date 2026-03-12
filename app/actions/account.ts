@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
+import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName } from '@/lib/business-scope';
 import {
   buildTwoFactorOtpAuthUrl,
   generateTwoFactorSecret,
@@ -66,7 +67,8 @@ export async function updateMyAccountAction(formData: FormData) {
 
   // Invalidate all OTHER sessions when password changes
   if (newPassword) {
-    const currentToken = cookies().get('pos_session')?.value;
+    const activeBusinessId = cookies().get(ACTIVE_BUSINESS_COOKIE)?.value ?? user.businessId;
+    const currentToken = cookies().get(getBusinessSessionCookieName(activeBusinessId))?.value;
     await prisma.session.deleteMany({
       where: { userId: user.id, NOT: { token: currentToken ?? '' } },
     });

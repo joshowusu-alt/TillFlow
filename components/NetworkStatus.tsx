@@ -12,6 +12,7 @@ import {
     getPendingSales,
     type SyncResult
 } from '@/lib/offline';
+import { getClientActiveBusinessId } from '@/lib/business-scope';
 
 export default function NetworkStatus() {
     const pathname = usePathname();
@@ -30,7 +31,7 @@ export default function NetworkStatus() {
     // Check pending sales count
     const checkPending = useCallback(async () => {
         try {
-            const pending = await getPendingSales();
+            const pending = await getPendingSales(getClientActiveBusinessId() ?? undefined);
             setPendingCount(pending.length);
         } catch {
             setPendingCount(0);

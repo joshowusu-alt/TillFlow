@@ -125,6 +125,7 @@ export default async function PosPage() {
   return (
     <PosClient
       business={{
+        id: business.id,
         currency: business.currency,
         vatEnabled: business.vatEnabled,
         momoEnabled: (business as any).momoEnabled ?? false,

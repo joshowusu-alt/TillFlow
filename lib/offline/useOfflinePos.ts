@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-    isOnline,
     cacheProducts,
     cacheBusiness,
     cacheStore,
@@ -15,11 +14,13 @@ import {
     getCachedTills,
     queueOfflineSale,
     hasCachedData,
+    setActiveOfflineScope,
     type OfflineProduct,
     type OfflineBusiness,
     type OfflineStore,
     type OfflineCustomer
-} from '@/lib/offline';
+} from './storage';
+import { isOnline } from './sync';
 
 export interface UseOfflinePosOptions {
     products: OfflineProduct[];
@@ -77,11 +78,12 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
                 // Online: cache the server data for later use
                 try {
                     await Promise.all([
-                        cacheProducts(options.products),
+                        cacheProducts({ businessId: options.business.id, storeId: options.store.id }, options.products),
                         cacheBusiness(options.business),
                         cacheStore(options.store),
-                        cacheCustomers(options.customers),
-                        cacheTills(options.tills)
+                        cacheCustomers(options.business.id, options.customers),
+                        cacheTills({ businessId: options.business.id, storeId: options.store.id }, options.tills),
+                        setActiveOfflineScope({ businessId: options.business.id, storeId: options.store.id })
                     ]);
                 } catch (error) {
                     console.error('Failed to cache data:', error);
@@ -90,14 +92,14 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
             } else {
                 // Offline: load from cache
                 try {
-                    const hasCache = await hasCachedData();
+                    const hasCache = await hasCachedData({ businessId: options.business.id, storeId: options.store.id });
                     if (hasCache) {
                         const [products, business, store, customers, tills] = await Promise.all([
-                            getCachedProducts(),
-                            getCachedBusiness(),
-                            getCachedStore(),
-                            getCachedCustomers(),
-                            getCachedTills()
+                            getCachedProducts(options.business.id, options.store.id),
+                            getCachedBusiness(options.business.id),
+                            getCachedStore(options.business.id, options.store.id),
+                            getCachedCustomers(options.business.id),
+                            getCachedTills(options.business.id, options.store.id)
                         ]);
                         setCachedProducts(products);
                         setCachedBusiness(business ?? null);
@@ -150,6 +152,7 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
         orderDiscountValue: string;
     }) => {
         const id = await queueOfflineSale({
+            businessId: options.business.id,
             ...sale,
             createdAt: new Date().toISOString()
         });
@@ -167,11 +170,11 @@ export function useOfflinePos(options: UseOfflinePosOptions): UseOfflinePosResul
                 }
             }
             setCachedProducts(updatedProducts);
-            await cacheProducts(updatedProducts);
+            await cacheProducts({ businessId: options.business.id, storeId: options.store.id }, updatedProducts);
         }
 
         return id;
-    }, [offline, cachedProducts, options.products]);
+    }, [cachedProducts, offline, options.business.id, options.products, options.store.id]);
 
     // Return appropriate data based on online/offline status
     return {

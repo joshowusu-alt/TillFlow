@@ -2,6 +2,12 @@ import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import {
+  ACTIVE_BUSINESS_COOKIE,
+  extractBusinessIdFromSessionCookie,
+  getBusinessSessionCookieName,
+  SESSION_COOKIE_PREFIX,
+} from '@/lib/business-scope';
 
 export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
 
@@ -13,12 +19,36 @@ export type Role = 'CASHIER' | 'MANAGER' | 'OWNER';
  * Helper to delete the pos_session cookie so stale tokens
  * don't cause redirect loops between middleware and auth.
  */
-function clearSessionCookie() {
+function deleteCookieSafe(name: string) {
+  try {
+    cookies().delete(name);
+  } catch {
+    // cookies().delete can throw in certain rendering contexts
+  }
+}
+
+function clearAllSessionCookies() {
   try {
     const cs = cookies();
     cs.getAll()
-      .filter(c => c.name.startsWith('pos_session_'))
+      .filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX))
       .forEach(c => cs.delete(c.name));
+    cs.delete(ACTIVE_BUSINESS_COOKIE);
+  } catch {
+    // cookies().delete can throw in certain rendering contexts
+  }
+}
+
+function clearResolvedSessionCookie(cookieName: string) {
+  deleteCookieSafe(cookieName);
+  const businessId = extractBusinessIdFromSessionCookie(cookieName);
+  if (!businessId) return;
+
+  try {
+    const activeBusinessId = cookies().get(ACTIVE_BUSINESS_COOKIE)?.value;
+    if (activeBusinessId === businessId) {
+      cookies().delete(ACTIVE_BUSINESS_COOKIE);
+    }
   } catch {
     // cookies().delete can throw in certain rendering contexts
   }
@@ -51,8 +81,20 @@ function browserFamily(ua: string | null): string | null {
 }
 
 export const getUser = cache(async () => {
-  // Cookie is business-scoped (pos_session_<businessId>) — scan for any match.
-  const sessionCookie = cookies().getAll().find(c => c.name.startsWith('pos_session_'));
+  const cookieStore = cookies();
+  const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX));
+  const activeBusinessId = cookieStore.get(ACTIVE_BUSINESS_COOKIE)?.value ?? null;
+  const sessionCookie = activeBusinessId
+    ? cookieStore.get(getBusinessSessionCookieName(activeBusinessId))
+    : sessionCookies.length === 1
+      ? sessionCookies[0]
+      : undefined;
+
+  if (!sessionCookie && sessionCookies.length > 1) {
+    console.warn('[auth] Multiple business sessions found without an active business selector');
+    return null;
+  }
+
   const token = sessionCookie?.value;
   if (!token) return null;
 
@@ -89,13 +131,13 @@ export const getUser = cache(async () => {
 
   if (!session) {
     // Session token in cookie but not in DB — clear stale cookie
-    clearSessionCookie();
+    clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 
   if (session.expiresAt < new Date()) {
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    clearSessionCookie();
+    clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 
@@ -110,7 +152,7 @@ export const getUser = cache(async () => {
   if (storedFamily && currentFamily && storedFamily !== currentFamily) {
     console.warn('[auth] Browser family mismatch', { storedFamily, currentFamily });
     prisma.session.delete({ where: { id: session.id } }).catch(() => {});
-    clearSessionCookie();
+    clearResolvedSessionCookie(sessionCookie.name);
     return null;
   }
 

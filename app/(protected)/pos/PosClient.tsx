@@ -19,6 +19,12 @@ import {
   checkMomoCollectionStatusAction,
   initiateMomoCollectionAction,
 } from '@/app/actions/mobile-money';
+import {
+  getLastReceiptStorageKey,
+  getParkedCartsStorageKey,
+  getPosCartStorageKey,
+  getPosCustomerStorageKey,
+} from '@/lib/business-scope';
 import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
 import SummarySidebar from './components/SummarySidebar';
@@ -70,6 +76,7 @@ type CategoryDto = { id: string; name: string; colour: string };
 
 type PosClientProps = {
   business: {
+    id: string;
     currency: string;
     vatEnabled: boolean;
     momoEnabled?: boolean;
@@ -188,12 +195,20 @@ export default function PosClient({
   // Park/hold state
   const [showParkModal, setShowParkModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
+  const storageScope = useMemo(
+    () => ({ businessId: business.id, storeId: store.id }),
+    [business.id, store.id]
+  );
+  const cartStorageKey = useMemo(() => getPosCartStorageKey(storageScope), [storageScope]);
+  const customerStorageKey = useMemo(() => getPosCustomerStorageKey(storageScope), [storageScope]);
+  const parkedCartsStorageKey = useMemo(() => getParkedCartsStorageKey(storageScope), [storageScope]);
+  const lastReceiptStorageKey = useMemo(() => getLastReceiptStorageKey(storageScope), [storageScope]);
   const {
     parkedCarts,
     parkCurrentCart,
     recallParkedCart,
     deleteParkedCart,
-  } = useParkedCarts<CartLine>();
+  } = useParkedCarts<CartLine>({ storageKey: parkedCartsStorageKey });
   const availablePaymentMethods = useMemo(
     () => getEnabledPosPaymentMethods(business.momoEnabled ?? false),
     [business.momoEnabled]
@@ -220,6 +235,8 @@ export default function PosClient({
   } = usePersistedPosCart<CartLine>({
     productExists,
     customerExists,
+    cartStorageKey,
+    customerStorageKey,
   });
 
   const pushUndo = useCallback((currentCart: CartLine[]) => {
@@ -302,9 +319,9 @@ export default function PosClient({
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setLastReceiptId(window.localStorage.getItem('lastReceiptId') ?? '');
+      setLastReceiptId(window.localStorage.getItem(lastReceiptStorageKey) ?? '');
     }
-  }, []);
+  }, [lastReceiptStorageKey]);
 
   // Debounced customer search — fetches from /api/customers/search
   useEffect(() => {
@@ -567,7 +584,7 @@ export default function PosClient({
         // Store receipt ID for reprinting
         setLastReceiptId(receiptId);
         if (typeof window !== 'undefined') {
-          window.localStorage.setItem('lastReceiptId', receiptId);
+          window.localStorage.setItem(lastReceiptStorageKey, receiptId);
         }
         // Show success toast
         setSaleSuccess({ receiptId, totalPence, transactionNumber });
@@ -583,6 +600,7 @@ export default function PosClient({
       if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
         try {
           const offlineId = await queueOfflineSale({
+            businessId: business.id,
             storeId: store.id,
             tillId,
             customerId: saleSnapshot.customerId || null,

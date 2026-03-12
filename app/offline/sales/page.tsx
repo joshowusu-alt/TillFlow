@@ -7,9 +7,11 @@ import {
   getOfflineSale,
   updateOfflineSale,
   getCachedProducts,
+  getCachedBusiness,
   type OfflineSale,
   type OfflineProduct,
-} from '@/lib/offline';
+} from '@/lib/offline/storage';
+import { getClientActiveBusinessId } from '@/lib/business-scope';
 import { formatMoney } from '@/lib/format';
 
 /* ------------------------------------------------------------------ */
@@ -30,6 +32,10 @@ type AmendingState = {
   }[];
 };
 
+type OfflineSaleLine = OfflineSale['lines'][number];
+type OfflineProductUnit = OfflineProduct['units'][number];
+type NewAmendLine = AmendingState['newLines'][number];
+
 /* ------------------------------------------------------------------ */
 /*  Page                                                              */
 /* ------------------------------------------------------------------ */
@@ -49,16 +55,16 @@ export default function OfflineSalesPage() {
   /* ---- Load data ---- */
   const refresh = useCallback(async () => {
     try {
+      const activeBusinessId = getClientActiveBusinessId() ?? undefined;
       const [pending, cached] = await Promise.all([
-        getPendingSales(),
-        getCachedProducts(),
+        getPendingSales(activeBusinessId),
+        getCachedProducts(activeBusinessId),
       ]);
       setSales(pending);
       setProducts(cached);
 
       // Try to get currency from cached business
-      const { getCachedBusiness } = await import('@/lib/offline');
-      const biz = await getCachedBusiness();
+      const biz = await getCachedBusiness(activeBusinessId);
       if (biz?.currency) setCurrency(biz.currency);
     } catch (e) {
       console.error('Failed to load offline sales:', e);
@@ -76,28 +82,28 @@ export default function OfflineSalesPage() {
   );
 
   /* ---- Helpers ---- */
-  const lineName = (line: OfflineSale['lines'][number]) => {
+  const lineName = (line: OfflineSaleLine) => {
     const p = productMap.get(line.productId);
     return p?.name ?? line.productId.slice(0, 8);
   };
 
-  const lineUnit = (line: OfflineSale['lines'][number]) => {
+  const lineUnit = (line: OfflineSaleLine) => {
     const p = productMap.get(line.productId);
     if (!p) return '';
-    const u = p.units.find((u) => u.id === line.unitId);
+    const u = p.units.find((u: OfflineProductUnit) => u.id === line.unitId);
     return u?.name ?? '';
   };
 
-  const linePrice = (line: OfflineSale['lines'][number]) => {
+  const linePrice = (line: OfflineSaleLine) => {
     const p = productMap.get(line.productId);
     if (!p) return 0;
-    const u = p.units.find((u) => u.id === line.unitId);
+    const u = p.units.find((u: OfflineProductUnit) => u.id === line.unitId);
     const conversionToBase = u?.conversionToBase ?? 1;
     return p.sellingPriceBasePence * conversionToBase * line.qtyInUnit;
   };
 
   const saleTotal = (sale: OfflineSale) =>
-    sale.lines.reduce((sum, l) => sum + linePrice(l), 0);
+    sale.lines.reduce((sum: number, l: OfflineSaleLine) => sum + linePrice(l), 0);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -106,7 +112,7 @@ export default function OfflineSalesPage() {
 
   /* ---- Open amend ---- */
   const startAmend = async (saleId: string) => {
-    const sale = await getOfflineSale(saleId);
+    const sale = await getOfflineSale(saleId, getClientActiveBusinessId() ?? undefined);
     if (!sale || sale.synced) return;
     setAmending({ sale, removedIndices: new Set(), newLines: [] });
     setSearchQuery('');
@@ -130,7 +136,7 @@ export default function OfflineSalesPage() {
   const addNewLine = (product: OfflineProduct) => {
     if (!amending) return;
     const baseUnit =
-      product.units.find((u) => u.isBaseUnit) ?? product.units[0];
+      product.units.find((u: OfflineProductUnit) => u.isBaseUnit) ?? product.units[0];
     if (!baseUnit) return;
     const unitPricePence =
       product.sellingPriceBasePence * baseUnit.conversionToBase;
@@ -185,9 +191,9 @@ export default function OfflineSalesPage() {
     setSaving(true);
     try {
       const kept = amending.sale.lines.filter(
-        (_, i) => !amending.removedIndices.has(i)
+        (_line: OfflineSaleLine, i: number) => !amending.removedIndices.has(i)
       );
-      const added = amending.newLines.map((l) => ({
+      const added = amending.newLines.map((l: NewAmendLine) => ({
         productId: l.productId,
         unitId: l.unitId,
         qtyInUnit: l.qtyInUnit,
@@ -219,9 +225,9 @@ export default function OfflineSalesPage() {
     if (!amending) return [];
     const existingIds = new Set([
       ...amending.sale.lines
-        .filter((_, i) => !amending.removedIndices.has(i))
-        .map((l) => l.productId),
-      ...amending.newLines.map((l) => l.productId),
+        .filter((_line: OfflineSaleLine, i: number) => !amending.removedIndices.has(i))
+        .map((l: OfflineSaleLine) => l.productId),
+      ...amending.newLines.map((l: NewAmendLine) => l.productId),
     ]);
     let list = products.filter((p) => !existingIds.has(p.id));
     if (searchQuery.trim()) {
@@ -252,10 +258,10 @@ export default function OfflineSalesPage() {
   /* ---- Amend view ---- */
   if (amending) {
     const keptLinesTotal = amending.sale.lines
-      .filter((_, i) => !amending.removedIndices.has(i))
-      .reduce((s, l) => s + linePrice(l), 0);
+      .filter((_line: OfflineSaleLine, i: number) => !amending.removedIndices.has(i))
+      .reduce((s: number, l: OfflineSaleLine) => s + linePrice(l), 0);
     const addedTotal = amending.newLines.reduce(
-      (s, l) => s + l.lineTotalPence,
+      (s: number, l: NewAmendLine) => s + l.lineTotalPence,
       0
     );
     const newTotal = keptLinesTotal + addedTotal;
@@ -283,7 +289,7 @@ export default function OfflineSalesPage() {
           <h3 className="text-sm font-semibold text-black/70">
             Current Items
           </h3>
-          {amending.sale.lines.map((line, idx) => {
+          {amending.sale.lines.map((line: OfflineSaleLine, idx: number) => {
             const removed = amending.removedIndices.has(idx);
             const isLastKept =
               !removed &&
@@ -409,7 +415,7 @@ export default function OfflineSalesPage() {
                 <div className="divide-y divide-black/5">
                   {filteredProducts.map((product) => {
                     const baseUnit =
-                      product.units.find((u) => u.isBaseUnit) ??
+                      product.units.find((u: OfflineProductUnit) => u.isBaseUnit) ??
                       product.units[0];
                     const price = baseUnit
                       ? product.sellingPriceBasePence *
@@ -563,7 +569,7 @@ export default function OfflineSalesPage() {
                     {sale.customerId && ' · Has customer'}
                   </div>
                   <div className="mt-1 flex gap-1 flex-wrap">
-                    {sale.lines.slice(0, 3).map((line, i) => (
+                    {sale.lines.slice(0, 3).map((line: OfflineSaleLine, i: number) => (
                       <span
                         key={i}
                         className="rounded bg-black/5 px-2 py-0.5 text-[11px] text-black/60"

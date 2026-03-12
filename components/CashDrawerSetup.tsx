@@ -9,19 +9,19 @@ import {
   setCashDrawerEnabled
 } from '@/lib/hardware';
 
-export default function CashDrawerSetup() {
+export default function CashDrawerSetup({ businessId }: { businessId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [status, setStatus] = useState('');
   const [supported, setSupported] = useState(false);
 
   useEffect(() => {
-    setEnabled(isCashDrawerEnabled());
+    setEnabled(isCashDrawerEnabled({ businessId }));
     setSupported(isSerialSupported());
-  }, []);
+  }, [businessId]);
 
   const toggleEnabled = (value: boolean) => {
     setEnabled(value);
-    setCashDrawerEnabled(value);
+    setCashDrawerEnabled(value, { businessId });
   };
 
   const handlePair = async () => {

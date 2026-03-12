@@ -12,6 +12,7 @@ import { headers } from 'next/headers';
 import { clearLoginFailures, getLoginThrottleStatus, recordLoginFailure } from '@/lib/security/login-throttle';
 import { verifyTwoFactorCode } from '@/lib/security/two-factor';
 import { appLog } from '@/lib/observability';
+import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const MAX_ACTIVE_SESSIONS = 5;
@@ -127,21 +128,17 @@ export async function login(formData: FormData) {
     process.env.NODE_ENV === 'production' &&
     !process.env.BASE_URL?.startsWith('http://');
 
-  // Use business-scoped cookie name so logging into a second business
-  // does not overwrite the first business's session cookie.
-  // Clear any other business sessions first so tabs don't silently
-  // serve the wrong business's data.
+  // Keep business sessions isolated by cookie name and explicitly mark
+  // the active business so the server never "falls into" another business.
   const cookieStore = cookies();
-  const oldBusinessCookies = cookieStore.getAll().filter(c => c.name.startsWith('pos_session_'));
-  if (oldBusinessCookies.length > 0) {
-    const oldTokens = oldBusinessCookies.map(c => c.value).filter(Boolean);
-    if (oldTokens.length > 0) {
-      await prisma.session.deleteMany({ where: { token: { in: oldTokens } } });
-    }
-    for (const c of oldBusinessCookies) { cookieStore.delete(c.name); }
-  }
-  cookieStore.set(`pos_session_${user.businessId}`, token, {
+  cookieStore.set(getBusinessSessionCookieName(user.businessId), token, {
     httpOnly: true,
+    secure: isSecure,
+    sameSite: 'lax',
+    path: '/',
+    expires: expiresAt
+  });
+  cookieStore.set(ACTIVE_BUSINESS_COOKIE, user.businessId, {
     secure: isSecure,
     sameSite: 'lax',
     path: '/',
@@ -176,7 +173,7 @@ export async function login(formData: FormData) {
 
 export async function logout() {
   const cookieStore = cookies();
-  const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith('pos_session_'));
+  const sessionCookies = cookieStore.getAll().filter(c => c.name.startsWith(SESSION_COOKIE_PREFIX));
   if (sessionCookies.length > 0) {
     const tokens = sessionCookies.map(c => c.value).filter(Boolean);
     if (tokens.length > 0) {
@@ -184,5 +181,6 @@ export async function logout() {
     }
     for (const c of sessionCookies) { cookieStore.delete(c.name); }
   }
+  cookieStore.delete(ACTIVE_BUSINESS_COOKIE);
   redirect('/login');
 }

@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { checkRegisterRateLimit } from '@/lib/security/register-throttle';
+import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName } from '@/lib/business-scope';
 
 /**
  * Self-service registration: creates a new Business, Store, Till, and OWNER user.
@@ -97,8 +98,15 @@ export async function register(formData: FormData) {
   await prisma.session.create({
     data: { token, userId: result.owner.id, expiresAt },
   });
-  cookies().set(`pos_session_${result.business.id}`, token, {
+  const cookieStore = cookies();
+  cookieStore.set(getBusinessSessionCookieName(result.business.id), token, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    expires: expiresAt,
+  });
+  cookieStore.set(ACTIVE_BUSINESS_COOKIE, result.business.id, {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',

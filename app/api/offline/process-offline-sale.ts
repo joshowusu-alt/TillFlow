@@ -5,6 +5,7 @@ import { parseDiscountValue } from '@/lib/format';
 
 export interface OfflineSalePayload {
     id: string;
+    businessId?: string;
     storeId: string;
     tillId: string;
     customerId: string | null;
@@ -51,6 +52,9 @@ export async function processOfflineSale(
 ): Promise<ProcessResult> {
     if (!payload?.id || !payload.storeId || !payload.tillId || !Array.isArray(payload.lines)) {
         throw new Error('Invalid offline payload');
+    }
+    if (payload.businessId && payload.businessId !== user.businessId) {
+        throw new Error('Offline sale belongs to a different business');
     }
 
     const store = await prisma.store.findFirst({

@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { ACTIVE_BUSINESS_COOKIE, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
 
 export interface BackupData {
     version: string;
@@ -382,7 +383,11 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
     }, { timeout: 60000, maxWait: 10000 });
 
     // Imported users have random temporary passwords and sessions were cleared.
-    cookies().delete('pos_session');
+    const cookieStore = cookies();
+    cookieStore.getAll()
+      .filter((cookie) => cookie.name.startsWith(SESSION_COOKIE_PREFIX))
+      .forEach((cookie) => cookieStore.delete(cookie.name));
+    cookieStore.delete(ACTIVE_BUSINESS_COOKIE);
 
     return ok({
       message: `Restored backup from ${exportDate.toLocaleString()}. Users will need to reset their passwords and sign in again.`

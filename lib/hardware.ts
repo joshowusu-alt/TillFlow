@@ -1,13 +1,30 @@
+import { getCashDrawerEnabledStorageKey, getClientActiveBusinessId } from '@/lib/business-scope';
+
 export const CASH_DRAWER_ENABLED_KEY = 'pos.cashDrawerEnabled';
 
-export function isCashDrawerEnabled() {
+function resolveCashDrawerKey(scope?: { businessId?: string }) {
+  const businessId = scope?.businessId ?? getClientActiveBusinessId();
+  if (!businessId) return CASH_DRAWER_ENABLED_KEY;
+  return getCashDrawerEnabledStorageKey({ businessId });
+}
+
+export function isCashDrawerEnabled(scope?: { businessId?: string }) {
   if (typeof window === 'undefined') return false;
+  const scopedKey = resolveCashDrawerKey(scope);
+  const scopedValue = window.localStorage.getItem(scopedKey);
+  if (scopedValue !== null) {
+    return scopedValue === 'true';
+  }
   return window.localStorage.getItem(CASH_DRAWER_ENABLED_KEY) === 'true';
 }
 
-export function setCashDrawerEnabled(enabled: boolean) {
+export function setCashDrawerEnabled(enabled: boolean, scope?: { businessId?: string }) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(CASH_DRAWER_ENABLED_KEY, enabled ? 'true' : 'false');
+  const scopedKey = resolveCashDrawerKey(scope);
+  window.localStorage.setItem(scopedKey, enabled ? 'true' : 'false');
+  if (scopedKey !== CASH_DRAWER_ENABLED_KEY) {
+    window.localStorage.removeItem(CASH_DRAWER_ENABLED_KEY);
+  }
 }
 
 export function isSerialSupported() {

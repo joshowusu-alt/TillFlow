@@ -284,7 +284,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           Simple mode hides advanced reporting and enterprise operations from the main navigation.
         </div>
       </div>
-      <CashDrawerSetup />
+      <CashDrawerSetup businessId={business.id} />
 
       {/* Quick links */}
       <div className="grid gap-4 lg:grid-cols-3">

@@ -17,11 +17,12 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       discountPence: true,
       cashReceivedPence: true,
       changeDuePence: true,
-      store: { select: { name: true } },
+      store: { select: { id: true, name: true } },
       cashierUser: { select: { name: true } },
       customer: { select: { name: true, phone: true } },
       business: {
         select: {
+          id: true,
           name: true,
           currency: true,
           vatEnabled: true,
@@ -101,6 +102,7 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
   return (
     <ReceiptClient
       business={{
+        id: invoice.business.id,
         name: invoice.business.name,
         currency: invoice.business.currency,
         vatEnabled: invoice.business.vatEnabled,
@@ -114,7 +116,7 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
         momoNumber: (invoice.business as any).momoNumber ?? null,
         momoProvider: (invoice.business as any).momoProvider ?? null
       }}
-      store={{ name: invoice.store.name }}
+      store={{ id: invoice.store.id, name: invoice.store.name }}
       cashier={{ name: invoice.cashierUser.name }}
       customer={invoice.customer ? { name: invoice.customer.name, phone: invoice.customer.phone } : null}
       invoice={{

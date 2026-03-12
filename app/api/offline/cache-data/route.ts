@@ -1,15 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUser } from '@/lib/auth';
 import { checkCacheDataRateLimit } from '@/lib/security/sync-throttle';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const user = await getUser();
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const requestedBusinessId = request.nextUrl.searchParams.get('businessId');
+        if (requestedBusinessId && requestedBusinessId !== user.businessId) {
+            return NextResponse.json({ error: 'Business scope mismatch' }, { status: 403 });
         }
 
         const throttle = await checkCacheDataRateLimit(user.id);
@@ -83,6 +88,8 @@ export async function GET() {
         });
 
         const productDtos = products.map((product) => ({
+            businessId: business.id,
+            storeId: store.id,
             id: product.id,
             name: product.name,
             barcode: product.barcode,
@@ -113,11 +120,12 @@ export async function GET() {
                 vatEnabled: business.vatEnabled
             },
             store: {
+                businessId: business.id,
                 id: store.id,
                 name: store.name
             },
-            customers: customers.map((c) => ({ id: c.id, name: c.name })),
-            tills: store.tills.map((t) => ({ id: t.id, name: t.name }))
+            customers: customers.map((c) => ({ businessId: business.id, id: c.id, name: c.name })),
+            tills: store.tills.map((t) => ({ businessId: business.id, storeId: store.id, id: t.id, name: t.name }))
         });
     } catch (error) {
         console.error('[cache-data] error:', error);

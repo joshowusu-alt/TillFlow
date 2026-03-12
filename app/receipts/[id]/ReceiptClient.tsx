@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { getLastReceiptStorageKey } from '@/lib/business-scope';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { openCashDrawer, isCashDrawerEnabled } from '@/lib/hardware';
 import { buildEscPosReceipt, toHexString } from '@/lib/escpos';
@@ -8,6 +9,7 @@ import { ensureQzConnection, printRawEscPos } from '@/lib/qz';
 
 type ReceiptClientProps = {
   business: {
+    id: string;
     name: string;
     currency: string;
     vatEnabled: boolean;
@@ -21,7 +23,7 @@ type ReceiptClientProps = {
     momoNumber?: string | null;
     momoProvider?: string | null;
   };
-  store: { name: string };
+  store: { id: string; name: string };
   cashier: { name: string };
   customer?: { name: string; phone?: string | null } | null;
   invoice: {
@@ -87,15 +89,16 @@ export default function ReceiptClient({
     (sum, line) => sum + line.lineDiscountPence + line.promoDiscountPence,
     0
   );
+  const lastReceiptStorageKey = getLastReceiptStorageKey({ businessId: business.id, storeId: store.id });
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('lastReceiptId', invoice.id);
-      if (cashPaid > 0 && isCashDrawerEnabled()) {
+      window.localStorage.setItem(lastReceiptStorageKey, invoice.id);
+      if (cashPaid > 0 && isCashDrawerEnabled({ businessId: business.id })) {
         openCashDrawer().catch(() => null);
       }
     }
-  }, [cashPaid, invoice.id]);
+  }, [business.id, cashPaid, invoice.id, lastReceiptStorageKey]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

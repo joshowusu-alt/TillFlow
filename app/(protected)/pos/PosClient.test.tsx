@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
+import { getParkedCartsStorageKey } from '@/lib/business-scope';
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -60,6 +61,7 @@ const product = {
 
 const baseProps = {
   business: {
+    id: 'biz-1',
     currency: 'GHS',
     vatEnabled: false,
     momoEnabled: true,
@@ -106,7 +108,7 @@ describe('PosClient desktop layout', () => {
   });
 
   it('shows the parked-sales quick rail when parked carts exist', async () => {
-    window.localStorage.setItem('pos.parkedCarts', JSON.stringify([
+    window.localStorage.setItem(getParkedCartsStorageKey({ businessId: 'biz-1', storeId: 'store-1' }), JSON.stringify([
       {
         id: 'park-1',
         label: 'Needs change',
