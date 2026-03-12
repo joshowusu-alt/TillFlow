@@ -143,7 +143,7 @@ export default async function CashflowForecastPage({
             ))}
           </div>
         )}
-        {forecast.days.length > 0 ? (
+        {forecast.days.length > 0 && (
           <div className="hidden overflow-x-auto md:block">
             <table className="table w-full border-separate border-spacing-y-1 text-sm">
               <thead>
