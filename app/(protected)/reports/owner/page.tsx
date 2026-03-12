@@ -34,7 +34,7 @@ export default async function OwnerIntelligencePage() {
     : `Scope: All ${stores.length} branches`;
 
   return (
-    <div className="space-y-6 pb-2">
+    <div className="space-y-5 pb-2 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Owner Dashboard"
@@ -90,10 +90,10 @@ export default async function OwnerIntelligencePage() {
       >
         <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)] xl:grid-cols-[minmax(0,1.75fr)_minmax(380px,1fr)]">
           <section className="card min-w-0 overflow-hidden border-red-100/90 bg-white/95 shadow-raised">
-            <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-4 py-4 sm:px-6 sm:py-5">
+            <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-4 py-3.5 sm:px-6 sm:py-5">
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-ink">Attention Needed Today</h2>
+                  <h2 className="text-base font-semibold text-ink sm:text-lg">Attention Needed Today</h2>
                   <p className="mt-1 text-sm text-muted">Critical issues, warnings, and monitors ranked for the owner.</p>
                 </div>
                 <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-700 sm:self-auto">
@@ -111,7 +111,7 @@ export default async function OwnerIntelligencePage() {
                 <p className="mt-1 max-w-xl text-sm text-muted">Sales, stock, debtors, supplier dues, and control signals are within normal thresholds right now.</p>
               </div>
             ) : (
-              <div className="stagger-children space-y-3 px-4 py-4 sm:px-6 sm:py-5">
+              <div className="stagger-children space-y-3 px-3.5 py-3.5 sm:px-6 sm:py-5">
                 {snapshot.attentionItems.map((item) => (
                   <AttentionRow key={item.id} item={item} />
                 ))}
@@ -188,13 +188,13 @@ export default async function OwnerIntelligencePage() {
 
 function LayerShell({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: ReactNode }) {
   return (
-    <section className="min-w-0 rounded-[1.8rem] border border-slate-200/80 bg-white/70 px-4 py-4 shadow-card backdrop-blur-sm sm:px-5 sm:py-5 md:px-6 md:py-6">
-      <div className="mb-6">
+    <section className="min-w-0 rounded-[1.6rem] border border-slate-200/80 bg-white/70 px-3.5 py-3.5 shadow-card backdrop-blur-sm sm:rounded-[1.8rem] sm:px-5 sm:py-5 md:px-6 md:py-6">
+      <div className="mb-5 sm:mb-6">
         <div className="inline-flex rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary">
           {eyebrow}
         </div>
-        <h2 className="mt-3 text-xl font-display font-bold tracking-tight text-ink">{title}</h2>
-        <p className="mt-1.5 max-w-4xl text-sm leading-relaxed text-muted">{description}</p>
+        <h2 className="mt-3 text-lg font-display font-bold tracking-tight text-ink sm:text-xl">{title}</h2>
+        <p className="mt-1.5 max-w-4xl text-[13px] leading-relaxed text-muted sm:text-sm">{description}</p>
       </div>
       {children}
     </section>
@@ -206,12 +206,12 @@ function HealthOverviewCard({ score, grade, topDrivers, href }: { score: number;
   const gradeTone = grade === 'GREEN' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : grade === 'AMBER' ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200';
 
   return (
-    <section className="card animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-4 text-white shadow-floating sm:p-6">
+    <section className="card animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-gradient-to-br from-slate-950 via-blue-950 to-blue-900 p-4 text-white shadow-floating sm:rounded-[1.5rem] sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-blue-100/80">Business health score</p>
           <div className="mt-3 flex items-end gap-2">
-            <span className="text-5xl font-display font-bold leading-none tabular-nums">{score}</span>
+            <span className="text-[2.75rem] font-display font-bold leading-none tabular-nums sm:text-5xl">{score}</span>
             <span className="pb-1 text-sm font-semibold text-blue-100/80">/100</span>
           </div>
         </div>
@@ -222,7 +222,7 @@ function HealthOverviewCard({ score, grade, topDrivers, href }: { score: number;
 
       <div className="mt-5 flex-1 space-y-2">
         {topDrivers.slice(0, 3).map((driver, index) => (
-          <div key={`${driver}-${index}`} className="flex items-start gap-3 text-sm text-blue-50/90">
+          <div key={`${driver}-${index}`} className="flex items-start gap-3 text-[13px] text-blue-50/90 sm:text-sm">
             <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
             <span>{driver}</span>
           </div>
@@ -254,7 +254,7 @@ function MetricCard({ card, currency }: { card: BusinessHealthCard; currency: st
     : 'border-slate-200 bg-slate-50 text-slate-600';
 
   return (
-    <Link href={card.href} className={`animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border p-5 shadow-card transition-transform hover:-translate-y-0.5 ${toneClass}`}>
+    <Link href={card.href} className={`animate-fade-in-up flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border p-4 shadow-card transition-transform hover:-translate-y-0.5 sm:p-5 ${toneClass}`}>
       <div className="flex min-w-0 flex-col gap-3">
         <p className="min-w-0 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{card.label}</p>
         <div className="flex min-w-0 justify-start sm:justify-end">
@@ -264,8 +264,8 @@ function MetricCard({ card, currency }: { card: BusinessHealthCard; currency: st
           </span>
         </div>
       </div>
-      <p className="mt-3 pr-1 text-[1.95rem] font-display font-bold leading-none tracking-tight text-ink tabular-nums">{value}</p>
-      <p className="mt-4 min-h-[3.5rem] flex-1 text-sm leading-relaxed text-slate-600">{card.subtitle}</p>
+      <p className="mt-3 pr-1 text-[1.72rem] font-display font-bold leading-none tracking-tight text-ink tabular-nums sm:text-[1.95rem]">{value}</p>
+      <p className="mt-4 flex-1 text-sm leading-relaxed text-slate-600 sm:min-h-[3.5rem]">{card.subtitle}</p>
     </Link>
   );
 }
@@ -290,13 +290,13 @@ function AttentionRow({ item }: { item: AttentionItem }) {
       };
 
   return (
-    <div className={`animate-fade-in-up rounded-[1.25rem] border p-4 sm:p-5 ${styles.shell}`}>
+    <div className={`animate-fade-in-up rounded-[1.15rem] border p-3.5 sm:rounded-[1.25rem] sm:p-5 ${styles.shell}`}>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <span className={`mt-2 h-2.5 w-2.5 flex-shrink-0 rounded-full ${styles.dot}`} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-ink sm:text-[15px]">{item.title}</p>
+              <p className="text-[15px] font-semibold leading-snug text-ink">{item.title}</p>
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${styles.badge}`}>
                 {item.severity}
               </span>
@@ -314,22 +314,22 @@ function AttentionRow({ item }: { item: AttentionItem }) {
 
 function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
   return (
-    <section className="card min-w-0 overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 shadow-card">
-      <div className="border-b border-slate-200/80 px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="card min-w-0 overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-white/95 shadow-card sm:rounded-[1.5rem]">
+      <div className="border-b border-slate-200/80 px-4 py-3.5 sm:px-6 sm:py-5">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold text-ink">Priority actions</h2>
+            <h2 className="text-base font-semibold text-ink sm:text-lg">Priority actions</h2>
             <p className="mt-1 max-w-md text-sm leading-relaxed text-muted">The fastest high-value moves the owner can make from the current report signals.</p>
           </div>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
+          <span className="mt-0.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
             {actions.length} action{actions.length === 1 ? '' : 's'}
           </span>
         </div>
       </div>
 
-      <div className="space-y-3 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 lg:max-h-[34rem] lg:pr-4">
+      <div className="space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-6 sm:py-5 lg:max-h-[34rem] lg:pr-4">
         {actions.length === 0 ? (
-          <div className="rounded-[1.1rem] border border-emerald-200 bg-emerald-50/70 p-4 text-sm leading-relaxed text-emerald-800">
+          <div className="rounded-[1rem] border border-emerald-200 bg-emerald-50/70 p-3.5 text-sm leading-relaxed text-emerald-800 sm:rounded-[1.1rem] sm:p-4">
             No urgent owner actions are queued right now. That’s the good kind of quiet.
           </div>
         ) : (
@@ -350,7 +350,7 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
                 };
 
             return (
-              <div key={action.id} className={`rounded-[1.1rem] border p-4 ${styles.shell}`}>
+              <div key={action.id} className={`rounded-[1rem] border p-3.5 sm:rounded-[1.1rem] sm:p-4 ${styles.shell}`}>
                 <div className="flex flex-col gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-start gap-2">
@@ -379,11 +379,11 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
   const seriesMax = Math.max(...snapshot.moneyPulseSeries.map((day) => Math.abs(day.projectedBalancePence)), 1);
 
   return (
-    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-blue-100/90 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 text-white shadow-floating">
-      <div className="border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border border-blue-100/90 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 text-white shadow-floating sm:rounded-[1.5rem]">
+      <div className="border-b border-white/10 px-4 py-3.5 sm:px-6 sm:py-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Money Pulse</h2>
+            <h2 className="text-base font-semibold sm:text-lg">Money Pulse</h2>
             <p className="mt-1 text-sm text-blue-100/80">Short-term visibility into cash pressure, collections, and supplier obligations.</p>
           </div>
           <Link href="/reports/cashflow-forecast" className="inline-flex min-h-10 items-center rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80 transition-colors hover:border-white/20 hover:text-white">
@@ -392,7 +392,7 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 px-4 py-4 sm:px-6 sm:py-5">
+      <div className="flex-1 space-y-4 px-4 py-3.5 sm:px-6 sm:py-5">
         <MoneyPulseRow label="Cash balance today" value={formatMoney(snapshot.brief.moneyPulse.cashTodayPence, currency)} tone="positive" />
         <MoneyPulseRow label="Receivables due (7d)" value={formatMoney(snapshot.brief.moneyPulse.arDue7DaysPence, currency)} tone="positive" />
         <MoneyPulseRow label="Payables due (7d)" value={formatMoney(snapshot.brief.moneyPulse.apDue7DaysPence, currency)} tone="warning" />
@@ -402,7 +402,7 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
           tone={snapshot.brief.moneyPulse.forecastLowestPence < 0 ? 'danger' : 'positive'}
         />
 
-        <div className="rounded-[1.1rem] border border-white/10 bg-white/5 p-4">
+        <div className="rounded-[1rem] border border-white/10 bg-white/5 p-3.5 sm:rounded-[1.1rem] sm:p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80">14-day pulse</p>
             <p className="text-[11px] text-blue-100/70">Projected balance</p>
@@ -542,10 +542,10 @@ function RecentActivityPanel({ items }: { items: ActivityItem[] }) {
 
 function PanelShell({ title, description, action, children }: { title: string; description: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-5 shadow-card sm:p-6">
-      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="card flex min-w-0 h-full flex-col overflow-hidden rounded-[1.35rem] border border-slate-200/80 bg-white/95 p-4 shadow-card sm:rounded-[1.5rem] sm:p-6">
+      <div className="mb-4 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold text-ink">{title}</h3>
+          <h3 className="text-base font-semibold text-ink sm:text-lg">{title}</h3>
           <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
         </div>
         {action ? <div className="w-full sm:w-auto">{action}</div> : null}
