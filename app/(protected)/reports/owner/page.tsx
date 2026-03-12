@@ -41,13 +41,13 @@ export default async function OwnerIntelligencePage() {
           subtitle={`Live operating brief for ${business.name} — generated ${new Date(snapshot.generatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
           description="See business health, cash pressure, stock risk, debtor follow-up, and trading activity in one serious retail control center."
         />
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-shrink-0 sm:justify-end">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={60_000} />
           <a
             href="/reports/owner/export?format=html"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-secondary text-sm"
+            className="btn-secondary justify-center text-sm"
           >
             Export Brief
           </a>
@@ -91,19 +91,19 @@ export default async function OwnerIntelligencePage() {
         <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)] xl:grid-cols-[minmax(0,1.75fr)_minmax(380px,1fr)]">
           <section className="card min-w-0 overflow-hidden border-red-100/90 bg-white/95 shadow-raised">
             <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-4 py-4 sm:px-6 sm:py-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <h2 className="text-lg font-semibold text-ink">Attention Needed Today</h2>
                   <p className="mt-1 text-sm text-muted">Critical issues, warnings, and monitors ranked for the owner.</p>
                 </div>
-                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-700">
+                <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-700 sm:self-auto">
                   {snapshot.attentionItems.length} live item{snapshot.attentionItems.length === 1 ? '' : 's'}
                 </span>
               </div>
             </div>
 
             {snapshot.attentionItems.length === 0 ? (
-              <div className="flex min-h-[320px] flex-col items-center justify-center px-4 py-8 text-center sm:px-6 sm:py-10">
+              <div className="flex min-h-[240px] flex-col items-center justify-center px-4 py-8 text-center sm:min-h-[320px] sm:px-6 sm:py-10">
                 <div className="rounded-full bg-emerald-50 p-4 text-emerald-600">
                   <CheckCircleIcon className="h-8 w-8" />
                 </div>
@@ -304,7 +304,7 @@ function AttentionRow({ item }: { item: AttentionItem }) {
             <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.whyItMatters}</p>
           </div>
         </div>
-        <Link href={item.href} className="btn-primary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
+        <Link href={item.href} className="btn-primary w-full justify-center self-start text-sm sm:w-auto sm:flex-shrink-0">
           {item.ctaLabel}
         </Link>
       </div>
@@ -386,7 +386,7 @@ function MoneyPulsePanel({ snapshot, currency }: { snapshot: Awaited<ReturnType<
             <h2 className="text-lg font-semibold">Money Pulse</h2>
             <p className="mt-1 text-sm text-blue-100/80">Short-term visibility into cash pressure, collections, and supplier obligations.</p>
           </div>
-          <Link href="/reports/cashflow-forecast" className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80 hover:text-white">
+          <Link href="/reports/cashflow-forecast" className="inline-flex min-h-10 items-center rounded-full border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-blue-100/80 transition-colors hover:border-white/20 hover:text-white">
             Full forecast
           </Link>
         </div>
@@ -499,7 +499,7 @@ function InventoryRiskPanel({ inventory }: { inventory: Awaited<ReturnType<typeo
                     {row.supplierName ? <span>Supplier: <strong className="font-semibold text-ink">{row.supplierName}</strong></span> : null}
                   </div>
                 </div>
-                <Link href={row.href} className="btn-secondary justify-center self-start text-xs sm:flex-shrink-0 sm:text-sm">
+                <Link href={row.href} className="btn-secondary w-full justify-center self-start text-sm sm:w-auto sm:flex-shrink-0">
                   {row.ctaLabel}
                 </Link>
               </div>
@@ -548,7 +548,7 @@ function PanelShell({ title, description, action, children }: { title: string; d
           <h3 className="text-lg font-semibold text-ink">{title}</h3>
           <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
         </div>
-        {action}
+        {action ? <div className="w-full sm:w-auto">{action}</div> : null}
       </div>
       {children}
     </section>
