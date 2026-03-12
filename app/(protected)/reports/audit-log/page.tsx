@@ -99,14 +99,14 @@ export default async function AuditLogPage({
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
       <PageHeader title="Audit Log" subtitle={`${total.toLocaleString()} entries`} />
 
       {/* Filters */}
-      <form method="GET" className="flex flex-wrap gap-3 items-end">
+      <form method="GET" className="card grid gap-3 p-3.5 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] xl:items-end">
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Action</label>
-          <select name="action" defaultValue={searchParams.action || ''} className="border rounded px-3 py-2 text-sm">
+          <select name="action" defaultValue={searchParams.action || ''} className="w-full rounded border px-3 py-2 text-sm">
             <option value="">All Actions</option>
             {Object.entries(ACTION_LABELS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
@@ -115,25 +115,54 @@ export default async function AuditLogPage({
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">User</label>
-          <select name="user" defaultValue={searchParams.user || ''} className="border rounded px-3 py-2 text-sm">
+          <select name="user" defaultValue={searchParams.user || ''} className="w-full rounded border px-3 py-2 text-sm">
             <option value="">All Users</option>
             {users.map(u => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
         </div>
-        <button type="submit" className="bg-black text-white px-4 py-2 rounded text-sm font-medium hover:bg-gray-800 transition">
+        <button type="submit" className="w-full rounded bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 xl:w-auto">
           Filter
         </button>
         {(searchParams.action || searchParams.user) && (
-          <a href="/reports/audit-log" className="text-sm text-gray-500 underline ml-2 self-center">
+          <a href="/reports/audit-log" className="inline-flex items-center text-sm text-gray-500 underline xl:ml-2 xl:self-center">
             Clear
           </a>
         )}
       </form>
 
+      <div className="space-y-3 md:hidden">
+        {logs.length === 0 ? (
+          <div className="card p-4 text-center text-sm text-gray-400">No audit entries found.</div>
+        ) : (
+          logs.map((log) => {
+            const details = parseDetails(log.details);
+            return (
+              <div key={log.id} className="card p-3.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-ink">{log.userName}</p>
+                    <p className="mt-1 text-xs text-gray-500">{ACTION_LABELS[log.action] || log.action}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${ACTION_COLOURS[log.action] || 'bg-gray-100 text-gray-700'}`}>
+                    {log.userRole}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm">
+                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">Time</span><span className="text-right text-gray-600">{new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">Entity</span><span className="text-right text-gray-600">{log.entity}{log.entityId ? ` #${log.entityId.slice(0, 8)}` : ''}</span></div>
+                  <div className="flex items-start justify-between gap-3"><span className="pt-0.5 text-gray-500">Details</span><span className="max-w-[65%] text-right text-xs text-gray-500">{details ? Object.entries(details).map(([k, v]) => `${k}: ${v}`).join(', ') : '—'}</span></div>
+                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">IP</span><span className="text-right text-xs text-gray-400">{log.ipAddress || '—'}</span></div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500 uppercase">

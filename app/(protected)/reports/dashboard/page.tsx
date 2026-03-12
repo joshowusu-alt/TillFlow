@@ -310,8 +310,8 @@ export default async function DashboardPage({
         title={isToday ? "Today's Dashboard" : 'Owner Dashboard'}
         subtitle={isToday ? 'Live snapshot — auto-refreshes every 2 minutes.' : `${fromIso} to ${toIso}`}
         actions={
-          <div className="flex items-center gap-3">
-            <a href="/reports/weekly-digest" className="btn-secondary text-sm">Weekly Digest</a>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+            <a href="/reports/weekly-digest" className="btn-secondary justify-center text-sm">Weekly Digest</a>
             <RefreshIndicator fetchedAt={new Date().toISOString()} autoRefreshMs={120_000} />
           </div>
         }
@@ -340,7 +340,7 @@ export default async function DashboardPage({
 
       {/* Live status bar — today's pulse at a glance (only when viewing today) */}
       {isToday && (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
             <span className={`h-2 w-2 flex-shrink-0 rounded-full ${lastSaleRecord ? 'bg-success animate-pulse' : 'bg-black/20'}`} />
             <span className="text-black/50">Last sale</span>
@@ -368,7 +368,7 @@ export default async function DashboardPage({
       )}
 
       {/* KPI row */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Sales" value={formatMoney(totalSales, currency)} tone="accent" />
         <StatCard
           label={`Gross Profit (${gpPercent}%)`}
@@ -400,8 +400,8 @@ export default async function DashboardPage({
 
       {/* Payment split + Activity highlights */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Payment Split</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Payment Split</h2>
           <div className="space-y-3 text-sm">
             {(
               [
@@ -430,8 +430,8 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Activity Highlights</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Activity Highlights</h2>
           {!hasActivity ? (
             <div className="flex flex-col items-center py-6 text-center text-sm text-black/40">
               <span>No voids, returns, adjustments, or cash variances in this period.</span>
@@ -451,7 +451,7 @@ export default async function DashboardPage({
                 </div>
               )}
               {todayAdj.map((adj: any, i: number) => (
-                <div key={i} className="flex justify-between rounded-lg bg-accentSoft px-3 py-2 text-xs">
+                <div key={i} className="flex flex-col gap-1 rounded-lg bg-accentSoft px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-accent">
                     Stock adj · {adj.product.name} · {adj.direction} {adj.qtyBase}
                   </span>
@@ -473,8 +473,8 @@ export default async function DashboardPage({
 
       {/* Debtor Ageing + Top Debtors */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Debtor Ageing</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Debtor Ageing</h2>
           <div className="space-y-2 text-sm">
             {bucketKeys.map((bucket) => (
               <div key={bucket} className="flex justify-between">
@@ -499,16 +499,16 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Top Debtors</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Debtors</h2>
           <div className="space-y-2 text-sm">
             {topDebtorList.length === 0 ? (
               <div className="py-4 text-center text-black/40">No outstanding debts</div>
             ) : (
               topDebtorList.map((d) => (
-                <div key={d.name} className="flex justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+                <div key={d.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                   <span>{d.name}</span>
-                  <span className="font-semibold text-rose-600">{formatMoney(d.balance, currency)}</span>
+                  <span className="font-semibold text-rose-600 sm:text-right">{formatMoney(d.balance, currency)}</span>
                 </div>
               ))
             )}
@@ -518,9 +518,9 @@ export default async function DashboardPage({
 
       {/* Low Stock + Best Sellers */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-6">
+        <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-display font-semibold">Low Stock Alerts</h2>
+            <h2 className="text-base font-display font-semibold sm:text-lg">Low Stock Alerts</h2>
             <a href="/reports/reorder-suggestions" className="text-xs text-black/40 hover:text-black/70">
               Reorder →
             </a>
@@ -553,14 +553,14 @@ export default async function DashboardPage({
                   packagingConversion: packaging?.conversionToBase,
                 });
                 return (
-                  <div key={balance.id} className="flex justify-between rounded-lg border border-rose-100 bg-rose-50 px-3 py-2">
+                  <div key={balance.id} className="flex flex-col gap-1 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <span className="font-medium">{balance.product.name}</span>
                       {balance.product.reorderQtyBase > 0 && (
                         <span className="ml-2 text-xs text-black/40">reorder {balance.product.reorderQtyBase}</span>
                       )}
                     </div>
-                    <span className="font-semibold text-rose-600">{mixed}</span>
+                    <span className="font-semibold text-rose-600 sm:text-right">{mixed}</span>
                   </div>
                 );
               })
@@ -568,8 +568,8 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        <div className="card p-6">
-          <h2 className="mb-4 text-lg font-display font-semibold">Top Revenue Products</h2>
+        <div className="card p-4 sm:p-6">
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Revenue Products</h2>
           <div className="space-y-2 text-sm">
             {bestItems.length === 0 ? (
               <div className="py-6 text-center animate-fade-in-up">
@@ -595,12 +595,12 @@ export default async function DashboardPage({
                   packagingConversion: packaging?.conversionToBase,
                 });
                 return (
-                  <div key={item.name} className="flex items-center justify-between rounded-lg border border-black/5 bg-white px-3 py-2">
+                  <div key={item.name} className="flex flex-col gap-1 rounded-lg border border-black/5 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <span className="font-medium">{item.name}</span>
                       <span className="ml-2 text-xs text-black/40">{mixed}</span>
                     </div>
-                    <span className="font-semibold text-emerald-700">{formatMoney(item.revenue, currency)}</span>
+                    <span className="font-semibold text-emerald-700 sm:text-right">{formatMoney(item.revenue, currency)}</span>
                   </div>
                 );
               })

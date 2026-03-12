@@ -197,7 +197,7 @@ export default async function ReorderSuggestionsPage({
           <ReportActionGroup>
             <a
               href={`?${baseSearchParams}&group=${groupBySupplier ? '' : 'supplier'}`}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`flex w-full justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:w-auto sm:py-1.5 ${
                 groupBySupplier ? 'bg-accent text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -207,8 +207,8 @@ export default async function ReorderSuggestionsPage({
         }
       />
 
-      <div className="card p-4">
-        <form className="grid gap-4 md:grid-cols-4">
+      <div className="card p-3.5 sm:p-4">
+        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="label">Store</label>
             <select name="storeId" className="input" defaultValue={selectedStoreId}>
@@ -245,7 +245,7 @@ export default async function ReorderSuggestionsPage({
       ) : supplierGroups ? (
         <div className="space-y-6">
           {supplierGroups.map(([supplierName, items]) => (
-            <div key={supplierName} className="card overflow-x-auto p-6">
+            <div key={supplierName} className="card overflow-hidden p-4 sm:p-6">
               <ReportSectionHeader
                 title={supplierName}
                 trailing={<Badge tone="neutral">{items.length} item{items.length !== 1 ? 's' : ''}</Badge>}
@@ -255,7 +255,7 @@ export default async function ReorderSuggestionsPage({
           ))}
         </div>
       ) : (
-        <div className="card overflow-x-auto p-6">
+        <div className="card overflow-hidden p-4 sm:p-6">
           <ReorderTable items={suggestions} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
         </div>
       )}
@@ -281,62 +281,98 @@ function ReorderTable({
   selectedStoreId: string;
 }) {
   return (
-    <table className="table w-full border-separate border-spacing-y-2">
-      <thead>
-        <tr>
-          <th>Product</th>
-          <th>Sold ({lookbackDays}d)</th>
-          <th>Avg / Day</th>
-          <th>On Hand</th>
-          <th>Suggested</th>
-          <th>Coverage</th>
-          <th>Priority</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
+    <>
+      <div className="space-y-3 md:hidden">
         {items.map((item) => (
-          <tr key={item.id} className="rounded-xl bg-white">
-            <td className="px-3 py-3 text-sm font-semibold">
-              {item.name}
-              {item.supplierName && (
-                <span className="ml-2 text-xs text-muted">{item.supplierName}</span>
-              )}
-            </td>
-            <td className="px-3 py-3 text-sm">{item.soldQty}</td>
-            <td className="px-3 py-3 text-sm">{item.avgDailyDemand.toFixed(2)}</td>
-            <td className="px-3 py-3 text-sm">{item.onHandLabel}</td>
-            <td className="px-3 py-3 text-sm font-semibold">{item.suggestionLabel}</td>
-            <td className="px-3 py-3 text-sm">
-              {Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}
-            </td>
-            <td className="px-3 py-3 text-sm">
+          <div key={item.id} className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink">{item.name}</p>
+                {item.supplierName ? <p className="mt-1 text-xs text-muted">{item.supplierName}</p> : null}
+              </div>
               <Badge tone={urgencyTone[item.urgency]}>{item.urgency}</Badge>
-            </td>
-            <td className="px-3 py-3 text-sm">
-              {item.pendingQty > 0 ? (
-                <Badge tone="info">{item.pendingQty} ordered</Badge>
-              ) : null}
-            </td>
-            <td className="px-3 py-3 text-sm">
-              {item.suggestedQty > 0 && item.pendingQty === 0 && (
-                <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }}>
-                  <input type="hidden" name="productId" value={item.id} />
-                  <input type="hidden" name="qtyBase" value={item.suggestedQty} />
-                  <input type="hidden" name="storeId" value={selectedStoreId} />
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-900 transition-colors"
-                  >
-                    Mark Ordered
-                  </button>
-                </form>
-              )}
-            </td>
-          </tr>
+            </div>
+            <div className="mt-3 grid gap-2 text-sm">
+              <div className="flex items-center justify-between gap-3"><span className="text-muted">Sold ({lookbackDays}d)</span><span className="font-medium">{item.soldQty}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted">Avg / Day</span><span className="font-medium">{item.avgDailyDemand.toFixed(2)}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted">On Hand</span><span className="font-medium text-right">{item.onHandLabel}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted">Suggested</span><span className="font-semibold text-right">{item.suggestionLabel}</span></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-muted">Coverage</span><span className="font-medium">{Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}</span></div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.pendingQty > 0 ? <Badge tone="info">{item.pendingQty} ordered</Badge> : null}
+            </div>
+            {item.suggestedQty > 0 && item.pendingQty === 0 ? (
+              <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }} className="mt-3">
+                <input type="hidden" name="productId" value={item.id} />
+                <input type="hidden" name="qtyBase" value={item.suggestedQty} />
+                <input type="hidden" name="storeId" value={selectedStoreId} />
+                <button type="submit" className="btn-primary w-full justify-center text-sm">Mark Ordered</button>
+              </form>
+            ) : null}
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="table w-full border-separate border-spacing-y-2">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Sold ({lookbackDays}d)</th>
+              <th>Avg / Day</th>
+              <th>On Hand</th>
+              <th>Suggested</th>
+              <th>Coverage</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id} className="rounded-xl bg-white">
+                <td className="px-3 py-3 text-sm font-semibold">
+                  {item.name}
+                  {item.supplierName && (
+                    <span className="ml-2 text-xs text-muted">{item.supplierName}</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-sm">{item.soldQty}</td>
+                <td className="px-3 py-3 text-sm">{item.avgDailyDemand.toFixed(2)}</td>
+                <td className="px-3 py-3 text-sm">{item.onHandLabel}</td>
+                <td className="px-3 py-3 text-sm font-semibold">{item.suggestionLabel}</td>
+                <td className="px-3 py-3 text-sm">
+                  {Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}
+                </td>
+                <td className="px-3 py-3 text-sm">
+                  <Badge tone={urgencyTone[item.urgency]}>{item.urgency}</Badge>
+                </td>
+                <td className="px-3 py-3 text-sm">
+                  {item.pendingQty > 0 ? (
+                    <Badge tone="info">{item.pendingQty} ordered</Badge>
+                  ) : null}
+                </td>
+                <td className="px-3 py-3 text-sm">
+                  {item.suggestedQty > 0 && item.pendingQty === 0 && (
+                    <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }}>
+                      <input type="hidden" name="productId" value={item.id} />
+                      <input type="hidden" name="qtyBase" value={item.suggestedQty} />
+                      <input type="hidden" name="storeId" value={selectedStoreId} />
+                      <button
+                        type="submit"
+                        className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-900"
+                      >
+                        Mark Ordered
+                      </button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
