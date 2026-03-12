@@ -453,8 +453,9 @@ export async function getOwnerDashboardSnapshot(
 
 	const inventoryRows = inventoryBalances
 		.filter((balance) => balance.qtyOnHandBase <= balance.product.reorderPointBase)
-		.map<InventoryRiskRow>((balance) => {
+		.map((balance) => {
 			const state = classifyInventoryState(balance.qtyOnHandBase, balance.product.reorderPointBase);
+			if (state === 'healthy') return null;
 			return {
 				id: balance.id,
 				productId: balance.product.id,
@@ -470,6 +471,7 @@ export async function getOwnerDashboardSnapshot(
 				href: `/products/${balance.product.id}`,
 			};
 		})
+		.filter((row): row is InventoryRiskRow => row !== null)
 		.sort((a, b) => {
 			const rank = { stockout: 0, critical: 1, low: 2 };
 			return rank[a.state] - rank[b.state] || a.currentQtyBase - b.currentQtyBase;
