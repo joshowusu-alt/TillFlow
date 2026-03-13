@@ -135,7 +135,10 @@ input, select, textarea {
 /* =============================================
    RECEIPT STYLES (unchanged)
    ============================================= */
-.receipt { width: 100%; }
+.receipt {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
 .receipt-thermal { max-width: 320px; margin: 0 auto; }
 .receipt-a4 { max-width: 720px; margin: 0 auto; }
 .no-print { display: block; }
@@ -143,6 +146,10 @@ input, select, textarea {
 @media print {
   body { background: #ffffff; }
   .no-print { display: none !important; }
+  .receipt {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .receipt-thermal { max-width: 320px; padding: 0; }
   .receipt-a4 { max-width: 100%; padding: 0; }
 }
