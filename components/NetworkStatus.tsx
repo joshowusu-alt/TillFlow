@@ -20,6 +20,7 @@ export default function NetworkStatus() {
     const [pendingCount, setPendingCount] = useState(0);
     const [syncing, setSyncing] = useState(false);
     const [lastSync, setLastSync] = useState<SyncResult | null>(null);
+    const [lastSyncIssue, setLastSyncIssue] = useState<string | null>(null);
     const [showDetails, setShowDetails] = useState(false);
     const { toast } = useToast();
     const prevOnline = useRef(true);
@@ -46,10 +47,14 @@ export default function NetworkStatus() {
         try {
             const result = await syncOfflineSales();
             setLastSync(result);
+            setLastSyncIssue(result.errors[0] ?? null);
 
             if (result.synced > 0) {
-                await refreshOfflineCache();
                 toast(`\u2713 ${result.synced} sale${result.synced !== 1 ? 's' : ''} synced successfully`, 'success');
+                const refreshResult = await refreshOfflineCache(undefined, { suppressErrors: true });
+                if (!refreshResult.refreshed && refreshResult.error) {
+                    toast('Sales synced, but this device could not refresh its offline catalogue. Reload if products look outdated.', 'info');
+                }
             }
             if (result.failed > 0) {
                 toast(`${result.failed} sale${result.failed !== 1 ? 's' : ''} failed to sync \u2014 check System Health`, 'error');
@@ -58,6 +63,7 @@ export default function NetworkStatus() {
             await checkPending();
         } catch (error) {
             console.error('Manual sync failed:', error);
+            setLastSyncIssue(error instanceof Error ? error.message : 'Sync failed');
             toast('Sync failed. Will retry automatically.', 'error');
         } finally {
             setSyncing(false);
@@ -96,6 +102,7 @@ export default function NetworkStatus() {
             (result) => {
                 setSyncing(false);
                 setLastSync(result);
+                setLastSyncIssue(result.errors[0] ?? null);
                 checkPending();
                 if (result.synced > 0) {
                     toast(`\u2713 ${result.synced} sale${result.synced !== 1 ? 's' : ''} synced`, 'success');
@@ -107,6 +114,7 @@ export default function NetworkStatus() {
             (error) => {
                 setSyncing(false);
                 console.error('Auto-sync error:', error);
+                setLastSyncIssue(error.message);
             }
         );
 
@@ -136,6 +144,11 @@ export default function NetworkStatus() {
             bg: 'bg-red-600',
             text: 'Offline',
             sub: 'Sales saved locally',
+        };
+        if (pendingCount > 0 && lastSyncIssue) return {
+            bg: 'bg-rose-600',
+            text: 'Sync needs attention',
+            sub: `${pendingCount} pending`,
         };
         if (syncing) return {
             bg: 'bg-accent',
@@ -233,6 +246,14 @@ export default function NetworkStatus() {
                                 )}
                             </>
                         )}
+                        {lastSyncIssue ? (
+                            <div className="border-t border-gray-100 pt-2.5">
+                                <div className="text-xs font-medium text-gray-400 mb-1.5">Attention</div>
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    {lastSyncIssue}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
                     {!online && (

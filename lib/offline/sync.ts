@@ -26,6 +26,11 @@ export interface SyncResult {
     errors: string[];
 }
 
+export interface RefreshOfflineCacheResult {
+    refreshed: boolean;
+    error?: Error;
+}
+
 // Sync offline sales to server (batch with one-at-a-time fallback)
 export async function syncOfflineSales(businessId?: string): Promise<SyncResult> {
     const resolvedBusinessId = businessId ?? getClientActiveBusinessId() ?? undefined;
@@ -129,11 +134,14 @@ export async function getPendingSaleCount(): Promise<number> {
 }
 
 // Refresh local cache from server
-export async function refreshOfflineCache(businessId?: string): Promise<void> {
+export async function refreshOfflineCache(
+    businessId?: string,
+    options?: { suppressErrors?: boolean }
+): Promise<RefreshOfflineCacheResult> {
     try {
         const resolvedBusinessId = businessId ?? getClientActiveBusinessId() ?? undefined;
         if (!resolvedBusinessId) {
-            throw new Error('No active business selected');
+            return { refreshed: false };
         }
 
         const response = await fetch(getOfflineCacheUrl(resolvedBusinessId));
@@ -172,9 +180,14 @@ export async function refreshOfflineCache(businessId?: string): Promise<void> {
             cacheTills({ businessId: data.business.id, storeId: data.store.id }, data.tills),
             setActiveOfflineScope({ businessId: data.business.id, storeId: data.store.id })
         ]);
+        return { refreshed: true };
     } catch (error) {
         console.error('Failed to refresh offline cache:', error);
-        throw error;
+        const normalizedError = error instanceof Error ? error : new Error('Failed to refresh offline cache');
+        if (options?.suppressErrors) {
+            return { refreshed: false, error: normalizedError };
+        }
+        throw normalizedError;
     }
 }
 
@@ -222,7 +235,9 @@ export function setupAutoSync(
         onSyncStart();
         try {
             const syncResult = await syncOfflineSales();
-            await refreshOfflineCache();
+            if (syncResult.synced > 0 || syncResult.failed > 0) {
+                await refreshOfflineCache(undefined, { suppressErrors: true });
+            }
             retryCount = 0;
             onSyncComplete(syncResult);
         } catch (error) {
