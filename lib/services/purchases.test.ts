@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, postJournalEntryMock } = vi.hoisted(() => ({
+const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock } = vi.hoisted(() => ({
   prismaMock: {
     business: { findUnique: vi.fn() },
     store: { findFirst: vi.fn() },
     supplier: { findFirst: vi.fn() },
     product: { findFirst: vi.fn() },
     productUnit: { findMany: vi.fn() },
+    account: { findMany: vi.fn() },
     purchaseInvoice: { create: vi.fn() },
+    purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { createMany: vi.fn() },
     stockMovement: { createMany: vi.fn() },
+    inventoryBalance: { upsert: vi.fn() },
+    $executeRaw: vi.fn(),
     $transaction: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
+  ensureChartOfAccountsMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -22,6 +27,7 @@ vi.mock('@/lib/accounting', () => ({
     cogs: '5000', vatReceivable: '1300',
   },
   postJournalEntry: postJournalEntryMock,
+  ensureChartOfAccounts: ensureChartOfAccountsMock,
 }));
 vi.mock('./shared', async () => {
   const actual = await vi.importActual<typeof import('./shared')>('./shared');
@@ -38,6 +44,13 @@ import { createPurchase, type PurchaseLineInput } from './purchases';
 describe('purchase unit conversion', () => {
   const bizId = 'biz-1';
   const storeId = 'store-1';
+  const defaultAccounts = [
+    { code: '1000', id: 'acc-cash' },
+    { code: '1010', id: 'acc-bank' },
+    { code: '1200', id: 'acc-inventory' },
+    { code: '1300', id: 'acc-vat-receivable' },
+    { code: '2000', id: 'acc-ap' },
+  ];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,10 +58,22 @@ describe('purchase unit conversion', () => {
       id: bizId, vatEnabled: false, currency: 'GHS',
     });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
-    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
+    prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
+    prismaMock.$transaction.mockImplementation(async (arg: any) => {
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
+      }
+      return arg(prismaMock);
+    });
     prismaMock.purchaseInvoice.create.mockResolvedValue({
       id: 'inv-1', totalPence: 0, lines: [],
     });
+    prismaMock.purchaseInvoiceLine.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.purchasePayment.createMany.mockResolvedValue({ count: 0 });
+    prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.inventoryBalance.upsert.mockResolvedValue({});
+    prismaMock.$executeRaw.mockResolvedValue(1);
+    ensureChartOfAccountsMock.mockResolvedValue(undefined);
   });
 
   it('converts pack qty to base units: 2 packs of 40 = 80 base units', async () => {
@@ -77,12 +102,11 @@ describe('purchase unit conversion', () => {
       lines,
     });
 
-    // Verify the transaction was called (which processes lineDetails)
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    // The purchase invoice creation should include qtyBase = 2 * 40 = 80
-    const txCallback = prismaMock.$transaction.mock.calls[0][0];
-    // Re-run to inspect — the important thing is it didn't throw
-    expect(prismaMock.productUnit.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchaseInvoiceLine.createMany).toHaveBeenCalledTimes(1);
+    const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
+    expect(createManyCall.data).toHaveLength(1);
+    expect(createManyCall.data[0].qtyBase).toBe(80);
   });
 
   it('converts single unit qty (conversionToBase=1) correctly', async () => {
@@ -111,7 +135,9 @@ describe('purchase unit conversion', () => {
       lines,
     });
 
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchaseInvoiceLine.createMany).toHaveBeenCalledTimes(1);
+    const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
+    expect(createManyCall.data[0].qtyBase).toBe(50);
   });
 
   it('throws when qty is zero or negative', async () => {

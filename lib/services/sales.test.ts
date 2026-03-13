@@ -8,6 +8,7 @@ const {
   postJournalEntryMock,
   fetchInventoryMapMock,
   decrementInventoryBalanceMock,
+  batchDecrementInventoryBalanceMock,
   getOpenShiftForTillMock,
   recordCashDrawerEntryTxMock,
   detectExcessiveDiscountRiskMock,
@@ -23,13 +24,14 @@ const {
     account: { findMany: vi.fn() },
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
-    salesInvoice: { create: vi.fn() },
+    salesInvoice: { create: vi.fn(), count: vi.fn(), aggregate: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
   decrementInventoryBalanceMock: vi.fn(),
+  batchDecrementInventoryBalanceMock: vi.fn(),
   getOpenShiftForTillMock: vi.fn(),
   recordCashDrawerEntryTxMock: vi.fn(),
   detectExcessiveDiscountRiskMock: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock('./shared', async () => {
     ...actual,
     fetchInventoryMap: fetchInventoryMapMock,
     decrementInventoryBalance: decrementInventoryBalanceMock,
+    batchDecrementInventoryBalance: batchDecrementInventoryBalanceMock,
   };
 });
 vi.mock('./cash-drawer', () => ({
@@ -148,6 +151,8 @@ beforeEach(() => {
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
+  prismaMock.salesInvoice.count.mockResolvedValue(0);
+  prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
   prismaMock.salesInvoice.create.mockResolvedValue({
     id: 'inv-1',
@@ -155,6 +160,7 @@ beforeEach(() => {
     lines: [],
     payments: [],
   });
+  prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
   (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
@@ -164,6 +170,7 @@ beforeEach(() => {
     new Map([[PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 300 }]])
   );
   decrementInventoryBalanceMock.mockResolvedValue(97);
+  batchDecrementInventoryBalanceMock.mockResolvedValue(undefined);
   getOpenShiftForTillMock.mockResolvedValue(null);
   recordCashDrawerEntryTxMock.mockResolvedValue(undefined);
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
@@ -217,7 +224,7 @@ describe('createSale — validation', () => {
       createSale(makeBaseInput({
         lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 10 }],
       }))
-    ).rejects.toThrow('Insufficient stock');
+    ).rejects.toThrow('Insufficient on hand');
   });
 });
 
@@ -324,13 +331,11 @@ describe('createSale — payments & stock', () => {
       lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 3 }],
     }));
 
-    // decrementInventoryBalance should be called with qty to subtract
-    expect(decrementInventoryBalanceMock).toHaveBeenCalled();
-    const call = decrementInventoryBalanceMock.mock.calls[0];
-    // args: tx, storeId, productId, qtyBase
+    expect(batchDecrementInventoryBalanceMock).toHaveBeenCalledTimes(1);
+    const call = batchDecrementInventoryBalanceMock.mock.calls[0];
     expect(call[1]).toBe(STORE_ID);
-    expect(call[2]).toBe(PRODUCT_ID);
-    expect(call[3]).toBe(3); // atomic decrement by 3
+    expect(call[2]).toBeInstanceOf(Map);
+    expect(call[2].get(PRODUCT_ID)).toBe(3);
   });
 
   it('posts journal entry for sale', async () => {

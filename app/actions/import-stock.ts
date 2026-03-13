@@ -246,7 +246,19 @@ async function _runImport(
       // support: a single barcode/name collision kills the entire 614-row batch.
       // With skipDuplicates, any colliding row is silently skipped so the rest
       // still commit. We then fetch back the IDs with a single findMany.
-      await prisma.product.createMany({ data: productData, skipDuplicates: true });
+      const supportsSkipDuplicates =
+        !!process.env.POSTGRES_PRISMA_URL ||
+        !!process.env.POSTGRES_URL_NON_POOLING ||
+        process.env.DATABASE_URL?.startsWith('postgres') === true;
+
+      const createManyArgs: { data: typeof productData; skipDuplicates?: boolean } = {
+        data: productData,
+      };
+      if (supportsSkipDuplicates) {
+        createManyArgs.skipDuplicates = true;
+      }
+
+      await (prisma.product.createMany as unknown as (args: typeof createManyArgs) => Promise<unknown>)(createManyArgs);
       const createdProducts = await prisma.product.findMany({
         where: { businessId, name: { in: rowsToCreate.map((r) => r.name) } },
         select: { id: true, name: true },

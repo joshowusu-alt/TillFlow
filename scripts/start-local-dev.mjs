@@ -1,8 +1,11 @@
 import net from 'node:net';
 import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 
 const repoRoot = process.cwd();
+const nodeDir = path.dirname(process.execPath);
+const npmCliPath = path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js');
 const requestedPort = Number.parseInt(process.env.PORT ?? '6200', 10);
 const portWindowSize = 5;
 const candidatePorts = Number.isFinite(requestedPort)
@@ -10,7 +13,9 @@ const candidatePorts = Number.isFinite(requestedPort)
 	: [6200, 6201, 6202, 6203, 6204];
 
 function getNpmCommand() {
-	return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+	return process.platform === 'win32'
+		? { command: process.execPath, prefixArgs: [npmCliPath] }
+		: { command: 'npm', prefixArgs: [] };
 }
 
 function logOpenUrl(port, reason) {
@@ -19,12 +24,36 @@ function logOpenUrl(port, reason) {
 	console.log(`[local-dev] Open TillFlow at ${url}`);
 }
 
+async function clearNextArtifacts(reason) {
+	const nextDir = path.join(repoRoot, '.next');
+	console.warn(`[local-dev] ${reason}`);
+	console.warn(`[local-dev] Clearing stale .next artifacts and retrying once...`);
+	await rm(nextDir, { recursive: true, force: true });
+}
+
+function shouldRetryAfterNextFailure({ code, stderr, durationMs, attempt }) {
+	if (attempt > 1 || code === 0 || durationMs > 20000) {
+		return false;
+	}
+
+	if (process.platform !== 'win32' || !/onedrive/i.test(repoRoot)) {
+		return false;
+	}
+
+	return /EINVAL: invalid argument, readlink/i.test(stderr) && /\.next/i.test(stderr);
+}
+
 function runCommand(command, args) {
 	return new Promise((resolve) => {
 		const child = spawn(command, args, {
 			cwd: repoRoot,
 			stdio: 'inherit',
 			env: process.env,
+		});
+
+		child.on('error', (error) => {
+			console.error(`[local-dev] Failed to start ${command}: ${error instanceof Error ? error.message : error}`);
+			resolve(1);
 		});
 
 		child.on('exit', (code, signal) => {
@@ -40,7 +69,7 @@ function runCommand(command, args) {
 
 async function prepareLocalDev() {
 	const npmCommand = getNpmCommand();
-	const prepareExitCode = await runCommand(npmCommand, ['run', 'dev:prepare']);
+	const prepareExitCode = await runCommand(npmCommand.command, [...npmCommand.prefixArgs, 'run', 'dev:prepare']);
 
 	if (prepareExitCode !== 0) {
 		throw new Error(`Local dev preparation failed with exit code ${prepareExitCode}.`);
@@ -150,23 +179,47 @@ async function main() {
 	logOpenUrl(port, `Starting TillFlow on port ${port}.`);
 
 	const nextBin = path.join(repoRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
-	const child = spawn(process.execPath, [nextBin, 'dev', '-p', String(port)], {
-		cwd: repoRoot,
-		stdio: 'inherit',
-		env: {
-			...process.env,
-			PORT: String(port),
-		},
-	});
 
-	child.on('exit', (code, signal) => {
-		if (signal) {
-			process.kill(process.pid, signal);
+	for (let attempt = 1; attempt <= 2; attempt += 1) {
+		const startedAt = Date.now();
+		const result = await new Promise((resolve) => {
+			let stderr = '';
+			const child = spawn(process.execPath, [nextBin, 'dev', '-p', String(port)], {
+				cwd: repoRoot,
+				stdio: ['inherit', 'inherit', 'pipe'],
+				env: {
+					...process.env,
+					PORT: String(port),
+				},
+			});
+
+			child.stderr?.on('data', (chunk) => {
+				stderr += chunk.toString();
+				process.stderr.write(chunk);
+			});
+
+			child.on('error', (error) => {
+				console.error(`[local-dev] Failed to start Next.js dev server: ${error instanceof Error ? error.message : error}`);
+				resolve({ code: 1, signal: null, stderr, durationMs: Date.now() - startedAt, attempt });
+			});
+
+			child.on('exit', (code, signal) => {
+				resolve({ code: code ?? 0, signal, stderr, durationMs: Date.now() - startedAt, attempt });
+			});
+		});
+
+		if (result.signal) {
+			process.kill(process.pid, result.signal);
 			return;
 		}
 
-		process.exit(code ?? 0);
-	});
+		if (shouldRetryAfterNextFailure(result)) {
+			await clearNextArtifacts('Detected a stale OneDrive .next readlink failure during startup.');
+			continue;
+		}
+
+		process.exit(result.code ?? 0);
+	}
 }
 
 try {
