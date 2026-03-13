@@ -50,7 +50,7 @@ export function LaunchStep({ onNext, onBack }: StepProps) {
       </div>
 
       <h2 className="text-3xl font-bold font-display mb-3">{"You're All Set!"}</h2>
-      <p className="text-black/50 text-lg mb-8">Your store is ready. Time to make your first sale.</p>
+      <p className="text-black/50 text-lg mb-8">Your business is ready. Time to make your first sale.</p>
 
       <div className="space-y-3 text-left mb-8">
         {[

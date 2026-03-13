@@ -20,7 +20,7 @@ export default async function DemoPosPage() {
 
   const store = await prisma.store.findFirst({ where: { businessId: demo.id } });
   if (!store) {
-    return <div className="card p-8 text-center">Demo store not found.</div>;
+    return <div className="card p-8 text-center">Demo business branch not found.</div>;
   }
 
   const [products, categories, inventory] = await Promise.all([
@@ -171,7 +171,7 @@ export default async function DemoPosPage() {
 
           {/* CTA */}
           <div className="rounded-2xl bg-gradient-to-br from-accent to-accent/80 p-6 text-white">
-            <h3 className="mb-2 font-bold text-lg leading-tight">Ready for your store?</h3>
+            <h3 className="mb-2 font-bold text-lg leading-tight">Ready for your business?</h3>
             <p className="mb-4 text-sm text-white/80">
               Get a full instance with multi-branch, WhatsApp alerts, offline mode, and more.
             </p>

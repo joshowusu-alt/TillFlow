@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     let store = await prisma.store.findFirst({ where: { businessId: business.id } });
     if (!store) {
       store = await prisma.store.create({
-        data: { businessId: business.id, name: 'Main Store', address: 'High Street' },
+        data: { businessId: business.id, name: 'Main Branch', address: 'High Street' },
       });
       results.push('Created store');
     } else {

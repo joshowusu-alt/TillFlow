@@ -37,11 +37,11 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
               </span>
               Demo Mode
             </div>
-            <p className="text-sm text-black/60">Create a demo store with Ghana-ready sample products and Mobile Money flows so you can explore TillFlow instantly.</p>
+            <p className="text-sm text-black/60">Create a demo business with Ghana-ready sample products and Mobile Money flows so you can explore TillFlow instantly.</p>
           </div>
         ) : (
           <div className="mt-4">
-            <p className="text-sm text-black/60">Create your store from scratch — your products, your prices, your currency.</p>
+            <p className="text-sm text-black/60">Create your business from scratch — your products, your prices, your currency.</p>
           </div>
         )}
       </div>
@@ -56,7 +56,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
         <input type="hidden" name="mode" value={isDemo ? 'demo' : 'fresh'} />
 
         <div>
-          <label className="label">Business / Store Name</label>
+          <label className="label">Business Name</label>
           <input
             name="businessName"
             type="text"
@@ -103,12 +103,12 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
 
         {!isDemo && (
           <div className="rounded-xl bg-accentSoft border border-accent/10 px-4 py-3 text-sm text-accent">
-            <span className="font-semibold">Clean start:</span> Your store will be created empty so you can add your own products from scratch.
+            <span className="font-semibold">Clean start:</span> Your business will be created empty so you can add your own products from scratch.
           </div>
         )}
 
-        <SubmitButton loadingText={isDemo ? 'Setting up demo...' : 'Creating your store...'}>
-          {isDemo ? 'Create Demo Store' : 'Create My Business'}
+        <SubmitButton loadingText={isDemo ? 'Setting up demo...' : 'Creating your business...'}>
+          {isDemo ? 'Create Demo Business' : 'Create My Business'}
         </SubmitButton>
       </form>
 

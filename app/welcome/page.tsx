@@ -121,7 +121,7 @@ export default function WelcomePage() {
             </div>
 
             <h1 className="text-5xl font-bold font-display tracking-tight text-gray-900 sm:text-6xl lg:text-7xl">
-              Run Your Store{' '}
+              Run Your Business{' '}
               <span className="bg-gradient-to-r from-accent to-accent/80 bg-clip-text text-transparent">
                 Like a Pro
               </span>
@@ -254,7 +254,7 @@ export default function WelcomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold font-display sm:text-4xl">
-              Everything Your Store Needs
+              Everything Your Business Needs
             </h2>
             <p className="mt-4 text-lg text-black/50">
               From your first sale to your month-end reports, one system handles it all.

@@ -30,7 +30,7 @@ async function ensureDemoBusinessInternal() {
 
   // Create a default store
   const store = await prisma.store.create({
-    data: { businessId: demo.id, name: 'Demo Main Store', address: 'Accra, Ghana' },
+    data: { businessId: demo.id, name: 'Demo Main Branch', address: 'Accra, Ghana' },
   });
 
   // Create categories

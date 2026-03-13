@@ -52,7 +52,7 @@ export async function getReadiness(): Promise<ReadinessData> {
   const steps: ReadinessStep[] = [
     {
       key: 'store',
-      title: 'Configure your store',
+      title: 'Configure your business',
       subtitle: 'Add your address, phone & receipt branding',
       benefit: 'Professional receipts build customer trust',
       estimatedMinutes: 2,

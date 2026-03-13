@@ -60,7 +60,7 @@ export async function register(formData: FormData) {
     const store = await tx.store.create({
       data: {
         businessId: business.id,
-        name: 'Main Store',
+        name: 'Main Branch',
       },
     });
 
