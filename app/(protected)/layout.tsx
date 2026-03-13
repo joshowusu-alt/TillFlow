@@ -2,6 +2,7 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import TopNav from '@/components/TopNav';
+import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
@@ -89,6 +90,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen">
+      <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
         mode={(business?.mode as any) ?? 'SIMPLE'}
