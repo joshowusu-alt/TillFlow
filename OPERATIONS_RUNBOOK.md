@@ -1,5 +1,11 @@
 # TillFlow Operations Runbook
 
+## Live Pilot Store Support
+
+For first-store supermarket incidents and cashier-support procedures, use:
+
+- `docs/SUPERMARKET_PILOT_SUPPORT_RUNBOOK.md`
+
 ## 1) CI/CD Gates
 
 Required checks are in `.github/workflows/ci.yml`:
