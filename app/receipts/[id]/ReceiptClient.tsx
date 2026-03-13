@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLastReceiptStorageKey } from '@/lib/business-scope';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { openCashDrawer, isCashDrawerEnabled } from '@/lib/hardware';
@@ -91,6 +91,31 @@ export default function ReceiptClient({
   );
   const lastReceiptStorageKey = getLastReceiptStorageKey({ businessId: business.id, storeId: store.id });
 
+  const handleDirectPrint = useCallback(async () => {
+    try {
+      setDirectStatus('printing');
+      setDirectError(null);
+      await ensureQzConnection();
+      const bytes = buildEscPosReceipt({
+        business,
+        store,
+        cashier,
+        customer,
+        invoice,
+        lines,
+        payments,
+        template
+      });
+      const hex = toHexString(bytes);
+      await printRawEscPos(business.printerName ?? null, hex);
+      setDirectStatus('success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Direct print failed.';
+      setDirectError(message);
+      setDirectStatus('failed');
+    }
+  }, [business, cashier, customer, invoice, lines, payments, store, template]);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(lastReceiptStorageKey, invoice.id);
@@ -110,33 +135,15 @@ export default function ReceiptClient({
       return;
     }
 
-    const directPrint = async () => {
-      try {
-        setDirectStatus('printing');
-        setDirectError(null);
-        await ensureQzConnection();
-        const bytes = buildEscPosReceipt({
-          business,
-          store,
-          cashier,
-          customer,
-          invoice,
-          lines,
-          payments,
-          template
-        });
-        const hex = toHexString(bytes);
-        await printRawEscPos(business.printerName ?? null, hex);
-        setDirectStatus('success');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Direct print failed.';
-        setDirectError(message);
-        setDirectStatus('failed');
-      }
-    };
+    const isAutomationBrowser = navigator.webdriver || /HeadlessChrome/i.test(navigator.userAgent);
+    if (isAutomationBrowser) {
+      setDirectStatus('idle');
+      setDirectError(null);
+      return;
+    }
 
-    directPrint();
-  }, [business, cashier, customer, invoice, lines, payments, printMode, store, template]);
+    handleDirectPrint();
+  }, [handleDirectPrint, printMode]);
 
   return (
     <div
@@ -176,6 +183,17 @@ export default function ReceiptClient({
           >
             Open Drawer
           </button>
+          {printMode === 'DIRECT_ESC_POS' && directStatus === 'failed' ? (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => {
+                void handleDirectPrint();
+              }}
+            >
+              Retry Direct Print
+            </button>
+          ) : null}
         </div>
         <div className="mt-3 text-xs text-emerald-700">
           {printMode === 'DIRECT_ESC_POS' ? 'Direct print enabled' : 'Browser print enabled'}

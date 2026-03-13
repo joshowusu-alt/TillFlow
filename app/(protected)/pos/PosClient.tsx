@@ -7,18 +7,19 @@ import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
+import {
+  useMomoCollection,
+  type CollectionNetwork,
+  type MomoCollectionState,
+} from '@/hooks/useMomoCollection';
 import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
 import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
-import { calculateCheckoutSummary, parseCurrencyToPence } from '@/lib/payments/pos-checkout';
+import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { getEnabledPosPaymentMethods, getMomoManualGuidance } from '@/lib/payments/pos-momo';
 import { calculateCompactDropdownViewport, handleScannerEnter, resetScannerBuffer, updateScannerBufferState } from '@/lib/payments/pos-scanner';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
-import {
-  checkMomoCollectionStatusAction,
-  initiateMomoCollectionAction,
-} from '@/app/actions/mobile-money';
 import {
   getLastReceiptStorageKey,
   getParkedCartsStorageKey,
@@ -104,8 +105,6 @@ type CartLine = {
 
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
 type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
-type CollectionNetwork = 'MTN' | 'TELECEL' | 'AIRTELTIGO' | 'UNKNOWN';
-type MomoCollectionState = 'IDLE' | 'PENDING' | 'CONFIRMED' | 'FAILED' | 'TIMEOUT';
 type SaleCompletionSnapshot = PosCompletionSnapshot<
   CartLine,
   ProductDto,
@@ -142,16 +141,29 @@ export default function PosClient({
   const [cashTendered, setCashTendered] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
-  const [momoPaid, setMomoPaid] = useState('');
-  const [momoRef, setMomoRef] = useState('');
-  const [momoPayerMsisdn, setMomoPayerMsisdn] = useState('');
-  const [momoNetwork, setMomoNetwork] = useState<CollectionNetwork>('MTN');
-  const [momoCollectionId, setMomoCollectionId] = useState('');
-  const [momoCollectionStatus, setMomoCollectionStatus] = useState<MomoCollectionState>('IDLE');
-  const [momoCollectionError, setMomoCollectionError] = useState<string | null>(null);
-  const [momoIdempotencyKey, setMomoIdempotencyKey] = useState('');
-  const [momoCollectionSignature, setMomoCollectionSignature] = useState('');
-  const [isInitiatingMomo, setIsInitiatingMomo] = useState(false);
+  const {
+    momoPaid,
+    setMomoPaid,
+    momoRef,
+    setMomoRef,
+    momoPayerMsisdn,
+    setMomoPayerMsisdn,
+    momoNetwork,
+    setMomoNetwork,
+    momoCollectionId,
+    setMomoCollectionId,
+    momoCollectionStatus,
+    setMomoCollectionStatus,
+    momoCollectionError,
+    setMomoCollectionError,
+    momoIdempotencyKey,
+    setMomoIdempotencyKey,
+    momoCollectionSignature,
+    setMomoCollectionSignature,
+    isInitiatingMomo,
+    resetMomoCollection,
+    handleInitiateMomoCollection,
+  } = useMomoCollection({ storeId: store.id });
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
@@ -266,7 +278,7 @@ export default function PosClient({
     setUndoStack((prev) => prev.slice(0, -1));
     setCart(previousCart);
     playBeep(true);
-  }, [undoStack, playBeep]);
+  }, [undoStack, playBeep, setCart]);
 
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
@@ -279,39 +291,6 @@ export default function PosClient({
     setQuickAddOpen(true);
     setQuickAddBarcode(barcodeValue ?? '');
   }, []);
-
-  const resetMomoCollection = useCallback(() => {
-    setMomoCollectionId('');
-    setMomoCollectionStatus('IDLE');
-    setMomoCollectionError(null);
-    setMomoIdempotencyKey('');
-    setMomoCollectionSignature('');
-    setMomoRef('');
-  }, []);
-
-  const applyMomoStatus = useCallback(
-    (next: {
-      status: string;
-      providerStatus?: string | null;
-      providerReference?: string | null;
-      providerTransactionId?: string | null;
-      failureReason?: string | null;
-    }) => {
-      const normalized = (next.status || 'IDLE').toUpperCase() as MomoCollectionState;
-      setMomoCollectionStatus(normalized);
-      const providerRef = next.providerTransactionId ?? next.providerReference ?? '';
-      if (providerRef) setMomoRef(providerRef);
-      if (normalized === 'FAILED' || normalized === 'TIMEOUT') {
-        setMomoCollectionError(
-          next.failureReason ||
-          `MoMo collection ${normalized.toLowerCase()}. You can retry safely.`
-        );
-      } else if (normalized === 'CONFIRMED') {
-        setMomoCollectionError(null);
-      }
-    },
-    []
-  );
 
   useEffect(() => {
     barcodeRef.current?.focus();
@@ -364,7 +343,16 @@ export default function PosClient({
     if (options?.playSuccessTone) {
       playBeep(true);
     }
-  }, [clearSavedCart, playBeep, resetMomoCollection]);
+  }, [
+    clearSavedCart,
+    playBeep,
+    resetMomoCollection,
+    setCart,
+    setCustomerId,
+    setMomoNetwork,
+    setMomoPaid,
+    setMomoPayerMsisdn,
+  ]);
 
   const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
     setProductOptions(snapshot.productOptions);
@@ -393,7 +381,20 @@ export default function PosClient({
     setUndoStack(snapshot.undoStack);
     setSaleError(errorMessage);
     playBeep(false);
-  }, [playBeep]);
+  }, [
+    playBeep,
+    setCart,
+    setCustomerId,
+    setMomoCollectionError,
+    setMomoCollectionId,
+    setMomoCollectionSignature,
+    setMomoCollectionStatus,
+    setMomoIdempotencyKey,
+    setMomoNetwork,
+    setMomoPaid,
+    setMomoPayerMsisdn,
+    setMomoRef,
+  ]);
 
   const handleParkCurrentCart = useCallback((label: string) => {
     const result = parkCurrentCart({ cart, customerId, label });
@@ -415,103 +416,7 @@ export default function PosClient({
     setCustomerId(result.restoredCustomerId);
     setNextCustomerReady(false);
     playBeep(true);
-  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart]);
-
-  const handleInitiateMomoCollection = useCallback(async () => {
-    if (isInitiatingMomo) return;
-
-    const amountPence = Math.max(0, Math.round(parseCurrencyToPence(momoPaid)));
-    const payer = momoPayerMsisdn.trim();
-    if (amountPence <= 0) {
-      setMomoCollectionError('Enter a valid MoMo amount before requesting collection.');
-      return;
-    }
-    if (!payer) {
-      setMomoCollectionError('Enter the payer phone number to request collection.');
-      return;
-    }
-
-    setIsInitiatingMomo(true);
-    setMomoCollectionError(null);
-    setMomoCollectionStatus('PENDING');
-
-    const nextIdempotencyKey =
-      momoIdempotencyKey ||
-      (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
-
-    try {
-      const result = await initiateMomoCollectionAction({
-        storeId: store.id,
-        amountPence,
-        payerMsisdn: payer,
-        network: momoNetwork,
-        idempotencyKey: nextIdempotencyKey,
-      });
-
-      if (!result.success) {
-        setMomoCollectionStatus('FAILED');
-        setMomoCollectionError(result.error);
-        return;
-      }
-
-      setMomoIdempotencyKey(nextIdempotencyKey);
-      setMomoCollectionId(result.data.collectionId);
-      setMomoCollectionSignature(
-        `${amountPence}|${momoNetwork}|${momoPayerMsisdn.trim().replace(/\s+/g, '')}`
-      );
-      applyMomoStatus({
-        status: result.data.status,
-        providerStatus: result.data.providerStatus,
-        providerReference: result.data.providerReference,
-        providerTransactionId: result.data.providerTransactionId,
-        failureReason: result.data.failureReason,
-      });
-    } catch {
-      setMomoCollectionStatus('FAILED');
-      setMomoCollectionError('Unable to initiate MoMo collection. Please retry.');
-    } finally {
-      setIsInitiatingMomo(false);
-    }
-  }, [
-    applyMomoStatus,
-    isInitiatingMomo,
-    momoIdempotencyKey,
-    momoNetwork,
-    momoPaid,
-    momoPayerMsisdn,
-    parseCurrencyToPence,
-    store.id,
-  ]);
-
-  useEffect(() => {
-    if (!momoCollectionId) return;
-    if (momoCollectionStatus !== 'PENDING') return;
-
-    let active = true;
-    const poll = async () => {
-      const result = await checkMomoCollectionStatusAction(momoCollectionId);
-      if (!active || !result.success) return;
-      applyMomoStatus({
-        status: result.data.status,
-        providerStatus: result.data.providerStatus,
-        providerReference: result.data.providerReference,
-        providerTransactionId: result.data.providerTransactionId,
-        failureReason: result.data.failureReason,
-      });
-    };
-
-    const interval = window.setInterval(() => {
-      poll().catch(() => null);
-    }, 5000);
-
-    poll().catch(() => null);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [applyMomoStatus, momoCollectionId, momoCollectionStatus]);
+  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart, setCart, setCustomerId]);
 
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
@@ -667,7 +572,7 @@ export default function PosClient({
     }
     setStockAlert(null);
     return desiredQty;
-  }, [formatAvailable, getAvailableBase, getProduct, getUnit]);
+  }, [getAvailableBase, getProduct, getUnit]);
 
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
 
@@ -709,7 +614,7 @@ export default function PosClient({
     if (activeLineId === lineId) {
       setActiveLineId(null);
     }
-  }, [activeLineId, cart, clearQtyDraft, pushUndo]);
+  }, [activeLineId, cart, clearQtyDraft, pushUndo, setCart]);
 
   const commitLineQty = (line: CartLine) => {
     const draft = qtyDrafts[line.id];
@@ -804,7 +709,7 @@ export default function PosClient({
         { id, ...line, qtyInUnit: clampedQty, discountType: 'NONE', discountValue: '' }
       ];
     });
-  }, [cart, clampQtyInUnit, router]);
+  }, [cart, clampQtyInUnit, router, setCart]);
   const {
     stagedProduct,
     stagedUnitId,

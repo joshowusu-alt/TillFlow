@@ -50,11 +50,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,  // unsafe-eval dev-only
+              `script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com${isDev ? " 'unsafe-eval'" : ''}`,  // unsafe-eval dev-only
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob:",
-              "connect-src 'self' https://*.neon.tech wss://*.neon.tech",
+              "connect-src 'self' https://*.neon.tech wss://*.neon.tech ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",

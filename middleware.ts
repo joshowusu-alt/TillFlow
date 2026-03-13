@@ -26,6 +26,17 @@ function forbiddenResponse(request: NextRequest, reason: string) {
     return new NextResponse('Forbidden', { status: 403 });
 }
 
+function hasSameHostReferer(request: NextRequest) {
+    const referer = request.headers.get('referer');
+    if (!referer) return false;
+
+    try {
+        return new URL(referer).host === request.nextUrl.host;
+    } catch {
+        return false;
+    }
+}
+
 export function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const requestOrigin = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
@@ -35,26 +46,31 @@ export function middleware(request: NextRequest) {
     if (MUTATING_METHODS.has(request.method)) {
         const origin = request.headers.get('origin');
         const secFetchSite = request.headers.get('sec-fetch-site');
+        const sameHostReferer = hasSameHostReferer(request);
 
         // Compare host only (ignore protocol) because Next.js production mode
         // may report https: for request.nextUrl.protocol even when the actual
         // server is running on plain HTTP (e.g. CI perf monitor).
-        if (origin) {
+        if (origin && origin !== 'null') {
             try {
                 const originHost = new URL(origin).host;
                 if (originHost !== request.nextUrl.host) {
                     return forbiddenResponse(request, 'origin_mismatch');
                 }
             } catch {
-                return forbiddenResponse(request, 'origin_mismatch');
+                if (!sameHostReferer) {
+                    return forbiddenResponse(request, 'origin_mismatch');
+                }
             }
+        } else if (origin === 'null' && !sameHostReferer) {
+            return forbiddenResponse(request, 'null_origin');
         }
 
         // Some legitimate browser contexts (including top-level form submits,
         // installed/PWA launches, and browser automation) can send
         // `sec-fetch-site: none`. Once the Origin host matches, that request is
         // still same-origin enough for our CSRF model.
-        if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite)) {
+        if (secFetchSite && !['same-origin', 'same-site', 'none'].includes(secFetchSite) && !sameHostReferer) {
             return forbiddenResponse(request, 'cross_site_request');
         }
     }
