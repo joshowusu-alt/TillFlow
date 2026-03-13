@@ -58,6 +58,30 @@ export type InflatedProduct = {
   defaultCostBasePence: number;
 };
 
+export type CatalogSanityCheck = {
+  key: string;
+  label: string;
+  severity: 'blocking' | 'warning';
+  count: number;
+  helper: string;
+};
+
+export type CatalogSanityRow = {
+  id: string;
+  name: string;
+  sellingPriceBasePence: number;
+  defaultCostBasePence: number;
+  barcode: string | null;
+  reasons: string[];
+};
+
+export type CatalogSanitySnapshot = {
+  blockingCount: number;
+  warningCount: number;
+  checks: CatalogSanityCheck[];
+  rows: CatalogSanityRow[];
+};
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -108,6 +132,59 @@ export function buildProductUnitCreates(
   ].filter(Boolean) as { unitId: string; isBaseUnit: boolean; conversionToBase: number }[];
 }
 
+function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
+  return {
+    ...data,
+    name: data.name.trim(),
+    sku: data.sku?.trim() ? data.sku.trim() : null,
+    barcode: data.barcode?.trim() ? data.barcode.trim() : null,
+    categoryId: data.categoryId?.trim() ? data.categoryId.trim() : null,
+    imageUrl: data.imageUrl?.trim() ? data.imageUrl.trim() : null,
+    baseUnitId: data.baseUnitId.trim(),
+    packagingUnitId: data.packagingUnitId?.trim() ?? '',
+  };
+}
+
+function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateProductInput {
+  return {
+    ...input,
+    name: input.name.trim(),
+    sku: input.sku?.trim() ? input.sku.trim() : null,
+    barcode: input.barcode?.trim() ? input.barcode.trim() : null,
+    baseUnitId: input.baseUnitId.trim(),
+    packagingUnitId: input.packagingUnitId?.trim() ? input.packagingUnitId.trim() : null,
+  };
+}
+
+function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion'>) {
+  if (!data.name.trim()) {
+    throw new Error('Please enter a product name.');
+  }
+  if (!data.baseUnitId.trim()) {
+    throw new Error('Please select a base unit.');
+  }
+  if (data.sellingPriceBasePence <= 0) {
+    throw new Error('Selling price must be greater than zero.');
+  }
+  if (data.defaultCostBasePence < 0) {
+    throw new Error('Default cost cannot be negative.');
+  }
+  if (data.vatRateBps < 0) {
+    throw new Error('VAT rate cannot be negative.');
+  }
+  if (data.promoBuyQty < 0 || data.promoGetQty < 0) {
+    throw new Error('Promo quantities cannot be negative.');
+  }
+  if (data.packagingUnitId) {
+    if (data.packagingUnitId === data.baseUnitId) {
+      throw new Error('Packaging unit must be different from the base unit.');
+    }
+    if (data.packagingConversion <= 1) {
+      throw new Error('Units per pack/carton must be greater than 1 when a packaging unit is selected.');
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
@@ -120,26 +197,29 @@ export async function createProduct(
   businessId: string,
   data: ProductCoreInput
 ): Promise<{ id: string; name: string }> {
-  await assertNoDuplicateProductName(businessId, data.name);
+  const normalized = normalizeCoreProductInput(data);
+  validateProductValues(normalized);
+
+  await assertNoDuplicateProductName(businessId, normalized.name);
 
   const product = await prisma.product.create({
     data: {
       businessId,
-      name: data.name,
-      sku: data.sku,
-      barcode: data.barcode,
-      categoryId: data.categoryId,
-      imageUrl: data.imageUrl,
-      sellingPriceBasePence: data.sellingPriceBasePence,
-      defaultCostBasePence: data.defaultCostBasePence,
-      vatRateBps: data.vatRateBps,
-      promoBuyQty: data.promoBuyQty,
-      promoGetQty: data.promoGetQty,
+      name: normalized.name,
+      sku: normalized.sku,
+      barcode: normalized.barcode,
+      categoryId: normalized.categoryId,
+      imageUrl: normalized.imageUrl,
+      sellingPriceBasePence: normalized.sellingPriceBasePence,
+      defaultCostBasePence: normalized.defaultCostBasePence,
+      vatRateBps: normalized.vatRateBps,
+      promoBuyQty: normalized.promoBuyQty,
+      promoGetQty: normalized.promoGetQty,
       productUnits: {
         create: buildProductUnitCreates(
-          data.baseUnitId,
-          data.packagingUnitId,
-          data.packagingConversion
+          normalized.baseUnitId,
+          normalized.packagingUnitId,
+          normalized.packagingConversion
         ),
       },
     },
@@ -160,6 +240,9 @@ export async function updateProduct(
   businessId: string,
   data: ProductCoreInput
 ): Promise<string> {
+  const normalized = normalizeCoreProductInput(data);
+  validateProductValues(normalized);
+
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
     select: { id: true },
@@ -168,22 +251,22 @@ export async function updateProduct(
     throw new Error('Product not found. It may have been removed.');
   }
 
-  await assertNoDuplicateProductName(businessId, data.name, existing.id);
+  await assertNoDuplicateProductName(businessId, normalized.name, existing.id);
 
   await prisma.$transaction(async (tx) => {
     await tx.product.update({
       where: { id: existing.id },
       data: {
-        name: data.name,
-        sku: data.sku,
-        barcode: data.barcode,
-        categoryId: data.categoryId,
-        imageUrl: data.imageUrl,
-        sellingPriceBasePence: data.sellingPriceBasePence,
-        defaultCostBasePence: data.defaultCostBasePence,
-        vatRateBps: data.vatRateBps,
-        promoBuyQty: data.promoBuyQty,
-        promoGetQty: data.promoGetQty,
+        name: normalized.name,
+        sku: normalized.sku,
+        barcode: normalized.barcode,
+        categoryId: normalized.categoryId,
+        imageUrl: normalized.imageUrl,
+        sellingPriceBasePence: normalized.sellingPriceBasePence,
+        defaultCostBasePence: normalized.defaultCostBasePence,
+        vatRateBps: normalized.vatRateBps,
+        promoBuyQty: normalized.promoBuyQty,
+        promoGetQty: normalized.promoGetQty,
       },
     });
 
@@ -192,8 +275,8 @@ export async function updateProduct(
     });
 
     // ── Base unit ──────────────────────────────────────────────────────────
-    if (data.baseUnitId) {
-      const baseUnit = existingUnits.find((u) => u.unitId === data.baseUnitId);
+    if (normalized.baseUnitId) {
+      const baseUnit = existingUnits.find((u) => u.unitId === normalized.baseUnitId);
       if (baseUnit) {
         await tx.productUnit.update({
           where: { id: baseUnit.id },
@@ -203,7 +286,7 @@ export async function updateProduct(
         await tx.productUnit.create({
           data: {
             productId: existing.id,
-            unitId: data.baseUnitId,
+            unitId: normalized.baseUnitId,
             isBaseUnit: true,
             conversionToBase: 1,
           },
@@ -211,30 +294,30 @@ export async function updateProduct(
       }
       // Ensure no other unit is accidentally marked as the base
       await tx.productUnit.updateMany({
-        where: { productId: existing.id, unitId: { not: data.baseUnitId } },
+        where: { productId: existing.id, unitId: { not: normalized.baseUnitId } },
         data: { isBaseUnit: false },
       });
     }
 
     // ── Packaging unit ─────────────────────────────────────────────────────
     if (
-      data.packagingUnitId &&
-      data.packagingConversion > 1 &&
-      data.packagingUnitId !== data.baseUnitId
+      normalized.packagingUnitId &&
+      normalized.packagingConversion > 1 &&
+      normalized.packagingUnitId !== normalized.baseUnitId
     ) {
-      const packagingUnit = existingUnits.find((u) => u.unitId === data.packagingUnitId);
+      const packagingUnit = existingUnits.find((u) => u.unitId === normalized.packagingUnitId);
       if (packagingUnit) {
         await tx.productUnit.update({
           where: { id: packagingUnit.id },
-          data: { isBaseUnit: false, conversionToBase: data.packagingConversion },
+          data: { isBaseUnit: false, conversionToBase: normalized.packagingConversion },
         });
       } else {
         await tx.productUnit.create({
           data: {
             productId: existing.id,
-            unitId: data.packagingUnitId,
+            unitId: normalized.packagingUnitId,
             isBaseUnit: false,
-            conversionToBase: data.packagingConversion,
+            conversionToBase: normalized.packagingConversion,
           },
         });
       }
@@ -243,7 +326,7 @@ export async function updateProduct(
         where: {
           productId: existing.id,
           isBaseUnit: false,
-          unitId: { not: data.packagingUnitId },
+          unitId: { not: normalized.packagingUnitId },
         },
       });
     } else {
@@ -269,14 +352,24 @@ export async function quickCreateProduct(
   input: QuickCreateProductInput,
   db: any = prisma
 ): Promise<QuickCreateProductResult> {
-  const name = input.name.trim();
-  if (!name) throw new Error('Please enter a product name.');
+  const normalized = normalizeQuickCreateInput(input);
+  validateProductValues({
+    name: normalized.name,
+    sellingPriceBasePence: normalized.sellingPriceBasePence,
+    defaultCostBasePence: normalized.defaultCostBasePence,
+    vatRateBps: normalized.vatRateBps,
+    promoBuyQty: 0,
+    promoGetQty: 0,
+    baseUnitId: normalized.baseUnitId,
+    packagingUnitId: normalized.packagingUnitId ?? '',
+    packagingConversion: normalized.packagingConversion ?? 0,
+  });
 
-  await assertNoDuplicateProductName(businessId, name, undefined, db);
+  await assertNoDuplicateProductName(businessId, normalized.name, undefined, db);
 
-  if (input.barcode) {
+  if (normalized.barcode) {
     const dup = await db.product.findFirst({
-      where: { businessId, barcode: input.barcode },
+      where: { businessId, barcode: normalized.barcode },
       select: { id: true },
     });
     if (dup) throw new Error('That barcode is already used by another product.');
@@ -285,17 +378,17 @@ export async function quickCreateProduct(
   const created = await db.product.create({
     data: {
       businessId,
-      name,
-      sku: input.sku ?? null,
-      barcode: input.barcode ?? null,
-      sellingPriceBasePence: input.sellingPriceBasePence,
-      defaultCostBasePence: input.defaultCostBasePence,
-      vatRateBps: input.vatRateBps,
+      name: normalized.name,
+      sku: normalized.sku ?? null,
+      barcode: normalized.barcode ?? null,
+      sellingPriceBasePence: normalized.sellingPriceBasePence,
+      defaultCostBasePence: normalized.defaultCostBasePence,
+      vatRateBps: normalized.vatRateBps,
       productUnits: {
         create: buildProductUnitCreates(
-          input.baseUnitId,
-          input.packagingUnitId ?? '',
-          input.packagingConversion ?? 0
+          normalized.baseUnitId,
+          normalized.packagingUnitId ?? '',
+          normalized.packagingConversion ?? 0
         ),
       },
     },
@@ -383,4 +476,132 @@ export async function repairInflatedPrices(businessId: string): Promise<Inflated
   );
 
   return inflated;
+}
+
+export async function getCatalogSanitySnapshot(
+  businessId: string,
+  rowLimit = 8
+): Promise<CatalogSanitySnapshot> {
+  const products = await prisma.product.findMany({
+    where: { businessId, active: true },
+    select: {
+      id: true,
+      name: true,
+      barcode: true,
+      sellingPriceBasePence: true,
+      defaultCostBasePence: true,
+      productUnits: {
+        select: {
+          unitId: true,
+          isBaseUnit: true,
+          conversionToBase: true,
+        },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  let zeroOrNegativeSellingPriceCount = 0;
+  let belowCostCount = 0;
+  let missingBarcodeCount = 0;
+  let invalidUnitConfigCount = 0;
+  let duplicateNormalizedNameCount = 0;
+  const rows: CatalogSanityRow[] = [];
+  const normalizedNameCounts = new Map<string, number>();
+
+  for (const product of products) {
+    const normalizedName = product.name.trim().toLowerCase();
+    normalizedNameCounts.set(normalizedName, (normalizedNameCounts.get(normalizedName) ?? 0) + 1);
+  }
+
+  for (const product of products) {
+    const reasons: string[] = [];
+    const baseUnits = product.productUnits.filter((unit) => unit.isBaseUnit);
+    const nonBaseUnits = product.productUnits.filter((unit) => !unit.isBaseUnit);
+    const normalizedName = product.name.trim().toLowerCase();
+
+    if (product.sellingPriceBasePence <= 0) {
+      zeroOrNegativeSellingPriceCount++;
+      reasons.push('Selling price is zero or negative');
+    }
+    if (
+      product.defaultCostBasePence > 0 &&
+      product.sellingPriceBasePence > 0 &&
+      product.defaultCostBasePence > product.sellingPriceBasePence
+    ) {
+      belowCostCount++;
+      reasons.push('Default cost is higher than selling price');
+    }
+    if (!product.barcode?.trim()) {
+      missingBarcodeCount++;
+      reasons.push('No barcode set');
+    }
+    if (
+      baseUnits.length !== 1 ||
+      nonBaseUnits.some((unit) => unit.conversionToBase <= 1 || unit.unitId === baseUnits[0]?.unitId)
+    ) {
+      invalidUnitConfigCount++;
+      reasons.push('Unit configuration needs repair');
+    }
+    if ((normalizedNameCounts.get(normalizedName) ?? 0) > 1) {
+      duplicateNormalizedNameCount++;
+      reasons.push('Looks duplicated after trimming/case normalization');
+    }
+
+    if (reasons.length > 0 && rows.length < rowLimit) {
+      rows.push({
+        id: product.id,
+        name: product.name,
+        sellingPriceBasePence: product.sellingPriceBasePence,
+        defaultCostBasePence: product.defaultCostBasePence,
+        barcode: product.barcode,
+        reasons,
+      });
+    }
+  }
+
+  const checks: CatalogSanityCheck[] = [
+    {
+      key: 'zero-price',
+      label: 'Zero-price products',
+      severity: 'blocking',
+      count: zeroOrNegativeSellingPriceCount,
+      helper: 'These can make live tills look broken or unsafe to cashiers.',
+    },
+    {
+      key: 'invalid-units',
+      label: 'Broken unit setup',
+      severity: 'blocking',
+      count: invalidUnitConfigCount,
+      helper: 'Products should have exactly one base unit and valid pack/carton conversions.',
+    },
+    {
+      key: 'below-cost',
+      label: 'Selling below default cost',
+      severity: 'warning',
+      count: belowCostCount,
+      helper: 'Sometimes intentional, often a pricing mistake that damages owner trust.',
+    },
+    {
+      key: 'missing-barcode',
+      label: 'Products missing barcodes',
+      severity: 'warning',
+      count: missingBarcodeCount,
+      helper: 'Not every SKU needs one, but supermarket scanning speed drops when too many are missing.',
+    },
+    {
+      key: 'normalized-duplicates',
+      label: 'Possible duplicate names',
+      severity: 'warning',
+      count: duplicateNormalizedNameCount,
+      helper: 'These can confuse cashiers during search and create owner distrust in catalog quality.',
+    },
+  ];
+
+  return {
+    blockingCount: checks.filter((check) => check.severity === 'blocking').reduce((sum, check) => sum + check.count, 0),
+    warningCount: checks.filter((check) => check.severity === 'warning').reduce((sum, check) => sum + check.count, 0),
+    checks,
+    rows,
+  };
 }
