@@ -10,11 +10,13 @@ import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton'
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
 import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
 import { getCurrencySymbol } from '@/lib/format';
+import { isQzSigningConfigured } from '@/lib/qz-signing.server';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const currencySymbol = getCurrencySymbol(business.currency);
+  const qzSigningConfigured = isQzSigningConfigured();
 
   return (
     <div className="space-y-6">
@@ -94,7 +96,36 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               <option value="BROWSER_DIALOG">Browser dialog</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Direct printing requires QZ Tray running on the register.
+              Direct printing uses QZ Tray, a small desktop helper that sends receipts straight to the printer.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href="https://qz.io/download/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost text-xs"
+              >
+                Download QZ Tray
+              </a>
+              <a
+                href="https://qz.io/docs/getting-started"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost text-xs"
+              >
+                Setup Guide
+              </a>
+            </div>
+            <div
+              className={`mt-2 rounded-lg border px-3 py-2 text-xs ${
+                qzSigningConfigured
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : 'border-amber-200 bg-amber-50 text-amber-800'
+              }`}
+            >
+              {qzSigningConfigured
+                ? 'Trusted QZ signing is configured. Install and run QZ Tray on each till, then allow the site once in QZ Tray to enable automatic direct printing.'
+                : 'Trusted QZ signing is not configured yet. Direct print can still work, but fully trusted automatic printing needs QZ_TRAY_CERTIFICATE and QZ_TRAY_PRIVATE_KEY on the server.'}
             </div>
           </div>
           <div>

@@ -96,6 +96,16 @@ When in doubt, stop, call the supervisor, and check the receipt/sales record fir
 
 ## 4) Printer incidents
 
+### Auto-print prerequisites
+
+Direct receipt printing is only considered fully ready when all of these are true:
+
+- the business **Print Mode** is set to **Direct ESC/POS**
+- **QZ Tray** is installed on the till computer
+- QZ Tray is running on the till computer
+- the site has been allowed/trusted in QZ Tray
+- the correct receipt printer is installed and ready
+
 ### Symptom
 
 - direct print fails
@@ -115,6 +125,7 @@ When in doubt, stop, call the supervisor, and check the receipt/sales record fir
 - continue trading
 - classify as direct-print integration issue, not sale failure
 - note printer model, device, and browser
+- check whether QZ Tray is running and whether the site was allowed in QZ Tray
 
 ### Escalate if
 

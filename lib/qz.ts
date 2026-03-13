@@ -6,6 +6,18 @@ declare global {
 
 let loadPromise: Promise<void> | null = null;
 
+async function fetchQzText(url: string, init?: RequestInit) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...init
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(text || `QZ request failed (${response.status})`);
+  }
+  return text;
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -28,7 +40,7 @@ function normalizeQzError(error: unknown) {
 
   const message = `${error.name} ${error.message}`.toLowerCase();
   if (message.includes('failed to load qz-tray') || message.includes('qz-tray.js')) {
-    return new Error('The direct print helper could not be loaded. Check that this device can reach the QZ Tray helper script, or use browser printing instead.');
+    return new Error('The direct print helper could not be loaded. Check that the local QZ helper script is available, or use browser printing instead.');
   }
   if (message.includes('timed out') || message.includes('timeout')) {
     return new Error('The printer connection took too long. Make sure QZ Tray is running, then try direct print again.');
@@ -47,7 +59,7 @@ function loadQzScript(): Promise<void> {
   if (loadPromise) return loadPromise;
   loadPromise = new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qz-tray/2.1.0/qz-tray.js';
+    s.src = '/api/qz/script';
     s.async = true;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error('Failed to load qz-tray.js'));
@@ -58,11 +70,36 @@ function loadQzScript(): Promise<void> {
 
 const configureSecurity = (qz: any) => {
   if (!qz?.security) return;
+  if (typeof qz.security.setSignatureAlgorithm === 'function') {
+    qz.security.setSignatureAlgorithm('SHA512');
+  }
   if (typeof qz.security.setCertificatePromise === 'function') {
-    qz.security.setCertificatePromise(() => Promise.resolve(''));
+    qz.security.setCertificatePromise((resolve: (value: string) => void) => {
+      fetchQzText('/api/qz/certificate')
+        .then((certificate) => resolve(certificate))
+        .catch((error) => {
+          console.warn('[qz] Certificate unavailable, falling back to unsigned printing.', error);
+          resolve('');
+        });
+    });
   }
   if (typeof qz.security.setSignaturePromise === 'function') {
-    qz.security.setSignaturePromise(() => Promise.resolve(''));
+    qz.security.setSignaturePromise((toSign: string) => {
+      return (resolve: (value: string) => void) => {
+        fetchQzText('/api/qz/sign', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ request: toSign })
+        })
+          .then((signature) => resolve(signature))
+          .catch((error) => {
+            console.warn('[qz] Signature unavailable, falling back to unsigned printing.', error);
+            resolve('');
+          });
+      };
+    });
   }
 };
 
@@ -106,4 +143,3 @@ export const printRawEscPos = async (printerName: string | null, hexData: string
     throw normalizeQzError(error);
   }
 };
-
