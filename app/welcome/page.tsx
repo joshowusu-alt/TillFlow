@@ -331,13 +331,16 @@ export default function WelcomePage() {
 
       {/* Footer */}
       <footer className="border-t border-black/5 px-6 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <img src="/icon.svg" alt="" className="h-6 w-6 rounded-lg" />
-            <span className="text-sm font-semibold font-display">
-              <span className="text-accent">Till</span>
-              <span className="text-gray-800">Flow</span>
-            </span>
+            <div>
+              <span className="text-sm font-semibold font-display">
+                <span className="text-accent">Till</span>
+                <span className="text-gray-800">Flow</span>
+              </span>
+              <p className="text-[11px] text-black/35">© 2026 Tish Group. All rights reserved.</p>
+            </div>
           </div>
           <p className="text-xs text-black/30">Sales made simple.</p>
         </div>

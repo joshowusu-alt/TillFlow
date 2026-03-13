@@ -2,6 +2,10 @@
 
 **Sales made simple.** A complete point of sale system with inventory management, accounting, and offline support.
 
+> Copyright © 2026 Tish Group. All rights reserved.
+>
+> This repository and the TillFlow software are proprietary to Tish Group.
+
 ![TillFlow Logo](./public/icon.svg)
 
 ## 🚀 How to Install
@@ -65,6 +69,14 @@ Each TillFlow installation is completely independent:
 - Zero data sharing between locations
 - Perfect for franchises or unrelated businesses
 
+## Ownership & Licensing
+
+- **Copyright owner:** Tish Group
+- **Notice:** `© 2026 Tish Group. All rights reserved.`
+- **License model:** Proprietary / all rights reserved
+- **Operating entity:** TillFlow Technologies
+- See `LICENSE` for usage restrictions.
+
 ---
 
-**Made with ❤️ for small businesses everywhere.**
+**Made with ❤️ for ambitious African businesses.**
