@@ -69,7 +69,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   if (needsOnboarding) {
     readinessPct = await unstable_cache(
       async () => {
-        const [productCount, staffCount, saleCount] = await Promise.all([
+        const [productCount, staffCount, saleCount, purchaseCount] = await Promise.all([
           prisma.product.count({ where: { businessId: business.id } }),
           prisma.user.count({ where: { businessId: business.id } }),
           prisma.salesInvoice.count({
@@ -78,9 +78,11 @@ export default async function ProtectedLayout({ children }: { children: React.Re
               OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
             },
           }),
+          prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
         ]);
         const hasAddress = !!(business.address || business.phone);
-        const checks = [hasAddress, productCount >= 3, staffCount > 1, business.hasDemoData, saleCount > 0];
+        const hasOpeningStock = ((business as any).openingCapitalPence ?? 0) > 0 || purchaseCount > 0;
+        const checks = [hasAddress, productCount >= 3, hasOpeningStock, staffCount > 1, saleCount > 0];
         return Math.round((checks.filter(Boolean).length / checks.length) * 100);
       },
       ['readiness', business.id],

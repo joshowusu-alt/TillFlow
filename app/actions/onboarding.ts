@@ -29,6 +29,24 @@ export type ReadinessData = {
   guidedSetup: boolean;
 };
 
+const OPTIONAL_READINESS_STEP_KEYS = new Set(['demo']);
+
+function getRequiredReadinessSteps(steps: ReadinessStep[]) {
+  return steps.filter((step) => !OPTIONAL_READINESS_STEP_KEYS.has(step.key));
+}
+
+function getReadinessPct(steps: ReadinessStep[]) {
+  const requiredSteps = getRequiredReadinessSteps(steps);
+  if (requiredSteps.length === 0) return 100;
+
+  const doneCount = requiredSteps.filter((step) => step.done).length;
+  return Math.round((doneCount / requiredSteps.length) * 100);
+}
+
+function getNextRequiredReadinessStep(steps: ReadinessStep[]) {
+  return getRequiredReadinessSteps(steps).find((step) => !step.done) ?? null;
+}
+
 /**
  * Compute the owner's readiness score by checking real data conditions.
  * Returns percentage complete, individual step statuses, and the "next best action".
@@ -115,9 +133,8 @@ export async function getReadiness(): Promise<ReadinessData> {
     },
   ];
 
-  const doneCount = steps.filter(s => s.done).length;
-  const pct = Math.round((doneCount / steps.length) * 100);
-  const nextStep = steps.find(s => !s.done) ?? null;
+  const pct = getReadinessPct(steps);
+  const nextStep = getNextRequiredReadinessStep(steps);
   const onboardingComplete = !!business.onboardingCompletedAt || pct === 100;
 
   return {

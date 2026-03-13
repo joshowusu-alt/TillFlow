@@ -8,6 +8,24 @@ import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
 import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
 import { generateDemoDay, wipeDemoData, clearSampleData } from '@/app/actions/demo-day';
 
+const OPTIONAL_STEP_KEYS = new Set(['demo']);
+
+function getRequiredSteps(steps: ReadinessStep[]) {
+  return steps.filter((step) => !OPTIONAL_STEP_KEYS.has(step.key));
+}
+
+function getReadinessPct(steps: ReadinessStep[]) {
+  const requiredSteps = getRequiredSteps(steps);
+  if (requiredSteps.length === 0) return 100;
+
+  const doneCount = requiredSteps.filter((step) => step.done).length;
+  return Math.round((doneCount / requiredSteps.length) * 100);
+}
+
+function getNextStep(steps: ReadinessStep[]) {
+  return getRequiredSteps(steps).find((step) => !step.done) ?? null;
+}
+
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
   store: (
@@ -287,12 +305,18 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
       if (res.ok && res.salesCount > 0) {
         showToast(`${res.salesCount} demo sales generated!`, 'success');
         // Refresh data
-        setData(prev => ({
-          ...prev,
-          hasDemoData: true,
-          steps: prev.steps.map(s => s.key === 'demo' ? { ...s, done: true, subtitle: 'Demo transactions generated' } : s),
-          pct: Math.round(((prev.steps.filter(s => s.done).length + 1) / prev.steps.length) * 100),
-        }));
+        setData(prev => {
+          const steps = prev.steps.map(s => s.key === 'demo' ? { ...s, done: true, subtitle: 'Demo transactions generated' } : s);
+          const pct = getReadinessPct(steps);
+          return {
+            ...prev,
+            hasDemoData: true,
+            steps,
+            pct,
+            nextStep: getNextStep(steps),
+            onboardingComplete: prev.onboardingComplete || pct === 100,
+          };
+        });
       } else if (res.error) {
         showToast(res.error, 'error');
       }
@@ -308,12 +332,18 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
       const res = await clearSampleData();
       if (res.ok) {
         showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!', 'success');
-        setData(prev => ({
-          ...prev,
-          hasDemoData: false,
-          steps: prev.steps.map(s => s.key === 'demo' ? { ...s, done: false, subtitle: 'See TillFlow with a week of realistic data' } : s),
-          pct: Math.round(((prev.steps.filter(s => s.done).length - 1) / prev.steps.length) * 100),
-        }));
+        setData(prev => {
+          const steps = prev.steps.map(s => s.key === 'demo' ? { ...s, done: false, subtitle: 'See TillFlow with a week of realistic data' } : s);
+          const pct = getReadinessPct(steps);
+          return {
+            ...prev,
+            hasDemoData: false,
+            steps,
+            pct,
+            nextStep: getNextStep(steps),
+            onboardingComplete: prev.onboardingComplete || pct === 100,
+          };
+        });
       } else if (res.error) {
         showToast(res.error, 'error');
       }
@@ -327,7 +357,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     setIsBusy(true);
     try {
       await completeOnboarding();
-      if (data.pct === 100) {
+      if (data.onboardingComplete || data.pct === 100) {
         setShowCelebration(true);
         setTimeout(() => setShowCelebration(false), 3000);
       }
@@ -337,7 +367,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     }
   };
 
-  const allDone = data.pct === 100;
+  const allDone = data.onboardingComplete || data.pct === 100;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">

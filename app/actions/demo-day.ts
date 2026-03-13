@@ -2,10 +2,50 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 
 const DEMO_TAG = 'DEMO_DAY';
+const SAMPLE_STOCK_ADJUSTMENT_REASONS = new Set([
+  'QA risk threshold trigger',
+  'Back room recount during dashboard preview',
+]);
+
+type InventoryRestoreLine = {
+  productId: string;
+  qtyBase: number;
+};
+
+function buildInventoryRestoreMap(lines: InventoryRestoreLine[]) {
+  const inventoryRestores = new Map<string, number>();
+  for (const line of lines) {
+    inventoryRestores.set(line.productId, (inventoryRestores.get(line.productId) ?? 0) + line.qtyBase);
+  }
+  return inventoryRestores;
+}
+
+function accumulateInventoryRestore(inventoryRestores: Map<string, number>, productId: string, qtyBase: number) {
+  inventoryRestores.set(productId, (inventoryRestores.get(productId) ?? 0) + qtyBase);
+}
+
+async function applyInventoryRestores(storeId: string | undefined, inventoryRestores: Map<string, number>) {
+  if (!storeId || inventoryRestores.size === 0) return;
+
+  await prisma.$transaction(
+    Array.from(inventoryRestores.entries()).map(([productId, qtyBase]) =>
+      prisma.inventoryBalance.upsert({
+        where: { storeId_productId: { storeId, productId } },
+        update: { qtyOnHandBase: { increment: qtyBase } },
+        create: {
+          storeId,
+          productId,
+          qtyOnHandBase: qtyBase,
+          avgCostBasePence: 0,
+        },
+      })
+    )
+  );
+}
 
 /** Simple cuid-like ID generator for pre-generating IDs in createMany batches */
 function genId(): string {
@@ -298,10 +338,12 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
           create: { storeId: store.id, productId, qtyOnHandBase: -qtyBase },
         });
       }
+
     } catch (glErr) {
       console.error('[demo-day] GL/inventory post failed (non-fatal):', glErr);
     }
 
+    revalidateTag(`readiness-${business.id}`);
     revalidatePath('/', 'layout');
     return { ok: true, salesCount: salesPerDay.reduce((a, b) => a + b, 0) };
   } catch (err) {
@@ -322,6 +364,9 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
   }
 
   try {
+    let demoStoreId: string | undefined;
+    let inventoryRestores = new Map<string, number>();
+
     await prisma.$transaction(async (tx) => {
       // Delete in dependency order: payments → lines → invoices
       const demoInvoices = await tx.salesInvoice.findMany({
@@ -329,7 +374,7 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
         select: { id: true, storeId: true },
       });
       const invoiceIds = demoInvoices.map(i => i.id);
-      const demoStoreId = demoInvoices[0]?.storeId;
+      demoStoreId = demoStoreId ?? demoInvoices[0]?.storeId;
 
       // Find demo expenses up-front so we can clean their journals
       const demoExpenses = await tx.expense.findMany({
@@ -344,6 +389,8 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
           where: { salesInvoiceId: { in: invoiceIds } },
           select: { productId: true, qtyBase: true },
         });
+        demoStoreId = demoStoreId ?? demoInvoices[0]?.storeId;
+        inventoryRestores = buildInventoryRestoreMap(demoLines);
 
         // Delete journal entries for demo sales (JournalLine cascades via schema)
         await tx.journalEntry.deleteMany({
@@ -352,20 +399,6 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
         await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
         await tx.salesInvoiceLine.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
         await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
-
-        // Restore inventory balances that were decremented during demo generation
-        if (demoStoreId) {
-          const inventoryRestores = new Map<string, number>();
-          for (const line of demoLines) {
-            inventoryRestores.set(line.productId, (inventoryRestores.get(line.productId) ?? 0) + line.qtyBase);
-          }
-          for (const [productId, qty] of inventoryRestores) {
-            await tx.inventoryBalance.updateMany({
-              where: { productId, storeId: demoStoreId },
-              data: { qtyOnHandBase: { increment: qty } },
-            });
-          }
-        }
       }
 
       if (expenseIds.length > 0) {
@@ -386,6 +419,9 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
       });
     });
 
+    await applyInventoryRestores(demoStoreId, inventoryRestores);
+
+    revalidateTag(`readiness-${business.id}`);
     revalidatePath('/', 'layout');
     return { ok: true };
   } catch (err) {
@@ -411,6 +447,10 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
   const removed: string[] = [];
 
   try {
+    let demoStoreId: string | undefined;
+    let inventoryRestores = new Map<string, number>();
+    const deletedProductIds = new Set<string>();
+
     await prisma.$transaction(async (tx) => {
       // 1) Wipe Demo Day sales & expenses (same as wipeDemoData)
       if (business.hasDemoData) {
@@ -419,7 +459,7 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
           select: { id: true, storeId: true },
         });
         const invoiceIds = demoInvoices.map(i => i.id);
-        const demoStoreId = demoInvoices[0]?.storeId;
+        demoStoreId = demoStoreId ?? demoInvoices[0]?.storeId;
         const csaDemoExpenses = await tx.expense.findMany({
           where: { businessId: business.id, qaTag: DEMO_TAG },
           select: { id: true },
@@ -432,6 +472,8 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
             where: { salesInvoiceId: { in: invoiceIds } },
             select: { productId: true, qtyBase: true },
           });
+          demoStoreId = demoStoreId ?? demoInvoices[0]?.storeId;
+          inventoryRestores = buildInventoryRestoreMap(demoLines);
           await tx.journalEntry.deleteMany({
             where: { referenceType: 'SALES_INVOICE', referenceId: { in: invoiceIds } },
           });
@@ -439,20 +481,6 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
           await tx.salesInvoiceLine.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } });
           await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } });
           removed.push(`${invoiceIds.length} demo sales`);
-
-          // Restore inventory balances
-          if (demoStoreId) {
-            const inventoryRestores = new Map<string, number>();
-            for (const line of demoLines) {
-              inventoryRestores.set(line.productId, (inventoryRestores.get(line.productId) ?? 0) + line.qtyBase);
-            }
-            for (const [productId, qty] of inventoryRestores) {
-              await tx.inventoryBalance.updateMany({
-                where: { productId, storeId: demoStoreId },
-                data: { qtyOnHandBase: { increment: qty } },
-              });
-            }
-          }
         }
 
         if (csaExpenseIds.length > 0) {
@@ -498,9 +526,43 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
         // Only delete products that have NO real sales
         const safeToDelete = demoProducts.filter(p => !realSaleProductIds.has(p.id));
         const keptProducts = demoProducts.filter(p => realSaleProductIds.has(p.id));
+        const sampleAdjustmentCandidates = await tx.stockAdjustment.findMany({
+          where: {
+            productId: { in: allDemoProductIds },
+            OR: [
+              { qaTag: { not: null } },
+              { reason: { in: Array.from(SAMPLE_STOCK_ADJUSTMENT_REASONS) } },
+            ],
+          },
+          select: { id: true, productId: true, qtyBase: true },
+        });
+
+        if (sampleAdjustmentCandidates.length > 0) {
+          const sampleAdjustmentIds = sampleAdjustmentCandidates.map((adjustment) => adjustment.id);
+          for (const adjustment of sampleAdjustmentCandidates) {
+            accumulateInventoryRestore(inventoryRestores, adjustment.productId, -adjustment.qtyBase);
+          }
+
+          await tx.journalEntry.deleteMany({
+            where: { referenceType: 'STOCK_ADJUSTMENT', referenceId: { in: sampleAdjustmentIds } },
+          });
+          await tx.stockMovement.deleteMany({
+            where: { referenceType: 'STOCK_ADJUSTMENT', referenceId: { in: sampleAdjustmentIds } },
+          });
+          await tx.stockAdjustment.deleteMany({
+            where: { id: { in: sampleAdjustmentIds } },
+          });
+          removed.push(`${sampleAdjustmentCandidates.length} sample stock adjustments`);
+        }
 
         if (safeToDelete.length > 0) {
           const productIds = safeToDelete.map(p => p.id);
+          productIds.forEach((productId) => deletedProductIds.add(productId));
+
+          const stockAdjustmentIds = (await tx.stockAdjustment.findMany({
+            where: { productId: { in: productIds } },
+            select: { id: true },
+          })).map((adjustment) => adjustment.id);
 
           // Must delete dependent records first (in safe order)
           await tx.salesInvoiceLine.deleteMany({
@@ -509,6 +571,11 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
           await tx.inventoryBalance.deleteMany({ where: { productId: { in: productIds } } });
           await tx.productUnit.deleteMany({ where: { productId: { in: productIds } } });
           await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } });
+          if (stockAdjustmentIds.length > 0) {
+            await tx.journalEntry.deleteMany({
+              where: { referenceType: 'STOCK_ADJUSTMENT', referenceId: { in: stockAdjustmentIds } },
+            });
+          }
           await tx.stockAdjustment.deleteMany({ where: { productId: { in: productIds } } });
           await tx.purchaseInvoiceLine.deleteMany({ where: { productId: { in: productIds } } });
           await tx.stocktakeLine.deleteMany({ where: { productId: { in: productIds } } });
@@ -558,6 +625,15 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
       });
     });
 
+    if (deletedProductIds.size > 0 && inventoryRestores.size > 0) {
+      inventoryRestores = new Map(
+        Array.from(inventoryRestores.entries()).filter(([productId]) => !deletedProductIds.has(productId))
+      );
+    }
+
+    await applyInventoryRestores(demoStoreId, inventoryRestores);
+
+    revalidateTag(`readiness-${business.id}`);
     revalidatePath('/', 'layout');
     return { ok: true, removed };
   } catch (err) {
