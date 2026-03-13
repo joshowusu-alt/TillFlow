@@ -320,7 +320,7 @@ export default async function DashboardPage({
       {/* Filter */}
       <ReportFilterCard columnsClassName="sm:grid-cols-4" submitLabel="Apply" submitTone="secondary">
         <div>
-          <label className="label">Branch / Store</label>
+          <label className="label">Branch</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>
             {stores.map((s) => (

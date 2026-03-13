@@ -30,7 +30,7 @@ export default async function OwnerIntelligencePage() {
 
   const currency = business.currency;
   const scopeLabel = stores.length <= 1
-    ? `Branch: ${stores[0]?.name ?? 'Main store'}`
+    ? `Branch: ${stores[0]?.name ?? 'Main branch'}`
     : `Scope: All ${stores.length} branches`;
 
   return (

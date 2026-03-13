@@ -142,7 +142,7 @@ export default async function PurchasesPage({
 
       <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <div className="min-w-0">
-          <label className="label">Branch / Store</label>
+          <label className="label">Branch</label>
           <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
             {stores.map((store) => (
               <option key={store.id} value={store.id}>

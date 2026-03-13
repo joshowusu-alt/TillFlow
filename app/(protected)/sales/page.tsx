@@ -85,7 +85,7 @@ export default async function SalesPage({
       <div className="flex flex-wrap items-end gap-3">
         <form method="GET" className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="label">Branch / Store</label>
+            <label className="label">Branch</label>
             <select className="input" name="storeId" defaultValue={selectedStoreId}>
               <option value="ALL">All branches</option>
               {stores.map((store) => (

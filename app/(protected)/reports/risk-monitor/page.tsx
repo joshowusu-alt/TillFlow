@@ -161,7 +161,7 @@ export default async function RiskMonitorPage({
           <input className="input" type="date" name="to" defaultValue={toIso} />
         </div>
         <div>
-          <label className="label">Branch / Store</label>
+          <label className="label">Branch</label>
           <select className="input" name="storeId" defaultValue={storeId}>
             <option value="ALL">All branches</option>
             {stores.map((store) => (

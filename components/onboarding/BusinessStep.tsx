@@ -52,7 +52,7 @@ export function BusinessStep({ onNext, onBack }: StepProps) {
 
         <div className="rounded-xl border border-black/5 bg-white p-4 space-y-3">
           <div className="text-xs font-semibold uppercase tracking-wide text-black/30">How many branches?</div>
-          <p className="text-xs text-black/40">This hides branch-related features if you only have one store, keeping your interface cleaner.</p>
+          <p className="text-xs text-black/40">This hides branch-related features if you only have one branch, keeping your interface cleaner.</p>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -63,7 +63,7 @@ export function BusinessStep({ onNext, onBack }: StepProps) {
                   : 'border-black/10 hover:border-black/20'
               }`}
             >
-              <div className="font-semibold text-sm">Single store</div>
+              <div className="font-semibold text-sm">Single branch</div>
               <div className="text-xs text-black/40 mt-0.5">Just one location</div>
             </button>
             <button
@@ -75,7 +75,7 @@ export function BusinessStep({ onNext, onBack }: StepProps) {
                   : 'border-black/10 hover:border-black/20'
               }`}
             >
-              <div className="font-semibold text-sm">Multiple stores</div>
+              <div className="font-semibold text-sm">Multiple branches</div>
               <div className="text-xs text-black/40 mt-0.5">Branches &amp; transfers</div>
             </button>
           </div>

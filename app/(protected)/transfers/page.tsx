@@ -24,10 +24,10 @@ export default async function TransfersPage({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-ink">Single-Store Mode</h3>
+          <h3 className="text-lg font-semibold text-ink">Single-Branch Mode</h3>
           <p className="mt-2 text-sm text-muted max-w-md mx-auto">
-            Stock transfers are only available when running in multi-store mode.
-            Switch to multi-store in Settings &rarr; Store Mode to enable branch transfers.
+            Stock transfers are only available when running in multi-branch mode.
+            Switch to multi-branch mode in Settings &rarr; Branch Mode to enable branch transfers.
           </p>
           <a href="/settings" className="btn-secondary mt-4 inline-block text-sm">Go to Settings</a>
         </div>
@@ -81,7 +81,7 @@ export default async function TransfersPage({
         <h2 className="text-lg font-display font-semibold">Create Transfer Request</h2>
         <form action={requestStockTransferAction} className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
-            <label className="label">From Branch / Store</label>
+            <label className="label">From Branch</label>
             <select className="input" name="fromStoreId" defaultValue={defaultFromStoreId} required>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>
@@ -91,7 +91,7 @@ export default async function TransfersPage({
             </select>
           </div>
           <div>
-            <label className="label">To Branch / Store</label>
+            <label className="label">To Branch</label>
             <select className="input" name="toStoreId" defaultValue={defaultToStoreId} required>
               {stores.map((store) => (
                 <option key={store.id} value={store.id}>

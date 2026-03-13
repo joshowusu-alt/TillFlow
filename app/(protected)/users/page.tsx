@@ -93,7 +93,7 @@ export default async function UsersPage({
               type="email"
               required
               defaultValue={editUser?.email ?? ''}
-              placeholder="e.g. ama@store.com"
+              placeholder="e.g. ama@yourbusiness.com"
             />
           </div>
           <div>

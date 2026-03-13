@@ -94,7 +94,7 @@ export default async function NotificationsSettingsPage({
             <label className="label">Branch Scope</label>
             <select className="input" name="whatsappBranchScope" defaultValue={business.whatsappBranchScope ?? 'ALL'}>
               <option value="ALL">All branches</option>
-              <option value="MAIN">Main store only</option>
+              <option value="MAIN">Main branch only</option>
             </select>
           </div>
           <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row">

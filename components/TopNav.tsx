@@ -165,7 +165,7 @@ export default function TopNav({
             <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
                 <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                {storeName || 'Main store'}
+                {storeName || 'Main branch'}
               </span>
               <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
                 {isOnline ? 'Sync ready' : 'Offline mode'}
@@ -250,7 +250,7 @@ export default function TopNav({
           <div className="flex flex-wrap items-center gap-2">
             <span className="metric-chip">
               <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-              {storeName || 'Main store'}
+              {storeName || 'Main branch'}
             </span>
             <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
               {isOnline ? 'Sync ready' : 'Offline mode'}

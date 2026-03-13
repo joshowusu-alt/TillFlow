@@ -25,7 +25,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           <div className="md:col-span-2 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4">
             <div className="text-xs uppercase tracking-[0.2em] text-black/40">Business profile</div>
             <div className="mt-1 text-sm text-black/60">
-              Configure receipts, tax settings, payments, and operational guardrails for your store.
+              Configure receipts, tax settings, payments, and operational guardrails for your business.
             </div>
           </div>
 
@@ -235,7 +235,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
           <div className="md:col-span-2 pt-2">
             <h2 className="text-base font-display font-semibold">Operating mode</h2>
-            <p className="mt-1 text-sm text-black/55">Choose the feature depth and whether you run one store or multiple branches.</p>
+            <p className="mt-1 text-sm text-black/55">Choose the feature depth and whether you run one branch or multiple branches.</p>
           </div>
           <div className="md:col-span-2">
             <label className="label">Mode</label>
@@ -261,13 +261,13 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </div>
           </div>
           <div>
-            <label className="label">Store Mode</label>
+            <label className="label">Branch Mode</label>
             <select className="input" name="storeMode" defaultValue={(business as any).storeMode ?? 'SINGLE_STORE'}>
-              <option value="SINGLE_STORE">Single Store</option>
-              <option value="MULTI_STORE">Multi-Store</option>
+              <option value="SINGLE_STORE">Single Branch</option>
+              <option value="MULTI_STORE">Multi-Branch</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Single Store hides Transfers and multi-branch features.
+              Single Branch hides Transfers and multi-branch features.
             </div>
           </div>
           <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">

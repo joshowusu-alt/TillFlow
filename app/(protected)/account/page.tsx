@@ -134,7 +134,7 @@ export default async function AccountPage({
           </div>
           <div>
             <div className="font-semibold text-black/70">Role: {user.role}</div>
-            <div>Your role can only be changed by the store owner.</div>
+            <div>Your role can only be changed by the business owner.</div>
           </div>
         </div>
       </div>

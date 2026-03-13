@@ -84,7 +84,7 @@ export default async function MomoReconciliationPage({
 
       <form className="card grid gap-3 p-4 sm:grid-cols-4" method="GET">
         <div>
-          <label className="label">Branch / Store</label>
+          <label className="label">Branch</label>
           <select className="input" name="storeId" defaultValue={selectedStoreId}>
             <option value="ALL">All branches</option>
             {stores.map((store) => (

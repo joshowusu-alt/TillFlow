@@ -57,7 +57,7 @@ export default async function CustomersPage({
         {business.customerScope === 'BRANCH' ? (
           <form method="GET" className="flex items-end gap-3">
             <div>
-              <label className="label">Branch / Store</label>
+              <label className="label">Branch</label>
               <select className="input" name="storeId" defaultValue={selectedStoreId}>
                 {stores.map((store) => (
                   <option key={store.id} value={store.id}>
