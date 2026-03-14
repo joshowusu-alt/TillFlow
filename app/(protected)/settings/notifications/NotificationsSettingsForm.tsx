@@ -27,12 +27,15 @@ export default function NotificationsSettingsForm({
 }: NotificationsSettingsFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewPending, startPreview] = useTransition();
 
   const handlePreview = () => {
     if (!formRef.current) return;
 
     const formData = new FormData(formRef.current);
+    setPreview(null);
+    setIsPreviewOpen(true);
     startPreview(async () => {
       try {
         const response = await fetch('/api/notifications/preview', {
@@ -143,9 +146,23 @@ export default function NotificationsSettingsForm({
         </div>
       </div>
 
-      {(previewPending || preview) && (
+      {(previewPending || (isPreviewOpen && preview)) && (
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-semibold">Message Preview</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold">Message Preview</h2>
+            {!previewPending ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-black/55 underline-offset-2 hover:text-black hover:underline"
+                onClick={() => {
+                  setPreview(null);
+                  setIsPreviewOpen(false);
+                }}
+              >
+                Close preview
+              </button>
+            ) : null}
+          </div>
           {previewPending ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-black/70">
               Generating preview...

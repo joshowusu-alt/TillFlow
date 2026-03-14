@@ -203,12 +203,6 @@ export function buildEscPosReceipt(data: ReceiptData) {
       appendLine(buffer, row);
     });
 
-    wrapText(`Unit ${formatMoney(line.unitPricePence, data.business.currency)}`, noteWidth).forEach(
-      (noteLine) => {
-        appendLine(buffer, `    ${noteLine}`);
-      }
-    );
-
     const discount = line.lineDiscountPence + line.promoDiscountPence;
     if (discount > 0) {
       wrapText(`Discount ${formatMoney(discount, data.business.currency)}`, noteWidth).forEach(

@@ -91,10 +91,10 @@ export default function ReceiptClient({
   );
   const lastReceiptStorageKey = getLastReceiptStorageKey({ businessId: business.id, storeId: store.id });
   const receiptReference = invoice.transactionNumber ?? invoice.id.slice(0, 8).toUpperCase();
-  const showUnitPriceColumn = template === 'A4';
-  const itemGridClass = showUnitPriceColumn
-    ? 'grid-cols-[2rem_minmax(0,1.8fr)_6rem_6rem_6rem]'
-    : 'grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
+  const itemGridClass =
+    template === 'A4'
+      ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_6rem]'
+      : 'grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
 
   const handleDirectPrint = useCallback(async () => {
     try {
@@ -282,7 +282,6 @@ export default function ReceiptClient({
             <div>#</div>
             <div>Description</div>
             <div className="text-right">Qty</div>
-            {showUnitPriceColumn ? <div className="text-right">Unit</div> : null}
             <div className="text-right">Total</div>
           </div>
           <div className="divide-y divide-black/10">
@@ -297,11 +296,6 @@ export default function ReceiptClient({
                   <div className="font-mono text-black/45">{index + 1}</div>
                   <div className="min-w-0">
                     <div className="font-semibold leading-tight text-black">{line.name}</div>
-                    {!showUnitPriceColumn ? (
-                      <div className="mt-1 text-[10px] leading-tight text-black/55">
-                        Unit {formatMoney(line.unitPricePence, business.currency)}
-                      </div>
-                    ) : null}
                     {discountPence > 0 ? (
                       <div className="mt-1 text-[10px] leading-tight text-emerald-700">
                         Discount {formatMoney(discountPence, business.currency)}
@@ -309,11 +303,6 @@ export default function ReceiptClient({
                     ) : null}
                   </div>
                   <div className="text-right leading-tight text-black/75">{line.qtyLabel}</div>
-                  {showUnitPriceColumn ? (
-                    <div className="text-right font-mono text-black/65">
-                      {formatMoney(line.unitPricePence, business.currency)}
-                    </div>
-                  ) : null}
                   <div className="text-right font-mono font-semibold text-black">
                     {formatMoney(line.lineTotalPence, business.currency)}
                   </div>
