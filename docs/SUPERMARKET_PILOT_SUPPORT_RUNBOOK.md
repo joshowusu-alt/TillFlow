@@ -308,6 +308,14 @@ At the end of every pilot trading day, confirm:
 - all major incidents were logged
 - top product and pricing issues are listed for next-day cleanup
 
+If owner WhatsApp EOD summaries are enabled, also confirm:
+
+- the summary appears in **Settings → Notifications**
+- the latest status is believable:
+	- `DELIVERED` / `READ` = Meta confirmed progress
+	- `ACCEPTED` = Meta accepted the message and webhook confirmation may still be pending
+	- `REVIEW_REQUIRED` = support or owner follow-up is still needed manually
+
 ---
 
 ## 12) Escalation template
@@ -337,6 +345,45 @@ If technical support has terminal access in a safe environment, the following ch
 - `npm run test:e2e:critical`
 - `GET /api/health`
 - `GET /api/metrics` (with auth token in production)
+
+### WhatsApp EOD support checks
+
+If the issue is specifically about the owner not receiving the end-of-day WhatsApp summary:
+
+1. Open **Settings → Notifications**
+2. Check the **Delivery Diagnostics** card
+3. Review the most recent delivery log
+
+Interpret the latest status like this:
+
+- `DELIVERED` / `READ` → Meta confirmed delivery progress; ask the owner to check the exact WhatsApp account/device
+- `ACCEPTED` → Meta accepted the message; webhook confirmation may still be pending
+- `REVIEW_REQUIRED` → TillFlow kept a manual review link because unattended delivery was not completed
+- `FAILED` → configuration or provider issue; escalate with evidence
+
+For support evidence, capture:
+
+- provider name shown in the log
+- provider status shown in the log
+- provider message ID if present
+- whether the diagnostics card says Meta is configured and webhook is ready
+
+### Cron trigger safety
+
+For protected cron routes such as `GET /api/cron/eod-summary` and `GET /api/cron/demo-reset`:
+
+- use `Authorization: Bearer <CRON_SECRET>` for production/Vercel-style verification
+- `x-cron-secret: <CRON_SECRET>` is acceptable for safe manual support testing
+- do **not** pass the cron secret in the URL or as `?secret=...`
+- if the cron secret is rotated in Vercel, redeploy before testing the new value
+
+### Safe webhook verification
+
+When verifying the Meta webhook setup with operations support:
+
+- callback URL must be `/api/notifications/webhook/meta`
+- the verify token in Meta must exactly match `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+- successful webhook delivery updates should move logs from `ACCEPTED` toward `DELIVERED` or `READ`
 
 Use the main operations guide for broader maintenance tasks:
 

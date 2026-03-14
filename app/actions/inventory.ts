@@ -7,6 +7,7 @@ import { formString, formInt } from '@/lib/form-helpers';
 import { StockDirectionEnum } from '@/lib/validation/enums';
 import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 
 export async function createStockAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -24,7 +25,7 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     }
     const reason = formString(formData, 'reason') || null;
 
-    await createStockAdjustment({
+    const adjustment = await createStockAdjustment({
       businessId,
       storeId,
       productId,
@@ -34,6 +35,12 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
       reason,
       userId: user.id
     });
+
+    void checkAndSendLowStockAlert({
+      businessId,
+      storeId,
+      productIds: [adjustment.productId],
+    }).catch(() => {});
 
     // Fire-and-forget: don't block the user on audit logging
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'INVENTORY_ADJUST', entity: 'Product', entityId: productId, details: { direction, qtyInUnit, unitId, reason } }).catch(() => {});

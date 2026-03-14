@@ -4,6 +4,11 @@ import { useRef, useState, useTransition } from 'react';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import { updateWhatsappSettingsAction } from '@/app/actions/notifications';
+import SendTestSummaryButton from './SendTestSummaryButton';
+import {
+  COMMON_AFRICAN_TIMEZONES,
+  DEFAULT_BUSINESS_TIMEZONE,
+} from '@/lib/notifications/utils';
 
 type NotificationsSettingsFormProps = {
   error?: string;
@@ -12,6 +17,7 @@ type NotificationsSettingsFormProps = {
     whatsappPhone?: string | null;
     whatsappScheduleTime?: string | null;
     whatsappBranchScope?: string | null;
+    timezone?: string | null;
   };
 };
 
@@ -26,6 +32,7 @@ export default function NotificationsSettingsForm({
   business
 }: NotificationsSettingsFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(!!business.whatsappEnabled);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewPending, startPreview] = useTransition();
@@ -75,7 +82,7 @@ export default function NotificationsSettingsForm({
         <FormError error={error} />
         <form ref={formRef} action={updateWhatsappSettingsAction} className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/60">
-            Configure the owner&apos;s end-of-day WhatsApp summary, schedule window, and message preview in one place.
+            Configure the owner&apos;s end-of-day WhatsApp summary schedule, preview the exact message, and let TillFlow try automated Meta delivery when the provider is configured.
           </div>
           <div className="md:col-span-2 flex items-center gap-3">
             <input
@@ -83,7 +90,8 @@ export default function NotificationsSettingsForm({
               type="checkbox"
               name="whatsappEnabled"
               id="whatsappEnabled"
-              defaultChecked={!!business.whatsappEnabled}
+              checked={whatsappEnabled}
+              onChange={(event) => setWhatsappEnabled(event.target.checked)}
             />
             <label htmlFor="whatsappEnabled" className="text-sm font-medium">
               Enable WhatsApp EOD summary
@@ -112,6 +120,20 @@ export default function NotificationsSettingsForm({
             />
           </div>
           <div>
+            <label className="label">Timezone</label>
+            <select
+              className="input"
+              name="timezone"
+              defaultValue={business.timezone ?? DEFAULT_BUSINESS_TIMEZONE}
+            >
+              {COMMON_AFRICAN_TIMEZONES.map((timezone) => (
+                <option key={timezone.value} value={timezone.value}>
+                  {timezone.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="label">Branch Scope</label>
             <select
               className="input"
@@ -132,6 +154,7 @@ export default function NotificationsSettingsForm({
             >
               {previewPending ? 'Generating Preview...' : 'Preview Message'}
             </button>
+            {whatsappEnabled ? <SendTestSummaryButton /> : null}
           </div>
           <div className="md:col-span-2 text-xs text-black/45">
             Preview uses the current form values and does not require saving first.
@@ -140,9 +163,9 @@ export default function NotificationsSettingsForm({
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <strong>How it works:</strong> Set up a Vercel Cron job or call{' '}
           <code className="rounded bg-amber-100 px-1 font-mono text-xs">/api/cron/eod-summary</code>{' '}
-          with your <code className="rounded bg-amber-100 px-1 font-mono text-xs">CRON_SECRET</code>{' '}
-          at the scheduled time. The system generates the message and provides a WhatsApp deep
-          link for quick sending.
+          with an <code className="rounded bg-amber-100 px-1 font-mono text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>{' '}
+          or <code className="rounded bg-amber-100 px-1 font-mono text-xs">x-cron-secret</code>{' '}
+          header at the scheduled time. When Meta WhatsApp env vars are configured, TillFlow attempts automated delivery first. If Meta is unavailable or rejects the request, TillFlow records <strong>manual review required</strong> and keeps a WhatsApp deep link for follow-up instead of pretending the message was sent. Duplicate cron retries for the same business/day are now skipped automatically.
         </div>
       </div>
 

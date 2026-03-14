@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resetDemoAction } from '@/app/actions/demo';
+import { hasValidCronSecret } from '@/lib/cron-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  // Protect with CRON_SECRET
-  const secret = process.env.CRON_SECRET;
-  const provided =
-    request.headers.get('x-cron-secret') ?? request.nextUrl.searchParams.get('secret');
-
-  if (!secret || provided !== secret) {
+  if (!hasValidCronSecret(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

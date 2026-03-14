@@ -8,6 +8,7 @@ import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
 import { performShiftClose } from '@/lib/services/shifts';
+import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 
 export async function openShiftAction(
   formData: FormData
@@ -113,6 +114,7 @@ export async function closeShiftAction(
         varianceReason,
         approval: { mode: 'PIN', approvingManagerId: manager.id },
       });
+      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidatePath('/shifts');
       return ok({ id: result.id });
     } catch (e) {
@@ -225,6 +227,7 @@ export async function closeShiftOwnerOverrideAction(
           overrideJustification,
         },
       });
+      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidatePath('/shifts');
       return ok({ id: result.id });
     } catch (e) {

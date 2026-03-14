@@ -51,12 +51,22 @@ In the Vercel project settings (or during import), add these env vars:
 | `NEXTAUTH_URL` | `https://your-project.vercel.app` | Production |
 | `UPSTASH_REDIS_REST_URL` | your Upstash Redis REST URL | Production, Preview |
 | `UPSTASH_REDIS_REST_TOKEN` | your Upstash Redis REST token | Production, Preview |
+| `META_WHATSAPP_ACCESS_TOKEN` | Meta system-user access token for WhatsApp | Production, Preview |
+| `META_WHATSAPP_PHONE_NUMBER_ID` | Meta WhatsApp phone number ID | Production, Preview |
+| `META_WHATSAPP_API_VERSION` | `v23.0` (or your selected Graph API version) | Production, Preview |
+| `META_WHATSAPP_TEMPLATE_NAME` | approved template name, or leave blank for freeform mode | Production, Preview |
+| `META_WHATSAPP_TEMPLATE_LANGUAGE_CODE` | e.g. `en_GB` | Production, Preview |
+| `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN` | strong random token for Meta webhook verification | Production, Preview |
+| `META_WHATSAPP_APP_SECRET` | Meta app secret for signature verification | Production, Preview |
+| `META_WHATSAPP_MOCK` | `false` in production | Production, Preview |
 
 To set them:
 1. Go to **Project Settings → Environment Variables**.
 2. Paste each name/value pair.
 3. Tick **Production** and **Preview** checkboxes.
 4. Click **Save**.
+
+> If you rotate `CRON_SECRET` or change any Meta WhatsApp env var, redeploy the latest build so the running server picks up the new values.
 
 ---
 
@@ -97,6 +107,26 @@ If the build fails, check the build logs — the most common issue is a missing 
 
 ---
 
+## Step 7 — Configure Meta Webhook + EOD Verification
+
+After the first deploy:
+
+1. In Meta, configure the callback URL:
+   - `https://your-domain/api/notifications/webhook/meta`
+2. Use the same verify token value you stored in `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`
+3. Subscribe the WhatsApp app to message status updates
+4. In TillFlow, open `/settings/notifications` and confirm the diagnostics card shows:
+   - Meta credentials = Configured
+   - Webhook delivery updates = Ready
+5. Trigger a safe one-business cron run using header auth
+
+For broader maintenance and live support, use:
+
+- `OPERATIONS_RUNBOOK.md`
+- `docs/SUPERMARKET_PILOT_SUPPORT_RUNBOOK.md`
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -106,6 +136,9 @@ If the build fails, check the build logs — the most common issue is a missing 
 | `prisma db push` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL. |
 | Login doesn't work | Ensure `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are set. |
 | Login lockout is inconsistent across instances | Ensure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. |
+| EOD summary falls back to manual review | Check Meta env vars and `/settings/notifications` diagnostics. |
+| Meta webhook verification fails | Check `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN` and the callback URL. |
+| Delivery logs stay at `ACCEPTED` | Check `META_WHATSAPP_APP_SECRET`, webhook subscription, and redeploy after env changes. |
 | Seed fails on Neon | Run `SET search_path TO public;` if using a custom schema. |
 
 ---

@@ -9,6 +9,7 @@ import { withBusinessContext, formAction, type ActionResult } from '@/lib/action
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isVoidReturnReasonCode } from '@/lib/fraud/reason-codes';
+import { sendVoidReturnAlert } from '@/app/actions/stock-alerts';
 
 export async function createSalesReturnAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -73,7 +74,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       approvalMode = 'PIN';
     }
 
-    await createSalesReturn({
+    const salesReturn = await createSalesReturn({
       businessId,
       salesInvoiceId,
       userId: user.id,
@@ -85,6 +86,8 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       managerApprovalMode: approvalMode,
       type
     });
+
+    void sendVoidReturnAlert({ salesReturnId: salesReturn.id, businessId }).catch(() => {});
 
     audit({
       businessId,

@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
         lastSyncAt: lastSyncEvent?.appliedAt?.toISOString() ?? null,
         lastSyncType: lastSyncEvent?.eventType ?? null,
         auditErrors24h: errorAuditLogs,
+        messageLogs24h: messageLogs,
         messagesSent24h: messageLogs,
         openRiskAlerts: riskAlerts,
         lastBackupDate: dayClosures?.closureDate?.toISOString() ?? null,

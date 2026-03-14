@@ -91,7 +91,7 @@ export default async function SystemHealthPage() {
           { label: 'Sync Events (24h)', value: syncEvents24h, ok: syncEvents24h < 1000 },
           { label: 'Risk Alerts (open)', value: openRiskAlerts, ok: openRiskAlerts === 0 },
           { label: 'Audit Flags (24h)', value: errorAuditCount, ok: errorAuditCount < 20 },
-          { label: 'Messages Sent (24h)', value: messageLogs24h, ok: true },
+          { label: 'Message Logs (24h)', value: messageLogs24h, ok: true },
         ].map((m) => (
           <div key={m.label} className="card p-4">
             <div className="mb-1 text-xs text-black/40">{m.label}</div>

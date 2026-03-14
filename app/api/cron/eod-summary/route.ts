@@ -1,48 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { _sendEodSummaryForBusiness } from '@/app/actions/notifications';
+import { hasValidCronSecret } from '@/lib/cron-auth';
+import {
+  getCurrentHourForTimeZone,
+  parseScheduleTime,
+  resolveBusinessTimeZone,
+} from '@/lib/notifications/utils';
 
 /**
  * GET /api/cron/eod-summary
- * Protected by CRON_SECRET via Authorization: Bearer, x-cron-secret header,
- * or ?secret= query param for manual triggers.
+ * Protected by CRON_SECRET via Authorization: Bearer or x-cron-secret header.
  *
- * Scheduled daily at 20:00 UTC (8 PM Ghana time) by Vercel Cron.
- * On Hobby plan only one run per day is allowed, so ALL whatsappEnabled
- * businesses are notified at that single daily fire — per-business schedule
- * time filtering is skipped for the standard cron run.
+ * Runs on a global schedule and filters each business by its local timezone
+ * and configured WhatsApp summary hour.
  *
  * Query params:
  *   businessId - optional; run immediately for a single business only
  *   force      - optional; set to "1" (same effect for manual test triggers)
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  // Vercel Cron sends: Authorization: Bearer <secret>
-  const authHeader = req.headers.get('authorization') ?? '';
-  const bearerSecret = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const providedSecret =
-    bearerSecret ||
-    req.headers.get('x-cron-secret') ||
-    req.nextUrl.searchParams.get('secret') ||
-    '';
-
-  if (!secret || providedSecret !== secret) {
+  if (!hasValidCronSecret(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const specificId = req.nextUrl.searchParams.get('businessId');
-
-  // Notify all whatsappEnabled businesses (or just the requested one).
-  // Per-business schedule time filtering removed: on the Hobby plan the cron
-  // fires once daily at 8 PM, so every enabled business is notified at that time.
+  const force = req.nextUrl.searchParams.get('force') === '1';
   const businesses = await prisma.business.findMany({
     where: {
       ...(specificId ? { id: specificId } : {}),
       whatsappEnabled: true,
       isDemo: false,
     },
-    select: { id: true, name: true },
+    select: { id: true, name: true, timezone: true, whatsappScheduleTime: true },
   });
 
   if (businesses.length === 0) {
@@ -53,12 +43,40 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const now = new Date();
+  const eligibleBusinesses = force
+    ? businesses
+    : businesses.filter((business) => {
+        const localHour = getCurrentHourForTimeZone(now, business.timezone);
+        const scheduledHour = parseScheduleTime(business.whatsappScheduleTime).hour;
+        return localHour === scheduledHour;
+      });
+
+  if (eligibleBusinesses.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      processed: 0,
+      skipped: businesses.map((business) => ({
+        id: business.id,
+        name: business.name,
+        timezone: resolveBusinessTimeZone(business.timezone),
+        scheduledTime: parseScheduleTime(business.whatsappScheduleTime).value,
+      })),
+      message: 'No businesses matched their local WhatsApp send hour',
+    });
+  }
+
   const results: Record<string, unknown> = {};
-  for (const biz of businesses) {
+  for (const biz of eligibleBusinesses) {
     results[biz.id] = await _sendEodSummaryForBusiness(biz.id, 'CRON');
   }
 
-  return NextResponse.json({ ok: true, processed: businesses.length, results });
+  return NextResponse.json({
+    ok: true,
+    processed: eligibleBusinesses.length,
+    skipped: businesses.length - eligibleBusinesses.length,
+    results,
+  });
 }
 
 export const runtime = 'nodejs';

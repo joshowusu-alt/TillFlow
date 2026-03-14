@@ -1,4 +1,4 @@
-type BadgeTone = 'success' | 'warn' | 'danger' | 'info' | 'neutral';
+type BadgeTone = 'success' | 'warn' | 'pending' | 'danger' | 'info' | 'neutral';
 
 type BadgeProps = {
   tone: BadgeTone;
@@ -9,6 +9,7 @@ type BadgeProps = {
 const toneClasses: Record<BadgeTone, string> = {
   success: 'border-emerald-200/80 bg-emerald-50 text-emerald-700',
   warn: 'border-amber-200/80 bg-amber-50 text-amber-700',
+  pending: 'border-yellow-200/80 bg-yellow-50 text-yellow-700',
   danger: 'border-rose-200/80 bg-rose-50 text-rose-700',
   info: 'border-sky-200/80 bg-sky-50 text-sky-700',
   neutral: 'border-slate-200/80 bg-slate-50 text-slate-600',

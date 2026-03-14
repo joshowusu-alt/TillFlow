@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { hasValidCronSecret } from '@/lib/cron-auth';
 
 /** Routes that don't require authentication */
 const PUBLIC_PATHS = [
@@ -10,6 +11,7 @@ const PUBLIC_PATHS = [
   '/demo',
   '/api/health',
   '/api/payments/momo/webhook/mtn',
+    '/api/notifications/webhook/meta',
 ];
 
 /** Paths protected by CRON_SECRET instead of session cookie */
@@ -88,6 +90,24 @@ export function middleware(request: NextRequest) {
         return NextResponse.redirect(rootUrl);
     }
 
+    if (CRON_SECRET_PATHS.some((p) => pathname.startsWith(p))) {
+        if (!hasValidCronSecret(request)) {
+            return NextResponse.json({ error: 'forbidden', reason: 'invalid_cron_secret' }, { status: 401 });
+        }
+
+        const requestHeaders = new Headers(request.headers);
+        requestHeaders.set('x-pathname', pathname);
+        requestHeaders.set('x-request-id', requestId);
+
+        const response = NextResponse.next({ request: { headers: requestHeaders } });
+        response.headers.set('x-request-id', requestId);
+        response.headers.set(
+            'Strict-Transport-Security',
+            'max-age=63072000; includeSubDomains; preload'
+        );
+        return response;
+    }
+
     const isPublic =
         PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
@@ -104,26 +124,6 @@ export function middleware(request: NextRequest) {
     // Note: We intentionally do NOT redirect /login → /pos based on cookie existence.
     // The cookie may reference a stale/invalid session. The login page itself
     // validates the session via getUser() and redirects if truly authenticated.
-
-    // CRON_SECRET_PATHS require CRON_SECRET via header or query param.
-    if (CRON_SECRET_PATHS.some((p) => pathname.startsWith(p))) {
-      const cronSecret = process.env.CRON_SECRET;
-      const authHeader = request.headers.get('authorization') ?? '';
-      const bearerValue = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      const providedSecret =
-        bearerValue ||
-        request.headers.get('x-cron-secret') ||
-        request.nextUrl.searchParams.get('secret') ||
-        '';
-      if (!cronSecret || providedSecret !== cronSecret) {
-        return NextResponse.json({ error: 'forbidden', reason: 'invalid_cron_secret' }, { status: 401 });
-      }
-      // Authorised cron call — skip the normal session check below.
-      const requestHeaders = new Headers(request.headers);
-      requestHeaders.set('x-pathname', pathname);
-      requestHeaders.set('x-request-id', requestId);
-      return NextResponse.next({ request: { headers: requestHeaders } });
-    }
 
     // --- Forward pathname header for server components ---
     const requestHeaders = new Headers(request.headers);

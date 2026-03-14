@@ -20,6 +20,9 @@ model Business {
   receiptTemplate                      String   @default("THERMAL_80")
   printMode                            String   @default("DIRECT_ESC_POS")
   printerName                          String?
+  labelPrintMode                       String   @default("BROWSER_PDF")
+  labelPrinterName                     String?
+  labelSize                            String   @default("SHELF_TAG")
   // Receipt customization fields
   receiptLogoUrl                       String?
   receiptHeader                        String?
@@ -47,6 +50,12 @@ model Business {
   whatsappPhone                        String?
   whatsappScheduleTime                 String?  @default("20:00")
   whatsappBranchScope                  String?  @default("ALL")
+  whatsappLowStockEnabled              Boolean  @default(false)
+  whatsappCashVarianceEnabled          Boolean  @default(false)
+  whatsappCashVarianceThreshold        Decimal  @default(50.00)
+  whatsappVoidAlertEnabled             Boolean  @default(false)
+  whatsappVoidAlertThreshold           Decimal  @default(100.00)
+  timezone                             String   @default("Africa/Accra")
   // Phase 3B: demo mode flag
   isDemo                               Boolean  @default(false)
   // Onboarding tracking
@@ -88,6 +97,7 @@ model Store {
   name           String
   address        String?
   phone          String?
+  isMainStore    Boolean  @default(false)
   vatEnabled     Boolean  @default(false)
   vatRateBps     Int      @default(1500)
   nhilRateBps    Int      @default(250)
@@ -1073,6 +1083,7 @@ model ScheduledJob {
   id          String   @id @default(cuid())
   businessId  String?
   jobName     String
+  runKey      String?  @unique
   status      String   @default("PENDING")
   triggeredBy String?  @default("CRON")
   startedAt   DateTime @default(now())
@@ -1093,19 +1104,26 @@ model MessageLog {
   id          String   @id @default(cuid())
   businessId  String
   channel     String   @default("WHATSAPP")
+  provider    String   @default("WHATSAPP_DEEPLINK")
   recipient   String
   messageType String
   payload     String
-  status      String   @default("SENT")
+  status      String   @default("PENDING")
+  providerStatus String?
+  providerMessageId String?
   errorMessage String?
   deepLink    String?
   sentAt      DateTime @default(now())
+  deliveredAt DateTime?
 
   business Business @relation(fields: [businessId], references: [id])
 
   @@index([businessId, sentAt])
   @@index([channel, sentAt])
   @@index([messageType, sentAt])
+  @@index([provider, sentAt])
+  @@index([status, sentAt])
+  @@index([providerMessageId])
 }
 
 // Phase 4: Lightweight reorder action tracking

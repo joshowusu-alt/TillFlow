@@ -64,16 +64,18 @@ async function testNewSchemaModels(businessId: string, tag: string) {
     data: {
       businessId,
       channel: 'WHATSAPP',
+      provider: 'WHATSAPP_DEEPLINK',
       recipient: '233241234567',
       messageType: tag,
       payload: 'Test QA message',
-      status: 'SENT',
+      status: 'REVIEW_REQUIRED',
+      providerStatus: 'MANUAL_REVIEW_REQUIRED',
       deepLink: 'https://wa.me/233241234567?text=test',
       sentAt: new Date(),
     },
   });
   assert(msg.id, 'MessageLog should have an id');
-  assert(msg.status === 'SENT', 'MessageLog status should be SENT');
+  assert(msg.status === 'REVIEW_REQUIRED', 'MessageLog status should reflect truthful fallback state');
   console.log('  ✓ MessageLog created', msg.id);
 
   // Read back
@@ -81,6 +83,7 @@ async function testNewSchemaModels(businessId: string, tag: string) {
   assert(readJob?.durationMs === 42, 'ScheduledJob durationMs should be 42');
   const readMsg = await prisma.messageLog.findUnique({ where: { id: msg.id } });
   assert(readMsg?.deepLink?.startsWith('https://wa.me'), 'MessageLog deepLink should be wa.me');
+  assert(readMsg?.provider === 'WHATSAPP_DEEPLINK', 'MessageLog provider should reflect deep-link fallback');
   console.log('  ✓ Read-back assertions passed');
 
   return { jobId: job.id, msgId: msg.id };
@@ -171,8 +174,8 @@ async function testEodSummaryPayload(businessId: string) {
   });
 
   // Import and call buildEodSummaryPayload
-  const { buildEodSummaryPayload } = await import('../app/actions/notifications');
-  const result = await buildEodSummaryPayload(businessId);
+  const { buildEodSummaryPreviewForBusiness } = await import('../app/actions/notifications');
+  const result = await buildEodSummaryPreviewForBusiness(businessId);
 
   assert(result.text.length > 0, 'EOD summary text should not be empty');
   assert(result.deepLink.startsWith('https://wa.me/'), 'EOD deepLink should be a wa.me URL');

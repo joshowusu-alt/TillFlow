@@ -6,6 +6,7 @@ import { revalidateTag } from 'next/cache';
 import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
 import { createStockAdjustment } from '@/lib/services/inventory';
 import { audit } from '@/lib/audit';
+import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 
 /**
  * Start a new stocktake — snapshots current system quantities for all active
@@ -122,6 +123,7 @@ export async function completeStocktakeAction(data: {
     // leave inventory in a partially-adjusted state.  On retry the idempotency
     // guard (line.adjusted check) ensures already-processed lines are skipped.
     let adjustedCount = 0;
+    const affectedProductIds = new Set<string>();
     await prisma.$transaction(
       async (tx) => {
         for (const count of data.counts) {
@@ -159,6 +161,7 @@ export async function completeStocktakeAction(data: {
                 },
                 tx,
               );
+              affectedProductIds.add(line.productId);
               adjustedCount++;
             }
           }
@@ -188,6 +191,14 @@ export async function completeStocktakeAction(data: {
     });
 
     revalidateTag('pos-products');
+
+    if (affectedProductIds.size > 0) {
+      void checkAndSendLowStockAlert({
+        businessId,
+        storeId,
+        productIds: Array.from(affectedProductIds),
+      }).catch(() => {});
+    }
 
     return { success: true };
   });

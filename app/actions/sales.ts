@@ -13,6 +13,7 @@ import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
+import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -107,6 +108,13 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         ],
         lines
       });
+
+      const affectedProductIds = [...new Set(lines.map((line) => line.productId).filter(Boolean))];
+      void checkAndSendLowStockAlert({
+        businessId,
+        storeId,
+        productIds: affectedProductIds,
+      }).catch(() => {});
 
       audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }).catch(() => {});
 
@@ -253,6 +261,13 @@ export async function completeSaleAction(data: {
       ],
       lines,
     });
+
+    const affectedProductIds = [...new Set(lines.map((line) => line.productId).filter(Boolean))];
+    void checkAndSendLowStockAlert({
+      businessId,
+      storeId: data.storeId,
+      productIds: affectedProductIds,
+    }).catch(() => {});
 
     // Fire-and-forget: audit + cache revalidation should not block the cashier
     audit({
