@@ -72,7 +72,15 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Products" subtitle="Products, categories, and pricing." />
+      <PageHeader
+        title="Products"
+        subtitle="Products, categories, and pricing."
+        actions={
+          <Link href="/products/labels" className="btn-secondary justify-center text-sm">
+            Print Labels
+          </Link>
+        }
+      />
 
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">

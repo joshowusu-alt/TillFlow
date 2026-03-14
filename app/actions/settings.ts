@@ -40,6 +40,12 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const receiptTemplate = formString(formData, 'receiptTemplate') || 'THERMAL_80';
     const printMode = formString(formData, 'printMode') || 'DIRECT_ESC_POS';
     const printerName = formOptionalString(formData, 'printerName');
+    const labelPrintModeRaw = (formString(formData, 'labelPrintMode') || 'BROWSER_PDF').toUpperCase();
+    const labelPrintMode = labelPrintModeRaw === 'ZPL_DIRECT' ? 'ZPL_DIRECT' : 'BROWSER_PDF';
+    const labelSizeRaw = (formString(formData, 'labelSize') || 'SHELF_TAG').toUpperCase();
+    const labelSize =
+      labelSizeRaw === 'PRODUCT_STICKER' || labelSizeRaw === 'A4_SHEET' ? labelSizeRaw : 'SHELF_TAG';
+    const labelPrinterName = formOptionalString(formData, 'labelPrinterName');
     const tinNumber = formOptionalString(formData, 'tinNumber');
     const phone = formOptionalString(formData, 'phone');
     const address = formOptionalString(formData, 'address');
@@ -78,6 +84,9 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         receiptTemplate,
         printMode,
         printerName,
+        labelPrintMode,
+        labelSize,
+        labelPrinterName,
         tinNumber,
         phone,
         address,
@@ -92,7 +101,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         inventoryAdjustmentRiskThresholdBase,
         cashVarianceRiskThresholdPence,
         storeMode,
-      }
+      } as any
     });
 
     // When switching to ADVANCED, ensure Chart of Accounts exists so reports work immediately

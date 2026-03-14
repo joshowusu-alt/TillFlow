@@ -135,6 +135,47 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               Leave blank to use the system default printer.
             </div>
           </div>
+
+          <div id="label-printing" className="md:col-span-2 rounded-2xl border border-blue-100/80 bg-blue-50/40 px-4 py-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-display font-semibold">Label Printing</h3>
+                <p className="mt-1 text-sm text-black/55">
+                  Set the default label format and choose whether product labels are prepared for browser printing or Zebra-compatible ZPL workflows.
+                </p>
+              </div>
+              <a href="/products/labels" className="btn-ghost text-xs">
+                Open label workspace
+              </a>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="label">Default Label Size</label>
+                <select className="input" name="labelSize" defaultValue={(business as any).labelSize ?? 'SHELF_TAG'}>
+                  <option value="SHELF_TAG">Shelf Tag</option>
+                  <option value="PRODUCT_STICKER">Product Sticker</option>
+                  <option value="A4_SHEET">A4 Sheet</option>
+                </select>
+                <div className="mt-1 text-xs text-black/50">Preselected on the bulk label print page.</div>
+              </div>
+              <div>
+                <label className="label">Label Print Mode</label>
+                <select className="input" name="labelPrintMode" defaultValue={(business as any).labelPrintMode ?? 'BROWSER_PDF'}>
+                  <option value="BROWSER_PDF">Browser / PDF</option>
+                  <option value="ZPL_DIRECT">ZPL Direct</option>
+                </select>
+                <div className="mt-1 text-xs text-black/50">
+                  Browser/PDF opens printable HTML. ZPL Direct stores your Zebra workflow preference for compatible thermal printers.
+                </div>
+              </div>
+              <div>
+                <label className="label">Label Printer Name (optional)</label>
+                <input className="input" name="labelPrinterName" defaultValue={(business as any).labelPrinterName ?? ''} />
+                <div className="mt-1 text-xs text-black/50">Used when sending labels to a saved thermal printer workflow.</div>
+              </div>
+            </div>
+          </div>
           <div>
             <label className="label">VAT Number</label>
             <input className="input" name="vatNumber" defaultValue={business.vatNumber ?? ''} />

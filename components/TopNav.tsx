@@ -30,6 +30,7 @@ const navGroups = [
       { href: '/inventory', label: 'Inventory', roles: ['MANAGER', 'OWNER'] },
       { href: '/inventory/adjustments', label: 'Stock Adjustments', roles: ['MANAGER', 'OWNER'] },
       { href: '/products', label: 'Products', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
+      { href: '/products/labels', label: 'Product Labels', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/customers', label: 'Customers', roles: ['MANAGER', 'OWNER'] },
       { href: '/suppliers', label: 'Suppliers', roles: ['MANAGER', 'OWNER'] }
     ]
