@@ -23,7 +23,7 @@
     <rect x="120" y="200" width="120" height="50" rx="8" fill="#1E40AF"/>
     
     <!-- Amount display -->
-    <text x="180" y="235" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">$42.50</text>
+    <text x="180" y="235" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">GH₵77</text>
     
     <!-- Keypad grid -->
     <g fill="#e5e7eb">

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
               display: 'flex',
               width: size * 0.38,
               height: size * 0.14,
-              background: 'rgba(255,255,255,0.95)',
+              background: '#1E40AF',
               borderRadius: size * 0.025,
               alignItems: 'center',
               justifyContent: 'center',
@@ -52,12 +52,12 @@ export async function GET(request: NextRequest) {
           >
             <span
               style={{
-                fontSize: size * 0.065,
+                fontSize: size * 0.055,
                 fontWeight: 700,
-                color: '#1E40AF',
+                color: '#ffffff',
               }}
             >
-              TillFlow
+              GH₵77
             </span>
           </div>
 
