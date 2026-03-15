@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import ResetPasswordModal from '@/components/ResetPasswordModal';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { requireRole } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createUserAction, updateUserAction, toggleUserActiveAction } from '@/app/actions/users';
@@ -177,7 +178,57 @@ export default async function UsersPage({
       {/* Users list */}
       <div className="card p-6">
         <h2 className="text-lg font-semibold mb-4">Current Users ({users.length})</h2>
-        <div className="overflow-x-auto">
+        <div className="space-y-4 md:hidden">
+          {users.map((user) => (
+            <DataCard key={user.id}>
+              <DataCardHeader
+                title={user.name}
+                subtitle={user.email}
+                aside={
+                  <span
+                    className={`pill text-[11px] ${
+                      user.role === 'OWNER'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : user.role === 'MANAGER'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-accentSoft text-accent'
+                    }`}
+                  >
+                    {user.role}
+                  </span>
+                }
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DataCardField
+                  label="Status"
+                  value={user.active ? 'Active' : 'Inactive'}
+                  valueClassName={user.active ? 'text-emerald-600' : 'text-red-500'}
+                />
+                <DataCardField label="Access" value={user.role === 'CASHIER' ? 'POS & shifts' : user.role === 'MANAGER' ? 'Operations manager' : 'Full owner access'} />
+              </div>
+              <DataCardActions>
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <a href={`/users?edit=${user.id}`} className="btn-ghost text-center text-xs">
+                    Edit
+                  </a>
+                  <ResetPasswordModal userId={user.id} userName={user.name} isSelf={user.id === owner.id} />
+                  {user.id !== owner.id && (
+                    <form action={toggleUserActiveAction}>
+                      <input type="hidden" name="userId" value={user.id} />
+                      <button
+                        type="submit"
+                        className={`btn-ghost text-xs ${user.active ? 'text-red-500' : 'text-emerald-600'}`}
+                      >
+                        {user.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              </DataCardActions>
+            </DataCard>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>

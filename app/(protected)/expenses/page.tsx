@@ -2,6 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import Pagination from '@/components/Pagination';
+import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
@@ -133,50 +134,77 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         </form>
       </div>
 
-      <div className="card p-6 overflow-x-auto">
+      <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Recent expenses</h2>
-        <table className="table mt-4 w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th className="hidden sm:table-cell">Method</th>
-              <th className="hidden sm:table-cell">Vendor</th>
-              <th className="hidden md:table-cell">Recorded By</th>
-              <th className="hidden md:table-cell">Notes</th>
-              <th className="hidden sm:table-cell">Attachment</th>
-            </tr>
-          </thead>
-          <tbody>
-            {expenses.map((expense) => (
-              <tr key={expense.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-sm">{formatDateTime(expense.createdAt)}</td>
-                <td className="px-3 py-3 text-sm font-semibold">{expense.account.name}</td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(expense.amountPence, business.currency)}
-                </td>
-                <td className="px-3 py-3 text-sm">
-                  <span className="pill bg-black/5 text-black/60">{expense.paymentStatus}</span>
-                </td>
-                <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
-                <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
-                <td className="hidden md:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
-                <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
-                <td className="hidden sm:table-cell px-3 py-3 text-sm">
-                  {expense.attachmentPath ? (
-                    <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank">
-                      View
-                    </a>
-                  ) : (
-                    '-'
-                  )}
-                </td>
+        <div className="mt-4 space-y-4 md:hidden">
+          {expenses.map((expense) => (
+            <DataCard key={expense.id}>
+              <DataCardHeader
+                title={expense.account.name}
+                subtitle={formatDateTime(expense.createdAt)}
+                aside={<span className="pill bg-black/5 text-black/60 text-[11px]">{expense.paymentStatus}</span>}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DataCardField label="Amount" value={formatMoney(expense.amountPence, business.currency)} />
+                <DataCardField label="Method" value={expense.method ?? '-'} />
+                <DataCardField label="Vendor" value={expense.vendorName ?? '-'} />
+                <DataCardField label="Recorded by" value={expense.user.name} />
+              </div>
+              {expense.notes ? <p className="text-sm text-black/60">{expense.notes}</p> : null}
+              {expense.attachmentPath ? (
+                <div>
+                  <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
+                    View attachment
+                  </a>
+                </div>
+              ) : null}
+            </DataCard>
+          ))}
+        </div>
+        <div className="mt-4 hidden overflow-x-auto md:block">
+          <table className="table w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th className="hidden sm:table-cell">Method</th>
+                <th className="hidden sm:table-cell">Vendor</th>
+                <th className="hidden md:table-cell">Recorded By</th>
+                <th className="hidden md:table-cell">Notes</th>
+                <th className="hidden sm:table-cell">Attachment</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {expenses.map((expense) => (
+                <tr key={expense.id} className="rounded-xl bg-white">
+                  <td className="px-3 py-3 text-sm">{formatDateTime(expense.createdAt)}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">{expense.account.name}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {formatMoney(expense.amountPence, business.currency)}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    <span className="pill bg-black/5 text-black/60">{expense.paymentStatus}</span>
+                  </td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
+                  <td className="hidden md:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
+                  <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm">
+                    {expense.attachmentPath ? (
+                      <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">
+                        View
+                      </a>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <Pagination currentPage={page} totalPages={totalPages} basePath="/expenses" />
         {expenses.length === 0 ? <div className="text-sm text-black/50">No expenses yet.</div> : null}
       </div>

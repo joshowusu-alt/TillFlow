@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getBusinessStores } from '@/lib/services/stores';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 
 export default async function SalesPage({
   searchParams,
@@ -118,102 +119,178 @@ export default async function SalesPage({
         </form>
       </div>
 
-      <div className="card p-6 overflow-x-auto">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Invoice</th>
-              <th>Date</th>
-              <th className="hidden sm:table-cell">Branch</th>
-              <th className="hidden sm:table-cell">Customer</th>
-              <th>Status</th>
-              <th>Total</th>
-              <th className="hidden sm:table-cell">Receipt</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sales.length === 0 && (
-              <tr>
-                <td colSpan={8} className="px-3 py-12 text-center">
-                  <div className="flex flex-col items-center animate-fade-in-up">
-                    <div className="rounded-full bg-black/5 p-3 mb-2">
-                      <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
-                      </svg>
-                    </div>
-                    <div className="text-sm text-black/70">
-                      {q ? `No sales matching "${q}"` : (fromParam || toParam) ? 'No sales in this date range' : 'No sales yet'}
-                    </div>
-                    <div className="text-xs text-black/40 mt-1">
-                      {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
-                    </div>
-                    {!q && (fromParam || toParam) ? (
-                      <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
-                    ) : !q ? (
-                      <div className="mt-3 flex gap-2">
-                        <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
-                        <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
-                      </div>
-                    ) : null}
+      <div className="card p-6">
+        <div className="space-y-3 md:hidden">
+          {sales.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
+              <div className="flex flex-col items-center animate-fade-in-up">
+                <div className="rounded-full bg-black/5 p-3 mb-2">
+                  <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
+                  </svg>
+                </div>
+                <div className="text-sm text-black/70">
+                  {q ? `No sales matching "${q}"` : (fromParam || toParam) ? 'No sales in this date range' : 'No sales yet'}
+                </div>
+                <div className="text-xs text-black/40 mt-1">
+                  {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                </div>
+                {!q && (fromParam || toParam) ? (
+                  <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
+                ) : !q ? (
+                  <div className="mt-3 flex gap-2">
+                    <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
+                    <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
                   </div>
-                </td>
-              </tr>
-            )}
-            {sales.map((sale) => (
-              <tr key={sale.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3">
-                  <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
-                    {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
-                  </Link>
-                </td>
-                <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
-                  {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                  {' '}
-                  <span className="text-muted">
-                    {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </td>
-                <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
-                <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
-                <td className="px-3 py-3">
-                  <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
-                </td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(sale.totalPence, business.currency)}
-                </td>
-                <td className="hidden sm:table-cell px-3 py-3">
+                ) : null}
+              </div>
+            </div>
+          ) : sales.map((sale) => {
+            const receiptRef = sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`;
+            const outstandingPence = sale.totalPence - sale.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+            const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
+
+            return (
+              <DataCard key={sale.id}>
+                <DataCardHeader
+                  title={<Link href={`/receipts/${sale.id}`} className="font-mono text-primary hover:underline">{receiptRef}</Link>}
+                  subtitle={sale.customer?.name ?? 'Walk-in'}
+                  aside={<span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>}
+                />
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <DataCardField label="Date" value={<span className="text-black/65">{sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>} />
+                  <DataCardField label="Total" value={<span className="font-semibold text-ink">{formatMoney(sale.totalPence, business.currency)}</span>} />
+                  <DataCardField label="Branch" value={<span className="text-black/65">{sale.store.name}</span>} />
+                  <DataCardField label="Items" value={<span className="text-black/65">{sale._count.lines}</span>} />
+                </div>
+                <DataCardActions>
                   <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
                     Print
                   </Link>
-                </td>
-                <td className="px-3 py-3">
-                  {sale.salesReturn || ['RETURNED', 'VOID'].includes(sale.paymentStatus) ? (
-                    <span className="text-xs text-black/40">Returned</span>
-                  ) : (
-                    <div className="flex gap-2 flex-wrap">
-                      {['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) && (
-                        <InlinePaymentForm
-                          invoiceId={sale.id}
-                          outstandingPence={sale.totalPence - sale.payments.reduce((s, p) => s + p.amountPence, 0)}
-                          currency={business.currency}
-                          type="customer"
-                          returnTo="/sales"
-                        />
-                      )}
+                  {!isClosed && ['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) ? (
+                    <InlinePaymentForm
+                      invoiceId={sale.id}
+                      outstandingPence={outstandingPence}
+                      currency={business.currency}
+                      type="customer"
+                      returnTo="/sales"
+                    />
+                  ) : null}
+                  {!isClosed ? (
+                    <>
                       <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
                         Amend
                       </Link>
                       <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
                         Return
                       </Link>
-                    </div>
+                    </>
+                  ) : (
+                    <span className="rounded-full bg-black/5 px-3 py-2 text-xs font-semibold text-black/45">Returned</span>
                   )}
-                </td>
+                </DataCardActions>
+              </DataCard>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="table w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th className="hidden sm:table-cell">Branch</th>
+                <th className="hidden sm:table-cell">Customer</th>
+                <th>Status</th>
+                <th>Total</th>
+                <th className="hidden sm:table-cell">Receipt</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sales.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-12 text-center">
+                    <div className="flex flex-col items-center animate-fade-in-up">
+                      <div className="rounded-full bg-black/5 p-3 mb-2">
+                        <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
+                        </svg>
+                      </div>
+                      <div className="text-sm text-black/70">
+                        {q ? `No sales matching "${q}"` : (fromParam || toParam) ? 'No sales in this date range' : 'No sales yet'}
+                      </div>
+                      <div className="text-xs text-black/40 mt-1">
+                        {q ? 'Try a different search term.' : (fromParam || toParam) ? 'Adjust the date range or view all sales.' : 'Open the POS to make your first sale, or run Demo Day to preview.'}
+                      </div>
+                      {!q && (fromParam || toParam) ? (
+                        <a href="/sales?from=&to=" className="btn-secondary text-xs px-3 py-1.5 mt-3">View all sales</a>
+                      ) : !q ? (
+                        <div className="mt-3 flex gap-2">
+                          <a href="/pos" className="btn-primary text-xs px-3 py-1.5">Open POS</a>
+                          <a href="/onboarding#demo" className="btn-ghost text-xs px-3 py-1.5 border border-black/10 rounded-lg">Run Demo Day</a>
+                        </div>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {sales.map((sale) => (
+                <tr key={sale.id} className="rounded-xl bg-white">
+                  <td className="px-3 py-3">
+                    <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
+                      {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
+                    {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    {' '}
+                    <span className="text-muted">
+                      {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
+                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
+                  <td className="px-3 py-3">
+                    <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {formatMoney(sale.totalPence, business.currency)}
+                  </td>
+                  <td className="hidden sm:table-cell px-3 py-3">
+                    <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
+                      Print
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3">
+                    {sale.salesReturn || ['RETURNED', 'VOID'].includes(sale.paymentStatus) ? (
+                      <span className="text-xs text-black/40">Returned</span>
+                    ) : (
+                      <div className="flex gap-2 flex-wrap">
+                        {['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) && (
+                          <InlinePaymentForm
+                            invoiceId={sale.id}
+                            outstandingPence={sale.totalPence - sale.payments.reduce((s, p) => s + p.amountPence, 0)}
+                            currency={business.currency}
+                            type="customer"
+                            returnTo="/sales"
+                          />
+                        )}
+                        <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
+                          Amend
+                        </Link>
+                        <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
+                          Return
+                        </Link>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <Pagination
           currentPage={page}
           totalPages={totalPages}

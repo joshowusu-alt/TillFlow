@@ -10,6 +10,7 @@ import { createCustomerAction } from '@/app/actions/customers';
 import { formatMoney } from '@/lib/format';
 import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 
 export default async function CustomersPage({
   searchParams,
@@ -73,59 +74,105 @@ export default async function CustomersPage({
         ) : null}
       </div>
 
-      <div className="card p-6 overflow-x-auto">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th className="hidden sm:table-cell">Email</th>
-              <th className="hidden md:table-cell">Branch</th>
-              <th>Credit Limit</th>
-              <th>Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {customers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-3 py-12 text-center">
-                  <div className="flex flex-col items-center">
-                    <div className="rounded-full bg-black/5 p-3 mb-2">
-                      <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                    </div>
-                    <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
-                    <div className="text-xs text-black/40 mt-1">Add your first customer using the form above.</div>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {customers.map((customer) => {
-              const balance = customer.outstandingBalancePence;
-              const branchName = customer.storeId
-                ? stores.find((store) => store.id === customer.storeId)?.name ?? 'Unknown'
-                : 'Shared';
+      <div className="card p-6">
+        <div className="space-y-3 md:hidden">
+          {customers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
+              <div className="flex flex-col items-center">
+                <div className="mb-2 rounded-full bg-black/5 p-3">
+                  <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
+                <div className="mt-1 text-xs text-black/40">Add your first customer using the form above.</div>
+              </div>
+            </div>
+          ) : customers.map((customer) => {
+            const balance = customer.outstandingBalancePence;
+            const branchName = customer.storeId
+              ? stores.find((store) => store.id === customer.storeId)?.name ?? 'Unknown'
+              : 'Shared';
 
-              return (
-                <tr key={customer.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 font-semibold">
-                    <Link href={`/customers/${customer.id}`} className="hover:underline">
-                      {customer.name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
-                  <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
-                  <td className="px-3 py-3 text-sm">{formatMoney(customer.creditLimitPence, business.currency)}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(balance, business.currency)}
+            return (
+              <DataCard key={customer.id}>
+                <DataCardHeader
+                  title={<Link href={`/customers/${customer.id}`} className="hover:underline">{customer.name}</Link>}
+                  subtitle={customer.phone ?? 'No phone number'}
+                  aside={balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
+                />
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(customer.creditLimitPence, business.currency)}</span>} />
+                  <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
+                  <DataCardField label="Email" value={<span className="text-black/65">{customer.email ?? '-'}</span>} className="col-span-2" />
+                  {business.customerScope === 'BRANCH' ? (
+                    <DataCardField label="Branch" value={<span className="text-black/65">{branchName}</span>} className="col-span-2" />
+                  ) : null}
+                </div>
+                <DataCardActions>
+                  <Link href={`/customers/${customer.id}`} className="btn-ghost text-xs">
+                    View customer
+                  </Link>
+                </DataCardActions>
+              </DataCard>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
+          <table className="table w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th className="hidden sm:table-cell">Email</th>
+                <th className="hidden md:table-cell">Branch</th>
+                <th>Credit Limit</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-12 text-center">
+                    <div className="flex flex-col items-center">
+                      <div className="rounded-full bg-black/5 p-3 mb-2">
+                        <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
+                      <div className="text-xs text-black/40 mt-1">Add your first customer using the form above.</div>
+                    </div>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+              {customers.map((customer) => {
+                const balance = customer.outstandingBalancePence;
+                const branchName = customer.storeId
+                  ? stores.find((store) => store.id === customer.storeId)?.name ?? 'Unknown'
+                  : 'Shared';
+
+                return (
+                  <tr key={customer.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 font-semibold">
+                      <Link href={`/customers/${customer.id}`} className="hover:underline">
+                        {customer.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
+                    <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
+                    <td className="px-3 py-3 text-sm">{formatMoney(customer.creditLimitPence, business.currency)}</td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(balance, business.currency)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         <Pagination
           currentPage={page}
           totalPages={totalPages}

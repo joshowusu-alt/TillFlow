@@ -13,6 +13,7 @@ import RepairPricesButton from './RepairPricesButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -200,72 +201,141 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           <div className="mb-4 max-w-xs">
             <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
           </div>
-          <div className="card p-6 overflow-x-auto">
-            <table className="table w-full border-separate border-spacing-y-2">
-              <thead>
-                <tr>
-                  <th className="hidden sm:table-cell"></th>
-                  <th>Product</th>
-                  <th className="hidden sm:table-cell">Category</th>
-                  <th>Base Price</th>
-                  <th className="hidden md:table-cell">Default Cost</th>
-                  <th className="hidden md:table-cell">Unit Display</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => {
-                  const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
-                  const packaging = getPrimaryPackagingUnit(
-                    product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
-                  );
-                  const preview = formatMixedUnit({
-                    qtyBase: packaging?.conversionToBase ? packaging.conversionToBase + 2 : 2,
-                    baseUnit: baseUnit?.unit.name ?? 'unit',
-                    baseUnitPlural: baseUnit?.unit.pluralName,
-                    packagingUnit: packaging?.unit.name,
-                    packagingUnitPlural: packaging?.unit.pluralName,
-                    packagingConversion: packaging?.conversionToBase
-                  });
-                  return (
-                    <tr key={product.id} className="rounded-xl bg-white">
-                      <td className="hidden sm:table-cell px-3 py-3 w-10">
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-8 h-8 rounded-md object-cover"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent">
-                            {product.name.charAt(0)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 font-semibold">
-                        <Link href={`/products/${product.id}`} className="hover:underline">
-                          {product.name}
-                        </Link>
-                      </td>
-                      <td className="hidden sm:table-cell px-3 py-3">
-                        {product.category ? (
-                          <span
-                            className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                            style={{ backgroundColor: product.category.colour }}
-                          >
-                            {product.category.name}
-                          </span>
-                        ) : (
-                          <span className="text-black/30 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                      <td className="hidden md:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
-                      <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="card p-6">
+            <div className="space-y-3 md:hidden">
+              {products.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
+                  {q ? `No products matching "${q}".` : 'No active products yet.'}
+                </div>
+              ) : products.map((product) => {
+                const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
+                const packaging = getPrimaryPackagingUnit(
+                  product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
+                );
+                const preview = formatMixedUnit({
+                  qtyBase: packaging?.conversionToBase ? packaging.conversionToBase + 2 : 2,
+                  baseUnit: baseUnit?.unit.name ?? 'unit',
+                  baseUnitPlural: baseUnit?.unit.pluralName,
+                  packagingUnit: packaging?.unit.name,
+                  packagingUnitPlural: packaging?.unit.pluralName,
+                  packagingConversion: packaging?.conversionToBase
+                });
+
+                return (
+                  <DataCard key={product.id}>
+                    <DataCardHeader
+                      title={
+                        <div className="flex items-center gap-3">
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="h-10 w-10 rounded-xl object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent">
+                              {product.name.charAt(0)}
+                            </div>
+                          )}
+                          <Link href={`/products/${product.id}`} className="truncate hover:underline">
+                            {product.name}
+                          </Link>
+                        </div>
+                      }
+                      subtitle={product.category ? 'Catalog item' : 'Uncategorised product'}
+                      aside={product.category ? (
+                        <span
+                          className="inline-block rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                          style={{ backgroundColor: product.category.colour }}
+                        >
+                          {product.category.name}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-black/45">No category</span>
+                      )}
+                    />
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
+                      <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} />
+                      <DataCardField label="Unit display" value={<span className="text-black/65">{preview}</span>} className="col-span-2" />
+                    </div>
+                    <DataCardActions>
+                      <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                        View Product
+                      </Link>
+                    </DataCardActions>
+                  </DataCard>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="table w-full border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th className="hidden sm:table-cell"></th>
+                    <th>Product</th>
+                    <th className="hidden sm:table-cell">Category</th>
+                    <th>Base Price</th>
+                    <th className="hidden md:table-cell">Default Cost</th>
+                    <th className="hidden md:table-cell">Unit Display</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => {
+                    const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
+                    const packaging = getPrimaryPackagingUnit(
+                      product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
+                    );
+                    const preview = formatMixedUnit({
+                      qtyBase: packaging?.conversionToBase ? packaging.conversionToBase + 2 : 2,
+                      baseUnit: baseUnit?.unit.name ?? 'unit',
+                      baseUnitPlural: baseUnit?.unit.pluralName,
+                      packagingUnit: packaging?.unit.name,
+                      packagingUnitPlural: packaging?.unit.pluralName,
+                      packagingConversion: packaging?.conversionToBase
+                    });
+                    return (
+                      <tr key={product.id} className="rounded-xl bg-white">
+                        <td className="hidden sm:table-cell px-3 py-3 w-10">
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-8 h-8 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent">
+                              {product.name.charAt(0)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 font-semibold">
+                          <Link href={`/products/${product.id}`} className="hover:underline">
+                            {product.name}
+                          </Link>
+                        </td>
+                        <td className="hidden sm:table-cell px-3 py-3">
+                          {product.category ? (
+                            <span
+                              className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+                              style={{ backgroundColor: product.category.colour }}
+                            >
+                              {product.category.name}
+                            </span>
+                          ) : (
+                            <span className="text-black/30 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
+                        <td className="hidden md:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                        <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <Pagination currentPage={page} totalPages={totalProductPages} basePath="/products" searchParams={{ q: q || undefined, tab: 'products' }} />
           </div>
         </>
