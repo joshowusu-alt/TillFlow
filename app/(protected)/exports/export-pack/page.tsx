@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadFormButton from '@/components/DownloadFormButton';
 import DownloadLink from '@/components/DownloadLink';
 import { requireBusiness } from '@/lib/auth';
 
@@ -22,10 +23,10 @@ export default async function ExportPackPage() {
       <div className="card p-6 max-w-lg">
         <h2 className="mb-4 text-base font-semibold">Select Date Range</h2>
         <form
+          id="export-pack-form"
           method="get"
           action="/api/exports/pack"
           className="space-y-4"
-          target="_blank"
         >
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -37,15 +38,17 @@ export default async function ExportPackPage() {
               <input className="input" type="date" name="to" defaultValue={defaultTo} required />
             </div>
           </div>
-          <button
-            type="submit"
+          <DownloadFormButton
+            formId="export-pack-form"
+            action="/api/exports/pack"
+            fallbackFilename="export-pack.zip"
             className="btn-primary flex items-center gap-2"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
             </svg>
             Download ZIP
-          </button>
+          </DownloadFormButton>
         </form>
 
         <div className="mt-6 rounded-xl bg-black/5 p-4 text-sm text-black/60">

@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -113,14 +114,15 @@ export default async function SupplierDetailPage({
             <button className="btn-primary w-full">Filter</button>
           </div>
           <div className="flex items-end">
-            <a
+            <DownloadLink
               className="btn-ghost w-full text-xs"
               href={`/suppliers/${supplier.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
                 end?.toISOString().slice(0, 10) ?? ''
               }`}
+              fallbackFilename={`supplier-statement-${supplier.id.slice(0, 8)}.csv`}
             >
               Download CSV
-            </a>
+            </DownloadLink>
           </div>
         </form>
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
