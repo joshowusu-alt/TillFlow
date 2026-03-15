@@ -75,7 +75,7 @@ export default function InstallPrompt() {
     }
 
     return (
-        <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-sm animate-fade-in md:left-auto md:right-4">
+        <div className="safe-floating-bottom fixed left-4 right-4 z-50 mx-auto max-w-sm animate-fade-in md:left-auto md:right-4">
             <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">
                 {/* Header gradient */}
                 <div className="bg-gradient-to-r from-accent to-accent/80 p-4">

@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { logout } from '@/app/actions/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import InstallButton from './InstallButton';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import type { TopNavUser } from './TopNav';
 
 interface NavMobileMenuProps {
@@ -36,12 +38,34 @@ export default function NavMobileMenu({
   advancedReportLinks,
   todaySales,
 }: NavMobileMenuProps) {
+  useBodyScrollLock(mobileOpen);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const closeMenu = () => setMobileOpen(false);
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleMediaChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setMobileOpen(false);
+      }
+    };
+
+    window.addEventListener('orientationchange', closeMenu);
+    mediaQuery.addEventListener('change', handleMediaChange);
+
+    return () => {
+      window.removeEventListener('orientationchange', closeMenu);
+      mediaQuery.removeEventListener('change', handleMediaChange);
+    };
+  }, [mobileOpen, setMobileOpen]);
+
   if (!mobileOpen) return null;
 
   return (
     <>
       <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
-      <div className="fixed inset-x-3 bottom-3 top-[76px] z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
+      <div className="nav-mobile-panel fixed inset-x-3 z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4">
             <div className="flex items-start justify-between gap-3">

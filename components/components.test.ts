@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import ResponsiveModal from '@/components/ResponsiveModal';
 
 // Simple component tests without full Next.js context
 describe('NetworkStatus Component Logic', () => {
@@ -56,6 +57,27 @@ describe('InstallPrompt Component Logic', () => {
         expect(shouldRespectDismissal(twelveHoursAgo)).toBe(true); // Don't show
         expect(shouldRespectDismissal(twoDaysAgo)).toBe(false); // OK to show
         expect(shouldRespectDismissal(null)).toBe(false); // Never dismissed
+    });
+});
+
+describe('ResponsiveModal', () => {
+    it('locks body scroll while open and closes on Escape', () => {
+        const onClose = vi.fn();
+
+        render(
+            React.createElement(
+                ResponsiveModal,
+                { open: true, onClose, ariaLabel: 'Test modal' },
+                React.createElement('div', null, 'Modal content')
+            )
+        );
+
+        expect(document.body.style.overflow).toBe('hidden');
+        expect(screen.getByRole('dialog', { name: 'Test modal' })).toBeInTheDocument();
+
+        fireEvent.keyDown(window, { key: 'Escape' });
+
+        expect(onClose).toHaveBeenCalledTimes(1);
     });
 });
 

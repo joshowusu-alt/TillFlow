@@ -132,6 +132,22 @@ input, select, textarea {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.overlay-shell {
+  padding-top: max(1rem, calc(env(safe-area-inset-top, 0px) + 0.5rem));
+  padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 0.5rem));
+  padding-bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.5rem));
+  padding-left: max(1rem, calc(env(safe-area-inset-left, 0px) + 0.5rem));
+}
+
+.safe-floating-bottom {
+  bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+}
+
+.nav-mobile-panel {
+  top: calc(76px + env(safe-area-inset-top, 0px));
+  bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+}
+
 /* =============================================
    RECEIPT STYLES (unchanged)
    ============================================= */

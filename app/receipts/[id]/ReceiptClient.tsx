@@ -93,8 +93,8 @@ export default function ReceiptClient({
   const receiptReference = invoice.transactionNumber ?? invoice.id.slice(0, 8).toUpperCase();
   const itemGridClass =
     template === 'A4'
-      ? 'grid-cols-[2rem_minmax(0,1fr)_6rem_6rem]'
-      : 'grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
+      ? 'grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_5rem] sm:grid-cols-[2rem_minmax(0,1fr)_6rem_6rem]'
+      : 'grid-cols-[1.25rem_minmax(0,1fr)_3.75rem_4.25rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
 
   const handleDirectPrint = useCallback(async () => {
     try {
@@ -170,7 +170,7 @@ export default function ReceiptClient({
             </div>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <a href="/pos" className="btn-primary text-xs">
             New Sale
           </a>

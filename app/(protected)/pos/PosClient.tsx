@@ -690,6 +690,25 @@ export default function PosClient({
     };
   }, [productDropdownOpen, updateProductDropdownViewport]);
 
+  useEffect(() => {
+    const handleOrientationChange = () => {
+      setProductDropdownOpen(false);
+      setShowKeyboardHelp(false);
+      setShowQuickCustomer(false);
+      setCameraOpen(false);
+      setQuickAddOpen(false);
+      setShowParkModal(false);
+
+      window.requestAnimationFrame(updateProductDropdownViewport);
+    };
+
+    window.addEventListener('orientationchange', handleOrientationChange);
+
+    return () => {
+      window.removeEventListener('orientationchange', handleOrientationChange);
+    };
+  }, [updateProductDropdownViewport]);
+
 
 
   const addToCart = useCallback((line: { productId: string; unitId: string; qtyInUnit: number }) => {
@@ -2005,58 +2024,6 @@ export default function PosClient({
               </div>
             </div>
 
-            {parkedCarts.length > 0 && (
-              <div className="card overflow-hidden md:hidden">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100"
-                  onClick={() => setShowParkedPanel(!showParkedPanel)}
-                >
-                  <span className="flex items-center gap-2">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                    Parked Sales ({parkedCarts.length})
-                  </span>
-                  <svg className={`h-4 w-4 transition-transform ${showParkedPanel ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                {showParkedPanel && (
-                  <div className="divide-y divide-black/5 bg-white">
-                    {parkedCarts.map((parked) => (
-                      <div key={parked.id} className="space-y-2 px-4 py-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold text-black/80">{parked.label}</span>
-                          <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/45">{formatRelativeTime(parked.parkedAt)}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 text-xs text-black/50">
-                          <span>{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</span>
-                          <span>{new Date(parked.parkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                        </div>
-                        <div className="mt-1 flex gap-2">
-                          <button
-                            type="button"
-                            className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
-                            onClick={() => { handleRecallParkedCart(parked.id); setShowParkedPanel(false); }}
-                          >
-                            Recall
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50"
-                            onClick={() => deleteParkedCart(parked.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             <div className="flex flex-col gap-2 md:flex-row">
               <button className="btn-primary hidden flex-1 py-3 text-lg md:inline-flex md:items-center md:justify-center" type="submit" disabled={!canSubmit || isCompletingSale}>
                 {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
@@ -2136,6 +2103,54 @@ export default function PosClient({
         }}
         onClose={() => setCameraOpen(false)}
       />
+
+      {showParkedPanel && parkedCarts.length > 0 ? (
+        <div className="fixed inset-x-4 bottom-28 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl md:hidden">
+          <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
+            <div>
+              <div className="text-sm font-semibold text-amber-800">Parked Sales</div>
+              <div className="text-[11px] text-amber-700/80">Tap a basket to recall it without losing your place.</div>
+            </div>
+            <button
+              type="button"
+              className="rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200"
+              onClick={() => setShowParkedPanel(false)}
+            >
+              Close
+            </button>
+          </div>
+          <div className="max-h-[calc(45vh-4rem)] divide-y divide-black/5 overflow-y-auto overscroll-contain bg-white">
+            {parkedCarts.map((parked) => (
+              <div key={parked.id} className="space-y-2 px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-black/80">{parked.label}</span>
+                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/45">{formatRelativeTime(parked.parkedAt)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-xs text-black/50">
+                  <span>{parked.itemCount} item{parked.itemCount !== 1 ? 's' : ''}</span>
+                  <span>{new Date(parked.parkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
+                <div className="mt-1 flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
+                    onClick={() => { handleRecallParkedCart(parked.id); setShowParkedPanel(false); }}
+                  >
+                    Recall
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-50"
+                    onClick={() => deleteParkedCart(parked.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (

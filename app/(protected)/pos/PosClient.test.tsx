@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
@@ -27,7 +27,7 @@ vi.mock('./components/SummarySidebar', () => ({
   default: () => <div data-testid="summary-sidebar">Summary Sidebar</div>,
 }));
 vi.mock('./components/KeyboardHelpModal', () => ({
-  default: () => <div data-testid="keyboard-help-modal" />,
+  default: ({ show }: { show: boolean }) => (show ? <div data-testid="keyboard-help-modal" /> : null),
 }));
 vi.mock('./components/QuickAddPanel', () => ({
   default: () => <div data-testid="quick-add-panel" />,
@@ -39,7 +39,7 @@ vi.mock('./components/QuickAddCustomer', () => ({
   default: () => <div data-testid="quick-add-customer" />,
 }));
 vi.mock('./components/CameraScanner', () => ({
-  default: () => <div data-testid="camera-scanner" />,
+  default: ({ open }: { open: boolean }) => (open ? <div data-testid="camera-scanner" /> : null),
 }));
 
 const product = {
@@ -128,5 +128,48 @@ describe('PosClient desktop layout', () => {
     expect(screen.getByText(/1 sale waiting/i)).toBeInTheDocument();
     expect(screen.getByText(/Latest: Needs change/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Recall latest' })).toBeInTheDocument();
+  });
+
+  it('closes transient overlays after an orientation change', async () => {
+    render(<PosClient {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /\+ new/i }));
+    expect(screen.getByTestId('quick-add-customer')).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new Event('orientationchange'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('quick-add-customer')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the parked sales overlay intact after an orientation change', async () => {
+    window.localStorage.setItem(getParkedCartsStorageKey({ businessId: 'biz-1', storeId: 'store-1' }), JSON.stringify([
+      {
+        id: 'park-1',
+        label: 'Needs change',
+        cart: [{ id: 'prod-1:bottle', productId: 'prod-1', unitId: 'bottle', qtyInUnit: 1, discountType: 'NONE', discountValue: '' }],
+        customerId: '',
+        parkedAt: '2026-03-12T09:50:00.000Z',
+        itemCount: 1,
+      },
+    ]));
+
+    render(<PosClient {...baseProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Parked sales ready')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /view parked list/i }));
+    expect(screen.getByText('Tap a basket to recall it without losing your place.')).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new Event('orientationchange'));
+    });
+
+    expect(screen.getByText('Tap a basket to recall it without losing your place.')).toBeInTheDocument();
   });
 });

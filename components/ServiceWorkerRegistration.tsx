@@ -105,7 +105,7 @@ export default function ServiceWorkerRegistration() {
   if (!waitingWorker) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4">
+    <div className="safe-floating-bottom fixed left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-lg">
         <span className="text-sm font-medium text-black/70">A new version is available</span>
         <button

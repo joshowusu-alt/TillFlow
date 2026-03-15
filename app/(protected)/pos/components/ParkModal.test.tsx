@@ -32,8 +32,9 @@ describe('ParkModal', () => {
 
     const { container } = render(<ParkModal itemCount={2} onPark={vi.fn()} onClose={onClose} />);
 
-    const backdrop = container.firstChild as HTMLElement;
-    fireEvent.click(screen.getByText('Park Sale'));
+    const backdrop = container.querySelector('button[aria-hidden="true"]') as HTMLElement;
+
+    fireEvent.click(screen.getByRole('dialog', { name: 'Park current sale' }));
     expect(onClose).not.toHaveBeenCalled();
 
     fireEvent.click(backdrop);

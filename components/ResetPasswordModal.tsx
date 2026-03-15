@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { resetUserPasswordAction } from '@/app/actions/users';
 import SubmitButton from '@/components/SubmitButton';
+import ResponsiveModal from '@/components/ResponsiveModal';
 
 export default function ResetPasswordModal({
   userId,
@@ -28,51 +29,46 @@ export default function ResetPasswordModal({
   }
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/30"
-        onClick={() => setOpen(false)}
-      />
-
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-          <h3 className="text-lg font-semibold mb-1">Reset Password</h3>
-          <p className="text-sm text-black/60 mb-4">
-            {isSelf
-              ? 'Set a new password for your account. You will be logged out and need to sign in again.'
-              : <>Set a new password for <strong>{userName}</strong>. They will be logged out immediately.</>}
-          </p>
-          <form action={resetUserPasswordAction} className="space-y-4">
-            <input type="hidden" name="userId" value={userId} />
-            <div>
-              <label className="label">New Password</label>
-              <input
-                name="newPassword"
-                type="password"
-                className="input"
-                minLength={6}
-                required
-                placeholder="Min 6 characters"
-                autoFocus
-              />
-            </div>
-            <div className="flex gap-3">
-              <SubmitButton className="btn-primary flex-1" loadingText="Resetting…">
-                Reset Password
-              </SubmitButton>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="btn-ghost flex-1"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+    <ResponsiveModal
+      open={open}
+      onClose={() => setOpen(false)}
+      ariaLabel="Reset password"
+      maxWidthClassName="max-w-sm"
+      panelClassName="p-6"
+    >
+      <h3 className="mb-1 text-lg font-semibold">Reset Password</h3>
+      <p className="mb-4 text-sm text-black/60">
+        {isSelf
+          ? 'Set a new password for your account. You will be logged out and need to sign in again.'
+          : <>Set a new password for <strong>{userName}</strong>. They will be logged out immediately.</>}
+      </p>
+      <form action={resetUserPasswordAction} className="space-y-4">
+        <input type="hidden" name="userId" value={userId} />
+        <div>
+          <label className="label">New Password</label>
+          <input
+            name="newPassword"
+            type="password"
+            className="input"
+            minLength={6}
+            required
+            placeholder="Min 6 characters"
+            autoFocus
+          />
         </div>
-      </div>
-    </>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <SubmitButton className="btn-primary flex-1" loadingText="Resetting…">
+            Reset Password
+          </SubmitButton>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="btn-ghost flex-1"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </ResponsiveModal>
   );
 }
