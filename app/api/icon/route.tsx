@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
+import { renderTillFlowAppIcon } from '@/lib/branding/app-icon';
 
 export const runtime = 'edge';
 
@@ -16,94 +17,7 @@ export async function GET(request: NextRequest) {
   }
   const size = parsed;
 
-  const response = new ImageResponse(
-    (
-      <div
-        style={{
-          display: 'flex',
-          width: size,
-          height: size,
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #2563eb 0%, #1E40AF 50%, #1e3a8a 100%)',
-          borderRadius: size * 0.21,
-        }}
-      >
-        {/* Cash register body */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: size * 0.015,
-          }}
-        >
-          {/* Display screen */}
-          <div
-            style={{
-              display: 'flex',
-              width: size * 0.38,
-              height: size * 0.14,
-              background: '#1E40AF',
-              borderRadius: size * 0.025,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: size * 0.055,
-                fontWeight: 700,
-                color: '#ffffff',
-              }}
-            >
-              GH₵77
-            </span>
-          </div>
-
-          {/* Register body */}
-          <div
-            style={{
-              display: 'flex',
-              width: size * 0.44,
-              height: size * 0.25,
-              background: 'rgba(255,255,255,0.9)',
-              borderRadius: size * 0.03,
-              padding: size * 0.025,
-              gap: size * 0.015,
-              flexWrap: 'wrap',
-              alignContent: 'flex-start',
-            }}
-          >
-            {/* Keypad 3x2 */}
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            <div style={{ display: 'flex', width: size * 0.065, height: size * 0.055, background: '#d1d5db', borderRadius: size * 0.008 }} />
-            {/* Action button */}
-            <div style={{ display: 'flex', width: size * 0.08, height: size * 0.12, background: '#3b82f6', borderRadius: size * 0.012, marginLeft: 'auto' }} />
-          </div>
-        </div>
-
-        {/* Flow waves */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: size * 0.04,
-            marginLeft: size * 0.04,
-          }}
-        >
-          <div style={{ display: 'flex', width: size * 0.13, height: size * 0.018, background: 'rgba(255,255,255,0.9)', borderRadius: size * 0.01 }} />
-          <div style={{ display: 'flex', width: size * 0.16, height: size * 0.018, background: 'rgba(255,255,255,0.65)', borderRadius: size * 0.01 }} />
-          <div style={{ display: 'flex', width: size * 0.11, height: size * 0.018, background: 'rgba(255,255,255,0.4)', borderRadius: size * 0.01 }} />
-        </div>
-      </div>
-    ),
-    { width: size, height: size }
-  );
+  const response = new ImageResponse(renderTillFlowAppIcon(size), { width: size, height: size });
 
   response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
   return response;

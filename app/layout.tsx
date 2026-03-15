@@ -24,12 +24,12 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   icons: {
     icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/api/icon?size=32', type: 'image/png', sizes: '32x32' },
+      { url: '/icon', type: 'image/png', sizes: '512x512' },
       { url: '/api/icon?size=192', type: 'image/png', sizes: '192x192' },
+      { url: '/api/icon?size=32', type: 'image/png', sizes: '32x32' },
     ],
     apple: [
-      { url: '/api/icon?size=180', sizes: '180x180' },
+      { url: '/apple-icon', type: 'image/png', sizes: '180x180' },
     ],
   },
   appleWebApp: {

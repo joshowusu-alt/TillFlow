@@ -1575,82 +1575,86 @@ export default function PosClient({
                   return (
                     <div
                       key={line.id}
-                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
+                      className={`px-4 py-3 transition-colors ${isActive ? 'bg-accentSoft/50' : 'hover:bg-black/[.02]'}`}
                       onClick={() => setActiveLineId(line.id)}
                     >
-                      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-black/5 text-xs font-bold text-black/40">
-                        {index + 1}
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-black/5 text-xs font-bold text-black/40">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-sm truncate">{line.product.name}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-black/40">{formatMoney(line.unitPrice, business.currency)} × {line.unit.name}</span>
+                            {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
+                            {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
+                            {availBase <= 10 && (
+                              <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
+                                {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex-shrink-0 rounded-lg p-3 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
+                          onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
+                          title="Remove"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-sm truncate">{line.product.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-black/40">{formatMoney(line.unitPrice, business.currency)} × {line.unit.name}</span>
-                          {line.promoLabel && <span className="text-[10px] text-emerald-600 font-medium">{line.promoLabel}</span>}
-                          {(line.lineDiscount > 0) && <span className="text-[10px] text-rose-500">-{formatMoney(line.lineDiscount, business.currency)}</span>}
-                          {availBase <= 10 && (
-                            <span className={`text-[10px] font-semibold ${availBase <= 3 ? 'text-rose-500' : 'text-amber-500'}`}>
-                              {availBase <= 0 ? 'Out of stock' : `${availBase} left`}
-                            </span>
-                          )}
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 sm:mt-2 sm:flex-nowrap">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newQty = line.qtyInUnit - 1;
+                              if (newQty <= 0) { removeLine(line.id); }
+                              else {
+                                pushUndo(cart);
+                                setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
+                              }
+                            }}
+                          >
+                            −
+                          </button>
+                          <input
+                            className="input w-16 px-2 py-2 text-center text-base font-bold sm:w-14"
+                            type="number"
+                            min={0}
+                            step={0.001}
+                            inputMode="decimal"
+                            value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
+                            onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                            onBlur={() => commitLineQty(line)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitLineQty(line); } }}
+                            onFocus={(e) => { setActiveLineId(line.id); e.currentTarget.select(); }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            type="button"
+                            className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newQty = clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
+                              if (newQty > line.qtyInUnit) {
+                                pushUndo(cart);
+                                setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
+                              }
+                            }}
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="ml-auto text-right sm:min-w-[5rem]">
+                          <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newQty = line.qtyInUnit - 1;
-                            if (newQty <= 0) { removeLine(line.id); }
-                            else {
-                              pushUndo(cart);
-                              setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
-                            }
-                          }}
-                        >
-                          −
-                        </button>
-                        <input
-                          className="w-12 rounded-lg border border-black/10 bg-white px-1 py-1 text-center text-sm font-bold"
-                          type="number"
-                          min={0}
-                          step={0.001}
-                          inputMode="decimal"
-                          value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
-                          onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))}
-                          onBlur={() => commitLineQty(line)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitLineQty(line); } }}
-                          onFocus={(e) => { setActiveLineId(line.id); e.currentTarget.select(); }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <button
-                          type="button"
-                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newQty = clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
-                            if (newQty > line.qtyInUnit) {
-                              pushUndo(cart);
-                              setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
-                            }
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <div className="w-20 text-right flex-shrink-0">
-                        <div className="text-sm font-bold">{formatMoney(line.total, business.currency)}</div>
-                      </div>
-                      <button
-                        type="button"
-                        className="flex-shrink-0 rounded-lg p-3 text-black/20 hover:text-rose-500 hover:bg-rose-50 transition"
-                        onClick={(e) => { e.stopPropagation(); removeLine(line.id); }}
-                        title="Remove"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
                     </div>
                   );
                 })}
