@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -68,18 +68,20 @@ export default async function CashDrawerReportPage({
       <ReportFilterCard
         actions={
           <>
-            <Link
+            <DownloadLink
               href={`/exports/eod-csv?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+              fallbackFilename="cash-drawer-summary.csv"
               className="btn-ghost w-full text-center text-xs"
             >
               Export CSV
-            </Link>
-            <Link
+            </DownloadLink>
+            <DownloadLink
               href={`/exports/eod-pdf?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+              fallbackFilename="cash-drawer-summary.pdf"
               className="btn-ghost w-full text-center text-xs"
             >
               Export PDF
-            </Link>
+            </DownloadLink>
           </>
         }
         columnsClassName="sm:grid-cols-5"

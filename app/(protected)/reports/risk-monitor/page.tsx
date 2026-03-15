@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -142,12 +142,13 @@ export default async function RiskMonitorPage({
         title="Risk Monitor"
         subtitle="Anti-fraud alerts and cashier trends."
         actions={
-          <Link
+          <DownloadLink
             href={`/exports/risk-summary?from=${fromIso}&to=${toIso}&storeId=${storeId}&status=${status}`}
+            fallbackFilename="risk-summary.csv"
             className="btn-secondary w-full justify-center text-sm sm:w-auto sm:text-xs"
           >
             Export Summary CSV
-          </Link>
+          </DownloadLink>
         }
       />
 

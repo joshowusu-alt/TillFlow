@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
@@ -33,12 +34,13 @@ export default async function IncomeStatementPage({
         subtitle="Revenue, COGS, expenses, and profit."
         actions={
           <ReportActionGroup>
-            <a
+            <DownloadLink
               href={`/api/reports/financials?type=income-statement&from=${fromStr}&to=${toStr}`}
+              fallbackFilename={`income-statement-${fromStr}.csv`}
               className="btn-secondary text-sm"
             >
               Export CSV
-            </a>
+            </DownloadLink>
             <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
           </ReportActionGroup>
         }

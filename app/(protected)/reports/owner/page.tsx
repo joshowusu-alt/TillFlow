@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import DownloadLink from '@/components/DownloadLink';
 import { requireBusiness } from '@/lib/auth';
 import { getOwnerDashboardSnapshot, type ActivityItem, type AttentionItem, type BusinessHealthCard, type LeakageMetric, type InventoryRiskRow } from '@/lib/reports/owner-dashboard';
 import type { PriorityAction } from '@/lib/owner-intel';
@@ -176,9 +177,9 @@ export default async function OwnerIntelligencePage() {
             <a href="/reports/owner/export?format=html" target="_blank" rel="noopener noreferrer" className="btn-secondary justify-center text-sm">
               Print / Save PDF
             </a>
-            <a href="/reports/owner/export?format=csv" className="btn-secondary justify-center text-sm">
+            <DownloadLink href="/reports/owner/export?format=csv" fallbackFilename="owner-brief.csv" className="btn-secondary justify-center text-sm">
               Export CSV
-            </a>
+            </DownloadLink>
           </div>
         </div>
       </div>

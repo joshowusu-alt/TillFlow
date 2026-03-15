@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import { resolveDownloadFilename } from '@/components/DownloadLink';
 import ResponsiveModal from '@/components/ResponsiveModal';
 
 // Simple component tests without full Next.js context
@@ -78,6 +79,30 @@ describe('ResponsiveModal', () => {
         fireEvent.keyDown(window, { key: 'Escape' });
 
         expect(onClose).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('DownloadLink helpers', () => {
+    it('prefers UTF-8 content-disposition filenames', () => {
+        expect(
+            resolveDownloadFilename(
+                `attachment; filename*=UTF-8''risk-summary%20march.csv`,
+                '/exports/risk-summary'
+            )
+        ).toBe('risk-summary march.csv');
+    });
+
+    it('falls back to plain content-disposition filenames', () => {
+        expect(
+            resolveDownloadFilename(
+                'attachment; filename="cash-drawer-summary.pdf"',
+                '/exports/eod-pdf'
+            )
+        ).toBe('cash-drawer-summary.pdf');
+    });
+
+    it('uses the path segment when no header filename exists', () => {
+        expect(resolveDownloadFilename(null, '/exports/products')).toBe('products');
     });
 });
 

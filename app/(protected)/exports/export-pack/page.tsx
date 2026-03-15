@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import { requireBusiness } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -75,15 +76,13 @@ export default async function ExportPackPage() {
             { label: 'Debtors PDF', href: '/exports/debtors-pdf' },
             { label: 'Stock Movements', href: '/exports/inventory-movements' },
           ].map((link) => (
-            <a
+            <DownloadLink
               key={link.href}
               href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
               className="rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 text-center"
             >
               {link.label}
-            </a>
+            </DownloadLink>
           ))}
         </div>
       </div>

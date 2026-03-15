@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
@@ -62,12 +63,13 @@ export default async function WeeklyDigestPage({
             {weekOffset < 0 && (
               <a href={`?week=${weekOffset + 1}`} className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Next Week</a>
             )}
-            <a
+            <DownloadLink
               href={`/api/reports/weekly-digest?week=${weekOffset}`}
+              fallbackFilename={`weekly-digest-${wStart.toISOString().slice(0, 10)}.csv`}
               className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none"
             >
               Export CSV
-            </a>
+            </DownloadLink>
             <a href="/reports/command-center" className="btn-secondary min-w-[calc(50%-0.25rem)] flex-1 justify-center text-sm sm:min-w-0 sm:flex-none">Command Center</a>
           </div>
         }

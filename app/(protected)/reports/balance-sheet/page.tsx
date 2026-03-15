@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import { requireBusiness } from '@/lib/auth';
@@ -44,12 +45,13 @@ export default async function BalanceSheetPage({
         subtitle="Assets, liabilities, and equity."
         actions={
           <div className="flex gap-2">
-            <a
+            <DownloadLink
               href={`/api/reports/financials?type=balance-sheet&asOf=${asOfStr}`}
+              fallbackFilename={`balance-sheet-${asOfStr}.csv`}
               className="btn-secondary text-sm"
             >
               Export CSV
-            </a>
+            </DownloadLink>
             <a href="/reports/command-center" className="btn-secondary text-sm">Command Center</a>
           </div>
         }

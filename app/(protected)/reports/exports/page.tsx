@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import { requireRole } from '@/lib/auth';
 
 export default async function ExportsPage() {
@@ -11,21 +12,21 @@ export default async function ExportsPage() {
         subtitle="Download CSV exports for external systems and analysis."
       />
       <div className="card grid gap-4 p-6 md:grid-cols-2">
-        <a className="btn-secondary text-center text-sm" href="/exports/products">
+        <DownloadLink className="btn-secondary text-center text-sm" href="/exports/products" fallbackFilename="products.csv">
           Export products
-        </a>
-        <a className="btn-secondary text-center text-sm" href="/exports/inventory">
+        </DownloadLink>
+        <DownloadLink className="btn-secondary text-center text-sm" href="/exports/inventory" fallbackFilename="inventory.csv">
           Export inventory
-        </a>
-        <a className="btn-secondary text-center text-sm" href="/exports/sales">
+        </DownloadLink>
+        <DownloadLink className="btn-secondary text-center text-sm" href="/exports/sales" fallbackFilename="sales.csv">
           Export sales
-        </a>
-        <a className="btn-secondary text-center text-sm" href="/exports/purchases">
+        </DownloadLink>
+        <DownloadLink className="btn-secondary text-center text-sm" href="/exports/purchases" fallbackFilename="purchases.csv">
           Export purchases
-        </a>
-        <a className="btn-secondary text-center text-sm" href="/exports/risk-summary">
+        </DownloadLink>
+        <DownloadLink className="btn-secondary text-center text-sm" href="/exports/risk-summary" fallbackFilename="risk-summary.csv">
           Export risk summary
-        </a>
+        </DownloadLink>
       </div>
     </div>
   );
