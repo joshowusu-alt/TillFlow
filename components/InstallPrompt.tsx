@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface BeforeInstallPromptEvent extends Event {
     prompt: () => Promise<void>;
@@ -11,6 +11,7 @@ export default function InstallPrompt() {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [showPrompt, setShowPrompt] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);
+    const promptTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         // Check if already installed
@@ -33,8 +34,10 @@ export default function InstallPrompt() {
             e.preventDefault();
             setDeferredPrompt(e as BeforeInstallPromptEvent);
 
-            // Delay showing prompt
-            setTimeout(() => setShowPrompt(true), 3000);
+            if (promptTimerRef.current) {
+                window.clearTimeout(promptTimerRef.current);
+            }
+            promptTimerRef.current = window.setTimeout(() => setShowPrompt(true), 1200);
         };
 
         const handleAppInstalled = () => {
@@ -47,6 +50,9 @@ export default function InstallPrompt() {
         window.addEventListener('appinstalled', handleAppInstalled);
 
         return () => {
+            if (promptTimerRef.current) {
+                window.clearTimeout(promptTimerRef.current);
+            }
             window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
             window.removeEventListener('appinstalled', handleAppInstalled);
         };
@@ -80,10 +86,10 @@ export default function InstallPrompt() {
                 {/* Header gradient */}
                 <div className="bg-gradient-to-r from-accent to-accent/80 p-4">
                     <div className="flex items-center gap-3">
-                        <img src="/icon.svg" alt="TillFlow" className="h-12 w-12 rounded-xl" />
+                        <img src="/icon" alt="TillFlow" className="h-12 w-12 rounded-xl shadow-lg shadow-black/15" />
                         <div className="text-white">
                             <div className="font-bold">Install TillFlow</div>
-                            <div className="text-sm text-white/80">Sales made simple</div>
+                            <div className="text-sm text-white/80">Ready for fast checkout, even on weak network</div>
                         </div>
                     </div>
                 </div>
@@ -91,8 +97,15 @@ export default function InstallPrompt() {
                 {/* Content */}
                 <div className="p-4">
                     <p className="text-sm text-black/60">
-                        Install the app for a faster, offline-ready experience with quick access from your home screen.
+                        Add TillFlow to this phone for one-tap opening, quicker cashier flow, and offline selling that syncs when you’re back online.
                     </p>
+
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-accentSoft px-3 py-1 text-[11px] font-semibold text-accent">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V8m0 8l-3-3m3 3l3-3M4 17.25A2.25 2.25 0 006.25 19.5h11.5A2.25 2.25 0 0020 17.25" />
+                        </svg>
+                        No app store needed
+                    </div>
 
                     {/* Benefits */}
                     <ul className="mt-3 space-y-1.5">
@@ -100,19 +113,19 @@ export default function InstallPrompt() {
                             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            <span>Works offline</span>
+                            <span>Works when network is weak or unavailable</span>
                         </li>
                         <li className="flex items-center gap-2 text-sm">
                             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            <span>Faster loading</span>
+                            <span>Keeps sales ready to sync in the background</span>
                         </li>
                         <li className="flex items-center gap-2 text-sm">
                             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
-                            <span>Full screen experience</span>
+                            <span>Launches full screen from the home screen</span>
                         </li>
                     </ul>
 

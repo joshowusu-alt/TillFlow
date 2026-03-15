@@ -484,7 +484,7 @@ export default function AmendSaleClient({
 
       {/* Confirmation modal */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="overlay-shell fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl flex flex-col max-h-[90vh]">
             <div className="overflow-y-auto flex-1 p-6">
               <div className="flex items-center gap-3">

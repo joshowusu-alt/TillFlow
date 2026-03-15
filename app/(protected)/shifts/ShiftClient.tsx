@@ -501,7 +501,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
 
       {/* Close Shift Modal */}
       {showCloseModal && shiftToClose && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+        <div className="overlay-shell fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl my-auto">
             <h3 className="text-lg font-display font-semibold">
               Close Shift{selectedOtherShift ? ` — ${selectedOtherShift.userName}` : ''}

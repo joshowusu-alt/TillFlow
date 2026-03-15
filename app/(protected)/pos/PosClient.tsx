@@ -2109,7 +2109,10 @@ export default function PosClient({
       />
 
       {showParkedPanel && parkedCarts.length > 0 ? (
-        <div className="fixed inset-x-4 bottom-28 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl md:hidden">
+        <div
+          className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl md:hidden"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' }}
+        >
           <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
             <div>
               <div className="text-sm font-semibold text-amber-800">Parked Sales</div>

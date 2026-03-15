@@ -163,9 +163,9 @@ export default function NetworkStatus() {
     })();
 
     return (
-        <div className="fixed bottom-4 right-4 z-50">
+        <div className="safe-floating-bottom fixed left-4 right-4 z-50 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm">
             <div
-                className={`${statusConfig.bg} flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm text-white shadow-lg transition-all duration-200`}
+                className={`${statusConfig.bg} flex w-full items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm text-white shadow-lg transition-all duration-200 sm:w-auto`}
             >
                 {/* Status icon */}
                 {syncing ? (
@@ -217,7 +217,7 @@ export default function NetworkStatus() {
 
             {/* Details panel */}
             {showDetails && (
-                <div className="mt-2 rounded-xl border border-gray-200 bg-white p-4 shadow-soft animate-scale-in">
+                <div className="mt-2 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-soft animate-scale-in">
                     <div className="space-y-2.5 text-sm">
                         <div className="flex justify-between items-center">
                             <span className="text-gray-500">Connection</span>

@@ -150,8 +150,8 @@ export default function CameraScanner({ open, onScan, onClose }: CameraScannerPr
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="relative mx-4 w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="overlay-shell fixed inset-0 z-[60] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center">
+            <div className="relative flex max-h-full w-full max-w-sm flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-2xl">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b px-4 py-3">
                     <div className="flex items-center gap-2">

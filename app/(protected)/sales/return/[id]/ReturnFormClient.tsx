@@ -67,7 +67,7 @@ export default function ReturnFormClient({
     <div className="grid gap-4 md:grid-cols-3">
       {/* Fixed modal overlay — floats above form on all screen sizes */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8">
+        <div className="overlay-shell fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
             <div className="overflow-y-auto flex-1 p-6 space-y-4">
               <div className="flex items-center gap-3">

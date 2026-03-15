@@ -70,14 +70,14 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
       <div
-        className="fixed bottom-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"
+        className="safe-floating-bottom fixed left-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none sm:left-auto sm:right-4 sm:items-end"
         aria-live="assertive"
         aria-atomic="false"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`${styles[t.type]} animate-slide-in-right pointer-events-auto flex items-start gap-3 rounded-xl px-4 py-3 text-sm shadow-soft max-w-sm`}
+            className={`${styles[t.type]} animate-slide-in-right pointer-events-auto flex items-start gap-3 rounded-xl px-4 py-3 text-sm shadow-soft max-w-full sm:max-w-sm`}
             role={t.type === 'error' ? 'alert' : 'status'}
           >
             <ToastIcon type={t.type} />

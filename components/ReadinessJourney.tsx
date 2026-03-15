@@ -257,7 +257,7 @@ function GuidedToggle({ initial }: { initial: boolean }) {
 function MicroWin({ message, show }: { message: string; show: boolean }) {
   if (!show) return null;
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+    <div className="safe-floating-bottom fixed left-1/2 z-50 -translate-x-1/2 animate-fade-in-up">
       <div className="flex items-center gap-2 rounded-xl bg-ink px-5 py-3 shadow-xl shadow-black/20">
         <svg className="h-5 w-5 text-success animate-check-draw" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
