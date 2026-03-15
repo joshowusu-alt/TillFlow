@@ -7,6 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import * as Sentry from '@sentry/nextjs';
 import { requireUser, requireRole, type Role } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { isRedirectError } from 'next/dist/client/components/redirect';
@@ -120,6 +121,7 @@ export async function safeAction<T>(
     if (error instanceof UserError) {
       return err(error.message);
     }
+    Sentry.captureException(error);
     // Return a user-friendly message instead of raw technical errors
     if (error instanceof Error) {
       const msg = error.message;

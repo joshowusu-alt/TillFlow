@@ -70,22 +70,32 @@ To set them:
 
 ---
 
-## Step 4 — Push the Postgres Schema
+## Step 4 — Create and Apply the Initial Postgres Migration
 
-Before the first deploy, push the schema to your Neon database:
+Before the first deploy, make sure your local shell has the same Postgres connection strings from Step 3 available, then create or verify the committed migration and check its status:
 
 ```powershell
-# In your local terminal, set the connection string temporarily
-$env:DATABASE_URL = "your-neon-direct-connection-string"
+# Optional when creating or checking migrations locally:
+# $env:POSTGRES_PRISMA_URL = "your-neon-pooled-connection-string"
+# $env:POSTGRES_URL_NON_POOLING = "your-neon-direct-connection-string"
+#
+# Create a new Postgres migration file when schema.postgres.prisma changes
+npm run db:migrate:create
 
-# Push the production schema
-npx prisma db push --schema=prisma/schema.postgres.prisma
+# Check migration status against Neon
+npx prisma migrate status --schema=prisma/schema.postgres.prisma
 
 # Seed the database (optional but recommended)
 npx prisma db seed
 ```
 
-Alternatively, you can do this from a Vercel Function or after the first deploy.
+TillFlow now uses committed Prisma migrations for production safety. The deployed Vercel build runs:
+
+```bash
+npm run build:vercel
+```
+
+That script includes `prisma migrate deploy --schema=prisma/schema.postgres.prisma`, so committed migrations are applied automatically during deployment.
 
 ---
 
@@ -96,6 +106,23 @@ Alternatively, you can do this from a Vercel Function or after the first deploy.
 3. Your app will be live at: `https://your-project.vercel.app`.
 
 If the build fails, check the build logs — the most common issue is a missing env var.
+
+---
+
+## Database Migration Workflow
+
+- **Create a migration:** `npm run db:migrate:create`
+- **Deploy migrations manually:** `npm run db:migrate:deploy`
+- **Check status:** `npx prisma migrate status --schema=prisma/schema.postgres.prisma`
+- **Automatic production deploy:** Vercel applies committed Postgres migrations during `npm run build:vercel`
+- **Local SQLite development:** `npm run db:setup` still uses `prisma db push` with `prisma\schema.prisma`, which is fine for local development only
+
+When you change the production schema:
+
+1. Update `prisma\schema.postgres.prisma`
+2. Run `npm run db:migrate:create`
+3. Commit the generated migration files
+4. Deploy normally to Vercel
 
 ---
 
@@ -133,7 +160,7 @@ For broader maintenance and live support, use:
 |---|---|
 | `DEPLOYMENT_NOT_FOUND` | Make sure the project is deployed and the URL matches. |
 | Build fails with `POSTGRES_PRISMA_URL` error | Add the env vars in Step 3. |
-| `prisma db push` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL. |
+| `prisma migrate deploy` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL and that the migration files are committed. |
 | Login doesn't work | Ensure `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are set. |
 | Login lockout is inconsistent across instances | Ensure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. |
 | EOD summary falls back to manual review | Check Meta env vars and `/settings/notifications` diagnostics. |

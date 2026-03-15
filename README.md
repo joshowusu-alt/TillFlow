@@ -40,6 +40,14 @@ npm run dev
 
 The dev server automatically sets up and seeds the database.
 
+### Optional Sentry Monitoring
+
+To enable Sentry in production, configure these environment variables before building:
+
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
+
 ## Demo Credentials
 
 | Role | Email | Password |

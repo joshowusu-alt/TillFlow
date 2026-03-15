@@ -34,6 +34,8 @@ npm run db:setup # Create the database
 npm run build    # Build for production
 ```
 
+> Note: local TillFlow setup uses the SQLite schema in `prisma\schema.prisma`, so `npm run db:setup` still uses Prisma `db push` for fast local development. Production Vercel/Neon deployments use Prisma migrations from `prisma\schema.postgres.prisma`.
+
 ---
 
 ## Step 3: Start TillFlow
@@ -78,6 +80,23 @@ npm install
 npm run build
 npm start
 ```
+
+## Database Migrations
+
+- **Local computer / SQLite dev:** keep using `npm run db:setup` (this still uses `prisma db push` and is fine for local development).
+- **Production / Vercel + Postgres:** use Prisma migrations from `prisma\schema.postgres.prisma`.
+
+Useful Postgres migration commands:
+
+```bash
+npm run db:migrate:create
+npm run db:migrate:deploy
+npx prisma migrate status --schema=prisma/schema.postgres.prisma
+```
+
+- `npm run db:migrate:create` creates a new migration file for Postgres schema changes.
+- `npm run db:migrate:deploy` applies committed migrations.
+- Vercel runs `npm run build:vercel`, which now applies Postgres migrations automatically during the production build.
 
 Repository: https://github.com/joshowusu-alt/TillFlow
 

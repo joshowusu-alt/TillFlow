@@ -1,4 +1,6 @@
-﻿/** @type {import('next').NextConfig} */
+﻿const { withSentryConfig } = require('@sentry/nextjs');
+
+/** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV === 'development';
 const localDevPorts = [6200, 6201, 6202, 6203, 6204];
 
@@ -66,4 +68,16 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+const sentryOptions = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: true,
+  widenClientFileUpload: true,
+  disableLogger: true,
+  hideSourceMaps: true,
+  automaticVercelMonitors: true,
+};
+
+module.exports = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, sentryOptions)
+  : nextConfig;

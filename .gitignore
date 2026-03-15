@@ -3,6 +3,7 @@
 /out
 /.env
 /.env.local
+/.env.production
 /.env.*.local
 dev.db
 dev.db-journal

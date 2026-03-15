@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs';
 import { headers } from 'next/headers';
 
 type LogLevel = 'info' | 'warn' | 'error';
@@ -27,6 +28,9 @@ export function appLog(level: LogLevel, message: string, context?: Record<string
   };
   const line = JSON.stringify(payload);
   if (level === 'error') {
+    Sentry.captureException(context?.error || new Error(message), {
+      extra: context,
+    });
     console.error(line);
     return;
   }
