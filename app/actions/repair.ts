@@ -474,16 +474,26 @@ export async function cleanOrphanedJournalEntriesAction(): Promise<ActionResult<
 /**
  * Void a sale as the owner — bypasses manager PIN requirement.
  * This is for emergency data cleanup by the business owner.
+ * Accepts either the internal sales invoice id or the receipt/transaction number.
  */
-export async function ownerVoidSaleAction(salesInvoiceId: string): Promise<ActionResult<{ voided: boolean }>> {
+export async function ownerVoidSaleAction(saleReference: string): Promise<ActionResult<{ voided: boolean }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext(['OWNER']);
 
+    const normalizedReference = saleReference.trim();
+    if (!normalizedReference) throw new Error('Enter a sale ID or receipt number');
+
     const invoice = await prisma.salesInvoice.findFirst({
-      where: { id: salesInvoiceId, businessId },
-      select: { id: true, paymentStatus: true, totalPence: true },
+      where: {
+        businessId,
+        OR: [
+          { id: normalizedReference },
+          { transactionNumber: normalizedReference },
+        ],
+      },
+      select: { id: true, paymentStatus: true, totalPence: true, transactionNumber: true },
     });
-    if (!invoice) throw new Error('Sale not found');
+    if (!invoice) throw new Error('Sale not found. Paste the sale ID from the receipt link or the receipt number such as INV-000042.');
     if (['VOID', 'RETURNED'].includes(invoice.paymentStatus)) {
       throw new Error('Sale already voided or returned');
     }
@@ -506,8 +516,13 @@ export async function ownerVoidSaleAction(salesInvoiceId: string): Promise<Actio
       userRole: user.role,
       action: 'SALE_VOID',
       entity: 'SalesInvoice',
-      entityId: salesInvoiceId,
-      details: { method: 'OWNER_OVERRIDE', reason: 'setup/test sale cleanup' },
+      entityId: invoice.id,
+      details: {
+        method: 'OWNER_OVERRIDE',
+        reason: 'setup/test sale cleanup',
+        lookupReference: normalizedReference,
+        transactionNumber: invoice.transactionNumber,
+      },
     });
 
     revalidatePath('/sales');

@@ -132,13 +132,13 @@ export default function DataDiagnosticPanel() {
       <div className="border-t border-black/10 pt-4">
         <div className="font-semibold text-sm mb-2">Void a Sale (Owner Override)</div>
         <p className="text-xs text-black/50 mb-2">
-          Enter the sale ID to void it. This bypasses manager PIN — owner only.
-          Find the sale ID from the sales list (click on the invoice link).
+          Enter the sale ID or receipt number to void it. This bypasses manager PIN — owner only.
+          You can paste the receipt number shown to cashiers, like INV-000042, or the internal sale ID from the receipt link.
         </p>
         <div className="flex gap-2">
           <input
             className="input flex-1"
-            placeholder="Sale ID (e.g. cm...)"
+            placeholder="Receipt no. or sale ID (e.g. INV-000042)"
             value={voidId}
             onChange={(e) => setVoidId(e.target.value)}
           />
