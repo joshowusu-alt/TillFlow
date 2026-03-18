@@ -3,6 +3,7 @@ import { requireBusiness } from '@/lib/auth';
 import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
+import BackfillLineCostButton from '@/components/BackfillLineCostButton';
 
 export default async function DataRepairPage() {
   const { user } = await requireBusiness(['OWNER']);
@@ -40,6 +41,15 @@ export default async function DataRepairPage() {
           use this to create any missing journal entries. Safe to run multiple times.
         </p>
         <RepairJournalEntriesButton />
+      </div>
+
+      <div className="card p-6">
+        <h3 className="font-semibold mb-1">Backfill Line Costs</h3>
+        <p className="text-sm text-black/50 mb-4">
+          Populates historical cost data on existing sales so profit margin reports
+          use the cost at time of sale rather than the current product cost. Safe to run multiple times.
+        </p>
+        <BackfillLineCostButton />
       </div>
     </div>
   );
