@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import { ACCOUNT_CODES } from '@/lib/accounting';
-import { getAccountBalance, getIncomeStatement } from './financials';
+import { getAccountBalance } from './financials';
 import {
   ensureSqliteReportDateColumnsNormalized,
   isDateOnOrAfter,
@@ -51,7 +51,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 
   const storeFilter = storeId ? { storeId } : {};
 
-  const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, income, cashOnHandEstimatePence] = await Promise.all([
+  const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { businessId, ...storeFilter },
       select: {
@@ -119,6 +119,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
       },
       select: {
+        lineSubtotalPence: true,
         lineTotalPence: true,
         lineCostPence: true,
         qtyBase: true,
@@ -127,7 +128,6 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
       take: 10000,
     }),
-    getIncomeStatement(businessId, todayStart, todayEnd),
     getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
   ]);
 
@@ -136,7 +136,18 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   );
 
   const totalSalesPence = validTodaySales.reduce((sum, row) => sum + row.totalPence, 0);
-  const grossMarginPence = income.grossProfit;
+
+  // GP from sale lines — same source as margins/analytics
+  const todaySaleLines = salesLines14d.filter((line) =>
+    isDateWithinRange(line.salesInvoice.createdAt, todayStart, todayEnd) &&
+    !['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)
+  );
+  const grossMarginPence = todaySaleLines.reduce((sum, line) => {
+    const cost = line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
+    return sum + line.lineSubtotalPence - cost;
+  }, 0);
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
   const paymentSplit: Record<string, number> = {};
@@ -184,8 +195,10 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
-    existing.revenue += line.lineTotalPence;
-    existing.cost += line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
+    existing.revenue += line.lineSubtotalPence;
+    existing.cost += line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
     productMargins.set(key, existing);
   }
 
@@ -268,7 +281,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     cashVarShifts,
     discountOverrides,
     salesLines14d,
-    income,
+    todayLinesForGP,
     cashOnHandEstimatePence,
   ] = await Promise.all([
     // Today's sales — aggregate at DB level
@@ -378,20 +391,43 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         },
       },
       select: {
-        lineTotalPence: true,
+        lineSubtotalPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
       },
       take: 10000,
     }),
-    getIncomeStatement(businessId, todayStart, todayEnd),
+    // Today's sale lines for GP computation
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: {
+          businessId,
+          ...(storeId ? { storeId } : {}),
+          createdAt: { gte: todayStart, lte: todayEnd },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      select: {
+        lineSubtotalPence: true,
+        lineCostPence: true,
+        qtyBase: true,
+        product: { select: { defaultCostBasePence: true } },
+      },
+    }),
     getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
   ]);
 
   // Sales KPIs — already aggregated by the DB
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
-  const grossMarginPence = income.grossProfit;
+
+  // GP from sale lines — same source as margins/analytics
+  const grossMarginPence = todayLinesForGP.reduce((sum, line) => {
+    const cost = line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
+    return sum + line.lineSubtotalPence - cost;
+  }, 0);
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
   // Payment split — already grouped by DB
@@ -430,8 +466,10 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   for (const line of salesLines14d) {
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
-    existing.revenue += line.lineTotalPence;
-    existing.cost += line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
+    existing.revenue += line.lineSubtotalPence;
+    existing.cost += line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
     productMargins.set(key, existing);
   }
   // Count products where selling price < cost (simplified)

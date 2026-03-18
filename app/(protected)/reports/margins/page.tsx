@@ -2,7 +2,6 @@ import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
-import { getIncomeStatement } from '@/lib/reports/financials';
 
 export default async function MarginsPage({
   searchParams
@@ -19,47 +18,30 @@ export default async function MarginsPage({
   const startDate = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
   const endDate = now;
 
-  // Fetch accounting totals and line-level detail in parallel
-  const [income, salesAgg, salesLines] = await Promise.all([
-    getIncomeStatement(business.id, startDate, endDate),
-    prisma.salesInvoice.aggregate({
-      where: {
+  // All data comes from the sale transaction itself — single source of truth
+  const salesLines = await prisma.salesInvoiceLine.findMany({
+    where: {
+      salesInvoice: {
         businessId: business.id,
         createdAt: { gte: startDate, lte: endDate },
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-      },
-      _sum: { totalPence: true },
-    }),
-    prisma.salesInvoiceLine.findMany({
-      where: {
-        salesInvoice: {
-          businessId: business.id,
-          createdAt: { gte: startDate, lte: endDate },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-        }
-      },
-      select: {
-        productId: true,
-        qtyBase: true,
-        lineTotalPence: true,
-        lineCostPence: true,
-        product: {
-          select: {
-            name: true,
-            defaultCostBasePence: true,
-          }
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
+      }
+    },
+    select: {
+      productId: true,
+      qtyBase: true,
+      lineSubtotalPence: true,
+      lineCostPence: true,
+      product: {
+        select: {
+          name: true,
+          defaultCostBasePence: true,
         }
       }
-    }),
-  ]);
+    }
+  });
 
-  // Summary cards use accounting source of truth
-  const acctRevenue = income.revenue;
-  const acctGrossProfit = income.grossProfit;
-  const acctCost = income.cogs;
-  const overallMargin = acctRevenue > 0 ? (acctGrossProfit / acctRevenue) * 100 : 0;
-
-  // Product-level breakdown uses line data with cost fallback
+  // Product-level breakdown from sale lines
   const productStats = new Map<
     string,
     {
@@ -82,8 +64,11 @@ export default async function MarginsPage({
       profit: 0
     };
 
-    const lineRevenue = line.lineTotalPence;
-    const lineCost = line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
+    const lineRevenue = line.lineSubtotalPence;
+    // lineCostPence is 0 for pre-deployment sales; fall back to current default cost
+    const lineCost = line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
     const lineProfit = lineRevenue - lineCost;
 
     existing.qtySold += line.qtyBase;
@@ -101,6 +86,12 @@ export default async function MarginsPage({
       marginPercent: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0
     }))
     .sort((a, b) => b.profit - a.profit);
+
+  // Summary cards = sum of product table rows (single source of truth)
+  const totalRevenue = products.reduce((s, p) => s + p.revenue, 0);
+  const totalCost = products.reduce((s, p) => s + p.cost, 0);
+  const totalProfit = totalRevenue - totalCost;
+  const overallMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
   // Top performers and underperformers
   const topPerformers = products.slice(0, 5);
@@ -133,20 +124,20 @@ export default async function MarginsPage({
         </div>
       </div>
 
-      {/* Summary Cards — aligned with Income Statement */}
+      {/* Summary Cards — derived from product table below */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Total Revenue</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(acctRevenue, business.currency)}</div>
+          <div className="mt-1 text-2xl font-bold">{formatMoney(totalRevenue, business.currency)}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Total Cost</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(acctCost, business.currency)}</div>
+          <div className="mt-1 text-2xl font-bold">{formatMoney(totalCost, business.currency)}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Gross Profit</div>
           <div className="mt-1 text-2xl font-bold text-emerald-700">
-            {formatMoney(acctGrossProfit, business.currency)}
+            {formatMoney(totalProfit, business.currency)}
           </div>
         </div>
         <div className="card p-4">

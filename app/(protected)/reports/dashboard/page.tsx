@@ -57,6 +57,7 @@ export default async function DashboardPage({
     todayVoids,
     todayReturns,
     todayCashVar,
+    saleLinesForGP,
   ] = await Promise.all([
     // Sales — aggregate at DB level
     prisma.salesInvoice.aggregate({
@@ -213,18 +214,39 @@ export default async function DashboardPage({
       select: { variance: true, user: { select: { name: true } } },
       take: 100,
     }),
+    // Sale lines for GP computation — single source of truth
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: {
+          businessId: business.id,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      select: {
+        lineSubtotalPence: true,
+        lineCostPence: true,
+        qtyBase: true,
+        product: { select: { defaultCostBasePence: true } },
+      },
+    }),
   ]);
 
   const currency = business.currency;
 
   // Summarise sales — already aggregated by DB
   const totalSales = salesAgg._sum.totalPence ?? 0;
-  // Use journal-based gross profit so the dashboard always agrees with the Income Statement.
-  // All product-level cost now flows from lineCostPence, which is set from the same avgCost
-  // used for journal COGS, ensuring consistency across all reports.
-  const totalGrossMargin = income.grossProfit;
-  const gpPercent = totalSales > 0 ? Math.round((income.grossProfit / totalSales) * 100) : 0;
-  const npPercent = totalSales > 0 ? Math.round((income.netProfit / totalSales) * 100) : 0;
+  // GP from sale lines — consistent with margins/analytics/KPIs
+  const totalGrossMargin = saleLinesForGP.reduce((sum, line) => {
+    const cost = line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
+    return sum + line.lineSubtotalPence - cost;
+  }, 0);
+  const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
+  // Expenses and NP still from journals (accounting source of truth for expense tracking)
+  const npPercent = totalSales > 0 ? Math.round(((totalGrossMargin - income.otherExpenses) / totalSales) * 100) : 0;
 
   // Payment split — already grouped by DB
   const paymentSplit = { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 };
@@ -381,7 +403,7 @@ export default async function DashboardPage({
         <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} />
         <StatCard
           label={`Net Profit (${npPercent}%)`}
-          value={formatMoney(income.netProfit, currency)}
+          value={formatMoney(totalGrossMargin - income.otherExpenses, currency)}
           tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
         />
         <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} />

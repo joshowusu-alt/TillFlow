@@ -5,7 +5,6 @@ import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getTodayKPIs } from './today-kpis';
 import { getCashflowForecast } from './forecast';
-import { getIncomeStatement } from './financials';
 import { classifyInventoryState, summarizeInventoryRisk } from './operational-metrics';
 import {
 	ensureSqliteReportDateColumnsNormalized,
@@ -193,7 +192,7 @@ export async function getOwnerDashboardSnapshot(
 	const storeFilter = storeId ? { storeId } : {};
 	const tillStoreFilter = storeId ? { id: storeId } : {};
 
-	const [brief, kpis, forecast, yesterdaySales, yesterdayIncome, yesterdayCashPayments, openTillCash, overdueDebtors, duePurchases, inventoryBalances, recentSales, recentSupplierPayments, recentStockAdjustments, recentDiscountOverrides, recentTillVariances, recentPurchases, recentCustomers, recentMoMo] = await Promise.all([
+	const [brief, kpis, forecast, yesterdaySales, yesterdayLinesForGP, yesterdayCashPayments, openTillCash, overdueDebtors, duePurchases, inventoryBalances, recentSales, recentSupplierPayments, recentStockAdjustments, recentDiscountOverrides, recentTillVariances, recentPurchases, recentCustomers, recentMoMo] = await Promise.all([
 		getOwnerBrief(businessId, currency, storeId),
 		getTodayKPIs(businessId, storeId),
 		getCashflowForecast(businessId, 14),
@@ -212,7 +211,24 @@ export async function getOwnerDashboardSnapshot(
 				_sum: { totalPence: true },
 				_count: { id: true },
 			}),
-		getIncomeStatement(businessId, yesterdayStart, yesterdayEnd),
+		// Yesterday's sale lines for GP comparison — same source as today's KPIs
+		prisma.salesInvoiceLine.findMany({
+			where: {
+				salesInvoice: {
+					businessId,
+					...(storeId ? { storeId } : {}),
+					createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+					paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+				},
+			},
+			select: {
+				lineSubtotalPence: true,
+				lineCostPence: true,
+				qtyBase: true,
+				product: { select: { defaultCostBasePence: true } },
+				...(sqliteRuntime ? { salesInvoice: { select: { createdAt: true, paymentStatus: true } } } : {}),
+			},
+		}),
 		sqliteRuntime
 			? prisma.salesPayment.findMany({
 				where: {
@@ -503,8 +519,27 @@ export async function getOwnerDashboardSnapshot(
 	const stockoutCount = inventorySummary.stockoutCount;
 	const criticalCount = inventorySummary.criticalCount;
 
+	// Yesterday's GP from sale lines — same source as today's KPIs
+	const yesterdayGrossProfit = (yesterdayLinesForGP as Array<{
+		lineSubtotalPence: number;
+		lineCostPence: number;
+		qtyBase: number;
+		product: { defaultCostBasePence: number };
+		salesInvoice?: { createdAt: Date; paymentStatus: string };
+	}>).reduce((sum, line) => {
+		// SQLite path may include lines outside yesterday range; filter if needed
+		if (sqliteRuntime && line.salesInvoice) {
+			if (!isDateWithinRange(line.salesInvoice.createdAt, yesterdayStart, yesterdayEnd)) return sum;
+			if (['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)) return sum;
+		}
+		const cost = line.lineCostPence > 0
+			? line.lineCostPence
+			: (line.product.defaultCostBasePence * line.qtyBase);
+		return sum + line.lineSubtotalPence - cost;
+	}, 0);
+
 	const salesTrend = describeChange(kpis.totalSalesPence, normalizedYesterdaySales._sum.totalPence ?? 0);
-	const grossProfitTrend = describeChange(kpis.grossMarginPence, yesterdayIncome.grossProfit);
+	const grossProfitTrend = describeChange(kpis.grossMarginPence, yesterdayGrossProfit);
 	const transactionTrend = describeChange(kpis.txCount, normalizedYesterdaySales._count.id);
 	const cashTodayPence = openTillCash._sum.expectedCashPence && openTillCash._sum.expectedCashPence > 0
 		? openTillCash._sum.expectedCashPence
