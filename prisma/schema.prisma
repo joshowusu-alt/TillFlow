@@ -554,6 +554,7 @@ model SalesInvoiceLine {
   lineTaxRateBps            Int      @default(0)
   lineVatPence              Int
   lineTotalPence            Int
+  lineCostPence             Int      @default(0)
   createdAt                 DateTime @default(now())
 
   salesInvoice SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)

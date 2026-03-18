@@ -452,7 +452,8 @@ export async function createSale(input: CreateSaleInput) {
             promoDiscountPence: line.promoDiscount,
             lineSubtotalPence: line.lineSubtotal,
             lineVatPence: line.lineVat,
-            lineTotalPence: line.lineTotal
+            lineTotalPence: line.lineTotal,
+            lineCostPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
           }))
         },
         payments: {
@@ -810,6 +811,7 @@ export async function amendSale(input: AmendSaleInput) {
             lineSubtotalPence: line.lineSubtotal,
             lineVatPence: line.lineVat,
             lineTotalPence: line.lineTotal,
+            lineCostPence: (avgCostMap.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
           })),
         })
       );

@@ -530,3 +530,72 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
     return ok({ voided: true });
   });
 }
+
+/**
+ * Backfill lineCostPence on historical SalesInvoiceLines that still have 0.
+ * Uses StockMovement.unitCostBasePence (historical) where available,
+ * falling back to product.defaultCostBasePence (current).
+ *
+ * Safe to run multiple times — only updates lines with lineCostPence = 0.
+ */
+export async function backfillLineCostAction(): Promise<ActionResult<{ updated: number }>> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER']);
+
+    const lines = await prisma.salesInvoiceLine.findMany({
+      where: {
+        lineCostPence: 0,
+        salesInvoice: { businessId },
+      },
+      select: {
+        id: true,
+        productId: true,
+        qtyBase: true,
+        salesInvoice: { select: { id: true } },
+        product: { select: { defaultCostBasePence: true } },
+      },
+      take: 5000,
+    });
+
+    if (lines.length === 0) return ok({ updated: 0 });
+
+    // Fetch stock movements for these invoices to get historical cost
+    const invoiceIds = [...new Set(lines.map((l) => l.salesInvoice.id))];
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: 'SALES_INVOICE',
+        referenceId: { in: invoiceIds },
+        type: 'SALE',
+      },
+      select: {
+        referenceId: true,
+        productId: true,
+        unitCostBasePence: true,
+      },
+    });
+
+    // Map: invoiceId+productId → unitCostBasePence
+    const movementCostMap = new Map<string, number>();
+    for (const m of movements) {
+      if (m.unitCostBasePence != null) {
+        movementCostMap.set(`${m.referenceId}:${m.productId}`, m.unitCostBasePence);
+      }
+    }
+
+    let updated = 0;
+    for (const line of lines) {
+      const historicalCost = movementCostMap.get(`${line.salesInvoice.id}:${line.productId}`);
+      const unitCost = historicalCost ?? line.product.defaultCostBasePence;
+      const lineCostPence = unitCost * line.qtyBase;
+
+      await prisma.salesInvoiceLine.update({
+        where: { id: line.id },
+        data: { lineCostPence },
+      });
+      updated++;
+    }
+
+    revalidatePath('/reports', 'layout');
+    return ok({ updated });
+  });
+}
