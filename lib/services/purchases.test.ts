@@ -197,4 +197,32 @@ describe('purchase unit conversion', () => {
       })
     ).rejects.toThrow('Payment exceeds total due');
   });
+
+  it('uses configured unit default cost when line cost is omitted', async () => {
+    const productId = 'prod-3';
+    const quarterPackUnitId = 'unit-quarter-pack';
+
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId,
+        unitId: quarterPackUnitId,
+        conversionToBase: 6,
+        defaultCostPence: 525,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Quarter pack' },
+      },
+    ]);
+
+    await createPurchase({
+      businessId: bizId,
+      storeId,
+      paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 1050 }],
+      lines: [{ productId, unitId: quarterPackUnitId, qtyInUnit: 2 }],
+    });
+
+    const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
+    expect(createManyCall.data[0].unitCostPence).toBe(525);
+    expect(createManyCall.data[0].lineSubtotalPence).toBe(1050);
+  });
 });

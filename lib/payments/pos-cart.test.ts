@@ -26,7 +26,7 @@ const products: PosProduct[] = [
     onHandBase: 24,
     units: [
       { id: 'pack', name: 'pack', pluralName: 'packs', conversionToBase: 1, isBaseUnit: true },
-      { id: 'carton', name: 'carton', pluralName: 'cartons', conversionToBase: 12, isBaseUnit: false },
+      { id: 'carton', name: 'carton', pluralName: 'cartons', conversionToBase: 12, isBaseUnit: false, sellingPricePence: 1100 },
     ],
   },
   {
@@ -103,5 +103,22 @@ describe('pos-cart helpers', () => {
   it('formats available quantities using packaging units', () => {
     expect(formatAvailable(products[0], 18)).toBe('1 carton + 6 packs');
     expect(formatAvailable(products[1], 2)).toBe('2 bottles');
+  });
+
+  it('uses explicit configured selling prices for non-base units', () => {
+    const productMap = buildProductMap(products);
+    const details = buildCartDetails([
+      {
+        id: 'prod-1:carton',
+        productId: 'prod-1',
+        unitId: 'carton',
+        qtyInUnit: 1,
+        discountType: 'NONE',
+        discountValue: '',
+      },
+    ], productMap, false);
+
+    expect(details[0].unitPrice).toBe(1100);
+    expect(details[0].subtotal).toBe(1100);
   });
 });

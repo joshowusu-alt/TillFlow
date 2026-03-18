@@ -9,6 +9,7 @@ import { createSalesReturn } from '../lib/services/returns';
 import { createStockAdjustment } from '../lib/services/inventory';
 import { ensureOrganizationAndBranches } from '../lib/services/branches';
 import { approveAndCompleteStockTransfer, requestStockTransfer } from '../lib/services/stock-transfers';
+import { resolveEffectiveSellingPricePence } from '../lib/services/shared';
 
 const prisma = new PrismaClient();
 
@@ -39,7 +40,7 @@ async function getSellableLine(businessId: string, storeId: string) {
           vatRateBps: true,
           productUnits: {
             where: { isBaseUnit: true },
-            select: { unitId: true, conversionToBase: true },
+            select: { unitId: true, conversionToBase: true, sellingPricePence: true },
             take: 1,
           },
         },
@@ -52,7 +53,7 @@ async function getSellableLine(businessId: string, storeId: string) {
   }
 
   const conversionToBase = balance.product.productUnits[0].conversionToBase;
-  const unitPricePence = balance.product.sellingPriceBasePence * conversionToBase;
+  const unitPricePence = resolveEffectiveSellingPricePence(balance.product, balance.product.productUnits[0]);
   return {
     productId: balance.productId,
     unitId: balance.product.productUnits[0].unitId,

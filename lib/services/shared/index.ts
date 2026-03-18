@@ -21,3 +21,11 @@ export {
   incrementInventoryBalance,
   buildQtyByProductMap
 } from './inventory-utils';
+
+export {
+  type ProductUnitPricingProduct,
+  type ProductUnitPricingUnit,
+  resolveEffectiveSellingPricePence,
+  resolveEffectiveDefaultCostPence,
+  resolveProductUnitBaseValuePence,
+} from './product-unit-pricing';

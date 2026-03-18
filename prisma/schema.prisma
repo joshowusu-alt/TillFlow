@@ -380,6 +380,8 @@ model ProductUnit {
   unitId           String
   isBaseUnit       Boolean  @default(false)
   conversionToBase Int     @default(1)
+  sellingPricePence Int?
+  defaultCostPence  Int?
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())

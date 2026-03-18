@@ -1,5 +1,9 @@
 import { computeDiscount, type PosCheckoutTotals, type PosDiscountType } from './pos-checkout';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import {
+  resolveEffectiveSellingPricePence,
+  resolveProductUnitBaseValuePence,
+} from '@/lib/services/shared';
 
 export type PosUnit = {
   id: string;
@@ -7,6 +11,8 @@ export type PosUnit = {
   pluralName: string;
   conversionToBase: number;
   isBaseUnit: boolean;
+  sellingPricePence?: number | null;
+  defaultCostPence?: number | null;
 };
 
 export type PosProduct = {
@@ -100,7 +106,7 @@ export function buildCartDetails(
       if (!product || !unit) return null;
 
       const qtyBase = line.qtyInUnit * unit.conversionToBase;
-      const unitPrice = unit.conversionToBase * product.sellingPriceBasePence;
+      const unitPrice = resolveEffectiveSellingPricePence(product, unit);
       const subtotal = unitPrice * line.qtyInUnit;
       const lineDiscount = computeDiscount(subtotal, line.discountType, line.discountValue);
       const promoBuyQty = product.promoBuyQty ?? 0;
@@ -111,7 +117,7 @@ export function buildCartDetails(
           ? Math.floor(qtyBase / promoGroup) * promoGetQty
           : 0;
       const promoDiscount = Math.min(
-        promoFreeUnits * product.sellingPriceBasePence,
+        resolveProductUnitBaseValuePence(unitPrice, unit, promoFreeUnits),
         Math.max(subtotal - lineDiscount, 0)
       );
       const netSubtotal = Math.max(subtotal - lineDiscount - promoDiscount, 0);

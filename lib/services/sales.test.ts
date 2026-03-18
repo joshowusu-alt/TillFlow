@@ -275,6 +275,25 @@ describe('createSale — pricing', () => {
     expect(createCall.data.subtotalPence).toBe(1000);
     expect(createCall.data.totalPence).toBe(1000);
   });
+
+  it('uses explicit configured unit selling price when present', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      makeProductUnit({
+        unitId: 'unit-half-pack',
+        conversionToBase: 6,
+        sellingPricePence: 2600,
+      }),
+    ]);
+
+    await createSale(makeBaseInput({
+      lines: [{ productId: PRODUCT_ID, unitId: 'unit-half-pack', qtyInUnit: 1 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.lines.create[0].unitPricePence).toBe(2600);
+    expect(createCall.data.subtotalPence).toBe(2600);
+    expect(createCall.data.totalPence).toBe(2600);
+  });
 });
 
 describe('createSale — VAT', () => {

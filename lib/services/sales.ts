@@ -17,6 +17,8 @@ import {
   upsertInventoryBalance,
   fetchInventoryMap,
   resolveAvgCost,
+  resolveEffectiveSellingPricePence,
+  resolveProductUnitBaseValuePence,
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
@@ -54,7 +56,7 @@ function buildLinePricing(
       throw new Error('Unit not configured for product');
     }
     const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
-    const unitPricePence = productUnit.product.sellingPriceBasePence * productUnit.conversionToBase;
+    const unitPricePence = resolveEffectiveSellingPricePence(productUnit.product, productUnit);
     const lineSubtotal = unitPricePence * line.qtyInUnit;
     const lineDiscount = computeDiscount(lineSubtotal, line.discountType, line.discountValue);
     const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
@@ -65,7 +67,7 @@ function buildLinePricing(
         ? Math.floor(qtyBase / promoGroup) * promoGetQty
         : 0;
     const promoDiscount = Math.min(
-      promoFreeUnits * productUnit.product.sellingPriceBasePence,
+      resolveProductUnitBaseValuePence(unitPricePence, productUnit, promoFreeUnits),
       Math.max(lineSubtotal - lineDiscount, 0)
     );
     const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);

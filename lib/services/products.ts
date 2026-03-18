@@ -18,6 +18,15 @@ export type ProductCoreInput = {
   baseUnitId: string;
   packagingUnitId: string;
   packagingConversion: number;
+  unitConfigs?: ProductUnitInput[];
+};
+
+export type ProductUnitInput = {
+  unitId: string;
+  conversionToBase: number;
+  isBaseUnit: boolean;
+  sellingPricePence?: number | null;
+  defaultCostPence?: number | null;
 };
 
 export type QuickCreateProductInput = {
@@ -30,6 +39,7 @@ export type QuickCreateProductInput = {
   baseUnitId: string;
   packagingUnitId?: string | null;
   packagingConversion?: number | null;
+  unitConfigs?: ProductUnitInput[];
 };
 
 export type QuickCreateProductResult = {
@@ -48,6 +58,8 @@ export type QuickCreateProductResult = {
     pluralName: string;
     conversionToBase: number;
     isBaseUnit: boolean;
+    sellingPricePence?: number | null;
+    defaultCostPence?: number | null;
   }[];
 };
 
@@ -123,16 +135,38 @@ export function buildProductUnitCreates(
   baseUnitId: string,
   packagingUnitId: string,
   packagingConversion: number
-): { unitId: string; isBaseUnit: boolean; conversionToBase: number }[] {
+): ProductUnitInput[] {
   return [
     { unitId: baseUnitId, isBaseUnit: true, conversionToBase: 1 },
     packagingUnitId && packagingConversion > 1 && packagingUnitId !== baseUnitId
       ? { unitId: packagingUnitId, isBaseUnit: false, conversionToBase: packagingConversion }
       : null,
-  ].filter(Boolean) as { unitId: string; isBaseUnit: boolean; conversionToBase: number }[];
+  ].filter(Boolean) as ProductUnitInput[];
+}
+
+function normalizeUnitConfigs(unitConfigs: ProductUnitInput[] | undefined, fallback: ProductUnitInput[]): ProductUnitInput[] {
+  const source = unitConfigs?.length ? unitConfigs : fallback;
+
+  return source
+    .map((config) => ({
+      unitId: config.unitId.trim(),
+      conversionToBase: Number(config.conversionToBase),
+      isBaseUnit: Boolean(config.isBaseUnit),
+      sellingPricePence:
+        config.sellingPricePence === null || config.sellingPricePence === undefined
+          ? null
+          : Math.round(Number(config.sellingPricePence)),
+      defaultCostPence:
+        config.defaultCostPence === null || config.defaultCostPence === undefined
+          ? null
+          : Math.round(Number(config.defaultCostPence)),
+    }))
+    .filter((config) => config.unitId);
 }
 
 function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
+  const fallbackUnits = buildProductUnitCreates(data.baseUnitId, data.packagingUnitId, data.packagingConversion);
+
   return {
     ...data,
     name: data.name.trim(),
@@ -142,10 +176,17 @@ function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
     imageUrl: data.imageUrl?.trim() ? data.imageUrl.trim() : null,
     baseUnitId: data.baseUnitId.trim(),
     packagingUnitId: data.packagingUnitId?.trim() ?? '',
+    unitConfigs: normalizeUnitConfigs(data.unitConfigs, fallbackUnits),
   };
 }
 
 function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateProductInput {
+  const fallbackUnits = buildProductUnitCreates(
+    input.baseUnitId,
+    input.packagingUnitId?.trim() ?? '',
+    input.packagingConversion ?? 0
+  );
+
   return {
     ...input,
     name: input.name.trim(),
@@ -153,10 +194,53 @@ function normalizeQuickCreateInput(input: QuickCreateProductInput): QuickCreateP
     barcode: input.barcode?.trim() ? input.barcode.trim() : null,
     baseUnitId: input.baseUnitId.trim(),
     packagingUnitId: input.packagingUnitId?.trim() ? input.packagingUnitId.trim() : null,
+    unitConfigs: normalizeUnitConfigs(input.unitConfigs, fallbackUnits),
   };
 }
 
-function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion'>) {
+function validateUnitConfigs(unitConfigs: ProductUnitInput[]) {
+  if (unitConfigs.length === 0) {
+    throw new Error('Please configure at least one product unit.');
+  }
+
+  const baseUnits = unitConfigs.filter((config) => config.isBaseUnit);
+  if (baseUnits.length !== 1) {
+    throw new Error('Please configure exactly one base unit.');
+  }
+
+  const seen = new Set<string>();
+  for (const config of unitConfigs) {
+    if (seen.has(config.unitId)) {
+      throw new Error('Each unit can only be configured once per product.');
+    }
+    seen.add(config.unitId);
+
+    if (config.isBaseUnit) {
+      if (config.conversionToBase !== 1) {
+        throw new Error('Base unit conversion must be exactly 1.');
+      }
+      if (config.sellingPricePence !== null && config.sellingPricePence !== undefined) {
+        throw new Error('Base unit selling price override is not needed; use the main selling price instead.');
+      }
+      if (config.defaultCostPence !== null && config.defaultCostPence !== undefined) {
+        throw new Error('Base unit default cost override is not needed; use the main default cost instead.');
+      }
+      continue;
+    }
+
+    if (!Number.isInteger(config.conversionToBase) || config.conversionToBase <= 1) {
+      throw new Error('Each non-base unit must contain a whole number of base units greater than 1.');
+    }
+    if (config.sellingPricePence !== null && config.sellingPricePence !== undefined && config.sellingPricePence <= 0) {
+      throw new Error('Selling price overrides must be greater than zero.');
+    }
+    if (config.defaultCostPence !== null && config.defaultCostPence !== undefined && config.defaultCostPence < 0) {
+      throw new Error('Default cost overrides cannot be negative.');
+    }
+  }
+}
+
+function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPriceBasePence' | 'defaultCostBasePence' | 'vatRateBps' | 'promoBuyQty' | 'promoGetQty' | 'baseUnitId' | 'packagingUnitId' | 'packagingConversion' | 'unitConfigs'>) {
   if (!data.name.trim()) {
     throw new Error('Please enter a product name.');
   }
@@ -175,6 +259,7 @@ function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPri
   if (data.promoBuyQty < 0 || data.promoGetQty < 0) {
     throw new Error('Promo quantities cannot be negative.');
   }
+  validateUnitConfigs(data.unitConfigs ?? []);
   if (data.packagingUnitId) {
     if (data.packagingUnitId === data.baseUnitId) {
       throw new Error('Packaging unit must be different from the base unit.');
@@ -216,11 +301,13 @@ export async function createProduct(
       promoBuyQty: normalized.promoBuyQty,
       promoGetQty: normalized.promoGetQty,
       productUnits: {
-        create: buildProductUnitCreates(
-          normalized.baseUnitId,
-          normalized.packagingUnitId,
-          normalized.packagingConversion
-        ),
+        create: (normalized.unitConfigs ?? []).map((config) => ({
+          unitId: config.unitId,
+          isBaseUnit: config.isBaseUnit,
+          conversionToBase: config.conversionToBase,
+          sellingPricePence: config.sellingPricePence ?? null,
+          defaultCostPence: config.defaultCostPence ?? null,
+        })),
       },
     },
     select: { id: true, name: true },
@@ -274,67 +361,39 @@ export async function updateProduct(
       where: { productId: existing.id },
     });
 
-    // ── Base unit ──────────────────────────────────────────────────────────
-    if (normalized.baseUnitId) {
-      const baseUnit = existingUnits.find((u) => u.unitId === normalized.baseUnitId);
-      if (baseUnit) {
+    const targetUnitIds = new Set((normalized.unitConfigs ?? []).map((config) => config.unitId));
+
+    for (const config of normalized.unitConfigs ?? []) {
+      const existingUnit = existingUnits.find((unit) => unit.unitId === config.unitId);
+      const unitData = {
+        isBaseUnit: config.isBaseUnit,
+        conversionToBase: config.conversionToBase,
+        sellingPricePence: config.sellingPricePence ?? null,
+        defaultCostPence: config.defaultCostPence ?? null,
+      };
+
+      if (existingUnit) {
         await tx.productUnit.update({
-          where: { id: baseUnit.id },
-          data: { isBaseUnit: true, conversionToBase: 1 },
+          where: { id: existingUnit.id },
+          data: unitData,
         });
       } else {
         await tx.productUnit.create({
           data: {
             productId: existing.id,
-            unitId: normalized.baseUnitId,
-            isBaseUnit: true,
-            conversionToBase: 1,
+            unitId: config.unitId,
+            ...unitData,
           },
         });
       }
-      // Ensure no other unit is accidentally marked as the base
-      await tx.productUnit.updateMany({
-        where: { productId: existing.id, unitId: { not: normalized.baseUnitId } },
-        data: { isBaseUnit: false },
-      });
     }
 
-    // ── Packaging unit ─────────────────────────────────────────────────────
-    if (
-      normalized.packagingUnitId &&
-      normalized.packagingConversion > 1 &&
-      normalized.packagingUnitId !== normalized.baseUnitId
-    ) {
-      const packagingUnit = existingUnits.find((u) => u.unitId === normalized.packagingUnitId);
-      if (packagingUnit) {
-        await tx.productUnit.update({
-          where: { id: packagingUnit.id },
-          data: { isBaseUnit: false, conversionToBase: normalized.packagingConversion },
-        });
-      } else {
-        await tx.productUnit.create({
-          data: {
-            productId: existing.id,
-            unitId: normalized.packagingUnitId,
-            isBaseUnit: false,
-            conversionToBase: normalized.packagingConversion,
-          },
-        });
-      }
-      // Remove any stale non-base units that are not the current packaging unit
-      await tx.productUnit.deleteMany({
-        where: {
-          productId: existing.id,
-          isBaseUnit: false,
-          unitId: { not: normalized.packagingUnitId },
-        },
-      });
-    } else {
-      // No packaging unit — remove all non-base units
-      await tx.productUnit.deleteMany({
-        where: { productId: existing.id, isBaseUnit: false },
-      });
-    }
+    await tx.productUnit.deleteMany({
+      where: {
+        productId: existing.id,
+        unitId: { notIn: [...targetUnitIds] },
+      },
+    });
   });
 
   return existing.id;
@@ -363,6 +422,7 @@ export async function quickCreateProduct(
     baseUnitId: normalized.baseUnitId,
     packagingUnitId: normalized.packagingUnitId ?? '',
     packagingConversion: normalized.packagingConversion ?? 0,
+    unitConfigs: normalized.unitConfigs,
   });
 
   await assertNoDuplicateProductName(businessId, normalized.name, undefined, db);
@@ -385,11 +445,13 @@ export async function quickCreateProduct(
       defaultCostBasePence: normalized.defaultCostBasePence,
       vatRateBps: normalized.vatRateBps,
       productUnits: {
-        create: buildProductUnitCreates(
-          normalized.baseUnitId,
-          normalized.packagingUnitId ?? '',
-          normalized.packagingConversion ?? 0
-        ),
+        create: (normalized.unitConfigs ?? []).map((config) => ({
+          unitId: config.unitId,
+          isBaseUnit: config.isBaseUnit,
+          conversionToBase: config.conversionToBase,
+          sellingPricePence: config.sellingPricePence ?? null,
+          defaultCostPence: config.defaultCostPence ?? null,
+        })),
       },
     },
     include: { productUnits: { include: { unit: true } } },
@@ -411,6 +473,8 @@ export async function quickCreateProduct(
       pluralName: pu.unit.pluralName,
       conversionToBase: pu.conversionToBase,
       isBaseUnit: pu.isBaseUnit,
+      sellingPricePence: pu.sellingPricePence,
+      defaultCostPence: pu.defaultCostPence,
     })),
   };
 }

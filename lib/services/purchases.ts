@@ -6,6 +6,7 @@ import {
   splitPayments,
   derivePaymentStatus,
   creditCashBankLines,
+  resolveEffectiveDefaultCostPence,
   type PaymentInput,
   type JournalLine
 } from './shared';
@@ -87,7 +88,7 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     if (!productUnit) throw new Error('Unit not configured for product');
     const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
     const unitCostPence =
-      line.unitCostPence ?? productUnit.product.defaultCostBasePence * productUnit.conversionToBase;
+      line.unitCostPence ?? resolveEffectiveDefaultCostPence(productUnit.product, productUnit);
     const unitCostBasePence = Math.round(unitCostPence / productUnit.conversionToBase);
     const lineSubtotal = unitCostPence * line.qtyInUnit;
     const vatRate = business.vatEnabled ? productUnit.product.vatRateBps : 0;
