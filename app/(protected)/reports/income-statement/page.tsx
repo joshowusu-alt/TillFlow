@@ -31,7 +31,7 @@ export default async function IncomeStatementPage({
     <div className="space-y-6">
       <PageHeader
         title="Income Statement"
-        subtitle="Journal-based revenue, COGS, expenses, and profit for the selected period."
+        subtitle="Revenue, COGS, expenses, and profit for the selected period."
         actions={
           <ReportActionGroup>
             <DownloadLink
@@ -72,7 +72,7 @@ export default async function IncomeStatementPage({
       <DateRangeFilterCard from={fromStr} to={toStr} />
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        This statement is built from accounting journals for the selected period. It will not always match product margin drill-downs, which estimate cost from item-level product cost snapshots.
+        Revenue and COGS are derived from sale transactions. Operating expenses are from accounting journals. The Balance Sheet remains fully journal-based.
       </div>
 
       {!hasData ? (

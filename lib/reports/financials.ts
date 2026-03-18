@@ -22,7 +22,24 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
   const start = new Date(startIso);
   const end = new Date(endIso);
 
-  const [grouped, accounts] = await Promise.all([
+  const [saleLines, grouped, accounts] = await Promise.all([
+    // Revenue and COGS from sale lines — single source of truth
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: {
+          businessId,
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      select: {
+        lineSubtotalPence: true,
+        lineCostPence: true,
+        qtyBase: true,
+        product: { select: { defaultCostBasePence: true } },
+      },
+    }),
+    // Journals still needed for non-COGS expenses
     prisma.journalLine.groupBy({
       by: ['accountId'],
       where: {
@@ -38,24 +55,27 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
+  // Revenue and COGS from sale lines (consistent with dashboard/margins/analytics)
   let revenue = 0;
   let cogs = 0;
-  let otherExpenses = 0;
+  for (const line of saleLines) {
+    revenue += line.lineSubtotalPence;
+    const cost = line.lineCostPence > 0
+      ? line.lineCostPence
+      : (line.product.defaultCostBasePence * line.qtyBase);
+    cogs += cost;
+  }
 
+  // Other expenses from journals (excluding COGS which is derived above)
+  let otherExpenses = 0;
   for (const g of grouped) {
     const account = accountMap.get(g.accountId);
     if (!account) continue;
     const accountType = account.type as AccountType;
-    const debit = g._sum.debitPence ?? 0;
-    const credit = g._sum.creditPence ?? 0;
-    const balance = applyBalance(accountType, debit, credit);
-    if (accountType === 'INCOME') {
-      revenue += balance;
-    }
-    if (account.code === ACCOUNT_CODES.cogs) {
-      cogs += balance;
-    } else if (accountType === 'EXPENSE') {
-      otherExpenses += balance;
+    if (accountType === 'EXPENSE' && account.code !== ACCOUNT_CODES.cogs) {
+      const debit = g._sum.debitPence ?? 0;
+      const credit = g._sum.creditPence ?? 0;
+      otherExpenses += applyBalance(accountType, debit, credit);
     }
   }
 
