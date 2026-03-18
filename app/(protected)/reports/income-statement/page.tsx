@@ -87,7 +87,7 @@ export default async function IncomeStatementPage({
       ) : (
         <ReportSummaryCard>
           <ReportSummaryRow
-            label="Sales Revenue"
+            label="Revenue"
             value={formatMoney(statement.revenue, business.currency)}
           />
           <ReportSummaryRow

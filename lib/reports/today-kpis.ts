@@ -120,8 +120,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
       select: {
         lineTotalPence: true,
-        qtyBase: true,
-        product: { select: { id: true, defaultCostBasePence: true } },
+        lineCostPence: true,
+        product: { select: { id: true } },
         salesInvoice: { select: { createdAt: true, paymentStatus: true } },
       },
       take: 10000,
@@ -181,11 +181,10 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     if (!isDateOnOrAfter(line.salesInvoice.createdAt, fourteenDaysAgo)) continue;
     if (['RETURNED', 'VOID'].includes(line.salesInvoice.paymentStatus)) continue;
 
-    const cost = (line.product.defaultCostBasePence ?? 0) * line.qtyBase;
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineTotalPence;
-    existing.cost += cost;
+    existing.cost += line.lineCostPence;
     productMargins.set(key, existing);
   }
 
@@ -379,8 +378,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       },
       select: {
         lineTotalPence: true,
-        qtyBase: true,
-        product: { select: { id: true, defaultCostBasePence: true } },
+        lineCostPence: true,
+        product: { select: { id: true } },
       },
       take: 10000,
     }),
@@ -427,11 +426,10 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   // Negative margin products
   const productMargins = new Map<string, { revenue: number; cost: number }>();
   for (const line of salesLines14d) {
-    const cost = (line.product.defaultCostBasePence ?? 0) * line.qtyBase;
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineTotalPence;
-    existing.cost += cost;
+    existing.cost += line.lineCostPence;
     productMargins.set(key, existing);
   }
   // Count products where selling price < cost (simplified)

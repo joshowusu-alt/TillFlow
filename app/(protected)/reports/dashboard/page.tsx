@@ -220,7 +220,8 @@ export default async function DashboardPage({
   // Summarise sales — already aggregated by DB
   const totalSales = salesAgg._sum.totalPence ?? 0;
   // Use journal-based gross profit so the dashboard always agrees with the Income Statement.
-  // salesInvoice.grossMarginPence is a denormalized snapshot that can diverge from COGS journals.
+  // All product-level cost now flows from lineCostPence, which is set from the same avgCost
+  // used for journal COGS, ensuring consistency across all reports.
   const totalGrossMargin = income.grossProfit;
   const gpPercent = totalSales > 0 ? Math.round((income.grossProfit / totalSales) * 100) : 0;
   const npPercent = totalSales > 0 ? Math.round((income.netProfit / totalSales) * 100) : 0;

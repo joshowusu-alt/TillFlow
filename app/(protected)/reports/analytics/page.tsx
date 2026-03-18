@@ -39,16 +39,15 @@ export default async function AnalyticsPage({
             select: {
                 createdAt: true,
                 totalPence: true,
-                grossMarginPence: true,
                 lines: {
                     select: {
                         productId: true,
                         qtyBase: true,
                         lineTotalPence: true,
+                        lineCostPence: true,
                         product: {
                             select: {
                                 name: true,
-                                defaultCostBasePence: true,
                                 category: { select: { name: true } }
                             }
                         }
@@ -90,7 +89,8 @@ export default async function AnalyticsPage({
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
             : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
-        dailyProfit.set(key, (dailyProfit.get(key) || 0) + (sale.grossMarginPence || 0));
+        const saleProfit = sale.lines.reduce((sum, l) => sum + l.lineTotalPence - l.lineCostPence, 0);
+        dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleProfit);
     });
 
     // Calculate hourly heatmap data
@@ -138,7 +138,7 @@ export default async function AnalyticsPage({
         sale.lines.forEach((line) => {
             const existing = productStats.get(line.productId) || { name: line.product.name, revenue: 0, cost: 0 };
             existing.revenue += line.lineTotalPence;
-            existing.cost += (line.product.defaultCostBasePence || 0) * line.qtyBase;
+            existing.cost += line.lineCostPence;
             productStats.set(line.productId, existing);
         });
     });
