@@ -10,6 +10,7 @@ const { prismaMock } = vi.hoisted(() => ({
     business: { findUniqueOrThrow: vi.fn() },
     journalLine: { groupBy: vi.fn() },
     account: { findMany: vi.fn() },
+    salesInvoiceLine: { findMany: vi.fn() },
   },
 }));
 
@@ -42,6 +43,7 @@ describe('getBalanceSheet asOf filtering', () => {
       openingCapitalPence: 0,
     });
     prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
+    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([]);
   });
 
   it('returns zero totals when no journal entries exist', async () => {
@@ -115,12 +117,16 @@ describe('getBalanceSheet asOf filtering', () => {
       { accountId: 'acc-revenue', _sum: { debitPence: 0, creditPence: 100000 } },
       { accountId: 'acc-cogs', _sum: { debitPence: 60000, creditPence: 0 } },
     ]);
+    // Sale lines drive revenue/COGS for NP calculation
+    prismaMock.salesInvoiceLine.findMany.mockResolvedValue([
+      { lineSubtotalPence: 100000, lineCostPence: 60000, qtyBase: 1, product: { defaultCostBasePence: 60000 } },
+    ]);
 
     const sheet = await getBalanceSheet(bizId, new Date('2024-12-31'));
 
     const currentProfit = sheet.equity.find(e => e.accountCode === 'CURRENT_PROFIT');
     expect(currentProfit).toBeTruthy();
-    // Net income = revenue (100000) - expenses (60000) = 40000
+    // Net income = sale-line revenue (100000) - sale-line cost (60000) = 40000
     expect(currentProfit!.balancePence).toBe(40000);
   });
 });

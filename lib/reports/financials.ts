@@ -103,7 +103,7 @@ export function getIncomeStatement(businessId: string, start: Date, end: Date) {
 async function _getBalanceSheet(businessId: string, asOfIso: string) {
   const asOf = new Date(asOfIso);
 
-  const [business, grouped, accounts] = await Promise.all([
+  const [business, grouped, accounts, income] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
     prisma.journalLine.groupBy({
       by: ['accountId'],
@@ -114,14 +114,16 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
       where: { businessId },
       select: { id: true, code: true, name: true, type: true },
     }),
+    // Sale-line-based NP (consistent with Income Statement)
+    _getIncomeStatement(businessId, new Date(0).toISOString(), asOfIso),
   ]);
 
   const openingCapital = business.openingCapitalPence ?? 0;
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
   const map = new Map<string, StatementLine>();
-  let incomeTotal = 0;
-  let expenseTotal = 0;
+  let journalIncomeTotal = 0;
+  let journalExpenseTotal = 0;
 
   for (const g of grouped) {
     const account = accountMap.get(g.accountId);
@@ -138,9 +140,13 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
       balancePence: balance,
     });
 
-    if (accountType === 'INCOME') incomeTotal += balance;
-    if (accountType === 'EXPENSE') expenseTotal += balance;
+    if (accountType === 'INCOME') journalIncomeTotal += balance;
+    if (accountType === 'EXPENSE') journalExpenseTotal += balance;
   }
+
+  // Adjustment: sale-line NP vs journal NP — applied to inventory to keep BS balanced
+  const journalNP = journalIncomeTotal - journalExpenseTotal;
+  const npAdjustment = income.netProfit - journalNP;
 
   const assets: StatementLine[] = [];
   const liabilities: StatementLine[] = [];
@@ -150,6 +156,10 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   for (const entry of map.values()) {
     if (entry.accountCode === ACCOUNT_CODES.cash && openingCapital > 0) {
       entry.balancePence += openingCapital;
+    }
+    // Adjust inventory to reflect sale-line COGS (keeps BS balanced)
+    if (entry.accountCode === ACCOUNT_CODES.inventory && npAdjustment !== 0) {
+      entry.balancePence += npAdjustment;
     }
     if (entry.type === 'ASSET') assets.push(entry);
     if (entry.type === 'LIABILITY') liabilities.push(entry);
@@ -176,13 +186,13 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     });
   }
 
-  const netIncome = incomeTotal - expenseTotal;
-  if (netIncome !== 0) {
+  // Use sale-line-based NP (matches Income Statement)
+  if (income.netProfit !== 0) {
     equity.push({
       accountCode: 'CURRENT_PROFIT',
       name: 'Net Profit to Date',
       type: 'EQUITY',
-      balancePence: netIncome
+      balancePence: income.netProfit
     });
   }
 
