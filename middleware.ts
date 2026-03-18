@@ -20,6 +20,28 @@ const CRON_SECRET_PATHS = [
   '/api/seed-once',
 ];
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+export function normalizeComparableHost(host: string) {
+    const trimmed = host.trim().toLowerCase();
+    if (!trimmed) return trimmed;
+
+    const isBracketedIpv6 = trimmed.startsWith('[');
+    const portSeparator = trimmed.lastIndexOf(':');
+    const hasPort = portSeparator > -1 && (!isBracketedIpv6 || trimmed.includes(']:'));
+    const hostname = hasPort ? trimmed.slice(0, portSeparator) : trimmed;
+    const port = hasPort ? trimmed.slice(portSeparator + 1) : '';
+
+    if (LOOPBACK_HOSTS.has(hostname)) {
+        return `loopback${port ? `:${port}` : ''}`;
+    }
+
+    return trimmed;
+}
+
+export function hostsMatch(leftHost: string, rightHost: string) {
+    return normalizeComparableHost(leftHost) === normalizeComparableHost(rightHost);
+}
 
 function forbiddenResponse(request: NextRequest, reason: string) {
     if (request.nextUrl.pathname.startsWith('/api/')) {
@@ -33,7 +55,7 @@ function hasSameHostReferer(request: NextRequest) {
     if (!referer) return false;
 
     try {
-        return new URL(referer).host === request.nextUrl.host;
+        return hostsMatch(new URL(referer).host, request.nextUrl.host);
     } catch {
         return false;
     }
@@ -56,7 +78,7 @@ export function middleware(request: NextRequest) {
         if (origin && origin !== 'null') {
             try {
                 const originHost = new URL(origin).host;
-                if (originHost !== request.nextUrl.host) {
+                if (!hostsMatch(originHost, request.nextUrl.host)) {
                     return forbiddenResponse(request, 'origin_mismatch');
                 }
             } catch {
