@@ -183,7 +183,7 @@ export function getBalanceSheet(businessId: string, asOf: Date) {
   return cachedBalanceSheet(businessId, asOf.toISOString());
 }
 
-async function getAccountBalance(businessId: string, code: string, asOf: Date) {
+export async function getAccountBalance(businessId: string, code: string, asOf: Date) {
   const account = await prisma.account.findFirst({
     where: { businessId, code },
     select: { id: true, type: true },

@@ -2,6 +2,7 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
 import RefreshIndicator from '@/components/RefreshIndicator';
+import { getIncomeStatement } from '@/lib/reports/financials';
 import AnalyticsClient from './AnalyticsClient';
 
 export const dynamic = 'force-dynamic';
@@ -28,16 +29,17 @@ export default async function AnalyticsPage({
     const previousPeriodAgo = new Date(periodAgo.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
     // Fetch both periods in parallel
-    const [recentSales, previousSales] = await Promise.all([
+    const [recentSales, previousSales, currentIncome] = await Promise.all([
         prisma.salesInvoice.findMany({
             where: {
                 businessId: business.id,
-                createdAt: { gte: periodAgo },
+                createdAt: { gte: periodAgo, lte: now },
                 paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             },
             select: {
                 createdAt: true,
                 totalPence: true,
+                grossMarginPence: true,
                 lines: {
                     select: {
                         productId: true,
@@ -63,6 +65,7 @@ export default async function AnalyticsPage({
             },
             select: { createdAt: true, totalPence: true }
         }),
+        getIncomeStatement(business.id, periodAgo, now),
     ]);
 
     // Calculate daily sales trend
@@ -87,8 +90,7 @@ export default async function AnalyticsPage({
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
             : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
-        const cost = sale.lines.reduce((sum, l) => sum + (l.product.defaultCostBasePence || 0) * l.qtyBase, 0);
-        dailyProfit.set(key, (dailyProfit.get(key) || 0) + (sale.totalPence - cost));
+        dailyProfit.set(key, (dailyProfit.get(key) || 0) + (sale.grossMarginPence || 0));
     });
 
     // Calculate hourly heatmap data
@@ -183,9 +185,7 @@ export default async function AnalyticsPage({
 
     // Calculate KPIs
     const totalSales = recentSales.reduce((sum, s) => sum + s.totalPence, 0);
-    const totalCost = recentSales.reduce((sum, s) =>
-        sum + s.lines.reduce((lSum, l) => lSum + (l.product.defaultCostBasePence || 0) * l.qtyBase, 0), 0);
-    const totalProfit = totalSales - totalCost;
+    const totalProfit = currentIncome.grossProfit;
     const marginPercent = totalSales > 0 ? (totalProfit / totalSales) * 100 : 0;
     const previousTotalSales = previousSales.reduce((sum, s) => sum + s.totalPence, 0);
     const growthPercent = previousTotalSales > 0
@@ -229,7 +229,7 @@ export default async function AnalyticsPage({
         <div className="space-y-6">
             <PageHeader
                 title="Advanced Analytics"
-                subtitle="Deep insights into your business performance."
+                subtitle="Deep insights into your business performance with accounting-aligned headline totals."
                 actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
             />
             <AnalyticsClient data={analyticsData} />

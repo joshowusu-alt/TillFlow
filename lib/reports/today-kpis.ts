@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
+import { ACCOUNT_CODES } from '@/lib/accounting';
+import { getAccountBalance, getIncomeStatement } from './financials';
 import {
   ensureSqliteReportDateColumnsNormalized,
   isDateOnOrAfter,
@@ -49,12 +51,11 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 
   const storeFilter = storeId ? { storeId } : {};
 
-  const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d] = await Promise.all([
+  const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, income, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { businessId, ...storeFilter },
       select: {
         totalPence: true,
-        grossMarginPence: true,
         createdAt: true,
         paymentStatus: true,
         discountOverrideReason: true,
@@ -125,6 +126,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
       take: 10000,
     }),
+    getIncomeStatement(businessId, todayStart, todayEnd),
+    getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
   ]);
 
   const validTodaySales = salesRows.filter((row) =>
@@ -132,7 +135,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   );
 
   const totalSalesPence = validTodaySales.reduce((sum, row) => sum + row.totalPence, 0);
-  const grossMarginPence = validTodaySales.reduce((sum, row) => sum + (row.grossMarginPence ?? 0), 0);
+  const grossMarginPence = income.grossProfit;
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
   const paymentSplit: Record<string, number> = {};
@@ -205,7 +208,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
-    cashOnHandEstimatePence: totalSalesPence,
+    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
     negativeMarginProductCount,
     momoPendingCount: momoPending,
     stockoutImminentCount: inventorySummary.stockoutImminentCount,
@@ -265,6 +268,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     cashVarShifts,
     discountOverrides,
     salesLines14d,
+    income,
+    cashOnHandEstimatePence,
   ] = await Promise.all([
     // Today's sales — aggregate at DB level
     prisma.salesInvoice.aggregate({
@@ -273,7 +278,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         createdAt: { gte: todayStart, lte: todayEnd },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
-      _sum: { totalPence: true, grossMarginPence: true },
+      _sum: { totalPence: true },
       _count: { id: true },
     }),
     // Today's payments grouped by method — aggregate at DB level
@@ -379,11 +384,13 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       },
       take: 10000,
     }),
+    getIncomeStatement(businessId, todayStart, todayEnd),
+    getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
   ]);
 
   // Sales KPIs — already aggregated by the DB
   const totalSalesPence = salesAgg._sum.totalPence ?? 0;
-  const grossMarginPence = salesAgg._sum.grossMarginPence ?? 0;
+  const grossMarginPence = income.grossProfit;
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
   // Payment split — already grouped by DB
@@ -413,9 +420,6 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   // Expenses — already aggregated by DB
   const totalExpenses30d = recentExpensesAgg._sum.amountPence ?? 0;
   const avgDailyExpensesPence = Math.round(totalExpenses30d / 30);
-
-  // Cash estimate (sales today - expenses avg)
-  const cashOnHandEstimatePence = totalSalesPence; // simplified — actual cash from today
 
   // Cash variances
   const cashVarianceTotalPence = cashVarShifts.reduce((s, v) => s + Math.abs(v.variance ?? 0), 0);
@@ -456,7 +460,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     productsAboveReorderPoint: inventorySummary.productsAboveReorderPoint,
     paymentSplit,
     avgDailyExpensesPence,
-    cashOnHandEstimatePence,
+    cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
     negativeMarginProductCount,
     momoPendingCount: momoPending,
     stockoutImminentCount: inventorySummary.stockoutImminentCount,

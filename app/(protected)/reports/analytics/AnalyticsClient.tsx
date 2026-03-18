@@ -75,7 +75,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
                     <div className="mt-1 text-base sm:text-xl font-bold text-emerald-600 truncate">{formatMoney(data.kpis.totalSales)}</div>
                 </div>
                 <div className="card p-3 sm:p-4">
-                    <div className="text-[10px] sm:text-xs text-black/50">Profit</div>
+                    <div className="text-[10px] sm:text-xs text-black/50">Gross Profit</div>
                     <div className={`mt-1 text-base sm:text-xl font-bold truncate ${data.kpis.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {formatMoney(data.kpis.totalProfit)}
                     </div>
@@ -110,6 +110,10 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
                     <div className="text-[10px] sm:text-xs text-black/50">Peak Hour</div>
                     <div className="mt-1 text-base sm:text-xl font-bold">{data.kpis.peakHour || '—'}</div>
                 </div>
+            </div>
+
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-900 sm:text-sm">
+                Revenue and gross profit cards are aligned to the accounting journals used by the dashboard and income statement. Product rankings below still use item-level cost snapshots for drill-down.
             </div>
 
             {/* Main Charts */}

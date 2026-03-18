@@ -2,6 +2,7 @@ import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
+import { getIncomeStatement } from '@/lib/reports/financials';
 
 export default async function MarginsPage({
   searchParams
@@ -15,28 +16,32 @@ export default async function MarginsPage({
   const days = parseInt(period, 10) || 30;
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
+  const endDate = new Date();
 
   // Get all sales lines with product and cost data
-  const salesLines = await prisma.salesInvoiceLine.findMany({
-    where: {
-      salesInvoice: {
-        businessId: business.id,
-        createdAt: { gte: startDate },
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-      }
-    },
-    select: {
-      productId: true,
-      qtyBase: true,
-      lineTotalPence: true,
-      product: {
-        select: {
-          name: true,
-          defaultCostBasePence: true
+  const [salesLines, income] = await Promise.all([
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        salesInvoice: {
+          businessId: business.id,
+          createdAt: { gte: startDate, lte: endDate },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] }
+        }
+      },
+      select: {
+        productId: true,
+        qtyBase: true,
+        lineTotalPence: true,
+        product: {
+          select: {
+            name: true,
+            defaultCostBasePence: true
+          }
         }
       }
-    }
-  });
+    }),
+    getIncomeStatement(business.id, startDate, endDate),
+  ]);
 
   // Aggregate by product
   const productStats = new Map<
@@ -91,7 +96,9 @@ export default async function MarginsPage({
     { revenue: 0, cost: 0, profit: 0 }
   );
 
-  const overallMargin = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
+  const accountingGrossProfit = income.grossProfit;
+  const accountingCogs = income.cogs;
+  const overallMargin = totals.revenue > 0 ? (accountingGrossProfit / totals.revenue) * 100 : 0;
 
   // Top performers and underperformers
   const topPerformers = products.slice(0, 5);
@@ -131,19 +138,23 @@ export default async function MarginsPage({
           <div className="mt-1 text-2xl font-bold">{formatMoney(totals.revenue, business.currency)}</div>
         </div>
         <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Total Cost</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(totals.cost, business.currency)}</div>
+          <div className="text-xs uppercase tracking-wide text-black/40">Accounting COGS</div>
+          <div className="mt-1 text-2xl font-bold">{formatMoney(accountingCogs, business.currency)}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Gross Profit</div>
           <div className="mt-1 text-2xl font-bold text-emerald-700">
-            {formatMoney(totals.profit, business.currency)}
+            {formatMoney(accountingGrossProfit, business.currency)}
           </div>
         </div>
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Overall Margin</div>
           <div className="mt-1 text-2xl font-bold">{overallMargin.toFixed(1)}%</div>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Summary cards above now match the accounting reports. Product rows below still use each product&apos;s current/default cost snapshot for margin drill-down, so item-level profit rankings are operational estimates rather than journal-posted COGS.
       </div>
 
       {/* Top and Low Margin */}
