@@ -121,7 +121,8 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       select: {
         lineTotalPence: true,
         lineCostPence: true,
-        product: { select: { id: true } },
+        qtyBase: true,
+        product: { select: { id: true, defaultCostBasePence: true } },
         salesInvoice: { select: { createdAt: true, paymentStatus: true } },
       },
       take: 10000,
@@ -184,7 +185,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineTotalPence;
-    existing.cost += line.lineCostPence;
+    existing.cost += line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
     productMargins.set(key, existing);
   }
 
@@ -379,7 +380,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       select: {
         lineTotalPence: true,
         lineCostPence: true,
-        product: { select: { id: true } },
+        qtyBase: true,
+        product: { select: { id: true, defaultCostBasePence: true } },
       },
       take: 10000,
     }),
@@ -429,7 +431,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     const key = line.product.id;
     const existing = productMargins.get(key) ?? { revenue: 0, cost: 0 };
     existing.revenue += line.lineTotalPence;
-    existing.cost += line.lineCostPence;
+    existing.cost += line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
     productMargins.set(key, existing);
   }
   // Count products where selling price < cost (simplified)

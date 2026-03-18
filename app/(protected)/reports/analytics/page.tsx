@@ -48,6 +48,7 @@ export default async function AnalyticsPage({
                         product: {
                             select: {
                                 name: true,
+                                defaultCostBasePence: true,
                                 category: { select: { name: true } }
                             }
                         }
@@ -89,7 +90,10 @@ export default async function AnalyticsPage({
             ? date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' })
             : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
         dailySales.set(key, (dailySales.get(key) || 0) + sale.totalPence);
-        const saleProfit = sale.lines.reduce((sum, l) => sum + l.lineTotalPence - l.lineCostPence, 0);
+        const saleProfit = sale.lines.reduce((sum, l) => {
+            const cost = l.lineCostPence || (l.product.defaultCostBasePence * l.qtyBase);
+            return sum + l.lineTotalPence - cost;
+        }, 0);
         dailyProfit.set(key, (dailyProfit.get(key) || 0) + saleProfit);
     });
 
@@ -138,7 +142,7 @@ export default async function AnalyticsPage({
         sale.lines.forEach((line) => {
             const existing = productStats.get(line.productId) || { name: line.product.name, revenue: 0, cost: 0 };
             existing.revenue += line.lineTotalPence;
-            existing.cost += line.lineCostPence;
+            existing.cost += line.lineCostPence || (line.product.defaultCostBasePence * line.qtyBase);
             productStats.set(line.productId, existing);
         });
     });
