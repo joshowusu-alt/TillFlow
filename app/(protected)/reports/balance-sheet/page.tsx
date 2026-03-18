@@ -80,6 +80,10 @@ export default async function BalanceSheetPage({
         <BalanceSheetDatePicker defaultValue={asOfStr} />
       </div>
 
+      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        Balance Sheet is an as-of-date financial position report. Equity includes cumulative net profit to date, not the product-level gross profit shown on the Profit Margins page.
+      </div>
+
       {/* Smart banner: negative cash = missing Opening Capital entry */}
       {rawCashBalance < 0 && openingCapitalPence === 0 && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">

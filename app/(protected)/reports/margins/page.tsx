@@ -98,7 +98,7 @@ export default async function MarginsPage({
 
   const accountingGrossProfit = income.grossProfit;
   const accountingCogs = income.cogs;
-  const overallMargin = totals.revenue > 0 ? (accountingGrossProfit / totals.revenue) * 100 : 0;
+  const overallMargin = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
 
   // Top performers and underperformers
   const topPerformers = products.slice(0, 5);
@@ -138,13 +138,13 @@ export default async function MarginsPage({
           <div className="mt-1 text-2xl font-bold">{formatMoney(totals.revenue, business.currency)}</div>
         </div>
         <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Accounting COGS</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(accountingCogs, business.currency)}</div>
+          <div className="text-xs uppercase tracking-wide text-black/40">Total Cost</div>
+          <div className="mt-1 text-2xl font-bold">{formatMoney(totals.cost, business.currency)}</div>
         </div>
         <div className="card p-4">
           <div className="text-xs uppercase tracking-wide text-black/40">Gross Profit</div>
           <div className="mt-1 text-2xl font-bold text-emerald-700">
-            {formatMoney(accountingGrossProfit, business.currency)}
+            {formatMoney(totals.profit, business.currency)}
           </div>
         </div>
         <div className="card p-4">
@@ -154,7 +154,7 @@ export default async function MarginsPage({
       </div>
 
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        Summary cards above now match the accounting reports. Product rows below still use each product&apos;s current/default cost snapshot for margin drill-down, so item-level profit rankings are operational estimates rather than journal-posted COGS.
+        The totals above are the sum of the visible product rows on this page. For the same period, the journal-based income statement currently shows COGS of {formatMoney(accountingCogs, business.currency)} and gross profit of {formatMoney(accountingGrossProfit, business.currency)}. Use <a href="/reports/income-statement" className="font-semibold underline">Income Statement</a> for accounting truth; use this page for product margin drill-down.
       </div>
 
       {/* Top and Low Margin */}

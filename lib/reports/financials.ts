@@ -160,7 +160,7 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   if (netIncome !== 0) {
     equity.push({
       accountCode: 'CURRENT_PROFIT',
-      name: 'Current Period Profit',
+      name: 'Net Profit to Date',
       type: 'EQUITY',
       balancePence: netIncome
     });
