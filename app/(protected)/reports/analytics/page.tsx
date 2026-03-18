@@ -32,7 +32,8 @@ export default async function AnalyticsPage({
         prisma.salesInvoice.findMany({
             where: {
                 businessId: business.id,
-                createdAt: { gte: periodAgo }
+                createdAt: { gte: periodAgo },
+                paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             },
             select: {
                 createdAt: true,
@@ -57,7 +58,8 @@ export default async function AnalyticsPage({
         prisma.salesInvoice.findMany({
             where: {
                 businessId: business.id,
-                createdAt: { gte: previousPeriodAgo, lt: periodAgo }
+                createdAt: { gte: previousPeriodAgo, lt: periodAgo },
+                paymentStatus: { notIn: ['RETURNED', 'VOID'] },
             },
             select: { createdAt: true, totalPence: true }
         }),

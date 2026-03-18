@@ -22,7 +22,7 @@ export default async function MarginsPage({
       salesInvoice: {
         businessId: business.id,
         createdAt: { gte: startDate },
-        paymentStatus: { not: 'VOID' }
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
       }
     },
     select: {

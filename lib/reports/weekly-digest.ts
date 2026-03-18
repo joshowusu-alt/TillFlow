@@ -63,21 +63,29 @@ async function _getWeeklyDigestData(
     // Payments grouped by method — aggregate at DB level
     prisma.salesPayment.groupBy({
       by: ['method'],
-      where: { receivedAt: { gte: weekStart, lte: weekEnd }, salesInvoice: { businessId } },
+      where: {
+        receivedAt: { gte: weekStart, lte: weekEnd },
+        salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      },
       _sum: { amountPence: true },
     }),
     prisma.salesInvoice.count({
       where: { businessId, createdAt: { gte: weekStart, lte: weekEnd }, paymentStatus: 'VOID' },
     }),
     prisma.salesReturn.count({
-      where: { store: { businessId }, createdAt: { gte: weekStart, lte: weekEnd } },
+      where: { store: { businessId }, createdAt: { gte: weekStart, lte: weekEnd }, type: 'RETURN' },
     }),
     prisma.riskAlert.findMany({
       where: { businessId, occurredAt: { gte: weekStart, lte: weekEnd } },
       select: { alertType: true, severity: true, cashierUser: { select: { name: true } } },
     }),
     prisma.salesInvoice.count({
-      where: { businessId, createdAt: { gte: weekStart, lte: weekEnd }, discountOverrideReason: { not: null } },
+      where: {
+        businessId,
+        createdAt: { gte: weekStart, lte: weekEnd },
+        discountOverrideReason: { not: null },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+      },
     }),
     prisma.shift.findMany({
       where: {

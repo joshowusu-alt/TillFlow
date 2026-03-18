@@ -65,6 +65,7 @@ export default async function RiskMonitorPage({
         businessId: business.id,
         createdAt: { gte: from, lte: to },
         ...(storeId !== 'ALL' ? { storeId } : {}),
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [
           { discountPence: { gt: 0 } },
           { discountApprovedByUserId: { not: null } },

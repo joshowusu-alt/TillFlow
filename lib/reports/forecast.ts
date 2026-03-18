@@ -242,7 +242,7 @@ async function _getCashflowForecast(
     where: {
       receivedAt: { gte: fourteenDaysAgo },
       method: { in: ['CASH', 'MOBILE_MONEY'] },
-      salesInvoice: { businessId },
+      salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
     },
     select: { amountPence: true },
   });

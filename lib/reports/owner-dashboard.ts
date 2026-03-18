@@ -215,7 +215,11 @@ export async function getOwnerDashboardSnapshot(
 			? prisma.salesPayment.findMany({
 				where: {
 					method: 'CASH',
-					salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+					salesInvoice: {
+						businessId,
+						...(storeId ? { storeId } : {}),
+						paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+					},
 				},
 				select: { amountPence: true, receivedAt: true },
 			})
@@ -223,7 +227,11 @@ export async function getOwnerDashboardSnapshot(
 				where: {
 					method: 'CASH',
 					receivedAt: { gte: yesterdayStart, lte: yesterdayEnd },
-					salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+					salesInvoice: {
+						businessId,
+						...(storeId ? { storeId } : {}),
+						paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+					},
 				},
 				_sum: { amountPence: true },
 			}),
@@ -351,6 +359,7 @@ export async function getOwnerDashboardSnapshot(
 				businessId,
 				...storeFilter,
 				discountOverrideReason: { not: null },
+				paymentStatus: { notIn: ['RETURNED', 'VOID'] },
 			},
 			select: {
 				id: true,

@@ -76,6 +76,7 @@ export default async function DashboardPage({
         salesInvoice: {
           businessId: business.id,
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
       _sum: { amountPence: true },
@@ -192,6 +193,7 @@ export default async function DashboardPage({
         store: { businessId: business.id },
         ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
         createdAt: { gte: start, lte: end },
+        type: 'RETURN',
       },
       select: { refundAmountPence: true },
       take: 500,

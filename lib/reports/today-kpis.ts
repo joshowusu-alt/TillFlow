@@ -62,7 +62,11 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     }),
     prisma.salesPayment.findMany({
       where: {
-        salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+        salesInvoice: {
+          businessId,
+          ...(storeId ? { storeId } : {}),
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
       },
       select: {
         method: true,
@@ -208,7 +212,12 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     urgentReorderCount: inventorySummary.urgentReorderCount,
     thisWeekExpensesPence,
     fourWeekAvgExpensesPence,
-    discountOverrideCount: salesRows.filter((row) => !!row.discountOverrideReason && isDateOnOrAfter(row.createdAt, sevenDaysAgo)).length,
+    discountOverrideCount: salesRows.filter(
+      (row) =>
+        !!row.discountOverrideReason &&
+        isDateOnOrAfter(row.createdAt, sevenDaysAgo) &&
+        !['RETURNED', 'VOID'].includes(row.paymentStatus)
+    ).length,
   };
 }
 
@@ -272,7 +281,11 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       by: ['method'],
       where: {
         receivedAt: { gte: todayStart, lte: todayEnd },
-        salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+        salesInvoice: {
+          businessId,
+          ...(storeId ? { storeId } : {}),
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
       },
       _sum: { amountPence: true },
     }),
@@ -347,6 +360,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         businessId,
         createdAt: { gte: sevenDaysAgo },
         discountOverrideReason: { not: null },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
     }),
     // Sales lines for negative margin check (14 days)
