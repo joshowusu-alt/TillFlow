@@ -18,6 +18,7 @@ import {
   softDeleteProduct,
   repairInflatedPrices,
   type ProductCoreInput,
+  type ProductUnitInput,
   type QuickCreateProductInput,
 } from '@/lib/services/products';
 
@@ -26,7 +27,41 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Extract the common product fields from FormData. */
+function parseUnitConfigs(formData: FormData): ProductUnitInput[] | undefined {
+  const raw = formOptionalString(formData, 'unitConfigsJson');
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    return parsed.map((item) => ({
+      unitId: String(item?.unitId ?? ''),
+      conversionToBase: Number(item?.conversionToBase ?? 0),
+      isBaseUnit: Boolean(item?.isBaseUnit),
+      sellingPricePence:
+        item?.sellingPricePence === null || item?.sellingPricePence === undefined
+          ? null
+          : Number(item.sellingPricePence),
+      defaultCostPence:
+        item?.defaultCostPence === null || item?.defaultCostPence === undefined
+          ? null
+          : Number(item.defaultCostPence),
+    }));
+  } catch {
+    throw new Error('Product units could not be read. Please review the configured units and try again.');
+  }
+}
+
 function parseProductFields(formData: FormData): ProductCoreInput {
+  const unitConfigs = parseUnitConfigs(formData);
+  const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
+  const firstNonBaseUnit = unitConfigs?.find((config) => !config.isBaseUnit);
+
   return {
     name: formString(formData, 'name'),
     sku: formString(formData, 'sku') || null,
@@ -38,9 +73,12 @@ function parseProductFields(formData: FormData): ProductCoreInput {
     vatRateBps: formInt(formData, 'vatRateBps'),
     promoBuyQty: formInt(formData, 'promoBuyQty'),
     promoGetQty: formInt(formData, 'promoGetQty'),
-    baseUnitId: formString(formData, 'baseUnitId'),
-    packagingUnitId: formString(formData, 'packagingUnitId'),
-    packagingConversion: formInt(formData, 'packagingConversion'),
+    baseUnitId: formOptionalString(formData, 'baseUnitId') || baseUnit?.unitId || '',
+    packagingUnitId: formOptionalString(formData, 'packagingUnitId') || firstNonBaseUnit?.unitId || '',
+    packagingConversion: formData.get('packagingConversion')
+      ? formInt(formData, 'packagingConversion')
+      : Number(firstNonBaseUnit?.conversionToBase ?? 0),
+    unitConfigs,
   };
 }
 

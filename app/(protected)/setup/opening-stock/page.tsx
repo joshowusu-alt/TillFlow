@@ -32,6 +32,7 @@ export default async function OpeningStockPage() {
           unitId: true,
           conversionToBase: true,
           isBaseUnit: true,
+          defaultCostPence: true,
           unit: { select: { id: true, name: true } },
         },
         orderBy: { isBaseUnit: 'desc' },

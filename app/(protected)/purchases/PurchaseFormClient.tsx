@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
+import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
+import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 
@@ -14,6 +16,8 @@ type UnitDto = {
   pluralName?: string;
   conversionToBase: number;
   isBaseUnit: boolean;
+  sellingPricePence?: number | null;
+  defaultCostPence?: number | null;
 };
 
 type ProductDto = {
@@ -34,6 +38,18 @@ type SupplierDto = {
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER';
 
 type UnitOption = { id: string; name: string };
+
+function buildDefaultUnitConfigs(units: UnitOption[]): EditableProductUnitConfig[] {
+  return units[0]
+    ? [
+        {
+          unitId: units[0].id,
+          conversionToBase: 1,
+          isBaseUnit: true,
+        },
+      ]
+    : [];
+}
 
 type CartLine = {
   id: string;
@@ -80,9 +96,7 @@ export default function PurchaseFormClient({
   const [quickName, setQuickName] = useState('');
   const [quickSku, setQuickSku] = useState('');
   const [quickBarcode, setQuickBarcode] = useState('');
-  const [quickBaseUnitId, setQuickBaseUnitId] = useState(units[0]?.id ?? '');
-  const [quickPackagingUnitId, setQuickPackagingUnitId] = useState('');
-  const [quickPackagingConversion, setQuickPackagingConversion] = useState('1');
+  const [quickUnitConfigs, setQuickUnitConfigs] = useState<EditableProductUnitConfig[]>(() => buildDefaultUnitConfigs(units));
   const [quickSellPrice, setQuickSellPrice] = useState('');
   const [quickCost, setQuickCost] = useState('');
   const [quickVatRate, setQuickVatRate] = useState('0');
@@ -137,17 +151,15 @@ export default function PurchaseFormClient({
   useEffect(() => {
     if (!selectedProduct || !selectedUnit) return;
     if (unitCostTouched) return;
-    const baseCost = selectedProduct.defaultCostBasePence * selectedUnit.conversionToBase;
-    setUnitCostInput((baseCost / 100).toFixed(2));
+    const resolvedCost = resolveEffectiveDefaultCostPence(selectedProduct, selectedUnit);
+    setUnitCostInput((resolvedCost / 100).toFixed(2));
   }, [selectedProduct, selectedUnit, unitCostTouched]);
 
   const resetQuickForm = () => {
     setQuickName('');
     setQuickSku('');
     setQuickBarcode('');
-    setQuickBaseUnitId(units[0]?.id ?? '');
-    setQuickPackagingUnitId('');
-    setQuickPackagingConversion('1');
+    setQuickUnitConfigs(buildDefaultUnitConfigs(units));
     setQuickSellPrice('');
     setQuickCost('');
     setQuickVatRate('0');
@@ -187,8 +199,10 @@ export default function PurchaseFormClient({
       setQuickAddError('Please enter a product name.');
       return;
     }
-    if (!quickBaseUnitId) {
-      setQuickAddError('Please select a base unit.');
+    const quickBaseUnit = quickUnitConfigs.find((config) => config.isBaseUnit);
+    const firstNonBase = quickUnitConfigs.find((config) => !config.isBaseUnit);
+    if (!quickBaseUnit?.unitId) {
+      setQuickAddError('Please configure a base unit.');
       return;
     }
     const selling = parseCurrencyToPence(quickSellPrice);
@@ -206,9 +220,10 @@ export default function PurchaseFormClient({
         sellingPriceBasePence: selling,
         defaultCostBasePence: cost,
         vatRateBps: Math.max(0, parseInt(quickVatRate, 10) || 0),
-        baseUnitId: quickBaseUnitId,
-        packagingUnitId: quickPackagingUnitId || null,
-        packagingConversion: parseInt(quickPackagingConversion, 10) || 1
+        baseUnitId: quickBaseUnit.unitId,
+        packagingUnitId: firstNonBase?.unitId ?? null,
+        packagingConversion: firstNonBase?.conversionToBase ?? 0,
+        unitConfigs: quickUnitConfigs,
       });
       if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
       const created = result.data;
@@ -238,7 +253,7 @@ export default function PurchaseFormClient({
     if (!Number.isFinite(qty) || qty <= 0) return;
     const defaultCost =
       selectedProduct && selectedUnit
-        ? ((selectedProduct.defaultCostBasePence * selectedUnit.conversionToBase) / 100).toFixed(2)
+        ? ((resolveEffectiveDefaultCostPence(selectedProduct, selectedUnit) / 100).toFixed(2))
         : '0';
     const costValue = unitCostInput.trim() ? unitCostInput : defaultCost;
     const id = `${productId}:${unitId}`;
@@ -411,54 +426,6 @@ export default function PurchaseFormClient({
               </div>
             </div>
             <div>
-              <label className="label">Single Unit (smallest)</label>
-              <select
-                className="input"
-                value={quickBaseUnitId}
-                onChange={(e) => setQuickBaseUnitId(e.target.value)}
-              >
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Smallest unit you sell (e.g., piece, bottle, sachet).
-              </div>
-            </div>
-            <div>
-              <label className="label">Pack/Carton Unit (optional)</label>
-              <select
-                className="input"
-                value={quickPackagingUnitId}
-                onChange={(e) => setQuickPackagingUnitId(e.target.value)}
-              >
-                <option value="">None</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Bigger bundle you receive or sell (e.g., carton, box).
-              </div>
-            </div>
-            <div>
-              <label className="label">Units per Pack/Carton</label>
-              <input
-                className="input"
-                type="number"
-                min={1}
-                value={quickPackagingConversion}
-                onChange={(e) => setQuickPackagingConversion(e.target.value)}
-              />
-              <div className="mt-1 text-xs text-black/50">
-                How many single units are inside 1 pack/carton.
-              </div>
-            </div>
-            <div>
               <label className="label">Selling Price ({getMinorUnitLabel(currency)})</label>
               <input
                 className="input"
@@ -468,6 +435,17 @@ export default function PurchaseFormClient({
                 inputMode="decimal"
                 value={quickSellPrice}
                 onChange={(e) => setQuickSellPrice(e.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-2 xl:col-span-3">
+              <ProductUnitPricingEditor
+                units={units}
+                currencySymbol={getCurrencySymbol(currency)}
+                basePricePence={parseCurrencyToPence(quickSellPrice)}
+                baseCostPence={parseCurrencyToPence(quickCost)}
+                fieldName="purchaseQuickAddUnitConfigsJson"
+                initialConfigs={quickUnitConfigs}
+                onConfigsChange={setQuickUnitConfigs}
               />
             </div>
             <div>

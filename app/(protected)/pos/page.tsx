@@ -42,6 +42,8 @@ const getCachedProducts = unstable_cache(
             unitId: true,
             conversionToBase: true,
             isBaseUnit: true,
+            sellingPricePence: true,
+            defaultCostPence: true,
             unit: { select: { name: true, pluralName: true } },
           },
         },
@@ -117,7 +119,9 @@ export default async function PosPage() {
       name: pu.unit.name,
       pluralName: pu.unit.pluralName,
       conversionToBase: pu.conversionToBase,
-      isBaseUnit: pu.isBaseUnit
+      isBaseUnit: pu.isBaseUnit,
+      sellingPricePence: pu.sellingPricePence,
+      defaultCostPence: pu.defaultCostPence,
     })),
     onHandBase: inventoryMap.get(product.id) ?? 0
   }));

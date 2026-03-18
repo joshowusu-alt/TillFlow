@@ -24,6 +24,8 @@ export interface OfflineProduct {
         pluralName: string;
         conversionToBase: number;
         isBaseUnit: boolean;
+        sellingPricePence?: number | null;
+        defaultCostPence?: number | null;
     }>;
 }
 

@@ -11,6 +11,7 @@ import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
 import RepairPricesButton from './RepairPricesButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
+import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
@@ -158,39 +159,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <input className="input" name="promoGetQty" type="number" min={0} defaultValue={0} />
                   <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
                 </div>
-                <div>
-                  <label className="label">Single Unit (smallest)</label>
-                  <select className="input" name="baseUnitId" required>
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="mt-1 text-xs text-black/50">
-                    Smallest unit you sell (e.g., piece, bottle, sachet).
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Pack/Carton Unit (optional)</label>
-                  <select className="input" name="packagingUnitId">
-                    <option value="">None</option>
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="mt-1 text-xs text-black/50">
-                    Bigger bundle you receive or sell (e.g., carton, box).
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Units per Pack/Carton</label>
-                  <input className="input" name="packagingConversion" type="number" min={1} defaultValue={1} />
-                  <div className="mt-1 text-xs text-black/50">
-                    How many single units are inside 1 pack/carton.
-                  </div>
+                <div className="md:col-span-3">
+                  <ProductUnitPricingEditor
+                    units={units}
+                    currencySymbol={getCurrencySymbol(business.currency)}
+                  />
                 </div>
                 <div className="md:col-span-3">
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create product</SubmitButton>

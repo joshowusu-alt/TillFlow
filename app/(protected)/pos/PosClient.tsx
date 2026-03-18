@@ -1410,8 +1410,8 @@ export default function PosClient({
               <input
                 type="number"
                 min={1}
-                step={0.001}
-                inputMode="decimal"
+                step={1}
+                inputMode="numeric"
                 value={stagedQty}
                 onChange={(e) => setStagedQty(e.target.value)}
                 onKeyDown={(e) => {
@@ -1627,8 +1627,8 @@ export default function PosClient({
                             className="input w-16 px-2 py-2 text-center text-base font-bold sm:w-14"
                             type="number"
                             min={0}
-                            step={0.001}
-                            inputMode="decimal"
+                            step={1}
+                            inputMode="numeric"
                             value={qtyDrafts[line.id] ?? String(line.qtyInUnit)}
                             onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [line.id]: e.target.value }))}
                             onBlur={() => commitLineQty(line)}

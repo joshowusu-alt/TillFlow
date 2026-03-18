@@ -24,7 +24,9 @@ const getCachedProducts = unstable_cache(
             unitId: true,
             conversionToBase: true,
             isBaseUnit: true,
-            unit: { select: { name: true } },
+            sellingPricePence: true,
+            defaultCostPence: true,
+            unit: { select: { name: true, pluralName: true } },
           },
         },
       },
@@ -120,8 +122,11 @@ export default async function AmendSalePage({ params }: { params: { id: string }
       units: p.productUnits.map((pu) => ({
         id: pu.unitId,
         name: pu.unit.name,
+        pluralName: pu.unit.pluralName,
         conversionToBase: pu.conversionToBase,
         isBaseUnit: pu.isBaseUnit,
+        sellingPricePence: pu.sellingPricePence,
+        defaultCostPence: pu.defaultCostPence,
       })),
     }));
 

@@ -75,6 +75,8 @@ export async function GET(request: NextRequest) {
                         unitId: true,
                         conversionToBase: true,
                         isBaseUnit: true,
+                        sellingPricePence: true,
+                        defaultCostPence: true,
                         unit: {
                             select: {
                                 id: true,
@@ -103,7 +105,9 @@ export async function GET(request: NextRequest) {
                 name: pu.unit.name,
                 pluralName: pu.unit.pluralName,
                 conversionToBase: pu.conversionToBase,
-                isBaseUnit: pu.isBaseUnit
+                isBaseUnit: pu.isBaseUnit,
+                sellingPricePence: pu.sellingPricePence,
+                defaultCostPence: pu.defaultCostPence
             }))
         }));
 

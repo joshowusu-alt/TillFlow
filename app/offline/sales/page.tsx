@@ -13,6 +13,7 @@ import {
 } from '@/lib/offline/storage';
 import { getClientActiveBusinessId } from '@/lib/business-scope';
 import { formatMoney } from '@/lib/format';
+import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -98,8 +99,8 @@ export default function OfflineSalesPage() {
     const p = productMap.get(line.productId);
     if (!p) return 0;
     const u = p.units.find((u: OfflineProductUnit) => u.id === line.unitId);
-    const conversionToBase = u?.conversionToBase ?? 1;
-    return p.sellingPriceBasePence * conversionToBase * line.qtyInUnit;
+    const unitPricePence = u ? resolveEffectiveSellingPricePence(p, u) : p.sellingPriceBasePence;
+    return unitPricePence * line.qtyInUnit;
   };
 
   const saleTotal = (sale: OfflineSale) =>
@@ -138,8 +139,7 @@ export default function OfflineSalesPage() {
     const baseUnit =
       product.units.find((u: OfflineProductUnit) => u.isBaseUnit) ?? product.units[0];
     if (!baseUnit) return;
-    const unitPricePence =
-      product.sellingPriceBasePence * baseUnit.conversionToBase;
+    const unitPricePence = resolveEffectiveSellingPricePence(product, baseUnit);
     setAmending({
       ...amending,
       newLines: [

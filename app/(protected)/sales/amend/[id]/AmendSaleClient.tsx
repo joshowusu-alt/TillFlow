@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { formatMoney } from '@/lib/format';
+import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
 import { amendSaleAction } from '@/app/actions/sales';
 
 type LineItem = {
@@ -20,8 +21,11 @@ type LineItem = {
 type ProductUnit = {
   id: string;
   name: string;
+  pluralName?: string;
   conversionToBase: number;
   isBaseUnit: boolean;
+  sellingPricePence?: number | null;
+  defaultCostPence?: number | null;
 };
 
 type AvailableProduct = {
@@ -122,7 +126,7 @@ export default function AmendSaleClient({
     const baseUnit = product.units.find((u) => u.isBaseUnit) ?? product.units[0];
     if (!baseUnit) return;
 
-    const unitPricePence = product.sellingPriceBasePence * baseUnit.conversionToBase;
+    const unitPricePence = resolveEffectiveSellingPricePence(product, baseUnit);
     setNewItems((prev) => [
       ...prev,
       {
@@ -346,7 +350,7 @@ export default function AmendSaleClient({
                     {filteredProducts.map((product) => {
                       const baseUnit = product.units.find((u) => u.isBaseUnit) ?? product.units[0];
                       const price = baseUnit
-                        ? product.sellingPriceBasePence * baseUnit.conversionToBase
+                        ? resolveEffectiveSellingPricePence(product, baseUnit)
                         : product.sellingPriceBasePence;
                       return (
                         <button

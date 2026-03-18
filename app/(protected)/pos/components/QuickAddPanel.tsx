@@ -3,6 +3,7 @@
 import { memo, useState, useCallback } from 'react';
 import { quickCreateProductAction } from '@/app/actions/products';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
+import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
 
 type UnitDto = {
   id: string;
@@ -26,11 +27,24 @@ type CreatedProduct = {
 
 type QuickAddPanelProps = {
   units: { id: string; name: string }[];
+  currencySymbol?: string;
   initialBarcode?: string;
   pendingScan?: string | null;
   onCreated: (product: CreatedProduct, matchedScan: boolean) => void;
   onCancel: () => void;
 };
+
+function buildDefaultUnitConfigs(units: { id: string; name: string }[]): EditableProductUnitConfig[] {
+  return units[0]
+    ? [
+        {
+          unitId: units[0].id,
+          conversionToBase: 1,
+          isBaseUnit: true,
+        },
+      ]
+    : [];
+}
 
 function parseCurrencyToPence(value: string): number {
   const trimmed = value.replace(/,/g, '').trim();
@@ -39,13 +53,11 @@ function parseCurrencyToPence(value: string): number {
   return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
 }
 
-function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onCancel }: QuickAddPanelProps) {
+function QuickAddPanelInner({ units, currencySymbol = '₵', initialBarcode, pendingScan, onCreated, onCancel }: QuickAddPanelProps) {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [barcode, setBarcode] = useState(initialBarcode ?? '');
-  const [baseUnitId, setBaseUnitId] = useState(units[0]?.id ?? '');
-  const [packagingUnitId, setPackagingUnitId] = useState('');
-  const [packagingConversion, setPackagingConversion] = useState('1');
+  const [unitConfigs, setUnitConfigs] = useState<EditableProductUnitConfig[]>(() => buildDefaultUnitConfigs(units));
   const [sellPrice, setSellPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [vatRate, setVatRate] = useState('0');
@@ -58,8 +70,10 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
       setError('Please enter a product name.');
       return;
     }
-    if (!baseUnitId) {
-      setError('Please select a base unit.');
+    const baseUnit = unitConfigs.find((config) => config.isBaseUnit);
+    const firstNonBase = unitConfigs.find((config) => !config.isBaseUnit);
+    if (!baseUnit?.unitId) {
+      setError('Please configure a base unit.');
       return;
     }
     const selling = parseCurrencyToPence(sellPrice);
@@ -77,9 +91,10 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
         sellingPriceBasePence: selling,
         defaultCostBasePence: cost,
         vatRateBps: Math.max(0, parseInt(vatRate, 10) || 0),
-        baseUnitId,
-        packagingUnitId: packagingUnitId || null,
-        packagingConversion: parseInt(packagingConversion, 10) || 1,
+        baseUnitId: baseUnit.unitId,
+        packagingUnitId: firstNonBase?.unitId ?? null,
+        packagingConversion: firstNonBase?.conversionToBase ?? 0,
+        unitConfigs,
       });
       if (!result || !result.success) throw new Error(result?.error ?? 'Unable to create product.');
       const created = result.data;
@@ -92,7 +107,7 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
     } finally {
       setIsCreating(false);
     }
-  }, [name, sku, barcode, baseUnitId, packagingUnitId, packagingConversion, sellPrice, costPrice, vatRate, pendingScan, onCreated]);
+  }, [name, sku, barcode, unitConfigs, sellPrice, costPrice, vatRate, pendingScan, onCreated]);
 
   return (
     <div className="card p-4">
@@ -116,27 +131,6 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
           <BarcodeScanInput name="barcode" value={barcode} onChange={(val) => setBarcode(val)} />
         </div>
         <div>
-          <label className="label">Base Unit</label>
-          <select className="input" value={baseUnitId} onChange={(e) => setBaseUnitId(e.target.value)}>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>{unit.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">Pack Unit</label>
-          <select className="input" value={packagingUnitId} onChange={(e) => setPackagingUnitId(e.target.value)}>
-            <option value="">None</option>
-            {units.map((unit) => (
-              <option key={unit.id} value={unit.id}>{unit.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">Per Pack</label>
-          <input className="input" type="number" min={1} value={packagingConversion} onChange={(e) => setPackagingConversion(e.target.value)} />
-        </div>
-        <div>
           <label className="label">Sell Price</label>
           <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} />
         </div>
@@ -147,6 +141,17 @@ function QuickAddPanelInner({ units, initialBarcode, pendingScan, onCreated, onC
         <div>
           <label className="label">VAT (bps)</label>
           <input className="input" type="number" min={0} value={vatRate} onChange={(e) => setVatRate(e.target.value)} />
+        </div>
+        <div className="md:col-span-3">
+          <ProductUnitPricingEditor
+            units={units}
+            currencySymbol={currencySymbol}
+            basePricePence={parseCurrencyToPence(sellPrice)}
+            baseCostPence={parseCurrencyToPence(costPrice)}
+            fieldName="quickAddUnitConfigsJson"
+            initialConfigs={unitConfigs}
+            onConfigsChange={setUnitConfigs}
+          />
         </div>
         {error && <div className="md:col-span-3 text-sm text-rose">{error}</div>}
         <div className="md:col-span-3">

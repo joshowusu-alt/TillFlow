@@ -8,6 +8,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
+import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 
 export default async function ProductDetailPage({
   params,
@@ -56,6 +57,13 @@ export default async function ProductDetailPage({
     packagingUnitPlural: packaging?.unit.pluralName,
     packagingConversion: packaging?.conversionToBase
   });
+  const initialUnitConfigs = product.productUnits.map((unit) => ({
+    unitId: unit.unitId,
+    conversionToBase: unit.conversionToBase,
+    isBaseUnit: unit.isBaseUnit,
+    sellingPricePence: unit.sellingPricePence,
+    defaultCostPence: unit.defaultCostPence,
+  }));
 
   return (
     <div className="space-y-6">
@@ -190,45 +198,14 @@ export default async function ProductDetailPage({
               />
               <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
             </div>
-            <div>
-              <label className="label">Single Unit (smallest)</label>
-              <select className="input" name="baseUnitId" defaultValue={baseUnit?.unitId ?? ''}>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Smallest unit you sell (e.g., piece, bottle, sachet).
-              </div>
-            </div>
-            <div>
-              <label className="label">Pack/Carton Unit (optional)</label>
-              <select className="input" name="packagingUnitId" defaultValue={packaging?.unit.id ?? ''}>
-                <option value="">None</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-1 text-xs text-black/50">
-                Bigger bundle you receive or sell (e.g., carton, box).
-              </div>
-            </div>
-            <div>
-              <label className="label">Units per Pack/Carton</label>
-              <input
-                className="input"
-                name="packagingConversion"
-                type="number"
-                min={1}
-                defaultValue={packaging?.conversionToBase ?? 1}
+            <div className="md:col-span-3">
+              <ProductUnitPricingEditor
+                units={units}
+                currencySymbol={getCurrencySymbol(business.currency)}
+                basePricePence={product.sellingPriceBasePence}
+                baseCostPence={product.defaultCostBasePence}
+                initialConfigs={initialUnitConfigs}
               />
-              <div className="mt-1 text-xs text-black/50">
-                How many single units are inside 1 pack/carton.
-              </div>
             </div>
             <div className="md:col-span-3">
               <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
@@ -242,8 +219,19 @@ export default async function ProductDetailPage({
         <div className="mt-3 space-y-2 text-sm">
           {product.productUnits.map((unit) => (
             <div key={unit.id} className="flex justify-between rounded-xl border border-black/5 bg-white px-3 py-2">
-              <span>{unit.unit.name}</span>
-              <span className="text-black/60">{unit.conversionToBase} base</span>
+              <span>
+                {unit.unit.name}
+                {unit.isBaseUnit ? ' (base)' : ''}
+              </span>
+              <span className="text-right text-black/60">
+                <span className="block">{unit.conversionToBase} base</span>
+                {unit.sellingPricePence != null ? (
+                  <span className="block text-xs">Sell: {formatMoney(unit.sellingPricePence, business.currency)}</span>
+                ) : null}
+                {unit.defaultCostPence != null ? (
+                  <span className="block text-xs">Cost: {formatMoney(unit.defaultCostPence, business.currency)}</span>
+                ) : null}
+              </span>
             </div>
           ))}
         </div>

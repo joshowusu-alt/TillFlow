@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
+import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import { createOpeningStockAction } from '@/app/actions/opening-stock';
 import type { OpeningStockResult } from '@/app/actions/opening-stock';
 
@@ -10,6 +11,8 @@ type UnitOption = {
   unitId: string;
   unit: { id: string; name: string };
   isBaseUnit: boolean;
+  conversionToBase: number;
+  defaultCostPence?: number | null;
 };
 
 type ProductDto = {
@@ -45,6 +48,14 @@ export default function OpeningStockClient({
   const [result, setResult] = useState<OpeningStockResult | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const getDefaultUnitCost = (product: ProductDto | undefined, unitId: string | undefined) => {
+    if (!product) return '';
+    const unit = product.productUnits.find((option) => option.unitId === unitId) ?? product.productUnits[0];
+    if (!unit) return '';
+    const resolvedCostPence = resolveEffectiveDefaultCostPence(product, unit);
+    return resolvedCostPence > 0 ? String(resolvedCostPence / 100) : '';
+  };
+
   const addRow = () => {
     const first = products[0];
     if (!first) return;
@@ -56,10 +67,7 @@ export default function OpeningStockClient({
         productId: first.id,
         unitId: firstUnit?.unitId ?? '',
         qty: '1',
-        cost:
-          first.defaultCostBasePence > 0
-            ? String(first.defaultCostBasePence / 100)
-            : '',
+        cost: getDefaultUnitCost(first, firstUnit?.unitId),
       },
     ]);
   };
@@ -75,11 +83,12 @@ export default function OpeningStockClient({
             ...row,
             productId: value,
             unitId: firstUnit?.unitId ?? '',
-            cost:
-              prod && prod.defaultCostBasePence > 0
-                ? String(prod.defaultCostBasePence / 100)
-                : '',
+            cost: getDefaultUnitCost(prod, firstUnit?.unitId),
           };
+        }
+        if (field === 'unitId') {
+          const prod = products.find(p => p.id === row.productId);
+          return { ...row, unitId: value, cost: getDefaultUnitCost(prod, value) };
         }
         return { ...row, [field]: value };
       })
