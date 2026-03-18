@@ -75,6 +75,12 @@ export default async function SalesPage({
 
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
 
+  const getClosedSaleLabel = (paymentStatus: string, hasSalesReturn: boolean) => {
+    if (paymentStatus === 'VOID') return 'Voided';
+    if (paymentStatus === 'RETURNED') return 'Returned';
+    return hasSalesReturn ? 'Closed' : 'Closed';
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -149,6 +155,7 @@ export default async function SalesPage({
             const receiptRef = sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`;
             const outstandingPence = sale.totalPence - sale.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
             const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
+            const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
 
             return (
               <DataCard key={sale.id}>
@@ -186,7 +193,7 @@ export default async function SalesPage({
                       </Link>
                     </>
                   ) : (
-                    <span className="rounded-full bg-black/5 px-3 py-2 text-xs font-semibold text-black/45">Returned</span>
+                    <span className="rounded-full bg-black/5 px-3 py-2 text-xs font-semibold text-black/45">{closedSaleLabel}</span>
                   )}
                 </DataCardActions>
               </DataCard>
@@ -236,58 +243,63 @@ export default async function SalesPage({
                   </td>
                 </tr>
               )}
-              {sales.map((sale) => (
-                <tr key={sale.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3">
-                    <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
-                      {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
-                    {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                    {' '}
-                    <span className="text-muted">
-                      {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
-                  <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
-                  <td className="px-3 py-3">
-                    <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
-                  </td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(sale.totalPence, business.currency)}
-                  </td>
-                  <td className="hidden sm:table-cell px-3 py-3">
-                    <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
-                      Print
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3">
-                    {sale.salesReturn || ['RETURNED', 'VOID'].includes(sale.paymentStatus) ? (
-                      <span className="text-xs text-black/40">Returned</span>
-                    ) : (
-                      <div className="flex gap-2 flex-wrap">
-                        {['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) && (
-                          <InlinePaymentForm
-                            invoiceId={sale.id}
-                            outstandingPence={sale.totalPence - sale.payments.reduce((s, p) => s + p.amountPence, 0)}
-                            currency={business.currency}
-                            type="customer"
-                            returnTo="/sales"
-                          />
-                        )}
-                        <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
-                          Amend
-                        </Link>
-                        <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
-                          Return
-                        </Link>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {sales.map((sale) => {
+                const isClosed = Boolean(sale.salesReturn) || ['RETURNED', 'VOID'].includes(sale.paymentStatus);
+                const closedSaleLabel = getClosedSaleLabel(sale.paymentStatus, Boolean(sale.salesReturn));
+
+                return (
+                  <tr key={sale.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-3">
+                      <Link href={`/receipts/${sale.id}`} className="text-sm font-mono font-semibold text-primary hover:underline">
+                        {sale.transactionNumber ?? `#${sale.id.slice(0, 8).toUpperCase()}`}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-sm tabular-nums whitespace-nowrap">
+                      {sale.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                      {' '}
+                      <span className="text-muted">
+                        {sale.createdAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.store.name}</td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm">{sale.customer?.name ?? 'Walk-in'}</td>
+                    <td className="px-3 py-3">
+                      <span className={`pill-${sale.paymentStatus.toLowerCase().replace('_', '-')}`}>{sale.paymentStatus.replace('_', ' ')}</span>
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(sale.totalPence, business.currency)}
+                    </td>
+                    <td className="hidden sm:table-cell px-3 py-3">
+                      <Link className="btn-ghost text-xs" href={`/receipts/${sale.id}`}>
+                        Print
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3">
+                      {isClosed ? (
+                        <span className="text-xs text-black/40">{closedSaleLabel}</span>
+                      ) : (
+                        <div className="flex gap-2 flex-wrap">
+                          {['UNPAID', 'PART_PAID'].includes(sale.paymentStatus) && (
+                            <InlinePaymentForm
+                              invoiceId={sale.id}
+                              outstandingPence={sale.totalPence - sale.payments.reduce((s, p) => s + p.amountPence, 0)}
+                              currency={business.currency}
+                              type="customer"
+                              returnTo="/sales"
+                            />
+                          )}
+                          <Link className="btn-ghost text-xs" href={`/sales/amend/${sale.id}`}>
+                            Amend
+                          </Link>
+                          <Link className="btn-ghost text-xs" href={`/sales/return/${sale.id}`}>
+                            Return
+                          </Link>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
