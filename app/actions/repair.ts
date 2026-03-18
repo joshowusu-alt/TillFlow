@@ -12,7 +12,7 @@ import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/ac
 import { splitPayments, debitCashBankLines, creditCashBankLines, type PaymentMethod } from '@/lib/services/shared';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { audit } from '@/lib/audit';
-import { createSalesReturn } from '@/lib/services/returns';
+import { cleanupOwnerVoidedSale } from '@/lib/services/owner-sale-cleanup';
 
 /**
  * Find purchase invoices that have no journal entry and create the missing entries.
@@ -498,15 +498,9 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
       throw new Error('Sale already voided or returned');
     }
 
-    await createSalesReturn({
+    const cleanupResult = await cleanupOwnerVoidedSale({
       businessId,
       salesInvoiceId: invoice.id,
-      userId: user.id,
-      reasonCode: 'OTHER',
-      reason: 'Owner void — setup/test sale cleanup',
-      managerApprovedByUserId: user.id,
-      managerApprovalMode: 'OWNER_OVERRIDE',
-      type: 'VOID',
     });
 
     await audit({
@@ -521,13 +515,17 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
         method: 'OWNER_OVERRIDE',
         reason: 'setup/test sale cleanup',
         lookupReference: normalizedReference,
-        transactionNumber: invoice.transactionNumber,
+        transactionNumber: cleanupResult.transactionNumber,
+        removedPaymentCount: cleanupResult.removedPaymentCount,
       },
     });
 
     revalidatePath('/sales');
+    revalidatePath(`/receipts/${invoice.id}`);
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidatePath('/settings');
+    revalidatePath('/settings/data-repair');
 
     return ok({ voided: true });
   });
