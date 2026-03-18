@@ -116,6 +116,7 @@ export async function closeShiftAction(
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidatePath('/shifts');
+      revalidatePath('/reports', 'layout');
       return ok({ id: result.id });
     } catch (e) {
       return err((e as Error).message);
@@ -160,6 +161,7 @@ export async function getShiftSummary(shiftId: string) {
   let salesTotal = 0;
 
   for (const invoice of shift.salesInvoices) {
+    if (invoice.paymentStatus === 'VOID' || invoice.paymentStatus === 'RETURNED') continue;
     salesCount += 1;
     salesTotal += invoice.totalPence;
     for (const payment of invoice.payments) {
@@ -229,6 +231,7 @@ export async function closeShiftOwnerOverrideAction(
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidatePath('/shifts');
+      revalidatePath('/reports', 'layout');
       return ok({ id: result.id });
     } catch (e) {
       return err((e as Error).message);

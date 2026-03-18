@@ -20,7 +20,9 @@ export default async function BalanceSheetPage({
     return <AdvancedModeNotice title="Balance Sheet is an advanced report" />;
   }
 
-  const asOf = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
+  const asOfRaw = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
+  // Normalize to end-of-day so same-day entries are included
+  const asOf = new Date(asOfRaw.getFullYear(), asOfRaw.getMonth(), asOfRaw.getDate(), 23, 59, 59, 999);
   const sheet = await getBalanceSheet(business.id, asOf);
   // Check if any individual account line has activity, not just the net total.
   // (Buying inventory with cash nets totalAssets to 0, but data still exists.)

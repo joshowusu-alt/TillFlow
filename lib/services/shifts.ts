@@ -119,8 +119,8 @@ export async function performShiftClose(input: CloseShiftInput): Promise<{ id: s
       actor: { userId: actor.userId, userName: actor.userName ?? 'Unknown', userRole: actor.userRole },
     });
 
-    await tx.shift.update({
-      where: { id: shift.id },
+    const updateResult = await tx.shift.updateMany({
+      where: { id: shift.id, status: 'OPEN' },
       data: {
         closedAt: new Date(),
         expectedCashPence: expectedCash,
@@ -145,6 +145,9 @@ export async function performShiftClose(input: CloseShiftInput): Promise<{ id: s
         }),
       },
     });
+    if (updateResult.count === 0) {
+      throw new Error('Shift was already closed by another request');
+    }
   });
 
   const auditDetails =

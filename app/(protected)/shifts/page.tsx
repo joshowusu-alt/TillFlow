@@ -25,6 +25,7 @@ export default async function ShiftsPage() {
           select: { entryType: true, amountPence: true }
         },
         salesInvoices: {
+          where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } },
           select: {
             totalPence: true,
             payments: { select: { method: true, amountPence: true } }
@@ -50,7 +51,7 @@ export default async function ShiftsPage() {
         momoTotalPence: true,
         user: { select: { name: true } },
         till: { select: { name: true } },
-        _count: { select: { salesInvoices: true } }
+        _count: { select: { salesInvoices: { where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } } } } }
       }
     }),
   ]);
