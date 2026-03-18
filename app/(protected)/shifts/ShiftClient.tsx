@@ -102,6 +102,19 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
   };
   const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
 
+  const resetCloseForm = () => {
+    setSelectedOtherShift(null);
+    setActualCash('');
+    setCloseNotes('');
+    setManagerPin('');
+    setVarianceReasonCode('');
+    setVarianceReason('');
+    setOwnerPassword('');
+    setOverrideReasonCode('');
+    setOverrideJustification('');
+    setShowOwnerOverride(false);
+  };
+
   const handleOpenShift = () => {
     setError(null);
     const formData = new FormData();
@@ -110,7 +123,11 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
 
     startTransition(async () => {
       try {
-        await openShiftAction(formData);
+        const result = await openShiftAction(formData);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
         setOpeningCash('');
         router.refresh();
       } catch (err) {
@@ -150,22 +167,17 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
 
     startTransition(async () => {
       try {
-        if (showOwnerOverride) {
-          await closeShiftOwnerOverrideAction(formData);
-        } else {
-          await closeShiftAction(formData);
+        const result = showOwnerOverride
+          ? await closeShiftOwnerOverrideAction(formData)
+          : await closeShiftAction(formData);
+
+        if (!result.success) {
+          setError(result.error);
+          return;
         }
+
         setShowCloseModal(false);
-        setSelectedOtherShift(null);
-        setActualCash('');
-        setCloseNotes('');
-        setManagerPin('');
-        setVarianceReasonCode('');
-        setVarianceReason('');
-        setOwnerPassword('');
-        setOverrideReasonCode('');
-        setOverrideJustification('');
-        setShowOwnerOverride(false);
+        resetCloseForm();
         setClosedSummary(summarySnapshot);
         router.refresh();
       } catch (err) {
@@ -728,7 +740,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
                     setOverrideJustification('');
                   }}
                 >
-                  {showOwnerOverride ? 'Use Manager PIN instead' : 'Owner Override (no PIN)'}
+                  {showOwnerOverride ? 'Use Manager PIN instead' : 'Owner Override (use password)'}
                 </button>
               </div>
             ) : null}
@@ -737,7 +749,10 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               <button
                 type="button"
                 className="btn-ghost flex-1"
-                onClick={() => { setShowCloseModal(false); setSelectedOtherShift(null); }}
+                onClick={() => {
+                  setShowCloseModal(false);
+                  resetCloseForm();
+                }}
               >
                 Cancel
               </button>
