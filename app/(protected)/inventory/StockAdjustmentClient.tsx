@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import SubmitButton from '@/components/SubmitButton';
 import { createStockAdjustmentAction } from '@/app/actions/inventory';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
@@ -32,6 +32,24 @@ export default function StockAdjustmentClient({
   const [qtyInput, setQtyInput] = useState('1');
   const [direction, setDirection] = useState<'INCREASE' | 'DECREASE'>('DECREASE');
   const [reason, setReason] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectProduct = useCallback((id: string) => {
+    setProductId(id);
+    const product = products.find((item) => item.id === id);
+    const base = product?.units.find((unit) => unit.isBaseUnit) ?? product?.units[0];
+    setUnitId(base?.id ?? '');
+    setProductSearch(product?.name ?? '');
+    setShowDropdown(false);
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => p.name.toLowerCase().includes(q));
+  }, [products, productSearch]);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === productId),
@@ -62,6 +80,7 @@ export default function StockAdjustmentClient({
   return (
     <form action={createStockAdjustmentAction} className="space-y-5">
       <input type="hidden" name="storeId" value={storeId} />
+      <input type="hidden" name="productId" value={productId} />
       <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
         <div className="mb-4">
           <div className="text-xs uppercase tracking-[0.2em] text-black/40">Adjustment details</div>
@@ -69,26 +88,43 @@ export default function StockAdjustmentClient({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="sm:col-span-2 xl:col-span-1">
+          <div className="relative sm:col-span-2 xl:col-span-1" ref={dropdownRef}>
             <label className="label">Product</label>
-            <select
+            <input
+              type="text"
               className="input"
-              name="productId"
-              value={productId}
-              onChange={(event) => {
-                const next = event.target.value;
-                setProductId(next);
-                const product = products.find((item) => item.id === next);
-                const base = product?.units.find((unit) => unit.isBaseUnit) ?? product?.units[0];
-                setUnitId(base?.id ?? '');
+              placeholder="Type to search products…"
+              value={showDropdown ? productSearch : (selectedProduct?.name ?? '')}
+              onFocus={() => {
+                setProductSearch('');
+                setShowDropdown(true);
               }}
-            >
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
+              onBlur={() => {
+                // Delay so click on dropdown item registers before close
+                setTimeout(() => setShowDropdown(false), 200);
+              }}
+              onChange={(event) => {
+                setProductSearch(event.target.value);
+                setShowDropdown(true);
+              }}
+            />
+            {showDropdown && (
+              <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg">
+                {filteredProducts.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-black/40">No products match</li>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <li
+                      key={product.id}
+                      className={`cursor-pointer px-3 py-2 text-sm hover:bg-black/5 ${product.id === productId ? 'bg-black/[0.03] font-semibold' : ''}`}
+                      onMouseDown={() => selectProduct(product.id)}
+                    >
+                      {product.name}
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
             {onHandLabel ? <div className="mt-1 text-xs text-black/50">On hand: {onHandLabel}</div> : null}
           </div>
           <div>

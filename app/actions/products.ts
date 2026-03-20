@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { revalidateTag } from 'next/cache';
+import { revalidateTag, revalidatePath } from 'next/cache';
 import { formString, formOptionalString, formInt, formPence } from '@/lib/form-helpers';
 import {
   withBusinessContext,
@@ -105,6 +105,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidatePath('/inventory', 'layout');
     redirect('/products');
   }, '/products');
 }
@@ -131,6 +132,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidatePath('/inventory', 'layout');
     redirect(`/products/${productId}`);
   }, '/products');
 }
@@ -140,6 +142,7 @@ export async function quickCreateProductAction(input: QuickCreateProductInput) {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const result = await quickCreateProduct(businessId, input);
     revalidateTag('pos-products');
+    revalidatePath('/inventory', 'layout');
     return ok(result);
   });
 }
@@ -165,6 +168,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidatePath('/inventory', 'layout');
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
 }

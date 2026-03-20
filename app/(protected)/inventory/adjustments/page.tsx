@@ -6,6 +6,8 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime } from '@/lib/format';
 import StockAdjustmentClient from '../StockAdjustmentClient';
 
+export const dynamic = 'force-dynamic';
+
 const PAGE_SIZE = 30;
 
 export default async function StockAdjustmentsPage({
@@ -23,6 +25,7 @@ export default async function StockAdjustmentsPage({
   const [products, adjustmentCount, adjustments] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
+      orderBy: { name: 'asc' },
       select: {
         id: true,
         name: true,
