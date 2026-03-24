@@ -9,14 +9,66 @@ import ClearSampleDataButton from '@/components/ClearSampleDataButton';
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
 import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
+import OpeningBalancesForm from '@/components/OpeningBalancesForm';
 import { getCurrencySymbol } from '@/lib/format';
 import { isQzSigningConfigured } from '@/lib/qz-signing.server';
+import { prisma } from '@/lib/prisma';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const currencySymbol = getCurrencySymbol(business.currency);
   const qzSigningConfigured = isQzSigningConfigured();
+
+  // Fetch opening balance data in parallel
+  const [openingBalances, customers, suppliers, arInvoices, apInvoices] = await Promise.all([
+    prisma.openingBalance.findMany({ where: { businessId: business.id } }),
+    prisma.customer.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.supplier.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.salesInvoice.findMany({
+      where: { businessId: business.id, externalRef: { startsWith: 'OB-AR-' } },
+      select: { customerId: true, totalPence: true, customer: { select: { name: true } } },
+    }),
+    prisma.purchaseInvoice.findMany({
+      where: {
+        businessId: business.id,
+        id: {
+          in: (await prisma.journalEntry.findMany({
+            where: { businessId: business.id, referenceType: 'OPENING_BALANCE_AP' },
+            select: { referenceId: true },
+          })).map(j => j.referenceId).filter((id): id is string => !!id),
+        },
+      },
+      select: { supplierId: true, totalPence: true, supplier: { select: { name: true } } },
+    }),
+  ]);
+
+  const obData = openingBalances.map(ob => ({
+    accountCode: ob.accountCode,
+    amountPence: ob.amountPence,
+  }));
+  const arData = arInvoices
+    .filter(inv => inv.customerId)
+    .map(inv => ({
+      customerId: inv.customerId!,
+      customerName: inv.customer?.name ?? 'Unknown',
+      totalPence: inv.totalPence,
+    }));
+  const apData = apInvoices
+    .filter(inv => inv.supplierId)
+    .map(inv => ({
+      supplierId: inv.supplierId!,
+      supplierName: inv.supplier?.name ?? 'Unknown',
+      totalPence: inv.totalPence,
+    }));
 
   return (
     <div className="space-y-6">
@@ -185,19 +237,20 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="tinNumber" defaultValue={(business as any).tinNumber ?? ''} placeholder="e.g. C0012345678" />
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
-          <div id="opening-capital">
-            <label className="label">Opening Capital ({currencySymbol} / {business.currency})</label>
-            <input
-              className="input"
-              name="openingCapitalPence"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={((business as any).openingCapitalPence ?? 0) / 100}
-            />
-            <div className="mt-1 text-xs text-black/50">
-              Cash you had on hand when you started (not stock value — stock is tracked automatically through Purchases). Appears as <strong>Owner&apos;s Capital</strong> on the Balance Sheet.
-              Use <a href="/setup/opening-stock" className="underline text-accent">Opening Stock &amp; Capital setup</a> to calculate this automatically.
+          <div id="opening-capital" className="md:col-span-2">
+            <h2 className="text-base font-display font-semibold">Opening Balances</h2>
+            <p className="mt-1 text-sm text-black/55">
+              Record your financial position when you started using TillFlow. These appear on your Balance Sheet.
+            </p>
+            <div className="mt-3">
+              <OpeningBalancesForm
+                currencySymbol={currencySymbol}
+                customers={customers}
+                suppliers={suppliers}
+                openingBalances={obData}
+                arInvoices={arData}
+                apInvoices={apData}
+              />
             </div>
           </div>
 

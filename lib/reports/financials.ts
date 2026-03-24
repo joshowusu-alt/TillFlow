@@ -103,8 +103,9 @@ export function getIncomeStatement(businessId: string, start: Date, end: Date) {
 async function _getBalanceSheet(businessId: string, asOfIso: string) {
   const asOf = new Date(asOfIso);
 
-  const [business, grouped, accounts, income] = await Promise.all([
+  const [business, obRecords, grouped, accounts, income] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
+    prisma.openingBalance.findMany({ where: { businessId } }),
     prisma.journalLine.groupBy({
       by: ['accountId'],
       where: { journalEntry: { businessId, entryDate: { lte: asOf } } },
@@ -118,7 +119,10 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     _getIncomeStatement(businessId, new Date(0).toISOString(), asOfIso),
   ]);
 
-  const openingCapital = business.openingCapitalPence ?? 0;
+  // Backward compat: use legacy openingCapitalPence only when no OB records exist
+  const hasOBRecords = obRecords.length > 0;
+  const legacyCapital = !hasOBRecords ? (business.openingCapitalPence ?? 0) : 0;
+
   const accountMap = new Map(accounts.map(a => [a.id, a]));
 
   const map = new Map<string, StatementLine>();
@@ -152,10 +156,10 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
   const liabilities: StatementLine[] = [];
   const equity: StatementLine[] = [];
 
-  // Add opening capital to Cash on Hand (the owner's investment)
+  // Legacy: add openingCapitalPence to Cash if no OpeningBalance records exist
   for (const entry of map.values()) {
-    if (entry.accountCode === ACCOUNT_CODES.cash && openingCapital > 0) {
-      entry.balancePence += openingCapital;
+    if (entry.accountCode === ACCOUNT_CODES.cash && legacyCapital > 0) {
+      entry.balancePence += legacyCapital;
     }
     // Adjust inventory to reflect sale-line COGS (keeps BS balanced)
     if (entry.accountCode === ACCOUNT_CODES.inventory && npAdjustment !== 0) {
@@ -166,23 +170,23 @@ async function _getBalanceSheet(businessId: string, asOfIso: string) {
     if (entry.type === 'EQUITY') equity.push(entry);
   }
 
-  // If no Cash account from journals but we have opening capital, add it
-  if (openingCapital > 0 && !assets.find(a => a.accountCode === ACCOUNT_CODES.cash)) {
+  // Legacy fallback: If no journal cash account but legacy capital exists
+  if (legacyCapital > 0 && !assets.find(a => a.accountCode === ACCOUNT_CODES.cash)) {
     assets.push({
       accountCode: ACCOUNT_CODES.cash,
       name: 'Cash on Hand',
       type: 'ASSET',
-      balancePence: openingCapital
+      balancePence: legacyCapital,
     });
   }
 
-  // Add Owner's Capital to equity (balancing entry)
-  if (openingCapital > 0) {
+  // Legacy fallback: synthetic Owner's Capital equity line
+  if (legacyCapital > 0) {
     equity.push({
       accountCode: 'OWNER_CAPITAL',
       name: "Owner's Capital",
       type: 'EQUITY',
-      balancePence: openingCapital
+      balancePence: legacyCapital,
     });
   }
 
@@ -238,12 +242,22 @@ async function _getCashflow(businessId: string, startIso: string, endIso: string
   const start = new Date(startIso);
   const end = new Date(endIso);
 
-  const [business, income] = await Promise.all([
+  const [business, obRecords, income] = await Promise.all([
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { openingCapitalPence: true } }),
+    prisma.openingBalance.findMany({ where: { businessId } }),
     cachedIncomeStatement(businessId, startIso, endIso)
   ]);
 
-  const openingCapital = business.openingCapitalPence ?? 0;
+  // Backward compat: use legacy field only when no OB records
+  const hasOBRecords = obRecords.length > 0;
+  const legacyCapital = !hasOBRecords ? (business.openingCapitalPence ?? 0) : 0;
+
+  // When OB records exist, opening cash = Cash OB + Bank OB (both flow through journals)
+  const obCashBank = hasOBRecords
+    ? obRecords
+        .filter(ob => ob.accountCode === ACCOUNT_CODES.cash || ob.accountCode === ACCOUNT_CODES.bank)
+        .reduce((sum, ob) => sum + ob.amountPence, 0)
+    : 0;
 
   const [startAr, endAr, startAp, endAp, startInv, endInv, startCash] = await Promise.all([
     getAccountBalance(businessId, ACCOUNT_CODES.ar, start),
@@ -260,7 +274,8 @@ async function _getCashflow(businessId: string, startIso: string, endIso: string
   const invChange = endInv - startInv;
 
   const netCashFromOps = income.netProfit - arChange - invChange + apChange;
-  const beginningCash = startCash + openingCapital;
+  // Legacy path uses openingCapitalPence; new path uses journal-based balances
+  const beginningCash = startCash + legacyCapital;
   const endingCash = beginningCash + netCashFromOps;
 
   return {
@@ -269,7 +284,7 @@ async function _getCashflow(businessId: string, startIso: string, endIso: string
     apChange,
     invChange,
     netCashFromOps,
-    openingCapital,
+    openingCapital: hasOBRecords ? obCashBank : legacyCapital,
     beginningCash,
     endingCash
   };
