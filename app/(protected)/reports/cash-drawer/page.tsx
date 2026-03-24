@@ -9,6 +9,27 @@ import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
 
+const REASON_CODE_LABELS: Record<string, string> = {
+  COUNT_ERROR: 'Count Error',
+  MISSING_CASH: 'Missing Cash',
+  EXTRA_CASH: 'Extra Cash',
+  LATE_POSTING: 'Late Posting',
+  OTHER: 'Other',
+};
+
+function reasonCodeLabel(code: string | null | undefined): string {
+  if (!code) return '-';
+  return REASON_CODE_LABELS[code] ?? code;
+}
+
+function notesText(varianceReason: string | null | undefined, notes: string | null | undefined): string {
+  return varianceReason || notes || '-';
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+
 export default async function CashDrawerReportPage({
   searchParams,
 }: {
@@ -43,6 +64,9 @@ export default async function CashDrawerReportPage({
       expectedCashPence: true,
       actualCashPence: true,
       variance: true,
+      varianceReasonCode: true,
+      varianceReason: true,
+      notes: true,
       till: {
         select: {
           name: true,
@@ -142,6 +166,22 @@ export default async function CashDrawerReportPage({
                 <div className="flex items-center justify-between gap-3"><span className="text-muted">Expected</span><span className="font-semibold">{formatMoney(shift.expectedCashPence, business.currency)}</span></div>
                 <div className="flex items-center justify-between gap-3"><span className="text-muted">Counted</span><span className="font-semibold">{shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, business.currency) : '-'}</span></div>
                 <div className="flex items-center justify-between gap-3"><span className="text-muted">Variance</span><span className={shift.variance === null ? 'text-black/40' : shift.variance === 0 ? 'text-emerald-700 font-semibold' : shift.variance > 0 ? 'text-accent font-semibold' : 'text-rose font-semibold'}>{shift.variance !== null ? formatMoney(shift.variance, business.currency) : '-'}</span></div>
+                {shift.variance !== null && shift.variance !== 0 && (
+                  <>
+                    {shift.varianceReasonCode && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted">Reason</span>
+                        <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">{reasonCodeLabel(shift.varianceReasonCode)}</span>
+                      </div>
+                    )}
+                    {(shift.varianceReason || shift.notes) && (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted">Notes</span>
+                        <span className="text-right text-black/50">{notesText(shift.varianceReason, shift.notes)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="flex items-center justify-between gap-3"><span className="text-muted">Approved By</span><span className="text-right">{shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}</span></div>
               </div>
             </div>
@@ -160,6 +200,8 @@ export default async function CashDrawerReportPage({
             <th>Expected</th>
             <th>Counted</th>
             <th>Variance</th>
+            <th>Reason</th>
+            <th>Notes</th>
             <th>Approved By</th>
           </tr>
         </thead>
@@ -195,13 +237,25 @@ export default async function CashDrawerReportPage({
                   <span className="text-black/40">-</span>
                 )}
               </td>
+              <td className="px-3 py-3 text-sm">
+                {shift.varianceReasonCode ? (
+                  <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">
+                    {reasonCodeLabel(shift.varianceReasonCode)}
+                  </span>
+                ) : (
+                  <span className="text-black/40">-</span>
+                )}
+              </td>
+              <td className="px-3 py-3 text-sm text-black/50" title={notesText(shift.varianceReason, shift.notes)}>
+                {truncate(notesText(shift.varianceReason, shift.notes), 40)}
+              </td>
               <td className="px-3 py-3 text-xs">
                 {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
               </td>
             </tr>
           ))}
           {shifts.length === 0 ? (
-            <ReportTableEmptyRow colSpan={8} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
+            <ReportTableEmptyRow colSpan={10} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
           ) : null}
         </tbody>
       </ReportTableCard>
