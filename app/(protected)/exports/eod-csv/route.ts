@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
+import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
 
 function parseDate(value: string | null, fallback: Date) {
   if (!value) return fallback;
@@ -23,57 +24,88 @@ export async function GET(request: Request) {
   to.setHours(23, 59, 59, 999);
   const storeId = url.searchParams.get('storeId') || 'ALL';
 
-  const shifts = await prisma.shift.findMany({
-    where: {
-      till: {
-        store: {
-          businessId: user.businessId,
-          ...(storeId === 'ALL' ? {} : { id: storeId }),
+  const [shifts, business] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        till: {
+          store: {
+            businessId: user.businessId,
+            ...(storeId === 'ALL' ? {} : { id: storeId }),
+          },
         },
+        openedAt: { gte: from, lte: to },
       },
-      openedAt: { gte: from, lte: to },
-    },
-    orderBy: { openedAt: 'desc' },
-    select: {
-      openedAt: true,
-      closedAt: true,
-      status: true,
-      openingCashPence: true,
-      expectedCashPence: true,
-      actualCashPence: true,
-      variance: true,
-      till: { select: { name: true, store: { select: { name: true } } } },
-      user: { select: { name: true } },
-      closeManagerApprovedBy: { select: { name: true } },
-    },
-  });
+      orderBy: { openedAt: 'desc' },
+      select: {
+        openedAt: true,
+        closedAt: true,
+        status: true,
+        openingCashPence: true,
+        expectedCashPence: true,
+        actualCashPence: true,
+        variance: true,
+        varianceReasonCode: true,
+        varianceReason: true,
+        notes: true,
+        till: { select: { name: true, store: { select: { name: true } } } },
+        user: { select: { name: true } },
+        closeManagerApprovedBy: { select: { name: true } },
+      },
+    }),
+    prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { name: true, currency: true },
+    }),
+  ]);
 
-  const rows: string[] = [];
-  rows.push(
-    'Date,Branch,Till,Cashier,Status,Opening Float,Expected Cash,Counted Cash,Variance,Manager Approval'
-  );
+  const columns = [
+    { header: 'Date', key: 'date', width: 20 },
+    { header: 'Branch', key: 'branch' },
+    { header: 'Till', key: 'till' },
+    { header: 'Cashier', key: 'cashier' },
+    { header: 'Status', key: 'status' },
+    { header: 'Opening Float', key: 'openingFloat' },
+    { header: 'Expected Cash', key: 'expectedCash' },
+    { header: 'Counted Cash', key: 'countedCash' },
+    { header: 'Variance', key: 'variance' },
+    { header: 'Variance Reason Code', key: 'varianceReasonCode', width: 20 },
+    { header: 'Variance Details', key: 'varianceDetails', width: 25 },
+    { header: 'Notes', key: 'notes', width: 25 },
+    { header: 'Manager Approval', key: 'managerApproval' },
+  ];
 
-  for (const shift of shifts) {
-    rows.push(
-      [
-        csvEscape(shift.openedAt.toISOString()),
-        csvEscape(shift.till.store.name),
-        csvEscape(shift.till.name),
-        csvEscape(shift.user.name),
-        csvEscape(shift.status),
-        csvEscape(formatPence(shift.openingCashPence)),
-        csvEscape(formatPence(shift.expectedCashPence)),
-        csvEscape(formatPence(shift.actualCashPence ?? 0)),
-        csvEscape(formatPence(shift.variance ?? 0)),
-        csvEscape(shift.closeManagerApprovedBy?.name ?? ''),
-      ].join(',')
-    );
-  }
+  const rows = shifts.map((shift) => ({
+    date: shift.openedAt.toISOString(),
+    branch: shift.till.store.name,
+    till: shift.till.name,
+    cashier: shift.user.name,
+    status: shift.status,
+    openingFloat: formatPence(shift.openingCashPence),
+    expectedCash: formatPence(shift.expectedCashPence),
+    countedCash: formatPence(shift.actualCashPence ?? 0),
+    variance: formatPence(shift.variance ?? 0),
+    varianceReasonCode: shift.varianceReasonCode ?? '',
+    varianceDetails: shift.varianceReason ?? '',
+    notes: shift.notes ?? '',
+    managerApproval: shift.closeManagerApprovedBy?.name ?? '',
+  }));
 
-  return new NextResponse(rows.join('\n'), {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="cash-drawer-summary.csv"',
+  const csvHeader = columns.map((c) => c.header).join(',');
+  const csvRows = rows.map((row) => columns.map((c) => csvEscape((row as Record<string, any>)[c.key] ?? '')).join(',')).join('\n');
+  const csv = `${csvHeader}\n${csvRows}`;
+
+  const format = detectExportFormat(request);
+  return respondWithExport({
+    format,
+    csv,
+    filename: 'cash-drawer-summary',
+    exportOptions: {
+      businessName: business?.name ?? 'Business',
+      reportTitle: 'Cash Drawer Summary',
+      dateRange: { from, to },
+      currency: business?.currency ?? 'GHS',
+      columns,
+      rows,
     },
   });
 }

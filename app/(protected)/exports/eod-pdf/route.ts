@@ -1,53 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { formatPence, requireExportUser } from '../_shared';
+import { csvEscape, formatPence, requireExportUser } from '../_shared';
+import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
 
 function parseDate(value: string | null, fallback: Date) {
   if (!value) return fallback;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return fallback;
   return parsed;
-}
-
-function escapePdfText(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
-
-function buildSimplePdf(lines: string[]) {
-  const textStream = ['BT', '/F1 10 Tf', '50 780 Td'];
-  lines.forEach((line, index) => {
-    if (index === 0) {
-      textStream.push(`(${escapePdfText(line)}) Tj`);
-    } else {
-      textStream.push(`0 -14 Td (${escapePdfText(line)}) Tj`);
-    }
-  });
-  textStream.push('ET');
-  const stream = textStream.join('\n');
-
-  const objects = [
-    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
-    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
-    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
-    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-    `5 0 obj << /Length ${Buffer.byteLength(stream, 'utf8')} >> stream\n${stream}\nendstream endobj`,
-  ];
-
-  let body = '%PDF-1.4\n';
-  const offsets: number[] = [0];
-  for (const obj of objects) {
-    offsets.push(Buffer.byteLength(body, 'utf8'));
-    body += `${obj}\n`;
-  }
-
-  const xrefOffset = Buffer.byteLength(body, 'utf8');
-  body += `xref\n0 ${objects.length + 1}\n`;
-  body += '0000000000 65535 f \n';
-  for (let i = 1; i < offsets.length; i += 1) {
-    body += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  }
-  body += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(body, 'utf8');
 }
 
 export async function GET(request: Request) {
@@ -82,40 +42,75 @@ export async function GET(request: Request) {
       orderBy: { openedAt: 'desc' },
       select: {
         openedAt: true,
+        closedAt: true,
+        status: true,
+        openingCashPence: true,
         expectedCashPence: true,
         actualCashPence: true,
         variance: true,
+        varianceReasonCode: true,
+        varianceReason: true,
+        notes: true,
         till: { select: { name: true, store: { select: { name: true } } } },
         user: { select: { name: true } },
+        closeManagerApprovedBy: { select: { name: true } },
       },
-      take: 40,
     }),
   ]);
 
-  const lines = [
-    `${business?.name ?? 'Business'} Cash Drawer Summary`,
-    `Range: ${from.toISOString().slice(0, 10)} to ${to.toISOString().slice(0, 10)}`,
-    'Date | Branch | Till | Cashier | Expected | Counted | Variance',
-    ...shifts.map((shift) => {
-      const counted = shift.actualCashPence ?? 0;
-      const variance = shift.variance ?? counted - shift.expectedCashPence;
-      return [
-        shift.openedAt.toISOString().slice(0, 10),
-        shift.till.store.name,
-        shift.till.name,
-        shift.user.name,
-        formatPence(shift.expectedCashPence),
-        formatPence(counted),
-        formatPence(variance),
-      ].join(' | ');
-    }),
+  const columns = [
+    { header: 'Date', key: 'date', width: 20 },
+    { header: 'Branch', key: 'branch' },
+    { header: 'Till', key: 'till' },
+    { header: 'Cashier', key: 'cashier' },
+    { header: 'Status', key: 'status' },
+    { header: 'Opening Float', key: 'openingFloat' },
+    { header: 'Expected Cash', key: 'expectedCash' },
+    { header: 'Counted Cash', key: 'countedCash' },
+    { header: 'Variance', key: 'variance' },
+    { header: 'Variance Reason Code', key: 'varianceReasonCode', width: 20 },
+    { header: 'Variance Details', key: 'varianceDetails', width: 25 },
+    { header: 'Notes', key: 'notes', width: 25 },
+    { header: 'Manager Approval', key: 'managerApproval' },
   ];
 
-  const pdf = buildSimplePdf(lines);
-  return new NextResponse(pdf, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'attachment; filename="cash-drawer-summary.pdf"',
+  const rows = shifts.map((shift) => ({
+    date: shift.openedAt.toISOString(),
+    branch: shift.till.store.name,
+    till: shift.till.name,
+    cashier: shift.user.name,
+    status: shift.status,
+    openingFloat: formatPence(shift.openingCashPence),
+    expectedCash: formatPence(shift.expectedCashPence),
+    countedCash: formatPence(shift.actualCashPence ?? 0),
+    variance: formatPence(shift.variance ?? 0),
+    varianceReasonCode: shift.varianceReasonCode ?? '',
+    varianceDetails: shift.varianceReason ?? '',
+    notes: shift.notes ?? '',
+    managerApproval: shift.closeManagerApprovedBy?.name ?? '',
+  }));
+
+  const csvHeader = columns.map((c) => c.header).join(',');
+  const csvRows = rows.map((row) => columns.map((c) => csvEscape((row as Record<string, any>)[c.key] ?? '')).join(',')).join('\n');
+  const csv = `${csvHeader}\n${csvRows}`;
+
+  // Default to 'pdf' for this endpoint since users expect PDF from this URL
+  const rawFormat = detectExportFormat(request);
+  const { searchParams } = new URL(request.url);
+  const explicitFormat = searchParams.get('format');
+  const format = explicitFormat ? rawFormat : 'pdf';
+
+  return respondWithExport({
+    format,
+    csv,
+    filename: 'cash-drawer-summary',
+    exportOptions: {
+      businessName: business?.name ?? 'Business',
+      reportTitle: 'Cash Drawer Summary',
+      dateRange: { from, to },
+      currency: business?.currency ?? 'GHS',
+      columns,
+      rows,
     },
   });
 }

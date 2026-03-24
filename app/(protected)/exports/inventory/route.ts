@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
+import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
 
 export async function GET(request: Request) {
   const { user, response } = await requireExportUser(request);
   if (!user) return response as NextResponse;
 
-  const store = await prisma.store.findFirst({ where: { businessId: user.businessId } });
+  const [store, business] = await Promise.all([
+    prisma.store.findFirst({ where: { businessId: user.businessId } }),
+    prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { name: true, currency: true },
+    }),
+  ]);
   if (!store) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
@@ -17,31 +24,47 @@ export async function GET(request: Request) {
     orderBy: { product: { name: 'asc' } }
   });
 
-  const rows: string[] = [];
-  rows.push('Store,Product,On Hand (Base),Avg Cost (Base),Base Unit,Packaging Unit,Packaging Conversion');
-  for (const balance of balances) {
+  const columns = [
+    { header: 'Store', key: 'store' },
+    { header: 'Product', key: 'product', width: 25 },
+    { header: 'On Hand (Base)', key: 'onHand' },
+    { header: 'Avg Cost (Base)', key: 'avgCost' },
+    { header: 'Base Unit', key: 'baseUnit' },
+    { header: 'Packaging Unit', key: 'pkgUnit' },
+    { header: 'Packaging Conversion', key: 'pkgConversion' },
+  ];
+
+  const rows = balances.map((balance) => {
     const baseUnit = balance.product.productUnits.find((unit) => unit.isBaseUnit);
     const packaging = balance.product.productUnits
       .filter((unit) => !unit.isBaseUnit && unit.conversionToBase > 1)
       .sort((a, b) => b.conversionToBase - a.conversionToBase)[0];
-    rows.push(
-      [
-        csvEscape(store.name),
-        csvEscape(balance.product.name),
-        csvEscape(balance.qtyOnHandBase),
-        csvEscape(formatPence(balance.avgCostBasePence)),
-        csvEscape(baseUnit?.unit.name ?? ''),
-        csvEscape(packaging?.unit.name ?? ''),
-        csvEscape(packaging?.conversionToBase ?? '')
-      ].join(',')
-    );
-  }
+    return {
+      store: store.name,
+      product: balance.product.name,
+      onHand: balance.qtyOnHandBase,
+      avgCost: formatPence(balance.avgCostBasePence),
+      baseUnit: baseUnit?.unit.name ?? '',
+      pkgUnit: packaging?.unit.name ?? '',
+      pkgConversion: packaging?.conversionToBase ?? '',
+    };
+  });
 
-  const csv = rows.join('\n');
-  return new NextResponse(csv, {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="inventory.csv"'
-    }
+  const csvHeader = columns.map((c) => c.header).join(',');
+  const csvRows = rows.map((row) => columns.map((c) => csvEscape((row as Record<string, any>)[c.key] ?? '')).join(',')).join('\n');
+  const csv = `${csvHeader}\n${csvRows}`;
+
+  const format = detectExportFormat(request);
+  return respondWithExport({
+    format,
+    csv,
+    filename: 'inventory',
+    exportOptions: {
+      businessName: business?.name ?? 'Business',
+      reportTitle: 'Inventory Report',
+      currency: business?.currency ?? 'GHS',
+      columns,
+      rows,
+    },
   });
 }
