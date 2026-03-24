@@ -87,7 +87,9 @@ model Business {
   dayClosures            DayClosure[]
   messageLogs            MessageLog[]
   scheduledJobs          ScheduledJob[]
-  reorderActions         ReorderAction[]
+  reorderActions             ReorderAction[]
+  paymentReconciliations     PaymentReconciliation[]
+  openingBalances            OpeningBalance[]
 }
 
 model Store {
@@ -123,7 +125,8 @@ model Store {
   riskAlerts             RiskAlert[]
   transfersOut           StockTransfer[]         @relation("StockTransferFromStore")
   transfersIn            StockTransfer[]         @relation("StockTransferToStore")
-  reorderActions         ReorderAction[]
+  reorderActions             ReorderAction[]
+  paymentReconciliations     PaymentReconciliation[]
 
   @@index([businessId])
 }
@@ -225,6 +228,7 @@ model User {
   reorderActions             ReorderAction[]
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
   passwordResetTokens        PasswordResetToken[]
+  reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
 
   @@index([businessId, active])
 }
@@ -1152,4 +1156,45 @@ model ReorderAction {
 
   @@index([businessId, storeId, status])
   @@index([productId, status])
+}
+
+model PaymentReconciliation {
+  id                 String    @id @default(cuid())
+  businessId         String
+  storeId            String
+  date               DateTime
+  paymentMethod      String
+  systemTotalPence   Int
+  actualTotalPence   Int?
+  variancePence      Int?
+  status             String    @default("PENDING")
+  reconciledByUserId String?
+  reconciledAt       DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  business     Business @relation(fields: [businessId], references: [id])
+  store        Store    @relation(fields: [storeId], references: [id])
+  reconciledBy User?    @relation("PaymentReconciledBy", fields: [reconciledByUserId], references: [id])
+
+  @@unique([businessId, storeId, date, paymentMethod])
+  @@index([businessId, date])
+  @@index([status])
+}
+
+model OpeningBalance {
+  id          String   @id @default(cuid())
+  businessId  String
+  accountCode String
+  accountName String
+  accountType String
+  amountPence Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, accountCode])
+  @@index([businessId])
 }
