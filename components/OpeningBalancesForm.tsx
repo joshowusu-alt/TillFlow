@@ -162,7 +162,7 @@ export default function OpeningBalancesForm({
             />
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"
             className="btn btn-primary text-sm"
@@ -187,7 +187,8 @@ export default function OpeningBalancesForm({
         </p>
         <div className="mt-3 space-y-2">
           {arRows.map((row, idx) => (
-            <div key={idx} className="flex items-end gap-2">
+            <div key={idx} className="rounded-xl border border-black/5 bg-white/70 p-3 sm:border-0 sm:bg-transparent sm:p-0">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 {idx === 0 && <label className="label">Customer</label>}
                 <select
@@ -205,7 +206,7 @@ export default function OpeningBalancesForm({
                   ))}
                 </select>
               </div>
-              <div className="w-36">
+              <div className="sm:w-36">
                 {idx === 0 && <label className="label">Amount ({currencySymbol})</label>}
                 <input
                   className="input"
@@ -222,22 +223,23 @@ export default function OpeningBalancesForm({
               </div>
               <button
                 type="button"
-                className="mb-0.5 text-red-500 hover:text-red-700 text-lg leading-none"
+                className="self-end text-lg leading-none text-red-500 hover:text-red-700 sm:mb-0.5"
                 onClick={() => removeArRow(idx)}
                 title="Remove"
               >
                 ×
               </button>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-2 flex items-center justify-between text-xs text-black/50">
+        <div className="mt-2 flex flex-col gap-2 text-xs text-black/50 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" className="text-accent hover:underline" onClick={addArRow}>
             + Add customer
           </button>
           <span>Total: {currencySymbol} {fromPence(totalAR)}</span>
         </div>
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"
             className="btn btn-primary text-sm"
@@ -262,7 +264,8 @@ export default function OpeningBalancesForm({
         </p>
         <div className="mt-3 space-y-2">
           {apRows.map((row, idx) => (
-            <div key={idx} className="flex items-end gap-2">
+            <div key={idx} className="rounded-xl border border-black/5 bg-white/70 p-3 sm:border-0 sm:bg-transparent sm:p-0">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 {idx === 0 && <label className="label">Supplier</label>}
                 <select
@@ -280,7 +283,7 @@ export default function OpeningBalancesForm({
                   ))}
                 </select>
               </div>
-              <div className="w-36">
+              <div className="sm:w-36">
                 {idx === 0 && <label className="label">Amount ({currencySymbol})</label>}
                 <input
                   className="input"
@@ -297,22 +300,23 @@ export default function OpeningBalancesForm({
               </div>
               <button
                 type="button"
-                className="mb-0.5 text-red-500 hover:text-red-700 text-lg leading-none"
+                className="self-end text-lg leading-none text-red-500 hover:text-red-700 sm:mb-0.5"
                 onClick={() => removeApRow(idx)}
                 title="Remove"
               >
                 ×
               </button>
+              </div>
             </div>
           ))}
         </div>
-        <div className="mt-2 flex items-center justify-between text-xs text-black/50">
+        <div className="mt-2 flex flex-col gap-2 text-xs text-black/50 sm:flex-row sm:items-center sm:justify-between">
           <button type="button" className="text-accent hover:underline" onClick={addApRow}>
             + Add supplier
           </button>
           <span>Total: {currencySymbol} {fromPence(totalAP)}</span>
         </div>
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"
             className="btn btn-primary text-sm"

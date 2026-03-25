@@ -157,7 +157,7 @@ export default function OpeningStockClient({
             Your Balance Sheet now reflects your starting position.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-left">
+        <div className="grid gap-3 text-left sm:grid-cols-3">
           <div className="rounded-xl border border-black/10 bg-white p-4">
             <div className="text-xs text-black/50">Stock value</div>
             <div className="text-lg font-semibold">
@@ -177,7 +177,7 @@ export default function OpeningStockClient({
             </div>
           </div>
         </div>
-        <div className="flex gap-3 justify-center">
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Link href="/reports/balance-sheet" className="btn-primary">
             View Balance Sheet →
           </Link>
@@ -194,7 +194,7 @@ export default function OpeningStockClient({
     <div className="space-y-4">
       {/* Stock section */}
       <div className="card p-6 space-y-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-base font-semibold">
               Step 1 — Existing stock
@@ -233,7 +233,7 @@ export default function OpeningStockClient({
         ) : (
           <div className="space-y-3">
             {/* Column headers */}
-            <div className="grid grid-cols-12 gap-2 px-1">
+            <div className="hidden grid-cols-12 gap-2 px-1 md:grid">
               <div className="col-span-4 text-xs font-medium text-black/40 uppercase tracking-wide">
                 Product
               </div>
@@ -248,6 +248,104 @@ export default function OpeningStockClient({
               </div>
             </div>
 
+            <div className="space-y-3 md:hidden">
+              {cart.map(row => {
+                const prod = products.find(p => p.id === row.productId);
+                return (
+                  <div key={row.id} className="rounded-2xl border border-black/10 bg-white p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-black/40">
+                          Stock item
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-black/70">
+                          {prod?.name ?? 'Select product'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeRow(row.id)}
+                        className="rounded-full p-1 text-black/30 transition hover:bg-rose-50 hover:text-rose-500"
+                        aria-label="Remove stock item"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={2}
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3">
+                      <div>
+                        <label className="label">Product</label>
+                        <select
+                          className="input text-sm"
+                          value={row.productId}
+                          onChange={e => updateRow(row.id, 'productId', e.target.value)}
+                        >
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="label">Unit</label>
+                          <select
+                            className="input text-sm"
+                            value={row.unitId}
+                            onChange={e => updateRow(row.id, 'unitId', e.target.value)}
+                          >
+                            {(prod?.productUnits ?? []).map(pu => (
+                              <option key={pu.unitId} value={pu.unitId}>
+                                {pu.unit.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="label">Quantity</label>
+                          <input
+                            className="input text-sm"
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="Qty"
+                            value={row.qty}
+                            onChange={e => updateRow(row.id, 'qty', e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="label">Cost ({currency})</label>
+                        <input
+                          className="input text-sm"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={row.cost}
+                          onChange={e => updateRow(row.id, 'cost', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden space-y-3 md:block">
             {cart.map(row => {
               const prod = products.find(p => p.id === row.productId);
               return (
@@ -333,6 +431,7 @@ export default function OpeningStockClient({
                 </div>
               );
             })}
+            </div>
 
             <button
               type="button"
@@ -372,7 +471,7 @@ export default function OpeningStockClient({
           <div className="text-xs font-bold uppercase tracking-wider text-accent">
             Opening Capital Summary
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <div className="text-xs text-black/50">Stock value</div>
               <div className="font-semibold">
@@ -406,7 +505,7 @@ export default function OpeningStockClient({
         </div>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <button
           type="button"
           onClick={handleSubmit}
