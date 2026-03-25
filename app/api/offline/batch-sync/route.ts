@@ -6,28 +6,10 @@ import { checkBatchSyncRateLimit } from '@/lib/security/sync-throttle';
 export const dynamic = 'force-dynamic';
 
 const MAX_BATCH_SIZE = 50;
-const CONCURRENCY = 5;
 
 interface BatchResult {
     synced: string[];
     failed: Array<{ id: string; error: string }>;
-}
-
-/**
- * Process an array of items with limited concurrency.
- */
-async function mapConcurrent<T, R>(
-    items: T[],
-    limit: number,
-    fn: (item: T) => Promise<R>
-): Promise<PromiseSettledResult<R>[]> {
-    const results: PromiseSettledResult<R>[] = [];
-    for (let i = 0; i < items.length; i += limit) {
-        const batch = items.slice(i, i + limit);
-        const settled = await Promise.allSettled(batch.map(fn));
-        results.push(...settled);
-    }
-    return results;
 }
 
 export async function POST(request: NextRequest) {
@@ -59,22 +41,16 @@ export async function POST(request: NextRequest) {
 
         const result: BatchResult = { synced: [], failed: [] };
 
-        const settled = await mapConcurrent(body.sales, CONCURRENCY, async (sale) => {
-            const res = await processOfflineSale(sale, user);
-            return { id: sale.id, invoiceId: res.invoiceId };
-        });
-
-        for (let i = 0; i < settled.length; i++) {
-            const outcome = settled[i];
-            const saleId = body.sales[i].id;
-            if (outcome.status === 'fulfilled') {
-                result.synced.push(saleId);
-            } else {
+        for (const sale of body.sales) {
+            try {
+                await processOfflineSale(sale, user);
+                result.synced.push(sale.id);
+            } catch (error) {
                 result.failed.push({
-                    id: saleId,
-                    error: outcome.reason instanceof Error
-                        ? outcome.reason.message
-                        : String(outcome.reason)
+                    id: sale.id,
+                    error: error instanceof Error
+                        ? error.message
+                        : String(error)
                 });
             }
         }
