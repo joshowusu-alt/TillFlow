@@ -36,6 +36,19 @@ function escapeHtml(v: string | number | null | undefined): string {
     .replace(/"/g, '&quot;');
 }
 
+function escapeCsv(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const stringValue = String(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+}
+
+function buildCsvRow(values: Array<string | number | null | undefined>) {
+  return values.map((value) => escapeCsv(value)).join(',');
+}
+
 // ── 1. buildBrandedExcel ─────────────────────────────────────────────────────
 
 export function buildBrandedExcel(options: ExportOptions): Buffer {
@@ -112,6 +125,8 @@ export function buildBrandedPdf(options: ExportOptions): string {
     ? `${fmtDate(dateRange.from)} — ${fmtDate(dateRange.to)}`
     : '';
   const currencyLabel = currency ? ` (${currency})` : '';
+  const generatedOn = fmtDate(new Date());
+  const rowCount = rows.length;
 
   const headerRow = columns
     .map((c) => `<th>${escapeHtml(c.header)}</th>`)
@@ -140,23 +155,68 @@ export function buildBrandedPdf(options: ExportOptions): string {
     }
     body{
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-      background:#fff;color:var(--ink);min-height:100vh;
+      background:linear-gradient(180deg,#f8fbff 0%,#ffffff 30%);color:var(--ink);min-height:100vh;
     }
 
     /* ── Hero header ──────────────────── */
     .hero{
       background:linear-gradient(135deg,var(--brand-dark) 0%,var(--brand) 100%);
-      color:#fff;padding:2rem 2.5rem 1.5rem;
+      color:#fff;padding:2.1rem 2.5rem 1.6rem;position:relative;overflow:hidden;
+      border-bottom-left-radius:28px;border-bottom-right-radius:28px;
+      box-shadow:0 24px 50px rgba(30,58,138,.18);
+    }
+    .hero::after{
+      content:'';position:absolute;inset:auto -8% -38% auto;width:280px;height:280px;
+      background:radial-gradient(circle,rgba(255,255,255,.28),transparent 62%);
+      pointer-events:none;
+    }
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:.45rem;padding:.35rem .7rem;
+      border:1px solid rgba(255,255,255,.2);border-radius:999px;
+      background:rgba(255,255,255,.12);font-size:.72rem;font-weight:700;
+      letter-spacing:.08em;text-transform:uppercase;
     }
     .hero h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.02em}
     .hero .subtitle{font-size:1.1rem;font-weight:600;opacity:.9;margin-top:0.25rem}
-    .hero .meta{font-size:0.8rem;opacity:.7;margin-top:0.5rem;display:flex;gap:1.5rem}
+    .hero .meta{font-size:0.8rem;opacity:.78;margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:.75rem}
+    .hero .meta span{
+      display:inline-flex;align-items:center;padding:.35rem .65rem;border-radius:999px;
+      background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);
+    }
+
+    .summary-strip{
+      max-width:1100px;margin:-1.25rem auto 0;padding:0 2.5rem;position:relative;z-index:1;
+    }
+    .summary-grid{
+      display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;
+    }
+    .summary-card{
+      background:rgba(255,255,255,.95);border:1px solid rgba(37,99,235,.12);
+      border-radius:18px;padding:1rem 1.1rem;box-shadow:0 14px 28px rgba(15,23,42,.07);
+    }
+    .summary-card .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+    .summary-card .value{margin-top:.35rem;font-size:1rem;font-weight:800;color:var(--brand-dark)}
 
     /* ── Content ──────────────────────── */
-    .content{max-width:1100px;margin:0 auto;padding:1.5rem 2.5rem 2rem}
+    .content{max-width:1100px;margin:0 auto;padding:1.8rem 2.5rem 2rem}
+    .content-shell{
+      border:1px solid rgba(17,24,39,.06);border-radius:24px;background:#fff;
+      box-shadow:0 18px 34px rgba(15,23,42,.06);overflow:hidden;
+    }
+    .content-header{
+      display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;
+      padding:1.15rem 1.25rem;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fff,#f8fbff);
+    }
+    .content-header h2{font-size:1rem;font-weight:800;color:var(--brand-dark)}
+    .content-header p{font-size:.82rem;color:var(--muted);margin-top:.2rem}
+    .report-badge{
+      display:inline-flex;align-items:center;gap:.45rem;padding:.45rem .75rem;
+      border-radius:999px;background:var(--brand-light);color:var(--brand-dark);
+      font-size:.78rem;font-weight:700;
+    }
 
     /* ── Table ─────────────────────────── */
-    table{width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:1rem}
+    table{width:100%;border-collapse:collapse;font-size:0.85rem}
     th{
       background:var(--brand);color:#fff;font-weight:700;text-align:left;
       padding:0.6rem 0.75rem;white-space:nowrap;
@@ -186,9 +246,16 @@ export function buildBrandedPdf(options: ExportOptions): string {
     @media print{
       .toolbar{display:none!important}
       body{background:#fff}
+      .summary-strip{margin-top:.75rem}
+      .summary-card,.content-shell{box-shadow:none}
       .hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}
       th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
       tr.alt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    }
+    @media (max-width: 840px){
+      .summary-strip,.content{padding-left:1rem;padding-right:1rem}
+      .summary-grid{grid-template-columns:1fr}
+      .content-header{flex-direction:column;align-items:flex-start}
     }
     @page{size:A4 landscape;margin:10mm}
   </style>
@@ -199,27 +266,80 @@ export function buildBrandedPdf(options: ExportOptions): string {
   </div>
 
   <div class="hero">
+    <div class="eyebrow">TillFlow export</div>
     <h1>${escapeHtml(businessName)}</h1>
     <div class="subtitle">${escapeHtml(reportTitle)}</div>
     <div class="meta">
       ${dateRangeText ? `<span>&#128197; ${escapeHtml(dateRangeText)}</span>` : ''}
-      ${currencyLabel ? `<span>Currency: ${escapeHtml(currencyLabel)}</span>` : ''}
-      <span>Generated: ${fmtDate(new Date())}</span>
+      ${currencyLabel ? `<span>&#128178; Currency: ${escapeHtml(currencyLabel)}</span>` : ''}
+      <span>&#128336; Generated: ${generatedOn}</span>
+    </div>
+  </div>
+
+  <div class="summary-strip">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="label">Rows exported</div>
+        <div class="value">${escapeHtml(rowCount)}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Data range</div>
+        <div class="value">${escapeHtml(dateRangeText || 'Full export')}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Format</div>
+        <div class="value">Print-ready PDF view</div>
+      </div>
     </div>
   </div>
 
   <div class="content">
-    <table>
-      <thead><tr>${headerRow}</tr></thead>
-      <tbody>
-        ${dataRows}
-      </tbody>
-    </table>
+    <div class="content-shell">
+      <div class="content-header">
+        <div>
+          <h2>${escapeHtml(reportTitle)}</h2>
+          <p>Prepared for retail operations review, sharing, and archive.</p>
+        </div>
+        <div class="report-badge">Powered by TillFlow</div>
+      </div>
+      <table>
+        <thead><tr>${headerRow}</tr></thead>
+        <tbody>
+          ${dataRows}
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div class="footer">Powered by <strong>TillFlow</strong></div>
 </body>
 </html>`;
+}
+
+export function buildBrandedCsv(options: ExportOptions, csvBody: string): string {
+  const { businessName, reportTitle, dateRange, currency, columns } = options;
+  const colCount = Math.max(columns.length, 1);
+  const emptyPadding = Array.from({ length: Math.max(colCount - 1, 0) }, () => '');
+
+  const headerRows = [
+    buildCsvRow([businessName, ...emptyPadding]),
+    buildCsvRow([reportTitle, ...emptyPadding]),
+    buildCsvRow([
+      dateRange
+        ? `Period: ${fmtDate(dateRange.from)} to ${fmtDate(dateRange.to)}`
+        : 'Period: Full export',
+      ...emptyPadding,
+    ]),
+    buildCsvRow([
+      currency ? `Currency: ${currency}` : 'Currency: Not specified',
+      ...emptyPadding,
+    ]),
+    buildCsvRow([`Generated: ${fmtDate(new Date())}`, ...emptyPadding]),
+    '',
+  ];
+
+  const footerRows = ['', buildCsvRow(['Powered by TillFlow', ...emptyPadding])];
+  return `${headerRows.join('\n')}${csvBody ? `${csvBody}\n` : ''}${footerRows.join('\n')}`;
 }
 
 // ── 3. detectExportFormat ────────────────────────────────────────────────────
@@ -271,7 +391,8 @@ export function respondWithExport(params: {
 
     case 'csv':
     default: {
-      return new NextResponse(csv, {
+      const brandedCsv = buildBrandedCsv(exportOptions, csv);
+      return new NextResponse(`\uFEFF${brandedCsv}`, {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="${safeName}.csv"`,
