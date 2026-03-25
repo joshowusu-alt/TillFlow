@@ -132,6 +132,71 @@ export default function OpeningBalancesForm({
 
   return (
     <div className="space-y-6">
+      <div className="rounded-3xl border border-accent/10 bg-[linear-gradient(135deg,rgba(37,99,235,0.08),rgba(255,255,255,0.96))] p-5 shadow-[0_18px_48px_rgba(37,99,235,0.08)]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="inline-flex items-center rounded-full border border-accent/15 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+              Opening balances guide
+            </div>
+            <h3 className="mt-3 text-base font-semibold text-black">How each opening balance behaves</h3>
+            <p className="mt-1 max-w-3xl text-sm text-black/55">
+              TillFlow records simple balances directly into accounting, while customer and supplier debts become real unpaid invoices you can work with later.
+            </p>
+          </div>
+          <div className="text-xs text-black/45">
+            Built for Ghana-first retail bookkeeping and everyday branch operations.
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {[
+            {
+              account: 'Cash on Hand',
+              method: 'Simple amount field',
+              result: 'Saves an OpeningBalance record and posts a journal entry: debit cash, credit equity.',
+            },
+            {
+              account: 'Bank Balance',
+              method: 'Simple amount field',
+              result: 'Saves an OpeningBalance record and posts a journal entry: debit bank, credit equity.',
+            },
+            {
+              account: 'AR (Customer Debts)',
+              method: 'Per-customer rows',
+              result: 'Creates real unpaid SalesInvoices that can later be collected through customer receipt flows.',
+            },
+            {
+              account: 'AP (Supplier Debts)',
+              method: 'Per-supplier rows',
+              result: 'Creates real unpaid PurchaseInvoices that can later be settled through supplier payment flows.',
+            },
+            {
+              account: 'Inventory',
+              method: 'Opening stock setup link',
+              result: 'Use the dedicated opening stock wizard to capture quantities and costs for stock already on hand.',
+            },
+            {
+              account: "Owner's Capital",
+              method: 'Auto-calculated summary',
+              result: 'Shown below as assets minus liabilities based on the opening balances saved in this screen.',
+            },
+          ].map((item) => (
+            <div
+              key={item.account}
+              className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-semibold text-black">{item.account}</h4>
+                <span className="rounded-full bg-accentSoft px-2.5 py-1 text-[11px] font-semibold text-accent">
+                  {item.method}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-black/60">{item.result}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Cash & Bank */}
       <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4">
         <h3 className="text-sm font-semibold">Cash & Bank</h3>

@@ -492,9 +492,9 @@ export default function OpeningStockClient({
             </div>
           </div>
           <p className="text-xs text-black/40">
-            Stock is recorded as inventory (Accounts Payable owed to owner).
-            Cash is recorded as Owner&apos;s Capital. Together they are your
-            opening capital.
+            Stock is recorded through the opening stock setup so your inventory
+            starts with the right quantities and costs. Cash on hand is stored
+            separately as your opening capital.
           </p>
         </div>
       )}
