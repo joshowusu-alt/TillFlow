@@ -66,11 +66,12 @@ describe('ResponsiveModal', () => {
         const onClose = vi.fn();
 
         render(
-            React.createElement(
-                ResponsiveModal,
-                { open: true, onClose, ariaLabel: 'Test modal' },
-                React.createElement('div', null, 'Modal content')
-            )
+            React.createElement(ResponsiveModal, {
+                open: true,
+                onClose,
+                ariaLabel: 'Test modal',
+                children: React.createElement('div', null, 'Modal content'),
+            })
         );
 
         expect(document.body.style.overflow).toBe('hidden');
