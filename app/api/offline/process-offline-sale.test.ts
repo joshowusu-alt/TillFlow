@@ -118,4 +118,18 @@ describe('processOfflineSale', () => {
       expect.objectContaining({ businessId: 'biz-correct' })
     );
   });
+
+  it('6. offline sync replays sale with allow-negative inventory policy', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
+    mockCreateSale.mockResolvedValue({ id: 'inv-offline' });
+
+    await processOfflineSale(makePayload(), USER);
+
+    expect(mockCreateSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inventoryPolicy: 'allow-negative',
+        externalRef: 'OFFLINE_SYNC:offline-abc123',
+      })
+    );
+  });
 });

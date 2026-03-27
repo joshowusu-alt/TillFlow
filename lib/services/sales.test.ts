@@ -357,6 +357,23 @@ describe('createSale — payments & stock', () => {
     expect(call[2].get(PRODUCT_ID)).toBe(3);
   });
 
+  it('allows offline replay to sync even when inventory would go negative', async () => {
+    fetchInventoryMapMock.mockResolvedValue(new Map());
+
+    await createSale(makeBaseInput({
+      inventoryPolicy: 'allow-negative',
+      externalRef: 'OFFLINE_SYNC:offline-1',
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 3 }],
+    }));
+
+    expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
+    expect((prismaMock as any).inventoryBalance.upsert).toHaveBeenCalledWith({
+      where: { storeId_productId: { storeId: STORE_ID, productId: PRODUCT_ID } },
+      update: { qtyOnHandBase: -3, avgCostBasePence: 300 },
+      create: { storeId: STORE_ID, productId: PRODUCT_ID, qtyOnHandBase: -3, avgCostBasePence: 300 },
+    });
+  });
+
   it('posts journal entry for sale', async () => {
     await createSale(makeBaseInput());
 
