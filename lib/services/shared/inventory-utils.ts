@@ -89,13 +89,14 @@ export async function decrementInventoryBalance(
   storeId: string,
   productId: string,
   qtyBase: number,
+  options?: { allowNegativeQuantity?: boolean },
 ): Promise<number> {
   const updated = await tx.inventoryBalance.update({
     where: { storeId_productId: { storeId, productId } },
     data: { qtyOnHandBase: { decrement: qtyBase } },
     select: { qtyOnHandBase: true },
   });
-  if (updated.qtyOnHandBase < 0) {
+  if (!options?.allowNegativeQuantity && updated.qtyOnHandBase < 0) {
     throw new Error('Insufficient stock on hand');
   }
   return updated.qtyOnHandBase;
@@ -111,6 +112,7 @@ export async function batchDecrementInventoryBalance(
   tx: any,
   storeId: string,
   decrements: Map<string, number>, // productId -> qtyBase to subtract
+  options?: { allowNegativeQuantity?: boolean },
 ): Promise<void> {
   if (decrements.size === 0) return;
 
@@ -133,7 +135,7 @@ export async function batchDecrementInventoryBalance(
   `;
 
   for (const row of result) {
-    if (row.qtyOnHandBase < 0) {
+    if (!options?.allowNegativeQuantity && row.qtyOnHandBase < 0) {
       throw new Error('Insufficient stock on hand');
     }
   }

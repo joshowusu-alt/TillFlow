@@ -136,6 +136,7 @@ export async function processOfflineSale(
             orderDiscountValue,
             externalRef,
             createdAt: safeCreatedAt,
+            inventoryPolicy: 'allow-negative',
             payments,
             lines
         });

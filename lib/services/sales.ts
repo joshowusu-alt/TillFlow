@@ -119,6 +119,7 @@ export type CreateSaleInput = {
   momoCollectionId?: string | null;
   externalRef?: string | null;
   createdAt?: Date | null;
+  inventoryPolicy?: 'enforce' | 'allow-negative';
   lines: SaleLineInput[];
 };
 
@@ -228,11 +229,14 @@ export async function createSale(input: CreateSaleInput) {
   const lineDetails = buildLinePricing(input.lines, unitMap, business.vatEnabled);
 
   const qtyByProduct = buildQtyByProductMap(lineDetails);
+  const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
 
-  for (const [productId, qtyBase] of qtyByProduct.entries()) {
-    const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
-    if (onHand < qtyBase) {
-      throw new UserError('Insufficient on hand');
+  if (enforceInventory) {
+    for (const [productId, qtyBase] of qtyByProduct.entries()) {
+      const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
+      if (onHand < qtyBase) {
+        throw new UserError('Insufficient on hand');
+      }
     }
   }
 
@@ -395,6 +399,8 @@ export async function createSale(input: CreateSaleInput) {
     }
   }
 
+  let stockMovementInventoryMap = inventoryMap;
+
   const invoice = await prisma.$transaction(
     async (tx) => {
     // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
@@ -524,8 +530,29 @@ export async function createSale(input: CreateSaleInput) {
       );
     }
 
-    // Single SQL UPDATE for all products — 1 RTT regardless of cart size
-    txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
+    if (enforceInventory) {
+      // Single SQL UPDATE for all products — 1 RTT regardless of cart size
+      txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
+    } else {
+      const inventoryMapInTx = await fetchInventoryMap(input.storeId, productIds, tx as any);
+      stockMovementInventoryMap = inventoryMapInTx;
+
+      for (const [productId, qtyBase] of qtyByProduct.entries()) {
+        const sampleLine = lineDetails.find((line) => line.productId === productId);
+        if (!sampleLine) continue;
+
+        const onHand = inventoryMapInTx.get(productId)?.qtyOnHandBase ?? 0;
+        const avgCost = resolveAvgCost(
+          inventoryMapInTx,
+          productId,
+          sampleLine.productUnit.product.defaultCostBasePence,
+        );
+
+        txPromises.push(
+          upsertInventoryBalance(tx, input.storeId, productId, onHand - qtyBase, avgCost),
+        );
+      }
+    }
 
     // Journal entry inside tx — accounting must be atomic with the sale
     const paymentSplit = splitPayments(payments);
@@ -567,7 +594,7 @@ export async function createSale(input: CreateSaleInput) {
   // Post-tx: stock movement audit trail — non-critical, fire-and-forget
   void prisma.stockMovement.createMany({
     data: lineDetails.map((line) => {
-      const beforeQtyBase = inventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+      const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
       const afterQtyBase = beforeQtyBase - line.qtyBase;
       return {
         storeId: input.storeId,
