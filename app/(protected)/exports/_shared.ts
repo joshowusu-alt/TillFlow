@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
+import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 
 export const csvEscape = (value: string | number | null | undefined) => {
   if (value === null || value === undefined) return '';
@@ -18,4 +19,17 @@ export async function requireExportUser(request: Request) {
     return { user: null, response: NextResponse.redirect(new URL('/login', request.url)) };
   }
   return { user, response: null };
+}
+
+export function resolveExportDateRange(request: Request, defaultPeriod = '30d') {
+  const { searchParams } = new URL(request.url);
+
+  return resolveSelectableReportDateRange(
+    {
+      period: searchParams.get('period') ?? undefined,
+      from: searchParams.get('from') ?? undefined,
+      to: searchParams.get('to') ?? undefined,
+    },
+    defaultPeriod,
+  );
 }
