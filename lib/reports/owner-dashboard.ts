@@ -671,6 +671,28 @@ export async function getOwnerDashboardSnapshot(
 		});
 	});
 
+	if (brief.leakageWatch.negativeMarginProductCount > 0) {
+		attentionItems.push({
+			id: 'below-cost-lines',
+			title: `${brief.leakageWatch.negativeMarginProductCount} product${brief.leakageWatch.negativeMarginProductCount === 1 ? '' : 's'} sold below cost`,
+			whyItMatters: 'Loss-making items quietly drain gross profit and should be repriced or investigated before they keep leaking cash.',
+			severity: 'critical',
+			ctaLabel: 'Open below-cost list',
+			href: '/reports/margins?view=below-cost&period=14d',
+		});
+	}
+
+	if (brief.leakageWatch.belowTargetMarginProductCount > 0) {
+		attentionItems.push({
+			id: 'below-target-margin-lines',
+			title: `${brief.leakageWatch.belowTargetMarginProductCount} product${brief.leakageWatch.belowTargetMarginProductCount === 1 ? '' : 's'} below target margin`,
+			whyItMatters: 'Products selling under the configured margin target can look healthy on volume while still eroding the profit discipline you planned for.',
+			severity: brief.leakageWatch.belowTargetMarginProductCount >= 10 ? 'warning' : 'monitor',
+			ctaLabel: 'Open margin exceptions',
+			href: '/reports/margins?view=below-target&period=14d',
+		});
+	}
+
 	const biggestVariance = recentTillVariances[0];
 	if (biggestVariance && biggestVariance.variance) {
 		attentionItems.push({
@@ -745,7 +767,16 @@ export async function getOwnerDashboardSnapshot(
 			kind: 'count',
 			helper: brief.leakageWatch.negativeMarginProductCount > 0 ? 'Pricing review needed on loss-making lines' : 'No negative-margin items flagged',
 			tone: brief.leakageWatch.negativeMarginProductCount > 0 ? 'danger' : 'success',
-			href: '/reports/margins',
+			href: '/reports/margins?view=below-cost&period=14d',
+		},
+		{
+			id: 'below-target-margin',
+			label: 'Below target margin',
+			value: brief.leakageWatch.belowTargetMarginProductCount,
+			kind: 'count',
+			helper: brief.leakageWatch.belowTargetMarginProductCount > 0 ? 'Sold products are falling under the configured margin target' : 'No products are breaching the current margin target',
+			tone: brief.leakageWatch.belowTargetMarginProductCount > 0 ? 'warning' : 'success',
+			href: '/reports/margins?view=below-target&period=14d',
 		},
 		{
 			id: 'cash-variance',

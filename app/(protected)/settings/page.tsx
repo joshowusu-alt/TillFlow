@@ -292,6 +292,21 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </div>
           </div>
           <div>
+            <label className="label">Minimum Margin Target (%)</label>
+            <input
+              className="input"
+              name="minimumMarginThresholdPercent"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              defaultValue={(((business as any).minimumMarginThresholdBps ?? 1500) / 100).toFixed(2)}
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Owner dashboard and margin alerts use this as the default minimum gross margin target unless a product overrides it.
+            </div>
+          </div>
+          <div>
             <label className="label">Inventory Adjustment Risk Threshold (base units)</label>
             <input
               className="input"

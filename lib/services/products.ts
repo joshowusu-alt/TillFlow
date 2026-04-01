@@ -12,6 +12,7 @@ export type ProductCoreInput = {
   imageUrl: string | null;
   sellingPriceBasePence: number;
   defaultCostBasePence: number;
+  minimumMarginThresholdBps: number | null;
   vatRateBps: number;
   promoBuyQty: number;
   promoGetQty: number;
@@ -270,6 +271,13 @@ function validateProductValues(data: Pick<ProductCoreInput, 'name' | 'sellingPri
   }
 }
 
+function validateMarginThresholdBps(value: number | null) {
+  if (value === null) return;
+  if (!Number.isInteger(value) || value < 0 || value > 10_000) {
+    throw new Error('Minimum margin target must be between 0% and 100%.');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
@@ -284,6 +292,7 @@ export async function createProduct(
 ): Promise<{ id: string; name: string }> {
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
+  validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
 
   await assertNoDuplicateProductName(businessId, normalized.name);
 
@@ -297,6 +306,7 @@ export async function createProduct(
       imageUrl: normalized.imageUrl,
       sellingPriceBasePence: normalized.sellingPriceBasePence,
       defaultCostBasePence: normalized.defaultCostBasePence,
+      minimumMarginThresholdBps: normalized.minimumMarginThresholdBps,
       vatRateBps: normalized.vatRateBps,
       promoBuyQty: normalized.promoBuyQty,
       promoGetQty: normalized.promoGetQty,
@@ -309,7 +319,7 @@ export async function createProduct(
           defaultCostPence: config.defaultCostPence ?? null,
         })),
       },
-    },
+    } as any,
     select: { id: true, name: true },
   });
 
@@ -329,6 +339,7 @@ export async function updateProduct(
 ): Promise<string> {
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
+  validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
 
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
@@ -351,10 +362,11 @@ export async function updateProduct(
         imageUrl: normalized.imageUrl,
         sellingPriceBasePence: normalized.sellingPriceBasePence,
         defaultCostBasePence: normalized.defaultCostBasePence,
+        minimumMarginThresholdBps: normalized.minimumMarginThresholdBps,
         vatRateBps: normalized.vatRateBps,
         promoBuyQty: normalized.promoBuyQty,
         promoGetQty: normalized.promoGetQty,
-      },
+      } as any,
     });
 
     const existingUnits = await tx.productUnit.findMany({

@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       ['LEAKAGE WATCH'],
       ['Discount overrides (7d)', brief.leakageWatch.discountOverrideCount.toString()],
       ['Items below cost', brief.leakageWatch.negativeMarginProductCount.toString()],
+      ['Below target margin', brief.leakageWatch.belowTargetMarginProductCount.toString()],
       ['Cash variances (7d)', formatMoney(brief.leakageWatch.cashVariancePence, brief.currency)],
       [],
       ['STOCK RISK'],
@@ -249,6 +250,7 @@ export async function GET(request: Request) {
         <div class="card-body">
           <div class="data-row"><span class="lbl">Discount overrides (7 days)</span><span class="val ${brief.leakageWatch.discountOverrideCount > 10 ? 'c-danger' : ''}">${brief.leakageWatch.discountOverrideCount}</span></div>
           <div class="data-row"><span class="lbl">Items selling below cost</span><span class="val ${brief.leakageWatch.negativeMarginProductCount > 0 ? 'c-danger' : 'c-success'}">${brief.leakageWatch.negativeMarginProductCount}</span></div>
+          <div class="data-row"><span class="lbl">Items below target margin</span><span class="val ${brief.leakageWatch.belowTargetMarginProductCount > 0 ? 'c-warn' : 'c-success'}">${brief.leakageWatch.belowTargetMarginProductCount}</span></div>
           <div class="data-row"><span class="lbl">Cash variance (7 days)</span><span class="val ${brief.leakageWatch.cashVariancePence / 100 > 20 ? 'c-danger' : ''}">${m(brief.leakageWatch.cashVariancePence)}</span></div>
         </div>
       </div>

@@ -61,6 +61,10 @@ function parseProductFields(formData: FormData): ProductCoreInput {
   const unitConfigs = parseUnitConfigs(formData);
   const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
   const firstNonBaseUnit = unitConfigs?.find((config) => !config.isBaseUnit);
+  const minimumMarginThresholdRaw = formOptionalString(formData, 'minimumMarginThresholdPercent');
+  const minimumMarginThresholdBps = minimumMarginThresholdRaw?.trim()
+    ? Math.max(0, Math.min(10_000, Math.round((parseFloat(minimumMarginThresholdRaw) || 0) * 100)))
+    : null;
 
   return {
     name: formString(formData, 'name'),
@@ -70,6 +74,7 @@ function parseProductFields(formData: FormData): ProductCoreInput {
     imageUrl: formOptionalString(formData, 'imageUrl') || null,
     sellingPriceBasePence: formPence(formData, 'sellingPriceBasePence'),
     defaultCostBasePence: formPence(formData, 'defaultCostBasePence'),
+    minimumMarginThresholdBps,
     vatRateBps: formInt(formData, 'vatRateBps'),
     promoBuyQty: formInt(formData, 'promoBuyQty'),
     promoGetQty: formInt(formData, 'promoGetQty'),
@@ -101,7 +106,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
       action: 'PRODUCT_CREATE',
       entity: 'Product',
       entityId: product.id,
-      details: { name: fields.name, price: fields.sellingPriceBasePence },
+      details: { name: fields.name, price: fields.sellingPriceBasePence, minimumMarginThresholdBps: fields.minimumMarginThresholdBps },
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
@@ -128,7 +133,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
       action: 'PRODUCT_UPDATE',
       entity: 'Product',
       entityId: productId,
-      details: { name: fields.name, price: fields.sellingPriceBasePence },
+      details: { name: fields.name, price: fields.sellingPriceBasePence, minimumMarginThresholdBps: fields.minimumMarginThresholdBps },
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');

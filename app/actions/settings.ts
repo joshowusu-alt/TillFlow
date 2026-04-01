@@ -60,6 +60,10 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
       0,
       Math.min(10_000, parseInt(String(formData.get('discountApprovalThresholdBps') || '1500'), 10) || 0)
     );
+    const minimumMarginThresholdBps = Math.max(
+      0,
+      Math.min(10_000, Math.round((parseFloat(String(formData.get('minimumMarginThresholdPercent') || '15')) || 0) * 100))
+    );
     const inventoryAdjustmentRiskThresholdBase = Math.max(
       1,
       parseInt(String(formData.get('inventoryAdjustmentRiskThresholdBase') || '50'), 10) || 50
@@ -98,6 +102,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         requireOpenTillForSales,
         varianceReasonRequired,
         discountApprovalThresholdBps,
+        minimumMarginThresholdBps,
         inventoryAdjustmentRiskThresholdBase,
         cashVarianceRiskThresholdPence,
         storeMode,

@@ -236,6 +236,7 @@ const _getBusiness = cache(async (businessId: string) => {
       whatsappPhone: true,
       whatsappScheduleTime: true,
       whatsappBranchScope: true,
+      minimumMarginThresholdBps: true,
       isDemo: true,
       onboardingCompletedAt: true,
       hasDemoData: true,

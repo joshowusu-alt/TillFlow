@@ -20,6 +20,7 @@ export type AlertInputs = {
   forecastNegativeWithin14Days: boolean;
   lowestProjectedBalancePence: number;
   negativeMarginProductCount: number;
+  belowTargetMarginProductCount: number;
   momoPendingCount: number;
   momoPendingThreshold: number;
   stockoutImminentCount: number; // products with <= 2 days cover
@@ -55,8 +56,21 @@ const rules: AlertRule[] = [
         id: 'NEGATIVE_MARGIN_ITEMS',
         severity: 'HIGH',
         title: `${inputs.negativeMarginProductCount} product${inputs.negativeMarginProductCount > 1 ? 's' : ''} selling below cost`,
-        explanation: `You have ${inputs.negativeMarginProductCount} product${inputs.negativeMarginProductCount > 1 ? 's' : ''} where the selling price is lower than cost price among your top sellers.`,
-        cta: { label: 'Review margins', href: '/reports/margins' },
+        explanation: `You have ${inputs.negativeMarginProductCount} product${inputs.negativeMarginProductCount > 1 ? 's' : ''} sold in the last 14 days where selling price fell below cost price.`,
+        cta: { label: 'Review below-cost items', href: '/reports/margins?view=below-cost&period=14d' },
+      };
+    },
+  },
+  {
+    id: 'BELOW_TARGET_MARGIN_ITEMS',
+    evaluate: (inputs) => {
+      if (inputs.belowTargetMarginProductCount === 0) return null;
+      return {
+        id: 'BELOW_TARGET_MARGIN_ITEMS',
+        severity: inputs.belowTargetMarginProductCount >= 10 ? 'HIGH' : 'MEDIUM',
+        title: `${inputs.belowTargetMarginProductCount} product${inputs.belowTargetMarginProductCount > 1 ? 's' : ''} below target margin`,
+        explanation: `You have ${inputs.belowTargetMarginProductCount} product${inputs.belowTargetMarginProductCount > 1 ? 's' : ''} sold in the last 14 days that are under the configured minimum margin target.`,
+        cta: { label: 'Review margin exceptions', href: '/reports/margins?view=below-target&period=14d' },
       };
     },
   },

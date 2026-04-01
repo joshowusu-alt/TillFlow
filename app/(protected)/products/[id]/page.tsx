@@ -43,6 +43,9 @@ export default async function ProductDetailPage({
 
   if (!product) return <div className="card p-6">Product not found.</div>;
   const isManager = user.role !== 'CASHIER';
+  const businessMarginThresholdBps = business.minimumMarginThresholdBps ?? 1500;
+  const productMarginThresholdBps = product.minimumMarginThresholdBps ?? null;
+  const effectiveMarginThresholdBps = productMarginThresholdBps ?? businessMarginThresholdBps;
 
   const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
   const packaging = getPrimaryPackagingUnit(
@@ -97,6 +100,12 @@ export default async function ProductDetailPage({
           <div className="text-xs uppercase tracking-wide text-black/40">Pricing</div>
           <div>Selling price: {formatMoney(product.sellingPriceBasePence, business.currency)}</div>
           <div>Default cost: {formatMoney(product.defaultCostBasePence, business.currency)}</div>
+          <div>
+            Margin target: {(effectiveMarginThresholdBps / 100).toFixed(2)}%
+            <span className="ml-2 text-xs text-black/45">
+              {productMarginThresholdBps !== null ? 'Product override' : 'Business default'}
+            </span>
+          </div>
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">On hand</div>
@@ -165,6 +174,20 @@ export default async function ProductDetailPage({
                 defaultValue={(product.defaultCostBasePence / 100).toFixed(2)}
               />
               <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
+            </div>
+            <div>
+              <label className="label">Target Margin Override (%)</label>
+              <input
+                className="input"
+                name="minimumMarginThresholdPercent"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                defaultValue={product.minimumMarginThresholdBps != null ? (product.minimumMarginThresholdBps / 100).toFixed(2) : ''}
+                placeholder={(businessMarginThresholdBps / 100).toFixed(2)}
+              />
+              <div className="mt-1 text-xs text-black/50">Leave blank to inherit the business default target of {(businessMarginThresholdBps / 100).toFixed(2)}%.</div>
             </div>
             <div>
               <label className="label">VAT Rate (bps)</label>

@@ -19,6 +19,7 @@ import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/comp
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -144,6 +145,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
                   <input className="input" name="defaultCostBasePence" type="number" min={0} step="0.01" inputMode="decimal" required />
                   <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
+                </div>
+                <div>
+                  <label className="label">Target Margin Override (%)</label>
+                  <input className="input" name="minimumMarginThresholdPercent" type="number" min={0} max={100} step="0.01" placeholder={defaultMarginThresholdPercent} />
+                  <div className="mt-1 text-xs text-black/50">Optional. Leave blank to inherit the business default target of {defaultMarginThresholdPercent}%.</div>
                 </div>
                 <div>
                   <label className="label">VAT Rate (bps)</label>

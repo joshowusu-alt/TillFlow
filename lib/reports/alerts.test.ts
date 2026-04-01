@@ -16,6 +16,7 @@ function makeInputs(overrides: Partial<AlertInputs> = {}): AlertInputs {
     forecastNegativeWithin14Days: false,
     lowestProjectedBalancePence: 500_000,
     negativeMarginProductCount: 0,
+    belowTargetMarginProductCount: 0,
     momoPendingCount: 0,
     momoPendingThreshold: 5,
     stockoutImminentCount: 0,
@@ -94,7 +95,17 @@ describe('computeBusinessAlerts', () => {
 
   it('fires NEGATIVE_MARGIN_ITEMS for below-cost products', () => {
     const alerts = computeBusinessAlerts(makeInputs({ negativeMarginProductCount: 3 }));
-    expect(alerts.find(a => a.id === 'NEGATIVE_MARGIN_ITEMS')).toBeTruthy();
+    const alert = alerts.find(a => a.id === 'NEGATIVE_MARGIN_ITEMS');
+    expect(alert).toBeTruthy();
+    expect(alert!.cta.href).toBe('/reports/margins?view=below-cost&period=14d');
+  });
+
+  it('fires BELOW_TARGET_MARGIN_ITEMS for products below the configured margin target', () => {
+    const alerts = computeBusinessAlerts(makeInputs({ belowTargetMarginProductCount: 4 }));
+    const alert = alerts.find(a => a.id === 'BELOW_TARGET_MARGIN_ITEMS');
+    expect(alert).toBeTruthy();
+    expect(alert!.severity).toBe('MEDIUM');
+    expect(alert!.cta.href).toBe('/reports/margins?view=below-target&period=14d');
   });
 
   it('fires MOMO_PENDING_SPIKE above threshold', () => {

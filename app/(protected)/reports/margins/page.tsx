@@ -1,265 +1,275 @@
+import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
+import StatCard from '@/components/StatCard';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
-import { prisma } from '@/lib/prisma';
+import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
+import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
+import { getMarginAnalysisSnapshot, type MarginAnalysisRow } from '@/lib/reports/margin-analysis';
 
-export default async function MarginsPage({
-  searchParams
-}: {
-  searchParams: { period?: string };
-}) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div>Business not found</div>;
+const periodOptions = [
+  { value: '7d', label: '7 days' },
+  { value: '14d', label: '14 days' },
+  { value: '30d', label: '30 days' },
+  { value: '90d', label: '90 days' },
+  { value: '365d', label: '1 year' },
+  { value: 'mtd', label: 'Month to date' },
+  { value: 'custom', label: 'Custom dates' },
+] as const;
 
-  const period = searchParams.period || '30';
-  const days = parseInt(period, 10) || 30;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startDate = new Date(today.getTime() - days * 24 * 60 * 60 * 1000);
-  const endDate = now;
+const viewOptions = [
+  { value: 'all', label: 'All sold products' },
+  { value: 'below-cost', label: 'Below cost only' },
+  { value: 'below-target', label: 'Below target margin' },
+] as const;
 
-  // All data comes from the sale transaction itself — single source of truth
-  const salesLines = await prisma.salesInvoiceLine.findMany({
-    where: {
-      salesInvoice: {
-        businessId: business.id,
-        createdAt: { gte: startDate, lte: endDate },
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-      }
-    },
-    select: {
-      productId: true,
-      qtyBase: true,
-      lineSubtotalPence: true,
-      lineCostPence: true,
-      product: {
-        select: {
-          name: true,
-          defaultCostBasePence: true,
-        }
-      }
-    }
-  });
+function formatMarginPercent(value: number) {
+  return `${value.toFixed(1)}%`;
+}
 
-  // Product-level breakdown from sale lines
-  const productStats = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      qtySold: number;
-      revenue: number;
-      cost: number;
-      profit: number;
-    }
-  >();
+function resolveMarginsView(view: string | undefined) {
+  if (view === 'below-cost' || view === 'below-target') return view;
+  return 'all';
+}
 
-  for (const line of salesLines) {
-    const existing = productStats.get(line.productId) ?? {
-      id: line.productId,
-      name: line.product.name,
-      qtySold: 0,
-      revenue: 0,
-      cost: 0,
-      profit: 0
-    };
+function marginBadgeClass(row: MarginAnalysisRow) {
+  if (row.belowCost) return 'bg-rose-100 text-rose-700';
+  if (row.belowTargetMargin) return 'bg-amber-100 text-amber-700';
+  return 'bg-emerald-100 text-emerald-700';
+}
 
-    const lineRevenue = line.lineSubtotalPence;
-    // lineCostPence is 0 for pre-deployment sales; fall back to current default cost
-    const lineCost = line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
-    const lineProfit = lineRevenue - lineCost;
-
-    existing.qtySold += line.qtyBase;
-    existing.revenue += lineRevenue;
-    existing.cost += lineCost;
-    existing.profit += lineProfit;
-
-    productStats.set(line.productId, existing);
+function sortRowsForView(rows: MarginAnalysisRow[], view: 'all' | 'below-cost' | 'below-target') {
+  if (view === 'below-cost') {
+    return [...rows].sort((a, b) => a.profitPence - b.profitPence || a.marginPercent - b.marginPercent);
   }
 
-  // Convert to array and sort by profit
-  const products = Array.from(productStats.values())
-    .map((p) => ({
-      ...p,
-      marginPercent: p.revenue > 0 ? (p.profit / p.revenue) * 100 : 0
-    }))
-    .sort((a, b) => b.profit - a.profit);
+  if (view === 'below-target') {
+    return [...rows].sort((a, b) => a.marginDeltaPercent - b.marginDeltaPercent || a.profitPence - b.profitPence);
+  }
 
-  // Summary cards = sum of product table rows (single source of truth)
-  const totalRevenue = products.reduce((s, p) => s + p.revenue, 0);
-  const totalCost = products.reduce((s, p) => s + p.cost, 0);
+  return [...rows].sort((a, b) => b.profitPence - a.profitPence);
+}
+
+export default async function MarginsPage({
+  searchParams,
+}: {
+  searchParams?: { period?: string; from?: string; to?: string; view?: string };
+}) {
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) return <div className="card p-6">Business not found.</div>;
+
+  const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
+  const currentView = resolveMarginsView(searchParams?.view);
+  const snapshot = await getMarginAnalysisSnapshot({ businessId: business.id, start, end });
+  const products = snapshot.rows;
+
+  const totalRevenue = products.reduce((sum, row) => sum + row.revenuePence, 0);
+  const totalCost = products.reduce((sum, row) => sum + row.costPence, 0);
   const totalProfit = totalRevenue - totalCost;
   const overallMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-  // Top performers and underperformers
-  const topPerformers = products.slice(0, 5);
-  const lowMarginProducts = [...products]
-    .filter((p) => p.revenue > 0)
-    .sort((a, b) => a.marginPercent - b.marginPercent)
+  const filteredRows = sortRowsForView(
+    currentView === 'below-cost'
+      ? products.filter((row) => row.belowCost)
+      : currentView === 'below-target'
+        ? products.filter((row) => row.belowTargetMargin)
+        : products,
+    currentView,
+  );
+
+  const topPerformers = [...products]
+    .sort((a, b) => b.profitPence - a.profitPence)
     .slice(0, 5);
 
+  const lowMarginProducts = [...products]
+    .sort((a, b) => a.marginPercent - b.marginPercent || a.profitPence - b.profitPence)
+    .slice(0, 5);
+
+  const viewLabel = viewOptions.find((option) => option.value === currentView)?.label ?? 'All sold products';
+  const filterSummary = currentView === 'all'
+    ? `Showing all ${products.length} sold product${products.length === 1 ? '' : 's'} in this period.`
+    : `Showing ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} flagged for ${viewLabel.toLowerCase()} in this period.`;
+
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Profit Margins"
+        subtitle="Track every sold product, spot lines below cost, and drill into products falling below the set margin target."
+      />
+
+      <ReportFilterCard
+        columnsClassName="lg:grid-cols-6"
+        submitLabel="Apply filters"
+        submitTone="primary"
+        actions={
+          <a href="/reports/margins?period=30d&view=all" className="btn-secondary w-full justify-center text-sm sm:w-auto">
+            Reset
+          </a>
+        }
+      >
         <div>
-          <div className="text-xs uppercase tracking-[0.25em] text-black/40">Reports</div>
-          <h1 className="text-2xl font-display font-semibold">Profit Margins</h1>
+          <label className="label">View</label>
+          <select className="input" name="view" defaultValue={currentView}>
+            {viewOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="flex gap-2">
-          {['7', '30', '90', '365'].map((p) => (
-            <a
-              key={p}
-              href={`/reports/margins?period=${p}`}
-              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                period === p
-                  ? 'bg-accent text-white'
-                  : 'bg-white text-black/70 hover:bg-black/5'
-              }`}
-            >
-              {p === '7' ? '7 days' : p === '30' ? '30 days' : p === '90' ? '90 days' : '1 year'}
-            </a>
+        <div>
+          <label className="label">Quick period</label>
+          <select className="input" name="period" defaultValue={periodInputValue}>
+            {periodOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">From</label>
+          <input className="input" type="date" name="from" defaultValue={fromInputValue} />
+        </div>
+        <div>
+          <label className="label">To</label>
+          <input className="input" type="date" name="to" defaultValue={toInputValue} />
+        </div>
+      </ReportFilterCard>
+
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        {filterSummary}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Revenue in period" value={formatMoney(totalRevenue, business.currency)} tone="accent" />
+        <StatCard label="Cost in period" value={formatMoney(totalCost, business.currency)} />
+        <StatCard label="Gross profit" value={formatMoney(totalProfit, business.currency)} tone={totalProfit >= 0 ? 'success' : 'danger'} />
+        <StatCard label="Overall margin" value={formatMarginPercent(overallMargin)} tone={overallMargin >= snapshot.businessDefaultThresholdBps / 100 ? 'success' : 'warn'} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Products in scope" value={String(snapshot.totalProducts)} />
+        <StatCard label="Below cost" value={String(snapshot.belowCostCount)} tone={snapshot.belowCostCount > 0 ? 'danger' : 'success'} />
+        <StatCard label="Below target margin" value={String(snapshot.belowTargetMarginCount)} tone={snapshot.belowTargetMarginCount > 0 ? 'warn' : 'success'} />
+        <StatCard label="Healthy products" value={String(snapshot.healthyCount)} tone="success" />
+      </div>
+
+      <ReportTableCard title={currentView === 'all' ? 'All sold products' : viewLabel}>
+        <thead>
+          <tr>
+            <th className="text-left">Product</th>
+            <th className="text-right">Qty Sold</th>
+            <th className="text-right">Avg Sell / Base</th>
+            <th className="text-right">Avg Cost / Base</th>
+            <th className="text-right">Revenue</th>
+            <th className="text-right">Cost</th>
+            <th className="text-right">Profit</th>
+            <th className="text-right">Margin %</th>
+            <th className="text-right">Target %</th>
+            <th className="text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredRows.map((row) => (
+            <tr key={row.productId} className="rounded-xl bg-white">
+              <td className="px-3 py-3">
+                <div className="flex flex-col gap-1">
+                  <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
+                    {row.name}
+                  </Link>
+                  <span className="text-xs text-black/45">
+                    Last sold {row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                  </span>
+                </div>
+              </td>
+              <td className="px-3 py-3 text-right text-sm">{row.qtySold}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageSellPricePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageCostPricePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.revenuePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.costPence, business.currency)}</td>
+              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.profitPence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                {formatMoney(row.profitPence, business.currency)}
+              </td>
+              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.belowTargetMargin ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {formatMarginPercent(row.marginPercent)}
+              </td>
+              <td className="px-3 py-3 text-right text-sm">{formatMarginPercent(row.effectiveThresholdPercent)}</td>
+              <td className="px-3 py-3 text-right text-sm">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
+                  {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
+                </span>
+              </td>
+            </tr>
           ))}
-        </div>
-      </div>
+          {filteredRows.length === 0 ? (
+            <ReportTableEmptyRow
+              colSpan={10}
+              message={currentView === 'all' ? 'No sold products found for this date range.' : `No products found for ${viewLabel.toLowerCase()} in this date range.`}
+            />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
 
-      {/* Summary Cards — derived from product table below */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Total Revenue</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(totalRevenue, business.currency)}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Total Cost</div>
-          <div className="mt-1 text-2xl font-bold">{formatMoney(totalCost, business.currency)}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Gross Profit</div>
-          <div className="mt-1 text-2xl font-bold text-emerald-700">
-            {formatMoney(totalProfit, business.currency)}
-          </div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs uppercase tracking-wide text-black/40">Overall Margin</div>
-          <div className="mt-1 text-2xl font-bold">{overallMargin.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      {/* Top and Low Margin */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="card p-4">
-          <ReportSectionHeader
-            title="Top Profit Contributors"
-            subtitle="Products generating the most profit"
-            titleClassName="text-emerald-700"
-          />
-          <div className="mt-4 space-y-3">
-            {topPerformers.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl bg-emerald-50 p-3">
-                <div>
-                  <div className="font-semibold">{p.name}</div>
-                  <div className="text-xs text-black/50">
-                    {p.qtySold} sold · {formatMoney(p.revenue, business.currency)} revenue
+      {currentView === 'all' ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="card p-4">
+            <ReportSectionHeader
+              title="Top Profit Contributors"
+              subtitle="Products generating the most profit"
+              titleClassName="text-emerald-700"
+            />
+            <div className="mt-4 space-y-3">
+              {topPerformers.map((product) => (
+                <div key={product.productId} className="flex items-center justify-between rounded-xl bg-emerald-50 p-3">
+                  <div>
+                    <div className="font-semibold">{product.name}</div>
+                    <div className="text-xs text-black/50">
+                      {product.qtySold} sold · {formatMoney(product.revenuePence, business.currency)} revenue
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-emerald-700">{formatMoney(product.profitPence, business.currency)}</div>
+                    <div className="text-xs text-emerald-600">{formatMarginPercent(product.marginPercent)} margin</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-emerald-700">
-                    {formatMoney(p.profit, business.currency)}
-                  </div>
-                  <div className="text-xs text-emerald-600">{p.marginPercent.toFixed(1)}% margin</div>
-                </div>
-              </div>
-            ))}
-            {topPerformers.length === 0 && (
-              <div className="text-center text-sm text-black/50 py-4">No sales data yet</div>
-            )}
-          </div>
-        </div>
-
-        <div className="card p-4">
-          <ReportSectionHeader
-            title="Low Margin Products"
-            subtitle="Consider reviewing pricing or costs"
-            titleClassName="text-amber-700"
-          />
-          <div className="mt-4 space-y-3">
-            {lowMarginProducts.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl bg-amber-50 p-3">
-                <div>
-                  <div className="font-semibold">{p.name}</div>
-                  <div className="text-xs text-black/50">
-                    {p.qtySold} sold · {formatMoney(p.revenue, business.currency)} revenue
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className={`font-bold ${p.profit < 0 ? 'text-rose-700' : 'text-amber-700'}`}>
-                    {formatMoney(p.profit, business.currency)}
-                  </div>
-                  <div className={`text-xs ${p.marginPercent < 0 ? 'text-rose-600' : 'text-amber-600'}`}>
-                    {p.marginPercent.toFixed(1)}% margin
-                  </div>
-                </div>
-              </div>
-            ))}
-            {lowMarginProducts.length === 0 && (
-              <div className="text-center text-sm text-black/50 py-4">No sales data yet</div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Full Product Table */}
-      <div className="mt-6 card p-4">
-        <ReportSectionHeader title="All Products" />
-        <div className="mt-4 overflow-x-auto">
-          <table className="table w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-left">Product</th>
-                <th className="text-right">Qty Sold</th>
-                <th className="text-right">Revenue</th>
-                <th className="text-right">Cost</th>
-                <th className="text-right">Profit</th>
-                <th className="text-right">Margin %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td className="font-medium">{p.name}</td>
-                  <td className="text-right">{p.qtySold}</td>
-                  <td className="text-right">{formatMoney(p.revenue, business.currency)}</td>
-                  <td className="text-right">{formatMoney(p.cost, business.currency)}</td>
-                  <td className={`text-right font-semibold ${p.profit < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {formatMoney(p.profit, business.currency)}
-                  </td>
-                  <td className="text-right">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        p.marginPercent >= 30
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : p.marginPercent >= 15
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}
-                    >
-                      {p.marginPercent.toFixed(1)}%
-                    </span>
-                  </td>
-                </tr>
               ))}
-              {products.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="text-center text-black/50 py-8">
-                    No sales data for this period
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              {topPerformers.length === 0 ? <div className="py-4 text-center text-sm text-black/50">No sales data yet</div> : null}
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <ReportSectionHeader
+              title="Lowest Margin Products"
+              subtitle="These items need the fastest pricing or buying review"
+              titleClassName="text-amber-700"
+            />
+            <div className="mt-4 space-y-3">
+              {lowMarginProducts.map((product) => (
+                <div key={product.productId} className="flex items-center justify-between rounded-xl bg-amber-50 p-3">
+                  <div>
+                    <div className="font-semibold">{product.name}</div>
+                    <div className="text-xs text-black/50">
+                      {product.qtySold} sold · {formatMoney(product.revenuePence, business.currency)} revenue
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`font-bold ${product.profitPence < 0 ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {formatMoney(product.profitPence, business.currency)}
+                    </div>
+                    <div className={`text-xs ${product.belowCost ? 'text-rose-600' : 'text-amber-600'}`}>
+                      {formatMarginPercent(product.marginPercent)} margin vs {formatMarginPercent(product.effectiveThresholdPercent)} target
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {lowMarginProducts.length === 0 ? <div className="py-4 text-center text-sm text-black/50">No sales data yet</div> : null}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

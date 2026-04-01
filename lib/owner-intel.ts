@@ -10,6 +10,7 @@ import { getTodayKPIs } from './reports/today-kpis';
 import { calculateHealthScore } from './reports/health-score';
 import { computeBusinessAlerts } from './reports/alerts';
 import { getCashflowForecast } from './reports/forecast';
+import { getMarginAnalysisSnapshot } from './reports/margin-analysis';
 import { prisma } from './prisma';
 
 // ─── Priority Action ─────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export type MoneyPulse = {
 export type LeakageWatch = {
   discountOverrideCount: number;
   negativeMarginProductCount: number;
+  belowTargetMarginProductCount: number;
   cashVariancePence: number;
 };
 
@@ -79,7 +81,8 @@ function alertSeverity(s: 'HIGH' | 'MEDIUM' | 'LOW'): ActionSeverity {
 
 const ALERT_RECOMMENDATIONS: Record<string, string> = {
   MARGIN_FALLING: 'Review your top 10 products and increase selling price or reduce cost.',
-  NEGATIVE_MARGIN_ITEMS: 'Open the Margins report, filter by negative GP, and adjust prices today.',
+  NEGATIVE_MARGIN_ITEMS: 'Open the Margins report, filter to below-cost items, and fix loss-making prices today.',
+  BELOW_TARGET_MARGIN_ITEMS: 'Open the Margins report, filter to below-target items, and reprice or renegotiate the flagged lines.',
   AR_AGING: 'Contact customers with invoices over 60 days. Offer a payment plan if needed.',
   CASH_VARIANCE_TREND: 'Check shift closing reports for the last 7 days in Risk Monitor.',
   STOCKOUT_IMMINENT: 'Raise a purchase order for the flagged items before end of day.',
@@ -169,10 +172,17 @@ export async function getOwnerBrief(
   currency: string,
   storeId?: string
 ): Promise<OwnerBrief> {
-  const [kpis, forecast, arAp] = await Promise.all([
+  const marginWindowEnd = new Date();
+  marginWindowEnd.setHours(23, 59, 59, 999);
+  const marginWindowStart = new Date(marginWindowEnd);
+  marginWindowStart.setDate(marginWindowStart.getDate() - 13);
+  marginWindowStart.setHours(0, 0, 0, 0);
+
+  const [kpis, forecast, arAp, marginSnapshot] = await Promise.all([
     getTodayKPIs(businessId, storeId),
     getCashflowForecast(businessId, 14),
     getArApDue7Days(businessId, storeId),
+    getMarginAnalysisSnapshot({ businessId, storeId, start: marginWindowStart, end: marginWindowEnd }),
   ]);
 
   // Health score
@@ -203,7 +213,8 @@ export async function getOwnerBrief(
     fourWeekAvgExpensesPence: kpis.fourWeekAvgExpensesPence,
     forecastNegativeWithin14Days: forecast.summary.daysUntilNegative !== null,
     lowestProjectedBalancePence: forecast.summary.lowestPointPence,
-    negativeMarginProductCount: kpis.negativeMarginProductCount,
+    negativeMarginProductCount: marginSnapshot.belowCostCount,
+    belowTargetMarginProductCount: marginSnapshot.belowTargetMarginCount,
     momoPendingCount: kpis.momoPendingCount,
     momoPendingThreshold: 5,
     stockoutImminentCount: kpis.stockoutImminentCount,
@@ -233,7 +244,8 @@ export async function getOwnerBrief(
     },
     leakageWatch: {
       discountOverrideCount: kpis.discountOverrideCount,
-      negativeMarginProductCount: kpis.negativeMarginProductCount,
+      negativeMarginProductCount: marginSnapshot.belowCostCount,
+      belowTargetMarginProductCount: marginSnapshot.belowTargetMarginCount,
       cashVariancePence: kpis.cashVarianceTotalPence,
     },
     stockRisk: {

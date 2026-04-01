@@ -41,6 +41,7 @@ model Business {
   openingCapitalPence                  Int      @default(0)
   requireOpenTillForSales              Boolean  @default(false)
   discountApprovalThresholdBps         Int      @default(1500)
+  minimumMarginThresholdBps            Int      @default(1500)
   varianceReasonRequired               Boolean  @default(true)
   inventoryAdjustmentRiskThresholdBase Int      @default(50)
   cashVarianceRiskThresholdPence       Int      @default(2000)
@@ -344,6 +345,7 @@ model Product {
   promoBuyQty           Int      @default(0)
   promoGetQty           Int      @default(0)
   preferredSupplierId   String?
+  minimumMarginThresholdBps Int?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @default(now()) @updatedAt
 
