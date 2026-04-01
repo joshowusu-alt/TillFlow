@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { formatMoney } from '@/lib/format';
+import { filterAmendSaleProductOptions } from '@/lib/amend-sale-product-options';
 import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
 import { amendSaleAction } from '@/app/actions/sales';
 
@@ -91,22 +92,17 @@ export default function AmendSaleClient({
   const hasChanges = removedIds.size > 0 || newItems.length > 0;
   const canSubmit = hasChanges && (keptLines.length > 0 || newItems.length > 0);
 
-  // Filter products already added as new items
+  // Filter products already added as new items or still kept on the invoice.
   const addedProductIds = useMemo(() => new Set(newItems.map((i) => i.productId)), [newItems]);
+  const keptProductIds = useMemo(() => new Set(keptLines.map((line) => line.productId)), [keptLines]);
 
-  const filteredProducts = useMemo(() => {
-    let filtered = availableProducts.filter((p) => !addedProductIds.has(p.id));
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.barcode && p.barcode.toLowerCase().includes(q)) ||
-          (p.categoryName && p.categoryName.toLowerCase().includes(q))
-      );
-    }
-    return filtered.slice(0, 20); // Limit for performance
-  }, [availableProducts, addedProductIds, searchQuery]);
+  const filteredProducts = useMemo<AvailableProduct[]>(() => {
+    return filterAmendSaleProductOptions<AvailableProduct>(availableProducts, {
+      keptProductIds,
+      addedProductIds,
+      searchQuery,
+    });
+  }, [availableProducts, keptProductIds, addedProductIds, searchQuery]);
 
   const toggleRemove = (lineId: string) => {
     setRemovedIds((prev) => {

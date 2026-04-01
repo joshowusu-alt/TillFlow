@@ -107,10 +107,10 @@ export default async function AmendSalePage({ params }: { params: { id: string }
     : [];
   const inventoryMap = new Map(inventory.map((i) => [i.productId, i.qtyOnHandBase]));
 
-  // Exclude products already on this sale
-  const existingProductIds = new Set(invoice.lines.map((l) => l.productId));
+  // Pass all active products and let the client hide items that are still kept
+  // on the invoice. This allows a removed item to appear in search immediately
+  // so it can be re-added with the correct unit/quantity.
   const availableProducts = products
-    .filter((p) => !existingProductIds.has(p.id))
     .map((p) => ({
       id: p.id,
       name: p.name,
