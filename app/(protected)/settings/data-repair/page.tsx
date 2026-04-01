@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
 import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
 import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
@@ -50,6 +51,16 @@ export default async function DataRepairPage() {
           use the cost at time of sale rather than the current product cost. Safe to run multiple times.
         </p>
         <BackfillLineCostButton />
+      </div>
+
+      <div className="card p-6">
+        <h3 className="font-semibold mb-1">Targeted Sale Cost Corrections</h3>
+        <p className="text-sm text-black/50 mb-4">
+          Correct only the specific historical sale lines affected by the old product setup. This is best when the receipt totals were correct, but the stored cost and gross profit trail need surgical repair.
+        </p>
+        <Link href="/settings/data-repair/sale-cost-corrections" className="btn-secondary inline-flex justify-center text-sm">
+          Open targeted corrections
+        </Link>
       </div>
     </div>
   );
