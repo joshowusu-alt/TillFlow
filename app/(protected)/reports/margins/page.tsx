@@ -21,9 +21,23 @@ const periodOptions = [
 
 const viewOptions = [
   { value: 'all', label: 'All sold products' },
-  { value: 'below-cost', label: 'Below cost only' },
+  { value: 'below-cost', label: 'Selling below cost' },
   { value: 'below-target', label: 'Below target margin' },
 ] as const;
+
+function buildMarginsHref(
+  view: 'all' | 'below-cost' | 'below-target',
+  query: { period: string; from: string; to: string },
+) {
+  const params = new URLSearchParams({
+    view,
+    period: query.period,
+    from: query.from,
+    to: query.to,
+  });
+
+  return `/reports/margins?${params.toString()}`;
+}
 
 function formatMarginPercent(value: number) {
   return `${value.toFixed(1)}%`;
@@ -88,6 +102,16 @@ export default async function MarginsPage({
     .slice(0, 5);
 
   const viewLabel = viewOptions.find((option) => option.value === currentView)?.label ?? 'All sold products';
+  const marginQuery = {
+    period: periodInputValue,
+    from: fromInputValue,
+    to: toInputValue,
+  };
+  const quickViews = [
+    { value: 'all' as const, label: 'All sold products', count: snapshot.totalProducts, tone: 'border-slate-200 bg-white text-slate-700' },
+    { value: 'below-cost' as const, label: 'Selling below cost', count: snapshot.belowCostCount, tone: 'border-rose-200 bg-rose-50 text-rose-700' },
+    { value: 'below-target' as const, label: 'Below target margin', count: snapshot.belowTargetMarginCount, tone: 'border-amber-200 bg-amber-50 text-amber-700' },
+  ];
   const filterSummary = currentView === 'all'
     ? `Showing all ${products.length} sold product${products.length === 1 ? '' : 's'} in this period.`
     : `Showing ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} flagged for ${viewLabel.toLowerCase()} in this period.`;
@@ -138,6 +162,35 @@ export default async function MarginsPage({
           <input className="input" type="date" name="to" defaultValue={toInputValue} />
         </div>
       </ReportFilterCard>
+
+      <p className="text-xs text-black/55">
+        Tip: if you change <span className="font-semibold text-black">From</span> or <span className="font-semibold text-black">To</span>, the page will automatically use that custom range.
+      </p>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-black">Exception views</h2>
+            <p className="text-xs text-black/55">Open the exact items behind each margin count in one tap.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {quickViews.map((view) => {
+              const isActive = currentView === view.value;
+
+              return (
+                <Link
+                  key={view.value}
+                  href={buildMarginsHref(view.value, marginQuery)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${view.tone} ${isActive ? 'ring-2 ring-offset-2 ring-accent/40' : 'hover:-translate-y-0.5'}`}
+                >
+                  <span>{view.label}</span>
+                  <span className="rounded-full bg-white/80 px-2 py-0.5 text-xs font-bold">{view.count}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         {filterSummary}

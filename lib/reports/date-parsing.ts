@@ -5,6 +5,10 @@ export function parseReportDate(value: string | undefined, fallback: Date) {
 	return parsed;
 }
 
+function toInputDateValue(value: Date) {
+	return value.toISOString().slice(0, 10);
+}
+
 function startOfDay(value: Date) {
 	const date = new Date(value);
 	date.setHours(0, 0, 0, 0);
@@ -99,7 +103,17 @@ export function resolveSelectableReportDateRange(
 ) {
 	const preset = resolvePeriodPreset(params?.period ?? defaultPeriod, now);
 	const normalizedPeriod = (params?.period ?? '').toLowerCase();
-	const hasCustomRange = normalizedPeriod === 'custom' || (!normalizedPeriod && Boolean(params?.from || params?.to));
+	const presetFromInputValue = toInputDateValue(startOfDay(preset.start));
+	const presetToInputValue = toInputDateValue(endOfDay(preset.end));
+	const submittedFrom = params?.from?.trim();
+	const submittedTo = params?.to?.trim();
+	const hasExplicitDateOverride = Boolean(
+		(submittedFrom && submittedFrom !== presetFromInputValue)
+		|| (submittedTo && submittedTo !== presetToInputValue),
+	);
+	const hasCustomRange = normalizedPeriod === 'custom'
+		|| hasExplicitDateOverride
+		|| (!normalizedPeriod && Boolean(submittedFrom || submittedTo));
 	const start = hasCustomRange
 		? startOfDay(parseReportDate(params?.from, preset.start))
 		: startOfDay(preset.start);
@@ -110,8 +124,8 @@ export function resolveSelectableReportDateRange(
 	return {
 		start,
 		end,
-		fromInputValue: start.toISOString().slice(0, 10),
-		toInputValue: end.toISOString().slice(0, 10),
+		fromInputValue: toInputDateValue(start),
+		toInputValue: toInputDateValue(end),
 		periodInputValue: hasCustomRange ? 'custom' : preset.key,
 		isCustomRange: hasCustomRange,
 	};

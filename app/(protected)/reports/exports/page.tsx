@@ -83,6 +83,10 @@ export default async function ExportsPage({
             <input className="input mt-1.5" defaultValue={toInputValue} name="to" type="date" />
           </label>
         </ReportFilterCard>
+
+        <p className="text-xs text-black/55">
+          Tip: if you edit <span className="font-semibold text-black">From</span> or <span className="font-semibold text-black">To</span>, exports will automatically switch to that custom period.
+        </p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
