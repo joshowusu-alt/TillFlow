@@ -110,8 +110,6 @@ export default function AmendSaleClient({
       if (next.has(lineId)) {
         next.delete(lineId);
       } else {
-        // Don't allow removing all items if no new items added
-        if (keptLines.length <= 1 && !prev.has(lineId) && newItems.length === 0) return prev;
         next.add(lineId);
       }
       return next;
@@ -218,7 +216,6 @@ export default function AmendSaleClient({
           <div className="space-y-2">
             {lines.map((line) => {
               const isRemoved = removedIds.has(line.id);
-              const isLastKept = !isRemoved && keptLines.length === 1 && newItems.length === 0;
               return (
                 <div
                   key={line.id}
@@ -231,13 +228,10 @@ export default function AmendSaleClient({
                   <button
                     type="button"
                     onClick={() => toggleRemove(line.id)}
-                    disabled={isLastKept}
                     className={`flex-none rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                       isRemoved
                         ? 'bg-rose-600 text-white hover:bg-rose-700'
-                        : isLastKept
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-black/5 text-black/70 hover:bg-rose-100 hover:text-rose-700'
+                        : 'bg-black/5 text-black/70 hover:bg-rose-100 hover:text-rose-700'
                     }`}
                   >
                     {isRemoved ? 'Undo' : 'Remove'}
@@ -255,6 +249,11 @@ export default function AmendSaleClient({
               );
             })}
           </div>
+          {keptLines.length === 0 && newItems.length === 0 && (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Add at least one replacement item before you confirm this amendment. If the whole sale should be cancelled instead, use Return or Owner Void.
+            </p>
+          )}
         </div>
       )}
 
@@ -470,6 +469,11 @@ export default function AmendSaleClient({
           </div>
 
           <div className="pt-2">
+            {keptLines.length === 0 && newItems.length === 0 && (
+              <p className="mb-3 text-sm text-amber-700">
+                Add a replacement item before confirming this amendment.
+              </p>
+            )}
             <button
               type="button"
               className="btn-primary"
