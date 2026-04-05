@@ -181,7 +181,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
           </div>
           <div className="card p-6">
-            <div className="space-y-3 md:hidden">
+            <div className="space-y-3 lg:hidden">
               {products.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
                   {q ? `No products matching "${q}".` : 'No active products yet.'}
@@ -248,7 +248,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               })}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
+            <div className="responsive-table-shell hidden lg:block">
               <table className="table w-full border-separate border-spacing-y-2">
                 <thead>
                   <tr>
@@ -256,8 +256,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                     <th>Product</th>
                     <th className="hidden sm:table-cell">Category</th>
                     <th>Base Price</th>
-                    <th className="hidden md:table-cell">Default Cost</th>
-                    <th className="hidden md:table-cell">Unit Display</th>
+                    <th className="hidden lg:table-cell">Default Cost</th>
+                    <th className="hidden lg:table-cell">Unit Display</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -307,8 +307,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                           )}
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
-                        <td className="hidden md:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
-                        <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
+                        <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                        <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
                       </tr>
                     );
                   })}

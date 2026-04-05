@@ -4,7 +4,7 @@ Follow these steps to put the software on your computer.
 
 ## Step 1: Install Tools
 You need two programs on your computer first.
-1. **Download Node.js:** [Click here to download (LTS version)](https://nodejs.org/dist/v20.11.1/node-v20.11.1-x64.msi) -> Install it.
+1. **Download Node.js 20 LTS:** [Click here to download](https://nodejs.org/dist/v20.11.1/node-v20.11.1-x64.msi) -> Install it. Avoid Node 24 for local validation in this repo.
 2. **Download Git:** [Click here to download](https://git-scm.com/download/win) -> Install it (just click Next, Next, Next).
 
 ## Step 2: Get the App

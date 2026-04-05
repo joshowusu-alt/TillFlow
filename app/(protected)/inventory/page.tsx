@@ -60,6 +60,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
     const balance = product.inventoryBalances[0];
     const qtyOnHand = balance?.qtyOnHandBase ?? 0;
     const avgCostBase = balance?.avgCostBasePence ?? product.defaultCostBasePence;
+    const hasCostDrift = balance?.avgCostBasePence != null && balance.avgCostBasePence !== product.defaultCostBasePence;
     const formatted = formatMixedUnit({
       qtyBase: qtyOnHand,
       baseUnit: baseUnit?.unit.name ?? 'unit',
@@ -77,6 +78,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
       packaging,
       qtyOnHand,
       avgCostBase,
+      hasCostDrift,
       formatted,
       isLow,
       isOut,
@@ -84,6 +86,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
   });
   const outOfStockCount = inventoryRows.filter((row) => row.isOut).length;
   const lowStockCount = inventoryRows.filter((row) => row.isLow && !row.isOut).length;
+  const costDriftCount = inventoryRows.filter((row) => row.hasCostDrift).length;
   const healthyCount = Math.max(0, inventoryRows.length - outOfStockCount - lowStockCount);
 
   return (
@@ -93,7 +96,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         subtitle="Real-time balances in mixed units."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
           <div className="text-xs uppercase tracking-[0.2em] text-black/40">Products</div>
           <div className="mt-1 text-2xl font-display font-semibold text-ink">{totalCount}</div>
@@ -105,6 +108,10 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
           <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Out of stock</div>
           <div className="mt-1 text-2xl font-display font-semibold text-rose-700">{outOfStockCount}</div>
+        </div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <div className="text-xs uppercase tracking-[0.2em] text-sky-700/70">Cost drift</div>
+          <div className="mt-1 text-2xl font-display font-semibold text-sky-800">{costDriftCount}</div>
         </div>
       </div>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -125,18 +132,30 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           <div>
             <h2 className="text-lg font-display font-semibold">Current stock</h2>
             <p className="mt-1 text-sm text-black/55">
-              {healthyCount} healthy, {lowStockCount} low, {outOfStockCount} out of stock.
+              {healthyCount} healthy, {lowStockCount} low, {outOfStockCount} out of stock, {costDriftCount} with cost drift.
             </p>
           </div>
         </div>
 
-        <div className="space-y-3 md:hidden">
+        {costDriftCount > 0 ? (
+          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <p className="font-semibold">Some inventory balances still differ from the current product base cost.</p>
+            <p className="mt-1 text-sky-800">
+              Sales and margin reports will continue using the inventory average cost until those balances are repaired or replaced by new authoritative inbound stock.
+              <Link href="/settings/data-repair" className="ml-1 font-medium underline">
+                Open Data Repair
+              </Link>
+            </p>
+          </div>
+        ) : null}
+
+        <div className="space-y-3 lg:hidden">
           {inventoryRows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
               No products found.
             </div>
           ) : (
-            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, isLow, isOut }) => (
+            inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => (
               <div
                 key={product.id}
                 className={`rounded-2xl border px-4 py-4 shadow-sm ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
@@ -154,6 +173,11 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-black/40">Avg cost</div>
                     <div className="mt-1 font-semibold text-ink">{formatMoney(avgCostBase, business.currency)}</div>
+                    {hasCostDrift ? (
+                      <div className="mt-1 text-xs font-medium text-sky-700">
+                        Default cost is {formatMoney(product.defaultCostBasePence, business.currency)}
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     <div className="text-xs uppercase tracking-[0.16em] text-black/40">Base unit</div>
@@ -165,26 +189,32 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                       {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : 'No pack/carton unit set'}
                     </div>
                   </div>
+                  {hasCostDrift ? (
+                    <div className="col-span-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                      Inventory is still carrying an older average cost, so profitability may look wrong until repaired.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))
           )}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Product</th>
               <th>On Hand</th>
               <th>Avg Cost (Base)</th>
+              <th>Default Cost</th>
               <th>Base Unit</th>
               <th>Packaging Unit</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, isLow, isOut }) => {
+            {inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => {
               return (
                 <tr key={product.id} className={`rounded-xl ${isOut ? 'bg-rose-50' : isLow ? 'bg-amber-50' : 'bg-white'}`}>
                   <td className="px-3 py-3 font-semibold">{product.name}</td>
@@ -192,12 +222,17 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
                   <td className="px-3 py-3 text-sm font-semibold">
                     {formatMoney(avgCostBase, business.currency)}
                   </td>
+                  <td className={`px-3 py-3 text-sm ${hasCostDrift ? 'font-semibold text-sky-700' : 'text-black/60'}`}>
+                    {formatMoney(product.defaultCostBasePence, business.currency)}
+                  </td>
                   <td className="px-3 py-3 text-sm text-black/60">{baseUnit?.unit.name ?? '-'}</td>
                   <td className="px-3 py-3 text-sm text-black/60">
                     {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : '-'}
                   </td>
                   <td className="px-3 py-3 text-sm">
-                    {isOut ? (
+                    {hasCostDrift ? (
+                      <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">Cost drift</span>
+                    ) : isOut ? (
                       <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Out of stock</span>
                     ) : isLow ? (
                       <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Low stock</span>

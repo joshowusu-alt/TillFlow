@@ -1,9 +1,12 @@
 import SettingsTabs from '@/components/SettingsTabs';
+import { requireBusiness } from '@/lib/auth';
 
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const { user } = await requireBusiness(['MANAGER', 'OWNER']);
+
   return (
     <div>
-      <SettingsTabs />
+      <SettingsTabs role={user.role as 'MANAGER' | 'OWNER'} />
       {children}
     </div>
   );

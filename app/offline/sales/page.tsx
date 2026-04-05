@@ -509,6 +509,21 @@ export default function OfflineSalesPage() {
   /* ---- Pending sales list ---- */
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+        <div className="font-semibold">Recovery centre for offline sales</div>
+        <p className="mt-1 text-amber-800">
+          Use this page when sync is delayed, a cashier needs to amend a queued sale, or you want to verify what is still waiting on this device.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link href="/settings/system-health" className="btn-secondary text-xs">
+            Open System Health
+          </Link>
+          <Link href="/settings/backup" className="btn-secondary text-xs">
+            Review Backup Plan
+          </Link>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Pending Offline Sales</h1>

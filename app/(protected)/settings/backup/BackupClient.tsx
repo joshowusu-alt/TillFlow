@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useRef } from 'react';
 import PageHeader from '@/components/PageHeader';
 import { exportDatabaseAction, importDatabaseAction, resetAllDataAction, type BackupData } from '@/app/actions/backup';
@@ -140,8 +141,37 @@ export default function BackupClient() {
         <div className="space-y-6">
             <PageHeader
                 title="Data Backup"
-                subtitle="Export and restore your business data."
+                subtitle="Recovery tools for exporting, restoring, and safely resetting business data."
             />
+
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-blue-700/70">Recovery workflow</div>
+                <div className="mt-2 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-xl bg-white/80 px-4 py-3">
+                        <div className="text-sm font-semibold text-ink">1. Export regularly</div>
+                        <p className="mt-1 text-xs text-black/60">Download a clean JSON backup before major imports, resets, or reconciliation work.</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 px-4 py-3">
+                        <div className="text-sm font-semibold text-ink">2. Check live issues</div>
+                        <p className="mt-1 text-xs text-black/60">Use System Health and pending offline sales to understand whether the problem is sync, data, or operator flow.</p>
+                    </div>
+                    <div className="rounded-xl bg-white/80 px-4 py-3">
+                        <div className="text-sm font-semibold text-ink">3. Restore only when needed</div>
+                        <p className="mt-1 text-xs text-black/60">Restores replace current business data. Prefer diagnostics and targeted recovery before using a full restore.</p>
+                    </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href="/settings/system-health" className="btn-secondary text-xs">
+                        Open System Health
+                    </Link>
+                    <Link href="/offline/sales" className="btn-secondary text-xs">
+                        View Pending Offline Sales
+                    </Link>
+                    <Link href="/settings/data-repair" className="btn-secondary text-xs">
+                        Advanced Recovery Tools
+                    </Link>
+                </div>
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
@@ -150,7 +180,7 @@ export default function BackupClient() {
                 </div>
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Use case</div>
-                    <div className="mt-1 text-base font-display font-semibold text-emerald-700">Backup & restore</div>
+                    <div className="mt-1 text-base font-display font-semibold text-emerald-700">Backup, restore, reset</div>
                 </div>
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Danger zone</div>
@@ -178,6 +208,9 @@ export default function BackupClient() {
                     </p>
                     <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
                         <strong>Note:</strong> Passwords are not included in backups for security. Users will need to reset their passwords after a restore.
+                    </div>
+                    <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] p-3 text-sm text-black/60">
+                        Includes business settings, catalog, inventory, sales, purchases, accounting data, tills, and shifts for the active business.
                     </div>
                     <button
                         onClick={handleExport}
@@ -252,6 +285,9 @@ export default function BackupClient() {
                                         <div className="text-xs uppercase tracking-[0.16em] text-black/40">Purchases</div>
                                         <div className="mt-1">{previewData.purchaseInvoices?.length ?? 0}</div>
                                     </div>
+                                </div>
+                                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    Confirm that the export date, business name, and record counts look correct before restoring.
                                 </div>
                             </div>
                             <div className="flex flex-col gap-2 sm:flex-row">

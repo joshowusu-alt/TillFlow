@@ -40,6 +40,8 @@ npm run dev
 
 The dev server automatically sets up and seeds the database.
 
+**Local validation baseline:** use **Node.js 20 LTS** and keep the repository in a normal local folder such as `C:\dev\supermarket-pos`. Running from OneDrive or other files-on-demand synced folders can cause `UNKNOWN: unknown error, read` failures in ESLint, Vitest, and other Node-based tooling.
+
 ### Optional Sentry Monitoring
 
 To enable Sentry in production, configure these environment variables before building:

@@ -75,7 +75,7 @@ export default async function CustomersPage({
       </div>
 
       <div className="card p-6">
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {customers.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
               <div className="flex flex-col items-center">
@@ -119,14 +119,14 @@ export default async function CustomersPage({
           })}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
                 <th className="hidden sm:table-cell">Email</th>
-                <th className="hidden md:table-cell">Branch</th>
+                <th className="hidden lg:table-cell">Branch</th>
                 <th>Credit Limit</th>
                 <th>Balance</th>
               </tr>
@@ -162,7 +162,7 @@ export default async function CustomersPage({
                     </td>
                     <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
                     <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
-                    <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
                     <td className="px-3 py-3 text-sm">{formatMoney(customer.creditLimitPence, business.currency)}</td>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(balance, business.currency)}

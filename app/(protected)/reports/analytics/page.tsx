@@ -245,6 +245,9 @@ export default async function AnalyticsPage({
                 subtitle="Deep insights into your business performance."
                 actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
             />
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                Profit analytics use the stored sale-line cost where available. If an older sale never captured line cost, analytics temporarily fall back to the current product base cost until those lines are backfilled or corrected.
+            </div>
             <AnalyticsClient data={analyticsData} />
         </div>
     );

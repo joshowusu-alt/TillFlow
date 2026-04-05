@@ -282,7 +282,7 @@ function ReorderTable({
 }) {
   return (
     <>
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {items.map((item) => (
           <div key={item.id} className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card">
             <div className="flex items-start justify-between gap-3">
@@ -314,7 +314,7 @@ function ReorderTable({
         ))}
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
+      <div className="responsive-table-shell hidden lg:block">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>

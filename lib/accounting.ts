@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PrismaClient } from '@prisma/client';
+import { isPostgresRuntimeEnv, isSqliteRuntimeEnv } from '@/lib/database-runtime';
 
 export const ACCOUNT_CODES = {
   cash: '1000',
@@ -38,20 +39,11 @@ export const CHART_OF_ACCOUNTS = [
 ];
 
 function isSqliteRuntime() {
-  const databaseUrl = process.env.DATABASE_URL ?? '';
-  return databaseUrl.startsWith('file:') || databaseUrl.includes('.db');
+  return isSqliteRuntimeEnv(process.env);
 }
 
 function isPostgresRuntime() {
-  const primaryUrl = process.env.DATABASE_URL ?? '';
-  const pooledUrl = process.env.POSTGRES_PRISMA_URL ?? '';
-  const directUrl = process.env.POSTGRES_URL_NON_POOLING ?? '';
-
-  if (isSqliteRuntime()) return false;
-
-  return [primaryUrl, pooledUrl, directUrl].some((url) =>
-    url.startsWith('postgres://') || url.startsWith('postgresql://')
-  );
+  return isPostgresRuntimeEnv(process.env);
 }
 
 /**

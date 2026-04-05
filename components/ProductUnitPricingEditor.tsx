@@ -152,7 +152,7 @@ export default function ProductUnitPricingEditor({
           return (
             <div key={row.key} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_160px_repeat(2,minmax(0,1fr))_auto] lg:items-start">
-                <div>
+                <div className="min-w-0">
                   <label className="label">{row.isBaseUnit ? 'Base unit' : 'Sellable unit'}</label>
                   <select
                     className="input"
@@ -173,7 +173,7 @@ export default function ProductUnitPricingEditor({
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="label">Base units inside</label>
                   <input
                     className="input"
@@ -190,7 +190,7 @@ export default function ProductUnitPricingEditor({
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="label">Selling price override</label>
                   <input
                     className="input"
@@ -212,7 +212,7 @@ export default function ProductUnitPricingEditor({
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="label">Default cost override</label>
                   <input
                     className="input"

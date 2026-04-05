@@ -95,10 +95,10 @@ describe('PosClient desktop layout', () => {
     const wrapper = summarySidebar.parentElement;
 
     expect(wrapper).not.toBeNull();
-    expect(wrapper?.className).toContain('md:h-fit');
-    expect(wrapper?.className).toContain('md:sticky');
-    expect(wrapper?.className).toContain('md:top-24');
-    expect(wrapper?.className).toContain('md:self-start');
+    expect(wrapper?.className).toContain('lg:h-fit');
+    expect(wrapper?.className).toContain('lg:sticky');
+    expect(wrapper?.className).toContain('lg:top-24');
+    expect(wrapper?.className).toContain('lg:self-start');
   });
 
   it('keeps the MoMo payment option visible even when MoMo settings are off', () => {

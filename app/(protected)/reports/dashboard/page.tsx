@@ -342,6 +342,10 @@ export default async function DashboardPage({
         }
       />
 
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        Gross profit uses the stored sale-line cost whenever it exists. Older sales that never captured a line cost fall back to the product&apos;s current base cost until you backfill or target-correct them.
+      </div>
+
       {/* Filter */}
       <ReportFilterCard columnsClassName="sm:grid-cols-4" submitLabel="Apply" submitTone="secondary">
         <div>

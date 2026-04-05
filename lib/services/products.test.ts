@@ -6,6 +6,7 @@ const { prismaMock } = vi.hoisted(() => ({
       create: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
     },
     productUnit: {
       findMany: vi.fn(),
@@ -14,6 +15,13 @@ const { prismaMock } = vi.hoisted(() => ({
       deleteMany: vi.fn(),
       updateMany: vi.fn(),
     },
+    inventoryBalance: {
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    stockMovement: {
+      findMany: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -21,13 +29,17 @@ const { prismaMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { buildProductUnitCreates, quickCreateProduct } from './products';
+import { buildProductUnitCreates, quickCreateProduct, repairInventoryAverageCostDrift, updateProduct } from './products';
 
 describe('product unit configuration helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.product.findFirst.mockResolvedValue(null);
+    prismaMock.product.findMany.mockResolvedValue([]);
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([]);
+    prismaMock.inventoryBalance.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.stockMovement.findMany.mockResolvedValue([]);
   });
 
   it('builds base + packaging unit creates only when packaging is valid', () => {
@@ -180,5 +192,81 @@ describe('product unit configuration helpers', () => {
 
     expect(dbMock.product.create).not.toHaveBeenCalled();
     expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('syncs default-cost-managed inventory balances when product cost changes', async () => {
+    prismaMock.product.findFirst.mockResolvedValue({
+      id: 'prod-1',
+      defaultCostBasePence: 1700,
+    });
+    const txMock = {
+      product: { update: vi.fn().mockResolvedValue({}) },
+      inventoryBalance: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: 'balance-1', storeId: 'store-1' },
+        ]),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      stockMovement: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      productUnit: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (callback) => callback(txMock));
+
+    await updateProduct('prod-1', 'biz-1', {
+      name: 'PPP',
+      sku: null,
+      barcode: null,
+      categoryId: null,
+      imageUrl: null,
+      sellingPriceBasePence: 900,
+      defaultCostBasePence: 550,
+      minimumMarginThresholdBps: null,
+      vatRateBps: 0,
+      promoBuyQty: 0,
+      promoGetQty: 0,
+      baseUnitId: 'unit-piece',
+      packagingUnitId: '',
+      packagingConversion: 0,
+      unitConfigs: [{ unitId: 'unit-piece', conversionToBase: 1, isBaseUnit: true }],
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(txMock.inventoryBalance.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['balance-1'] } },
+      data: { avgCostBasePence: 550 },
+    });
+  });
+
+  it('does not override balances with authoritative inbound cost history during drift repair', async () => {
+    prismaMock.product.findMany.mockResolvedValue([
+      { id: 'prod-1', defaultCostBasePence: 550 },
+    ]);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback({
+        inventoryBalance: {
+          findMany: vi.fn().mockResolvedValue([
+            { id: 'balance-1', storeId: 'store-1' },
+          ]),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        stockMovement: {
+          findMany: vi.fn().mockResolvedValue([{ storeId: 'store-1' }]),
+        },
+      })
+    );
+
+    const result = await repairInventoryAverageCostDrift('biz-1');
+
+    expect(result).toEqual({
+      affectedProducts: 0,
+      syncedBalances: 0,
+      skippedAuthoritativeBalances: 1,
+    });
   });
 });

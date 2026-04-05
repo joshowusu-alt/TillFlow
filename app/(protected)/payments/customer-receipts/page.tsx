@@ -27,7 +27,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
       <PageHeader title="Customer Receipts" subtitle="Collect outstanding payments." />
       <FormError error={searchParams?.error} />
       <div className="card p-6">
-        <div className="space-y-4 md:hidden">
+        <div className="space-y-4 lg:hidden">
           {invoices.map((invoice) => {
             const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
             const outstanding = Math.max(invoice.totalPence - paid, 0);
@@ -85,7 +85,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
             );
           })}
         </div>
-        <div className="hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>

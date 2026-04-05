@@ -103,6 +103,23 @@ export default async function SystemHealthPage() {
         ))}
       </div>
 
+      <div className="card p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">Operator actions</h3>
+            <p className="mt-1 text-sm text-black/50">
+              Use these links when a problem needs action, not just observation.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/offline/sales" className="btn-secondary text-xs">Pending Offline Sales</Link>
+            <Link href="/settings/backup" className="btn-secondary text-xs">Backup & Restore</Link>
+            <Link href="/settings/data-repair" className="btn-secondary text-xs">Advanced Recovery</Link>
+            <Link href="/reports/risk-monitor" className="btn-secondary text-xs">Risk Monitor</Link>
+          </div>
+        </div>
+      </div>
+
       {/* Details row */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="card p-4 sm:p-5">

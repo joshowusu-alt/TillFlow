@@ -6,75 +6,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
+import { NAV_GROUPS } from '@/lib/navigation-config';
 import InstallButton from './InstallButton';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
-
-const navGroups = [
-  {
-    id: 'operations',
-    label: 'Operations',
-    items: [
-      { href: '/pos', label: 'POS', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/shifts', label: 'Shifts', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/sales', label: 'Sales', roles: ['MANAGER', 'OWNER'] },
-      { href: '/purchases', label: 'Purchases', roles: ['MANAGER', 'OWNER'] },
-      { href: '/transfers', label: 'Transfers', roles: ['MANAGER', 'OWNER'] },
-      { href: '/expenses', label: 'Expenses', roles: ['MANAGER', 'OWNER'] }
-    ]
-  },
-  {
-    id: 'catalog',
-    label: 'Catalog',
-    items: [
-      { href: '/inventory', label: 'Inventory', roles: ['MANAGER', 'OWNER'] },
-      { href: '/inventory/adjustments', label: 'Stock Adjustments', roles: ['MANAGER', 'OWNER'] },
-      { href: '/products', label: 'Products', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/products/labels', label: 'Product Labels', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/customers', label: 'Customers', roles: ['MANAGER', 'OWNER'] },
-      { href: '/suppliers', label: 'Suppliers', roles: ['MANAGER', 'OWNER'] }
-    ]
-  },
-  {
-    id: 'payments',
-    label: 'Payments',
-    items: [
-      { href: '/payments/customer-receipts', label: 'Customer Receipts', roles: ['MANAGER', 'OWNER'] },
-      { href: '/payments/supplier-payments', label: 'Supplier Payments', roles: ['MANAGER', 'OWNER'] },
-      { href: '/payments/reconciliation', label: 'MoMo Reconciliation', roles: ['MANAGER', 'OWNER'] },
-      { href: '/payments/reconciliation/card-transfer', label: 'Card/Transfer Reconciliation', roles: ['MANAGER', 'OWNER'] }
-    ]
-  },
-  {
-    id: 'reports',
-    label: 'Reports',
-    items: [
-      { href: '/reports/owner', label: '⚡ Owner Intelligence', roles: ['OWNER'] },
-      { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cashflow-forecast', label: 'Cashflow Forecast', roles: ['OWNER'] },
-      { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'] }
-    ]
-  },
-  {
-    id: 'admin',
-    label: 'Administration',
-    items: [
-      { href: '/account', label: 'My Account', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/settings', label: 'Settings', roles: ['OWNER', 'MANAGER'] },
-      { href: '/users', label: 'Users', roles: ['OWNER'] },
-      { href: '/onboarding', label: 'Setup Guide', roles: ['OWNER'] }
-    ]
-  }
-];
 
 export type TopNavUser = {
   name: string;
@@ -102,10 +37,18 @@ export default function TopNav({
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const isOnline = useNetworkStatus();
   const navRef = useRef<HTMLDivElement>(null);
-  const advancedReportLinks = new Set<string>();
+  const advancedReportLinks = useMemo(
+    () =>
+      new Set(
+        NAV_GROUPS.find((group) => group.id === 'reports')?.items
+          .filter((item) => item.advanced)
+          .map((item) => item.href) ?? []
+      ),
+    []
+  );
 
   const visibleGroups = useMemo(() => {
-    return navGroups
+    return NAV_GROUPS
       .map((group) => ({
         ...group,
         items: group.items.filter((item) =>

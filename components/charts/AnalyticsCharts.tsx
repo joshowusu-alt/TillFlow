@@ -137,8 +137,8 @@ export function HourlyHeatmap({ data, title = 'Sales by Hour' }: HourlyHeatmapPr
     return (
         <div className="card p-4 sm:p-6">
             <h3 className="mb-3 sm:mb-4 text-sm sm:text-base font-display font-semibold">{title}</h3>
-            <div className="overflow-x-auto -mx-2 px-2">
-                <div className="min-w-[22rem]">
+            <div className="responsive-table-shell -mx-2 px-2">
+                <div className="min-w-[18rem] sm:min-w-[22rem]">
                     {/* Hour labels */}
                     <div className="mb-1 flex gap-px sm:gap-0.5 pl-10 sm:pl-12">
                         {hours.filter((h) => h % 3 === 0).map((h) => (

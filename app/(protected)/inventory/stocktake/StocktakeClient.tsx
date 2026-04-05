@@ -207,7 +207,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
       )}
 
       {/* Count sheet */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {filteredLines.map((line) => {
           const countedVal = counts[line.id];
           const hasCounted = countedVal !== '' && countedVal !== undefined;

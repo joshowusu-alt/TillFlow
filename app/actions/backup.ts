@@ -42,7 +42,7 @@ export interface BackupData {
 
 export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['OWNER']);
+    const { businessId, user } = await withBusinessContext(['OWNER']);
 
     const business = await prisma.business.findUnique({ where: { id: businessId } });
     if (!business) return err('No business set up yet. Please complete onboarding first.');
@@ -136,13 +136,27 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
             shifts
         };
 
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'BACKUP_EXPORT',
+      details: {
+        exportedAt: backupData.exportedAt,
+        productCount: products.length,
+        salesCount: salesInvoices.length,
+        purchaseCount: purchaseInvoices.length,
+      },
+    }).catch(() => {});
+
     return ok(backupData);
   });
 }
 
 export async function importDatabaseAction(backup: BackupData): Promise<ActionResult<{ message: string }>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['OWNER']);
+    const { businessId, user } = await withBusinessContext(['OWNER']);
 
     if (!backup.version || !backup.business || !backup.exportedAt) {
       return err('The backup file is not in the right format. Please use a file exported from TillFlow.');
@@ -388,6 +402,21 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       .filter((cookie) => cookie.name.startsWith(SESSION_COOKIE_PREFIX))
       .forEach((cookie) => cookieStore.delete(cookie.name));
     cookieStore.delete(ACTIVE_BUSINESS_COOKIE);
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'BACKUP_IMPORT',
+      details: {
+        importedFrom: backup.exportedAt,
+        userCount: users.length,
+        productCount: list(backup.products).length,
+        salesCount: list(backup.salesInvoices).length,
+        purchaseCount: list(backup.purchaseInvoices).length,
+      },
+    }).catch(() => {});
 
     return ok({
       message: `Restored backup from ${exportDate.toLocaleString()}. Users will need to reset their passwords and sign in again.`

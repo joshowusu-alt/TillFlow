@@ -117,7 +117,7 @@ export function TransactionDrillDown({
 
   return (
     <>
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {transactions.map((tx) => (
           <div key={tx.id} className="rounded-xl border border-black/5 bg-white p-3">
             <div className="flex items-start justify-between gap-3">

@@ -121,7 +121,7 @@ export default async function CashflowForecastPage({
         {forecast.days.length === 0 ? (
           <EmptyState icon="chart" title="No forecast data" subtitle="Record some sales and expenses to see projections." />
         ) : (
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 lg:hidden">
             {forecast.days.map((day) => (
               <div key={day.date} className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card">
                 <div className="flex items-start justify-between gap-3">
@@ -144,7 +144,7 @@ export default async function CashflowForecastPage({
           </div>
         )}
         {forecast.days.length > 0 && (
-          <div className="hidden overflow-x-auto md:block">
+          <div className="responsive-table-shell hidden lg:block">
             <table className="table w-full border-separate border-spacing-y-1 text-sm">
               <thead>
                 <tr>

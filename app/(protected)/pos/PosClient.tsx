@@ -1098,7 +1098,7 @@ export default function PosClient({
   }, [handleBarcodeScan]);
 
   return (
-    <div className="grid gap-6 pb-36 md:grid-cols-[3fr_1fr] md:items-start md:pb-0">
+    <div className="grid gap-6 pb-36 lg:grid-cols-[3fr_1fr] lg:items-start lg:pb-0">
       <div className="space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
         <div className="card p-4">
@@ -2060,7 +2060,7 @@ export default function PosClient({
       </div>
 
       {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
-      <div className="hidden md:block md:h-fit md:sticky md:top-24 md:self-start">
+      <div className="hidden lg:block lg:h-fit lg:sticky lg:top-24 lg:self-start">
         <SummarySidebar
           business={business}
           store={store}
@@ -2110,7 +2110,7 @@ export default function PosClient({
 
       {showParkedPanel && parkedCarts.length > 0 ? (
         <div
-          className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl md:hidden"
+          className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:hidden"
           style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' }}
         >
           <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
@@ -2161,7 +2161,7 @@ export default function PosClient({
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-30 md:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
+        <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
           <div className="space-y-3">
             <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
               {canSubmit

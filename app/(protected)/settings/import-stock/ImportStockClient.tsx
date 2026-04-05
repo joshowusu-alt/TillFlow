@@ -635,7 +635,7 @@ export default function ImportStockClient({
       </div>
 
       {/* Table */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {filteredRows.length === 0 && (
           <div className="rounded-2xl border border-dashed border-black/10 px-4 py-10 text-center text-sm text-black/40">
             {statusFilter === 'error' ? 'No errors — all fixed! 🎉' :

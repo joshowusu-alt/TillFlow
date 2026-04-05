@@ -136,7 +136,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
 
       <div className="card p-6">
         <h2 className="text-lg font-display font-semibold">Recent expenses</h2>
-        <div className="mt-4 space-y-4 md:hidden">
+        <div className="mt-4 space-y-4 lg:hidden">
           {expenses.map((expense) => (
             <DataCard key={expense.id}>
               <DataCardHeader
@@ -161,7 +161,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
             </DataCard>
           ))}
         </div>
-        <div className="mt-4 hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell mt-4 hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
@@ -171,8 +171,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
                 <th>Status</th>
                 <th className="hidden sm:table-cell">Method</th>
                 <th className="hidden sm:table-cell">Vendor</th>
-                <th className="hidden md:table-cell">Recorded By</th>
-                <th className="hidden md:table-cell">Notes</th>
+                <th className="hidden lg:table-cell">Recorded By</th>
+                <th className="hidden lg:table-cell">Notes</th>
                 <th className="hidden sm:table-cell">Attachment</th>
               </tr>
             </thead>
@@ -189,8 +189,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
                   </td>
                   <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.method ?? '-'}</td>
                   <td className="hidden sm:table-cell px-3 py-3 text-sm">{expense.vendorName ?? '-'}</td>
-                  <td className="hidden md:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
-                  <td className="hidden md:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-sm">{expense.user.name}</td>
+                  <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{expense.notes ?? '-'}</td>
                   <td className="hidden sm:table-cell px-3 py-3 text-sm">
                     {expense.attachmentPath ? (
                       <a className="btn-ghost text-xs" href={expense.attachmentPath} target="_blank" rel="noreferrer">

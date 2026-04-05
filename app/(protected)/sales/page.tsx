@@ -126,7 +126,7 @@ export default async function SalesPage({
       </div>
 
       <div className="card p-6">
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {sales.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
               <div className="flex flex-col items-center animate-fade-in-up">
@@ -201,7 +201,7 @@ export default async function SalesPage({
           })}
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>

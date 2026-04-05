@@ -78,7 +78,7 @@ export default function ResponsiveModal({
         className={`absolute inset-0 ${backdropClassName}`}
         onClick={closeOnBackdrop ? onClose : undefined}
       />
-      <div className="relative flex min-h-full items-center justify-center">
+      <div className="relative flex min-h-full items-end justify-center sm:items-center">
         <div
           ref={panelRef}
           role="dialog"
@@ -86,7 +86,7 @@ export default function ResponsiveModal({
           aria-label={ariaLabel}
           aria-labelledby={labelledBy}
           tabIndex={-1}
-          className={`w-full ${maxWidthClassName} max-h-[min(92vh,92dvh)] overflow-y-auto rounded-2xl bg-white shadow-xl ${panelClassName}`}
+          className={`mx-auto w-full max-w-full ${maxWidthClassName} max-h-[min(92vh,92dvh)] overflow-y-auto rounded-2xl bg-white shadow-xl ${panelClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
           {children}

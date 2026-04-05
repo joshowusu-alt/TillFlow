@@ -278,6 +278,76 @@ function validateMarginThresholdBps(value: number | null) {
   }
 }
 
+const AUTHORITATIVE_INBOUND_COST_TYPES = ['PURCHASE', 'TRANSFER_IN', 'SALE_VOID', 'SALES_RETURN'] as const;
+
+type InventoryCostSyncResult = {
+  syncedBalances: number;
+  skippedAuthoritativeBalances: number;
+};
+
+async function syncDefaultCostManagedInventoryBalances(
+  tx: any,
+  input: {
+    productId: string;
+    defaultCostBasePence: number;
+  }
+): Promise<InventoryCostSyncResult> {
+  const candidateBalances = await tx.inventoryBalance.findMany({
+    where: {
+      productId: input.productId,
+      OR: [
+        { avgCostBasePence: { lte: 0 } },
+        { avgCostBasePence: { not: input.defaultCostBasePence } },
+      ],
+    },
+    select: {
+      id: true,
+      storeId: true,
+    },
+  });
+
+  if (candidateBalances.length === 0) {
+    return { syncedBalances: 0, skippedAuthoritativeBalances: 0 };
+  }
+
+  const storeIds = [...new Set(candidateBalances.map((balance: { storeId: string }) => balance.storeId))];
+  const authoritativeMovements = await tx.stockMovement.findMany({
+    where: {
+      productId: input.productId,
+      storeId: { in: storeIds },
+      qtyBase: { gt: 0 },
+      unitCostBasePence: { gt: 0 },
+      type: { in: [...AUTHORITATIVE_INBOUND_COST_TYPES] },
+    },
+    select: { storeId: true },
+    distinct: ['storeId'],
+  });
+
+  const authoritativeStoreIds = new Set(
+    authoritativeMovements.map((movement: { storeId: string }) => movement.storeId)
+  );
+  const balanceIdsToSync = candidateBalances
+    .filter((balance: { storeId: string }) => !authoritativeStoreIds.has(balance.storeId))
+    .map((balance: { id: string }) => balance.id);
+
+  if (balanceIdsToSync.length === 0) {
+    return {
+      syncedBalances: 0,
+      skippedAuthoritativeBalances: candidateBalances.length,
+    };
+  }
+
+  await tx.inventoryBalance.updateMany({
+    where: { id: { in: balanceIdsToSync } },
+    data: { avgCostBasePence: input.defaultCostBasePence },
+  });
+
+  return {
+    syncedBalances: balanceIdsToSync.length,
+    skippedAuthoritativeBalances: candidateBalances.length - balanceIdsToSync.length,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
@@ -343,7 +413,7 @@ export async function updateProduct(
 
   const existing = await prisma.product.findFirst({
     where: { id, businessId },
-    select: { id: true },
+    select: { id: true, defaultCostBasePence: true },
   });
   if (!existing) {
     throw new Error('Product not found. It may have been removed.');
@@ -368,6 +438,13 @@ export async function updateProduct(
         promoGetQty: normalized.promoGetQty,
       } as any,
     });
+
+    if (existing.defaultCostBasePence !== normalized.defaultCostBasePence) {
+      await syncDefaultCostManagedInventoryBalances(tx, {
+        productId: existing.id,
+        defaultCostBasePence: normalized.defaultCostBasePence,
+      });
+    }
 
     const existingUnits = await tx.productUnit.findMany({
       where: { productId: existing.id },
@@ -409,6 +486,48 @@ export async function updateProduct(
   });
 
   return existing.id;
+}
+
+export async function repairInventoryAverageCostDrift(
+  businessId: string
+): Promise<{ affectedProducts: number; syncedBalances: number; skippedAuthoritativeBalances: number }> {
+  const products = await prisma.product.findMany({
+    where: {
+      businessId,
+      inventoryBalances: {
+        some: {},
+      },
+    },
+    select: {
+      id: true,
+      defaultCostBasePence: true,
+    },
+  });
+
+  if (products.length === 0) {
+    return { affectedProducts: 0, syncedBalances: 0, skippedAuthoritativeBalances: 0 };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let affectedProducts = 0;
+    let syncedBalances = 0;
+    let skippedAuthoritativeBalances = 0;
+
+    for (const product of products) {
+      const result = await syncDefaultCostManagedInventoryBalances(tx, {
+        productId: product.id,
+        defaultCostBasePence: product.defaultCostBasePence,
+      });
+
+      if (result.syncedBalances > 0) {
+        affectedProducts += 1;
+      }
+      syncedBalances += result.syncedBalances;
+      skippedAuthoritativeBalances += result.skippedAuthoritativeBalances;
+    }
+
+    return { affectedProducts, syncedBalances, skippedAuthoritativeBalances };
+  });
 }
 
 /**

@@ -22,7 +22,7 @@ const quickLinks = [
 /* ─── Page ───────────────────────────────────────────────────────────── */
 
 export default async function OwnerIntelligencePage() {
-  const { business, user } = await requireBusiness(['OWNER', 'MANAGER']);
+  const { business, user } = await requireBusiness(['OWNER']);
 
   const [{ stores }, snapshot] = await Promise.all([
     getBusinessStores(business.id),

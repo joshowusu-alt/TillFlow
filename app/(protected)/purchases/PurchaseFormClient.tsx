@@ -711,7 +711,7 @@ export default function PurchaseFormClient({
             <div className="mt-3 text-sm text-black/50">No items yet.</div>
           ) : (
             <>
-              <div className="mt-3 space-y-3 md:hidden">
+              <div className="mt-3 space-y-3 lg:hidden">
                 {cartDetails.map((line) => (
                   <div key={line.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
@@ -788,7 +788,7 @@ export default function PurchaseFormClient({
                 ))}
               </div>
 
-              <div className="mt-3 hidden overflow-x-auto md:block">
+              <div className="responsive-table-shell mt-3 hidden lg:block">
                 <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>

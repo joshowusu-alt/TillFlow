@@ -65,7 +65,7 @@ export default function NavMobileMenu({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
-      <div className="nav-mobile-panel fixed inset-x-3 z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
+      <div className="nav-mobile-panel fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4">
             <div className="flex items-start justify-between gap-3">

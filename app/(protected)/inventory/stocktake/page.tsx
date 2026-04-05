@@ -127,7 +127,7 @@ export default async function StocktakePage() {
       {pastStocktakes.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-black/50 uppercase tracking-wider">Past Stocktakes</h3>
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 lg:hidden">
             {pastStocktakes.map((st) => (
               <div key={st.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">

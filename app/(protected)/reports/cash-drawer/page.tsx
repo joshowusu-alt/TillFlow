@@ -149,7 +149,7 @@ export default async function CashDrawerReportPage({
         />
       </div>
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {shifts.length === 0 ? (
           <div className="card p-4 text-center text-sm text-black/50">No shifts found in this date range.</div>
         ) : (

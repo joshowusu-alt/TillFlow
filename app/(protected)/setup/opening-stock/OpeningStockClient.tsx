@@ -248,7 +248,7 @@ export default function OpeningStockClient({
               </div>
             </div>
 
-            <div className="space-y-3 md:hidden">
+            <div className="space-y-3 lg:hidden">
               {cart.map(row => {
                 const prod = products.find(p => p.id === row.productId);
                 return (

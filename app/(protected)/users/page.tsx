@@ -178,7 +178,7 @@ export default async function UsersPage({
       {/* Users list */}
       <div className="card p-6">
         <h2 className="text-lg font-semibold mb-4">Current Users ({users.length})</h2>
-        <div className="space-y-4 md:hidden">
+        <div className="space-y-4 lg:hidden">
           {users.map((user) => (
             <DataCard key={user.id}>
               <DataCardHeader
@@ -228,7 +228,7 @@ export default async function UsersPage({
             </DataCard>
           ))}
         </div>
-        <div className="hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>

@@ -143,7 +143,7 @@ export default async function StockAdjustmentsPage({
           <div className="text-xs text-black/45">{adjustmentCount} total records</div>
         </div>
 
-        <div className="mt-4 space-y-3 md:hidden">
+        <div className="mt-4 space-y-3 lg:hidden">
           {adjustmentRows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
               No stock adjustments recorded yet.
@@ -179,7 +179,7 @@ export default async function StockAdjustmentsPage({
           )}
         </div>
 
-        <div className="mt-4 hidden overflow-x-auto md:block">
+        <div className="responsive-table-shell mt-4 hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
           <thead>
             <tr>

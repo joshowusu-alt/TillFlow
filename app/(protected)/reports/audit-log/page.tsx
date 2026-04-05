@@ -132,7 +132,7 @@ export default async function AuditLogPage({
         )}
       </form>
 
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {logs.length === 0 ? (
           <div className="card p-4 text-center text-sm text-gray-400">No audit entries found.</div>
         ) : (
@@ -162,7 +162,7 @@ export default async function AuditLogPage({
       </div>
 
       {/* Table */}
-      <div className="hidden overflow-x-auto md:block">
+      <div className="responsive-table-shell hidden lg:block">
         <table className="min-w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500 uppercase">

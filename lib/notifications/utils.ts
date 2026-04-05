@@ -75,11 +75,13 @@ function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts {
       .map((part) => [part.type, Number(part.value)]),
   ) as Record<string, number>;
 
+  const normalizedHour = values.hour === 24 ? 0 : values.hour;
+
   return {
     year: values.year,
     month: values.month,
     day: values.day,
-    hour: values.hour,
+    hour: normalizedHour,
     minute: values.minute,
     second: values.second,
   };

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isSqliteRuntimeEnv } from '@/lib/database-runtime';
 
 type SqliteDateColumn = {
   table: string;
@@ -24,8 +25,7 @@ const REPORT_DATE_COLUMNS: SqliteDateColumn[] = [
 let normalizationPromise: Promise<void> | null = null;
 
 export function isSqliteRuntime() {
-  const databaseUrl = process.env.DATABASE_URL ?? '';
-  return databaseUrl.startsWith('file:') || databaseUrl.includes('.db');
+  return isSqliteRuntimeEnv(process.env);
 }
 
 export function coerceReportDate(value: Date | string | number | null | undefined) {

@@ -77,23 +77,36 @@ export function renderTillFlowAppIcon(size: number, variant: IconVariant = 'defa
         >
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(3, ${size * 0.052}px)`,
+              display: 'flex',
+              flexDirection: 'column',
               gap: size * 0.012,
-              alignContent: 'start',
               marginTop: size * 0.004,
             }}
           >
-            {Array.from({ length: 6 }).map((_, index) => (
+            {Array.from({ length: 2 }).map((_, rowIndex) => (
               <div
-                key={index}
+                key={rowIndex}
                 style={{
-                  width: size * 0.052,
-                  height: size * 0.046,
-                  borderRadius: size * 0.012,
-                  background: index === 5 ? '#cbd5e1' : '#dbe4f0',
+                  display: 'flex',
+                  gap: size * 0.012,
                 }}
-              />
+              >
+                {Array.from({ length: 3 }).map((_, columnIndex) => {
+                  const index = rowIndex * 3 + columnIndex;
+
+                  return (
+                    <div
+                      key={index}
+                      style={{
+                        width: size * 0.052,
+                        height: size * 0.046,
+                        borderRadius: size * 0.012,
+                        background: index === 5 ? '#cbd5e1' : '#dbe4f0',
+                      }}
+                    />
+                  );
+                })}
+              </div>
             ))}
           </div>
           <div

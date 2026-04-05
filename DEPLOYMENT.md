@@ -10,7 +10,7 @@ This guide helps you set up TillFlow on a local computer at the supermarket.
 
 - **Computer** (Windows, Mac, or Linux)
 - **WiFi Router** (for other devices like tablets to connect)
-- **Node.js** installed (download from https://nodejs.org - choose LTS version)
+- **Node.js 20 LTS** installed (download from https://nodejs.org - use an LTS release; Node 24 is not supported for local validation in this repo)
 
 ---
 

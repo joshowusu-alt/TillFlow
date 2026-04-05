@@ -30,7 +30,7 @@ export default function ReportTableCard({
 	return (
 		<div className="card overflow-hidden p-3.5 sm:p-4">
 			{title ? <h2 className="text-base font-display font-semibold sm:text-lg">{title}</h2> : null}
-			<div className="-mx-1 overflow-x-auto px-1 sm:mx-0 sm:px-0">
+			<div className="responsive-table-shell -mx-1 px-1 sm:mx-0 sm:px-0">
 				<table className={tableClassName}>{children}</table>
 			</div>
 		</div>

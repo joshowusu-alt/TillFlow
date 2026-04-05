@@ -23,14 +23,14 @@ export default async function ProductDetailPage({
   const [product, units, categories] = await Promise.all([
     prisma.product.findFirst({
       where: { id: params.id, businessId: business.id },
-      include: {
-        productUnits: { include: { unit: true } },
-        inventoryBalances: {
-          where: { storeId: store.id },
-          select: { storeId: true, qtyOnHandBase: true }
-        },
-        category: true
-      }
+        include: {
+          productUnits: { include: { unit: true } },
+          inventoryBalances: {
+            where: { storeId: store.id },
+            select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
+          },
+          category: true
+        }
     }),
     prisma.unit.findMany({
       select: { id: true, name: true, pluralName: true }
@@ -52,6 +52,10 @@ export default async function ProductDetailPage({
     product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
   );
   const qtyOnHand = product.inventoryBalances[0]?.qtyOnHandBase ?? 0;
+  const inventoryAvgCost = product.inventoryBalances[0]?.avgCostBasePence ?? product.defaultCostBasePence;
+  const hasInventoryCostDrift =
+    product.inventoryBalances[0]?.avgCostBasePence != null &&
+    product.inventoryBalances[0].avgCostBasePence !== product.defaultCostBasePence;
   const mixed = formatMixedUnit({
     qtyBase: qtyOnHand,
     baseUnit: baseUnit?.unit.name ?? 'unit',
@@ -73,7 +77,7 @@ export default async function ProductDetailPage({
       <PageHeader title={product.name} subtitle="Product detail and unit breakdown." />
 
       {/* Hero row with image + summary */}
-      <div className="card p-6 flex gap-6">
+      <div className="card flex flex-col gap-6 p-6 sm:flex-row">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
         ) : (
@@ -95,17 +99,23 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      <div className="card p-6 grid gap-6 md:grid-cols-2">
+      <div className="card grid gap-6 p-6 lg:grid-cols-2">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Pricing</div>
           <div>Selling price: {formatMoney(product.sellingPriceBasePence, business.currency)}</div>
           <div>Default cost: {formatMoney(product.defaultCostBasePence, business.currency)}</div>
+          <div>Inventory avg cost: {formatMoney(inventoryAvgCost, business.currency)}</div>
           <div>
             Margin target: {(effectiveMarginThresholdBps / 100).toFixed(2)}%
             <span className="ml-2 text-xs text-black/45">
               {productMarginThresholdBps !== null ? 'Product override' : 'Business default'}
             </span>
           </div>
+          {hasInventoryCostDrift ? (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+              Inventory is still carrying an older average cost for this store, so margins may stay wrong until you repair the drift or receive new authoritative stock.
+            </div>
+          ) : null}
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">On hand</div>
@@ -123,7 +133,7 @@ export default async function ProductDetailPage({
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Edit product</h2>
           <FormError error={searchParams?.error} />
-          <form action={updateProductAction} className="mt-4 grid gap-4 md:grid-cols-3">
+          <form action={updateProductAction} className="mt-4 grid gap-4 lg:grid-cols-3">
             <input type="hidden" name="id" value={product.id} />
             <div>
               <label className="label">Name</label>
@@ -173,7 +183,9 @@ export default async function ProductDetailPage({
                 inputMode="decimal"
                 defaultValue={(product.defaultCostBasePence / 100).toFixed(2)}
               />
-              <div className="mt-1 text-xs text-black/50">Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50.</div>
+              <div className="mt-1 text-xs text-black/50">
+                Cost per base unit, e.g. 3.50 for {getCurrencySymbol(business.currency)}3.50. Saving here now also updates inventory average cost where stock has no purchase/transfer-return cost trail yet.
+              </div>
             </div>
             <div>
               <label className="label">Target Margin Override (%)</label>
@@ -221,7 +233,7 @@ export default async function ProductDetailPage({
               />
               <div className="mt-1 text-xs text-black/50">Free units given when promo applies.</div>
             </div>
-            <div className="md:col-span-3">
+            <div className="lg:col-span-3">
               <ProductUnitPricingEditor
                 units={units}
                 currencySymbol={getCurrencySymbol(business.currency)}
@@ -230,7 +242,7 @@ export default async function ProductDetailPage({
                 initialConfigs={initialUnitConfigs}
               />
             </div>
-            <div className="md:col-span-3">
+            <div className="lg:col-span-3">
               <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
             </div>
           </form>

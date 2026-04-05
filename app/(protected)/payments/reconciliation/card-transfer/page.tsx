@@ -203,7 +203,7 @@ export default async function CardTransferReconciliationPage({
       </details>
 
       {/* Main reconciliation table */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3 lg:hidden">
         {rows.length === 0 ? (
           <div className="card p-4 text-center text-sm text-black/50">
             No card or transfer payments found for this period.

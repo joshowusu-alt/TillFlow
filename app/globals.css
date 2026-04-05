@@ -82,6 +82,12 @@
   --z-toast:   60;
 }
 
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -106,6 +112,22 @@ body {
     radial-gradient(circle at 100% 18%, rgba(5, 150, 105, 0.08), transparent 20%),
     linear-gradient(180deg, rgba(255,255,255,0.86), rgba(248,250,252,0.98));
   background-attachment: fixed;
+  width: 100%;
+  max-width: 100%;
+}
+
+main#main-content,
+main#main-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+svg,
+canvas,
+video,
+iframe {
+  max-width: 100%;
 }
 
 /* Respect OS-level motion preferences globally */
@@ -159,6 +181,8 @@ input, select, textarea {
 .nav-mobile-panel {
   top: calc(76px + env(safe-area-inset-top, 0px));
   bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+  left: max(0.75rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
+  right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
 }
 
 /* =============================================
@@ -296,9 +320,15 @@ input, select, textarea {
   .table th {
     @apply text-left text-xs font-semibold uppercase tracking-wider text-gray-500
            bg-slate-50/90 px-4 py-3;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
   .table td {
     @apply text-sm px-4 py-3;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    vertical-align: top;
   }
   .table tr {
     @apply border-b border-gray-100 transition-colors hover:bg-blue-50/40;
@@ -387,6 +417,22 @@ input, select, textarea {
 
   .metric-chip {
     @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600;
+  }
+}
+
+.responsive-table-shell {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1023px) {
+  .table th,
+  .table td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 }
 

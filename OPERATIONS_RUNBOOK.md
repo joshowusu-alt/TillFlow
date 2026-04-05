@@ -8,6 +8,13 @@ For first-store supermarket incidents and cashier-support procedures, use:
 
 ## 1) CI/CD Gates
 
+Local developer baseline before running these gates:
+
+- Node.js 20 LTS
+- a non-OneDrive local workspace path (for example `C:\dev\supermarket-pos`)
+
+Windows files-on-demand folders can cause `UNKNOWN: unknown error, read` failures while Node is loading `node_modules`, which breaks lint/test execution even when application code is valid.
+
 Required checks are in `.github/workflows/ci.yml`:
 
 - `npm run lint`
