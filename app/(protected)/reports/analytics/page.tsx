@@ -233,6 +233,7 @@ export default async function AnalyticsPage({
             totalTransactions: recentSales.length,
             avgTransaction: recentSales.length > 0 ? totalSales / recentSales.length : 0,
             growthPercent,
+            previousPeriodSales: previousTotalSales,
             topSellingProduct: topProduct,
             peakHour
         }

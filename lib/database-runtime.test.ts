@@ -35,6 +35,7 @@ describe('isPostgresDatabaseUrl', () => {
 describe('runtime env helpers', () => {
   it('treats postgres prisma urls as authoritative over a leftover sqlite DATABASE_URL', () => {
     const env = {
+      NODE_ENV: 'test',
       DATABASE_URL: 'file:./dev.db',
       POSTGRES_PRISMA_URL: 'postgresql://user:pass@localhost:5432/tillflow',
       POSTGRES_URL_NON_POOLING: 'postgresql://user:pass@localhost:5432/tillflow',
@@ -46,6 +47,7 @@ describe('runtime env helpers', () => {
 
   it('falls back to sqlite runtime when no postgres prisma urls are present', () => {
     const env = {
+      NODE_ENV: 'test',
       DATABASE_URL: 'file:./dev.db',
     } as NodeJS.ProcessEnv;
 

@@ -20,6 +20,7 @@ interface AnalyticsData {
         totalTransactions: number;
         avgTransaction: number;
         growthPercent: number;
+        previousPeriodSales: number;
         topSellingProduct: string;
         peakHour: string;
     };
@@ -49,6 +50,10 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
     };
 
     const periodLabel = `Last ${data.periodDays} Days`;
+    const hasPreviousPeriodSales = data.kpis.previousPeriodSales > 0;
+    const growthFormula = hasPreviousPeriodSales
+        ? `((${formatMoney(data.kpis.totalSales)} - ${formatMoney(data.kpis.previousPeriodSales)}) / ${formatMoney(data.kpis.previousPeriodSales)}) x 100`
+        : `Previous ${data.periodDays} days had no revenue, so growth is shown as 0%.`;
 
     return (
         <div className="space-y-4 sm:space-y-6">
@@ -98,6 +103,10 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
                     <div className="text-[10px] sm:text-xs text-black/50">Growth</div>
                     <div className={`mt-1 text-base sm:text-xl font-bold ${data.kpis.growthPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {data.kpis.growthPercent >= 0 ? '+' : ''}{data.kpis.growthPercent.toFixed(1)}%
+                    </div>
+                    <div className="mt-2 space-y-1 text-[10px] leading-relaxed text-black/60 sm:text-xs">
+                        <div>Vs previous {data.periodDays} days.</div>
+                        <div>{growthFormula}</div>
                     </div>
                 </div>
                 <div className="card p-3 sm:p-4">
