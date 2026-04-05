@@ -65,7 +65,7 @@ describe('ResponsiveModal', () => {
     it('locks body scroll while open and closes on Escape', () => {
         const onClose = vi.fn();
 
-        render(
+        const { unmount } = render(
             React.createElement(
                 ResponsiveModal,
                 {
@@ -78,11 +78,17 @@ describe('ResponsiveModal', () => {
         );
 
         expect(document.body.style.overflow).toBe('hidden');
+        expect(document.documentElement.style.overflow).toBe('hidden');
         expect(screen.getByRole('dialog', { name: 'Test modal' })).toBeInTheDocument();
 
         fireEvent.keyDown(window, { key: 'Escape' });
 
         expect(onClose).toHaveBeenCalledTimes(1);
+
+        unmount();
+
+        expect(document.body.style.overflow).toBe('');
+        expect(document.documentElement.style.overflow).toBe('');
     });
 });
 

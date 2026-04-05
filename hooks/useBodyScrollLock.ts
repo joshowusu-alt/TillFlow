@@ -8,18 +8,30 @@ export function useBodyScrollLock(locked: boolean) {
 
     const body = document.body;
     const html = document.documentElement;
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyTouchAction = body.style.touchAction;
-    const previousHtmlOverflow = html.style.overflow;
+    const activeLocks = Number(body.dataset.scrollLockCount ?? '0');
 
-    body.style.overflow = 'hidden';
-    body.style.touchAction = 'none';
-    html.style.overflow = 'hidden';
+    if (activeLocks === 0) {
+      body.dataset.scrollLockBodyOverflow = body.style.overflow;
+      html.dataset.scrollLockHtmlOverflow = html.style.overflow;
+      body.style.overflow = 'hidden';
+      html.style.overflow = 'hidden';
+    }
+
+    body.dataset.scrollLockCount = String(activeLocks + 1);
 
     return () => {
-      body.style.overflow = previousBodyOverflow;
-      body.style.touchAction = previousBodyTouchAction;
-      html.style.overflow = previousHtmlOverflow;
+      const remainingLocks = Math.max(0, Number(body.dataset.scrollLockCount ?? '1') - 1);
+
+      if (remainingLocks === 0) {
+        body.style.overflow = body.dataset.scrollLockBodyOverflow ?? '';
+        html.style.overflow = html.dataset.scrollLockHtmlOverflow ?? '';
+        delete body.dataset.scrollLockCount;
+        delete body.dataset.scrollLockBodyOverflow;
+        delete html.dataset.scrollLockHtmlOverflow;
+        return;
+      }
+
+      body.dataset.scrollLockCount = String(remainingLocks);
     };
   }, [locked]);
 }

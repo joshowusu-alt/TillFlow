@@ -65,16 +65,6 @@ export default function TopNav({
     setMobileOpen(false);
   }, [pathname]);
 
-  // Lock body scroll when mobile menu is open
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [mobileOpen]);
-
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       if (!navRef.current) return;
