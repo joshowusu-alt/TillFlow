@@ -100,7 +100,6 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior-y: contain; /* Prevent pull-to-refresh in standalone PWA */
   -webkit-tap-highlight-color: transparent; /* Clean taps on iOS */
   overflow-x: hidden; /* Prevent horizontal scroll on mobile */
   /* Safe-area padding for notch devices */
@@ -114,6 +113,12 @@ body {
   background-attachment: fixed;
   width: 100%;
   max-width: 100%;
+}
+
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain; /* Prevent pull-to-refresh in the installed PWA */
+  }
 }
 
 main#main-content,
