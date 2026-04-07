@@ -78,62 +78,26 @@ export default function TopNav({
 
   return (
     <>
-      <header role="banner">
-        <div className="app-shell-header border-b border-slate-200/70 bg-white/88 backdrop-blur-2xl shadow-nav">
-          <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
-            Skip to content
-          </a>
-          <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-            <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
-              <a href="/pos" className="flex min-w-0 items-center gap-3" aria-label="TillFlow — go to POS">
-                <img src="/icon.svg" alt="" width="36" height="36" className="h-9 w-9 rounded-xl shadow-sm" aria-hidden="true" />
-                <div className="min-w-0">
-                  <div className="text-lg font-display font-bold leading-none">
-                    <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
-                    <span className="text-gray-800">Flow</span>
-                  </div>
-                  <div className="hidden text-[11px] font-medium uppercase tracking-[0.24em] text-muted sm:block">
-                    Executive retail operations
-                  </div>
+      <header className="app-shell-header border-b border-slate-200/70 bg-white/88 backdrop-blur-2xl shadow-nav" role="banner">
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
+          Skip to content
+        </a>
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
+            <a href="/pos" className="flex min-w-0 items-center gap-3" aria-label="TillFlow — go to POS">
+              <img src="/icon.svg" alt="" width="36" height="36" className="h-9 w-9 rounded-xl shadow-sm" aria-hidden="true" />
+              <div className="min-w-0">
+                <div className="text-lg font-display font-bold leading-none">
+                  <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
+                  <span className="text-gray-800">Flow</span>
                 </div>
-              </a>
-
-              <div className="hidden xl:flex items-center gap-2">
-                <span className="metric-chip">
-                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                  {storeName || 'Main branch'}
-                </span>
-                <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
-                  {isOnline ? 'Sync ready' : 'Offline mode'}
-                </span>
+                <div className="hidden text-[11px] font-medium uppercase tracking-[0.24em] text-muted sm:block">
+                  Executive retail operations
+                </div>
               </div>
-            </div>
+            </a>
 
-            <div className="flex items-center gap-2 sm:gap-3">
-              <InstallButton />
-              <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
-              <button
-                type="button"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 lg:hidden"
-                onClick={() => setMobileOpen((prev) => !prev)}
-                aria-expanded={mobileOpen}
-                aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-              >
-                {mobileOpen ? (
-                  <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-200/60 bg-white/80 px-4 py-2 lg:hidden sm:px-6">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
                 <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
                 {storeName || 'Main branch'}
@@ -142,18 +106,9 @@ export default function TopNav({
                 {isOnline ? 'Sync ready' : 'Offline mode'}
               </span>
             </div>
-            {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
-              <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
-                {formatMoney(todaySales.totalPence, todaySales.currency)} · {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
-              </div>
-            ) : null}
           </div>
-        </div>
-      </header>
 
-      <div className="app-shell-ribbon hidden border-b border-slate-200/70 bg-white/94 backdrop-blur-2xl lg:block">
-        <div className="w-full overflow-x-auto px-4 sm:px-6 lg:px-8">
-          <nav ref={navRef} aria-label="Main navigation" className="flex min-w-max items-center gap-2 py-3">
+          <nav ref={navRef} aria-label="Main navigation" className="hidden items-center gap-2 lg:flex">
             {visibleGroups.map((group) => {
               const isActive = group.items.some(
                 (item) => pathname === item.href || pathname.startsWith(item.href + '/')
@@ -171,7 +126,7 @@ export default function TopNav({
                   </button>
                   {openGroup === group.id ? (
                     <div
-                      className="shell-dropdown-panel absolute left-0 top-full mt-2.5 min-w-[240px] animate-scale-in"
+                      className="shell-dropdown-panel absolute left-0 mt-2.5 min-w-[240px] animate-scale-in"
                       onMouseLeave={() => setOpenGroup(null)}
                     >
                       <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
@@ -202,8 +157,47 @@ export default function TopNav({
               );
             })}
           </nav>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <InstallButton />
+            <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
+            <button
+              type="button"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 lg:hidden"
+              onClick={() => setMobileOpen((prev) => !prev)}
+              aria-expanded={mobileOpen}
+              aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            >
+              {mobileOpen ? (
+                <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+
+        <div className="border-t border-slate-200/60 bg-white/80 px-4 py-2 lg:hidden sm:px-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="metric-chip">
+              <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+              {storeName || 'Main branch'}
+            </span>
+            <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
+              {isOnline ? 'Sync ready' : 'Offline mode'}
+            </span>
+          </div>
+          {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+            <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
+              {formatMoney(todaySales.totalPence, todaySales.currency)} · {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+            </div>
+          ) : null}
+        </div>
+      </header>
 
       <NavMobileMenu
         mobileOpen={mobileOpen}

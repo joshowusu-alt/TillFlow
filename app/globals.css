@@ -82,12 +82,9 @@
   --z-toast:   60;
   --safe-area-top: env(safe-area-inset-top, 0px);
   --app-header-height-mobile: 7.5rem;
-  --app-header-row-height-desktop: 5rem;
-  --app-ribbon-height-desktop: 3.75rem;
-  --app-header-height-desktop: calc(var(--app-header-row-height-desktop) + var(--app-ribbon-height-desktop));
+  --app-header-height-desktop: 5.75rem;
   --app-header-offset: calc(var(--safe-area-top) + var(--app-header-height-mobile));
   --app-header-offset-desktop: calc(var(--safe-area-top) + var(--app-header-height-desktop));
-  --app-ribbon-top-desktop: calc(var(--safe-area-top) + var(--app-header-row-height-desktop));
 }
 
 html {
@@ -464,14 +461,6 @@ input, select, textarea {
 
 .responsive-table-shell > table {
   min-width: max(100%, var(--responsive-table-min-width, 42rem));
-}
-
-@media (min-width: 1024px) {
-  .app-shell-ribbon {
-    position: sticky;
-    top: var(--app-ribbon-top-desktop);
-    z-index: 29;
-  }
 }
 
 @media (min-width: 1024px) {
