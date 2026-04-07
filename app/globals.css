@@ -467,6 +467,9 @@ input, select, textarea {
   .app-desktop-sidebar-sticky {
     position: sticky;
     top: calc(var(--app-header-offset-desktop) + 1rem);
+    max-height: calc(100vh - var(--app-header-offset-desktop) - 1rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
     align-self: flex-start;
   }
 
