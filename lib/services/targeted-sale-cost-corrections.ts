@@ -43,7 +43,10 @@ export function buildHistoricalSaleLineCandidate(
     : 0;
   const correctedUnitCostBasePence = input.currentProductCostBasePence;
   const correctedLineCostPence = correctedUnitCostBasePence * input.qtyBase;
-  const profitBeforePence = input.lineSubtotalPence - input.lineCostPence;
+  const effectiveLineCostPence = input.lineCostPence > 0
+    ? input.lineCostPence
+    : input.currentProductCostBasePence * input.qtyBase;
+  const profitBeforePence = input.lineSubtotalPence - effectiveLineCostPence;
   const profitAfterPence = input.lineSubtotalPence - correctedLineCostPence;
 
   return {
