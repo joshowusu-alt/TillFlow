@@ -32,6 +32,32 @@ describe('buildHistoricalSaleLineCandidate', () => {
     expect(candidate.belowCostAfter).toBe(false);
     expect(candidate.needsCorrection).toBe(true);
   });
+
+  it('uses the current setup cost when stored line cost is zero', () => {
+    const candidate = buildHistoricalSaleLineCandidate({
+      id: 'line-2',
+      salesInvoiceId: 'invoice-2',
+      transactionNumber: 'INV-001202',
+      createdAt: new Date('2026-04-01T10:00:00.000Z'),
+      productId: 'product-2',
+      productName: 'Milk Powder',
+      sku: 'MILK-02',
+      unitName: 'tin',
+      qtyInUnit: 2,
+      qtyBase: 2,
+      unitPricePence: 700,
+      lineSubtotalPence: 1_400,
+      lineTotalPence: 1_400,
+      lineCostPence: 0,
+      currentProductCostBasePence: 900,
+    });
+
+    expect(candidate.storedUnitCostBasePence).toBe(0);
+    expect(candidate.correctedLineCostPence).toBe(1_800);
+    expect(candidate.profitBeforePence).toBe(-400);
+    expect(candidate.belowCostBefore).toBe(true);
+    expect(candidate.needsCorrection).toBe(true);
+  });
 });
 
 describe('buildInvoiceGrossMarginMap', () => {
