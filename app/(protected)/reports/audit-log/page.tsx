@@ -132,38 +132,9 @@ export default async function AuditLogPage({
         )}
       </form>
 
-      <div className="space-y-3 lg:hidden">
-        {logs.length === 0 ? (
-          <div className="card p-4 text-center text-sm text-gray-400">No audit entries found.</div>
-        ) : (
-          logs.map((log) => {
-            const details = parseDetails(log.details);
-            return (
-              <div key={log.id} className="card p-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink">{log.userName}</p>
-                    <p className="mt-1 text-xs text-gray-500">{ACTION_LABELS[log.action] || log.action}</p>
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${ACTION_COLOURS[log.action] || 'bg-gray-100 text-gray-700'}`}>
-                    {log.userRole}
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 text-sm">
-                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">Time</span><span className="text-right text-gray-600">{new Date(log.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">Entity</span><span className="text-right text-gray-600">{log.entity}{log.entityId ? ` #${log.entityId.slice(0, 8)}` : ''}</span></div>
-                  <div className="flex items-start justify-between gap-3"><span className="pt-0.5 text-gray-500">Details</span><span className="max-w-[65%] text-right text-xs text-gray-500">{details ? Object.entries(details).map(([k, v]) => `${k}: ${v}`).join(', ') : '—'}</span></div>
-                  <div className="flex items-center justify-between gap-3"><span className="text-gray-500">IP</span><span className="text-right text-xs text-gray-400">{log.ipAddress || '—'}</span></div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
       {/* Table */}
-      <div className="responsive-table-shell hidden lg:block">
-        <table className="min-w-full text-sm">
+      <div className="responsive-table-shell">
+        <table className="min-w-[64rem] text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500 uppercase">
               <th className="py-2 pr-4">Time</th>

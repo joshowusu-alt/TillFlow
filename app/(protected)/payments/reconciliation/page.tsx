@@ -2,7 +2,6 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
-import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -198,79 +197,10 @@ export default async function MomoReconciliationPage({
       </div>
 
       <ResponsiveDataTable
-        mobile={
-          collections.length === 0 ? (
-            <div className="card p-4 text-center text-sm text-black/50">No mobile money collections yet.</div>
-          ) : (
-            collections.map((collection) => {
-              const statusTone =
-                collection.status === 'CONFIRMED'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : collection.status === 'PENDING'
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-rose-100 text-rose-700';
-              const reference =
-                collection.providerTransactionId ??
-                collection.providerReference ??
-                collection.id.slice(0, 8);
-              const canReinitiate = collection.status === 'FAILED' || collection.status === 'TIMEOUT';
-
-              return (
-                <DataCard key={collection.id}>
-                  <DataCardHeader
-                    title={collection.payerMsisdn}
-                    subtitle={formatDateTime(collection.initiatedAt)}
-                    aside={<span className={`pill ${statusTone}`}>{collection.status}</span>}
-                  />
-                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                    <DataCardField label="Amount" value={<span className="font-semibold text-ink">{formatMoney(collection.amountPence, collection.currency || business.currency)}</span>} />
-                    <DataCardField label="Network" value={`${collection.network} · ${collection.provider}`} />
-                    <DataCardField label="Provider ref" value={<span className="font-mono text-xs">{reference}</span>} />
-                    <DataCardField
-                      label="Sale"
-                      value={
-                        collection.salesInvoiceId ? (
-                          <Link className="text-emerald-700 hover:underline" href={`/receipts/${collection.salesInvoiceId}`}>
-                            {collection.salesInvoiceId.slice(0, 8)}
-                          </Link>
-                        ) : (
-                          <span className="text-black/40">Not linked</span>
-                        )
-                      }
-                    />
-                    <DataCardField className="sm:col-span-2" label="Provider status" value={collection.providerStatus ?? '-'} valueClassName="text-black/60" />
-                    {collection.lastCheckedAt ? (
-                      <DataCardField className="sm:col-span-2" label="Last checked" value={formatDateTime(collection.lastCheckedAt)} valueClassName="text-black/60" />
-                    ) : null}
-                    {collection.failureReason ? (
-                      <DataCardField className="sm:col-span-2" label="Failure reason" value={<span className="font-mono text-xs text-rose/80">{collection.failureReason}</span>} />
-                    ) : null}
-                  </div>
-                  <DataCardActions className="flex-col sm:flex-row">
-                    <form action={recheckMomoCollectionAction} className="w-full sm:w-auto">
-                      <input type="hidden" name="collectionId" value={collection.id} />
-                      <SubmitButton className="btn-ghost w-full text-xs" loadingText="Checking...">
-                        Re-check
-                      </SubmitButton>
-                    </form>
-                    {canReinitiate ? (
-                      <form action={reinitiateMomoCollectionAction} className="w-full sm:w-auto">
-                        <input type="hidden" name="collectionId" value={collection.id} />
-                        <SubmitButton className="btn-secondary w-full text-xs" loadingText="Retrying...">
-                          Re-initiate
-                        </SubmitButton>
-                      </form>
-                    ) : null}
-                  </DataCardActions>
-                </DataCard>
-              );
-            })
-          )
-        }
         desktop={
           <div className="card p-4">
             <div className="responsive-table-shell">
-              <table className="table w-full border-separate border-spacing-y-2">
+              <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
                 <thead>
                   <tr>
                     <th>Initiated</th>

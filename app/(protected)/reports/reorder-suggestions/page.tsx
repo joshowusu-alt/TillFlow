@@ -281,41 +281,8 @@ function ReorderTable({
   selectedStoreId: string;
 }) {
   return (
-    <>
-      <div className="space-y-3 lg:hidden">
-        {items.map((item) => (
-          <div key={item.id} className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink">{item.name}</p>
-                {item.supplierName ? <p className="mt-1 text-xs text-muted">{item.supplierName}</p> : null}
-              </div>
-              <Badge tone={urgencyTone[item.urgency]}>{item.urgency}</Badge>
-            </div>
-            <div className="mt-3 grid gap-2 text-sm">
-              <div className="flex items-center justify-between gap-3"><span className="text-muted">Sold ({lookbackDays}d)</span><span className="font-medium">{item.soldQty}</span></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-muted">Avg / Day</span><span className="font-medium">{item.avgDailyDemand.toFixed(2)}</span></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-muted">On Hand</span><span className="font-medium text-right">{item.onHandLabel}</span></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-muted">Suggested</span><span className="font-semibold text-right">{item.suggestionLabel}</span></div>
-              <div className="flex items-center justify-between gap-3"><span className="text-muted">Coverage</span><span className="font-medium">{Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}</span></div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {item.pendingQty > 0 ? <Badge tone="info">{item.pendingQty} ordered</Badge> : null}
-            </div>
-            {item.suggestedQty > 0 && item.pendingQty === 0 ? (
-              <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }} className="mt-3">
-                <input type="hidden" name="productId" value={item.id} />
-                <input type="hidden" name="qtyBase" value={item.suggestedQty} />
-                <input type="hidden" name="storeId" value={selectedStoreId} />
-                <button type="submit" className="btn-primary w-full justify-center text-sm">Mark Ordered</button>
-              </form>
-            ) : null}
-          </div>
-        ))}
-      </div>
-
-      <div className="responsive-table-shell hidden lg:block">
-        <table className="table w-full border-separate border-spacing-y-2">
+    <div className="responsive-table-shell">
+      <table className="table w-full min-w-[72rem] border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Product</th>
@@ -371,8 +338,7 @@ function ReorderTable({
               </tr>
             ))}
           </tbody>
-        </table>
-      </div>
-    </>
+      </table>
+    </div>
   );
 }

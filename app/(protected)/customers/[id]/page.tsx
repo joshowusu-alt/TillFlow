@@ -2,7 +2,6 @@ import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
-import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
@@ -141,35 +140,9 @@ export default async function CustomerDetailPage({
           </div>
         </div>
         <ResponsiveDataTable
-          mobile={
-            invoices.length === 0 ? (
-              <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-sm text-black/50">
-                No invoices found for this date range.
-              </div>
-            ) : (
-              invoices.map((invoice) => (
-                <DataCard key={invoice.id}>
-                  <DataCardHeader
-                    title={`Invoice ${invoice.id.slice(0, 8)}`}
-                    subtitle={formatDateTime(invoice.createdAt)}
-                    aside={<span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>}
-                  />
-                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                    <DataCardField label="Total" value={<span className="font-semibold text-ink">{formatMoney(invoice.totalPence, business.currency)}</span>} />
-                    <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(invoice.balance, business.currency)}</span>} />
-                  </div>
-                  <DataCardActions>
-                    <Link className="btn-ghost text-xs" href={`/receipts/${invoice.id}`}>
-                      Print
-                    </Link>
-                  </DataCardActions>
-                </DataCard>
-              ))
-            )
-          }
           desktop={
             <div className="responsive-table-shell">
-              <table className="table mt-4 w-full border-separate border-spacing-y-2">
+              <table className="table mt-4 w-full min-w-[48rem] border-separate border-spacing-y-2">
                 <thead>
                   <tr>
                     <th>Invoice</th>
@@ -201,6 +174,13 @@ export default async function CustomerDetailPage({
                       </td>
                     </tr>
                   ))}
+                  {invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-8 text-center text-sm text-black/50">
+                        No invoices found for this date range.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

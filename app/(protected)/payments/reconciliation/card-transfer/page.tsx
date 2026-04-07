@@ -203,100 +203,8 @@ export default async function CardTransferReconciliationPage({
       </details>
 
       {/* Main reconciliation table */}
-      <div className="space-y-3 lg:hidden">
-        {rows.length === 0 ? (
-          <div className="card p-4 text-center text-sm text-black/50">
-            No card or transfer payments found for this period.
-          </div>
-        ) : (
-          rows.map((row) => {
-            const methodTone =
-              row.method === 'CARD'
-                ? 'bg-blue-100 text-blue-700'
-                : 'bg-purple-100 text-purple-700';
-            const statusTone =
-              row.status === 'RECONCILED'
-                ? 'bg-emerald-100 text-emerald-700'
-                : row.status === 'DISCREPANCY'
-                  ? 'bg-rose-100 text-rose-700'
-                  : 'bg-amber-100 text-amber-800';
-            const varianceColor =
-              row.variancePence === null
-                ? 'text-black/40'
-                : row.variancePence === 0
-                  ? 'text-emerald-700'
-                  : row.variancePence > 0
-                    ? 'text-accent'
-                    : 'text-rose';
-            const detailKey = `${row.date}|${row.method}`;
-
-            return (
-              <div key={detailKey} className="card p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <Link
-                      className="text-sm font-semibold text-emerald-700 hover:underline"
-                      href={`/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`}
-                    >
-                      {row.date}
-                    </Link>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <span className={`pill ${methodTone}`}>
-                        {row.method === 'CARD' ? 'Card' : 'Transfer'}
-                      </span>
-                      <span className={`pill ${statusTone}`}>{row.status}</span>
-                    </div>
-                  </div>
-                  <div className={`text-right text-sm font-semibold ${varianceColor}`}>
-                    {row.variancePence !== null
-                      ? formatMoney(row.variancePence, business.currency)
-                      : '—'}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-2 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-black/50">System total</span>
-                    <span className="font-semibold">
-                      {formatMoney(row.systemTotalPence, business.currency)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-black/50">Actual total</span>
-                    <span className="font-semibold">
-                      {row.actualTotalPence !== null
-                        ? formatMoney(row.actualTotalPence, business.currency)
-                        : '—'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-black/50">Variance</span>
-                    <span className={`font-semibold ${varianceColor}`}>
-                      {row.variancePence !== null
-                        ? formatMoney(row.variancePence, business.currency)
-                        : '—'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4 border-t border-black/5 pt-4">
-                  <ReconcileForm
-                    date={row.date}
-                    method={row.method}
-                    storeId={resolvedStoreId}
-                    systemTotalPence={row.systemTotalPence}
-                    currency={business.currency}
-                  />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      <div className="hidden lg:block">
       <div className="card overflow-x-auto p-4">
-        <table className="table w-full border-separate border-spacing-y-2">
+        <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Date</th>
@@ -383,7 +291,6 @@ export default async function CardTransferReconciliationPage({
             ) : null}
           </tbody>
         </table>
-      </div>
       </div>
 
       {/* Drill-down panel */}

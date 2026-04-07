@@ -1,8 +1,6 @@
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
-import ResponsiveDataTable from '@/components/ResponsiveDataTable';
-import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -209,115 +207,65 @@ export default async function RiskMonitorPage({
         </div>
       </div>
 
-      <ResponsiveDataTable
-        mobile={
-          cashierRows.length === 0 ? (
-            <div className="card p-4 text-sm text-black/50">No cashier trend data found.</div>
-          ) : (
-            cashierRows.map((row) => (
-              <DataCard key={row.cashierUserId}>
-                <DataCardHeader title={row.name} subtitle="Cashier trends" />
-                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <DataCardField label="Alerts" value={<span className="font-semibold text-ink">{row.alertCount}</span>} />
-                  <DataCardField label="High alerts" value={<span className="font-semibold text-rose">{row.highAlertCount}</span>} />
-                  <DataCardField label="Discount total" value={formatMoney(row.discountTotalPence, business.currency)} />
-                  <DataCardField label="Overrides" value={row.overrideCount} />
-                </div>
-              </DataCard>
-            ))
-          )
-        }
-        desktop={
-          <ReportTableCard title="Cashier Trends">
-            <thead>
-              <tr>
-                <th>Cashier</th>
-                <th>Alerts</th>
-                <th>High Alerts</th>
-                <th>Discount Total</th>
-                <th>Overrides</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cashierRows.map((row) => (
-                <tr key={row.cashierUserId} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm">{row.name}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
-                  <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
-                  <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
-                  <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
-                </tr>
-              ))}
-              {cashierRows.length === 0 ? (
-                <ReportTableEmptyRow colSpan={5} message="No cashier trend data found." />
-              ) : null}
-            </tbody>
-          </ReportTableCard>
-        }
-      />
+      <ReportTableCard title="Cashier Trends" tableClassName="table mt-3 w-full min-w-[44rem] border-separate border-spacing-y-2">
+        <thead>
+          <tr>
+            <th>Cashier</th>
+            <th>Alerts</th>
+            <th>High Alerts</th>
+            <th>Discount Total</th>
+            <th>Overrides</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cashierRows.map((row) => (
+            <tr key={row.cashierUserId} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-sm">{row.name}</td>
+              <td className="px-3 py-3 text-sm font-semibold">{row.alertCount}</td>
+              <td className="px-3 py-3 text-sm font-semibold text-rose">{row.highAlertCount}</td>
+              <td className="px-3 py-3 text-sm">{formatMoney(row.discountTotalPence, business.currency)}</td>
+              <td className="px-3 py-3 text-sm">{row.overrideCount}</td>
+            </tr>
+          ))}
+          {cashierRows.length === 0 ? (
+            <ReportTableEmptyRow colSpan={5} message="No cashier trend data found." />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
 
-      <ResponsiveDataTable
-        mobile={
-          alerts.length === 0 ? (
-            <div className="card p-4 text-sm text-black/50">No alerts found.</div>
-          ) : (
-            alerts.map((alert) => (
-              <DataCard key={alert.id}>
-                <DataCardHeader
-                  title={alertTypeLabels[alert.alertType] ?? alert.alertType}
-                  subtitle={formatDateTime(alert.occurredAt)}
-                  aside={
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                  }
-                />
-                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <DataCardField label="Cashier" value={alert.cashierUser?.name ?? 'Unknown'} />
-                  <DataCardField label="Branch" value={alert.store?.name ?? 'N/A'} />
-                  <DataCardField label="Status" value={alert.status} />
-                  <DataCardField className="sm:col-span-2" label="Summary" value={alert.summary} valueClassName="text-black/65" />
-                </div>
-              </DataCard>
-            ))
-          )
-        }
-        desktop={
-          <ReportTableCard title="Recent Alerts">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Type</th>
-                <th>Severity</th>
-                <th>Cashier</th>
-                <th>Branch</th>
-                <th>Status</th>
-                <th>Summary</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((alert) => (
-                <tr key={alert.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
-                  <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
-                      {alert.severity}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
-                  <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
-                  <td className="px-3 py-3 text-xs">{alert.status}</td>
-                  <td className="px-3 py-3 text-sm">{alert.summary}</td>
-                </tr>
-              ))}
-              {alerts.length === 0 ? (
-                <ReportTableEmptyRow colSpan={7} message="No alerts found." />
-              ) : null}
-            </tbody>
-          </ReportTableCard>
-        }
-      />
+      <ReportTableCard title="Recent Alerts" tableClassName="table mt-3 w-full min-w-[64rem] border-separate border-spacing-y-2">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Severity</th>
+            <th>Cashier</th>
+            <th>Branch</th>
+            <th>Status</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          {alerts.map((alert) => (
+            <tr key={alert.id} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-xs">{formatDateTime(alert.occurredAt)}</td>
+              <td className="px-3 py-3 text-sm">{alertTypeLabels[alert.alertType] ?? alert.alertType}</td>
+              <td className="px-3 py-3 text-sm">
+                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${severityClass(alert.severity)}`}>
+                  {alert.severity}
+                </span>
+              </td>
+              <td className="px-3 py-3 text-sm">{alert.cashierUser?.name ?? 'Unknown'}</td>
+              <td className="px-3 py-3 text-sm">{alert.store?.name ?? 'N/A'}</td>
+              <td className="px-3 py-3 text-xs">{alert.status}</td>
+              <td className="px-3 py-3 text-sm">{alert.summary}</td>
+            </tr>
+          ))}
+          {alerts.length === 0 ? (
+            <ReportTableEmptyRow colSpan={7} message="No alerts found." />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
     </div>
   );
 }

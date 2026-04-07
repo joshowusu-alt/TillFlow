@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
-import ResponsiveDataTable from '@/components/ResponsiveDataTable';
-import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
@@ -212,105 +210,64 @@ export default async function MarginsPage({
         <StatCard label="Healthy products" value={String(snapshot.healthyCount)} tone="success" />
       </div>
 
-      <ResponsiveDataTable
-        mobile={
-          filteredRows.length === 0 ? (
-            <div className="card p-4 text-sm text-black/50">
-              {currentView === 'all' ? 'No sold products found for this date range.' : `No products found for ${viewLabel.toLowerCase()} in this date range.`}
-            </div>
-          ) : (
-            filteredRows.map((row) => (
-              <DataCard key={row.productId}>
-                <DataCardHeader
-                  title={
-                    <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
-                      {row.name}
-                    </Link>
-                  }
-                  subtitle={`Last sold ${row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`}
-                  aside={
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
-                      {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
-                    </span>
-                  }
-                />
-                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <DataCardField label="Qty sold" value={row.qtySold} />
-                  <DataCardField
-                    label="Margin"
-                    value={<span className={row.belowTargetMargin ? 'font-semibold text-amber-700' : 'font-semibold text-emerald-700'}>{formatMarginPercent(row.marginPercent)}</span>}
-                  />
-                  <DataCardField label="Revenue" value={<span className="font-semibold text-ink">{formatMoney(row.revenuePence, business.currency)}</span>} />
-                  <DataCardField
-                    label="Profit"
-                    value={<span className={row.profitPence < 0 ? 'font-semibold text-rose-700' : 'font-semibold text-emerald-700'}>{formatMoney(row.profitPence, business.currency)}</span>}
-                  />
-                  <DataCardField label="Avg sell / base" value={formatMoney(row.averageSellPricePence, business.currency)} />
-                  <DataCardField label="Avg cost / base" value={formatMoney(row.averageCostPricePence, business.currency)} />
-                  <DataCardField label="Target %" value={formatMarginPercent(row.effectiveThresholdPercent)} />
+      <ReportTableCard
+        title={currentView === 'all' ? 'All sold products' : viewLabel}
+        tableClassName="table mt-3 w-full min-w-[72rem] border-separate border-spacing-y-2"
+      >
+        <thead>
+          <tr>
+            <th className="text-left">Product</th>
+            <th className="text-right">Qty Sold</th>
+            <th className="text-right">Avg Sell / Base</th>
+            <th className="text-right">Avg Cost / Base</th>
+            <th className="text-right">Revenue</th>
+            <th className="text-right">Cost</th>
+            <th className="text-right">Profit</th>
+            <th className="text-right">Margin %</th>
+            <th className="text-right">Target %</th>
+            <th className="text-right">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredRows.map((row) => (
+            <tr key={row.productId} className="rounded-xl bg-white">
+              <td className="px-3 py-3">
+                <div className="flex flex-col gap-1">
+                  <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
+                    {row.name}
+                  </Link>
+                  <span className="text-xs text-black/45">
+                    Last sold {row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                  </span>
                 </div>
-              </DataCard>
-            ))
-          )
-        }
-        desktop={
-          <ReportTableCard title={currentView === 'all' ? 'All sold products' : viewLabel}>
-            <thead>
-              <tr>
-                <th className="text-left">Product</th>
-                <th className="text-right">Qty Sold</th>
-                <th className="text-right">Avg Sell / Base</th>
-                <th className="text-right">Avg Cost / Base</th>
-                <th className="text-right">Revenue</th>
-                <th className="text-right">Cost</th>
-                <th className="text-right">Profit</th>
-                <th className="text-right">Margin %</th>
-                <th className="text-right">Target %</th>
-                <th className="text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.productId} className="rounded-xl bg-white">
-                  <td className="px-3 py-3">
-                    <div className="flex flex-col gap-1">
-                      <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
-                        {row.name}
-                      </Link>
-                      <span className="text-xs text-black/45">
-                        Last sold {row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-right text-sm">{row.qtySold}</td>
-                  <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageSellPricePence, business.currency)}</td>
-                  <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageCostPricePence, business.currency)}</td>
-                  <td className="px-3 py-3 text-right text-sm">{formatMoney(row.revenuePence, business.currency)}</td>
-                  <td className="px-3 py-3 text-right text-sm">{formatMoney(row.costPence, business.currency)}</td>
-                  <td className={`px-3 py-3 text-right text-sm font-semibold ${row.profitPence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                    {formatMoney(row.profitPence, business.currency)}
-                  </td>
-                  <td className={`px-3 py-3 text-right text-sm font-semibold ${row.belowTargetMargin ? 'text-amber-700' : 'text-emerald-700'}`}>
-                    {formatMarginPercent(row.marginPercent)}
-                  </td>
-                  <td className="px-3 py-3 text-right text-sm">{formatMarginPercent(row.effectiveThresholdPercent)}</td>
-                  <td className="px-3 py-3 text-right text-sm">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
-                      {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {filteredRows.length === 0 ? (
-                <ReportTableEmptyRow
-                  colSpan={10}
-                  message={currentView === 'all' ? 'No sold products found for this date range.' : `No products found for ${viewLabel.toLowerCase()} in this date range.`}
-                />
-              ) : null}
-            </tbody>
-          </ReportTableCard>
-        }
-      />
+              </td>
+              <td className="px-3 py-3 text-right text-sm">{row.qtySold}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageSellPricePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageCostPricePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.revenuePence, business.currency)}</td>
+              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.costPence, business.currency)}</td>
+              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.profitPence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                {formatMoney(row.profitPence, business.currency)}
+              </td>
+              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.belowTargetMargin ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {formatMarginPercent(row.marginPercent)}
+              </td>
+              <td className="px-3 py-3 text-right text-sm">{formatMarginPercent(row.effectiveThresholdPercent)}</td>
+              <td className="px-3 py-3 text-right text-sm">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
+                  {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
+                </span>
+              </td>
+            </tr>
+          ))}
+          {filteredRows.length === 0 ? (
+            <ReportTableEmptyRow
+              colSpan={10}
+              message={currentView === 'all' ? 'No sold products found for this date range.' : `No products found for ${viewLabel.toLowerCase()} in this date range.`}
+            />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
 
       {currentView === 'all' ? (
         <div className="grid gap-6 lg:grid-cols-2">

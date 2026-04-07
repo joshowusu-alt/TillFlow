@@ -149,48 +149,7 @@ export default async function CashDrawerReportPage({
         />
       </div>
 
-      <div className="space-y-3 lg:hidden">
-        {shifts.length === 0 ? (
-          <div className="card p-4 text-center text-sm text-black/50">No shifts found in this date range.</div>
-        ) : (
-          shifts.map((shift) => (
-            <div key={shift.id} className="card p-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-ink">{shift.user.name}</p>
-                  <p className="mt-1 text-xs text-muted">{shift.till.store.name} • {shift.till.name}</p>
-                </div>
-                <span className="text-xs text-muted">{formatDateTime(shift.openedAt)}</span>
-              </div>
-              <div className="mt-3 grid gap-2 text-sm">
-                <div className="flex items-center justify-between gap-3"><span className="text-muted">Expected</span><span className="font-semibold">{formatMoney(shift.expectedCashPence, business.currency)}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-muted">Counted</span><span className="font-semibold">{shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, business.currency) : '-'}</span></div>
-                <div className="flex items-center justify-between gap-3"><span className="text-muted">Variance</span><span className={shift.variance === null ? 'text-black/40' : shift.variance === 0 ? 'text-emerald-700 font-semibold' : shift.variance > 0 ? 'text-accent font-semibold' : 'text-rose font-semibold'}>{shift.variance !== null ? formatMoney(shift.variance, business.currency) : '-'}</span></div>
-                {shift.variance !== null && shift.variance !== 0 && (
-                  <>
-                    {shift.varianceReasonCode && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted">Reason</span>
-                        <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">{reasonCodeLabel(shift.varianceReasonCode)}</span>
-                      </div>
-                    )}
-                    {(shift.varianceReason || shift.notes) && (
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted">Notes</span>
-                        <span className="text-right text-black/50">{notesText(shift.varianceReason, shift.notes)}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-                <div className="flex items-center justify-between gap-3"><span className="text-muted">Approved By</span><span className="text-right">{shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}</span></div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="hidden lg:block">
-      <ReportTableCard tableClassName="table w-full border-separate border-spacing-y-2">
+      <ReportTableCard tableClassName="table w-full min-w-[72rem] border-separate border-spacing-y-2">
         <thead>
           <tr>
             <th>Date</th>
@@ -259,7 +218,6 @@ export default async function CashDrawerReportPage({
           ) : null}
         </tbody>
       </ReportTableCard>
-      </div>
     </div>
   );
 }
