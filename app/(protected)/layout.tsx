@@ -91,7 +91,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip">
+    <div className="min-h-screen w-full max-w-full">
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
@@ -137,7 +137,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main id="main-content" className="w-full min-w-0 max-w-full overflow-x-clip px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <main id="main-content" className="w-full min-w-0 max-w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
         {children}
       </main>
     </div>

@@ -80,12 +80,18 @@
   --z-overlay: 40;
   --z-modal:   50;
   --z-toast:   60;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --app-header-height-mobile: 7.5rem;
+  --app-header-height-desktop: 5.75rem;
+  --app-header-offset: calc(var(--safe-area-top) + var(--app-header-height-mobile));
+  --app-header-offset-desktop: calc(var(--safe-area-top) + var(--app-header-height-desktop));
 }
 
 html {
   width: 100%;
   max-width: 100%;
   overflow-x: clip;
+  scroll-padding-top: var(--app-header-offset);
 }
 
 * {
@@ -125,6 +131,10 @@ main#main-content,
 main#main-content > * {
   min-width: 0;
   max-width: 100%;
+}
+
+main#main-content {
+  scroll-margin-top: var(--app-header-offset);
 }
 
 img,
@@ -184,10 +194,20 @@ input, select, textarea {
 }
 
 .nav-mobile-panel {
-  top: calc(76px + env(safe-area-inset-top, 0px));
+  top: calc(var(--app-header-offset) + 0.5rem);
   bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
   left: max(0.75rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
   right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
+}
+
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: var(--app-header-offset-desktop);
+  }
+
+  main#main-content {
+    scroll-margin-top: var(--app-header-offset-desktop);
+  }
 }
 
 /* =============================================
@@ -323,16 +343,15 @@ input, select, textarea {
 
   /* ----- Tables ----- */
   .table th {
-    @apply text-left text-xs font-semibold uppercase tracking-wider text-gray-500
-           bg-slate-50/90 px-4 py-3;
-    white-space: normal;
-    overflow-wrap: anywhere;
+     @apply text-left text-xs font-semibold uppercase tracking-wider text-gray-500
+            bg-slate-50/90 px-4 py-3;
+    white-space: nowrap;
   }
   .table td {
-    @apply text-sm px-4 py-3;
+     @apply text-sm px-4 py-3;
     min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
     vertical-align: top;
   }
   .table tr {
@@ -421,7 +440,13 @@ input, select, textarea {
   }
 
   .metric-chip {
-    @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600;
+     @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-600;
+  }
+
+  .app-shell-header {
+    @apply sticky top-0;
+    z-index: var(--z-nav);
+    padding-top: var(--safe-area-top);
   }
 }
 
@@ -431,6 +456,14 @@ input, select, textarea {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 1024px) {
+  .app-desktop-sidebar-sticky {
+    position: sticky;
+    top: calc(var(--app-header-offset-desktop) + 1rem);
+    align-self: flex-start;
+  }
 }
 
 @media (max-width: 1023px) {

@@ -2060,7 +2060,7 @@ export default function PosClient({
       </div>
 
       {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
-      <div className="hidden lg:block lg:h-fit lg:sticky lg:top-24 lg:self-start">
+      <div className="app-desktop-sidebar-sticky hidden lg:block lg:h-fit lg:self-start">
         <SummarySidebar
           business={business}
           store={store}

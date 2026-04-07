@@ -78,7 +78,7 @@ export default function TopNav({
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/88 backdrop-blur-2xl shadow-nav" role="banner">
+      <header className="app-shell-header border-b border-slate-200/70 bg-white/88 backdrop-blur-2xl shadow-nav" role="banner">
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>

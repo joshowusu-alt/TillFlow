@@ -95,9 +95,9 @@ describe('PosClient desktop layout', () => {
     const wrapper = summarySidebar.parentElement;
 
     expect(wrapper).not.toBeNull();
+    expect(wrapper?.className).toContain('app-desktop-sidebar-sticky');
+    expect(wrapper?.className).toContain('lg:block');
     expect(wrapper?.className).toContain('lg:h-fit');
-    expect(wrapper?.className).toContain('lg:sticky');
-    expect(wrapper?.className).toContain('lg:top-24');
     expect(wrapper?.className).toContain('lg:self-start');
   });
 
