@@ -283,7 +283,7 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
         )}
       </div>
 
-      <div className="card hidden overflow-hidden md:block">
+      <div className="card hidden overflow-hidden lg:block">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-black/[0.02]">

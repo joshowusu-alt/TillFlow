@@ -294,7 +294,7 @@ export default async function CardTransferReconciliationPage({
         )}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
       <div className="card overflow-x-auto p-4">
         <table className="table w-full border-separate border-spacing-y-2">
           <thead>

@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
+import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -195,36 +197,12 @@ export default async function MomoReconciliationPage({
         </form>
       </div>
 
-      <div className="card overflow-x-auto p-4">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Initiated</th>
-              <th>Payer</th>
-              <th>Amount</th>
-              <th>Status
-                <span className="tooltip-wrap ml-1 cursor-help align-middle">
-                  <svg className="inline h-3.5 w-3.5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="tooltip-content">
-                    <strong>Status Glossary</strong><br />
-                    <br />
-                    <strong>Pending</strong> — Payment initiated, waiting for customer to approve on their phone.<br />
-                    <strong>Confirmed</strong> — Customer approved. Funds are on the way.<br />
-                    <strong>Reconciled</strong> — Confirmed and matched to a sale in TillFlow.<br />
-                    <strong>Failed</strong> — Customer declined or an error occurred. You can retry.<br />
-                    <strong>Timeout</strong> — No response received. Re-check or re-initiate.
-                  </span>
-                </span>
-              </th>
-              <th>Provider Ref</th>
-              <th>Sale</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {collections.map((collection) => {
+      <ResponsiveDataTable
+        mobile={
+          collections.length === 0 ? (
+            <div className="card p-4 text-center text-sm text-black/50">No mobile money collections yet.</div>
+          ) : (
+            collections.map((collection) => {
               const statusTone =
                 collection.status === 'CONFIRMED'
                   ? 'bg-emerald-100 text-emerald-700'
@@ -238,76 +216,175 @@ export default async function MomoReconciliationPage({
               const canReinitiate = collection.status === 'FAILED' || collection.status === 'TIMEOUT';
 
               return (
-                <tr key={collection.id} className="rounded-xl bg-white align-top">
-                  <td className="px-3 py-3 text-xs">
-                    <div>{formatDateTime(collection.initiatedAt)}</div>
+                <DataCard key={collection.id}>
+                  <DataCardHeader
+                    title={collection.payerMsisdn}
+                    subtitle={formatDateTime(collection.initiatedAt)}
+                    aside={<span className={`pill ${statusTone}`}>{collection.status}</span>}
+                  />
+                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <DataCardField label="Amount" value={<span className="font-semibold text-ink">{formatMoney(collection.amountPence, collection.currency || business.currency)}</span>} />
+                    <DataCardField label="Network" value={`${collection.network} · ${collection.provider}`} />
+                    <DataCardField label="Provider ref" value={<span className="font-mono text-xs">{reference}</span>} />
+                    <DataCardField
+                      label="Sale"
+                      value={
+                        collection.salesInvoiceId ? (
+                          <Link className="text-emerald-700 hover:underline" href={`/receipts/${collection.salesInvoiceId}`}>
+                            {collection.salesInvoiceId.slice(0, 8)}
+                          </Link>
+                        ) : (
+                          <span className="text-black/40">Not linked</span>
+                        )
+                      }
+                    />
+                    <DataCardField className="sm:col-span-2" label="Provider status" value={collection.providerStatus ?? '-'} valueClassName="text-black/60" />
                     {collection.lastCheckedAt ? (
-                      <div className="text-black/50">Checked: {formatDateTime(collection.lastCheckedAt)}</div>
+                      <DataCardField className="sm:col-span-2" label="Last checked" value={formatDateTime(collection.lastCheckedAt)} valueClassName="text-black/60" />
                     ) : null}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    <div className="font-semibold">{collection.payerMsisdn}</div>
-                    <div className="text-xs text-black/50">
-                      {collection.network} | {collection.provider}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(collection.amountPence, collection.currency || business.currency)}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className={`pill ${statusTone}`}>{collection.status}</span>
-                    <div className="mt-1 text-[11px] text-black/50">{collection.providerStatus ?? '-'}</div>
                     {collection.failureReason ? (
-                      <details className="mt-1">
-                        <summary className="cursor-pointer text-[11px] text-rose hover:underline">Payment failed — Show reason</summary>
-                        <div className="mt-0.5 text-[11px] text-rose/80 font-mono">{collection.failureReason}</div>
-                      </details>
+                      <DataCardField className="sm:col-span-2" label="Failure reason" value={<span className="font-mono text-xs text-rose/80">{collection.failureReason}</span>} />
                     ) : null}
-                  </td>
-                  <td className="px-3 py-3 text-xs font-mono">{reference}</td>
-                  <td className="px-3 py-3 text-xs">
-                    {collection.salesInvoiceId ? (
-                      <Link
-                        className="text-emerald-700 hover:underline"
-                        href={`/receipts/${collection.salesInvoiceId}`}
-                      >
-                        {collection.salesInvoiceId.slice(0, 8)}
-                      </Link>
-                    ) : (
-                      <span className="text-black/40">Not linked</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-col gap-2">
-                      <form action={recheckMomoCollectionAction}>
+                  </div>
+                  <DataCardActions className="flex-col sm:flex-row">
+                    <form action={recheckMomoCollectionAction} className="w-full sm:w-auto">
+                      <input type="hidden" name="collectionId" value={collection.id} />
+                      <SubmitButton className="btn-ghost w-full text-xs" loadingText="Checking...">
+                        Re-check
+                      </SubmitButton>
+                    </form>
+                    {canReinitiate ? (
+                      <form action={reinitiateMomoCollectionAction} className="w-full sm:w-auto">
                         <input type="hidden" name="collectionId" value={collection.id} />
-                        <SubmitButton className="btn-ghost text-xs w-full" loadingText="Checking...">
-                          Re-check
+                        <SubmitButton className="btn-secondary w-full text-xs" loadingText="Retrying...">
+                          Re-initiate
                         </SubmitButton>
                       </form>
-                      {canReinitiate ? (
-                        <form action={reinitiateMomoCollectionAction}>
-                          <input type="hidden" name="collectionId" value={collection.id} />
-                          <SubmitButton className="btn-secondary text-xs w-full" loadingText="Retrying...">
-                            Re-initiate
-                          </SubmitButton>
-                        </form>
-                      ) : null}
-                    </div>
-                  </td>
-                </tr>
+                    ) : null}
+                  </DataCardActions>
+                </DataCard>
               );
-            })}
-            {collections.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
-                  No mobile money collections yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            })
+          )
+        }
+        desktop={
+          <div className="card p-4">
+            <div className="responsive-table-shell">
+              <table className="table w-full border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th>Initiated</th>
+                    <th>Payer</th>
+                    <th>Amount</th>
+                    <th>Status
+                      <span className="tooltip-wrap ml-1 cursor-help align-middle">
+                        <svg className="inline h-3.5 w-3.5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="tooltip-content">
+                          <strong>Status Glossary</strong><br />
+                          <br />
+                          <strong>Pending</strong> — Payment initiated, waiting for customer to approve on their phone.<br />
+                          <strong>Confirmed</strong> — Customer approved. Funds are on the way.<br />
+                          <strong>Reconciled</strong> — Confirmed and matched to a sale in TillFlow.<br />
+                          <strong>Failed</strong> — Customer declined or an error occurred. You can retry.<br />
+                          <strong>Timeout</strong> — No response received. Re-check or re-initiate.
+                        </span>
+                      </span>
+                    </th>
+                    <th>Provider Ref</th>
+                    <th>Sale</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {collections.map((collection) => {
+                    const statusTone =
+                      collection.status === 'CONFIRMED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : collection.status === 'PENDING'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-700';
+                    const reference =
+                      collection.providerTransactionId ??
+                      collection.providerReference ??
+                      collection.id.slice(0, 8);
+                    const canReinitiate = collection.status === 'FAILED' || collection.status === 'TIMEOUT';
+
+                    return (
+                      <tr key={collection.id} className="rounded-xl bg-white align-top">
+                        <td className="px-3 py-3 text-xs">
+                          <div>{formatDateTime(collection.initiatedAt)}</div>
+                          {collection.lastCheckedAt ? (
+                            <div className="text-black/50">Checked: {formatDateTime(collection.lastCheckedAt)}</div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3 text-sm">
+                          <div className="font-semibold">{collection.payerMsisdn}</div>
+                          <div className="text-xs text-black/50">
+                            {collection.network} | {collection.provider}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-sm font-semibold">
+                          {formatMoney(collection.amountPence, collection.currency || business.currency)}
+                        </td>
+                        <td className="px-3 py-3 text-sm">
+                          <span className={`pill ${statusTone}`}>{collection.status}</span>
+                          <div className="mt-1 text-[11px] text-black/50">{collection.providerStatus ?? '-'}</div>
+                          {collection.failureReason ? (
+                            <details className="mt-1">
+                              <summary className="cursor-pointer text-[11px] text-rose hover:underline">Payment failed — Show reason</summary>
+                              <div className="mt-0.5 text-[11px] text-rose/80 font-mono">{collection.failureReason}</div>
+                            </details>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3 text-xs font-mono">{reference}</td>
+                        <td className="px-3 py-3 text-xs">
+                          {collection.salesInvoiceId ? (
+                            <Link
+                              className="text-emerald-700 hover:underline"
+                              href={`/receipts/${collection.salesInvoiceId}`}
+                            >
+                              {collection.salesInvoiceId.slice(0, 8)}
+                            </Link>
+                          ) : (
+                            <span className="text-black/40">Not linked</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-2">
+                            <form action={recheckMomoCollectionAction}>
+                              <input type="hidden" name="collectionId" value={collection.id} />
+                              <SubmitButton className="btn-ghost text-xs w-full" loadingText="Checking...">
+                                Re-check
+                              </SubmitButton>
+                            </form>
+                            {canReinitiate ? (
+                              <form action={reinitiateMomoCollectionAction}>
+                                <input type="hidden" name="collectionId" value={collection.id} />
+                                <SubmitButton className="btn-secondary text-xs w-full" loadingText="Retrying...">
+                                  Re-initiate
+                                </SubmitButton>
+                              </form>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {collections.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
+                        No mobile money collections yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      />
     </div>
   );
 }

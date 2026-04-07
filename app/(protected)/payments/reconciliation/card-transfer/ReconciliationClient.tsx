@@ -155,7 +155,7 @@ export function TransactionDrillDown({
         ))}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
         <table className="table w-full border-separate border-spacing-y-1">
           <thead>
             <tr>

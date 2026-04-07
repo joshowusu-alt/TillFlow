@@ -145,7 +145,7 @@ export default async function StocktakePage() {
               </div>
             ))}
           </div>
-          <div className="card hidden overflow-hidden md:block">
+          <div className="card hidden overflow-hidden lg:block">
             <table className="table w-full">
               <thead>
                 <tr>

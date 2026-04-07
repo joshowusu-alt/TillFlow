@@ -189,7 +189,7 @@ export default async function CashDrawerReportPage({
         )}
       </div>
 
-      <div className="hidden md:block">
+      <div className="hidden lg:block">
       <ReportTableCard tableClassName="table w-full border-separate border-spacing-y-2">
         <thead>
           <tr>
