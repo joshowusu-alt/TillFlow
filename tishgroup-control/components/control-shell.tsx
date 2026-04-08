@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 
 type ControlShellStaff = {
   name: string;
@@ -21,9 +21,106 @@ const navigation = [
 
 export default function ControlShell({ children, staff }: { children: ReactNode; staff: ControlShellStaff }) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const currentSection = useMemo(
+    () => navigation.find((item) => (item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))) ?? navigation[0],
+    [pathname]
+  );
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mobileMenuOpen]);
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-6 px-4 py-5 sm:px-6 lg:px-8">
+    <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 px-3 py-3 sm:gap-6 sm:px-6 sm:py-5 lg:px-8">
+      {mobileMenuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-[#122126]/45 backdrop-blur-[2px]"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-[22rem] flex-col border-l border-black/10 bg-[#122126] px-5 py-5 text-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
+                <div className="mt-2 text-2xl font-semibold tracking-tight">Tish Group Control</div>
+                <div className="mt-2 text-sm text-white/66">{staff.name} · {staff.role.replace(/_/g, ' ')}</div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMobileMenuOpen(false)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/8 text-white transition hover:bg-white/12"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+
+            <nav className="mt-8 space-y-2">
+              {navigation.map((item) => {
+                const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    <span className="text-[10px] uppercase tracking-[0.18em]">Ops</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="mt-auto space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Signed in</div>
+                <div className="mt-2 font-semibold text-white">{staff.name}</div>
+                <div className="mt-1 text-xs text-white/60">{staff.email}</div>
+              </div>
+
+              <p className="leading-6">
+                Tillflow enforces access. Tish Group Control manages subscription, collections, and relationship follow-up.
+              </p>
+
+              <Link
+                href="/logout"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/12"
+              >
+                Sign out
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <aside className="hidden w-[280px] shrink-0 flex-col justify-between rounded-panel border border-black/10 bg-[#122126] px-5 py-5 text-white shadow-dashboard lg:flex">
         <div className="space-y-6">
           <div className="space-y-2">
@@ -79,7 +176,53 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-6">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
+        <div className="panel sticky top-3 z-30 border-black/8 bg-[rgba(255,255,255,0.92)] p-3 shadow-lg lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="eyebrow">Tish Group Control</div>
+              <div className="truncate text-lg font-semibold text-control-ink">{currentSection.label}</div>
+            </div>
+            <button
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen(true)}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-black/6 bg-[#f7f4ef] px-3 py-2.5 text-sm text-black/62">
+            <div className="min-w-0">
+              <div className="truncate font-semibold text-control-ink">{staff.name}</div>
+              <div className="truncate text-xs text-black/52">{staff.role.replace(/_/g, ' ')} · {staff.email}</div>
+            </div>
+          </div>
+
+          <nav className="mobile-nav-strip -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+            {navigation.map((item) => {
+              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition ${
+                    active ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/58 hover:bg-black/[0.03]'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        {children}
+      </div>
     </div>
   );
 }

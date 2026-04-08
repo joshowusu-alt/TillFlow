@@ -123,7 +123,7 @@ export default async function BusinessDetailPage({
               title="What Tishgroup needs to know right now"
               description="This is the live account posture: what was sold, what access remains, what money is outstanding, and what relationship owner is on point."
             />
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Purchased plan</div>
                 <div className="mt-2 text-lg font-semibold text-control-ink">{business.plan}</div>

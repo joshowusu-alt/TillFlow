@@ -42,7 +42,7 @@ export default async function StaffPage({
         />
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="panel p-6">
           <SectionHeading
             eyebrow="Create staff"
@@ -92,7 +92,46 @@ export default async function StaffPage({
             />
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-3 p-4 md:hidden">
+            {staffDirectory.map((entry) => (
+              <div key={entry.id} className="mobile-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-control-ink">{entry.name}</div>
+                    <div className="mt-1 text-xs text-black/55">{entry.email}</div>
+                  </div>
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${entry.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                    {entry.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="mobile-card-grid">
+                  <div>
+                    <div className="mobile-card-label">Role</div>
+                    <div className="mobile-card-value">{entry.role.replace(/_/g, ' ')}</div>
+                  </div>
+                  <div>
+                    <div className="mobile-card-label">Created</div>
+                    <div className="mobile-card-value">{entry.createdAt}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  {canEditStaff ? (
+                    <form action={toggleControlStaffAction}>
+                      <input type="hidden" name="staffId" value={entry.id} />
+                      <input type="hidden" name="makeActive" value={entry.active ? 'false' : 'true'} />
+                      <button type="submit" className="inline-flex w-full rounded-2xl border border-black/12 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                        {entry.active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    </form>
+                  ) : <span className="text-xs text-black/45">View only</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="data-table">
               <thead>
                 <tr>

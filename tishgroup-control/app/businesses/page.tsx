@@ -86,11 +86,11 @@ export default async function BusinessesPage({
           description="Use this quick panel to pick a business, move it between Starter, Growth, and Pro, and set the subscription start date plus monthly or annual billing without opening a separate screen."
         />
 
-        <form action={updateControlSubscriptionAction} className="mt-5 grid gap-4 xl:grid-cols-2">
+        <form action={updateControlSubscriptionAction} className="mt-5 grid gap-4 sm:grid-cols-2">
           <input type="hidden" name="returnPath" value="/businesses" />
           <input type="hidden" name="status" value="ACTIVE" />
 
-          <label className="block space-y-1 text-sm xl:col-span-2">
+          <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium text-control-ink">Business</span>
             <select name="businessId" defaultValue={filteredBusinesses[0]?.id ?? managedBusinesses[0]?.id ?? ''} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required>
               {managedBusinesses.map((business) => (
@@ -128,11 +128,11 @@ export default async function BusinessesPage({
             <input type="date" name="nextDueDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
           </label>
 
-          <p className="text-sm text-black/60 xl:col-span-2">
+          <p className="text-sm text-black/60 sm:col-span-2">
             Leave the first due date blank to let TG Control calculate it from the start date and whether the business is monthly or annual.
           </p>
 
-          <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] xl:col-span-2 xl:w-fit">
+          <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
             Save billing setup
           </button>
         </form>
@@ -146,7 +146,7 @@ export default async function BusinessesPage({
             description="This lets TG assign the current unreviewed set to a manager, mark them reviewed, and optionally set the sold plan to Growth or Pro in one pass."
           />
 
-          <form action={bulkReviewControlBusinessesAction} className="mt-5 grid gap-4 xl:grid-cols-2">
+          <form action={bulkReviewControlBusinessesAction} className="mt-5 grid gap-4 sm:grid-cols-2">
             <input type="hidden" name="businessIds" value={filteredBusinesses.map((business) => business.id).join(',')} />
 
             <label className="block space-y-1 text-sm">
@@ -188,12 +188,12 @@ export default async function BusinessesPage({
               <input type="date" name="nextDueDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
             </label>
 
-            <label className="block space-y-1 text-sm xl:col-span-2">
+            <label className="block space-y-1 text-sm sm:col-span-2">
               <span className="font-medium text-control-ink">Bulk review note</span>
               <input type="text" name="reviewNote" placeholder="Optional note to append to each reviewed business" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
             </label>
 
-            <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] xl:col-span-2 xl:w-fit">
+            <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
               Review {filteredBusinesses.length} businesses
             </button>
           </form>
@@ -201,7 +201,56 @@ export default async function BusinessesPage({
       ) : null}
 
       <section className="panel overflow-hidden p-0">
-        <div className="overflow-x-auto">
+        <div className="space-y-3 p-4 md:hidden">
+          {filteredBusinesses.length > 0 ? filteredBusinesses.map((business) => (
+            <div key={business.id} className="mobile-card">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
+                    {business.name}
+                  </Link>
+                  <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.assignedManager}</div>
+                </div>
+                <HealthPill health={business.health} />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <PlanPill plan={business.plan} />
+                {business.plan !== business.effectivePlan ? <PlanPill plan={business.effectivePlan} /> : null}
+                <StatePill state={business.state} />
+              </div>
+
+              <div className="mobile-card-grid">
+                <div>
+                  <div className="mobile-card-label">Cadence</div>
+                  <div className="mobile-card-value">{business.billingCadence}</div>
+                </div>
+                <div>
+                  <div className="mobile-card-label">Next due</div>
+                  <div className="mobile-card-value">{business.nextDueAt}</div>
+                </div>
+                <div>
+                  <div className="mobile-card-label">Outstanding</div>
+                  <div className="mobile-card-value">{formatCedi(business.outstandingAmount)}</div>
+                </div>
+                <div>
+                  <div className="mobile-card-label">Reviewed</div>
+                  <div className="mobile-card-value">{business.reviewedAt ?? 'Pending'}</div>
+                </div>
+              </div>
+
+              {business.needsReview ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b35c2e]">Needs review</div> : null}
+
+              <Link href={`/businesses/${business.id}`} className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                Open billing
+              </Link>
+            </div>
+          )) : (
+            <div className="mobile-card text-sm text-black/58">No businesses match this filter.</div>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="data-table">
             <thead>
               <tr>

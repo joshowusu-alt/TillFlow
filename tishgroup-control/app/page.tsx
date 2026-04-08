@@ -16,8 +16,8 @@ export default async function PortfolioPage() {
 
   return (
     <div className="space-y-6">
-      <section className="panel overflow-hidden p-7 sm:p-8">
-        <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr] xl:items-end">
+      <section className="panel overflow-hidden p-5 sm:p-8">
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-end">
           <div className="space-y-4">
             <div className="eyebrow">Tishgroup portfolio control</div>
             <h1 className="page-title font-[var(--font-display)] text-control-ink">Run Tillflow like a managed software business, not a loose collection of accounts.</h1>
@@ -46,7 +46,7 @@ export default async function PortfolioPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Portfolio MRR" value={formatCedi(summary.mrr)} hint="Monthly-equivalent recurring revenue across Starter, Growth, and Pro tenants." accent="Finance" />
         <KpiCard label="Due This Week" value={String(summary.dueSoon)} hint="Accounts that should be contacted before they cross into overdue handling." accent="Collections" />
         <KpiCard label="Fallback + Locked" value={String(summary.fallback + summary.readOnly)} hint="Businesses already degraded to Starter fallback or fully read-only and needing escalation." accent="Risk" />
@@ -60,7 +60,39 @@ export default async function PortfolioPage() {
           description="Every newly created business should land here automatically so Tishgroup can confirm owner details, plan, and first billing expectations without blocking the business from running."
         />
 
-        <div className="mt-5 overflow-x-auto">
+        <div className="mt-5 space-y-3 md:hidden">
+          {unreviewedBusinesses.length > 0 ? unreviewedBusinesses.map((business) => (
+            <div key={business.id} className="mobile-card">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
+                    {business.name}
+                  </Link>
+                  <div className="mt-1 text-xs text-black/55">No completed Tishgroup review yet</div>
+                </div>
+                <PlanPill plan={business.plan} />
+              </div>
+              <div className="mobile-card-grid">
+                <div>
+                  <div className="mobile-card-label">Owner</div>
+                  <div className="mobile-card-value">{business.ownerName}</div>
+                </div>
+                <div>
+                  <div className="mobile-card-label">Signed up</div>
+                  <div className="mobile-card-value">{business.signedUpAt}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="mobile-card-label">Next step</div>
+                  <div className="mobile-card-value text-black/62">Open the account, confirm plan, and capture the first internal note.</div>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <div className="mobile-card text-sm text-black/58">No unreviewed accounts right now.</div>
+          )}
+        </div>
+
+        <div className="mt-5 hidden overflow-x-auto md:block">
           <table className="data-table">
             <thead>
               <tr>
@@ -98,7 +130,7 @@ export default async function PortfolioPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="panel p-6">
           <SectionHeading
             eyebrow="Urgent queue"
@@ -106,7 +138,42 @@ export default async function PortfolioPage() {
             description="The handful of businesses that need follow-up before revenue leaks, access locks, or churn risk deepens."
           />
 
-          <div className="mt-5 overflow-x-auto">
+          <div className="mt-5 space-y-3 md:hidden">
+            {urgentBusinesses.length > 0 ? urgentBusinesses.map((business) => (
+              <div key={business.id} className="mobile-card">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
+                      {business.name}
+                    </Link>
+                    <div className="mt-1 text-xs text-black/55">Assigned to {business.assignedManager}</div>
+                  </div>
+                  <StatePill state={business.state} />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <PlanPill plan={business.plan} />
+                </div>
+                <div className="mobile-card-grid">
+                  <div>
+                    <div className="mobile-card-label">Outstanding</div>
+                    <div className="mobile-card-value">{formatCedi(business.outstandingAmount)}</div>
+                  </div>
+                  <div>
+                    <div className="mobile-card-label">Owner</div>
+                    <div className="mobile-card-value">{business.ownerName}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="mobile-card-label">Phone</div>
+                    <div className="mobile-card-value">{business.ownerPhone}</div>
+                  </div>
+                </div>
+              </div>
+            )) : (
+              <div className="mobile-card text-sm text-black/58">No urgent businesses right now.</div>
+            )}
+          </div>
+
+          <div className="mt-5 hidden overflow-x-auto md:block">
             <table className="data-table">
               <thead>
                 <tr>
