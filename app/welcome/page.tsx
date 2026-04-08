@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
 
 const features = [
   {
@@ -9,7 +10,7 @@ const features = [
       </svg>
     ),
     title: 'Lightning-Fast POS',
-    desc: 'Scan barcodes, process payments, and print receipts in seconds. Keyboard shortcuts make every sale effortless.',
+    desc: 'Barcode speed, phone-camera scanning, quick payments, and receipt printing that keep the line moving.',
   },
   {
     icon: (
@@ -18,7 +19,7 @@ const features = [
       </svg>
     ),
     title: 'Real-Time Inventory',
-    desc: 'Track stock across units - pieces, cartons, crates. Get low-stock alerts and never run out of your best sellers.',
+    desc: 'Track stock across pieces, packs, cartons, and crates without losing clarity.',
   },
   {
     icon: (
@@ -27,7 +28,7 @@ const features = [
       </svg>
     ),
     title: 'Works Offline',
-    desc: 'No internet? No problem. Make sales offline and everything syncs automatically when you reconnect.',
+    desc: 'Keep selling through unstable internet, then sync cleanly when the connection returns.',
   },
   {
     icon: (
@@ -36,7 +37,7 @@ const features = [
       </svg>
     ),
     title: 'Full Accounting',
-    desc: 'Double-entry bookkeeping built in. Income statements, balance sheets, and cashflow reports - all automatic.',
+    desc: 'Built-in accounting with the financial visibility owners usually chase manually.',
   },
   {
     icon: (
@@ -45,7 +46,7 @@ const features = [
       </svg>
     ),
     title: 'Multi-Role Access',
-    desc: 'Owner, Manager, and Cashier roles with granular permissions. Everyone sees only what they need.',
+    desc: 'Owner, manager, and cashier access that keeps the shop controlled without slowing work.',
   },
   {
     icon: (
@@ -54,15 +55,84 @@ const features = [
       </svg>
     ),
     title: 'Install as App',
-    desc: 'Install on any device - phone, tablet, or desktop. Full-screen, fast, and works just like a native app.',
+    desc: 'Install on phone, tablet, or desktop for a fast full-screen setup that feels native.',
   },
 ];
 
-const stats = [
-  { value: '21+', label: 'Demo Products' },
-  { value: '22+', label: 'Currencies' },
-  { value: '<2s', label: 'Per Transaction' },
-  { value: '100%', label: 'Offline Ready' },
+const businessTypes = [
+  'Supermarkets',
+  'Mini marts',
+  'Provision shops',
+  'Pharmacies',
+  'Beauty supply stores',
+  'Wholesale counters',
+];
+
+const ownerOutcomes = [
+  {
+    title: 'Sell through busy hours without slowing the queue',
+    desc: 'Fast checkout and clean till flow keep staff moving when the counter gets busy.',
+  },
+  {
+    title: 'Track stock the way the shelf actually works',
+    desc: 'Mixed units stay manageable without forcing the team into awkward workarounds.',
+  },
+  {
+    title: 'See the business clearly at closing time',
+    desc: 'Sales, margins, expenses, and cash position stay visible without end-of-day guesswork.',
+  },
+];
+
+const testimonials = [
+  {
+    title: 'Offline selling stayed calm',
+    quote:
+      'The network went off. TillFlow did not. We sold normally, and once the network was back everything synced on its own without any issues.',
+  },
+  {
+    title: 'Closing business became easier',
+    quote:
+      'TillFlow helps in closing business easily. We have shifts, we see what is expected to be there, and we close with comments for any positive or negative variance which the owner sees.',
+  },
+  {
+    title: 'Profit visibility improved decision-making',
+    quote:
+      'We have seen profitable products more clearly. It was difficult to keep track as the business grew to over 1,000 products, but TillFlow has been a rock where sound decisions have been made.',
+  },
+];
+
+const planPreview: WelcomePlanPreview[] = [
+  {
+    name: 'Starter',
+    monthlyPrice: 199,
+    note: 'Lean single-store start',
+    bullets: [
+      'POS, products, customers, and inventory basics',
+      'Offline-ready selling with receipts and simple setup',
+      'Best for shops starting with one branch and a lean team',
+    ],
+  },
+  {
+    name: 'Growth',
+    monthlyPrice: 349,
+    note: 'Best fit for most stores',
+    featured: true,
+    bullets: [
+      'Everything in Starter, plus stronger controls and reporting',
+      'Margins, accounting visibility, reorder support, and owner insight',
+      'Best for serious supermarkets that want tighter operational discipline',
+    ],
+  },
+  {
+    name: 'Pro',
+    monthlyPrice: 699,
+    note: 'For larger operational control',
+    bullets: [
+      'Everything in Growth, plus broader owner command capability',
+      'Best for more complex operations and multi-branch growth',
+      'Built for operators who want stronger oversight and control depth',
+    ],
+  },
 ];
 
 const previewCartItems = [
@@ -121,14 +191,13 @@ export default function WelcomePage() {
             </div>
 
             <h1 className="text-5xl font-bold font-display tracking-tight text-gray-900 sm:text-6xl lg:text-7xl">
-              Run Your Business{' '}
+              Run Your Business Like a Pro.{' '}
               <span className="bg-gradient-to-r from-accent to-accent/80 bg-clip-text text-transparent">
-                Like a Pro
+                Stay in Control.
               </span>
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-black/60 sm:text-xl">
-              The all-in-one POS system that handles sales, inventory, and accounting
-              — even when the internet goes down. Set up in under 5 minutes.
+              Sell fast, track stock clearly, and keep cash, margins, and reports visible even when the internet drops.
             </p>
 
             {/* CTAs */}
@@ -140,13 +209,13 @@ export default function WelcomePage() {
                 <svg className="h-5 w-5 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                 </svg>
-                Try Live Demo
+                See Live Demo
               </Link>
               <Link
                 href="/register"
                 className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-accent/20 hover:shadow-xl hover:-translate-y-0.5"
               >
-                Create My Business
+                Start My Setup
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </svg>
@@ -157,16 +226,31 @@ export default function WelcomePage() {
             <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-black/40">
               <span className="flex items-center gap-1.5">
                 <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                Start without card setup
+                Offline-ready selling
               </span>
               <span className="flex items-center gap-1.5">
                 <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                Setup in 5 minutes
+                Mixed-unit inventory
               </span>
               <span className="flex items-center gap-1.5">
                 <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
-                Works offline
+                Built-in accounting
               </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="h-4 w-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" /></svg>
+                Daily owner visibility
+              </span>
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5">
+              {businessTypes.map((type) => (
+                <span
+                  key={type}
+                  className="rounded-full border border-black/5 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/50 shadow-sm backdrop-blur-sm"
+                >
+                  {type}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -235,42 +319,36 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      {/* Stats */}
-      <section className="relative py-16 px-6">
-        <div className="mx-auto max-w-4xl">
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="text-center">
-                <div className="text-3xl font-bold font-display text-accent">{s.value}</div>
-                <div className="mt-1 text-sm text-black/50">{s.label}</div>
+      <section className="relative px-6 pb-6">
+        <div className="mx-auto max-w-6xl rounded-[2rem] border border-black/5 bg-gradient-to-br from-white/85 to-accentSoft/55 p-6 shadow-sm backdrop-blur-sm sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black/45">
+                Real store feedback
               </div>
-            ))}
+              <h2 className="mt-4 text-3xl font-bold font-display text-gray-900 sm:text-4xl">
+                What a live business is saying after switching fully to TillFlow.
+              </h2>
+              <p className="mt-3 text-base leading-7 text-black/55">
+                These are real-life comments from a business now running daily operations on TillFlow. They show what matters once the system is no longer a trial and has become part of normal trade.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-black/5 bg-white/80 px-4 py-3 text-left text-sm text-black/50 shadow-sm">
+              From offline selling to shift closing and product profitability, the value is showing up in day-to-day decisions.
+            </div>
           </div>
-        </div>
-      </section>
 
-      {/* Features Grid */}
-      <section className="relative py-20 px-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold font-display sm:text-4xl">
-              Everything Your Business Needs
-            </h2>
-            <p className="mt-4 text-lg text-black/50">
-              From your first sale to your month-end reports, one system handles it all.
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+            {testimonials.map((testimonial) => (
               <div
-                key={f.title}
-                className="group rounded-2xl border border-black/5 bg-white/80 p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-accent/20"
+                key={testimonial.title}
+                className="rounded-2xl border border-black/5 bg-white/85 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="mb-4 inline-flex rounded-xl bg-accentSoft p-3 text-accent transition-colors group-hover:bg-accent/20">
-                  {f.icon}
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/35">Live store testimonial</div>
+                <h3 className="mt-3 text-xl font-semibold font-display leading-8 text-gray-900">{testimonial.title}</h3>
+                <div className="mt-4 rounded-2xl bg-accentSoft/70 px-4 py-4 text-sm leading-7 text-black/60">
+                  "{testimonial.quote}"
                 </div>
-                <h3 className="text-lg font-semibold font-display">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-black/50">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -302,16 +380,75 @@ export default function WelcomePage() {
         </div>
       </section>
 
+      <section className="relative px-6 py-6">
+        <div className="mx-auto max-w-6xl rounded-[2rem] border border-black/5 bg-white/75 p-6 shadow-sm backdrop-blur-sm sm:p-8">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-accent/15 bg-accentSoft px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                Built for real retail rhythm
+              </div>
+              <h2 className="mt-4 text-3xl font-bold font-display text-gray-900 sm:text-4xl">
+                Clean for staff. Serious where the owner feels the pressure.
+              </h2>
+              <p className="mt-4 max-w-lg text-base leading-7 text-black/55">
+                This is where TillFlow earns its place: unstable internet, mixed-unit stock, fast tills, and the need to close the day with real visibility instead of guesswork.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              {ownerOutcomes.map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="mb-3 h-2 w-12 rounded-full bg-gradient-to-r from-accent to-blue-400" />
+                  <h3 className="text-base font-semibold font-display text-gray-900">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-black/50">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section className="relative py-20 px-6">
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold font-display sm:text-4xl">
+              Everything Your Business Needs
+            </h2>
+            <p className="mt-4 text-lg text-black/50">
+              From the first sale to the closing numbers, one system keeps the shop moving.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((f) => (
+              <div
+                key={f.title}
+                className="group rounded-2xl border border-black/5 bg-white/80 p-6 shadow-sm transition-all hover:shadow-lg hover:-translate-y-1 hover:border-accent/20"
+              >
+                <div className="mb-4 inline-flex rounded-xl bg-accentSoft p-3 text-accent transition-colors group-hover:bg-accent/20">
+                  {f.icon}
+                </div>
+                <h3 className="text-lg font-semibold font-display">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-black/50">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="relative py-24 px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold font-display sm:text-4xl">
-            Ready to Transform Your Business?
+            Pick the setup that matches how your business runs today.
           </h2>
           <p className="mt-4 text-lg text-black/50">
-            Join retailers across Ghana and Africa using TillFlow to simplify daily operations.
-            Start with a free demo or create your business today.
+            Start with Starter, move into Growth when reporting and control matter more, and step into Pro when the operation gets broader.
           </p>
+          <WelcomePricingPreview plans={planPreview} />
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
               href="/register?mode=demo"
