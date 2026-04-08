@@ -1,7 +1,9 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
 import '@/app/globals.css';
 import ControlShell from '@/components/control-shell';
+import InstallPrompt from '@/components/InstallPrompt';
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import { getControlStaffOptional } from '@/lib/control-auth';
 
 const bodyFont = IBM_Plex_Sans({
@@ -19,6 +21,27 @@ const displayFont = Space_Grotesk({
 export const metadata: Metadata = {
   title: 'Tish Group Control',
   description: 'Internal portfolio and commercial control plane for Tillflow businesses.',
+  manifest: '/manifest.webmanifest',
+  applicationName: 'Tish Group Control',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Tish Group Control',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: '/api/icon?size=192', sizes: '192x192', type: 'image/png' },
+      { url: '/api/icon?size=512', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/api/icon?size=180', sizes: '180x180', type: 'image/png' }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#122126',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +50,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body className="font-[var(--font-body)] antialiased">
+        <ServiceWorkerRegistration />
+        <InstallPrompt />
         {staff ? (
           <ControlShell staff={staff}>{children}</ControlShell>
         ) : children}
