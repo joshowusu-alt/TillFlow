@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model Business {
+  id               String                 @id @default(cuid())
+  name             String
+  phone            String?
+  plan             String                 @default("STARTER")
+  planStatus       String                 @default("ACTIVE")
+  trialEndsAt      DateTime?
+  planSetAt        DateTime               @default(now())
+  lastPaymentAt    DateTime?
+  nextPaymentDueAt DateTime?
+  billingNotes     String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  users            User[]
+  stores           Store[]
+  salesInvoices    SalesInvoice[]
+  controlProfile   ControlBusinessProfile?
+}
+
+model User {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  email      String   @unique
+  role       String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, role])
+}
+
+model Store {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model SalesInvoice {
+  id         String   @id @default(cuid())
+  businessId String
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, createdAt])
+}
+
+model ControlStaff {
+  id                 String                   @id @default(cuid())
+  name               String
+  email              String                   @unique
+  role               String                   @default("ACCOUNT_MANAGER")
+  active             Boolean                  @default(true)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  assignedBusinesses ControlBusinessProfile[] @relation("ControlBusinessAssignedManager")
+  reviewedBusinesses ControlBusinessProfile[] @relation("ControlBusinessReviewedBy")
+  receivedPayments   ControlPayment[]         @relation("ControlPaymentReceivedBy")
+  authoredNotes      ControlNote[]            @relation("ControlNoteAuthoredBy")
+}
+
+model ControlBusinessProfile {
+  id                String               @id @default(cuid())
+  businessId        String               @unique
+  ownerName         String?
+  ownerPhone        String?
+  ownerEmail        String?
+  assignedManagerId String?
+  reviewedByStaffId String?
+  reviewedAt        DateTime?
+  supportStatus     String               @default("HEALTHY")
+  lastActivityAt    DateTime?
+  notes             String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  business          Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignedManager   ControlStaff?        @relation("ControlBusinessAssignedManager", fields: [assignedManagerId], references: [id])
+  reviewedByStaff   ControlStaff?        @relation("ControlBusinessReviewedBy", fields: [reviewedByStaffId], references: [id])
+  subscription      ControlSubscription?
+  payments          ControlPayment[]
+  notesEntries      ControlNote[]
+
+  @@index([assignedManagerId])
+  @@index([reviewedByStaffId])
+  @@index([supportStatus])
+}
+
+model ControlSubscription {
+  id                     String                 @id @default(cuid())
+  controlBusinessId      String                 @unique
+  purchasedPlan          String
+  status                 String                 @default("ACTIVE")
+  billingCadence         String                 @default("MONTHLY")
+  startDate              DateTime               @default(now())
+  nextDueDate            DateTime?
+  lastPaymentDate        DateTime?
+  readOnlyAt             DateTime?
+  effectivePlanOverride  String?
+  gracePolicyVersion     String?
+  monthlyValuePence      Int                    @default(0)
+  outstandingAmountPence Int                    @default(0)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  controlBusiness        ControlBusinessProfile @relation(fields: [controlBusinessId], references: [id], onDelete: Cascade)
+
+  @@index([purchasedPlan, status])
+  @@index([nextDueDate])
+}
+
+model ControlPayment {
+  id                String                 @id @default(cuid())
+  controlBusinessId String
+  amountPence       Int
+  currency          String                 @default("GHS")
+  paidAt            DateTime
+  method            String
+  reference         String?
+  note              String?
+  receivedByStaffId String?
+  createdAt         DateTime               @default(now())
+  controlBusiness   ControlBusinessProfile @relation(fields: [controlBusinessId], references: [id], onDelete: Cascade)
+  receivedByStaff   ControlStaff?          @relation("ControlPaymentReceivedBy", fields: [receivedByStaffId], references: [id])
+
+  @@index([controlBusinessId, paidAt])
+  @@index([receivedByStaffId])
+}
+
+model ControlNote {
+  id                String                 @id @default(cuid())
+  controlBusinessId String
+  category          String                 @default("GENERAL")
+  note              String
+  createdByStaffId  String?
+  createdAt         DateTime               @default(now())
+  controlBusiness   ControlBusinessProfile @relation(fields: [controlBusinessId], references: [id], onDelete: Cascade)
+  createdByStaff    ControlStaff?          @relation("ControlNoteAuthoredBy", fields: [createdByStaffId], references: [id])
+
+  @@index([controlBusinessId, createdAt])
+  @@index([createdByStaffId])
+}

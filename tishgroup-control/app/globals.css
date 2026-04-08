@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f7f4ef;
+  --surface: rgba(255, 255, 255, 0.84);
+  --surface-strong: #ffffff;
+  --line: rgba(21, 39, 43, 0.12);
+  --ink: #15272b;
+  --muted: rgba(21, 39, 43, 0.66);
+  --teal: #1f8a82;
+  --moss: #2f6f56;
+  --gold: #e2a83d;
+  --ember: #b35c2e;
+  --danger: #a84432;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(31, 138, 130, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(226, 168, 61, 0.18), transparent 22%),
+    linear-gradient(180deg, #fcfaf6 0%, var(--bg) 100%);
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  background: transparent;
+}
+
+* {
+  border-color: var(--line);
+}
+
+.panel {
+  @apply rounded-panel border shadow-dashboard;
+  background: var(--surface);
+  backdrop-filter: blur(10px);
+}
+
+.metric-card {
+  @apply panel p-5;
+}
+
+.data-table {
+  @apply w-full border-separate border-spacing-0 text-sm;
+}
+
+.data-table th {
+  @apply border-b px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em];
+  color: rgba(21, 39, 43, 0.5);
+}
+
+.data-table td {
+  @apply border-b px-4 py-3 align-top;
+}
+
+.eyebrow {
+  @apply text-[11px] font-semibold uppercase tracking-[0.2em];
+  color: rgba(21, 39, 43, 0.52);
+}
+
+.page-title {
+  @apply font-semibold tracking-tight;
+  font-size: clamp(2rem, 3vw, 3.4rem);
+  line-height: 0.95;
+}
+
+.section-title {
+  @apply text-xl font-semibold tracking-tight;
+}

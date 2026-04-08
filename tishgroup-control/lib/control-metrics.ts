@@ -1,0 +1,92 @@
+import { managedBusinesses, planRates, type ManagedBusiness } from '@/lib/control-data';
+
+function sum(values: number[]) {
+  return values.reduce((total, value) => total + value, 0);
+}
+
+export function formatCedi(value: number) {
+  return `GHc ${value.toLocaleString('en-GH')}`;
+}
+
+export function getPortfolioSummary() {
+  return getPortfolioSummaryFor(managedBusinesses);
+}
+
+export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
+  const totalBusinesses = businesses.length;
+  const mrr = sum(businesses.map((business) => business.monthlyValue));
+  const expectedCollections = sum(
+    businesses
+      .filter((business) => business.state === 'DUE_SOON' || business.state === 'GRACE' || business.state === 'STARTER_FALLBACK' || business.state === 'READ_ONLY')
+      .map((business) => business.outstandingAmount)
+  );
+  const activePaid = businesses.filter((business) => business.state === 'ACTIVE').length;
+  const dueSoon = businesses.filter((business) => business.state === 'DUE_SOON').length;
+  const grace = businesses.filter((business) => business.state === 'GRACE').length;
+  const fallback = businesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
+  const readOnly = businesses.filter((business) => business.state === 'READ_ONLY').length;
+
+  return {
+    totalBusinesses,
+    mrr,
+    arr: mrr * 12,
+    expectedCollections,
+    activePaid,
+    dueSoon,
+    grace,
+    fallback,
+    readOnly,
+  };
+}
+
+export function getRevenueByPlan() {
+  return getRevenueByPlanFor(managedBusinesses);
+}
+
+export function getRevenueByPlanFor(businesses: ManagedBusiness[]) {
+  return (Object.keys(planRates) as Array<keyof typeof planRates>).map((plan) => {
+    const matchingBusinesses = businesses.filter((business) => business.plan === plan);
+    const revenue = sum(matchingBusinesses.map((business) => business.monthlyValue));
+
+    return {
+      plan,
+      count: matchingBusinesses.length,
+      revenue,
+    };
+  });
+}
+
+export function getCollectionQueues() {
+  return getCollectionQueuesFor(managedBusinesses);
+}
+
+export function getCollectionQueuesFor(businesses: ManagedBusiness[]) {
+  return {
+    healthy: businesses.filter((business) => business.state === 'ACTIVE' || business.state === 'TRIAL'),
+    dueSoon: businesses.filter((business) => business.state === 'DUE_SOON'),
+    overdue: businesses.filter((business) => business.state === 'GRACE' || business.state === 'STARTER_FALLBACK'),
+    locked: businesses.filter((business) => business.state === 'READ_ONLY'),
+  };
+}
+
+export function getBusinessById(businessId: string) {
+  return managedBusinesses.find((business) => business.id === businessId);
+}
+
+export function getActionChecklist(business: ManagedBusiness) {
+  switch (business.state) {
+    case 'DUE_SOON':
+      return ['Send reminder now', 'Confirm payment method', 'Verify owner contact is current'];
+    case 'GRACE':
+      return ['Call owner today', 'Record promised payment date', 'Escalate if no proof by close of day'];
+    case 'STARTER_FALLBACK':
+      return ['Escalate to account manager', 'Warn owner of read-only date', 'Prepare same-day restoration if payment lands'];
+    case 'READ_ONLY':
+      return ['Confirm payment status', 'Record payment and restore access if settled', 'Log root cause for churn risk'];
+    case 'TRIAL':
+      return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
+    case 'ACTIVE':
+    default:
+      return ['Monitor usage health', 'Review upsell path', 'Keep renewal note current'];
+  }
+}
