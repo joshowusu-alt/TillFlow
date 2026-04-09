@@ -74,6 +74,45 @@ export function getBusinessById(businessId: string) {
   return managedBusinesses.find((business) => business.id === businessId);
 }
 
+export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
+  const active = businesses.filter((b) => b.state !== 'INACTIVE');
+  const approachingList = active.filter((b) => b.state === 'DUE_SOON');
+  const overdueList = active.filter((b) => b.state === 'GRACE' || b.state === 'STARTER_FALLBACK');
+  const lockedList = active.filter((b) => b.state === 'READ_ONLY');
+  const currentList = active.filter((b) => b.state === 'ACTIVE' || b.state === 'TRIAL');
+
+  return {
+    current: {
+      count: currentList.length,
+      amount: sum(currentList.map((b) => b.monthlyValue)),
+      label: 'Healthy',
+      description: 'Active and up to date — no billing action needed right now.',
+      href: '/collections#healthy',
+    },
+    approaching: {
+      count: approachingList.length,
+      amount: sum(approachingList.map((b) => b.outstandingAmount)),
+      label: 'Due now',
+      description: 'In billing window. Send reminders before these tip into overdue.',
+      href: '/collections#dueSoon',
+    },
+    overdue: {
+      count: overdueList.length,
+      amount: sum(overdueList.map((b) => b.outstandingAmount)),
+      label: 'Overdue',
+      description: 'Operating on grace or fallback. Same-day contact required.',
+      href: '/collections#overdue',
+    },
+    locked: {
+      count: lockedList.length,
+      amount: sum(lockedList.map((b) => b.outstandingAmount)),
+      label: 'Locked',
+      description: 'Access restricted. Confirm payment or make a commercial decision.',
+      href: '/collections#locked',
+    },
+  };
+}
+
 export function getActionChecklist(business: ManagedBusiness) {
   switch (business.state) {
     case 'DUE_SOON':

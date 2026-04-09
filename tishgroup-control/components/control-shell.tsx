@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import GlobalSearch, { type SearchBusiness } from '@/components/GlobalSearch';
 
 type ControlShellStaff = {
   name: string;
@@ -10,11 +11,19 @@ type ControlShellStaff = {
   role: string;
 };
 
+function getNavCount(href: string, navCounts?: { urgent: number; collections: number; unreviewed: number }) {
+  if (!navCounts) return 0;
+  if (href === '/') return navCounts.urgent;
+  if (href === '/businesses') return navCounts.unreviewed;
+  if (href === '/collections') return navCounts.collections;
+  return 0;
+}
+
 const navigation = [
   { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
   { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
   { href: '/collections', label: 'Collections', shortLabel: 'Collections', icon: 'pulse' },
-  { href: '/revenue', label: 'Revenue', shortLabel: 'Revenue', icon: 'chart' },
+  { href: '/revenue', label: 'Receivables', shortLabel: 'Receive', icon: 'chart' },
   { href: '/playbooks', label: 'Playbooks', shortLabel: 'Playbooks', icon: 'book' },
   { href: '/staff', label: 'Staff', shortLabel: 'Staff', icon: 'users' },
 ];
@@ -73,7 +82,17 @@ function NavigationIcon({ icon, active }: { icon: string; active: boolean }) {
   }
 }
 
-export default function ControlShell({ children, staff }: { children: ReactNode; staff: ControlShellStaff }) {
+export default function ControlShell({
+  children,
+  staff,
+  navCounts,
+  businesses,
+}: {
+  children: ReactNode;
+  staff: ControlShellStaff;
+  navCounts?: { urgent: number; collections: number; unreviewed: number };
+  businesses?: SearchBusiness[];
+}) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -138,6 +157,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
             <nav className="mt-8 space-y-2">
               {navigation.map((item) => {
                 const active = isActivePath(pathname, item.href);
+                const count = getNavCount(item.href, navCounts);
                 return (
                   <Link
                     key={item.href}
@@ -151,7 +171,11 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                       <NavigationIcon icon={item.icon} active={active} />
                       <span>{item.label}</span>
                     </span>
-                    <span className="text-[10px] uppercase tracking-[0.18em]">Ops</span>
+                    {count > 0 && (
+                      <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white tabular-nums">
+                        {count}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -189,9 +213,12 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
             </p>
           </div>
 
+          <GlobalSearch businesses={businesses ?? []} variant="dark" />
+
           <nav className="space-y-2">
             {navigation.map((item) => {
               const active = isActivePath(pathname, item.href);
+              const count = getNavCount(item.href, navCounts);
               return (
                 <Link
                   key={item.href}
@@ -205,7 +232,11 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                     <NavigationIcon icon={item.icon} active={active} />
                     <span>{item.label}</span>
                   </span>
-                  <span className="text-[10px] uppercase tracking-[0.18em]">Ops</span>
+                  {count > 0 && (
+                    <span className="inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white tabular-nums">
+                      {count}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -261,6 +292,10 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
 
             <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/44">
               {staff.name} · {staff.role.replace(/_/g, ' ')}
+            </div>
+
+            <div className="px-4 pb-2">
+              <GlobalSearch businesses={businesses ?? []} variant="light" />
             </div>
 
             <div className="mobile-nav-strip -mb-px flex overflow-x-auto px-2">

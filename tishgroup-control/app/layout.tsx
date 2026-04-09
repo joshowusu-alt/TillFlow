@@ -5,6 +5,8 @@ import ControlShell from '@/components/control-shell';
 import InstallPrompt from '@/components/InstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import { getControlStaffOptional } from '@/lib/control-auth';
+import { listManagedBusinesses } from '@/lib/control-service';
+import { getPortfolioSummaryFor, getCollectionQueuesFor } from '@/lib/control-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,13 +54,39 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const staff = await getControlStaffOptional();
 
+  let navCounts: { urgent: number; collections: number; unreviewed: number } | undefined;
+  let searchList: Array<{ id: string; name: string; ownerName: string; ownerPhone: string; plan: string; state: string }> = [];
+
+  if (staff) {
+    try {
+      const businesses = await listManagedBusinesses();
+      const summary = getPortfolioSummaryFor(businesses);
+      const queues = getCollectionQueuesFor(businesses);
+      navCounts = {
+        urgent: summary.grace + summary.fallback + summary.readOnly,
+        collections: queues.overdue.length + queues.locked.length,
+        unreviewed: businesses.filter((b) => b.needsReview).length,
+      };
+      searchList = businesses.map((b) => ({
+        id: b.id,
+        name: b.name,
+        ownerName: b.ownerName,
+        ownerPhone: b.ownerPhone,
+        plan: b.plan,
+        state: b.state,
+      }));
+    } catch {
+      // Graceful degradation — nav counts and search not available
+    }
+  }
+
   return (
     <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body className="font-[var(--font-body)] antialiased">
         <ServiceWorkerRegistration />
         <InstallPrompt />
         {staff ? (
-          <ControlShell staff={staff}>{children}</ControlShell>
+          <ControlShell staff={staff} navCounts={navCounts} businesses={searchList}>{children}</ControlShell>
         ) : children}
       </body>
     </html>
