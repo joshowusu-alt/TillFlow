@@ -1,10 +1,12 @@
+import type { BusinessPlan } from './features';
+
 export type AppRole = 'CASHIER' | 'MANAGER' | 'OWNER';
 
 export type NavigationItem = {
   href: string;
   label: string;
   roles: AppRole[];
-  advanced?: boolean;
+  minimumPlan?: BusinessPlan;
 };
 
 export type NavigationGroup = {
@@ -38,7 +40,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
       { href: '/purchases', label: 'Purchases', roles: ['MANAGER', 'OWNER'] },
       { href: '/transfers', label: 'Transfers', roles: ['MANAGER', 'OWNER'] },
       { href: '/products', label: 'Products', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
-      { href: '/products/labels', label: 'Product Labels', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
+      { href: '/products/labels', label: 'Product Labels', roles: ['CASHIER', 'MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
     ],
   },
   {
@@ -65,18 +67,18 @@ export const NAV_GROUPS: NavigationGroup[] = [
     label: 'Reports',
     items: [
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'], advanced: true },
-      { href: '/reports/owner', label: 'Owner Intelligence', roles: ['OWNER'], advanced: true },
-      { href: '/reports/cashflow-forecast', label: 'Cashflow Forecast', roles: ['OWNER'], advanced: true },
-      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'], advanced: true },
+      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/owner', label: 'Owner Intelligence', roles: ['OWNER'], minimumPlan: 'PRO' },
+      { href: '/reports/cashflow-forecast', label: 'Cashflow Forecast', roles: ['OWNER'], minimumPlan: 'PRO' },
+      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'], minimumPlan: 'PRO' },
     ],
   },
   {
@@ -98,18 +100,19 @@ export const SETTINGS_TAB_SECTIONS: SettingsTabSection[] = [
     items: [
       { href: '/settings', label: 'Business', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/organization', label: 'Organization', roles: ['MANAGER', 'OWNER'] },
-      { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'] },
+      { href: '/settings/billing', label: 'Billing', roles: ['MANAGER', 'OWNER'] },
+      { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/import-stock', label: 'Import Stock', roles: ['MANAGER', 'OWNER'] },
     ],
   },
   {
     id: 'advanced',
-    label: 'Recovery & diagnostics',
+    label: 'Owner & recovery',
     items: [
-      { href: '/settings/system-health', label: 'System Health', roles: ['MANAGER', 'OWNER'], advanced: true },
-      { href: '/settings/backup', label: 'Backup', roles: ['OWNER'], advanced: true },
-      { href: '/settings/data-repair', label: 'Data Repair', roles: ['OWNER'], advanced: true },
+      { href: '/settings/system-health', label: 'System Health', roles: ['MANAGER', 'OWNER'] },
+      { href: '/settings/backup', label: 'Backup', roles: ['OWNER'] },
+      { href: '/settings/data-repair', label: 'Data Repair', roles: ['OWNER'] },
     ],
   },
 ];

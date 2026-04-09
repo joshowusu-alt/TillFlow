@@ -7,6 +7,8 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
+import { getBillingEntitlement } from '@/lib/billing-entitlements';
 import * as Sentry from '@sentry/nextjs';
 import { requireUser, requireRole, type Role } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -71,24 +73,44 @@ export interface BusinessStoreContext extends BusinessContext {
   storeId: string;
 }
 
+type BusinessContextOptions = {
+  requireWrite?: boolean;
+};
+
+async function assertBusinessWriteAllowed(businessId: string) {
+  const { business } = await findBusinessCommercialSnapshot(businessId);
+
+  if (!business) redirect('/settings');
+
+  const entitlement = getBillingEntitlement(business as any);
+  if (!entitlement.canWrite) {
+    throw new UserError('This business is now read-only because the payment grace window has ended. Record payment in Billing & Plans to restore write access.');
+  }
+}
+
 /**
  * Authenticate, enforce roles, resolve the business (and optionally the first
  * store) in one call.  Redirects when anything is missing.
  */
 export async function withBusinessContext(
-  roles?: Role[]
+  roles?: Role[],
+  options?: BusinessContextOptions,
 ): Promise<BusinessContext> {
   const user = roles ? await requireRole(roles) : await requireUser();
   const business = await prisma.business.findUnique({ where: { id: user.businessId } });
   if (!business) redirect('/settings');
+  if (options?.requireWrite !== false) {
+    await assertBusinessWriteAllowed(business.id);
+  }
   return { user, businessId: business.id };
 }
 
 export async function withBusinessStoreContext(
   roles?: Role[],
-  preferredStoreId?: string
+  preferredStoreId?: string,
+  options?: BusinessContextOptions,
 ): Promise<BusinessStoreContext> {
-  const ctx = await withBusinessContext(roles);
+  const ctx = await withBusinessContext(roles, options);
   const store = await prisma.store.findFirst({
     where: {
       businessId: ctx.businessId,

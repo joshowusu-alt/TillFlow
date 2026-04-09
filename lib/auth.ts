@@ -2,6 +2,8 @@ import { cache } from 'react';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { findBusinessForAuth } from '@/lib/billing-db-compat';
+import { getBillingEntitlement } from '@/lib/billing-entitlements';
 import {
   ACTIVE_BUSINESS_COOKIE,
   extractBusinessIdFromSessionCookie,
@@ -51,6 +53,41 @@ function clearResolvedSessionCookie(cookieName: string) {
     }
   } catch {
     // cookies().delete can throw in certain rendering contexts
+  }
+}
+
+function isMissingControlPlaneAuthError(error: unknown) {
+  return error instanceof Error && (
+    error.message.includes('no such table')
+    || error.message.includes('does not exist in the current database')
+    || error.message.includes('Unknown field')
+    || error.message.includes('controlBusinessProfile')
+    || error.message.includes('ControlBusinessProfile')
+    || error.message.includes('controlSubscription')
+    || error.message.includes('ControlSubscription')
+  );
+}
+
+async function findControlSubscriptionForAuth(businessId: string) {
+  try {
+    const profile = await prisma.controlBusinessProfile.findUnique({
+      where: { businessId },
+      select: {
+        subscription: {
+          select: {
+            billingCadence: true,
+            startDate: true,
+          },
+        },
+      },
+    });
+
+    return profile?.subscription ?? null;
+  } catch (error) {
+    if (isMissingControlPlaneAuthError(error)) {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -198,52 +235,30 @@ export async function requireRole(roles: Role[]) {
  * called from both layout and page.
  */
 const _getBusiness = cache(async (businessId: string) => {
-  return prisma.business.findUnique({
-    where: { id: businessId },
-    select: {
-      id: true,
-      name: true,
-      currency: true,
-      vatEnabled: true,
-      vatNumber: true,
-      mode: true,
-      receiptTemplate: true,
-      printMode: true,
-      printerName: true,
-      labelPrintMode: true,
-      labelPrinterName: true,
-      labelSize: true,
-      receiptLogoUrl: true,
-      receiptHeader: true,
-      receiptFooter: true,
-      receiptShowVatNumber: true,
-      receiptShowAddress: true,
-      socialMediaHandle: true,
-      address: true,
-      phone: true,
-      tinNumber: true,
-      momoEnabled: true,
-      momoProvider: true,
-      momoNumber: true,
-      openingCapitalPence: true,
-      requireOpenTillForSales: true,
-      varianceReasonRequired: true,
-      discountApprovalThresholdBps: true,
-      inventoryAdjustmentRiskThresholdBase: true,
-      cashVarianceRiskThresholdPence: true,
-      customerScope: true,
-      whatsappEnabled: true,
-      whatsappPhone: true,
-      whatsappScheduleTime: true,
-      whatsappBranchScope: true,
-      minimumMarginThresholdBps: true,
-      isDemo: true,
-      onboardingCompletedAt: true,
-      hasDemoData: true,
-      guidedSetup: true,
-      createdAt: true,
-    }
-  });
+  const [{ business, billingSchemaReady }, controlSubscription] = await Promise.all([
+    findBusinessForAuth(businessId),
+    findControlSubscriptionForAuth(businessId),
+  ]);
+
+  if (!business) return null;
+
+  const entitlement = getBillingEntitlement(business as any);
+
+  return {
+    ...business,
+    purchasedPlan: entitlement.purchasedPlan,
+    plan: entitlement.effectivePlan,
+    planStatus: entitlement.statusLabel,
+    billingAccessState: entitlement.accessState,
+    billingCanWrite: entitlement.canWrite,
+    billingReadOnly: entitlement.isReadOnly,
+    billingGraceEndsAt: entitlement.graceEndsAt,
+    billingStarterFallbackEndsAt: entitlement.starterFallbackEndsAt,
+    billingReadOnlyAt: entitlement.readOnlyAt,
+    controlBillingCadence: controlSubscription?.billingCadence ?? null,
+    controlPlanStartDate: controlSubscription?.startDate ?? null,
+    billingSchemaReady,
+  };
 });
 
 /**
