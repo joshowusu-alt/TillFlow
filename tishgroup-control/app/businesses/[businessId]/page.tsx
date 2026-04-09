@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
 import BillingScheduleFields from '@/components/BillingScheduleFields';
@@ -38,6 +39,8 @@ export default async function BusinessDetailPage({
     notFound();
   }
 
+  const businessId = business.id;
+
   const resolvedSearchParams = (
     searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
       ? await searchParams
@@ -65,7 +68,7 @@ export default async function BusinessDetailPage({
           {tabs.map((t) => (
             <Link
               key={t.id}
-              href={`/businesses/${business.id}?tab=${t.id}`}
+              href={`/businesses/${businessId}?tab=${t.id}`}
               className={`shrink-0 border-b-2 px-5 pb-3 pt-3 text-sm font-medium transition ${
                 tab === t.id
                   ? 'border-control-ink text-control-ink'
@@ -125,8 +128,8 @@ export default async function BusinessDetailPage({
         chips={[
           { label: 'Call owner', href: toPhoneHref(business.ownerPhone), tone: 'dark' },
           ...(business.ownerEmail !== 'Email not recorded' ? [{ label: 'Email owner', href: `mailto:${business.ownerEmail}` }] : []),
-          { label: 'Billing', href: `/businesses/${business.id}?tab=billing` },
-          { label: 'Activity', href: `/businesses/${business.id}?tab=activity` },
+          { label: 'Billing', href: `/businesses/${businessId}?tab=billing` },
+          { label: 'Activity', href: `/businesses/${businessId}?tab=activity` },
         ]}
         stats={[
           { label: 'Outstanding', value: formatCedi(business.outstandingAmount), hint: 'Current amount exposed to renewal follow-up or recovery.' },
@@ -814,7 +817,7 @@ export default async function BusinessDetailPage({
         </a>
         {canTakePayments ? (
           <Link
-            href={`/businesses/${business.id}?tab=billing`}
+            href={`/businesses/${businessId}?tab=billing`}
             className="flex-1 inline-flex items-center justify-center rounded-2xl border border-black/12 bg-white py-3 text-sm font-semibold text-control-ink"
           >
             Record payment
