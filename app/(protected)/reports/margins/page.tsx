@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 import { getMarginAnalysisSnapshot, type MarginAnalysisRow } from '@/lib/reports/margin-analysis';
@@ -73,6 +76,17 @@ export default async function MarginsPage({
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Business not found.</div>;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.advancedReports) {
+    return (
+      <AdvancedModeNotice
+        title="Profit Margins is available on Growth and Pro"
+        description="Margin analysis, below-cost checks, and target tracking are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Profit Margins"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
 
   const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
   const currentView = resolveMarginsView(searchParams?.view);
@@ -107,6 +121,7 @@ export default async function MarginsPage({
     from: fromInputValue,
     to: toInputValue,
   };
+  const exportHrefBase = `/exports/margins?period=${encodeURIComponent(periodInputValue)}&from=${encodeURIComponent(fromInputValue)}&to=${encodeURIComponent(toInputValue)}&view=${encodeURIComponent(currentView)}`;
   const quickViews = [
     { value: 'all' as const, label: 'All sold products', count: snapshot.totalProducts, tone: 'border-slate-200 bg-white text-slate-700' },
     { value: 'below-cost' as const, label: 'Selling below cost', count: snapshot.belowCostCount, tone: 'border-rose-200 bg-rose-50 text-rose-700' },
@@ -122,6 +137,25 @@ export default async function MarginsPage({
         title="Profit Margins"
         subtitle="Track every sold product, spot lines below cost, and drill into products falling below the set margin target."
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium text-black/60">Export this view:</span>
+        <DownloadLink
+          href={`${exportHrefBase}&format=xlsx`}
+          className="btn-secondary text-xs"
+          fallbackFilename="margins.xlsx"
+        >
+          Excel
+        </DownloadLink>
+        <a
+          href={`${exportHrefBase}&format=pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary text-xs"
+        >
+          Print / PDF
+        </a>
+      </div>
 
       <ReportFilterCard
         columnsClassName="lg:grid-cols-6"

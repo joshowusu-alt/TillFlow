@@ -1,7 +1,8 @@
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
-import { requireRole } from '@/lib/auth';
+import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
 
 const exportPeriodOptions = [
@@ -34,7 +35,8 @@ export default async function ExportsPage({
 }: {
   searchParams?: { period?: string; from?: string; to?: string };
 }) {
-  await requireRole(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
 
   const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
   const periodLabel = exportPeriodOptions.find((option) => option.value === periodInputValue)?.label ?? 'Last 30 days';
@@ -195,18 +197,30 @@ export default async function ExportsPage({
           <div>
             <div className="inline-flex rounded-full bg-black/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/55">Controls</div>
             <h3 className="mt-3 font-semibold text-sm">Risk Summary</h3>
-            <p className="text-xs text-black/50">Risk alerts, cashier analysis, and discount overrides</p>
+            <p className="text-xs text-black/50">
+              {features.riskMonitor
+                ? 'Risk alerts, cashier analysis, and discount overrides'
+                : 'Risk alerts, cashier analysis, and discount overrides are unlocked on Growth and Pro.'}
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <DownloadLink className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary" fallbackFilename="risk-summary.csv">
-              CSV
-            </DownloadLink>
-            <DownloadLink className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary?format=xlsx" fallbackFilename="risk-summary.xlsx">
-              Excel
-            </DownloadLink>
-            <a className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary?format=pdf" target="_blank" rel="noopener noreferrer">
-              Print / PDF
-            </a>
+            {features.riskMonitor ? (
+              <>
+                <DownloadLink className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary" fallbackFilename="risk-summary.csv">
+                  CSV
+                </DownloadLink>
+                <DownloadLink className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary?format=xlsx" fallbackFilename="risk-summary.xlsx">
+                  Excel
+                </DownloadLink>
+                <a className="btn-secondary text-center text-xs flex-1" href="/exports/risk-summary?format=pdf" target="_blank" rel="noopener noreferrer">
+                  Print / PDF
+                </a>
+              </>
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Growth or Pro required for risk exports.
+              </div>
+            )}
           </div>
         </div>
 
