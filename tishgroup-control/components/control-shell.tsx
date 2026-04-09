@@ -177,48 +177,32 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
-        <div className="panel sticky top-[calc(var(--safe-top)+0.75rem)] z-30 border-black/8 bg-[rgba(255,255,255,0.94)] p-3 shadow-lg lg:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="eyebrow">Tish Group Control</div>
-              <div className="truncate text-lg font-semibold text-control-ink">{currentSection.label}</div>
+        <div className="sticky top-[calc(var(--safe-top)+0.75rem)] z-30 lg:hidden">
+          <div className="rounded-[28px] border border-black/8 bg-[#fcfaf6] px-4 py-3 shadow-[0_18px_40px_rgba(21,39,43,0.08)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="eyebrow">Tish Group Control</div>
+                <div className="mt-1 truncate text-[1.75rem] font-semibold leading-none tracking-tight text-control-ink">{currentSection.label}</div>
+              </div>
+              <button
+                type="button"
+                aria-label="Open navigation"
+                aria-expanded={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen(true)}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </button>
             </div>
-            <button
-              type="button"
-              aria-label="Open navigation"
-              aria-expanded={mobileMenuOpen}
-              onClick={() => setMobileMenuOpen(true)}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-            </button>
-          </div>
 
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-black/6 bg-[#f7f4ef] px-3 py-2.5 text-sm text-black/62">
-            <div className="min-w-0">
-              <div className="truncate font-semibold text-control-ink">{staff.name}</div>
-              <div className="truncate text-[11px] text-black/52">{staff.role.replace(/_/g, ' ')} · {staff.email}</div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/6 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/54">
+              <span className="truncate">{staff.name}</span>
+              <span className="text-black/24">•</span>
+              <span>{staff.role.replace(/_/g, ' ')}</span>
             </div>
           </div>
-
-          <nav className="mobile-nav-strip -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-            {navigation.map((item) => {
-              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition ${
-                    active ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/58 hover:bg-black/[0.03]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
         </div>
 
         {children}
