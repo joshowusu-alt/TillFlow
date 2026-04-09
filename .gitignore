@@ -18,6 +18,7 @@ test.txt
 .vercel
 .playwright-mcp/
 market-upstash.html
+tsconfig.tsbuildinfo
 
 ci.db
 ci.db-journal
