@@ -89,7 +89,7 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-sm">
+    <div className="fixed inset-x-4 bottom-[calc(var(--safe-bottom)+1rem)] z-50 mx-auto max-w-sm">
       <div className="overflow-hidden rounded-[28px] border border-black/10 bg-[rgba(255,255,255,0.97)] shadow-2xl backdrop-blur">
         <div className="bg-[#122126] px-4 py-4 text-white">
           <div className="flex items-center gap-3">

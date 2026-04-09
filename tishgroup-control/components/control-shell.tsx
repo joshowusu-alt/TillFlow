@@ -53,7 +53,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
   }, [mobileMenuOpen]);
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-[1600px] gap-4 px-3 py-3 sm:gap-6 sm:px-6 sm:py-5 lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1600px] gap-4 px-3 py-3 sm:gap-6 sm:px-6 sm:py-5 lg:px-8">
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
@@ -62,7 +62,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
             className="absolute inset-0 bg-[#122126]/45 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[22rem] flex-col border-l border-black/10 bg-[#122126] px-5 py-5 text-white shadow-2xl">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-[22rem] flex-col border-l border-black/10 bg-[#122126] px-5 pb-[calc(var(--safe-bottom)+1.25rem)] pt-[calc(var(--safe-top)+1rem)] text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -177,7 +177,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
-        <div className="panel sticky top-3 z-30 border-black/8 bg-[rgba(255,255,255,0.92)] p-3 shadow-lg lg:hidden">
+        <div className="panel sticky top-[calc(var(--safe-top)+0.75rem)] z-30 border-black/8 bg-[rgba(255,255,255,0.94)] p-3 shadow-lg lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="eyebrow">Tish Group Control</div>
@@ -199,7 +199,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
           <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-black/6 bg-[#f7f4ef] px-3 py-2.5 text-sm text-black/62">
             <div className="min-w-0">
               <div className="truncate font-semibold text-control-ink">{staff.name}</div>
-              <div className="truncate text-xs text-black/52">{staff.role.replace(/_/g, ' ')} · {staff.email}</div>
+              <div className="truncate text-[11px] text-black/52">{staff.role.replace(/_/g, ' ')} · {staff.email}</div>
             </div>
           </div>
 

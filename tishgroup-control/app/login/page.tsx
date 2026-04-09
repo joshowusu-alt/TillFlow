@@ -26,9 +26,9 @@ export default async function LoginPage({
   const authConfigured = controlAuthConfigured();
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="panel overflow-hidden p-8 sm:p-10">
+        <section className="panel overflow-hidden p-5 sm:p-10">
           <div className="eyebrow">Internal control plane</div>
           <h1 className="page-title mt-4 font-[var(--font-display)] text-control-ink">Tish Group Control keeps billing decisions in one place and pushes the result back into Tillflow.</h1>
           <p className="mt-5 max-w-2xl text-base leading-8 text-black/64">
@@ -51,7 +51,7 @@ export default async function LoginPage({
           </div>
         </section>
 
-        <section className="panel p-8 sm:p-10">
+        <section className="panel p-5 sm:p-10">
           <div className="eyebrow">Staff sign-in</div>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-control-ink">Access Tish Group Control</h2>
           <p className="mt-3 text-sm leading-6 text-black/64">
@@ -77,7 +77,7 @@ export default async function LoginPage({
                 type="email"
                 name="email"
                 placeholder="you@tishgroup.com"
-                className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]"
+                className="control-field"
                 autoComplete="email"
                 required
               />
@@ -88,7 +88,7 @@ export default async function LoginPage({
               <input
                 type="password"
                 name="accessKey"
-                className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]"
+                className="control-field"
                 autoComplete="current-password"
                 required
               />

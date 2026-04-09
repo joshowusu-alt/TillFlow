@@ -56,7 +56,7 @@ export default function ServiceWorkerRegistration() {
   }
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-sm sm:left-auto sm:right-4 sm:mx-0">
+    <div className="fixed inset-x-4 bottom-[calc(var(--safe-bottom)+1rem)] z-50 mx-auto max-w-sm sm:left-auto sm:right-4 sm:mx-0">
       <div className="flex items-center gap-3 rounded-[24px] border border-black/10 bg-white px-4 py-3 shadow-xl">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-control-ink">New version available</div>
