@@ -177,7 +177,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
-        <div className="sticky top-[calc(var(--safe-top)+0.75rem)] z-30 lg:hidden">
+        <div className="relative z-20 lg:hidden">
           <div className="rounded-[28px] border border-black/8 bg-[#fcfaf6] px-4 py-3 shadow-[0_18px_40px_rgba(21,39,43,0.08)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
