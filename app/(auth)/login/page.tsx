@@ -37,6 +37,8 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
             ? 'This account requires a 2FA code from your authenticator app.'
             : error === 'otp_invalid'
             ? 'Invalid 2FA code. Please try again.'
+            : error === 'deactivated'
+            ? 'This business account has been deactivated. Contact your account manager.'
             : error === 'server'
             ? 'Unable to connect. Please try again in a moment.'
             : 'Invalid credentials. Please try again.'}

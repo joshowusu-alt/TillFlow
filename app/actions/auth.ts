@@ -99,6 +99,15 @@ export async function login(formData: FormData) {
 
   await clearLoginFailures(email, ipAddress);
 
+  const businessRecord = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { planStatus: true },
+  });
+  if (businessRecord?.planStatus === 'INACTIVE') {
+    appLog('warn', 'Login blocked for deactivated business', { email, businessId: user.businessId });
+    redirect('/login?error=deactivated');
+  }
+
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 

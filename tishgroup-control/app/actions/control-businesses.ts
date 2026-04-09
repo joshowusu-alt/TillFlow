@@ -338,6 +338,15 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           ]),
         },
       });
+
+      if (status === 'INACTIVE') {
+        await tx.$executeRaw`
+          DELETE FROM "Session"
+          WHERE "userId" IN (
+            SELECT "id" FROM "User" WHERE "businessId" = ${businessId}
+          )
+        `;
+      }
     });
   } catch (error) {
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to update the subscription.'));
@@ -674,8 +683,9 @@ export async function toggleControlStaffAction(formData: FormData): Promise<void
 
 export async function bulkReviewControlBusinessesAction(formData: FormData): Promise<void> {
   const staff = await requireControlStaff();
+  const returnPath = readReturnPath(formData, '/businesses?filter=unreviewed');
   if (!canWriteNotes(staff.role)) {
-    redirect('/businesses?filter=unreviewed&error=Your TG role cannot bulk review businesses.');
+    redirect(withRedirectParam(returnPath, 'error', 'Your TG role cannot bulk review businesses.'));
   }
 
   const requestedManager = readOptional(formData, 'assignedManagerId');
@@ -691,7 +701,7 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
     .filter(Boolean);
 
   if (businessIds.length === 0) {
-    redirect('/businesses?filter=unreviewed&error=No businesses were selected for bulk review.');
+    redirect(withRedirectParam(returnPath, 'error', 'No businesses were selected for bulk review.'));
   }
 
   try {
@@ -752,10 +762,10 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
       }
     });
   } catch (error) {
-    redirect(`/businesses?filter=unreviewed&error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to bulk review the selected businesses.')}`);
+    redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to bulk review the selected businesses.'));
   }
 
   revalidatePath('/');
   revalidatePath('/businesses');
-  redirect('/businesses?filter=unreviewed&updated=bulk-review');
+  redirect(withRedirectParam(returnPath, 'updated', 'bulk-review'));
 }
