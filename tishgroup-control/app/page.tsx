@@ -81,17 +81,26 @@ export default async function PortfolioPage() {
     <div className="space-y-6">
       {/* Mobile urgency pulse strip — 3 tap-able stat tiles, hidden on desktop */}
       <div className="grid grid-cols-3 gap-3 lg:hidden">
-        <Link href="/businesses?filter=unreviewed" className="rounded-2xl border border-[#1f8a82]/24 bg-[#1f8a82]/8 p-4 text-center transition active:scale-95">
-          <div className="text-2xl font-semibold tracking-tight text-control-ink">{unreviewedBusinesses.length}</div>
-          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Unreviewed</div>
+        <Link href="/businesses?filter=unreviewed" className="relative overflow-hidden rounded-2xl border border-[#1f8a82]/28 bg-gradient-to-br from-teal-50/80 via-white to-teal-50/40 p-4 text-center shadow-card transition duration-200 active:scale-95">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-[#1f8a82]" aria-hidden="true" />
+          <div className="font-display text-3xl font-bold tabular-nums tracking-tight text-[#1a7370]">{unreviewedBusinesses.length}</div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#1f8a82]/70">Unreviewed</div>
         </Link>
-        <Link href="/collections" className="rounded-2xl border border-[#b35c2e]/24 bg-[#b35c2e]/8 p-4 text-center transition active:scale-95">
-          <div className="text-2xl font-semibold tracking-tight text-control-ink">{summary.grace + summary.fallback}</div>
-          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Overdue</div>
+        <Link href="/collections" className="relative overflow-hidden rounded-2xl border border-[#b35c2e]/28 bg-gradient-to-br from-orange-50/80 via-white to-orange-50/40 p-4 text-center shadow-card transition duration-200 active:scale-95">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-[#b35c2e]" aria-hidden="true" />
+          <div className="flex items-center justify-center gap-1.5">
+            {(summary.grace + summary.fallback) > 0 && <span className="pulse-dot bg-[#b35c2e]" />}
+            <span className="font-display text-3xl font-bold tabular-nums tracking-tight text-[#9a4a22]">{summary.grace + summary.fallback}</span>
+          </div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#b35c2e]/70">Overdue</div>
         </Link>
-        <Link href="/collections" className="rounded-2xl border border-[#e2a83d]/24 bg-[#e2a83d]/10 p-4 text-center transition active:scale-95">
-          <div className="text-2xl font-semibold tracking-tight text-control-ink">{summary.readOnly}</div>
-          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Locked</div>
+        <Link href="/collections" className="relative overflow-hidden rounded-2xl border border-[#e2a83d]/28 bg-gradient-to-br from-amber-50/80 via-white to-amber-50/40 p-4 text-center shadow-card transition duration-200 active:scale-95">
+          <span className="absolute inset-x-0 top-0 h-[3px] bg-[#e2a83d]" aria-hidden="true" />
+          <div className="flex items-center justify-center gap-1.5">
+            {summary.readOnly > 0 && <span className="pulse-dot bg-[#e2a83d]" />}
+            <span className="font-display text-3xl font-bold tabular-nums tracking-tight text-[#b8882e]">{summary.readOnly}</span>
+          </div>
+          <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#e2a83d]/80">Locked</div>
         </Link>
       </div>
 
@@ -138,10 +147,10 @@ export default async function PortfolioPage() {
       />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Portfolio MRR" value={formatCedi(summary.mrr)} hint="Monthly-equivalent recurring revenue across Starter, Growth, and Pro tenants." accent="Finance" />
-        <KpiCard label="Due This Week" value={String(summary.dueSoon)} hint="Accounts that should be contacted before they cross into overdue handling." accent="Collections" />
-        <KpiCard label="Fallback + Locked" value={String(summary.fallback + summary.readOnly)} hint="Businesses already degraded to Starter fallback or fully read-only and needing escalation." accent="Risk" />
-        <KpiCard label="Unreviewed New Accounts" value={String(unreviewedBusinesses.length)} hint="New or untouched accounts that need their first Tishgroup commercial review." accent="Ops" />
+        <KpiCard label="Portfolio MRR" value={formatCedi(summary.mrr)} hint="Monthly-equivalent recurring revenue across Starter, Growth, and Pro tenants." accent="Finance" tone="teal" />
+        <KpiCard label="Due This Week" value={String(summary.dueSoon)} hint="Accounts that should be contacted before they cross into overdue handling." accent="Collections" tone="gold" />
+        <KpiCard label="Fallback + Locked" value={String(summary.fallback + summary.readOnly)} hint="Businesses already degraded to Starter fallback or fully read-only and needing escalation." accent="Risk" tone="ember" />
+        <KpiCard label="Unreviewed New Accounts" value={String(unreviewedBusinesses.length)} hint="New or untouched accounts that need their first Tishgroup commercial review." accent="Ops" tone="moss" />
       </section>
 
       <section id="today-workboard" className="panel p-5 sm:p-6">
@@ -153,14 +162,14 @@ export default async function PortfolioPage() {
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {workboardCards.map((card) => (
-            <Link key={card.title} href={card.href} className={`rounded-[24px] border p-4 transition hover:-translate-y-[1px] hover:shadow-lg ${card.tone}`}>
+            <Link key={card.title} href={card.href} className={`relative overflow-hidden rounded-[24px] border p-5 shadow-card transition duration-[220ms] ease-executive hover:-translate-y-[2px] hover:shadow-raised ${card.tone}`}>
               <div className="eyebrow">Next move</div>
-              <div className="mt-2 text-xl font-semibold tracking-tight text-control-ink">{card.title}</div>
-              <div className="mt-3 text-2xl font-semibold text-control-ink">{card.value}</div>
-              <p className="mt-3 text-sm leading-6 text-black/62">{card.note}</p>
-              <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-control-ink">
+              <div className="mt-2 text-lg font-bold tracking-tight text-control-ink">{card.title}</div>
+              <div className="mt-3 font-display text-[1.9rem] font-bold tabular-nums tracking-tight text-control-ink">{card.value}</div>
+              <p className="mt-3 text-sm leading-6 text-black/58">{card.note}</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-control-ink/70">
                 Open queue
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
                 </svg>
               </div>

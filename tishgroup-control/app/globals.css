@@ -8,7 +8,7 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-  --bg: #f6f9fc;
+  --bg: #f4f8f9;
   --surface: #ffffff;
   --surface-strong: #ffffff;
   --line: rgba(60, 66, 87, 0.14);
@@ -19,10 +19,24 @@
   --gold: #e2a83d;
   --ember: #b35c2e;
   --danger: #a84432;
+  /* motion */
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 380ms;
+  --ease-executive: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* shadows */
+  --shadow-card: 0 1px 3px rgba(13,27,30,0.06), 0 4px 16px rgba(13,27,30,0.08);
+  --shadow-raised: 0 4px 8px rgba(13,27,30,0.08), 0 12px 32px rgba(13,27,30,0.10);
+  --shadow-soft: 0 4px 12px -2px rgba(31,138,130,0.10), 0 12px 32px rgba(31,138,130,0.12);
+  --shadow-glow: 0 0 24px rgba(31,138,130,0.22);
 }
 
 html {
   background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(31, 138, 130, 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 92% 20%, rgba(226, 168, 61, 0.06) 0%, transparent 50%);
+  background-attachment: fixed;
   scroll-padding-top: calc(var(--safe-top) + 6.5rem);
 }
 
@@ -64,7 +78,44 @@ textarea::placeholder {
 
 .metric-card {
   @apply panel p-5;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--motion-base) var(--ease-executive),
+              transform var(--motion-base) var(--ease-executive);
 }
+
+.metric-card:hover {
+  box-shadow: var(--shadow-raised);
+  transform: translateY(-2px);
+}
+
+.metric-card-teal {
+  background: linear-gradient(135deg, rgba(31,138,130,0.07) 0%, #ffffff 50%, rgba(31,138,130,0.04) 100%);
+}
+
+.metric-card-gold {
+  background: linear-gradient(135deg, rgba(226,168,61,0.09) 0%, #ffffff 50%, rgba(226,168,61,0.05) 100%);
+}
+
+.metric-card-ember {
+  background: linear-gradient(135deg, rgba(179,92,46,0.08) 0%, #ffffff 50%, rgba(179,92,46,0.04) 100%);
+}
+
+.metric-card-moss {
+  background: linear-gradient(135deg, rgba(47,111,86,0.08) 0%, #ffffff 50%, rgba(47,111,86,0.04) 100%);
+}
+
+.kpi-top-strip {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+}
+
+.kpi-top-strip-teal  { background: #1f8a82; }
+.kpi-top-strip-gold  { background: #e2a83d; }
+.kpi-top-strip-ember { background: #b35c2e; }
+.kpi-top-strip-moss  { background: #2f6f56; }
 
 .control-stat-card {
   @apply rounded-2xl border p-4;
@@ -158,10 +209,10 @@ textarea::placeholder {
 }
 
 .control-sequence-step {
-  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-semibold;
-  border-color: rgba(21, 39, 43, 0.1);
-  background: rgba(18, 33, 38, 0.06);
-  color: var(--ink);
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-bold;
+  border-color: rgba(31, 138, 130, 0.28);
+  background: rgba(31, 138, 130, 0.12);
+  color: var(--teal);
 }
 
 .control-chip {
@@ -182,7 +233,8 @@ textarea::placeholder {
 }
 
 .control-action-card:hover {
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-raised);
+  transform: translateY(-2px);
 }
 
 .data-table {
@@ -204,9 +256,22 @@ textarea::placeholder {
 }
 
 .page-title {
-  @apply font-semibold tracking-tight;
+  @apply font-bold tracking-tight;
   font-size: clamp(1.5rem, 2.2vw, 2rem);
   line-height: 0.95;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.75); }
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
 .section-title {
@@ -248,6 +313,7 @@ textarea::placeholder {
 @media (max-width: 640px) {
   .page-title {
     font-size: clamp(1.35rem, 6vw, 1.75rem);
+    font-weight: 700;
     line-height: 1.02;
   }
 

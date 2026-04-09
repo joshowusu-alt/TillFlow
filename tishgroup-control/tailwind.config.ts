@@ -18,9 +18,19 @@ const config: Config = {
       },
       boxShadow: {
         dashboard: '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05)',
+        card: '0 1px 3px rgba(13,27,30,0.06), 0 4px 16px rgba(13,27,30,0.08)',
+        raised: '0 4px 8px rgba(13,27,30,0.08), 0 12px 32px rgba(13,27,30,0.10)',
+        soft: '0 4px 12px -2px rgba(31,138,130,0.10), 0 12px 32px rgba(31,138,130,0.12)',
+        glow: '0 0 24px rgba(31,138,130,0.22)',
       },
       borderRadius: {
         panel: '0.75rem',
+      },
+      transitionTimingFunction: {
+        executive: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      },
+      fontFamily: {
+        display: ['var(--font-display)', 'Space Grotesk', 'sans-serif'],
       },
     },
   },
