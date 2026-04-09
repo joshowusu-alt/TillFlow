@@ -79,6 +79,22 @@ export default async function PortfolioPage() {
 
   return (
     <div className="space-y-6">
+      {/* Mobile urgency pulse strip — 3 tap-able stat tiles, hidden on desktop */}
+      <div className="grid grid-cols-3 gap-3 lg:hidden">
+        <Link href="/businesses?filter=unreviewed" className="rounded-2xl border border-[#1f8a82]/24 bg-[#1f8a82]/8 p-4 text-center transition active:scale-95">
+          <div className="text-2xl font-semibold tracking-tight text-control-ink">{unreviewedBusinesses.length}</div>
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Unreviewed</div>
+        </Link>
+        <Link href="/collections" className="rounded-2xl border border-[#b35c2e]/24 bg-[#b35c2e]/8 p-4 text-center transition active:scale-95">
+          <div className="text-2xl font-semibold tracking-tight text-control-ink">{summary.grace + summary.fallback}</div>
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Overdue</div>
+        </Link>
+        <Link href="/collections" className="rounded-2xl border border-[#e2a83d]/24 bg-[#e2a83d]/10 p-4 text-center transition active:scale-95">
+          <div className="text-2xl font-semibold tracking-tight text-control-ink">{summary.readOnly}</div>
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-black/52">Locked</div>
+        </Link>
+      </div>
+
       <ControlPageHeader
         eyebrow="Portfolio command"
         title="Run Tillflow like a managed software business, not a loose collection of accounts."

@@ -12,7 +12,7 @@ export default function KpiCard({
   accent: ReactNode;
 }) {
   return (
-    <div className="metric-card flex min-h-[148px] flex-col justify-between sm:min-h-[168px]">
+    <div className="metric-card flex flex-col justify-between">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="eyebrow">{label}</div>

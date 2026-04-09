@@ -35,11 +35,11 @@ export default function ControlPageHeader({
           <div className="space-y-3">
             <div className="eyebrow">{eyebrow}</div>
             <h1 className="page-title font-[var(--font-display)] text-control-ink">{title}</h1>
-            <p className="max-w-3xl text-base leading-8 text-black/64">{description}</p>
+            <p className="hidden max-w-3xl text-base leading-8 text-black/64 sm:block">{description}</p>
           </div>
 
           {chips && chips.length > 0 ? (
-            <div className="mobile-nav-strip -mx-1 flex gap-2 overflow-x-auto pb-1">
+            <div className="mobile-nav-strip -mx-1 hidden gap-2 overflow-x-auto pb-1 sm:flex">
               {chips.map((chip) => {
                 const className = `control-chip ${
                   chip.tone === 'dark'
@@ -63,7 +63,7 @@ export default function ControlPageHeader({
           ) : null}
 
           {stats && stats.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="hidden gap-3 sm:grid sm:grid-cols-2 xl:grid-cols-4">
               {stats.map((stat) => (
                 <div key={stat.label} className="control-page-summary-card">
                   <div className="eyebrow">{stat.label}</div>
@@ -75,7 +75,7 @@ export default function ControlPageHeader({
           ) : null}
         </div>
 
-        {aside ? <div className="control-page-hero-aside">{aside}</div> : null}
+        {aside ? <div className="hidden control-page-hero-aside xl:block">{aside}</div> : null}
       </div>
     </section>
   );
