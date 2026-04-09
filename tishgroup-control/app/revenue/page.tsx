@@ -3,7 +3,7 @@ import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
-import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
+import { formatCedi, getAgingBucketsFor, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,13 @@ export default async function RevenuePage() {
   const businesses = await listManagedBusinesses();
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
+  const buckets = getAgingBucketsFor(businesses);
+  const agingCards = [
+    { key: 'current', ...buckets.current, tone: 'border-[#1f8a82]/18 bg-[#1f8a82]/6' },
+    { key: 'approaching', ...buckets.approaching, tone: 'border-[#e2a83d]/20 bg-[#e2a83d]/8' },
+    { key: 'overdue', ...buckets.overdue, tone: 'border-[#b35c2e]/20 bg-[#b35c2e]/8' },
+    { key: 'locked', ...buckets.locked, tone: 'border-black/10 bg-black/[0.03]' },
+  ];
   const riskCards = [
     {
       label: 'Due soon',
@@ -34,37 +41,36 @@ export default async function RevenuePage() {
   ];
   const headerStats = [
     {
-      label: 'MRR',
-      value: formatCedi(summary.mrr),
-      hint: 'Current monthly-equivalent recurring revenue across the managed portfolio.',
+      label: 'Healthy accounts',
+      value: String(buckets.current.count),
+      hint: 'Accounts active and current — no immediate billing action needed.',
     },
     {
-      label: 'ARR',
-      value: formatCedi(summary.arr),
-      hint: 'Simple annualized run-rate based on the current sold-plan base.',
+      label: 'Due now',
+      value: formatCedi(buckets.approaching.amount),
+      hint: 'Cash in the billing window — reminders before these tip into overdue.',
     },
     {
-      label: 'Expected collections',
-      value: formatCedi(summary.expectedCollections),
-      hint: 'Cash that needs active follow-up rather than passive reporting.',
+      label: 'Overdue exposure',
+      value: formatCedi(buckets.overdue.amount),
+      hint: 'Outstanding across grace and fallback accounts needing same-day follow-up.',
     },
     {
-      label: 'Active paid accounts',
-      value: String(summary.activePaid),
-      hint: 'Accounts currently paying and operating without immediate billing pressure.',
+      label: 'Locked exposure',
+      value: formatCedi(buckets.locked.amount),
+      hint: 'Cash tied to accounts with access restrictions. Needs payment or decision.',
     },
   ];
 
   return (
     <div className="space-y-6">
       <ControlPageHeader
-        eyebrow="Revenue view"
-        title="Portfolio revenue, not just account status."
-        description="Read this page like an operating review: what the portfolio produces, where cash is exposed, and which collections lane should get the next team action."
+        eyebrow="Receivables"
+        title="Track cash position, not just status."
+        description="Four aging buckets show exactly where money sits: healthy, approaching, overdue, and locked. Use this to route the team into the right collections lane before cash slips further."
         chips={[
-          { label: 'Revenue summary', href: '#revenue-summary' },
+          { label: 'Aging buckets', href: '#aging-buckets' },
           { label: 'Protection sequence', href: '#protection-sequence', tone: 'dark' },
-          { label: 'Risk lanes', href: '#risk-lanes' },
           { label: 'Plan economics', href: '#plan-economics' },
         ]}
         stats={headerStats}
@@ -95,27 +101,15 @@ export default async function RevenuePage() {
         )}
       />
 
-      <section id="revenue-summary" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="metric-card">
-          <div className="eyebrow">MRR</div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight text-control-ink">{formatCedi(summary.mrr)}</div>
-          <p className="mt-3 text-sm leading-6 text-black/62">Current monthly-equivalent revenue across all active subscriptions and annual contracts.</p>
-        </div>
-        <div className="metric-card">
-          <div className="eyebrow">ARR</div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight text-control-ink">{formatCedi(summary.arr)}</div>
-          <p className="mt-3 text-sm leading-6 text-black/62">Simple annualized run-rate based on the current portfolio mix.</p>
-        </div>
-        <div className="metric-card">
-          <div className="eyebrow">Expected collections</div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight text-control-ink">{formatCedi(summary.expectedCollections)}</div>
-          <p className="mt-3 text-sm leading-6 text-black/62">Cash at risk across due-soon, overdue, fallback, and locked accounts.</p>
-        </div>
-        <div className="metric-card">
-          <div className="eyebrow">Active paid accounts</div>
-          <div className="mt-3 text-3xl font-semibold tracking-tight text-control-ink">{summary.activePaid}</div>
-          <p className="mt-3 text-sm leading-6 text-black/62">Accounts paying and operating without current billing pressure.</p>
-        </div>
+      <section id="aging-buckets" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {agingCards.map((card) => (
+          <Link key={card.key} href={card.href} className={`rounded-[24px] border p-5 transition hover:-translate-y-[1px] hover:shadow-md ${card.tone}`}>
+            <div className="eyebrow">{card.label}</div>
+            <div className="mt-3 text-2xl font-semibold tracking-tight text-control-ink">{card.amount > 0 ? formatCedi(card.amount) : card.count}</div>
+            <div className="mt-1 text-sm font-medium text-black/52">{card.count} account{card.count === 1 ? '' : 's'}</div>
+            <p className="mt-3 text-sm leading-6 text-black/62">{card.description}</p>
+          </Link>
+        ))}
       </section>
 
       <section id="protection-sequence" className="panel p-6">
@@ -134,26 +128,6 @@ export default async function RevenuePage() {
               </div>
               <div className="mt-4 text-lg font-semibold text-control-ink">{card.label}</div>
               <p className="mt-3 text-sm leading-6 text-black/62">{card.note}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section id="risk-lanes" className="panel p-6">
-        <SectionHeading
-          eyebrow="Revenue risk lanes"
-          title="See where follow-up should happen next"
-          description="This is the Stripe-style operating layer the page was missing: not just totals, but where the team should move to protect cash right now."
-        />
-
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          {riskCards.map((card) => (
-            <Link key={card.label} href={card.href} className="control-action-card">
-              <div className="eyebrow">Queue</div>
-              <div className="mt-2 text-lg font-semibold text-control-ink">{card.label}</div>
-              <div className="mt-3 text-3xl font-semibold tracking-tight text-control-ink">{card.value}</div>
-              <p className="mt-3 text-sm leading-6 text-black/62">{card.note}</p>
-              <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-control-ink">Open collections</div>
             </Link>
           ))}
         </div>
