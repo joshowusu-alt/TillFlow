@@ -1,8 +1,11 @@
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import PageHeader from '@/components/PageHeader';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import AnalyticsClient from './AnalyticsClient';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +17,17 @@ export default async function AnalyticsPage({
     const { business } = await requireBusiness(['MANAGER', 'OWNER']);
     if (!business) {
         return <div className="card p-6">Business not found.</div>;
+    }
+    const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+    if (!features.advancedReports) {
+        return (
+            <AdvancedModeNotice
+                title="Analytics is available on Growth and Pro"
+                description="Trend analysis and deeper trading analytics are unlocked on businesses provisioned for Growth or Pro."
+                featureName="Analytics"
+                minimumPlan="GROWTH"
+            />
+        );
     }
 
     // Period selector: 7d (default), 14d, 30d, 90d
@@ -244,7 +258,12 @@ export default async function AnalyticsPage({
             <PageHeader
                 title="Advanced Analytics"
                 subtitle="Deep insights into your business performance."
-                actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
+                actions={
+                    <>
+                        <PlanFeatureBadge plan="GROWTH" />
+                        <RefreshIndicator fetchedAt={new Date().toISOString()} />
+                    </>
+                }
             />
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                 Profit analytics use the stored sale-line cost where available. If an older sale never captured line cost, analytics temporarily fall back to the current product base cost until those lines are backfilled or corrected.

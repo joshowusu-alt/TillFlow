@@ -6,9 +6,12 @@ import type { PriorityAction } from '@/lib/owner-intel';
 import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import OwnerStatusStrip from '@/components/owner/OwnerStatusStrip';
 import { getBusinessStores } from '@/lib/services/stores';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +26,17 @@ const quickLinks = [
 
 export default async function OwnerIntelligencePage() {
   const { business, user } = await requireBusiness(['OWNER']);
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.ownerIntelligence) {
+    return (
+      <AdvancedModeNotice
+        title="Owner Dashboard is available on Pro"
+        description="Executive oversight, leakage watch, and cross-business control views are unlocked on businesses provisioned for Pro."
+        featureName="Owner Dashboard"
+        minimumPlan="PRO"
+      />
+    );
+  }
 
   const [{ stores }, snapshot] = await Promise.all([
     getBusinessStores(business.id),
@@ -43,6 +57,7 @@ export default async function OwnerIntelligencePage() {
           description="See business health, cash pressure, stock risk, debtor follow-up, and trading activity in one serious retail control center."
         />
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <PlanFeatureBadge plan="PRO" />
           <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={60_000} />
           <a
             href="/reports/owner/export?format=html"

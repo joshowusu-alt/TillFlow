@@ -173,7 +173,7 @@ TillFlow works as a Progressive Web App on any device:
 
 ## Tips
 
-- **Switch to Advanced Mode** in Settings to unlock full double-entry accounting views
+- **Growth and Pro plans** unlock fuller financial reporting and deeper accounting visibility
 - **Barcode scanning** works with any USB or Bluetooth barcode scanner — just plug in and scan
 - **Cash drawer** is supported via USB (Web Serial API) — configure in Settings
 - **Thermal receipt printing** via QZ Tray for ESC/POS printers

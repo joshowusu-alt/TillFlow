@@ -42,7 +42,7 @@ export interface BackupData {
 
 export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> {
   return safeAction(async () => {
-    const { businessId, user } = await withBusinessContext(['OWNER']);
+    const { businessId, user } = await withBusinessContext(['OWNER'], { requireWrite: false });
 
     const business = await prisma.business.findUnique({ where: { id: businessId } });
     if (!business) return err('No business set up yet. Please complete onboarding first.');
@@ -230,6 +230,18 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       data: {
         name: backup.business.name ?? 'Restored Business',
         currency: backup.business.currency ?? 'GHS',
+        plan:
+          backup.business.plan ??
+          (backup.business.mode === 'ADVANCED'
+            ? backup.business.storeMode === 'MULTI_STORE'
+              ? 'PRO'
+              : 'GROWTH'
+            : 'STARTER'),
+        planStatus: backup.business.planStatus ?? 'ACTIVE',
+        trialEndsAt: backup.business.trialEndsAt ? new Date(backup.business.trialEndsAt) : null,
+        planSetAt: backup.business.planSetAt ? new Date(backup.business.planSetAt) : new Date(),
+        planChangedByUserId: backup.business.planChangedByUserId ?? null,
+        billingNotes: backup.business.billingNotes ?? null,
         vatEnabled: !!backup.business.vatEnabled,
         vatNumber: backup.business.vatNumber ?? null,
         mode: backup.business.mode ?? 'SIMPLE',

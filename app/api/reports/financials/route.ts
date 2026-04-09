@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { getIncomeStatement, getBalanceSheet, getCashflow } from '@/lib/reports/financials';
 import { formatMoney } from '@/lib/format';
 
@@ -12,6 +13,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const type = url.searchParams.get('type') ?? 'income-statement';
   const currency = business.currency;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+
+  if ((type === 'income-statement' || type === 'balance-sheet' || type === 'cashflow') && !features.financialReports) {
+    return NextResponse.json({ error: 'Growth plan required' }, { status: 403 });
+  }
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

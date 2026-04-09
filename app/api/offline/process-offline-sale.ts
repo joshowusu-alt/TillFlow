@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
+import { getBillingEntitlement } from '@/lib/billing-entitlements';
 import { createSale, type DiscountType } from '@/lib/services/sales';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { parseDiscountValue } from '@/lib/format';
@@ -62,6 +64,10 @@ export async function processOfflineSale(
         select: { id: true }
     });
     if (!store) throw new Error('Store not found');
+
+    const { business } = await findBusinessCommercialSnapshot(user.businessId);
+    const entitlement = getBillingEntitlement((business as any) ?? {});
+    if (!entitlement.canWrite) throw new Error('This business is read-only until payment is recorded in Billing & Plans');
 
     const till = await prisma.till.findFirst({
         where: { id: payload.tillId, storeId: store.id, active: true },

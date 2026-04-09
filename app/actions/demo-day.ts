@@ -64,6 +64,9 @@ function genId(): string {
  */
 export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: number; error?: string }> {
   const { user, business } = await requireBusiness(['OWNER']);
+  if (!(business as any).billingCanWrite) {
+    return { ok: false, salesCount: 0, error: 'This business is read-only until payment is recorded in Billing & Plans.' };
+  }
 
   if (business.hasDemoData) {
     return { ok: true, salesCount: 0, error: 'Demo data already generated. Wipe first to regenerate.' };
@@ -358,6 +361,9 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
  */
 export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
   const { business } = await requireBusiness(['OWNER']);
+  if (!(business as any).billingCanWrite) {
+    return { ok: false, error: 'This business is read-only until payment is recorded in Billing & Plans.' };
+  }
 
   if (!business.hasDemoData) {
     return { ok: true };
@@ -444,6 +450,9 @@ const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa', 'Emmanuel Asante', 'Ab
  */
 export async function clearSampleData(): Promise<{ ok: boolean; removed: string[]; error?: string }> {
   const { business } = await requireBusiness(['OWNER']);
+  if (!(business as any).billingCanWrite) {
+    return { ok: false, removed: [], error: 'This business is read-only until payment is recorded in Billing & Plans.' };
+  }
   const removed: string[] = [];
 
   try {

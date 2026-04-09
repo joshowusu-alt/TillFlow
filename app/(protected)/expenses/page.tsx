@@ -14,7 +14,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
-  const features = getFeatures(business.mode as any);
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   // Run all queries in parallel
@@ -59,8 +59,8 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         <h2 className="text-lg font-display font-semibold">Record expense</h2>
         <FormError error={searchParams?.error} />
         <form action={createExpenseAction} className="mt-4 grid gap-4 md:grid-cols-4" encType="multipart/form-data">
-          <input type="hidden" name="useSimple" value={features.advancedOps ? 'false' : 'true'} />
-          {features.advancedOps ? (
+          <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
+          {features.detailedExpenseCategories ? (
             <div>
               <label className="label">Category</label>
               <select className="input" name="accountId" required>
@@ -78,7 +78,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
                 Operating Expenses
               </div>
               <div className="mt-1 text-xs text-black/50">
-                Simple mode uses one expense bucket. Switch to Advanced for full categories.
+                Starter keeps one expense bucket. Growth and Pro unlock full expense categories.
               </div>
             </div>
           )}

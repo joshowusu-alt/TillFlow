@@ -1,7 +1,10 @@
 import Link from 'next/link';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import PageHeader from '@/components/PageHeader';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import LabelPrintClient from '@/app/(protected)/products/labels/LabelPrintClient';
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import type { LabelPrintMode, LabelSize } from '@/lib/labels/types';
 
@@ -17,6 +20,17 @@ export default async function ProductLabelsPage({
 }) {
   const { business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.advancedOps) {
+    return (
+      <AdvancedModeNotice
+        title="Product Labels is available on Growth and Pro"
+        description="Shelf tags, barcode stickers, and label-printing workflows are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Product Labels"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
 
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
@@ -77,6 +91,7 @@ export default async function ProductLabelsPage({
         subtitle="Build shelf tags, barcode stickers, and A4 label sheets from your product catalog."
         actions={
           <>
+            <PlanFeatureBadge plan="GROWTH" />
             <Link href="/products" className="btn-secondary justify-center text-sm">
               Back to products
             </Link>

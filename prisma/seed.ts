@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import bcrypt from 'bcryptjs';
+import { ensureControlPlaneBusinessBootstrap } from '../lib/control-plane-bootstrap';
 
 const prisma = new PrismaClient();
 
@@ -96,7 +97,15 @@ async function main() {
   let business = await prisma.business.findFirst();
   if (!business) {
     business = await prisma.business.create({
-      data: { name: 'Supermarket Demo', currency: 'GHS', vatEnabled: false, mode: 'SIMPLE', openingCapitalPence: 2000000 },
+      data: {
+        name: 'Supermarket Demo',
+        currency: 'GHS',
+        plan: 'STARTER',
+        planStatus: 'ACTIVE',
+        vatEnabled: false,
+        mode: 'SIMPLE',
+        openingCapitalPence: 2000000,
+      },
     });
   }
 
@@ -200,6 +209,17 @@ async function main() {
       categoryMap.set(c.name, created.id);
     }
   }
+
+  await ensureControlPlaneBusinessBootstrap(prisma as any, {
+    businessId: business.id,
+    ownerName: 'Owner',
+    ownerEmail: 'owner@store.com',
+    plan: business.plan,
+    status: business.planStatus,
+    supportStatus: 'HEALTHY',
+    notes: 'Seeded starter control-plane record for the local demo tenant.',
+    startedAt: business.planSetAt,
+  });
 
   const cat = (name: string) => categoryMap.get(name);
 

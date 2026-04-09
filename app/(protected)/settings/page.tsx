@@ -4,18 +4,13 @@ import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
-import InstallButton from '@/components/InstallButton';
-import ClearSampleDataButton from '@/components/ClearSampleDataButton';
-import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
-import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsButton';
-import DataDiagnosticPanel from '@/components/DataDiagnosticPanel';
 import OpeningBalancesForm from '@/components/OpeningBalancesForm';
 import { getCurrencySymbol } from '@/lib/format';
 import { isQzSigningConfigured } from '@/lib/qz-signing.server';
 import { prisma } from '@/lib/prisma';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const currencySymbol = getCurrencySymbol(business.currency);
   const qzSigningConfigured = isQzSigningConfigured();
@@ -333,8 +328,8 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           </div>
 
           <div className="md:col-span-2 pt-2">
-            <h2 className="text-base font-display font-semibold">Contacts & customer flow</h2>
-            <p className="mt-1 text-sm text-black/55">Phone, address, Mobile Money, and how customers are shared across branches.</p>
+            <h2 className="text-base font-display font-semibold">Contacts & payments</h2>
+            <p className="mt-1 text-sm text-black/55">Phone, address, and Mobile Money details used across receipts and payment flows.</p>
           </div>
           <div>
             <label className="label">Phone Number</label>
@@ -362,54 +357,6 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="momoNumber" defaultValue={(business as any).momoNumber ?? ''} placeholder="024 XXX XXXX" />
             <div className="mt-1 text-xs text-black/50">Displayed on receipts for customer payments.</div>
           </div>
-          <div>
-            <label className="label">Customer Scope</label>
-            <select className="input" name="customerScope" defaultValue={(business as any).customerScope ?? 'SHARED'}>
-              <option value="SHARED">Shared across all branches</option>
-              <option value="BRANCH">Branch-specific customers</option>
-            </select>
-            <div className="mt-1 text-xs text-black/50">
-              Choose whether customer records are shared company-wide or isolated per branch.
-            </div>
-          </div>
-
-          <div className="md:col-span-2 pt-2">
-            <h2 className="text-base font-display font-semibold">Operating mode</h2>
-            <p className="mt-1 text-sm text-black/55">Choose the feature depth and whether you run one branch or multiple branches.</p>
-          </div>
-          <div className="md:col-span-2">
-            <label className="label">Mode</label>
-            <div className="mt-2 flex flex-wrap gap-4 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="mode"
-                  value="SIMPLE"
-                  defaultChecked={business.mode !== 'ADVANCED'}
-                />
-                Simple (default)
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="mode"
-                  value="ADVANCED"
-                  defaultChecked={business.mode === 'ADVANCED'}
-                />
-                Advanced (full operations)
-              </label>
-            </div>
-          </div>
-          <div>
-            <label className="label">Branch Mode</label>
-            <select className="input" name="storeMode" defaultValue={(business as any).storeMode ?? 'SINGLE_STORE'}>
-              <option value="SINGLE_STORE">Single Branch</option>
-              <option value="MULTI_STORE">Multi-Branch</option>
-            </select>
-            <div className="mt-1 text-xs text-black/50">
-              Single Branch hides Transfers and multi-branch features.
-            </div>
-          </div>
           <div className="md:col-span-2 flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-black/55">
               Save once you finish updating your business profile and operational rules.
@@ -420,128 +367,25 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         <div className="mt-4 text-xs text-black/50">
           VAT OFF hides VAT UI and skips VAT posting. VAT ON will post VAT Payable and VAT Receivable (input VAT).
         </div>
-        <div className="mt-2 text-xs text-black/50">
-          Simple mode hides advanced reporting and enterprise operations from the main navigation.
-        </div>
       </div>
       <CashDrawerSetup businessId={business.id} />
 
-      {/* Quick links */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card flex flex-col gap-4 p-5 transition hover:shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
-              <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-semibold">Install App</h3>
-              <p className="text-sm text-black/50">Install on this device</p>
-            </div>
-          </div>
-          <div className="w-full sm:w-auto"><InstallButton /></div>
-        </div>
-        <a href="/settings/data-repair" className="card flex items-center gap-4 p-5 transition hover:shadow-lg sm:p-6">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-rose-100">
-            <svg className="h-6 w-6 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="font-semibold">Data Repair</h3>
-            <p className="text-sm text-black/50">Diagnose &amp; fix data issues</p>
-          </div>
-        </a>
-        <a href="/onboarding" className="card flex items-center gap-4 p-5 transition hover:shadow-lg sm:p-6">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accentSoft">
-            <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="font-semibold">Setup Guide</h3>
-            <p className="text-sm text-black/50">Restart the setup wizard anytime</p>
-          </div>
-        </a>
-      </div>
-
-      {/* Data safety trust note */}
-      <div className="flex flex-col gap-3 rounded-xl border border-black/5 bg-slate-50 px-5 py-4 sm:flex-row sm:items-start">
-        <svg className="h-5 w-5 flex-shrink-0 text-black/30 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        </svg>
-        <p className="text-xs text-black/50 leading-relaxed">
-          Your data is <strong className="text-black/60">encrypted in transit and at rest</strong>, automatically backed up daily,
-          and stored on secure cloud infrastructure in Europe (Vercel&nbsp;/&nbsp;AWS&nbsp;eu-west-2).
-          TillFlow never shares your business data with third parties.
-        </p>
-      </div>
-
-      {/* Data management — clear demo/sample data */}
-      {user.role === 'OWNER' && (
-        <div className="card p-6">
-          <h3 className="font-semibold mb-1">Sample Data</h3>
-          <p className="text-sm text-black/50 mb-4">
-            Remove demo products, sample customers, demo sales and expenses that were
-            created during setup. Your own data will not be affected.
-          </p>
-          <ClearSampleDataButton />
-        </div>
-      )}
-
-      {/* Import & Data */}
       <div className="card p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h3 className="font-semibold mb-1">Import &amp; Data</h3>
+            <h3 className="font-semibold mb-1">Related settings</h3>
             <p className="text-sm text-black/50">
-              Bulk-create your product catalogue and record opening stock quantities from a CSV or Excel spreadsheet.
-              Useful when migrating from another system.
+              Business keeps company profile, tax, printing, and controls. Use the dedicated tabs below for structure, billing, imports, and recovery.
             </p>
           </div>
-          <a href="/settings/import-stock" className="btn-primary w-full shrink-0 text-center text-sm sm:w-auto">
-            Import stock from CSV / Excel →
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a href="/settings/organization" className="btn-secondary text-sm">Organization</a>
+            <a href="/settings/billing" className="btn-secondary text-sm">Billing</a>
+            <a href="/settings/import-stock" className="btn-secondary text-sm">Import Stock</a>
+            <a href="/settings/data-repair" className="btn-secondary text-sm">Data Repair</a>
+          </div>
         </div>
       </div>
-
-      {/* Data repair — fix missing accounting journal entries */}
-      {user.role === 'OWNER' && (
-        <div className="card p-6">
-          <h3 className="font-semibold mb-1">Repair Accounting Entries</h3>
-          <p className="text-sm text-black/50 mb-4">
-            If your Balance Sheet shows GHS 0 for assets despite having recorded purchases,
-            use this to create any missing journal entries. Safe to run multiple times.
-          </p>
-          <RepairJournalEntriesButton />
-        </div>
-      )}
-
-      {/* Restore products deleted by Clear Sample Data */}
-      {user.role === 'OWNER' && (
-        <div className="card p-6">
-          <h3 className="font-semibold mb-1">Restore Deleted Products</h3>
-          <p className="text-sm text-black/50 mb-4">
-            If sales are missing from the sales list after clearing sample data,
-            use this to restore products that were accidentally removed. Safe to run multiple times.
-          </p>
-          <RestoreOrphanedProductsButton />
-        </div>
-      )}
-
-      {/* Data diagnostic and repair */}
-      {user.role === 'OWNER' && (
-        <div className="card p-6">
-          <h3 className="font-semibold mb-1">Data Diagnostic &amp; Repair</h3>
-          <p className="text-sm text-black/50 mb-4">
-            Diagnose data issues, clean up orphaned journal entries from deleted sales,
-            and void test/setup sales without needing a manager PIN.
-          </p>
-          <DataDiagnosticPanel />
-        </div>
-      )}
     </div>
   );
 }

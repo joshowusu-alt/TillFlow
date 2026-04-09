@@ -1,11 +1,14 @@
 import DownloadLink from '@/components/DownloadLink';
 import PageHeader from '@/components/PageHeader';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
@@ -30,6 +33,17 @@ export default async function RiskMonitorPage({
   searchParams?: { from?: string; to?: string; storeId?: string; status?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.riskMonitor) {
+    return (
+      <AdvancedModeNotice
+        title="Risk Monitor is available on Growth and Pro"
+        description="Control alerts, override patterns, and anti-fraud monitoring are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Risk Monitor"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
@@ -143,13 +157,16 @@ export default async function RiskMonitorPage({
         title="Risk Monitor"
         subtitle="Anti-fraud alerts and cashier trends."
         actions={
-          <DownloadLink
-            href={`/exports/risk-summary?from=${fromIso}&to=${toIso}&storeId=${storeId}&status=${status}`}
-            fallbackFilename="risk-summary.csv"
-            className="btn-secondary w-full justify-center text-sm sm:w-auto sm:text-xs"
-          >
-            Export Summary CSV
-          </DownloadLink>
+          <>
+            <PlanFeatureBadge plan="GROWTH" />
+            <DownloadLink
+              href={`/exports/risk-summary?from=${fromIso}&to=${toIso}&storeId=${storeId}&status=${status}`}
+              fallbackFilename="risk-summary.csv"
+              className="btn-secondary w-full justify-center text-sm sm:w-auto sm:text-xs"
+            >
+              Export Summary CSV
+            </DownloadLink>
+          </>
         }
       />
 

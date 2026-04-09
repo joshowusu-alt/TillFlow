@@ -5,6 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { ensureControlPlaneBusinessBootstrap } from '../lib/control-plane-bootstrap';
 import {
   buildSalesLedgerCsv,
   buildPurchasesLedgerCsv,
@@ -110,6 +111,15 @@ async function testDemoModeIsolation() {
   const demoName = `QA_DEMO_${Date.now()}`;
   const demo = await prisma.business.create({
     data: { name: demoName, currency: 'GHS', isDemo: true },
+  });
+  await ensureControlPlaneBusinessBootstrap(prisma as any, {
+    businessId: demo.id,
+    ownerName: demoName,
+    plan: demo.plan,
+    status: demo.planStatus,
+    supportStatus: 'HEALTHY',
+    notes: 'QA demo record for phase 3B automation checks.',
+    startedAt: demo.planSetAt,
   });
   assert(demo.isDemo === true, 'Demo business isDemo should be true');
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstrap';
 
 /**
  * GET /api/seed-once
@@ -38,6 +39,8 @@ export async function GET(request: Request) {
         data: {
           name: 'Supermarket Demo',
           currency: 'GHS',
+          plan: 'STARTER',
+          planStatus: 'ACTIVE',
           vatEnabled: false,
           mode: 'SIMPLE',
           openingCapitalPence: 2000000,
@@ -136,6 +139,18 @@ export async function GET(request: Request) {
       },
     });
     results.push('Upserted cashier user');
+
+    await ensureControlPlaneBusinessBootstrap(prisma as any, {
+      businessId: business.id,
+      ownerName: 'Owner',
+      ownerEmail: 'owner@store.com',
+      plan: business.plan,
+      status: business.planStatus,
+      supportStatus: 'HEALTHY',
+      notes: 'Seeded demo business for local development and smoke checks.',
+      startedAt: business.planSetAt,
+    });
+    results.push('Bootstrapped control-plane profile');
 
     // 7. Units
     const unitData = [

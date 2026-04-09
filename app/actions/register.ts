@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { checkRegisterRateLimit } from '@/lib/security/register-throttle';
 import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName } from '@/lib/business-scope';
+import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstrap';
 
 /**
  * Self-service registration: creates a new Business, Store, Till, and OWNER user.
@@ -52,6 +53,8 @@ export async function register(formData: FormData) {
       data: {
         name: businessName,
         currency,
+        plan: 'STARTER',
+        planStatus: 'ACTIVE',
         vatEnabled: false,
         mode: 'SIMPLE',
       },
@@ -82,6 +85,17 @@ export async function register(formData: FormData) {
     });
 
     return { business, store, owner };
+  });
+
+  await ensureControlPlaneBusinessBootstrap(prisma as any, {
+    businessId: result.business.id,
+    ownerName,
+    ownerEmail: result.owner.email,
+    plan: result.business.plan,
+    status: result.business.planStatus,
+    supportStatus: 'UNREVIEWED',
+    notes: 'Awaiting first Tishgroup commercial review after signup.',
+    startedAt: result.business.planSetAt,
   });
 
   // Seed demo data only in demo mode; fresh mode gets a clean business

@@ -28,7 +28,7 @@ export default function SettingsTabs({ role }: { role: AppRole }) {
                   className={`px-3 py-2 text-sm font-medium rounded-t-lg transition-colors ${
                     active
                       ? 'border-b-2 border-primary text-primary bg-primary/5'
-                      : tab.advanced
+                      : tab.minimumPlan
                         ? 'text-black/55 hover:text-ink hover:bg-black/5'
                         : 'text-muted hover:text-ink hover:bg-surface'
                   }`}

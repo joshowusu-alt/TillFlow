@@ -1,4 +1,5 @@
 import { requireBusiness } from '@/lib/auth';
+import { getBusinessPlan } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import TopNav from '@/components/TopNav';
@@ -6,6 +7,12 @@ import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
+
+function formatDateLabel(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('en-GB');
+}
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
@@ -62,6 +69,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
+  const billingAccessState = String((business as any).billingAccessState ?? 'ACTIVE');
+  const billingGraceEndsAt = formatDateLabel((business as any).billingGraceEndsAt as Date | null | undefined);
+  const billingStarterFallbackEndsAt = formatDateLabel(
+    (business as any).billingStarterFallbackEndsAt as Date | null | undefined
+  );
+  const billingReadOnlyAt = formatDateLabel((business as any).billingReadOnlyAt as Date | null | undefined);
 
   // Compute lightweight readiness % — cached for 5 min per business.
   // Invalidated when products, staff, or sales change (revalidateTag in relevant actions).
@@ -95,7 +108,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
-        mode={(business?.mode as any) ?? 'SIMPLE'}
+        plan={getBusinessPlan((business as any).plan ?? (business?.mode as any), ((business as any).storeMode as any) ?? 'SINGLE_STORE')}
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
         momoEnabled={!!business.momoEnabled}
@@ -132,6 +145,45 @@ export default async function ProtectedLayout({ children }: { children: React.Re
               className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
             >
               {readinessPct > 0 ? 'Continue Setup' : 'Get Started'} &rarr;
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {billingAccessState === 'GRACE' && !pathname.includes('/settings/billing') && (
+        <div className="border-b border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-900 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Payment is overdue. Full access remains available until {billingGraceEndsAt ?? 'the end of the current grace period'}.
+            </p>
+            <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
+              Review billing
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {billingAccessState === 'STARTER_FALLBACK' && !pathname.includes('/settings/billing') && (
+        <div className="border-b border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-900 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              This business is on Starter fallback access until {billingStarterFallbackEndsAt ?? billingReadOnlyAt ?? 'the fallback window ends'}.
+            </p>
+            <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
+              Open billing controls
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {billingAccessState === 'READ_ONLY' && !pathname.includes('/settings/billing') && (
+        <div className="border-b border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-900 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              This business is read-only. New write activity is blocked until payment is recorded.
+            </p>
+            <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
+              Restore access
             </Link>
           </div>
         </div>

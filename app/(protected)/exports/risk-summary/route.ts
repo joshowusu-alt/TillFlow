@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
 import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
@@ -64,9 +65,14 @@ export async function GET(request: Request) {
     }),
     prisma.business.findUnique({
       where: { id: user.businessId },
-      select: { name: true, currency: true },
+      select: { name: true, currency: true, plan: true, mode: true, storeMode: true },
     }),
   ]);
+
+  const features = getFeatures((business as any)?.plan ?? (business as any)?.mode, (business as any)?.storeMode as any);
+  if (!features.riskMonitor) {
+    return NextResponse.json({ error: 'Growth plan required' }, { status: 403 });
+  }
 
   const byCashier = new Map<
     string,

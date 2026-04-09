@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstrap';
 
 /** Get (or create) the demo business. */
 export async function getDemoBusiness() {
@@ -17,6 +18,8 @@ async function ensureDemoBusinessInternal() {
     data: {
       name: '🛒 Demo Supermarket',
       currency: 'GHS',
+      plan: 'PRO',
+      planStatus: 'ACTIVE',
       vatEnabled: true,
       vatNumber: 'DEMO-VAT-0000',
       mode: 'ADVANCED',
@@ -26,6 +29,16 @@ async function ensureDemoBusinessInternal() {
       isDemo: true,
       hasDemoData: true,
     },
+  });
+
+  await ensureControlPlaneBusinessBootstrap(prisma as any, {
+    businessId: demo.id,
+    ownerName: 'Demo account',
+    plan: demo.plan,
+    status: demo.planStatus,
+    supportStatus: 'HEALTHY',
+    notes: 'Internal demo business seeded for product showcase workflows.',
+    startedAt: demo.planSetAt,
   });
 
   // Create a default store
@@ -96,6 +109,9 @@ export async function seedDemoAction(): Promise<{ ok: boolean; businessId?: stri
   // Must be an OWNER/MANAGER of a real business to trigger seeding
   const { business: callerBusiness } = await requireBusiness(['OWNER', 'MANAGER']);
   if (!callerBusiness) return { ok: false, error: 'Unauthorized' };
+  if (!(callerBusiness as any).billingCanWrite) {
+    return { ok: false, error: 'This business is read-only until payment is recorded in Billing & Plans.' };
+  }
 
   const demo = await ensureDemoBusinessInternal();
   return { ok: true, businessId: demo.id };

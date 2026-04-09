@@ -5,7 +5,9 @@ import EmptyState from '@/components/EmptyState';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
 import DateRangeFilterCard from '@/components/reports/DateRangeFilterCard';
 import ReportSummaryCard, { ReportSummaryRow } from '@/components/reports/ReportSummaryCard';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
@@ -17,6 +19,17 @@ export default async function IncomeStatementPage({
 }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.financialReports) {
+    return (
+      <AdvancedModeNotice
+        title="Income Statement is available on Growth and Pro"
+        description="Financial statements are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Income Statement"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
 
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);

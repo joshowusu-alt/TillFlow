@@ -1,4 +1,5 @@
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { getOwnerBrief } from '@/lib/owner-intel';
 import { formatMoney } from '@/lib/format';
 import { NextResponse } from 'next/server';
@@ -7,6 +8,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const { business } = await requireBusiness(['OWNER', 'MANAGER']);
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.ownerIntelligence) {
+    return NextResponse.json({ error: 'Pro plan required' }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const format = searchParams.get('format') ?? 'csv';
 

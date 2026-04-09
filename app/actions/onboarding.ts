@@ -158,6 +158,7 @@ export async function getReadiness(): Promise<ReadinessData> {
  */
 export async function completeOnboarding(): Promise<void> {
   const { business } = await requireBusiness(['OWNER']);
+  if (!(business as any).billingCanWrite) return;
   if (!business.onboardingCompletedAt) {
     await prisma.business.update({
       where: { id: business.id },
@@ -172,6 +173,7 @@ export async function completeOnboarding(): Promise<void> {
  */
 export async function toggleGuidedSetup(enabled: boolean): Promise<void> {
   const { business } = await requireBusiness(['OWNER']);
+  if (!(business as any).billingCanWrite) return;
   await prisma.business.update({
     where: { id: business.id },
     data: { guidedSetup: enabled },

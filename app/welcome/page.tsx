@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
+import { PLAN_MONTHLY_PRICES } from '@/lib/plan-pricing';
 
 const features = [
   {
@@ -104,7 +105,7 @@ const testimonials = [
 const planPreview: WelcomePlanPreview[] = [
   {
     name: 'Starter',
-    monthlyPrice: 199,
+    monthlyPrice: PLAN_MONTHLY_PRICES.STARTER,
     note: 'Lean single-store start',
     bullets: [
       'POS, products, customers, and inventory basics',
@@ -114,7 +115,7 @@ const planPreview: WelcomePlanPreview[] = [
   },
   {
     name: 'Growth',
-    monthlyPrice: 349,
+    monthlyPrice: PLAN_MONTHLY_PRICES.GROWTH,
     note: 'Best fit for most stores',
     featured: true,
     bullets: [
@@ -125,7 +126,7 @@ const planPreview: WelcomePlanPreview[] = [
   },
   {
     name: 'Pro',
-    monthlyPrice: 699,
+    monthlyPrice: PLAN_MONTHLY_PRICES.PRO,
     note: 'For larger operational control',
     bullets: [
       'Everything in Growth, plus broader owner command capability',

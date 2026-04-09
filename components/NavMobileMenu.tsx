@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { logout } from '@/app/actions/auth';
-import { getFeatures } from '@/lib/features';
+import { getFeatures, hasPlanAccess, type BusinessPlan } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import InstallButton from './InstallButton';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
@@ -22,7 +22,7 @@ interface NavMobileMenuProps {
   storeName?: string;
   features: ReturnType<typeof getFeatures>;
   pathname: string;
-  advancedReportLinks: Set<string>;
+  planGatedLinks: Map<string, BusinessPlan>;
   todaySales?: { totalPence: number; txCount: number; currency: string };
 }
 
@@ -35,7 +35,7 @@ export default function NavMobileMenu({
   storeName,
   features,
   pathname,
-  advancedReportLinks,
+  planGatedLinks,
   todaySales,
 }: NavMobileMenuProps) {
   useBodyScrollLock(mobileOpen);
@@ -113,7 +113,8 @@ export default function NavMobileMenu({
                   <div className="grid gap-2">
                     {group.items.map((item) => {
                       const active = pathname === item.href || pathname.startsWith(item.href + '/');
-                      const isAdvanced = group.id === 'reports' && advancedReportLinks.has(item.href);
+                      const minimumPlan = planGatedLinks.get(item.href);
+                      const planLocked = minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
                       return (
                         <Link
                           key={item.href}
@@ -122,9 +123,9 @@ export default function NavMobileMenu({
                           onClick={() => setMobileOpen(false)}
                         >
                           <span>{item.label}</span>
-                          {!features.advancedReports && isAdvanced ? (
+                          {planLocked && minimumPlan ? (
                             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                              Advanced
+                              {minimumPlan}
                             </span>
                           ) : null}
                         </Link>

@@ -7,6 +7,8 @@ import PageHeader from '@/components/PageHeader';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { markAsOrdered } from '@/app/actions/reorder';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 
 type QueryParams = {
   days?: string;
@@ -30,6 +32,17 @@ export default async function ReorderSuggestionsPage({
   const { business, store: defaultStore } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !defaultStore) {
     return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your shop setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
+  }
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.advancedReports) {
+    return (
+      <AdvancedModeNotice
+        title="Reorder Suggestions is available on Growth and Pro"
+        description="Velocity-based reorder planning and supplier grouping are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Reorder Suggestions"
+        minimumPlan="GROWTH"
+      />
+    );
   }
 
   const lookbackDays = Math.min(Math.max(parseInt(searchParams.days ?? '14', 10) || 14, 7), 90);

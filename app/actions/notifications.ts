@@ -591,6 +591,9 @@ export async function updateWhatsappSettingsAction(formData: FormData): Promise<
   const { requireBusiness } = await import('@/lib/auth');
   const { business } = await requireBusiness(['OWNER']);
   if (!business) return;
+  if (!(business as any).billingCanWrite) {
+    redirect('/settings/notifications?error=This business is read-only until payment is recorded in Billing %26 Plans.');
+  }
 
   const parsed = WhatsAppSettingsSchema.safeParse({
     whatsappEnabled: formData.get('whatsappEnabled') === 'on',

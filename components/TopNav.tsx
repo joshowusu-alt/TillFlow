@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { getFeatures, type BusinessMode, type StoreMode } from '@/lib/features';
+import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { NAV_GROUPS } from '@/lib/navigation-config';
 import InstallButton from './InstallButton';
@@ -18,31 +18,33 @@ export type TopNavUser = {
 
 export default function TopNav({
   user,
-  mode,
+  plan,
   storeMode,
   storeName,
   momoEnabled,
   todaySales,
 }: {
   user: TopNavUser;
-  mode?: BusinessMode;
+  plan?: BusinessPlan;
   storeMode?: StoreMode;
   storeName?: string;
   momoEnabled?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
 }) {
   const pathname = usePathname();
-  const features = getFeatures(mode ?? 'SIMPLE', storeMode ?? 'SINGLE_STORE');
+  const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const isOnline = useNetworkStatus();
   const navRef = useRef<HTMLDivElement>(null);
-  const advancedReportLinks = useMemo(
+  const planGatedLinks = useMemo(
     () =>
-      new Set(
-        NAV_GROUPS.find((group) => group.id === 'reports')?.items
-          .filter((item) => item.advanced)
-          .map((item) => item.href) ?? []
+      new Map(
+        NAV_GROUPS.flatMap((group) =>
+          group.items
+            .filter((item): item is typeof item & { minimumPlan: BusinessPlan } => Boolean(item.minimumPlan))
+            .map((item) => [item.href, item.minimumPlan] as const)
+        )
       ),
     []
   );
@@ -134,7 +136,8 @@ export default function TopNav({
                       </div>
                       {group.items.map((item) => {
                         const active = pathname === item.href;
-                        const isAdvanced = group.id === 'reports' && advancedReportLinks.has(item.href);
+                        const minimumPlan = planGatedLinks.get(item.href);
+                        const planLocked = minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
                         return (
                           <Link
                             key={item.href}
@@ -143,9 +146,9 @@ export default function TopNav({
                             onClick={() => setOpenGroup(null)}
                           >
                             <span>{item.label}</span>
-                            {!features.advancedReports && isAdvanced ? (
+                            {planLocked && minimumPlan ? (
                               <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                                Advanced
+                                {minimumPlan}
                               </span>
                             ) : null}
                           </Link>
@@ -208,7 +211,7 @@ export default function TopNav({
         storeName={storeName}
         features={features}
         pathname={pathname}
-        advancedReportLinks={advancedReportLinks}
+        planGatedLinks={planGatedLinks}
         todaySales={todaySales}
       />
     </>

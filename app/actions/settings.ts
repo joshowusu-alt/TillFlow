@@ -1,16 +1,27 @@
 'use server';
 
+import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ensureChartOfAccounts } from '@/lib/accounting';
+import { getBusinessPlan, hasPlanAccess, type BusinessPlan } from '@/lib/features';
+
+function parseOptionalDate(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /** Lightweight action for onboarding wizard to set store mode */
 export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STORE'): Promise<ActionResult> {
   const { user, businessId } = await withBusinessContext(['OWNER']);
-  const validated = storeMode === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+  const { business: currentBusiness } = await findBusinessCommercialSnapshot(businessId);
+  const requestedStoreMode = storeMode === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+  const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any), requestedStoreMode as any);
+  const validated = requestedStoreMode === 'MULTI_STORE' && hasPlanAccess(plan, 'PRO') ? 'MULTI_STORE' : 'SINGLE_STORE';
   await prisma.business.update({
     where: { id: businessId },
     data: { storeMode: validated },
@@ -23,7 +34,7 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
     action: 'SETTINGS_UPDATE',
     entity: 'Business',
     entityId: businessId,
-    details: { storeMode: validated, source: 'onboarding' },
+    details: { storeMode: validated, requestedStoreMode, source: 'onboarding' },
   }).catch((e) => console.error('[audit]', e));
   return { success: true };
 }
@@ -31,12 +42,12 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
 export async function updateBusinessAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { business: currentBusiness } = await findBusinessCommercialSnapshot(businessId);
 
     const name = formString(formData, 'name');
     const currency = formString(formData, 'currency') || 'GHS';
     const vatEnabled = formData.get('vatEnabled') === 'on';
     const vatNumber = formOptionalString(formData, 'vatNumber');
-    const mode = (formString(formData, 'mode') || 'SIMPLE').toUpperCase();
     const receiptTemplate = formString(formData, 'receiptTemplate') || 'THERMAL_80';
     const printMode = formString(formData, 'printMode') || 'DIRECT_ESC_POS';
     const printerName = formOptionalString(formData, 'printerName');
@@ -52,8 +63,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
-    const customerScopeRaw = (formString(formData, 'customerScope') || 'SHARED').toUpperCase();
-    const customerScope = customerScopeRaw === 'BRANCH' ? 'BRANCH' : 'SHARED';
     const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
     const discountApprovalThresholdBps = Math.max(
@@ -74,8 +83,7 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     );
     // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
     const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));
-    const storeModeRaw = (formString(formData, 'storeMode') || 'SINGLE_STORE').toUpperCase();
-    const storeMode = storeModeRaw === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+    const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any), (currentBusiness?.storeMode as any) ?? 'SINGLE_STORE');
 
     await prisma.business.update({
       where: { id: businessId },
@@ -84,7 +92,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         currency,
         vatEnabled,
         vatNumber,
-        mode,
         receiptTemplate,
         printMode,
         printerName,
@@ -97,7 +104,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         momoEnabled,
         momoProvider,
         momoNumber,
-        customerScope,
         openingCapitalPence,
         requireOpenTillForSales,
         varianceReasonRequired,
@@ -105,17 +111,126 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         minimumMarginThresholdBps,
         inventoryAdjustmentRiskThresholdBase,
         cashVarianceRiskThresholdPence,
-        storeMode,
       } as any
     });
 
-    // When switching to ADVANCED, ensure Chart of Accounts exists so reports work immediately
-    if (mode === 'ADVANCED') {
+    if (hasPlanAccess(plan, 'GROWTH')) {
       await ensureChartOfAccounts(businessId);
     }
 
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, mode } }).catch((e) => console.error('[audit]', e));
+    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, momoEnabled } }).catch((e) => console.error('[audit]', e));
 
     redirect('/settings');
   }, '/settings');
+}
+
+export async function updateOrganizationSettingsAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { business: currentBusiness } = await findBusinessCommercialSnapshot(businessId);
+
+    const customerScopeRaw = (formString(formData, 'customerScope') || 'SHARED').toUpperCase();
+    const customerScope = customerScopeRaw === 'BRANCH' ? 'BRANCH' : 'SHARED';
+    const storeModeRaw = (formString(formData, 'storeMode') || 'SINGLE_STORE').toUpperCase();
+    const requestedStoreMode = storeModeRaw === 'MULTI_STORE' ? 'MULTI_STORE' : 'SINGLE_STORE';
+    const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any), requestedStoreMode as any);
+    const storeMode = requestedStoreMode === 'MULTI_STORE' && hasPlanAccess(plan, 'PRO') ? 'MULTI_STORE' : 'SINGLE_STORE';
+
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        customerScope,
+        storeMode,
+      } as any,
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: { customerScope, storeMode, requestedStoreMode, source: 'organization-settings' },
+    }).catch((e) => console.error('[audit]', e));
+
+    redirect('/settings/organization');
+  }, '/settings/organization');
+}
+
+export async function updatePlanBillingScheduleAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER'], { requireWrite: false });
+    redirect('/settings/billing?error=Billing schedule changes are now managed by Tishgroup Control. Contact Tishgroup to update your commercial record.');
+  }, '/settings/billing');
+}
+
+export async function recordPlanPaymentAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['OWNER'], { requireWrite: false });
+    redirect('/settings/billing?error=Payments are now recorded by Tishgroup Control. Contact Tishgroup to restore access or confirm payment.');
+  }, '/settings/billing');
+}
+
+export async function requestPlanUpgradeAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER'], { requireWrite: false });
+    const { business: currentBusiness, billingSchemaReady } = await findBusinessCommercialSnapshot(businessId);
+
+    if (!billingSchemaReady) {
+      redirect('/settings/billing?error=Billing schema is not deployed yet. Run the latest database migrations before using upgrade requests.');
+    }
+
+    const desiredPlanRaw = (formString(formData, 'desiredPlan') || '').toUpperCase();
+    const desiredPlan: BusinessPlan =
+      desiredPlanRaw === 'PRO' ? 'PRO' : desiredPlanRaw === 'GROWTH' ? 'GROWTH' : 'STARTER';
+    const feature = formOptionalString(formData, 'feature');
+    const requestNote = formOptionalString(formData, 'requestNote');
+    const currentPlan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any));
+
+    if (hasPlanAccess(currentPlan, desiredPlan)) {
+      redirect(
+        `/settings/billing?error=${encodeURIComponent(
+          desiredPlan === currentPlan
+            ? `This business is already on ${desiredPlan}.`
+            : `Upgrade requests must target a higher plan than ${currentPlan}.`
+        )}`
+      );
+    }
+
+    const requestedAt = new Date().toISOString();
+    const noteLines = [
+      `[${requestedAt}] Upgrade request`,
+      `Requested by: ${user.name} (${user.role})`,
+      `Current plan: ${currentPlan}`,
+      `Requested plan: ${desiredPlan}`,
+      feature ? `Feature context: ${feature}` : null,
+      requestNote ? `Request note: ${requestNote}` : null,
+    ].filter(Boolean);
+
+    const nextBillingNotes = [((currentBusiness as any)?.billingNotes as string | undefined)?.trim(), noteLines.join('\n')]
+      .filter(Boolean)
+      .join('\n\n');
+
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        billingNotes: nextBillingNotes,
+      } as any,
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: { source: 'billing-upgrade-request', currentPlan, desiredPlan, feature },
+    }).catch((e) => console.error('[audit]', e));
+
+    redirect(`/settings/billing?requested=1&desiredPlan=${desiredPlan}${feature ? `&feature=${encodeURIComponent(feature)}` : ''}`);
+  }, '/settings/billing');
 }

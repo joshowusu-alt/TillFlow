@@ -1,0 +1,69 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - navigation [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e7]: TillFlow
+        - generic [ref=e8]
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]: Trusted by businesses across Africa
+        - heading "Run Your Business Like a Pro. Stay in Control." [level=1] [ref=e18]
+        - paragraph [ref=e19]: Sell fast, track stock clearly, and keep cash, margins, and reports visible even when the internet drops.
+        - generic [ref=e20]
+        - generic [ref=e27]
+        - generic [ref=e40]
+      - generic [ref=e48]:
+        - generic [ref=e49]
+        - generic [ref=e56]
+    - generic [ref=e106]:
+      - generic [ref=e107]:
+        - generic [ref=e108]: Built for real retail rhythm
+        - heading "Clean for staff. Serious where the owner feels the pressure." [level=2] [ref=e109]
+        - paragraph [ref=e110]: "This is where TillFlow earns its place: unstable internet, mixed-unit stock, fast tills, and the need to close the day with real visibility instead of guesswork."
+      - generic [ref=e111]:
+        - generic [ref=e112]
+        - generic [ref=e116]
+        - generic [ref=e120]
+    - generic [ref=e125]:
+      - generic [ref=e126]:
+        - generic [ref=e127]
+        - generic [ref=e131]: "The goal in the pilot runbook is simple: keep the store trading safely and protect trust."
+      - generic [ref=e132]:
+        - generic [ref=e133]
+        - generic [ref=e138]
+        - generic [ref=e143]
+    - generic [ref=e149]:
+      - generic [ref=e150]:
+        - heading "Everything Your Business Needs" [level=2] [ref=e151]
+        - paragraph [ref=e152]: From the first sale to the closing numbers, one system keeps the shop moving.
+      - generic [ref=e153]:
+        - generic [ref=e154]
+        - generic [ref=e161]
+        - generic [ref=e167]
+        - generic [ref=e173]
+        - generic [ref=e179]
+        - generic [ref=e185]
+    - generic [ref=e192]:
+      - generic [ref=e193]:
+        - heading "Up and Running in 3 Steps" [level=2] [ref=e194]
+        - paragraph [ref=e195]: No hardware, no installation CD, no technician needed.
+      - generic [ref=e196]:
+        - generic [ref=e197]
+        - generic [ref=e201]
+        - generic [ref=e205]
+    - generic [ref=e210]:
+      - heading "Pick the setup that matches how your business runs today." [level=2] [ref=e211]
+      - paragraph [ref=e212]: Start with Starter, move into Growth when reporting and control matter more, and step into Pro when the operation gets broader.
+      - generic [ref=e213]:
+        - generic [ref=e214]
+        - generic [ref=e222]
+      - generic [ref=e278]:
+        - link "Try Live Demo" [ref=e279] [cursor=pointer]:
+          - /url: /register?mode=demo
+        - link "Create My Business" [ref=e280] [cursor=pointer]:
+          - /url: /register
+    - contentinfo [ref=e281]:
+      - generic [ref=e282]:
+        - generic [ref=e284]
+        - paragraph [ref=e287]: Sales made simple.
+  - alert [ref=e288]

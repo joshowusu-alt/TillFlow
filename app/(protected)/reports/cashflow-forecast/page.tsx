@@ -3,6 +3,8 @@ import StatCard from '@/components/StatCard';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import { requireBusiness } from '@/lib/auth';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getCashflowForecast } from '@/lib/reports/forecast';
 
@@ -16,6 +18,17 @@ export default async function CashflowForecastPage({
   const { business } = await requireBusiness(['OWNER']);
   if (!business) {
     return <EmptyState icon="chart" title="Business not found" cta={{ label: 'Go to Settings', href: '/settings' }} />;
+  }
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.cashflowForecast) {
+    return (
+      <AdvancedModeNotice
+        title="Cashflow Forecast is available on Pro"
+        description="Forward-looking cash pressure forecasting is unlocked on businesses provisioned for Pro."
+        featureName="Cashflow Forecast"
+        minimumPlan="PRO"
+      />
+    );
   }
 
   const daysParam = parseInt(searchParams?.days ?? '14', 10);

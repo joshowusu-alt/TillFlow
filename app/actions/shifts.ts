@@ -125,7 +125,7 @@ export async function closeShiftAction(
 }
 
 export async function getOpenShift(tillId: string) {
-  const { businessId } = await withBusinessContext();
+  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
   return prisma.shift.findFirst({
     where: { tillId, status: 'OPEN', till: { store: { businessId } } },
     include: {
@@ -136,7 +136,7 @@ export async function getOpenShift(tillId: string) {
 }
 
 export async function getShiftSummary(shiftId: string) {
-  const { businessId } = await withBusinessContext();
+  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
   const shift = await prisma.shift.findFirst({
     where: { id: shiftId, till: { store: { businessId } } },
     include: {

@@ -34,7 +34,8 @@ export async function POST(request: NextRequest) {
                 message.includes('Insufficient stock') ||
                 message.includes('required') ||
                 message.includes('Invalid offline payload') ||
-                message.includes('No valid sale lines')
+                message.includes('No valid sale lines') ||
+                message.includes('read-only')
             ) {
                 return NextResponse.json({ error: message }, { status: 400 });
             }

@@ -2,8 +2,11 @@ import PageHeader from '@/components/PageHeader';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import Pagination from '@/components/Pagination';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import StatCard from '@/components/StatCard';
 import { requireBusiness } from '@/lib/auth';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { getFeatures } from '@/lib/features';
 import { getMetaWhatsAppDiagnostics } from '@/lib/notifications/providers/meta-whatsapp';
 import { prisma } from '@/lib/prisma';
 import MessageLogActions from './MessageLogActions';
@@ -44,6 +47,17 @@ export default async function NotificationsSettingsPage({
 }) {
   const { business } = await requireBusiness(['OWNER']);
   if (!business) return <div className="card p-6">Owners only.</div>;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.advancedOps) {
+    return (
+      <AdvancedModeNotice
+        title="Notifications is available on Growth and Pro"
+        description="Automated WhatsApp summaries and notification controls are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Notifications"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
   const diagnostics = getMetaWhatsAppDiagnostics();
   const businessTimezone = (business as any).timezone as string | null | undefined;
   const requestedPage = Number(searchParams?.page ?? '1');
@@ -133,6 +147,7 @@ export default async function NotificationsSettingsPage({
       <PageHeader
         title="Notifications"
         subtitle="Automate the daily owner summary via Meta when configured, with honest fallback logging when manual review is needed."
+        actions={<PlanFeatureBadge plan="GROWTH" />}
       />
 
       <div className="card p-4 sm:p-6">

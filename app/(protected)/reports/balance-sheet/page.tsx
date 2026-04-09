@@ -6,7 +6,8 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
 import { getBalanceSheet } from '@/lib/reports/financials';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { isAdvancedMode } from '@/lib/features';
+import PlanFeatureBadge from '@/components/PlanFeatureBadge';
+import { getFeatures } from '@/lib/features';
 import BalanceSheetDatePicker from './BalanceSheetDatePicker';
 
 export default async function BalanceSheetPage({
@@ -16,8 +17,16 @@ export default async function BalanceSheetPage({
 }) {
   const { user, business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
-  if (!isAdvancedMode(business.mode as any)) {
-    return <AdvancedModeNotice title="Balance Sheet is an advanced report" />;
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.financialReports) {
+    return (
+      <AdvancedModeNotice
+        title="Balance Sheet is available on Growth and Pro"
+        description="Financial statements are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Balance Sheet"
+        minimumPlan="GROWTH"
+      />
+    );
   }
 
   const asOfRaw = searchParams?.asOf ? new Date(searchParams.asOf) : new Date();
@@ -47,6 +56,7 @@ export default async function BalanceSheetPage({
         subtitle="Assets, liabilities, and equity."
         actions={
           <div className="flex gap-2">
+            <PlanFeatureBadge plan="GROWTH" />
             <DownloadLink
               href={`/api/reports/financials?type=balance-sheet&asOf=${asOfStr}`}
               fallbackFilename={`balance-sheet-${asOfStr}.csv`}
