@@ -42,6 +42,32 @@ function toPhoneHref(phone: string) {
   return cleaned ? `tel:${cleaned}` : '#';
 }
 
+function daysFromNow(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr.slice(0, 10));
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+
+function getAccountMove(state: string, nextDueAt: string): string {
+  const days = daysFromNow(nextDueAt);
+  const overdue = Math.abs(days);
+  switch (state) {
+    case 'DUE_SOON':
+      return days <= 1
+        ? `Due tomorrow — send reminder now and confirm MoMo or bank transfer.`
+        : `Due in ${days} day${days === 1 ? '' : 's'} — send reminder and confirm payment channel.`;
+    case 'GRACE':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due — call now and push for same-day MoMo or transfer.`;
+    case 'STARTER_FALLBACK':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due, access downgraded — escalate for partial or full payment today.`;
+    case 'READ_ONLY':
+      return `${overdue} day${overdue === 1 ? '' : 's'} past due, account locked — confirm payment first to restore access immediately.`;
+    default:
+      return `Account in good standing — confirm renewal prep and upsell readiness.`;
+  }
+}
+
 export default async function CollectionsPage({
   searchParams,
 }: {
@@ -215,9 +241,12 @@ export default async function CollectionsPage({
                     <span>Due: <strong className="text-control-ink">{business.nextDueAt}</strong></span>
                     <span>Outstanding: <strong className="text-control-ink">{formatCedi(business.outstandingAmount)}</strong></span>
                     <span>Manager: <strong className="text-control-ink">{business.assignedManager}</strong></span>
+                    {business.lastActivityAt ? (
+                      <span>Last contact: <strong className="text-control-ink">{business.lastActivityAt}</strong></span>
+                    ) : null}
                   </div>
                   <div className="mt-3 rounded-2xl border border-black/8 bg-black/[0.02] px-3 py-3 text-sm leading-6 text-black/62">
-                    Next operator move: {queue.bestMove}
+                    {getAccountMove(business.state, business.nextDueAt)}
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <a
