@@ -46,6 +46,7 @@ function isMissingControlPlaneError(error: unknown) {
 }
 
 function inferHealth(state: ManagedBusiness['state']): BusinessHealth {
+  if (state === 'INACTIVE') return 'HEALTHY';
   if (state === 'READ_ONLY' || state === 'STARTER_FALLBACK') return 'AT_RISK';
   if (state === 'GRACE' || state === 'DUE_SOON') return 'WATCH';
   return 'HEALTHY';
@@ -80,6 +81,10 @@ function normalizeCadence(value?: string | null): ManagedBusiness['billingCadenc
 
 function normalizeManagedState(value?: string | null): ManagedState | null {
   switch (String(value ?? '').toUpperCase()) {
+    case 'INACTIVE':
+    case 'DEACTIVATED':
+    case 'CANCELLED':
+      return 'INACTIVE';
     case 'ACTIVE':
     case 'DUE_SOON':
     case 'GRACE':
@@ -100,6 +105,9 @@ function normalizeManagedState(value?: string | null): ManagedState | null {
 function resolveEffectivePlan(state: ManagedState, plan: ManagedPlan, override?: string | null): ManagedPlan {
   if (override === 'PRO' || override === 'GROWTH' || override === 'STARTER') {
     return override;
+  }
+  if (state === 'INACTIVE') {
+    return plan;
   }
   if (state === 'STARTER_FALLBACK' || state === 'READ_ONLY') {
     return 'STARTER';
@@ -194,8 +202,10 @@ const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => {
       const effectivePlan = resolveEffectivePlan(state, plan, subscription?.effectivePlanOverride);
       const owner = business.users[0];
       const monthlyValue = subscription?.monthlyValuePence ?? planRates[plan];
-      const outstandingAmount = subscription?.outstandingAmountPence
-        ?? (['DUE_SOON', 'GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(state) ? monthlyValue : 0);
+      const outstandingAmount = state === 'INACTIVE'
+        ? 0
+        : subscription?.outstandingAmountPence
+          ?? (['DUE_SOON', 'GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(state) ? monthlyValue : 0);
       const lastPaymentAt = profile?.payments[0]?.paidAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt;
       const latestNote = profile?.notesEntries[0]?.note;
       const needsReview = !profile || String(profile.supportStatus ?? '').toUpperCase() === 'UNREVIEWED';

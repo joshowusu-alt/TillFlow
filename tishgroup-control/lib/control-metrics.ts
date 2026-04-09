@@ -13,18 +13,19 @@ export function getPortfolioSummary() {
 }
 
 export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
+  const activeBusinesses = businesses.filter((business) => business.state !== 'INACTIVE');
   const totalBusinesses = businesses.length;
-  const mrr = sum(businesses.map((business) => business.monthlyValue));
+  const mrr = sum(activeBusinesses.map((business) => business.monthlyValue));
   const expectedCollections = sum(
-    businesses
+    activeBusinesses
       .filter((business) => business.state === 'DUE_SOON' || business.state === 'GRACE' || business.state === 'STARTER_FALLBACK' || business.state === 'READ_ONLY')
       .map((business) => business.outstandingAmount)
   );
-  const activePaid = businesses.filter((business) => business.state === 'ACTIVE').length;
-  const dueSoon = businesses.filter((business) => business.state === 'DUE_SOON').length;
-  const grace = businesses.filter((business) => business.state === 'GRACE').length;
-  const fallback = businesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
-  const readOnly = businesses.filter((business) => business.state === 'READ_ONLY').length;
+  const activePaid = activeBusinesses.filter((business) => business.state === 'ACTIVE').length;
+  const dueSoon = activeBusinesses.filter((business) => business.state === 'DUE_SOON').length;
+  const grace = activeBusinesses.filter((business) => business.state === 'GRACE').length;
+  const fallback = activeBusinesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
+  const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY').length;
 
   return {
     totalBusinesses,
@@ -45,7 +46,7 @@ export function getRevenueByPlan() {
 
 export function getRevenueByPlanFor(businesses: ManagedBusiness[]) {
   return (Object.keys(planRates) as Array<keyof typeof planRates>).map((plan) => {
-    const matchingBusinesses = businesses.filter((business) => business.plan === plan);
+    const matchingBusinesses = businesses.filter((business) => business.plan === plan && business.state !== 'INACTIVE');
     const revenue = sum(matchingBusinesses.map((business) => business.monthlyValue));
 
     return {
@@ -85,6 +86,8 @@ export function getActionChecklist(business: ManagedBusiness) {
       return ['Confirm payment status', 'Record payment and restore access if settled', 'Log root cause for churn risk'];
     case 'TRIAL':
       return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
+    case 'INACTIVE':
+      return ['Keep the account archived', 'Do not include in active billing follow-up', 'Reactivate only if the business returns to service'];
     case 'ACTIVE':
     default:
       return ['Monitor usage health', 'Review upsell path', 'Keep renewal note current'];

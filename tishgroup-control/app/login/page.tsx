@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { loginControlStaffAction } from '@/app/actions/control-auth';
 import { controlAuthConfigured, getControlStaffOptional } from '@/lib/control-auth';
 
+export const dynamic = 'force-dynamic';
+
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }

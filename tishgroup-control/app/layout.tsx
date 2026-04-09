@@ -6,6 +6,8 @@ import InstallPrompt from '@/components/InstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import { getControlStaffOptional } from '@/lib/control-auth';
 
+export const dynamic = 'force-dynamic';
+
 const bodyFont = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],

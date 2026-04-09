@@ -88,6 +88,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={false}
                     className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
                       active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                     }`}
@@ -138,6 +139,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
                     active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                   }`}

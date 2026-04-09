@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { bulkReviewControlBusinessesAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
+import BillingScheduleFields from '@/components/BillingScheduleFields';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
@@ -88,11 +89,10 @@ export default async function BusinessesPage({
 
         <form action={updateControlSubscriptionAction} className="mt-5 grid gap-4 sm:grid-cols-2">
           <input type="hidden" name="returnPath" value="/businesses" />
-          <input type="hidden" name="status" value="ACTIVE" />
 
           <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium text-control-ink">Business</span>
-            <select name="businessId" defaultValue={filteredBusinesses[0]?.id ?? managedBusinesses[0]?.id ?? ''} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required>
+            <select name="businessId" defaultValue={filteredBusinesses[0]?.id ?? managedBusinesses[0]?.id ?? ''} className="control-field" required>
               {managedBusinesses.map((business) => (
                 <option key={business.id} value={business.id}>
                   {business.name} · {business.plan} · {business.billingCadence}
@@ -103,7 +103,7 @@ export default async function BusinessesPage({
 
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-control-ink">Sold plan</span>
-            <select name="purchasedPlan" defaultValue="STARTER" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+            <select name="purchasedPlan" defaultValue="STARTER" className="control-field">
               <option value="STARTER">Starter</option>
               <option value="GROWTH">Growth</option>
               <option value="PRO">Pro</option>
@@ -111,22 +111,17 @@ export default async function BusinessesPage({
           </label>
 
           <label className="block space-y-1 text-sm">
-            <span className="font-medium text-control-ink">Billing cadence</span>
-            <select name="billingCadence" defaultValue="MONTHLY" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-              <option value="MONTHLY">Monthly</option>
-              <option value="ANNUAL">Annual</option>
+            <span className="font-medium text-control-ink">Subscription status</span>
+            <select name="status" defaultValue="ACTIVE" className="control-field">
+              <option value="ACTIVE">Active</option>
+              <option value="TRIAL">Trial</option>
+              <option value="SUSPENDED">Suspended</option>
+              <option value="READ_ONLY">Read only</option>
+              <option value="INACTIVE">Deactivated</option>
             </select>
           </label>
 
-          <label className="block space-y-1 text-sm">
-            <span className="font-medium text-control-ink">Subscription start date</span>
-            <input type="date" name="startDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-          </label>
-
-          <label className="block space-y-1 text-sm">
-            <span className="font-medium text-control-ink">First due date</span>
-            <input type="date" name="nextDueDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-          </label>
+          <BillingScheduleFields />
 
           <p className="text-sm text-black/60 sm:col-span-2">
             Leave the first due date blank to let TG Control calculate it from the start date and whether the business is monthly or annual.
@@ -151,7 +146,7 @@ export default async function BusinessesPage({
 
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">Assigned manager</span>
-              <select name="assignedManagerId" defaultValue="SELF" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+              <select name="assignedManagerId" defaultValue="SELF" className="control-field">
                 <option value="SELF">Assign to me</option>
                 <option value="UNASSIGNED">Leave unassigned</option>
                 {staffOptions.map((option) => (
@@ -162,7 +157,7 @@ export default async function BusinessesPage({
 
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">Sold plan</span>
-              <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+              <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="control-field">
                 <option value="KEEP_CURRENT">Keep current sold plan</option>
                 <option value="STARTER">Starter</option>
                 <option value="GROWTH">Growth</option>
@@ -170,27 +165,11 @@ export default async function BusinessesPage({
               </select>
             </label>
 
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Billing cadence</span>
-              <select name="billingCadence" defaultValue="MONTHLY" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                <option value="MONTHLY">Monthly</option>
-                <option value="ANNUAL">Annual</option>
-              </select>
-            </label>
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Subscription start date</span>
-              <input type="date" name="startDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-            </label>
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">First due date</span>
-              <input type="date" name="nextDueDate" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-            </label>
+            <BillingScheduleFields />
 
             <label className="block space-y-1 text-sm sm:col-span-2">
               <span className="font-medium text-control-ink">Bulk review note</span>
-              <input type="text" name="reviewNote" placeholder="Optional note to append to each reviewed business" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+              <input type="text" name="reviewNote" placeholder="Optional note to append to each reviewed business" className="control-field" />
             </label>
 
             <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">

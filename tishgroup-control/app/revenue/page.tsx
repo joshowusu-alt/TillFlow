@@ -3,6 +3,8 @@ import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 
+export const dynamic = 'force-dynamic';
+
 export default async function RevenuePage() {
   await requireControlStaff();
   const businesses = await listManagedBusinesses();

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
+import BillingScheduleFields from '@/components/BillingScheduleFields';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { canManageSubscriptions, canRecordPayments, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
@@ -305,7 +306,7 @@ export default async function BusinessDetailPage({
 
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Assigned manager</span>
-                <select name="assignedManagerId" defaultValue={business.assignedManagerId ?? 'SELF'} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                <select name="assignedManagerId" defaultValue={business.assignedManagerId ?? 'SELF'} className="control-field">
                   <option value="SELF">Assign to me</option>
                   <option value="UNASSIGNED">Leave unassigned</option>
                   {staffOptions.map((option) => (
@@ -316,7 +317,7 @@ export default async function BusinessDetailPage({
 
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Sold plan for this business</span>
-                <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="control-field">
                   <option value="KEEP_CURRENT">Keep current sold plan</option>
                   <option value="STARTER">Starter</option>
                   <option value="GROWTH">Growth</option>
@@ -324,23 +325,11 @@ export default async function BusinessDetailPage({
                 </select>
               </label>
 
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium text-control-ink">Billing cadence</span>
-                <select name="billingCadence" defaultValue={business.billingCadence} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                  <option value="MONTHLY">Monthly</option>
-                  <option value="ANNUAL">Annual</option>
-                </select>
-              </label>
-
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium text-control-ink">Subscription start date</span>
-                <input type="date" name="startDate" defaultValue={asDateInput(business.subscriptionStartAt ?? business.planSetAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-              </label>
-
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium text-control-ink">First due date</span>
-                <input type="date" name="nextDueDate" defaultValue={asDateInput(business.nextDueAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-              </label>
+              <BillingScheduleFields
+                defaultCadence={business.billingCadence}
+                defaultStartDate={asDateInput(business.subscriptionStartAt ?? business.planSetAt)}
+                defaultNextDueDate={asDateInput(business.nextDueAt)}
+              />
 
               <p className="text-sm text-black/60">
                 If you leave first due date blank, TG Control will calculate it from the start date and billing cadence.
@@ -348,7 +337,7 @@ export default async function BusinessDetailPage({
 
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Review note</span>
-                <textarea name="reviewNote" rows={3} placeholder="Capture the first commercial review, owner confirmation, or assignment context." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                <textarea name="reviewNote" rows={3} placeholder="Capture the first commercial review, owner confirmation, or assignment context." className="control-field" />
               </label>
 
               <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl border border-black/12 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03] sm:w-fit">
@@ -375,7 +364,7 @@ export default async function BusinessDetailPage({
 
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Sold plan</span>
-                    <select name="purchasedPlan" defaultValue={business.plan} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                    <select name="purchasedPlan" defaultValue={business.plan} className="control-field">
                       <option value="STARTER">Starter</option>
                       <option value="GROWTH">Growth</option>
                       <option value="PRO">Pro</option>
@@ -383,32 +372,21 @@ export default async function BusinessDetailPage({
                   </label>
 
                   <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Billing cadence</span>
-                    <select name="billingCadence" defaultValue={business.billingCadence} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                      <option value="MONTHLY">Monthly</option>
-                      <option value="ANNUAL">Annual</option>
-                    </select>
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Subscription start date</span>
-                    <input type="date" name="startDate" defaultValue={asDateInput(business.subscriptionStartAt ?? business.planSetAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Subscription status</span>
-                    <select name="status" defaultValue={business.subscriptionStatus} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                    <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
                       <option value="ACTIVE">Active</option>
                       <option value="TRIAL">Trial</option>
                       <option value="SUSPENDED">Suspended</option>
                       <option value="READ_ONLY">Read only</option>
+                      <option value="INACTIVE">Deactivated</option>
                     </select>
                   </label>
 
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Next due date</span>
-                    <input type="date" name="nextDueDate" defaultValue={asDateInput(business.nextDueAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
+                  <BillingScheduleFields
+                    defaultCadence={business.billingCadence}
+                    defaultStartDate={asDateInput(business.subscriptionStartAt ?? business.planSetAt)}
+                    defaultNextDueDate={asDateInput(business.nextDueAt)}
+                  />
 
                   <p className="text-sm text-black/60">
                     Leave next due blank to calculate it automatically from the subscription start date and cadence.

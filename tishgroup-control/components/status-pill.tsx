@@ -15,6 +15,8 @@ function stateTone(state: ManagedState): PillTone {
   switch (state) {
     case 'ACTIVE':
       return 'moss';
+    case 'INACTIVE':
+      return 'slate';
     case 'TRIAL':
       return 'teal';
     case 'DUE_SOON':

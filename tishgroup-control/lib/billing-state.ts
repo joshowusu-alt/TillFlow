@@ -28,6 +28,14 @@ export function deriveManagedState(input: {
   const trialEndsAt = toDate(input.trialEndsAt);
   const planStatus = String(input.planStatus ?? 'ACTIVE').toUpperCase();
 
+  if (planStatus === 'INACTIVE' || planStatus === 'DEACTIVATED' || planStatus === 'CANCELLED') {
+    return {
+      state: 'INACTIVE' as ManagedState,
+      effectivePlan: input.plan,
+      readOnlyAt: null,
+    };
+  }
+
   if ((planStatus === 'TRIAL' || planStatus === 'TRIALING') && trialEndsAt && trialEndsAt >= now) {
     return {
       state: 'TRIAL' as ManagedState,

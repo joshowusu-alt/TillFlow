@@ -7,7 +7,7 @@ import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNote
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
-type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'SUSPENDED' | 'READ_ONLY';
+type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'SUSPENDED' | 'READ_ONLY' | 'INACTIVE';
 
 function readRequired(formData: FormData, name: string) {
   return String(formData.get(name) ?? '').trim();
@@ -42,6 +42,10 @@ function normalizeSubscriptionStatus(value: string): SubscriptionStatus {
   switch (value) {
     case 'TRIAL':
       return 'TRIAL';
+    case 'INACTIVE':
+    case 'DEACTIVATED':
+    case 'CANCELLED':
+      return 'INACTIVE';
     case 'SUSPENDED':
       return 'SUSPENDED';
     case 'READ_ONLY':
@@ -97,6 +101,8 @@ function businessStatusFromSubscription(status: SubscriptionStatus) {
   switch (status) {
     case 'TRIAL':
       return 'TRIAL';
+    case 'INACTIVE':
+      return 'INACTIVE';
     case 'SUSPENDED':
       return 'SUSPENDED';
     case 'READ_ONLY':
@@ -291,7 +297,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           effectivePlanOverride: null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
-          outstandingAmountPence,
+          outstandingAmountPence: status === 'INACTIVE' ? 0 : outstandingAmountPence,
         },
         create: {
           controlBusinessId: profile.id,
@@ -303,7 +309,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
-          outstandingAmountPence,
+          outstandingAmountPence: status === 'INACTIVE' ? 0 : outstandingAmountPence,
         },
       });
 
@@ -321,7 +327,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           planStatus: businessStatusFromSubscription(status),
           trialEndsAt: status === 'TRIAL' ? trialEndsAt : null,
           planSetAt: startDate,
-          nextPaymentDueAt: resolvedNextDueDate,
+          nextPaymentDueAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
             `Plan: ${purchasedPlan}`,

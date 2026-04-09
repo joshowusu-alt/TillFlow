@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export const CONTROL_SESSION_COOKIE = 'tishgroup_control_session';
 
 const SESSION_TTL_SECONDS = 60 * 60 * 12;

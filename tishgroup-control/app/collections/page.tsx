@@ -4,6 +4,8 @@ import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getCollectionQueuesFor } from '@/lib/control-metrics';
 
+export const dynamic = 'force-dynamic';
+
 export default async function CollectionsPage() {
   await requireControlStaff();
   const businesses = await listManagedBusinesses();

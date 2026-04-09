@@ -1,6 +1,6 @@
 export type ManagedPlan = 'STARTER' | 'GROWTH' | 'PRO';
 
-export type ManagedState = 'ACTIVE' | 'DUE_SOON' | 'GRACE' | 'STARTER_FALLBACK' | 'READ_ONLY' | 'TRIAL';
+export type ManagedState = 'ACTIVE' | 'DUE_SOON' | 'GRACE' | 'STARTER_FALLBACK' | 'READ_ONLY' | 'TRIAL' | 'INACTIVE';
 
 export type BusinessHealth = 'HEALTHY' | 'WATCH' | 'AT_RISK';
 

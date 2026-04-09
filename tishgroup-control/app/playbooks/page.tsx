@@ -1,6 +1,8 @@
 import SectionHeading from '@/components/section-heading';
 import { requireControlStaff } from '@/lib/control-auth';
 
+export const dynamic = 'force-dynamic';
+
 const playbooks = [
   {
     title: 'Signup to first payment',
