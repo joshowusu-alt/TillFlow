@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import ControlPageHeader from '@/components/control-page-header';
 import KpiCard from '@/components/kpi-card';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
@@ -13,38 +14,112 @@ export default async function PortfolioPage() {
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
+  const workboardCards = [
+    {
+      title: 'Review new accounts',
+      value: String(unreviewedBusinesses.length),
+      href: '/businesses?filter=unreviewed',
+      note: 'Start here when new clients need plan confirmation and assignment.',
+      tone: 'border-[#1f8a82]/18 bg-[#1f8a82]/8',
+    },
+    {
+      title: 'Run collections',
+      value: String(summary.dueSoon + summary.grace + summary.fallback + summary.readOnly),
+      href: '/collections',
+      note: 'Work the due, overdue, fallback, and locked queues in one pass.',
+      tone: 'border-[#b35c2e]/18 bg-[#b35c2e]/8',
+    },
+    {
+      title: 'Watch revenue risk',
+      value: formatCedi(summary.expectedCollections),
+      href: '/revenue',
+      note: 'See the cash exposed to payment delays and degraded access.',
+      tone: 'border-[#e2a83d]/18 bg-[#e2a83d]/10',
+    },
+  ];
+  const headerStats = [
+    {
+      label: 'Portfolio MRR',
+      value: formatCedi(summary.mrr),
+      hint: 'Monthly-equivalent recurring revenue across the full paid base.',
+    },
+    {
+      label: 'Expected collections at risk',
+      value: formatCedi(summary.expectedCollections),
+      hint: 'Revenue exposed across due, overdue, fallback, and locked accounts.',
+    },
+    {
+      label: 'Urgent commercial accounts',
+      value: String(summary.grace + summary.fallback + summary.readOnly),
+      hint: 'Businesses already in grace, degraded access, or read-only handling.',
+    },
+    {
+      label: 'Unreviewed new accounts',
+      value: String(unreviewedBusinesses.length),
+      hint: 'Accounts still waiting for first commercial confirmation and assignment.',
+    },
+  ];
+  const focusOrder = [
+    {
+      label: 'Clear new accounts first',
+      value: `${unreviewedBusinesses.length} pending`,
+      href: '/businesses?filter=unreviewed',
+    },
+    {
+      label: 'Protect collections next',
+      value: `${summary.dueSoon + summary.grace + summary.fallback + summary.readOnly} accounts`,
+      href: '/collections',
+    },
+    {
+      label: 'Check revenue concentration',
+      value: formatCedi(summary.arr),
+      href: '/revenue',
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      <section className="panel overflow-hidden p-5 sm:p-8">
-        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-end">
-          <div className="space-y-4">
-            <div className="eyebrow">Tishgroup portfolio control</div>
-            <h1 className="page-title font-[var(--font-display)] text-control-ink">Run Tillflow like a managed software business, not a loose collection of accounts.</h1>
-            <p className="max-w-3xl text-base leading-8 text-black/64">
-              One place to see plan mix, MRR, due accounts, fallback risk, support watchlists, and the exact next action for every customer business.
-            </p>
-          </div>
+      <ControlPageHeader
+        eyebrow="Portfolio command"
+        title="Run Tillflow like a managed software business, not a loose collection of accounts."
+        description="This is the daily operating surface for the portfolio: see commercial exposure, route the team into the right queue, and keep every business tied to a clear owner and next move."
+        chips={[
+          { label: 'New accounts', href: '#new-accounts' },
+          { label: 'Today\'s workboard', href: '#today-workboard', tone: 'dark' },
+          { label: 'Urgent pressure', href: '#urgent-queue' },
+          { label: 'Plan mix', href: '#plan-mix' },
+        ]}
+        stats={headerStats}
+        aside={(
+          <div className="space-y-5">
+            <div>
+              <div className="eyebrow">Today</div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Recommended operating order</h2>
+              <p className="mt-3 text-sm leading-7">
+                Start with accounts that need an owner decision, then protect cash, then review where the revenue base is actually concentrating.
+              </p>
+            </div>
 
-          <div className="rounded-panel border border-black/10 bg-white/80 p-5">
-            <div className="eyebrow">Current position</div>
-            <div className="mt-4 space-y-3 text-sm text-black/65">
-              <div className="flex items-center justify-between">
-                <span>Total businesses</span>
-                <strong className="text-base text-control-ink">{summary.totalBusinesses}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Monthly recurring revenue</span>
-                <strong className="text-base text-control-ink">{formatCedi(summary.mrr)}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Expected collections at risk</span>
-                <strong className="text-base text-control-ink">{formatCedi(summary.expectedCollections)}</strong>
-              </div>
+            <div className="control-priority-list">
+              {focusOrder.map((item, index) => (
+                <Link key={item.label} href={item.href} className="control-priority-item control-priority-item-tonal block">
+                  <div className="flex items-start gap-3">
+                    <span className="control-sequence-step">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold">{item.label}</div>
+                      <div className="mt-1 text-sm text-white/68">{item.value}</div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <div className="rounded-[22px] border border-white/10 bg-white/6 px-4 py-4 text-sm leading-6 text-white/74">
+              Total businesses: <strong>{summary.totalBusinesses}</strong>. Active paid base: <strong>{summary.activePaid}</strong>.
             </div>
           </div>
-        </div>
-      </section>
+        )}
+      />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Portfolio MRR" value={formatCedi(summary.mrr)} hint="Monthly-equivalent recurring revenue across Starter, Growth, and Pro tenants." accent="Finance" />
@@ -53,7 +128,32 @@ export default async function PortfolioPage() {
         <KpiCard label="Unreviewed New Accounts" value={String(unreviewedBusinesses.length)} hint="New or untouched accounts that need their first Tishgroup commercial review." accent="Ops" />
       </section>
 
-      <section className="panel p-6">
+      <section id="today-workboard" className="panel p-5 sm:p-6">
+        <SectionHeading
+          eyebrow="Work through today"
+          title="Start with the next operational move"
+          description="On mobile, the panel should feel like a daily workboard. These shortcuts take the team straight into the next queue instead of making them think about where to go first."
+        />
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {workboardCards.map((card) => (
+            <Link key={card.title} href={card.href} className={`rounded-[24px] border p-4 transition hover:-translate-y-[1px] hover:shadow-lg ${card.tone}`}>
+              <div className="eyebrow">Next move</div>
+              <div className="mt-2 text-xl font-semibold tracking-tight text-control-ink">{card.title}</div>
+              <div className="mt-3 text-2xl font-semibold text-control-ink">{card.value}</div>
+              <p className="mt-3 text-sm leading-6 text-black/62">{card.note}</p>
+              <div className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-control-ink">
+                Open queue
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-6-6 6 6-6 6" />
+                </svg>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section id="new-accounts" className="panel p-6">
         <SectionHeading
           eyebrow="New accounts queue"
           title="Unreviewed businesses"
@@ -132,6 +232,7 @@ export default async function PortfolioPage() {
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="panel p-6">
+          <div id="urgent-queue" />
           <SectionHeading
             eyebrow="Urgent queue"
             title="Commercial pressure points"
@@ -209,6 +310,7 @@ export default async function PortfolioPage() {
 
         <div className="space-y-6">
           <div className="panel p-6">
+            <div id="plan-mix" />
             <SectionHeading
               eyebrow="Revenue mix"
               title="Portfolio by plan"

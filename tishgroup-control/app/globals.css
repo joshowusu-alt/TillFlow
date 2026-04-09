@@ -8,12 +8,12 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-  --bg: #f7f4ef;
-  --surface: rgba(255, 255, 255, 0.84);
+  --bg: #f6f9fc;
+  --surface: #ffffff;
   --surface-strong: #ffffff;
-  --line: rgba(21, 39, 43, 0.12);
+  --line: rgba(60, 66, 87, 0.14);
   --ink: #15272b;
-  --muted: rgba(21, 39, 43, 0.66);
+  --muted: rgba(21, 39, 43, 0.58);
   --teal: #1f8a82;
   --moss: #2f6f56;
   --gold: #e2a83d;
@@ -22,10 +22,8 @@
 }
 
 html {
-  background:
-    radial-gradient(circle at top left, rgba(31, 138, 130, 0.18), transparent 24%),
-    radial-gradient(circle at top right, rgba(226, 168, 61, 0.18), transparent 22%),
-    linear-gradient(180deg, #fcfaf6 0%, var(--bg) 100%);
+  background: var(--bg);
+  scroll-padding-top: calc(var(--safe-top) + 6.5rem);
 }
 
 html,
@@ -61,12 +59,130 @@ textarea::placeholder {
 
 .panel {
   @apply rounded-panel border shadow-dashboard;
-  background: var(--surface);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
 }
 
 .metric-card {
   @apply panel p-5;
+}
+
+.control-stat-card {
+  @apply rounded-2xl border p-4;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.control-page-hero {
+  background: #ffffff;
+}
+
+.control-page-summary-card {
+  @apply rounded-2xl border p-4;
+  border-color: var(--line);
+  background: var(--bg);
+}
+
+.control-page-hero-aside {
+  @apply rounded-2xl border p-5 sm:p-6;
+  border-color: rgba(0, 0, 0, 0.12);
+  background: #0d1b1e;
+  color: white;
+}
+
+.control-page-hero-aside .eyebrow {
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.control-page-hero-aside p,
+.control-page-hero-aside li {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.control-page-hero-aside strong,
+.control-page-hero-aside h2,
+.control-page-hero-aside h3,
+.control-page-hero-aside .text-control-ink {
+  color: white;
+}
+
+.control-page-hero-aside .control-chip {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.control-callout {
+  @apply rounded-2xl border p-4;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.control-callout-tonal {
+  background: var(--bg);
+}
+
+.control-priority-list {
+  @apply space-y-3;
+}
+
+.control-priority-item {
+  @apply rounded-2xl border px-4 py-3;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.control-priority-item-tonal {
+  background: rgba(18, 33, 38, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.control-priority-item-tonal .eyebrow,
+.control-priority-item-tonal .text-black\/54,
+.control-priority-item-tonal .text-black\/58,
+.control-priority-item-tonal .text-black\/60,
+.control-priority-item-tonal .text-black\/62,
+.control-priority-item-tonal .text-black\/64,
+.control-priority-item-tonal .text-black\/66 {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.control-sequence-grid {
+  @apply grid gap-3;
+}
+
+.control-sequence-card {
+  @apply rounded-2xl border p-4;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.control-sequence-step {
+  @apply inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-semibold;
+  border-color: rgba(21, 39, 43, 0.1);
+  background: rgba(18, 33, 38, 0.06);
+  color: var(--ink);
+}
+
+.control-chip {
+  @apply inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition;
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.control-chip-muted {
+  color: rgba(21, 39, 43, 0.62);
+}
+
+.control-action-card {
+  @apply rounded-2xl border p-4 transition;
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+.control-action-card:hover {
+  transform: translateY(-1px);
 }
 
 .data-table {
@@ -102,9 +218,9 @@ textarea::placeholder {
 }
 
 .mobile-card {
-  @apply rounded-2xl border p-4 shadow-sm;
-  border-color: rgba(21, 39, 43, 0.08);
-  background: rgba(255, 255, 255, 0.85);
+  @apply rounded-2xl border p-4;
+  border-color: var(--line);
+  background: #ffffff;
 }
 
 .mobile-card-grid {
@@ -143,6 +259,10 @@ textarea::placeholder {
   .data-table td {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
+  }
+
+  .metric-card {
+    min-height: 0;
   }
 }
 

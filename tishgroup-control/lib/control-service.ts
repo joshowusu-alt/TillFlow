@@ -33,6 +33,29 @@ export type ManagedBusinessDetail = ManagedBusiness & {
   recentNotes: ManagedBusinessNote[];
 };
 
+export type ManagedBusinessRosterFilter = 'all' | 'unreviewed';
+
+export type ManagedBusinessRosterOptions = {
+  filter?: ManagedBusinessRosterFilter;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type ManagedBusinessRoster = {
+  items: ManagedBusiness[];
+  filter: ManagedBusinessRosterFilter;
+  search: string;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  startIndex: number;
+  endIndex: number;
+  totalBusinesses: number;
+  unreviewedCount: number;
+};
+
 function isMissingTableError(error: unknown) {
   return error instanceof Error && (error.message.includes('no such table') || error.message.includes('does not exist in the current database'));
 }
@@ -247,6 +270,80 @@ const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => {
 
 export async function listManagedBusinesses() {
   return getLiveBusinesses();
+}
+
+function normalizeRosterPage(value?: number) {
+  if (!value || !Number.isFinite(value) || value < 1) {
+    return 1;
+  }
+  return Math.floor(value);
+}
+
+function normalizeRosterPageSize(value?: number) {
+  if (!value || !Number.isFinite(value)) {
+    return 50;
+  }
+
+  if (value <= 25) return 25;
+  if (value <= 50) return 50;
+  return 100;
+}
+
+function matchesBusinessSearch(business: ManagedBusiness, search: string) {
+  if (!search) {
+    return true;
+  }
+
+  const query = search.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+
+  return [
+    business.name,
+    business.ownerName,
+    business.ownerPhone,
+    business.ownerEmail,
+    business.assignedManager,
+    business.reviewedBy ?? '',
+  ].some((value) => value.toLowerCase().includes(query));
+}
+
+export async function listManagedBusinessesPage(options: ManagedBusinessRosterOptions = {}): Promise<ManagedBusinessRoster> {
+  const businesses = await getLiveBusinesses();
+  const filter = options.filter === 'unreviewed' ? 'unreviewed' : 'all';
+  const search = options.search?.trim() ?? '';
+  const pageSize = normalizeRosterPageSize(options.pageSize);
+  const page = normalizeRosterPage(options.page);
+  const unreviewedCount = businesses.filter((business) => business.needsReview).length;
+
+  const filteredBusinesses = businesses.filter((business) => {
+    if (filter === 'unreviewed' && !business.needsReview) {
+      return false;
+    }
+
+    return matchesBusinessSearch(business, search);
+  });
+
+  const total = filteredBusinesses.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const items = filteredBusinesses.slice(start, start + pageSize);
+
+  return {
+    items,
+    filter,
+    search,
+    page: safePage,
+    pageSize,
+    total,
+    totalPages,
+    startIndex: total === 0 ? 0 : start + 1,
+    endIndex: total === 0 ? 0 : start + items.length,
+    totalBusinesses: businesses.length,
+    unreviewedCount,
+  };
 }
 
 export async function getManagedBusiness(businessId: string) {

@@ -28,7 +28,7 @@ export default async function LoginPage({
   const authConfigured = controlAuthConfigured();
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-4 sm:px-6 sm:py-10 lg:px-8">
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <section className="panel overflow-hidden p-5 sm:p-10">
           <div className="eyebrow">Internal control plane</div>
@@ -37,16 +37,23 @@ export default async function LoginPage({
             Staff sign in here to manage subscriptions, record payments, capture internal notes, and restore or restrict access across the managed Tillflow portfolio.
           </p>
 
+          <div className="mobile-nav-strip mt-5 -mx-1 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            <span className="control-chip">Subscriptions</span>
+            <span className="control-chip">Collections</span>
+            <span className="control-chip">Revenue risk</span>
+            <span className="control-chip">Recovery</span>
+          </div>
+
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+            <div className="control-stat-card">
               <div className="eyebrow">Source of truth</div>
               <p className="mt-2 text-sm leading-6 text-black/64">Commercial changes are written here first, then mirrored into Tillflow entitlement fields.</p>
             </div>
-            <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+            <div className="control-stat-card">
               <div className="eyebrow">Staff roles</div>
               <p className="mt-2 text-sm leading-6 text-black/64">Access is tied to Control staff records so account managers and collections operators do not share one generic login.</p>
             </div>
-            <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+            <div className="control-stat-card">
               <div className="eyebrow">Immediate recovery</div>
               <p className="mt-2 text-sm leading-6 text-black/64">When payment is recorded here, Tillflow writes are restored immediately according to the sold plan.</p>
             </div>
@@ -103,6 +110,10 @@ export default async function LoginPage({
               Sign in to Control
             </button>
           </form>
+
+          <div className="mt-5 rounded-[22px] border border-black/8 bg-black/[0.02] px-4 py-4 text-sm text-black/60">
+            Best on phone: sign in once, install the app, and work the portfolio from the bottom navigation and queue shortcuts.
+          </div>
         </section>
       </div>
     </div>

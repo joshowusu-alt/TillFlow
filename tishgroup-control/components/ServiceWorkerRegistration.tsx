@@ -20,10 +20,14 @@ export default function ServiceWorkerRegistration() {
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
-    navigator.serviceWorker.register('/sw.js').then((registration) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) {
         setWaitingWorker(registration.waiting);
       }
+
+      registration.update().catch(() => {
+        // Ignore transient update failures and keep the existing worker active.
+      });
 
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;

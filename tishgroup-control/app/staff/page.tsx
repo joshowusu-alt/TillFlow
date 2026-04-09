@@ -1,4 +1,5 @@
 import { createControlStaffAction, toggleControlStaffAction } from '@/app/actions/control-businesses';
+import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { canManageStaff, listControlStaffDirectory, requireControlStaff } from '@/lib/control-auth';
 
@@ -21,6 +22,9 @@ export default async function StaffPage({
   const error = readSearchParam(resolvedSearchParams.error);
   const updated = readSearchParam(resolvedSearchParams.updated);
   const canEditStaff = canManageStaff(currentStaff.role);
+  const activeCount = staffDirectory.filter((entry) => entry.active).length;
+  const inactiveCount = staffDirectory.length - activeCount;
+  const adminCount = staffDirectory.filter((entry) => entry.role === 'CONTROL_ADMIN' && entry.active).length;
 
   return (
     <div className="space-y-6">
@@ -34,16 +38,35 @@ export default async function StaffPage({
         </div>
       ) : null}
 
-      <section className="panel p-6">
-        <SectionHeading
-          eyebrow="TG staff"
-          title="Control team directory"
-          description="Create account managers, collections operators, and support staff here so the control plane reflects real ownership instead of one bootstrap admin."
-        />
-      </section>
+      <ControlPageHeader
+        eyebrow="TG staff"
+        title="Control team directory with explicit coverage roles."
+        description="The control plane should reflect the real operating team, not a shared super-admin. Define who owns renewals, relationship reviews, collections, and support so every account can be handed off cleanly."
+        chips={[
+          { label: 'Create staff', href: '#create-staff', tone: 'dark' },
+          { label: 'Directory', href: '#staff-directory' },
+        ]}
+        stats={[
+          { label: 'Active operators', value: String(activeCount), hint: 'People who can sign in and work the control plane right now.' },
+          { label: 'Inactive', value: String(inactiveCount), hint: 'Accounts currently disabled but still kept in the directory.' },
+          { label: 'Control admins', value: String(adminCount), hint: 'Admins who can manage staff and broader control settings.' },
+          { label: 'Team records', value: String(staffDirectory.length), hint: 'Total directory entries, active and inactive together.' },
+        ]}
+        aside={(
+          <div className="space-y-5">
+            <div>
+              <div className="eyebrow">Coverage rule</div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Every portfolio account should map to a real human owner</h2>
+              <p className="mt-3 text-sm leading-7">
+                Use this directory to keep assignment and review workflows honest. If the staff table is stale, the rest of the control plane becomes unreliable.
+              </p>
+            </div>
+          </div>
+        )}
+      />
 
       <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="panel p-6">
+        <div id="create-staff" className="panel p-6">
           <SectionHeading
             eyebrow="Create staff"
             title="Add or reactivate a TG operator"
@@ -83,7 +106,7 @@ export default async function StaffPage({
           )}
         </div>
 
-        <div className="panel overflow-hidden p-0">
+        <div id="staff-directory" className="panel overflow-hidden p-0">
           <div className="border-b border-black/8 px-6 py-5">
             <SectionHeading
               eyebrow="Active and inactive"

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
 import BillingScheduleFields from '@/components/BillingScheduleFields';
+import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { canManageSubscriptions, canRecordPayments, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
@@ -13,6 +14,11 @@ function readSearchParam(value: string | string[] | undefined) {
 
 function asDateInput(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
+}
+
+function toPhoneHref(phone: string) {
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  return cleaned ? `tel:${cleaned}` : '#';
 }
 
 export default async function BusinessDetailPage({
@@ -83,37 +89,65 @@ export default async function BusinessDetailPage({
         </div>
       ) : null}
 
-      <section className="panel p-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <SectionHeading
-            eyebrow="Business detail"
-            title={business.name}
-            description="The control-plane detail view combines commercial state, owner relationship context, and the exact next operational action for Tishgroup."
-          />
-          <div className="flex flex-wrap gap-2">
-            <PlanPill plan={business.plan} />
-            <StatePill state={business.state} />
-            <HealthPill health={business.health} />
+      <ControlPageHeader
+        eyebrow="Business detail"
+        title={business.name}
+        description="This account view combines commercial state, owner context, payment history, and the exact next operational action so any TG operator can pick up the business without backtracking."
+        chips={[
+          { label: 'Call owner', href: toPhoneHref(business.ownerPhone), tone: 'dark' },
+          ...(business.ownerEmail !== 'Email not recorded' ? [{ label: 'Email owner', href: `mailto:${business.ownerEmail}` }] : []),
+          { label: 'Billing editor', href: '#control-actions' },
+          { label: 'Payment history', href: '#payment-history' },
+        ]}
+        stats={[
+          { label: 'Outstanding', value: formatCedi(business.outstandingAmount), hint: 'Current amount exposed to renewal follow-up or recovery.' },
+          { label: 'Next due', value: business.nextDueAt, hint: 'The billing date driving the next collections move.' },
+          { label: 'Assigned manager', value: business.assignedManager, hint: 'Current owner responsible for relationship continuity.' },
+          { label: 'Review status', value: business.needsReview ? 'Pending review' : 'Reviewed', hint: 'Whether the account still needs first commercial review.' },
+        ]}
+        aside={(
+          <div className="space-y-5">
+            <div className="flex flex-wrap gap-2">
+              <PlanPill plan={business.plan} />
+              <StatePill state={business.state} />
+              <HealthPill health={business.health} />
+            </div>
+            <div>
+              <div className="eyebrow">Today's move</div>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight">What the next operator should do</h2>
+            </div>
+            <ol className="space-y-3 text-sm leading-6">
+              {checklist.slice(0, 3).map((item, index) => (
+                <li key={item} className="control-priority-item control-priority-item-tonal">
+                  <div className="flex items-start gap-3">
+                    <span className="control-sequence-step">{index + 1}</span>
+                    <span>{item}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      />
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="control-callout">
+          <div className="eyebrow">Commercial source</div>
+          <div className="mt-3 text-sm leading-7 text-black/66">
+            <strong className="text-control-ink">Source of truth:</strong> {business.commercialSource === 'CONTROL_PLANE'
+              ? ' Tishgroup Control owns the subscription record for this business and Tillflow mirrors it for enforcement.'
+              : ' This business is still running from Tillflow-derived billing fields until the first control-plane subscription or payment write is recorded.'}
           </div>
         </div>
 
-        <div className="mt-5 rounded-2xl border border-black/8 bg-white/80 px-4 py-4 text-sm text-black/66">
-          <strong className="text-control-ink">Commercial source:</strong> {business.commercialSource === 'CONTROL_PLANE'
-            ? ' Tishgroup Control owns the subscription record for this business and Tillflow mirrors it for enforcement.'
-            : ' This business is still running from Tillflow-derived billing fields until the first control-plane subscription or payment write is recorded.'}
+        <div className={`control-callout ${business.needsReview ? 'border-amber-200 bg-amber-50/80' : 'border-blue-200 bg-blue-50/80'}`}>
+          <div className="eyebrow">Review posture</div>
+          <div className={`mt-3 text-sm leading-7 ${business.needsReview ? 'text-amber-900' : 'text-blue-900'}`}>
+            {business.needsReview
+              ? 'This account is still marked as unreviewed. Confirm the owner, assign a manager, and save an initial review to take it out of the new-accounts queue.'
+              : 'This business has already been reviewed. Use the subscription editor below for later plan changes, or send it back to review if the commercial direction has changed.'}
+          </div>
         </div>
-
-        {business.needsReview ? (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-            This account is still marked as unreviewed. Confirm the owner, assign a manager, and save an initial review to take it out of the new-accounts queue.
-          </div>
-        ) : null}
-
-        {!business.needsReview ? (
-          <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
-            This business has already been reviewed. If the customer changes commercial direction later, use the subscription editor below to move them to Growth or Pro, or send the account back to the review queue for another TG review.
-          </div>
-        ) : null}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -191,7 +225,7 @@ export default async function BusinessDetailPage({
             </p>
           </div>
 
-          <div className="panel p-6">
+          <div id="payment-history" className="panel p-6">
             <SectionHeading
               eyebrow="Payment history"
               title="Recent recorded payments"
@@ -256,6 +290,22 @@ export default async function BusinessDetailPage({
               <div><strong className="text-control-ink">Email:</strong> {business.ownerEmail}</div>
               <div><strong className="text-control-ink">Branches:</strong> {business.branches}</div>
               <div><strong className="text-control-ink">Last activity:</strong> {business.lastActivityAt}</div>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <a
+                href={toPhoneHref(business.ownerPhone)}
+                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
+              >
+                Call owner
+              </a>
+              {business.ownerEmail !== 'Email not recorded' ? (
+                <a
+                  href={`mailto:${business.ownerEmail}`}
+                  className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
+                >
+                  Email owner
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -346,7 +396,7 @@ export default async function BusinessDetailPage({
             </form>
           </div>
 
-          <div className="panel p-6">
+          <div id="control-actions" className="panel p-6">
             <SectionHeading
               eyebrow="Control actions"
               title="Sold plan, billing, and payments"

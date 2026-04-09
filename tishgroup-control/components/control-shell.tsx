@@ -11,20 +11,74 @@ type ControlShellStaff = {
 };
 
 const navigation = [
-  { href: '/', label: 'Portfolio' },
-  { href: '/businesses', label: 'Businesses' },
-  { href: '/staff', label: 'Staff' },
-  { href: '/collections', label: 'Collections' },
-  { href: '/revenue', label: 'Revenue' },
-  { href: '/playbooks', label: 'Playbooks' },
+  { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
+  { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
+  { href: '/collections', label: 'Collections', shortLabel: 'Collections', icon: 'pulse' },
+  { href: '/revenue', label: 'Revenue', shortLabel: 'Revenue', icon: 'chart' },
+  { href: '/playbooks', label: 'Playbooks', shortLabel: 'Playbooks', icon: 'book' },
+  { href: '/staff', label: 'Staff', shortLabel: 'Staff', icon: 'users' },
 ];
+
+function isActivePath(pathname: string, href: string) {
+  return href === '/' ? pathname === '/' : pathname.startsWith(href);
+}
+
+function NavigationIcon({ icon, active }: { icon: string; active: boolean }) {
+  const className = `h-[18px] w-[18px] ${active ? 'text-control-ink' : 'text-current'}`;
+
+  switch (icon) {
+    case 'grid':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="4" width="6" height="6" rx="1.2" />
+          <rect x="14" y="4" width="6" height="6" rx="1.2" />
+          <rect x="4" y="14" width="6" height="6" rx="1.2" />
+          <rect x="14" y="14" width="6" height="6" rx="1.2" />
+        </svg>
+      );
+    case 'pulse':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2.4-4.5L14 17l2.2-5H21" />
+        </svg>
+      );
+    case 'chart':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 19V9m7 10V5m7 14v-7" />
+        </svg>
+      );
+    case 'book':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 5.5A2.5 2.5 0 0 1 8.5 3H20v17H8.5A2.5 2.5 0 0 0 6 22V5.5ZM6 5.5V20" />
+        </svg>
+      );
+    case 'users':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16 19a4 4 0 0 0-8 0" />
+          <circle cx="12" cy="11" r="3" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20 19a3.5 3.5 0 0 0-2.6-3.38M17.5 8.2A2.5 2.5 0 1 1 19 12.8" />
+        </svg>
+      );
+    case 'home':
+    default:
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 11.5 12 5l8 6.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.5 10.5V20h11V10.5" />
+        </svg>
+      );
+  }
+}
 
 export default function ControlShell({ children, staff }: { children: ReactNode; staff: ControlShellStaff }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const currentSection = useMemo(
-    () => navigation.find((item) => (item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))) ?? navigation[0],
+    () => navigation.find((item) => isActivePath(pathname, item.href)) ?? navigation[0],
     [pathname]
   );
 
@@ -83,7 +137,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
 
             <nav className="mt-8 space-y-2">
               {navigation.map((item) => {
-                const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+                const active = isActivePath(pathname, item.href);
                 return (
                   <Link
                     key={item.href}
@@ -93,7 +147,10 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                       active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                     }`}
                   >
-                    <span>{item.label}</span>
+                    <span className="flex items-center gap-3">
+                      <NavigationIcon icon={item.icon} active={active} />
+                      <span>{item.label}</span>
+                    </span>
                     <span className="text-[10px] uppercase tracking-[0.18em]">Ops</span>
                   </Link>
                 );
@@ -122,7 +179,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
         </div>
       ) : null}
 
-      <aside className="hidden w-[280px] shrink-0 flex-col justify-between rounded-panel border border-black/10 bg-[#122126] px-5 py-5 text-white shadow-dashboard lg:flex">
+      <aside className="sticky top-5 hidden max-h-[calc(100dvh-2.5rem)] w-[280px] shrink-0 flex-col justify-between self-start rounded-panel border border-black/10 bg-[#122126] px-5 py-5 text-white shadow-dashboard lg:flex">
         <div className="space-y-6">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -134,7 +191,7 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
 
           <nav className="space-y-2">
             {navigation.map((item) => {
-              const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+              const active = isActivePath(pathname, item.href);
               return (
                 <Link
                   key={item.href}
@@ -144,7 +201,10 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
                     active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                   }`}
                 >
-                  <span>{item.label}</span>
+                  <span className="flex items-center gap-3">
+                    <NavigationIcon icon={item.icon} active={active} />
+                    <span>{item.label}</span>
+                  </span>
                   <span className="text-[10px] uppercase tracking-[0.18em]">Ops</span>
                 </Link>
               );
@@ -178,20 +238,20 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
-        <div className="relative z-20 lg:hidden">
-          <div className="rounded-[28px] border border-black/8 bg-[#fcfaf6] px-4 py-3 shadow-[0_18px_40px_rgba(21,39,43,0.08)]">
-            <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:gap-6 lg:pb-0">
+        <div className="sticky top-0 z-30 lg:hidden">
+          <div className="border-b border-[var(--line)] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
               <div className="min-w-0">
                 <div className="eyebrow">Tish Group Control</div>
-                <div className="mt-1 truncate text-[1.75rem] font-semibold leading-none tracking-tight text-control-ink">{currentSection.label}</div>
+                <div className="mt-0.5 truncate text-[1.6rem] font-semibold leading-tight tracking-tight text-control-ink">{currentSection.label}</div>
               </div>
               <button
                 type="button"
                 aria-label="Open navigation"
                 aria-expanded={mobileMenuOpen}
                 onClick={() => setMobileMenuOpen(true)}
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
               >
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
@@ -199,10 +259,28 @@ export default function ControlShell({ children, staff }: { children: ReactNode;
               </button>
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-black/6 pt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/54">
-              <span className="truncate">{staff.name}</span>
-              <span className="text-black/24">•</span>
-              <span>{staff.role.replace(/_/g, ' ')}</span>
+            <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/44">
+              {staff.name} · {staff.role.replace(/_/g, ' ')}
+            </div>
+
+            <div className="mobile-nav-strip -mb-px flex overflow-x-auto px-2">
+              {navigation.map((item) => {
+                const active = isActivePath(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    prefetch={false}
+                    className={`shrink-0 border-b-2 px-3 pb-3 pt-1.5 text-sm font-medium transition ${
+                      active
+                        ? 'border-control-ink text-control-ink'
+                        : 'border-transparent text-black/52 hover:text-control-ink'
+                    }`}
+                  >
+                    {item.shortLabel}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>

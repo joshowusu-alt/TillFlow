@@ -17,10 +17,10 @@ const config: Config = {
         },
       },
       boxShadow: {
-        dashboard: '0 18px 50px rgba(13, 27, 30, 0.08)',
+        dashboard: '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05)',
       },
       borderRadius: {
-        panel: '1.5rem',
+        panel: '0.75rem',
       },
     },
   },
