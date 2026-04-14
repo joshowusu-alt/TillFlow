@@ -78,8 +78,8 @@ export default function GlobalSearch({
 
   const isDark = variant === 'dark';
   const inputClass = isDark
-    ? 'w-full rounded-xl border border-white/12 bg-white/8 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/30 focus:bg-white/14'
-    : 'w-full rounded-xl border border-black/10 bg-black/[0.03] py-2.5 pl-9 pr-3 text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-[#1f8a82] focus:bg-white';
+    ? 'w-full rounded-[16px] border border-white/12 bg-white/8 py-2.5 pl-9 pr-8 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/30 focus:bg-white/14'
+    : 'w-full rounded-[16px] border border-black/10 bg-black/[0.03] py-2.5 pl-9 pr-8 text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-[#1f8a82] focus:bg-white';
   const iconClass = isDark ? 'text-white/40' : 'text-black/36';
 
   return (
@@ -126,7 +126,7 @@ export default function GlobalSearch({
       </div>
 
       {open && results.length > 0 ? (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-black/10 bg-white shadow-xl">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-[18px] border border-black/10 bg-white shadow-xl">
           {results.map((biz, index) => (
             <li key={biz.id}>
               <Link
@@ -135,7 +135,7 @@ export default function GlobalSearch({
                   setQuery('');
                   setOpen(false);
                 }}
-                className={`flex items-center justify-between gap-3 px-4 py-3 text-sm transition ${
+                 className={`flex items-center justify-between gap-3 px-3.5 py-3 text-sm transition ${
                   index === activeIndex ? 'bg-black/[0.04]' : 'hover:bg-black/[0.03]'
                 }`}
               >
@@ -153,7 +153,7 @@ export default function GlobalSearch({
           ))}
         </ul>
       ) : open && query.trim().length >= 2 ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm text-black/50 shadow-xl">
+         <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-[18px] border border-black/10 bg-white px-3.5 py-3 text-sm text-black/50 shadow-xl">
           No match for &ldquo;{query}&rdquo;
         </div>
       ) : null}

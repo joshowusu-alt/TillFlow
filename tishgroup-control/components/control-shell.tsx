@@ -126,7 +126,7 @@ export default function ControlShell({
   }, [mobileMenuOpen]);
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1600px] gap-4 px-3 py-3 sm:gap-6 sm:px-6 sm:py-5 lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-[calc(var(--safe-bottom)+1rem)] sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6">
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
@@ -135,18 +135,18 @@ export default function ControlShell({
             className="absolute inset-0 bg-[#122126]/45 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[22rem] flex-col border-l border-black/10 bg-[#122126] px-5 pb-[calc(var(--safe-bottom)+1.25rem)] pt-[calc(var(--safe-top)+1rem)] text-white shadow-2xl">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col border-l border-black/10 bg-[#122126] px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
-                <div className="mt-2 text-2xl font-semibold tracking-tight">Tish Group Control</div>
+                <div className="mt-1.5 text-xl font-semibold tracking-tight">Tish Group Control</div>
                 <div className="mt-2 text-sm text-white/66">{staff.name} · {staff.role.replace(/_/g, ' ')}</div>
               </div>
               <button
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setMobileMenuOpen(false)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/12 bg-white/8 text-white transition hover:bg-white/12"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-[18px] border border-white/12 bg-white/8 text-white transition hover:bg-white/12"
               >
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
@@ -154,7 +154,7 @@ export default function ControlShell({
               </button>
             </div>
 
-            <nav className="mt-8 space-y-2">
+            <nav className="mt-6 space-y-1.5">
               {navigation.map((item) => {
                 const active = isActivePath(pathname, item.href);
                 const count = getNavCount(item.href, navCounts);
@@ -163,7 +163,7 @@ export default function ControlShell({
                     key={item.href}
                     href={item.href}
                     prefetch={false}
-                    className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    className={`flex items-center justify-between rounded-[18px] px-3.5 py-3 text-sm font-medium transition ${
                       active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                     }`}
                   >
@@ -181,20 +181,20 @@ export default function ControlShell({
               })}
             </nav>
 
-            <div className="mt-auto space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+            <div className="mt-auto space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Signed in</div>
-                <div className="mt-2 font-semibold text-white">{staff.name}</div>
+                <div className="mt-1.5 font-semibold text-white">{staff.name}</div>
                 <div className="mt-1 text-xs text-white/60">{staff.email}</div>
               </div>
 
               <p className="leading-6">
-                Tillflow enforces access. Tish Group Control manages subscription, collections, and relationship follow-up.
+                Work the commercial layer: portfolio posture, renewals, restrictions, and assignment clarity.
               </p>
 
               <Link
                 href="/logout"
-                className="inline-flex w-full items-center justify-center rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/12"
+                className="inline-flex w-full items-center justify-center rounded-[18px] border border-white/12 bg-white/8 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/12"
               >
                 Sign out
               </Link>
@@ -203,19 +203,19 @@ export default function ControlShell({
         </div>
       ) : null}
 
-      <aside className="sticky top-5 hidden max-h-[calc(100dvh-2.5rem)] w-[280px] shrink-0 flex-col justify-between self-start rounded-panel border border-black/10 bg-[#122126] px-5 py-5 text-white shadow-dashboard lg:flex">
-        <div className="space-y-6">
+      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[272px] shrink-0 flex-col justify-between self-start rounded-[26px] border border-black/10 bg-[#122126] px-4 py-4 text-white shadow-dashboard lg:flex">
+        <div className="space-y-5">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
-            <div className="text-2xl font-semibold tracking-tight">Tish Group Control</div>
+            <div className="text-[1.35rem] font-semibold tracking-tight">Tish Group Control</div>
             <p className="text-sm leading-6 text-white/68">
-              Commercial portfolio, collections, support risk, and revenue visibility across every managed Tillflow business.
+              Commercial control surface for the Tillflow portfolio.
             </p>
           </div>
 
           <GlobalSearch businesses={businesses ?? []} variant="dark" />
 
-          <nav className="space-y-2">
+          <nav className="space-y-1.5">
             {navigation.map((item) => {
               const active = isActivePath(pathname, item.href);
               const count = getNavCount(item.href, navCounts);
@@ -224,7 +224,7 @@ export default function ControlShell({
                   key={item.href}
                   href={item.href}
                   prefetch={false}
-                  className={`flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                  className={`flex items-center justify-between rounded-[18px] px-3.5 py-2.5 text-sm font-medium transition ${
                     active ? 'bg-white text-control-ink' : 'bg-white/5 text-white/78 hover:bg-white/10 hover:text-white'
                   }`}
                 >
@@ -243,10 +243,10 @@ export default function ControlShell({
           </nav>
         </div>
 
-        <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/75">
+        <div className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Signed in</div>
-            <div className="mt-2 font-semibold text-white">{staff.name}</div>
+            <div className="mt-1.5 font-semibold text-white">{staff.name}</div>
             <div className="mt-1 text-xs text-white/60">{staff.email}</div>
             <div className="mt-2 inline-flex rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/72">
               {staff.role.replace(/_/g, ' ')}
@@ -256,66 +256,79 @@ export default function ControlShell({
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50">Operating stance</div>
             <p className="mt-2 leading-6">
-              Tillflow enforces access. Tish Group Control manages the portfolio, billing decisions, and relationship follow-up.
+              Keep revenue posture, restriction handling, and account ownership explicit.
             </p>
           </div>
 
           <Link
             href="/logout"
-            className="inline-flex w-full items-center justify-center rounded-2xl border border-white/12 bg-white/8 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/12"
+            className="inline-flex w-full items-center justify-center rounded-[18px] border border-white/12 bg-white/8 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/12"
           >
             Sign out
           </Link>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-4 pb-[calc(var(--safe-bottom)+1.5rem)] sm:gap-6 lg:pb-0">
-        <div className="sticky top-0 z-30 lg:hidden">
-          <div className="border-b border-[var(--line)] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
-              <div className="min-w-0">
-                <div className="eyebrow">Tish Group Control</div>
-                <div className="mt-0.5 truncate text-[1.6rem] font-semibold leading-tight tracking-tight text-control-ink">{currentSection.label}</div>
+      <div className="flex min-w-0 flex-1 flex-col gap-3 lg:gap-4">
+        <div className="sticky top-0 z-40 lg:hidden">
+          <div className="bg-[linear-gradient(180deg,rgba(244,248,249,0.96)_0%,rgba(244,248,249,0.92)_78%,rgba(244,248,249,0)_100%)] pb-2 pt-2 backdrop-blur">
+            <div className="rounded-[22px] border border-black/8 bg-white/92 px-3 py-3 shadow-[0_8px_24px_rgba(13,27,30,0.08)]">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/42">
+                    <span>Tish Group Control</span>
+                    <span className="text-black/24">•</span>
+                    <span>{staff.name}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="min-w-0 truncate text-lg font-semibold tracking-tight text-control-ink">{currentSection.label}</div>
+                    <span className="inline-flex shrink-0 rounded-full border border-black/8 bg-black/[0.03] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/48">
+                      {staff.role.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Open navigation"
+                  aria-expanded={mobileMenuOpen}
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[16px] border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
+                >
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+                  </svg>
+                </button>
               </div>
-              <button
-                type="button"
-                aria-label="Open navigation"
-                aria-expanded={mobileMenuOpen}
-                onClick={() => setMobileMenuOpen(true)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/8 bg-white text-control-ink transition hover:bg-black/[0.03]"
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
-              </button>
-            </div>
 
-            <div className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/44">
-              {staff.name} · {staff.role.replace(/_/g, ' ')}
-            </div>
+              <div className="mt-3">
+                <GlobalSearch businesses={businesses ?? []} variant="light" />
+              </div>
 
-            <div className="px-4 pb-2">
-              <GlobalSearch businesses={businesses ?? []} variant="light" />
-            </div>
-
-            <div className="mobile-nav-strip -mb-px flex overflow-x-auto px-2">
-              {navigation.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    prefetch={false}
-                    className={`shrink-0 border-b-2 px-3 pb-3 pt-1.5 text-sm font-medium transition ${
-                      active
-                        ? 'border-control-ink text-control-ink'
-                        : 'border-transparent text-black/52 hover:text-control-ink'
-                    }`}
-                  >
-                    {item.shortLabel}
-                  </Link>
-                );
-              })}
+              <div className="mobile-nav-strip mt-3 flex gap-2 overflow-x-auto pb-0.5">
+                {navigation.map((item) => {
+                  const active = isActivePath(pathname, item.href);
+                  const count = getNavCount(item.href, navCounts);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      prefetch={false}
+                      className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-semibold transition ${
+                        active
+                          ? 'border-[#122126] bg-[#122126] text-white'
+                          : 'border-black/8 bg-black/[0.03] text-black/56'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      {count > 0 ? (
+                        <span className={`inline-flex min-w-[1.15rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? 'bg-white/18 text-white' : 'bg-white text-control-ink'}`}>
+                          {count}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
