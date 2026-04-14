@@ -37,7 +37,7 @@ html {
     radial-gradient(ellipse 80% 40% at 50% -10%, rgba(31, 138, 130, 0.09) 0%, transparent 60%),
     radial-gradient(ellipse 40% 30% at 92% 20%, rgba(226, 168, 61, 0.06) 0%, transparent 50%);
   background-attachment: fixed;
-  scroll-padding-top: calc(var(--safe-top) + 6.5rem);
+  scroll-padding-top: calc(var(--safe-top) + 5.25rem);
 }
 
 html,
@@ -73,11 +73,12 @@ textarea::placeholder {
 
 .panel {
   @apply rounded-panel border shadow-dashboard;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
 }
 
 .metric-card {
-  @apply panel p-5;
+  @apply panel p-4 sm:p-5;
   position: relative;
   overflow: hidden;
   box-shadow: var(--shadow-card);
@@ -85,9 +86,11 @@ textarea::placeholder {
               transform var(--motion-base) var(--ease-executive);
 }
 
-.metric-card:hover {
-  box-shadow: var(--shadow-raised);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .metric-card:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-2px);
+  }
 }
 
 .metric-card-teal {
@@ -128,13 +131,13 @@ textarea::placeholder {
 }
 
 .control-page-summary-card {
-  @apply rounded-2xl border p-4;
+  @apply rounded-[20px] border px-4 py-3;
   border-color: var(--line);
-  background: var(--bg);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .control-page-hero-aside {
-  @apply rounded-2xl border p-5 sm:p-6;
+  @apply rounded-[22px] border p-4 sm:p-5;
   border-color: rgba(0, 0, 0, 0.12);
   background: #0d1b1e;
   color: white;
@@ -227,14 +230,16 @@ textarea::placeholder {
 }
 
 .control-action-card {
-  @apply rounded-2xl border p-4 transition;
+  @apply rounded-[20px] border p-4 transition;
   border-color: var(--line);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
 }
 
-.control-action-card:hover {
-  box-shadow: var(--shadow-raised);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .control-action-card:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-2px);
+  }
 }
 
 .data-table {
@@ -242,12 +247,12 @@ textarea::placeholder {
 }
 
 .data-table th {
-  @apply border-b px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em];
+  @apply border-b px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em];
   color: rgba(21, 39, 43, 0.5);
 }
 
 .data-table td {
-  @apply border-b px-4 py-2 align-top;
+  @apply border-b px-4 py-2.5 align-top;
 }
 
 .eyebrow {
@@ -257,8 +262,8 @@ textarea::placeholder {
 
 .page-title {
   @apply font-bold tracking-tight;
-  font-size: clamp(1.5rem, 2.2vw, 2rem);
-  line-height: 0.95;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  line-height: 0.98;
 }
 
 @keyframes pulse-dot {
@@ -279,17 +284,17 @@ textarea::placeholder {
 }
 
 .control-field {
-  @apply w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-base text-control-ink outline-none transition focus:border-[#1f8a82];
+  @apply w-full rounded-[18px] border border-black/10 bg-white px-3.5 py-2.5 text-sm text-control-ink outline-none transition focus:border-[#1f8a82];
 }
 
 .mobile-card {
-  @apply rounded-2xl border p-4;
+  @apply rounded-[20px] border p-3.5;
   border-color: var(--line);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .mobile-card-grid {
-  @apply mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm;
+  @apply mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm;
 }
 
 .mobile-card-label {
@@ -302,6 +307,140 @@ textarea::placeholder {
   color: var(--ink);
 }
 
+.control-kpi-band {
+  @apply grid gap-2 sm:gap-3;
+}
+
+.control-kpi-compact {
+  @apply rounded-[20px] border px-4 py-3;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(13, 27, 30, 0.04);
+}
+
+.control-kpi-compact-label {
+  @apply text-[10px] font-semibold uppercase tracking-[0.18em];
+  color: rgba(21, 39, 43, 0.48);
+}
+
+.control-kpi-compact-value {
+  @apply mt-2 text-xl font-semibold tracking-tight tabular-nums text-control-ink sm:text-2xl;
+}
+
+.control-kpi-compact-hint {
+  @apply mt-1 text-xs leading-5;
+  color: rgba(21, 39, 43, 0.56);
+}
+
+.control-action-strip {
+  @apply grid gap-2 md:grid-cols-3;
+}
+
+.control-action-strip-link {
+  @apply rounded-[20px] border px-4 py-3 transition;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-card);
+}
+
+@media (hover: hover) {
+  .control-action-strip-link:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-1px);
+  }
+}
+
+.control-toolbar {
+  @apply rounded-[22px] border px-4 py-3;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.control-toolbar-muted {
+  background: rgba(244, 248, 249, 0.9);
+}
+
+.control-inline-note {
+  @apply rounded-[18px] border px-3 py-2.5 text-sm;
+  border-color: var(--line);
+  background: rgba(244, 248, 249, 0.84);
+  color: rgba(21, 39, 43, 0.62);
+}
+
+.control-list-row {
+  @apply rounded-[20px] border px-4 py-3;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.control-list-row-muted {
+  background: rgba(244, 248, 249, 0.92);
+}
+
+.control-runbook-card {
+  @apply rounded-[24px] border p-4 sm:p-5;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.control-runbook-grid {
+  @apply grid gap-2 sm:grid-cols-2;
+}
+
+.control-runbook-field {
+  @apply rounded-[18px] border px-3 py-3;
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(244, 248, 249, 0.86);
+}
+
+.control-checklist {
+  counter-reset: runbook-step;
+}
+
+.control-checklist-item {
+  @apply flex gap-3 rounded-[18px] border px-3 py-3;
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.control-checklist-item::before {
+  counter-increment: runbook-step;
+  content: counter(runbook-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(31, 138, 130, 0.24);
+  background: rgba(31, 138, 130, 0.12);
+  color: var(--teal);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.control-disclosure {
+  @apply rounded-[18px] border;
+  border-color: var(--line);
+  background: rgba(244, 248, 249, 0.84);
+}
+
+.control-disclosure summary {
+  @apply cursor-pointer list-none px-3 py-3 text-sm font-semibold text-control-ink;
+}
+
+.control-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-disclosure-content {
+  @apply border-t px-3 py-3 text-sm leading-6;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(21, 39, 43, 0.64);
+}
+
 .mobile-nav-strip {
   scrollbar-width: none;
 }
@@ -312,13 +451,13 @@ textarea::placeholder {
 
 @media (max-width: 640px) {
   .page-title {
-    font-size: clamp(1.35rem, 6vw, 1.75rem);
+    font-size: clamp(1.25rem, 5.3vw, 1.65rem);
     font-weight: 700;
-    line-height: 1.02;
+    line-height: 1.04;
   }
 
   .panel {
-    border-radius: 1.5rem;
+    border-radius: 1.25rem;
   }
 
   .data-table th,
@@ -329,6 +468,10 @@ textarea::placeholder {
 
   .metric-card {
     min-height: 0;
+  }
+
+  .section-title {
+    font-size: 1.0625rem;
   }
 }
 

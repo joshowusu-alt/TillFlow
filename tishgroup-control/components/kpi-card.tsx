@@ -42,18 +42,18 @@ export default function KpiCard({
   return (
     <div className={`metric-card flex flex-col justify-between ${toneCard[tone]}`}>
       {tone !== 'default' && <span className={toneStrip[tone]} aria-hidden="true" />}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <div className="eyebrow">{label}</div>
-          <div className={`mt-3 font-display text-[2rem] font-bold tabular-nums tracking-tight sm:text-[2.1rem] ${toneNumber[tone]}`}>
+          <div className={`mt-2 font-display text-[1.55rem] font-bold tabular-nums tracking-tight sm:text-[1.9rem] ${toneNumber[tone]}`}>
             {value}
           </div>
         </div>
-        <div className="shrink-0 rounded-full border border-black/8 bg-white/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.20em] text-black/50">
+        <div className="shrink-0 rounded-full border border-black/8 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black/50">
           {accent}
         </div>
       </div>
-      <p className="mt-4 text-sm leading-6 text-black/58">{hint}</p>
+      <p className="mt-3 text-sm leading-5 text-black/56">{hint}</p>
     </div>
   );
 }
