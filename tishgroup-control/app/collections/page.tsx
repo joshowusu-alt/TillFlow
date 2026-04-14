@@ -121,38 +121,38 @@ export default async function CollectionsPage({
     {
       label: 'Healthy accounts',
       value: String(queues.healthy.length),
-      hint: 'Accounts that can shift to relationship quality and expansion review.',
+      hint: 'No immediate collections pressure.',
     },
     {
       label: 'Due soon',
       value: String(queues.dueSoon.length),
-      hint: 'Reminder queue to keep renewals proactive rather than reactive.',
+      hint: 'Reminder queue before overdue handling starts.',
     },
     {
-      label: 'Overdue operating',
+      label: 'Overdue',
       value: String(queues.overdue.length),
-      hint: 'Accounts still operating but already consuming collections attention.',
+      hint: 'Accounts already consuming same-day collections attention.',
     },
     {
-      label: 'Locked or read-only',
+      label: 'Locked',
       value: String(queues.locked.length),
-      hint: 'Accounts needing payment confirmation or a deliberate restriction decision.',
+      hint: 'Accounts needing payment confirmation or a restriction decision.',
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-5">
       <ControlPageHeader
         eyebrow="Collections board"
-        title="Run renewals in explicit queues, not one long list."
-        description="The board is structured around operating urgency. Work reminders first, then same-day overdue follow-up, then locked recovery, while keeping healthy accounts available for relationship review."
+        title="Queue-first collections control."
+        description="Work reminders first, then same-day overdue recovery, then locked accounts. The page should tell the team what queue to open next."
         chips={queueEntries.map((queue) => ({ label: queue.title, href: `#${queue.key}` }))}
         stats={headerStats}
         aside={(
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <div className="eyebrow">Pass order</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Work the queues in the right sequence</h2>
+              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Work the right queue next</h2>
             </div>
             <div className="control-priority-list">
               {queueEntries.slice(1).map((queue, index) => (
@@ -167,14 +167,14 @@ export default async function CollectionsPage({
                 </div>
               ))}
             </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/6 px-4 py-4 text-sm leading-6 text-white/74">
+            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
               Preview mode stays the default so large portfolios remain fast on mobile and low-power devices.
             </div>
           </div>
         )}
       />
 
-      <section className="panel p-6">
+      <section className="control-toolbar">
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -201,82 +201,80 @@ export default async function CollectionsPage({
                 <option value="100">Show 100 per queue</option>
               </select>
             </label>
-            <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl border border-black/10 bg-white px-5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
               Update
             </button>
           </form>
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
+      <section className="grid gap-4 xl:grid-cols-2">
         {queueEntries.map((queue) => {
           const visibleItems = view === 'all' ? queue.items : queue.items.slice(0, previewSize);
           const hiddenCount = Math.max(queue.items.length - visibleItems.length, 0);
 
           return (
-          <div key={queue.key} id={queue.key} className="panel p-6">
-            <SectionHeading eyebrow="Queue" title={queue.title} description={queue.description} />
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
-              <span>{queue.items.length} account{queue.items.length === 1 ? '' : 's'} in this queue.</span>
-              {hiddenCount > 0 ? (
-                <Link href={`${buildCollectionsHref('all', previewSize)}#${queue.key}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
-                  Show all {queue.items.length}
-                </Link>
-              ) : null}
-            </div>
-            <div className="mt-4 rounded-[22px] border border-black/8 bg-black/[0.02] px-4 py-4 text-sm leading-6 text-black/64">
-              <strong className="text-control-ink">Best move:</strong> {queue.bestMove} <span className="text-black/40">•</span> <strong className="text-control-ink">Response window:</strong> {queue.responseWindow}
-            </div>
-            <div className="mt-5 space-y-3">
-              {visibleItems.map((business) => (
-                <div key={business.id} className="rounded-2xl border border-black/8 bg-white/85 px-4 py-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="font-semibold text-control-ink">{business.name}</div>
-                      <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.ownerPhone}</div>
+            <div key={queue.key} id={queue.key} className="panel p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <SectionHeading eyebrow="Queue" title={queue.title} description={queue.description} />
+                <div className="rounded-full border border-black/10 bg-black/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-black/50">
+                  {queue.items.length} account{queue.items.length === 1 ? '' : 's'}
+                </div>
+              </div>
+              <div className="mt-4 control-inline-note">
+                <strong className="text-control-ink">Best move:</strong> {queue.bestMove} <span className="text-black/35">•</span> <strong className="text-control-ink">Window:</strong> {queue.responseWindow}
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {visibleItems.map((business) => (
+                  <div key={business.id} className="control-list-row">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-control-ink">{business.name}</div>
+                        <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.ownerPhone}</div>
+                      </div>
+                      <StatePill state={business.state} />
                     </div>
-                    <StatePill state={business.state} />
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-black/62">
+                      <span>Due <strong className="text-control-ink">{business.nextDueAt}</strong></span>
+                      <span>Outstanding <strong className="text-control-ink">{formatCedi(business.outstandingAmount)}</strong></span>
+                      <span>Manager <strong className="text-control-ink">{business.assignedManager}</strong></span>
+                    </div>
+                    <div className="mt-3 text-sm leading-5 text-black/62">
+                      {getAccountMove(business.state, business.nextDueAt)}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <a
+                        href={toPhoneHref(business.ownerPhone)}
+                        className="inline-flex items-center justify-center rounded-[16px] border border-black/10 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-control-ink transition hover:bg-black/[0.03]"
+                      >
+                        Call owner
+                      </a>
+                      <Link
+                        href={`/businesses/${business.id}`}
+                        className="inline-flex items-center justify-center rounded-[16px] border border-black/10 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-control-ink transition hover:bg-black/[0.03]"
+                      >
+                        Open account
+                      </Link>
+                    </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-black/64">
-                    <span>Due: <strong className="text-control-ink">{business.nextDueAt}</strong></span>
-                    <span>Outstanding: <strong className="text-control-ink">{formatCedi(business.outstandingAmount)}</strong></span>
-                    <span>Manager: <strong className="text-control-ink">{business.assignedManager}</strong></span>
-                    {business.lastActivityAt ? (
-                      <span>Last contact: <strong className="text-control-ink">{business.lastActivityAt}</strong></span>
-                    ) : null}
+                ))}
+                {visibleItems.length === 0 ? (
+                  <div className="control-inline-note">No accounts are currently in this queue.</div>
+                ) : null}
+                {hiddenCount > 0 ? (
+                  <div className="control-inline-note">
+                    {hiddenCount} more account{hiddenCount === 1 ? '' : 's'} are hidden in preview mode. Use &ldquo;Show all queues&rdquo; to open the full board.
                   </div>
-                  <div className="mt-3 rounded-2xl border border-black/8 bg-black/[0.02] px-3 py-3 text-sm leading-6 text-black/62">
-                    {getAccountMove(business.state, business.nextDueAt)}
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <a
-                      href={toPhoneHref(business.ownerPhone)}
-                      className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-control-ink transition hover:bg-black/[0.03]"
-                    >
-                      Call owner
-                    </a>
-                    <Link
-                      href={`/businesses/${business.id}`}
-                      className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-control-ink transition hover:bg-black/[0.03]"
-                    >
-                      Open account
-                    </Link>
-                  </div>
-                </div>
-              ))}
-              {visibleItems.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/58">
-                  No accounts are currently in this queue.
-                </div>
-              ) : null}
-              {hiddenCount > 0 ? (
-                <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/58">
-                  {hiddenCount} more account{hiddenCount === 1 ? '' : 's'} are hidden in preview mode to keep the board fast on large portfolios.
-                </div>
-              ) : null}
+                ) : null}
+                {hiddenCount > 0 ? (
+                  <Link href={`${buildCollectionsHref('all', previewSize)}#${queue.key}`} className="inline-flex text-sm font-semibold text-control-ink underline-offset-4 hover:underline">
+                    Show all {queue.items.length}
+                  </Link>
+                ) : null}
+              </div>
             </div>
-          </div>
-        );})}
+          );
+        })}
       </section>
     </div>
   );

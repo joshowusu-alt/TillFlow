@@ -27,7 +27,7 @@ export default async function StaffPage({
   const adminCount = staffDirectory.filter((entry) => entry.role === 'CONTROL_ADMIN' && entry.active).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-5">
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">{error}</div>
       ) : null}
@@ -40,33 +40,30 @@ export default async function StaffPage({
 
       <ControlPageHeader
         eyebrow="TG staff"
-        title="Control team directory with explicit coverage roles."
-        description="The control plane should reflect the real operating team, not a shared super-admin. Define who owns renewals, relationship reviews, collections, and support so every account can be handed off cleanly."
+        title="Operator directory and coverage control."
+        description="Keep the control plane tied to real operators so renewals, collections, support, and review ownership stay explicit."
         chips={[
           { label: 'Create staff', href: '#create-staff', tone: 'dark' },
           { label: 'Directory', href: '#staff-directory' },
         ]}
         stats={[
-          { label: 'Active operators', value: String(activeCount), hint: 'People who can sign in and work the control plane right now.' },
-          { label: 'Inactive', value: String(inactiveCount), hint: 'Accounts currently disabled but still kept in the directory.' },
-          { label: 'Control admins', value: String(adminCount), hint: 'Admins who can manage staff and broader control settings.' },
-          { label: 'Team records', value: String(staffDirectory.length), hint: 'Total directory entries, active and inactive together.' },
+          { label: 'Active operators', value: String(activeCount), hint: 'People who can work the control plane now.' },
+          { label: 'Inactive', value: String(inactiveCount), hint: 'Directory records currently disabled.' },
+          { label: 'Control admins', value: String(adminCount), hint: 'Operators who can manage staff and settings.' },
+          { label: 'Team records', value: String(staffDirectory.length), hint: 'Active and inactive entries together.' },
         ]}
         aside={(
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <div className="eyebrow">Coverage rule</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Every portfolio account should map to a real human owner</h2>
-              <p className="mt-3 text-sm leading-7">
-                Use this directory to keep assignment and review workflows honest. If the staff table is stale, the rest of the control plane becomes unreliable.
-              </p>
+              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Every account should map to a real human owner</h2>
             </div>
           </div>
         )}
       />
 
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div id="create-staff" className="panel p-6">
+      <section className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+        <div id="create-staff" className="panel p-4 sm:p-5">
           <SectionHeading
             eyebrow="Create staff"
             title="Add or reactivate a TG operator"
@@ -77,17 +74,17 @@ export default async function StaffPage({
             <form action={createControlStaffAction} className="mt-5 space-y-4">
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Full name</span>
-                <input type="text" name="name" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required />
+                <input type="text" name="name" className="control-field" required />
               </label>
 
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Email</span>
-                <input type="email" name="email" placeholder="name@tishgroup.com" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required />
+                <input type="email" name="email" placeholder="name@tishgroup.com" className="control-field" required />
               </label>
 
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-control-ink">Role</span>
-                <select name="role" defaultValue="ACCOUNT_MANAGER" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                <select name="role" defaultValue="ACCOUNT_MANAGER" className="control-field">
                   <option value="CONTROL_ADMIN">Control admin</option>
                   <option value="ACCOUNT_MANAGER">Account manager</option>
                   <option value="COLLECTIONS_AGENT">Collections agent</option>
@@ -95,7 +92,7 @@ export default async function StaffPage({
                 </select>
               </label>
 
-              <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:w-fit">
+              <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-[#122126] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:w-fit">
                 Save staff account
               </button>
             </form>
@@ -107,11 +104,11 @@ export default async function StaffPage({
         </div>
 
         <div id="staff-directory" className="panel overflow-hidden p-0">
-          <div className="border-b border-black/8 px-6 py-5">
+          <div className="border-b border-black/8 px-4 py-4 sm:px-5">
             <SectionHeading
               eyebrow="Active and inactive"
               title="Current TG operators"
-              description="This is the live staff directory used by assignment and review workflows."
+              description="The live staff table used by assignment and review workflows."
             />
           </div>
 
@@ -144,7 +141,7 @@ export default async function StaffPage({
                     <form action={toggleControlStaffAction}>
                       <input type="hidden" name="staffId" value={entry.id} />
                       <input type="hidden" name="makeActive" value={entry.active ? 'false' : 'true'} />
-                      <button type="submit" className="inline-flex w-full rounded-2xl border border-black/12 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                      <button type="submit" className="inline-flex w-full rounded-[18px] border border-black/12 bg-white px-4 py-2.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
                         {entry.active ? 'Deactivate' : 'Reactivate'}
                       </button>
                     </form>
@@ -184,7 +181,7 @@ export default async function StaffPage({
                         <form action={toggleControlStaffAction}>
                           <input type="hidden" name="staffId" value={entry.id} />
                           <input type="hidden" name="makeActive" value={entry.active ? 'false' : 'true'} />
-                          <button type="submit" className="inline-flex rounded-2xl border border-black/12 bg-white px-3 py-2 text-xs font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                          <button type="submit" className="inline-flex rounded-[18px] border border-black/12 bg-white px-3 py-2 text-xs font-semibold text-control-ink transition hover:bg-black/[0.03]">
                             {entry.active ? 'Deactivate' : 'Reactivate'}
                           </button>
                         </form>

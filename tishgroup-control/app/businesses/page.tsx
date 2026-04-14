@@ -111,12 +111,12 @@ export default async function BusinessesPage({
     {
       label: 'Page size',
       value: String(roster.pageSize),
-      hint: 'Scoped views keep the roster fast even when the portfolio crosses 1000 clients.',
+      hint: 'Scoped views keep the roster fast on large portfolios.',
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-5">
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">{error}</div>
       ) : null}
@@ -141,33 +141,30 @@ export default async function BusinessesPage({
 
       <ControlPageHeader
         eyebrow="Managed businesses"
-        title="Cross-tenant commercial roster with page-scoped control."
-        description="Work the portfolio like Shopify Admin meets Stripe: keep the list fast, keep actions scoped to the current slice, and make every row answer owner, sold plan, access posture, and next action."
+        title="Commercial roster and billing control."
+        description="Keep the roster fast, make billing edits without scroll fatigue, and keep every business tied to a clear owner, plan, and next action."
         chips={[
-          { label: 'Search and filters', href: '#roster-tools' },
+          { label: 'Roster control', href: '#roster-tools' },
           { label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' },
           ...(filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
-          { label: 'Roster cards', href: '#business-roster' },
+          { label: 'Roster', href: '#business-roster' },
         ]}
         stats={headerStats}
         aside={(
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <div className="eyebrow">Roster discipline</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Keep bulk actions page-scoped</h2>
-              <p className="mt-3 text-sm leading-7">
-                Filters, bulk review, and quick billing only target the current page so the team can operate safely on very large portfolios without touching unrelated accounts.
-              </p>
+              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Operate the current slice only</h2>
             </div>
-            <div className="rounded-[22px] border border-white/10 bg-white/6 px-4 py-4 text-sm leading-6 text-white/74">
+            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
               {listSummary} Current filter: <strong>{filter === 'unreviewed' ? 'Unreviewed only' : 'All businesses'}</strong>.
             </div>
           </div>
         )}
       />
 
-      <section className="panel p-6">
-        <div className="flex flex-wrap gap-3 text-sm">
+      <section className="control-toolbar">
+        <div className="flex flex-wrap gap-2 text-sm">
           <Link
             href={buildBusinessesHref({ filter: 'all', search, pageSize: roster.pageSize })}
             className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${filter === 'all' ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/64'}`}
@@ -182,7 +179,7 @@ export default async function BusinessesPage({
           </Link>
         </div>
 
-        <form id="roster-tools" action="/businesses" className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_160px_auto_auto] lg:items-end">
+        <form id="roster-tools" action="/businesses" className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_auto_auto] lg:items-end">
           {filter === 'unreviewed' ? <input type="hidden" name="filter" value="unreviewed" /> : null}
 
           <label className="block space-y-1 text-sm">
@@ -205,26 +202,26 @@ export default async function BusinessesPage({
             </select>
           </label>
 
-          <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]">
+          <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]">
             Apply view
           </button>
 
-          <Link href={clearSearchHref} className="inline-flex h-[50px] items-center justify-center rounded-2xl border border-black/10 bg-white px-5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+          <Link href={clearSearchHref} className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
             Clear
           </Link>
         </form>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
           <span>{listSummary}</span>
           <span>Page {roster.page} of {roster.totalPages}</span>
         </div>
       </section>
 
-      <section id="billing-setup" className="panel p-6">
+      <section id="billing-setup" className="panel p-4 sm:p-5">
         <SectionHeading
           eyebrow="Billing setup"
-          title="Select a business and set its commercial plan"
-          description="Use this quick panel on the current roster page to pick a business, move it between Starter, Growth, and Pro, and set the subscription start date plus monthly or annual billing without loading the full portfolio into one massive selector."
+          title="Quick billing setup"
+          description="Select a business on the current page, adjust the commercial plan, and save billing dates without opening the full record."
         />
 
         {pageBusinesses.length > 0 ? (
@@ -268,7 +265,7 @@ export default async function BusinessesPage({
               Leave the first due date blank to let TG Control calculate it from the start date and whether the business is monthly or annual.
             </p>
 
-            <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
+            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
               Save billing setup
             </button>
           </form>
@@ -280,11 +277,11 @@ export default async function BusinessesPage({
       </section>
 
       {filter === 'unreviewed' && pageBusinesses.length > 0 ? (
-        <section id="bulk-review" className="panel p-6">
+        <section id="bulk-review" className="panel p-4 sm:p-5">
           <SectionHeading
             eyebrow="Bulk review"
             title="Assign and clear the current page"
-            description="This lets TG assign the unreviewed businesses on the current page to a manager, mark them reviewed, and optionally set the sold plan to Growth or Pro in one pass without accidentally touching the whole queue."
+            description="Assign the current unreviewed slice, mark it reviewed, and optionally update the sold plan in one controlled pass."
           />
 
           <form action={bulkReviewControlBusinessesAction} className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -319,7 +316,7 @@ export default async function BusinessesPage({
               <input type="text" name="reviewNote" placeholder="Optional note to append to each reviewed business" className="control-field" />
             </label>
 
-            <button type="submit" className="inline-flex h-[50px] items-center justify-center rounded-2xl bg-[#122126] px-5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
+            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
               Review {pageBusinesses.length} businesses on this page
             </button>
           </form>
@@ -340,7 +337,7 @@ export default async function BusinessesPage({
                 <HealthPill health={business.health} />
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-2">
                 <PlanPill plan={business.plan} />
                 {business.plan !== business.effectivePlan ? <PlanPill plan={business.effectivePlan} /> : null}
                 <StatePill state={business.state} />
@@ -367,12 +364,12 @@ export default async function BusinessesPage({
 
               {business.needsReview ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b35c2e]">Needs review</div> : null}
 
-              <Link href={`/businesses/${business.id}`} className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+              <Link href={`/businesses/${business.id}`} className="mt-3 inline-flex w-full items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
                 Open billing
               </Link>
             </div>
           )) : (
-            <div className="mobile-card text-sm text-black/58">No businesses match this view.</div>
+            <div className="control-inline-note">No businesses match this view.</div>
           )}
         </div>
 
@@ -436,36 +433,36 @@ export default async function BusinessesPage({
       </section>
 
       {roster.totalPages > 1 ? (
-        <section className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <section className="control-toolbar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-black/62">{listSummary}</div>
           <div className="flex flex-wrap items-center gap-2">
             {hasPreviousPage ? (
               <Link
                 href={buildBusinessesHref({ filter, search, page: roster.page - 1, pageSize: roster.pageSize })}
-                className="inline-flex h-10 items-center justify-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
-              >
-                Previous
-              </Link>
-            ) : (
-              <span className="inline-flex h-10 items-center justify-center rounded-2xl border border-black/8 bg-black/[0.03] px-4 text-sm font-semibold text-black/35">
-                Previous
-              </span>
-            )}
+                  className="inline-flex h-10 items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="inline-flex h-10 items-center justify-center rounded-[18px] border border-black/8 bg-black/[0.03] px-4 text-sm font-semibold text-black/35">
+                  Previous
+                </span>
+              )}
 
             <span className="px-2 text-sm text-black/62">Page {roster.page} of {roster.totalPages}</span>
 
             {hasNextPage ? (
               <Link
                 href={buildBusinessesHref({ filter, search, page: roster.page + 1, pageSize: roster.pageSize })}
-                className="inline-flex h-10 items-center justify-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
-              >
-                Next
-              </Link>
-            ) : (
-              <span className="inline-flex h-10 items-center justify-center rounded-2xl border border-black/8 bg-black/[0.03] px-4 text-sm font-semibold text-black/35">
-                Next
-              </span>
-            )}
+                  className="inline-flex h-10 items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="inline-flex h-10 items-center justify-center rounded-[18px] border border-black/8 bg-black/[0.03] px-4 text-sm font-semibold text-black/35">
+                  Next
+                </span>
+              )}
           </div>
         </section>
       ) : null}

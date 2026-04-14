@@ -43,45 +43,42 @@ export default async function RevenuePage() {
     {
       label: 'Healthy accounts',
       value: String(buckets.current.count),
-      hint: 'Accounts active and current — no immediate billing action needed.',
+      hint: 'Current and active.',
     },
     {
       label: 'Due now',
       value: formatCedi(buckets.approaching.amount),
-      hint: 'Cash in the billing window — reminders before these tip into overdue.',
+      hint: 'Cash in the reminder window.',
     },
     {
       label: 'Overdue exposure',
       value: formatCedi(buckets.overdue.amount),
-      hint: 'Outstanding across grace and fallback accounts needing same-day follow-up.',
+      hint: 'Outstanding across grace and fallback accounts.',
     },
     {
       label: 'Locked exposure',
       value: formatCedi(buckets.locked.amount),
-      hint: 'Cash tied to accounts with access restrictions. Needs payment or decision.',
+      hint: 'Cash tied to restricted accounts.',
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-5">
       <ControlPageHeader
         eyebrow="Receivables"
-        title="Track cash position, not just status."
-        description="Four aging buckets show exactly where money sits: healthy, approaching, overdue, and locked. Use this to route the team into the right collections lane before cash slips further."
+        title="Revenue posture and cash exposure."
+        description="See where the money sits, where the risk is building, and which protection step the team should run next."
         chips={[
-          { label: 'Aging buckets', href: '#aging-buckets' },
+          { label: 'Revenue posture', href: '#aging-buckets' },
           { label: 'Protection sequence', href: '#protection-sequence', tone: 'dark' },
           { label: 'Plan economics', href: '#plan-economics' },
         ]}
         stats={headerStats}
         aside={(
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <div className="eyebrow">Protection order</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight">Move revenue risk before it compounds</h2>
-              <p className="mt-3 text-sm leading-7">
-                The point of this page is to route people into the right collections lane and keep the portfolio away from fallback dependency.
-              </p>
+              <h2 className="mt-1.5 text-xl font-semibold tracking-tight">Move exposure before it compounds</h2>
             </div>
 
             <div className="control-priority-list">
@@ -101,25 +98,25 @@ export default async function RevenuePage() {
         )}
       />
 
-      <section id="aging-buckets" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section id="aging-buckets" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {agingCards.map((card) => (
-          <Link key={card.key} href={card.href} className={`rounded-[24px] border p-5 transition hover:-translate-y-[1px] hover:shadow-md ${card.tone}`}>
+          <Link key={card.key} href={card.href} className={`rounded-[20px] border px-4 py-3 transition hover:-translate-y-[1px] hover:shadow-md ${card.tone}`}>
             <div className="eyebrow">{card.label}</div>
-            <div className="mt-3 text-2xl font-semibold tracking-tight text-control-ink">{card.amount > 0 ? formatCedi(card.amount) : card.count}</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-control-ink">{card.amount > 0 ? formatCedi(card.amount) : card.count}</div>
             <div className="mt-1 text-sm font-medium text-black/52">{card.count} account{card.count === 1 ? '' : 's'}</div>
-            <p className="mt-3 text-sm leading-6 text-black/62">{card.description}</p>
+            <p className="mt-2 text-sm leading-5 text-black/62">{card.description}</p>
           </Link>
         ))}
       </section>
 
-      <section id="protection-sequence" className="panel p-6">
+      <section id="protection-sequence" className="panel p-4 sm:p-5">
         <SectionHeading
           eyebrow="Protection sequence"
-          title="The commercial order of operations"
-          description="This is the Chargebee-style layer: use revenue data to decide who needs reminders, who needs same-day recovery work, and where restricted access should stay in place."
+          title="Protection order"
+          description="Use receivables posture to decide what queue to run first, what needs same-day recovery, and where restriction should stay in place."
         />
 
-        <div className="control-sequence-grid mt-5 md:grid-cols-3">
+        <div className="control-sequence-grid mt-4 md:grid-cols-3">
           {riskCards.map((card, index) => (
             <Link key={card.label} href={card.href} className="control-sequence-card block transition hover:-translate-y-[1px] hover:shadow-lg">
               <div className="flex items-center justify-between gap-3">
@@ -133,22 +130,34 @@ export default async function RevenuePage() {
         </div>
       </section>
 
-      <section id="plan-economics" className="panel p-6">
+      <section id="plan-economics" className="panel p-4 sm:p-5">
         <SectionHeading
           eyebrow="Plan economics"
           title="Revenue by sold plan"
-          description="This gives a clean commercial read: where the customer base sits now, and whether Tishgroup is still too dependent on lower-value accounts."
+          description="Read the commercial mix quickly: where the base sits now and where lower-value dependence is still concentrated."
         />
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="mt-4 space-y-2.5">
           {revenueByPlan.map((entry) => (
-            <div key={entry.plan} className="rounded-2xl border border-black/8 bg-white/80 p-5">
-              <div className="eyebrow">{entry.plan}</div>
-              <div className="mt-3 text-2xl font-semibold text-control-ink">{formatCedi(entry.revenue)}</div>
-              <div className="mt-2 text-sm text-black/62">{entry.count} business{entry.count === 1 ? '' : 'es'} sold on this tier.</div>
+            <div key={entry.plan} className="control-list-row control-list-row-muted">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <PlanLabel plan={entry.plan} />
+                  <span className="text-sm text-black/62">{entry.count} business{entry.count === 1 ? '' : 'es'}</span>
+                </div>
+                <div className="text-sm font-semibold text-control-ink">{formatCedi(entry.revenue)}</div>
+              </div>
             </div>
           ))}
         </div>
       </section>
     </div>
+  );
+}
+
+function PlanLabel({ plan }: { plan: string }) {
+  return (
+    <span className="inline-flex rounded-full border border-black/8 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-control-ink">
+      {plan}
+    </span>
   );
 }
