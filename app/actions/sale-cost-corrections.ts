@@ -100,9 +100,12 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
     });
     const existingMovementCostMap = new Map<string, number>();
     for (const m of existingMovements) {
-      const key = `${m.referenceId}:${m.productId}`;
-      if (!existingMovementCostMap.has(key)) {
-        existingMovementCostMap.set(key, m.unitCostBasePence);
+      const cost = m.unitCostBasePence ?? 0;
+      if (cost > 0) {
+        const key = `${m.referenceId}:${m.productId}`;
+        if (!existingMovementCostMap.has(key)) {
+          existingMovementCostMap.set(key, cost);
+        }
       }
     }
 
