@@ -103,6 +103,38 @@ export default async function SaleCostCorrectionsPage({
     ...(shouldLimitPreview ? { take: 150 } : {}),
   });
 
+  // Fetch the SALE stock movement unit cost for every invoice+product pair in view.
+  // This gives a stable correction reference: after a correction both lineCostPence and
+  // the movement cost are aligned, so changing the product's defaultCostBasePence later will
+  // not re-flag already-corrected lines (preventing cost drift).
+  const invoiceIds = [...new Set(rawLines.map((l) => l.salesInvoiceId))];
+  const productIds = [...new Set(rawLines.map((l) => l.productId))];
+  const movementRows = invoiceIds.length > 0
+    ? await prisma.stockMovement.findMany({
+        where: {
+          referenceType: 'SALES_INVOICE',
+          referenceId: { in: invoiceIds },
+          productId: { in: productIds },
+          type: 'SALE',
+          unitCostBasePence: { gt: 0 },
+        },
+        select: {
+          referenceId: true,
+          productId: true,
+          unitCostBasePence: true,
+        },
+      })
+    : [];
+
+  // Map "invoiceId:productId" → unitCostBasePence (keep first found per pair)
+  const movementCostMap = new Map<string, number>();
+  for (const m of movementRows) {
+    const key = `${m.referenceId}:${m.productId}`;
+    if (!movementCostMap.has(key)) {
+      movementCostMap.set(key, m.unitCostBasePence);
+    }
+  }
+
   const allCandidates = rawLines.map((line) =>
     buildHistoricalSaleLineCandidate({
       id: line.id,
@@ -120,6 +152,7 @@ export default async function SaleCostCorrectionsPage({
       lineTotalPence: line.lineTotalPence,
       lineCostPence: line.lineCostPence,
       currentProductCostBasePence: line.product.defaultCostBasePence,
+      movementUnitCostBasePence: movementCostMap.get(`${line.salesInvoiceId}:${line.productId}`) ?? null,
     }),
   );
 
