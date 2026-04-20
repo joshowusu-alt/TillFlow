@@ -8,6 +8,7 @@ const {
   MockUserError,
   withBusinessContextMock,
   selectedLinesFindManyMock,
+  movementFindManyMock,
   transactionMock,
   txSalesLineUpdateMock,
   txStockMovementUpdateManyMock,
@@ -32,6 +33,7 @@ const {
     MockUserError,
     withBusinessContextMock: vi.fn(),
     selectedLinesFindManyMock: vi.fn(),
+    movementFindManyMock: vi.fn(),
     transactionMock: vi.fn(async (callback: any) => callback({
       salesInvoiceLine: {
         update: txSalesLineUpdateMock,
@@ -68,6 +70,9 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     salesInvoiceLine: {
       findMany: selectedLinesFindManyMock,
+    },
+    stockMovement: {
+      findMany: movementFindManyMock,
     },
     $transaction: transactionMock,
   },
@@ -131,6 +136,9 @@ describe('correctTargetedSaleCostsAction', () => {
       },
     ]);
 
+    // No pre-existing movements — correction falls back to defaultCostBasePence (300)
+    movementFindManyMock.mockResolvedValue([]);
+
     txSalesLineFindManyMock.mockResolvedValue([
       { salesInvoiceId: 'invoice-1', lineSubtotalPence: 1_200, lineCostPence: 600 },
       { salesInvoiceId: 'invoice-1', lineSubtotalPence: 900, lineCostPence: 600 },
@@ -165,6 +173,44 @@ describe('correctTargetedSaleCostsAction', () => {
     });
     expect(auditMock).toHaveBeenCalled();
     expect(revalidateTagMock).toHaveBeenCalledWith('reports');
+  });
+
+  it('uses the existing movement cost as the correction value when a movement is present', async () => {
+    // Movement says the sale was recorded at 450/base — use that instead of defaultCostBasePence (300)
+    movementFindManyMock.mockResolvedValue([
+      { referenceId: 'invoice-1', productId: 'product-1', unitCostBasePence: 450 },
+    ]);
+    // Refresh the resolved lines so line-1 (lineCostPence=1000) ≠ 450×2=900 and line-2 (600) ≠ 900
+    selectedLinesFindManyMock.mockResolvedValue([
+      {
+        id: 'line-1',
+        salesInvoiceId: 'invoice-1',
+        productId: 'product-1',
+        qtyBase: 2,
+        lineCostPence: 1_000,
+        lineSubtotalPence: 1_200,
+        salesInvoice: { id: 'invoice-1', transactionNumber: 'INV-1001' },
+        product: { name: 'Safety Matches', defaultCostBasePence: 300 },
+      },
+    ]);
+    txSalesLineFindManyMock.mockResolvedValue([
+      { salesInvoiceId: 'invoice-1', lineSubtotalPence: 1_200, lineCostPence: 900 },
+    ]);
+
+    const formData = new FormData();
+    formData.append('lineIds', 'line-1');
+    formData.set('reason', 'Aligning to movement cost.');
+    formData.set('confirmCorrection', 'on');
+    formData.set('status', 'below-cost');
+    formData.set('period', '30d');
+
+    await expect(correctTargetedSaleCostsAction(formData)).rejects.toThrow('NEXT_REDIRECT:');
+
+    // Corrected cost should be 450 × 2 = 900 (from movement), not 300 × 2 = 600
+    expect(txSalesLineUpdateMock).toHaveBeenCalledWith({
+      where: { id: 'line-1' },
+      data: { lineCostPence: 900 },
+    });
   });
 
   it('redirects back with an error when no lines are selected', async () => {

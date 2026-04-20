@@ -78,21 +78,57 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
       throw new UserError('Some selected sale lines could not be loaded. Refresh the page and try again.');
     }
 
+    // Look up the existing SALE movement cost for each invoice+product pair.
+    // When a movement already has a real cost we use that as the correction value —
+    // it is the stable historical anchor that the page uses for the needsCorrection check.
+    // This keeps the page and the action in perfect agreement about what "corrected" means.
+    const selectedInvoiceIds = [...new Set(selectedLines.map((l) => l.salesInvoiceId))];
+    const selectedProductIds = [...new Set(selectedLines.map((l) => l.productId))];
+    const existingMovements = await prisma.stockMovement.findMany({
+      where: {
+        referenceType: 'SALES_INVOICE',
+        referenceId: { in: selectedInvoiceIds },
+        productId: { in: selectedProductIds },
+        type: 'SALE',
+        unitCostBasePence: { gt: 0 },
+      },
+      select: {
+        referenceId: true,
+        productId: true,
+        unitCostBasePence: true,
+      },
+    });
+    const existingMovementCostMap = new Map<string, number>();
+    for (const m of existingMovements) {
+      const key = `${m.referenceId}:${m.productId}`;
+      if (!existingMovementCostMap.has(key)) {
+        existingMovementCostMap.set(key, m.unitCostBasePence);
+      }
+    }
+
     const corrections = selectedLines
-      .map((line) => ({
-        id: line.id,
-        salesInvoiceId: line.salesInvoiceId,
-        productId: line.productId,
-        productName: line.product.name,
-        transactionNumber: line.salesInvoice.transactionNumber,
-        previousLineCostPence: line.lineCostPence,
-        correctedUnitCostBasePence: line.product.defaultCostBasePence,
-        correctedLineCostPence: line.product.defaultCostBasePence * line.qtyBase,
-      }))
+      .map((line) => {
+        const movementCost = existingMovementCostMap.get(`${line.salesInvoiceId}:${line.productId}`);
+        // Use the stable movement cost when available; fall back to the product's current default.
+        const correctedUnitCostBasePence =
+          movementCost != null && movementCost > 0
+            ? movementCost
+            : line.product.defaultCostBasePence;
+        return {
+          id: line.id,
+          salesInvoiceId: line.salesInvoiceId,
+          productId: line.productId,
+          productName: line.product.name,
+          transactionNumber: line.salesInvoice.transactionNumber,
+          previousLineCostPence: line.lineCostPence,
+          correctedUnitCostBasePence,
+          correctedLineCostPence: correctedUnitCostBasePence * line.qtyBase,
+        };
+      })
       .filter((line) => line.previousLineCostPence !== line.correctedLineCostPence);
 
     if (!corrections.length) {
-      throw new UserError('All selected sale lines already match the current product cost.');
+      throw new UserError('All selected sale lines already match the recorded movement cost.');
     }
 
     const affectedInvoiceIds = [...new Set(corrections.map((line) => line.salesInvoiceId))];

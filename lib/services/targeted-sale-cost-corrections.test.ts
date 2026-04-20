@@ -58,6 +58,63 @@ describe('buildHistoricalSaleLineCandidate', () => {
     expect(candidate.belowCostBefore).toBe(true);
     expect(candidate.needsCorrection).toBe(true);
   });
+
+  it('prefers movement cost over current product cost when movement is present', () => {
+    // Movement recorded cost at 400/base; current product setup cost has drifted to 600.
+    // The correction should target 400 (the stable movement anchor), not 600.
+    const candidate = buildHistoricalSaleLineCandidate({
+      id: 'line-3',
+      salesInvoiceId: 'invoice-3',
+      transactionNumber: 'INV-001203',
+      createdAt: new Date('2026-04-01T11:00:00.000Z'),
+      productId: 'product-3',
+      productName: 'Cooking Oil',
+      sku: 'OIL-03',
+      unitName: 'litre',
+      qtyInUnit: 5,
+      qtyBase: 5,
+      unitPricePence: 300,
+      lineSubtotalPence: 1_500,
+      lineTotalPence: 1_500,
+      lineCostPence: 0,
+      currentProductCostBasePence: 600,
+      movementUnitCostBasePence: 400,
+    });
+
+    expect(candidate.correctedUnitCostBasePence).toBe(400);
+    expect(candidate.correctedLineCostPence).toBe(2_000);
+    expect(candidate.needsCorrection).toBe(true); // lineCostPence=0 ≠ 2000
+  });
+
+  it('does not re-flag a previously corrected line even when the product cost changes — no drift', () => {
+    // Simulates the post-correction state:
+    //   lineCostPence was corrected to 350 × 10 = 3500
+    //   StockMovement.unitCostBasePence was updated to 350 at the same time
+    //   Later the owner updated the product default cost to 600
+    // Expected: needsCorrection = false — the line is stable and must not drift back.
+    const candidate = buildHistoricalSaleLineCandidate({
+      id: 'line-4',
+      salesInvoiceId: 'invoice-4',
+      transactionNumber: 'INV-001204',
+      createdAt: new Date('2026-03-15T08:00:00.000Z'),
+      productId: 'product-4',
+      productName: 'Safety Matches',
+      sku: 'MATCH-01',
+      unitName: 'piece',
+      qtyInUnit: 10,
+      qtyBase: 10,
+      unitPricePence: 600,
+      lineSubtotalPence: 6_000,
+      lineTotalPence: 6_000,
+      lineCostPence: 3_500,
+      currentProductCostBasePence: 600, // product cost changed since the correction
+      movementUnitCostBasePence: 350,   // movement still holds the corrected value
+    });
+
+    expect(candidate.correctedUnitCostBasePence).toBe(350); // anchored to movement, not 600
+    expect(candidate.correctedLineCostPence).toBe(3_500);
+    expect(candidate.needsCorrection).toBe(false); // 3500 === 350 × 10 — no drift
+  });
 });
 
 describe('buildInvoiceGrossMarginMap', () => {
