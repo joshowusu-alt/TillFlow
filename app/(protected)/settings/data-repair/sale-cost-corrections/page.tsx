@@ -129,9 +129,12 @@ export default async function SaleCostCorrectionsPage({
   // Map "invoiceId:productId" → unitCostBasePence (keep first found per pair)
   const movementCostMap = new Map<string, number>();
   for (const m of movementRows) {
-    const key = `${m.referenceId}:${m.productId}`;
-    if (!movementCostMap.has(key)) {
-      movementCostMap.set(key, m.unitCostBasePence);
+    const cost = m.unitCostBasePence ?? 0;
+    if (cost > 0) {
+      const key = `${m.referenceId}:${m.productId}`;
+      if (!movementCostMap.has(key)) {
+        movementCostMap.set(key, cost);
+      }
     }
   }
 
