@@ -123,6 +123,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <BarcodeScanInput name="barcode" />
                 </div>
                 <div>
+                  <label className="label">Image URL</label>
+                  <input className="input" name="imageUrl" type="url" placeholder="https://example.com/product.jpg" />
+                  <div className="mt-1 text-xs text-black/50">Optional product photo URL.</div>
+                </div>
+                <div>
                   <label className="label">Category</label>
                   <select className="input" name="categoryId">
                     <option value="">Uncategorised</option>

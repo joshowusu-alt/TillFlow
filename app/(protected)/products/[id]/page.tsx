@@ -8,6 +8,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
+import BarcodeFieldWithGenerate from '@/components/BarcodeFieldWithGenerate';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 
 export default async function ProductDetailPage({
@@ -145,7 +146,12 @@ export default async function ProductDetailPage({
             </div>
             <div>
               <label className="label">Barcode</label>
-              <BarcodeScanInput name="barcode" defaultValue={product.barcode ?? ''} />
+              <BarcodeFieldWithGenerate productId={product.id} defaultValue={product.barcode ?? ''} />
+            </div>
+            <div>
+              <label className="label">Image URL</label>
+              <input className="input" name="imageUrl" type="url" defaultValue={product.imageUrl ?? ''} placeholder="https://example.com/product.jpg" />
+              <div className="mt-1 text-xs text-black/50">Optional product photo URL.</div>
             </div>
             <div>
               <label className="label">Category</label>

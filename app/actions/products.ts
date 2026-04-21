@@ -11,6 +11,7 @@ import {
   type ActionResult,
 } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
+import { prisma } from '@/lib/prisma';
 import {
   createProduct,
   updateProduct,
@@ -209,5 +210,44 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
 
     revalidateTag('pos-products');
     return ok({ fixed: inflated.length });
+  });
+}
+
+/**
+ * Generate an EAN-13 barcode (GS1 internal prefix 200) for a product
+ * and save it immediately.  Returns the new barcode string.
+ */
+export async function generateBarcodeAction(productId: string): Promise<ActionResult<{ barcode: string }>> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    // Verify product belongs to this business
+    const existing = await prisma.product.findFirst({
+      where: { id: productId, businessId },
+      select: { id: true },
+    });
+    if (!existing) throw new Error('Product not found.');
+
+    // Generate a unique EAN-13 (prefix 200 = internal use range)
+    let barcode = '';
+    for (let attempts = 0; attempts < 10; attempts++) {
+      const digits = '200' + String(Math.floor(Math.random() * 1_000_000_000)).padStart(9, '0');
+      const sum = digits
+        .split('')
+        .reduce((acc, d, i) => acc + parseInt(d, 10) * (i % 2 === 0 ? 1 : 3), 0);
+      const check = (10 - (sum % 10)) % 10;
+      const candidate = digits + check;
+      const conflict = await prisma.product.findUnique({ where: { barcode: candidate }, select: { id: true } });
+      if (!conflict) {
+        barcode = candidate;
+        break;
+      }
+    }
+    if (!barcode) throw new Error('Could not generate a unique barcode. Please try again.');
+
+    await prisma.product.update({ where: { id: productId }, data: { barcode } });
+    revalidateTag('pos-products');
+    revalidatePath(`/products/${productId}`);
+    return ok({ barcode });
   });
 }

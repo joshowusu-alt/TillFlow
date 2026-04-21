@@ -37,6 +37,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     items: [
       { href: '/inventory', label: 'Inventory', roles: ['MANAGER', 'OWNER'] },
       { href: '/inventory/adjustments', label: 'Stock Adjustments', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/stock-movements', label: 'Stock Movements', roles: ['MANAGER', 'OWNER'] },
       { href: '/purchases', label: 'Purchases', roles: ['MANAGER', 'OWNER'] },
       { href: '/transfers', label: 'Transfers', roles: ['MANAGER', 'OWNER'] },
       { href: '/products', label: 'Products', roles: ['CASHIER', 'MANAGER', 'OWNER'] },

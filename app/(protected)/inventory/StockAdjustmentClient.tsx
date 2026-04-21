@@ -181,12 +181,30 @@ export default function StockAdjustmentClient({
           </div>
           <div className="sm:col-span-2 xl:col-span-2">
             <label className="label">Reason</label>
+            {direction === 'DECREASE' && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {['Wastage', 'Expired', 'Damaged', 'Theft', 'Stocktake correction'].map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setReason(label)}
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                      reason === label
+                        ? 'border-rose-400 bg-rose-100 text-rose-700'
+                        : 'border-black/10 bg-white text-black/60 hover:border-rose-300 hover:text-rose-600'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               className="input"
               name="reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Optional reason"
+              placeholder={direction === 'DECREASE' ? 'Reason (or select above)' : 'Optional reason'}
             />
           </div>
         </div>
