@@ -1,4 +1,4 @@
-import { requireBusiness } from '@/lib/auth';
+import { requireBusiness, getFirstStore } from '@/lib/auth';
 import { getBusinessPlan } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
@@ -18,10 +18,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const { user, business } = await requireBusiness();
 
   const [store, kpisResult] = await Promise.all([
-    prisma.store.findFirst({
-      where: { businessId: business.id },
-      select: { id: true, name: true }
-    }),
+    getFirstStore(business.id),
     getTodayKPIs(business.id).catch((error) => {
       console.error('[protected-layout] Failed to load today KPIs', {
         businessId: business.id,

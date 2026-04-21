@@ -272,6 +272,12 @@ const _getStore = cache(async (businessId: string) => {
 });
 
 /**
+ * Cached first-store lookup that can be imported by layouts and pages so that
+ * both share the same React-per-request cache entry.
+ */
+export const getFirstStore = _getStore;
+
+/**
  * Authenticate and return the user + their Business record.
  * Always scoped to the logged-in user's businessId.
  */
