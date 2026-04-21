@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 export default async function Home() {
   const user = await getUser();
   if (user) {
-    redirect('/pos');
+    redirect(user.role === 'OWNER' ? '/reports/dashboard' : '/pos');
   }
   redirect('/welcome');
 }

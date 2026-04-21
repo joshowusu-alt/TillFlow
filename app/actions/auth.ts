@@ -160,7 +160,8 @@ export async function login(formData: FormData) {
   // Opportunistic cleanup of expired sessions and old audit logs
   cleanupStaleData(user.businessId).catch(() => {});
 
-  // Redirect owners to onboarding if guided setup has not yet been completed
+  // Redirect owners to onboarding if guided setup has not yet been completed,
+  // otherwise straight to the reports dashboard.
   if (user.role === 'OWNER') {
     const business = await prisma.business.findFirst({
       where: { id: user.businessId },
@@ -169,6 +170,7 @@ export async function login(formData: FormData) {
     if (business?.guidedSetup) {
       redirect('/onboarding');
     }
+    redirect('/reports/dashboard');
   }
 
   redirect('/pos');
