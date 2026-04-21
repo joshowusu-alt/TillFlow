@@ -53,7 +53,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
 
   const [salesRows, paymentRows, openSalesInvoices, outstandingPurchases, alertRows, balances, paidExpenses, momoPending, cashVarShifts, salesLines14d, cashOnHandEstimatePence] = await Promise.all([
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter },
+      where: { businessId, ...storeFilter, createdAt: { gte: sevenDaysAgo } },
       select: {
         totalPence: true,
         createdAt: true,
@@ -63,6 +63,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     }),
     prisma.salesPayment.findMany({
       where: {
+        receivedAt: { gte: todayStart },
         salesInvoice: {
           businessId,
           ...(storeId ? { storeId } : {}),
@@ -89,7 +90,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       select: { totalPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
-      where: { businessId, severity: 'HIGH', status: 'OPEN' },
+      where: { businessId, severity: 'HIGH', status: 'OPEN', occurredAt: { gte: sevenDaysAgo } },
       select: { occurredAt: true },
     }),
     prisma.inventoryBalance.findMany({
@@ -100,7 +101,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
     }),
     prisma.expense.findMany({
-      where: { businessId, paymentStatus: 'PAID' },
+      where: { businessId, paymentStatus: 'PAID', createdAt: { gte: thirtyFiveDaysAgo } },
       select: { amountPence: true, createdAt: true },
     }),
     prisma.mobileMoneyCollection.count({
@@ -110,23 +111,26 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       where: {
         till: { store: { businessId, ...(storeId ? { id: storeId } : {}) } },
         variance: { not: null },
+        closedAt: { gte: sevenDaysAgo },
       },
       select: { variance: true, closedAt: true },
       take: 200,
     }),
     prisma.salesInvoiceLine.findMany({
       where: {
-        salesInvoice: { businessId, ...(storeId ? { storeId } : {}) },
+        salesInvoice: {
+          businessId, ...(storeId ? { storeId } : {}),
+          createdAt: { gte: fourteenDaysAgo },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
       },
       select: {
         lineSubtotalPence: true,
-        lineTotalPence: true,
         lineCostPence: true,
         qtyBase: true,
         product: { select: { id: true, defaultCostBasePence: true } },
         salesInvoice: { select: { createdAt: true, paymentStatus: true } },
       },
-      take: 10000,
     }),
     getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
   ]);
@@ -512,9 +516,11 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
 const cachedTodayKPIs = unstable_cache(
   _getTodayKPIs,
   ['report-today-kpis'],
-  // 5 s TTL so Owner Intelligence stays within 5 seconds of reality after a sale.
-  // (was 30 s — long enough to show stale totals while a cashier was mid-session)
-  { revalidate: 5, tags: ['reports'] }
+  // 30 s TTL. Sales, expenses, and purchases all call revalidateTag('reports')
+  // immediately after commit, so the nav counter refreshes within seconds of
+  // a real transaction. The TTL is only the fallback for background processes
+  // (cron jobs, webhooks) that don't know to bust the tag.
+  { revalidate: 30, tags: ['reports'] }
 );
 
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
