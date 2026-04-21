@@ -8,6 +8,7 @@ import { formatMoney, formatDateTime } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
+import { getFeatures } from '@/lib/features';
 
 export default async function CustomerDetailPage({
   params,
@@ -18,6 +19,12 @@ export default async function CustomerDetailPage({
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+
+  const features = getFeatures(
+    (business as any).plan ?? (business.mode as any),
+    (business as any).storeMode as any
+  );
+  const loyaltyEnabled = features.loyaltyPoints && (business as any).loyaltyEnabled;
 
   const start = searchParams?.from ? new Date(searchParams.from) : undefined;
   const end = searchParams?.to ? new Date(searchParams.to) : undefined;
@@ -69,6 +76,14 @@ export default async function CustomerDetailPage({
           <div>Phone: {customer.phone ?? '-'}</div>
           <div>Email: {customer.email ?? '-'}</div>
           <div>Credit limit: {formatMoney(customer.creditLimitPence, business.currency)}</div>
+          {loyaltyEnabled && (
+            <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Loyalty points</div>
+              <div className="text-xl font-bold text-amber-700 tabular-nums">
+                {((customer as any).loyaltyPointsBalance ?? 0).toLocaleString()}
+              </div>
+            </div>
+          )}
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Balance</div>

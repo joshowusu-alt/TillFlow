@@ -103,6 +103,7 @@ export const SETTINGS_TAB_SECTIONS: SettingsTabSection[] = [
       { href: '/settings/organization', label: 'Organization', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/billing', label: 'Billing', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/settings/loyalty', label: 'Loyalty', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/import-stock', label: 'Import Stock', roles: ['MANAGER', 'OWNER'] },
     ],

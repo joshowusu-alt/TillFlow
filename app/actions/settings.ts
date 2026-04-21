@@ -234,3 +234,36 @@ export async function requestPlanUpgradeAction(formData: FormData): Promise<void
     redirect(`/settings/billing?requested=1&desiredPlan=${desiredPlan}${feature ? `&feature=${encodeURIComponent(feature)}` : ''}`);
   }, '/settings/billing');
 }
+
+export async function updateLoyaltySettingsAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { business: currentBusiness } = await findBusinessCommercialSnapshot(businessId);
+    const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any));
+    if (!hasPlanAccess(plan, 'GROWTH')) {
+      redirect('/settings/loyalty?error=Loyalty+programme+requires+Growth+plan');
+    }
+
+    const loyaltyEnabled = formData.get('loyaltyEnabled') === 'on';
+    const loyaltyPointsPerGhsPence = Math.max(1, parseInt(String(formData.get('loyaltyPointsPerGhsPence') || '100'), 10) || 100);
+    const loyaltyGhsPerHundredPoints = Math.max(1, parseInt(String(formData.get('loyaltyGhsPerHundredPoints') || '100'), 10) || 100);
+
+    await prisma.business.update({
+      where: { id: businessId },
+      data: { loyaltyEnabled, loyaltyPointsPerGhsPence, loyaltyGhsPerHundredPoints } as any,
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: { source: 'loyalty-settings', loyaltyEnabled, loyaltyPointsPerGhsPence, loyaltyGhsPerHundredPoints },
+    }).catch((e) => console.error('[audit]', e));
+
+    redirect('/settings/loyalty');
+  }, '/settings/loyalty');
+}

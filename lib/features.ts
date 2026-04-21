@@ -60,6 +60,7 @@ export function getFeatures(planOrMode?: BusinessPlan | BusinessMode | null, sto
     financialReports: growth,
     detailedExpenseCategories: growth,
     riskMonitor: growth,
+    loyaltyPoints: growth,
     ownerIntelligence: pro,
     cashflowForecast: pro,
     auditLog: pro,

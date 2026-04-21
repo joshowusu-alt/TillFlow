@@ -14,6 +14,7 @@ import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import type { PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
+import { prisma } from '@/lib/prisma';
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -268,6 +269,36 @@ export async function completeSaleAction(data: {
       storeId: data.storeId,
       productIds: affectedProductIds,
     }).catch(() => {});
+
+    // Award loyalty points if programme is active and a customer is on the invoice
+    if (customerId && invoice.paymentStatus !== 'VOID') {
+      void (async () => {
+        try {
+          const biz = await prisma.business.findUnique({
+            where: { id: businessId },
+            select: { loyaltyEnabled: true, loyaltyPointsPerGhsPence: true } as any,
+          });
+          const bizAny = biz as any;
+          if (bizAny?.loyaltyEnabled) {
+            const pointsEarned = Math.floor(invoice.totalPence / 100) * (bizAny.loyaltyPointsPerGhsPence ?? 1);
+            if (pointsEarned > 0) {
+              await prisma.$transaction([
+                prisma.salesInvoice.update({
+                  where: { id: invoice.id },
+                  data: { loyaltyPointsEarned: pointsEarned } as any,
+                }),
+                prisma.customer.update({
+                  where: { id: customerId },
+                  data: { loyaltyPointsBalance: { increment: pointsEarned } } as any,
+                }),
+              ]);
+            }
+          }
+        } catch {
+          // Loyalty point failure must never block a sale
+        }
+      })();
+    }
 
     // Fire-and-forget: audit + cache revalidation should not block the cashier
     audit({
