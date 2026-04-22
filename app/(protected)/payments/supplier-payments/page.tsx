@@ -2,9 +2,10 @@ import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
@@ -18,11 +19,16 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
       select: {
         id: true,
+        createdAt: true,
+        dueDate: true,
         totalPence: true,
-        supplier: { select: { name: true } },
-        payments: { select: { amountPence: true } }
+        supplier: { select: { id: true, name: true } },
+        payments: { select: { amountPence: true, paidAt: true, method: true } }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'asc' },
+      ],
     }),
     prisma.purchasePayment.findMany({
       where: { purchaseInvoice: { businessId: business.id } },
@@ -50,31 +56,66 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         desktop={
           <div className="card p-6">
             <div className="responsive-table-shell">
-              <table className="table w-full min-w-[58rem] border-separate border-spacing-y-2">
+              <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
                 <thead>
                   <tr>
                     <th>Invoice</th>
                     <th>Supplier</th>
+                    <th>Purchased</th>
+                    <th>Due Date</th>
                     <th>Outstanding</th>
-                    <th>Payment</th>
+                    <th>Record Payment</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoices.map((invoice) => {
                     const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
                     const outstanding = Math.max(invoice.totalPence - paid, 0);
+                    const now = new Date();
+                    const isOverdue = invoice.dueDate && invoice.dueDate < now;
+                    const isDueSoon = !isOverdue && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
                     return (
                       <tr key={invoice.id} className="rounded-xl bg-white align-top">
-                        <td className="px-3 py-3 text-sm">{invoice.id.slice(0, 8)}</td>
-                        <td className="px-3 py-3 text-sm">{invoice.supplier?.name ?? 'Supplier not set'}</td>
+                        <td className="px-3 py-3 text-sm">
+                          <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                            {invoice.id.slice(0, 8)}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3 text-sm">
+                          {invoice.supplier
+                            ? <Link href={`/suppliers/${invoice.supplier.id}`} className="hover:underline">{invoice.supplier.name}</Link>
+                            : <span className="text-black/40">No supplier</span>
+                          }
+                        </td>
+                        <td className="px-3 py-3 text-sm text-black/60">
+                          {formatDate(invoice.createdAt)}
+                        </td>
+                        <td className="px-3 py-3 text-sm">
+                          {invoice.dueDate ? (
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                              isOverdue
+                                ? 'bg-red-100 text-red-700'
+                                : isDueSoon
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-black/5 text-black/60'
+                            }`}>
+                              {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
+                            </span>
+                          ) : <span className="text-black/30">—</span>}
+                        </td>
                         <td className="px-3 py-3 text-sm font-semibold">
                           {formatMoney(outstanding, business.currency)}
+                          {invoice.payments.length > 0 && (
+                            <div className="mt-0.5 text-xs font-normal text-black/40">
+                              {invoice.payments.length} payment{invoice.payments.length > 1 ? 's' : ''} made
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <form action={recordSupplierPaymentAction} className="grid gap-2 md:grid-cols-2">
                             <input type="hidden" name="invoiceId" value={invoice.id} />
                             <div>
-                              <div className="text-xs text-black/50">Payment method</div>
+                              <div className="text-xs text-black/50">Method</div>
                               <select className="input" name="paymentMethod" defaultValue="CASH">
                                 <option value="CASH">Cash</option>
                                 <option value="CARD">Card</option>
@@ -112,7 +153,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                                 placeholder="e.g. cheque #1234"
                               />
                             </div>
-                            <div className="flex items-end">
+                            <div className="flex items-end md:col-span-2">
                               <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
                             </div>
                           </form>
@@ -122,7 +163,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                   })}
                   {invoices.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-8 text-center text-sm text-black/50">
+                      <td colSpan={6} className="px-3 py-8 text-center text-sm text-black/50">
                         No outstanding invoices.
                       </td>
                     </tr>

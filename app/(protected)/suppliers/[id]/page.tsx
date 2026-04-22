@@ -1,9 +1,10 @@
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
+import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 
 export default async function SupplierDetailPage({
@@ -30,9 +31,13 @@ export default async function SupplierDetailPage({
         select: {
           id: true,
           createdAt: true,
+          dueDate: true,
           paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } }
+          payments: {
+            select: { id: true, amountPence: true, paidAt: true, method: true, notes: true },
+            orderBy: { paidAt: 'asc' },
+          }
         },
         orderBy: { createdAt: 'desc' },
         take: 200
@@ -141,28 +146,80 @@ export default async function SupplierDetailPage({
           <thead>
             <tr>
               <th>Invoice</th>
-              <th>Date</th>
+              <th>Purchased</th>
+              <th>Due Date</th>
               <th>Status</th>
               <th>Total</th>
               <th>Balance</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {invoices.map((invoice) => (
-              <tr key={invoice.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-sm">{invoice.id.slice(0, 8)}</td>
-                <td className="px-3 py-3 text-sm">{formatDateTime(invoice.createdAt)}</td>
-                <td className="px-3 py-3">
-                  <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
-                </td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(invoice.totalPence, business.currency)}
-                </td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(invoice.balance, business.currency)}
-                </td>
-              </tr>
-            ))}
+            {invoices.map((invoice) => {
+              const now = new Date();
+              const isOverdue = !invoice.isClosed && invoice.dueDate && invoice.dueDate < now;
+              const isDueSoon = !isOverdue && !invoice.isClosed && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
+              return (
+                <>
+                  <tr key={invoice.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 text-sm">
+                      <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                        {invoice.id.slice(0, 8)}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(invoice.createdAt)}</td>
+                    <td className="px-3 py-3 text-sm">
+                      {invoice.dueDate ? (
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          isOverdue
+                            ? 'bg-red-100 text-red-700'
+                            : isDueSoon
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-black/5 text-black/60'
+                        }`}>
+                          {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
+                        </span>
+                      ) : <span className="text-black/30">—</span>}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(invoice.totalPence, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(invoice.balance, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      {!invoice.isClosed && invoice.balance > 0 && (
+                        <Link href={`/payments/supplier-payments`} className="btn-ghost text-xs">
+                          Pay
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                  {invoice.payments.length > 0 && (
+                    <tr key={`${invoice.id}-payments`} className="bg-transparent">
+                      <td colSpan={7} className="px-3 pb-3 pt-0">
+                        <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
+                          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
+                          <div className="space-y-1">
+                            {invoice.payments.map((payment) => (
+                              <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
+                                <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
+                                <span>{payment.method}</span>
+                                <span className="text-black/40">{formatDate(payment.paidAt)}</span>
+                                {payment.notes && <span className="text-black/40">{payment.notes}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
           </tbody>
         </table>
         </div>

@@ -236,6 +236,9 @@ export default async function PurchasesPage({
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
+                  <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
+                    View
+                  </Link>
                   {purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus) ? (
                     <span className="text-xs text-black/40">Returned</span>
                   ) : (
@@ -293,6 +296,9 @@ export default async function PurchasesPage({
                       <span className="text-xs text-black/40">Returned</span>
                     ) : (
                       <div className="flex gap-2 flex-wrap">
+                        <Link className="btn-ghost text-xs" href={`/purchases/${purchase.id}`}>
+                          View
+                        </Link>
                         {['UNPAID', 'PART_PAID'].includes(purchase.paymentStatus) && (
                           <InlinePaymentForm
                             invoiceId={purchase.id}
