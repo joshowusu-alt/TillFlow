@@ -2090,7 +2090,16 @@ export default function PosClient({
       </div>
 
       {/* ── Summary sidebar (hidden on mobile — use sticky bottom bar) ── */}
-      <div className="app-desktop-sidebar-sticky hidden lg:block lg:h-fit lg:self-start">
+      <div
+        className="hidden lg:block lg:self-start"
+        style={{
+          position: 'sticky',
+          top: 'calc(var(--app-header-offset-desktop) + 0.5rem)',
+          maxHeight: 'calc(100dvh - var(--app-header-offset-desktop) - 0.5rem)',
+          overflowY: 'auto',
+          paddingRight: '0.25rem',
+        }}
+      >
         <SummarySidebar
           business={business}
           store={store}
