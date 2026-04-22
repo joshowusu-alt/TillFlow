@@ -44,7 +44,7 @@ export default async function UsersPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader title="Users" subtitle="Manage cashiers, managers, and owner accounts." />
 
       {/* Error / Success banners */}

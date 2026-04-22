@@ -90,7 +90,7 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
   const healthyCount = Math.max(0, inventoryRows.length - outOfStockCount - lowStockCount);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Inventory"
         subtitle="Real-time balances in mixed units."

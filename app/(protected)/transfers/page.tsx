@@ -16,7 +16,7 @@ export default async function TransfersPage({
 
   if ((business as any).storeMode !== 'MULTI_STORE') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-5">
         <PageHeader title="Stock Transfers" subtitle="Move inventory between branches." />
         <div className="card p-8 text-center">
           <div className="rounded-full bg-blue-50 p-3 inline-flex mb-3">
@@ -69,7 +69,7 @@ export default async function TransfersPage({
   const defaultToStoreId = stores.length > 1 ? stores[1].id : stores[0]?.id ?? '';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Stock Transfers"
         subtitle="Request branch transfers and complete them with manager approval."

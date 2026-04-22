@@ -22,7 +22,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader title="Customer Receipts" subtitle="Collect outstanding payments." />
       <FormError error={searchParams?.error} />
       <div className="card p-6">

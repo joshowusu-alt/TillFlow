@@ -98,7 +98,7 @@ export default async function StockAdjustmentsPage({
   const countOut = adjustmentRows.filter(({ adjustment }) => adjustment.direction !== 'IN').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader title="Stock Adjustments" subtitle="Record shrinkage, found stock, and corrections." />
 
       <div className="grid gap-3 sm:grid-cols-3">
