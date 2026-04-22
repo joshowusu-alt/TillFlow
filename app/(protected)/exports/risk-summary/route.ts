@@ -45,7 +45,6 @@ export async function GET(request: Request) {
         cashierUser: { select: { id: true, name: true } },
       },
       orderBy: { occurredAt: 'desc' },
-      take: 1000,
     }),
     prisma.salesInvoice.findMany({
       where: {

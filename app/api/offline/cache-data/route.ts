@@ -38,8 +38,28 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Business not found' }, { status: 404 });
         }
 
+        const requestedStoreId = request.nextUrl.searchParams.get('storeId');
+        const availableStores = requestedStoreId
+            ? []
+            : await prisma.store.findMany({
+                where: { businessId: business.id },
+                select: { id: true, name: true },
+                orderBy: { name: 'asc' }
+            });
+
+        const resolvedStoreId =
+            requestedStoreId
+                ?? (availableStores.length === 1 ? availableStores[0]?.id : null);
+
+        if (!resolvedStoreId) {
+            return NextResponse.json(
+                { error: 'Store scope required for offline cache refresh' },
+                { status: 400 }
+            );
+        }
+
         const store = await prisma.store.findFirst({
-            where: { businessId: business.id },
+            where: { id: resolvedStoreId, businessId: business.id },
             select: {
                 id: true,
                 name: true,

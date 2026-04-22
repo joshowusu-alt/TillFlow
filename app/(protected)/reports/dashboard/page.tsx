@@ -52,12 +52,13 @@ export default async function DashboardPage({
     outstandingSales,
     outstandingPurchases,
     balances,
-    bestSellers,
+    bestSellerGroups,
     todayAdj,
     todayVoids,
     todayReturns,
     todayCashVar,
-    saleLinesForGP,
+    costedMarginAgg,
+    uncostedMarginGroups,
   ] = await Promise.all([
     // Sales — aggregate at DB level
     prisma.salesInvoice.aggregate({
@@ -133,7 +134,8 @@ export default async function DashboardPage({
       },
       take: 1000,
     }),
-    prisma.salesInvoiceLine.findMany({
+    prisma.salesInvoiceLine.groupBy({
+      by: ['productId'],
       where: {
         salesInvoice: {
           businessId: business.id,
@@ -142,24 +144,16 @@ export default async function DashboardPage({
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
-      select: {
-        productId: true,
+      _sum: {
         qtyBase: true,
         lineTotalPence: true,
-        product: {
-          select: {
-            name: true,
-            productUnits: {
-              select: {
-                isBaseUnit: true,
-                conversionToBase: true,
-                unit: { select: { name: true, pluralName: true } },
-              },
-            },
-          },
+      },
+      orderBy: {
+        _sum: {
+          lineTotalPence: 'desc',
         },
       },
-      take: 5000,
+      take: 20,
     }),
     // Phase 3B: stock adjustments in range
     prisma.stockAdjustment.findMany({
@@ -215,7 +209,7 @@ export default async function DashboardPage({
       take: 100,
     }),
     // Sale lines for GP computation — single source of truth
-    prisma.salesInvoiceLine.findMany({
+    prisma.salesInvoiceLine.aggregate({
       where: {
         salesInvoice: {
           businessId: business.id,
@@ -223,27 +217,73 @@ export default async function DashboardPage({
           createdAt: { gte: start, lte: end },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
+        lineCostPence: { gt: 0 },
       },
-      select: {
+      _sum: {
         lineSubtotalPence: true,
         lineCostPence: true,
+      },
+    }),
+    prisma.salesInvoiceLine.groupBy({
+      by: ['productId'],
+      where: {
+        salesInvoice: {
+          businessId: business.id,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+        lineCostPence: 0,
+      },
+      _sum: {
+        lineSubtotalPence: true,
         qtyBase: true,
-        product: { select: { defaultCostBasePence: true } },
       },
     }),
   ]);
 
   const currency = business.currency;
+  const bestSellerProductIds = bestSellerGroups.map((group) => group.productId);
+  const uncostedProductIds = uncostedMarginGroups.map((group) => group.productId);
+  const [bestSellerProducts, uncostedProducts] = await Promise.all([
+    bestSellerProductIds.length
+      ? prisma.product.findMany({
+        where: { id: { in: bestSellerProductIds } },
+        select: {
+          id: true,
+          name: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } },
+            },
+          },
+        },
+      })
+      : Promise.resolve([]),
+    uncostedProductIds.length
+      ? prisma.product.findMany({
+        where: { id: { in: uncostedProductIds } },
+        select: { id: true, defaultCostBasePence: true },
+      })
+      : Promise.resolve([]),
+  ]);
+  const bestSellerProductMap = new Map(bestSellerProducts.map((product) => [product.id, product]));
+  const uncostedProductCostMap = new Map(uncostedProducts.map((product) => [product.id, product.defaultCostBasePence]));
 
   // Summarise sales — already aggregated by DB
   const totalSales = salesAgg._sum.totalPence ?? 0;
   // GP from sale lines — consistent with margins/analytics/KPIs
-  const totalGrossMargin = saleLinesForGP.reduce((sum, line) => {
-    const cost = line.lineCostPence > 0
-      ? line.lineCostPence
-      : (line.product.defaultCostBasePence * line.qtyBase);
-    return sum + line.lineSubtotalPence - cost;
+  const costedGrossMargin =
+    (costedMarginAgg._sum.lineSubtotalPence ?? 0) - (costedMarginAgg._sum.lineCostPence ?? 0);
+  const uncostedGrossMargin = uncostedMarginGroups.reduce((sum, group) => {
+    const revenue = group._sum.lineSubtotalPence ?? 0;
+    const qtyBase = group._sum.qtyBase ?? 0;
+    const defaultCostBasePence = uncostedProductCostMap.get(group.productId) ?? 0;
+    return sum + revenue - (defaultCostBasePence * qtyBase);
   }, 0);
+  const totalGrossMargin = costedGrossMargin + uncostedGrossMargin;
   const gpPercent = totalSales > 0 ? Math.round((totalGrossMargin / totalSales) * 100) : 0;
   // Expenses and NP still from journals (accounting source of truth for expense tracking)
   const npPercent = totalSales > 0 ? Math.round(((totalGrossMargin - income.otherExpenses) / totalSales) * 100) : 0;
@@ -283,14 +323,19 @@ export default async function DashboardPage({
     .slice(0, 8);
 
   // Best sellers by revenue
-  const bestMap = new Map<string, { name: string; qty: number; revenue: number; units: any[] }>();
-  for (const line of bestSellers) {
-    const e = bestMap.get(line.productId) ?? { name: line.product.name, qty: 0, revenue: 0, units: line.product.productUnits };
-    e.qty += line.qtyBase;
-    e.revenue += line.lineTotalPence;
-    bestMap.set(line.productId, e);
-  }
-  const bestItems = Array.from(bestMap.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+  const bestItems = bestSellerGroups
+    .map((group) => {
+      const product = bestSellerProductMap.get(group.productId);
+      if (!product) return null;
+      return {
+        name: product.name,
+        qty: group._sum.qtyBase ?? 0,
+        revenue: group._sum.lineTotalPence ?? 0,
+        units: product.productUnits,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .slice(0, 5);
 
   // Activity highlights
   const voidTotal = todayVoids.reduce((s, v) => s + v.totalPence, 0);

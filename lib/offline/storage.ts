@@ -237,7 +237,17 @@ export async function getCachedStore(businessId?: string, storeId?: string): Pro
     }
 
     const all = await db.getAll('store') as OfflineStore[];
-    return all.find((store) => !resolvedBusinessId || store.businessId === resolvedBusinessId);
+    const scopedStores = all.filter((store) => !resolvedBusinessId || store.businessId === resolvedBusinessId);
+    const activeStoreId = await getSyncMeta(getOfflineActiveStoreMetaKey());
+
+    if (activeStoreId) {
+        const activeStore = scopedStores.find((store) => store.id === activeStoreId);
+        if (activeStore) {
+            return activeStore;
+        }
+    }
+
+    return scopedStores.length === 1 ? scopedStores[0] : undefined;
 }
 
 export async function cacheCustomers(businessId: string, customers: OfflineCustomer[]): Promise<void> {

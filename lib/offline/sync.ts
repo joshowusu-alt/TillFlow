@@ -10,13 +10,18 @@ import {
     cacheCustomers,
     cacheTills,
     setActiveOfflineScope,
+    getSyncMeta,
     type OfflineProduct,
     type OfflineBusiness,
     type OfflineStore,
     type OfflineCustomer,
     type OfflineSale
 } from './storage';
-import { getClientActiveBusinessId, getOfflineCacheUrl } from '@/lib/business-scope';
+import {
+    getClientActiveBusinessId,
+    getOfflineCacheUrl,
+    getOfflineActiveStoreMetaKey
+} from '@/lib/business-scope';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -136,7 +141,7 @@ export async function getPendingSaleCount(): Promise<number> {
 // Refresh local cache from server
 export async function refreshOfflineCache(
     businessId?: string,
-    options?: { suppressErrors?: boolean }
+    options?: { suppressErrors?: boolean; storeId?: string }
 ): Promise<RefreshOfflineCacheResult> {
     try {
         const resolvedBusinessId = businessId ?? getClientActiveBusinessId() ?? undefined;
@@ -144,7 +149,8 @@ export async function refreshOfflineCache(
             return { refreshed: false };
         }
 
-        const response = await fetch(getOfflineCacheUrl(resolvedBusinessId));
+        const resolvedStoreId = options?.storeId ?? await getSyncMeta(getOfflineActiveStoreMetaKey());
+        const response = await fetch(getOfflineCacheUrl(resolvedBusinessId, resolvedStoreId));
         if (!response.ok) {
             let message = `Failed to fetch cache data (${response.status})`;
             const contentType = response.headers.get('content-type') ?? '';

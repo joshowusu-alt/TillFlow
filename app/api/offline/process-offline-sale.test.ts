@@ -16,6 +16,15 @@ const { prismaMock, mockCreateSale } = vi.hoisted(() => {
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/services/sales', () => ({ createSale: mockCreateSale }));
+vi.mock('@/lib/billing-db-compat', () => ({
+  findBusinessCommercialSnapshot: vi.fn(async () => ({
+    business: { id: 'biz-1', plan: 'PRO', storeMode: 'SINGLE_STORE' },
+    billingSchemaReady: true,
+  })),
+}));
+vi.mock('@/lib/billing-entitlements', () => ({
+  getBillingEntitlement: vi.fn(() => ({ canWrite: true })),
+}));
 
 // Import AFTER mocks
 import { processOfflineSale, type OfflineSalePayload } from './process-offline-sale';
