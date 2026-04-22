@@ -99,6 +99,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     handoverPence: number;
     actualCashPence: number;
     variancePence: number;
+    durationMinutes: number;
   };
   const [closedSummary, setClosedSummary] = useState<ClosedSummary | null>(null);
 
@@ -147,6 +148,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     formData.set('varianceReason', varianceReason);
 
     // Capture summary before data disappears on refresh
+    const openedAtMs = new Date(shiftToClose.openedAt).getTime();
     const summarySnapshot: ClosedSummary = {
       tillName: shiftToClose.till.name,
       salesCount: shiftToClose.salesCount,
@@ -155,6 +157,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
       handoverPence: Math.max(0, shiftToClose.expectedCash - shiftToClose.openingCashPence),
       actualCashPence: Math.round(Number(actualCash) * 100),
       variancePence: Math.round(Number(actualCash) * 100) - shiftToClose.expectedCash,
+      durationMinutes: Math.round((Date.now() - openedAtMs) / 60000),
     };
 
     if (showOwnerOverride) {
@@ -233,7 +236,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     : 0;
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       {error && (
         <div className="rounded-xl border border-rose/40 bg-rose/10 px-4 py-3 text-sm text-rose">
           {error}
@@ -303,11 +306,19 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
         {closedSummary && (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">✓</span>
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                  <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
                 <div>
-                  <div className="font-semibold text-emerald-800">Shift Closed — {closedSummary.tillName}</div>
-                  <div className="text-xs text-emerald-600">{closedSummary.salesCount} transaction{closedSummary.salesCount !== 1 ? 's' : ''} during shift</div>
+                  <div className="font-semibold text-emerald-800">Shift Closed &mdash; {closedSummary.tillName}</div>
+                  <div className="text-xs text-emerald-600">
+                    {closedSummary.salesCount} transaction{closedSummary.salesCount !== 1 ? 's' : ''}
+                    {' · '}
+                    {Math.floor(closedSummary.durationMinutes / 60)}h {closedSummary.durationMinutes % 60}m
+                  </div>
                 </div>
               </div>
               <button type="button" className="text-emerald-400 hover:text-emerald-600 text-xs" onClick={() => setClosedSummary(null)}>Dismiss</button>
@@ -383,78 +394,118 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
         </>
       )}
 
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Recent Shifts</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="table w-full text-sm">
-            <thead>
-              <tr>
-                <th>Till</th>
-                <th>Cashier</th>
-                <th>Opened</th>
-                <th>Duration</th>
-                <th>Sales</th>
-                <th>Expected</th>
-                <th>Actual</th>
-                <th>Variance</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentShifts.map((shift) => (
-                <tr key={shift.id}>
-                  <td className="font-medium">{shift.tillName}</td>
-                  <td>{shift.userName}</td>
-                  <td>{formatTime(shift.openedAt)}</td>
-                  <td>{formatDuration(shift.openedAt, shift.closedAt)}</td>
-                  <td>{shift.salesCount}</td>
-                  <td>{formatMoney(shift.expectedCashPence, currency)}</td>
-                  <td>
-                    {shift.actualCashPence !== null
-                      ? formatMoney(shift.actualCashPence, currency)
-                      : '-'}
-                  </td>
-                  <td>
-                    {shift.variance !== null ? (
-                      <span
-                        className={
-                          shift.variance === 0
-                            ? 'text-emerald-700'
-                            : shift.variance > 0
-                            ? 'text-accent'
-                            : 'text-rose-700'
-                        }
-                      >
-                        {shift.variance >= 0 ? '+' : ''}
-                        {formatMoney(shift.variance, currency)}
+      <div className="card p-4 sm:p-5">
+        <h2 className="text-base font-display font-semibold text-ink sm:text-lg">Recent Shifts</h2>
+
+        {recentShifts.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-black/50">
+            No shifts recorded yet
+          </div>
+        ) : (
+          <>
+            {/* Mobile cards — hidden on large screens */}
+            <div className="mt-3 space-y-2 lg:hidden">
+              {recentShifts.map((shift) => {
+                const isOpen = shift.status === 'OPEN';
+                const hasVariance = shift.variance !== null;
+                const variancePositive = (shift.variance ?? 0) > 0;
+                const varianceZero = shift.variance === 0;
+                return (
+                  <div
+                    key={shift.id}
+                    className={`rounded-2xl border px-4 py-3.5 ${isOpen ? 'border-emerald-200 bg-emerald-50/60' : 'border-black/5 bg-white'}`}
+                  >
+                    {/* Row 1: Till + Status */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {isOpen && <div className="h-2 w-2 flex-shrink-0 rounded-full bg-emerald-500 animate-pulse" />}
+                        <span className="font-semibold text-ink text-sm">{shift.tillName}</span>
+                        <span className="text-xs text-black/40">&middot; {shift.userName}</span>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-black/5 text-black/55'}`}>
+                        {isOpen ? 'Open' : 'Closed'}
                       </span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        shift.status === 'OPEN'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      {shift.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {recentShifts.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="text-center text-black/50 py-8">
-                    No shifts recorded yet
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                    {/* Row 2: Time + duration */}
+                    <div className="mt-1.5 text-xs text-black/45">
+                      {formatTime(shift.openedAt)}
+                      {' · '}
+                      <span className={isOpen ? 'text-emerald-600 font-medium' : ''}>{formatDuration(shift.openedAt, shift.closedAt)}</span>
+                      {' · '}{shift.salesCount} sale{shift.salesCount !== 1 ? 's' : ''}
+                    </div>
+                    {/* Row 3: Cash metrics */}
+                    <div className="mt-2.5 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-black/35">Expected</div>
+                        <div className="mt-0.5 font-semibold text-ink">{formatMoney(shift.expectedCashPence, currency)}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-black/35">Actual</div>
+                        <div className="mt-0.5 font-semibold text-ink">
+                          {shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, currency) : <span className="text-black/30">&mdash;</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-black/35">Variance</div>
+                        <div className={`mt-0.5 font-semibold ${hasVariance ? (varianceZero ? 'text-emerald-700' : variancePositive ? 'text-accent' : 'text-rose-600') : 'text-black/30'}`}>
+                          {hasVariance
+                            ? `${(shift.variance ?? 0) >= 0 ? '+' : ''}${formatMoney(shift.variance!, currency)}`
+                            : <span>&mdash;</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop table — hidden on mobile/tablet */}
+            <div className="responsive-table-shell mt-4 hidden lg:block">
+              <table className="table w-full text-sm border-separate border-spacing-y-1.5">
+                <thead>
+                  <tr>
+                    <th>Till</th>
+                    <th>Cashier</th>
+                    <th>Opened</th>
+                    <th>Duration</th>
+                    <th>Sales</th>
+                    <th>Expected</th>
+                    <th>Actual</th>
+                    <th>Variance</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentShifts.map((shift) => (
+                    <tr key={shift.id} className="rounded-xl bg-white">
+                      <td className="px-3 py-3 font-medium">{shift.tillName}</td>
+                      <td className="px-3 py-3">{shift.userName}</td>
+                      <td className="px-3 py-3">{formatTime(shift.openedAt)}</td>
+                      <td className="px-3 py-3">{formatDuration(shift.openedAt, shift.closedAt)}</td>
+                      <td className="px-3 py-3">{shift.salesCount}</td>
+                      <td className="px-3 py-3">{formatMoney(shift.expectedCashPence, currency)}</td>
+                      <td className="px-3 py-3">
+                        {shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, currency) : <span className="text-black/30">—</span>}
+                      </td>
+                      <td className="px-3 py-3">
+                        {shift.variance !== null ? (
+                          <span className={shift.variance === 0 ? 'text-emerald-700' : shift.variance > 0 ? 'text-accent' : 'text-rose-700'}>
+                            {shift.variance >= 0 ? '+' : ''}{formatMoney(shift.variance, currency)}
+                          </span>
+                        ) : <span className="text-black/30">—</span>}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${shift.status === 'OPEN' ? 'bg-emerald-100 text-emerald-800' : 'bg-black/5 text-black/55'}`}>
+                          {shift.status === 'OPEN' ? 'Open' : 'Closed'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Owner: other open shifts they can close */}

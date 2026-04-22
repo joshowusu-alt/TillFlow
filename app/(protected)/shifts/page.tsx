@@ -168,12 +168,11 @@ export default async function ShiftsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-[0.25em] text-black/40">Cash Management</div>
-          <h1 className="text-2xl font-display font-semibold">Shift Reconciliation</h1>
-        </div>
+    <div className="mx-auto max-w-4xl space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-1 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card backdrop-blur-xl sm:rounded-[1.75rem] sm:px-5 md:px-6 md:py-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-black/35">Cash Management</p>
+        <h1 className="text-[1.6rem] font-display font-bold leading-tight text-ink sm:text-2xl md:text-[1.85rem]">Shift Reconciliation</h1>
+        <p className="text-sm font-medium text-slate-500">Open, monitor, and close till shifts. All cash counts are audited.</p>
       </div>
 
       <ShiftClient
