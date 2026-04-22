@@ -16,7 +16,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 
-export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string } }) {
+export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
@@ -74,10 +74,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const activeTab = searchParams?.tab || 'products';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Products"
-        subtitle="Products, categories, and pricing."
+        subtitle="Your live catalogue for pricing, stock, and barcode selling."
+        density="compact"
         actions={
           <Link href="/products/labels" className="btn-secondary justify-center text-sm">
             Print Labels
@@ -104,10 +105,25 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       {/* ───── Products Tab ───── */}
       {activeTab === 'products' && (
         <>
+          {searchParams?.created === '1' && (
+            <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
+              <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <div className="flex-1">
+                <span className="text-sm font-semibold text-success">Product added to your catalogue.</span>
+                <span className="ml-1.5 text-sm text-ink/70">Record a purchase to set opening stock, then open the POS to start selling.</span>
+              </div>
+              <Link href="/purchases" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+                Receive stock &rarr;
+              </Link>
+            </div>
+          )}
           {user.role === 'OWNER' && <RepairPricesButton />}
           {isManager ? (
-            <div className="card p-6">
+            <div id="product-create" className="card p-4 sm:p-5">
               <h2 className="text-lg font-display font-semibold">Add product</h2>
+              <p className="mt-1 text-sm text-black/55">Start with the items you sell every day. You can add the rest of the catalogue later.</p>
               <FormError error={searchParams?.error} />
               <form action={createProductAction} className="mt-4 grid gap-4 md:grid-cols-3">
                 <div>
@@ -185,11 +201,41 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           <div className="mb-4 max-w-xs">
             <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
           </div>
-          <div className="card p-6">
+          <div className="card p-4 sm:p-5">
             <div className="space-y-3 lg:hidden">
               {products.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
-                  {q ? `No products matching "${q}".` : 'No active products yet.'}
+                <div className="rounded-2xl border border-dashed border-black/10 px-5 py-7">
+                  {q ? (
+                    <>
+                      <div className="text-sm font-semibold text-ink">No products match &ldquo;{q}&rdquo;</div>
+                      <div className="mt-1 text-sm text-black/50">Try a broader search, or clear the filter to see your full catalogue.</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-black/30 mb-4">Your catalogue is empty</div>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {([
+                          { n: '1', title: 'Add your fastest-moving lines', detail: 'Start with 5–10 core products. The full catalogue can follow at any pace.' },
+                          { n: '2', title: 'Set cost and selling price', detail: 'TillFlow calculates your gross margin automatically as each sale is recorded.' },
+                          { n: '3', title: 'Open the POS', detail: 'Once one product is live, your team can begin recording sales immediately.' },
+                        ] as { n: string; title: string; detail: string }[]).map(({ n, title, detail }) => (
+                          <div key={n} className="rounded-xl border border-black/5 bg-slate-50 px-4 py-3">
+                            <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">{n}</div>
+                            <div className="mt-2 text-sm font-semibold text-ink">{title}</div>
+                            <div className="mt-1 text-xs text-black/50">{detail}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {isManager ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <a href="#product-create" className="btn-primary text-xs px-3 py-1.5">Add first product</a>
+                          <Link href="/settings/import-stock" className="btn-ghost border border-black/10 rounded-lg px-3 py-1.5 text-xs">
+                            Import from file
+                          </Link>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </div>
               ) : products.map((product) => {
                 const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
@@ -254,7 +300,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             </div>
 
             <div className="responsive-table-shell hidden lg:block">
-              <table className="table w-full border-separate border-spacing-y-2">
+              <table className="table w-full border-separate border-spacing-y-1.5">
                 <thead>
                   <tr>
                     <th className="hidden sm:table-cell"></th>
@@ -266,6 +312,16 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   </tr>
                 </thead>
                 <tbody>
+                  {products.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-10 text-center">
+                        <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : 'No products loaded yet.'}</div>
+                        <div className="mt-1 text-sm text-black/55">
+                          {q ? 'Try a different search term or clear the search.' : 'Add your first few products to start receiving stock and selling from the till.'}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {products.map((product) => {
                     const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit);
                     const packaging = getPrimaryPackagingUnit(
@@ -329,7 +385,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       {activeTab === 'categories' && (
         <>
           {isManager ? (
-            <div className="card p-6">
+            <div className="card p-4 sm:p-5">
               <h2 className="text-lg font-display font-semibold">Add category</h2>
               <form action={createCategoryAction} className="mt-4 grid gap-4 md:grid-cols-4">
                 <div>

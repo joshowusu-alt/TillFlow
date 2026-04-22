@@ -121,8 +121,8 @@ export default async function PurchasesPage({
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Purchases" subtitle="Receive stock and track payables by branch." />
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader title="Purchases" subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together." density="compact" />
       <FormError error={searchParams?.error} />
 
       {searchParams?.created === '1' && (
@@ -131,8 +131,8 @@ export default async function PurchasesPage({
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
           <div className="flex-1">
-            <span className="text-sm font-semibold text-success">Stock updated!</span>
-            <span className="ml-1.5 text-sm text-ink/70">All inventory quantities have been adjusted.</span>
+            <span className="text-sm font-semibold text-success">Purchase recorded.</span>
+            <span className="ml-1.5 text-sm text-ink/70">Stock, supplier balance, and reports have been updated for this branch.</span>
           </div>
           <Link href="/inventory" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
             View inventory &rarr;
@@ -156,11 +156,11 @@ export default async function PurchasesPage({
         </button>
       </form>
 
-      <div className="card p-4 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-display font-semibold">Receive stock</h2>
-            <p className="mt-1 text-sm text-black/55">Add supplier purchases quickly and update stock in one flow.</p>
+            <p className="mt-1 text-sm text-black/55">A single purchase entry updates stock quantities, average cost, and your supplier payable simultaneously.</p>
           </div>
           <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/suppliers">
             Add supplier
@@ -191,7 +191,7 @@ export default async function PurchasesPage({
         />
       </div>
 
-      <div className="card p-4 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-lg font-display font-semibold">Recent purchases</h2>
@@ -202,8 +202,11 @@ export default async function PurchasesPage({
 
         <div className="mt-4 space-y-3 lg:hidden">
           {purchaseRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
-              No purchases recorded yet.
+            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6">
+              <div className="text-sm font-semibold text-ink">No purchases recorded yet.</div>
+              <div className="mt-1 text-sm text-black/55">
+                Use the form above when stock arrives from a supplier. TillFlow will increase inventory and track what is still unpaid.
+              </div>
             </div>
           ) : (
             purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => (
@@ -265,7 +268,7 @@ export default async function PurchasesPage({
         </div>
 
         <div className="responsive-table-shell mt-4 hidden lg:block">
-          <table className="table w-full border-separate border-spacing-y-2">
+          <table className="table w-full border-separate border-spacing-y-1.5">
           <thead>
             <tr>
               <th>Invoice</th>
@@ -278,6 +281,14 @@ export default async function PurchasesPage({
             </tr>
           </thead>
           <tbody>
+            {purchaseRows.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-10 text-center">
+                  <div className="text-sm font-semibold text-ink">No purchases recorded yet.</div>
+                  <div className="mt-1 text-sm text-black/55">Receive your first supplier delivery above to update stock and payables together.</div>
+                </td>
+              </tr>
+            )}
             {purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => {
               return (
                 <tr key={purchase.id} className="rounded-xl bg-white">

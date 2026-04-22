@@ -130,10 +130,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">Setup guide</div>
                 <span className="text-sm font-medium text-accent">
                 {readinessPct === 0
-                  ? 'Let\u2019s get your shop set up on TillFlow!'
-                  : readinessPct < 100
-                  ? 'You\u2019re making progress \u2014 keep going!'
-                  : 'Almost there \u2014 just finish up!'}
+                ? 'Start with business profile, core products, and one live sale to activate your reports.'
+                : readinessPct < 100
+                ? `${readinessPct < 60 ? 'A few key steps remain' : 'Almost there'} — complete your setup to trade with full confidence.`
+                : 'Final configuration steps are waiting — your system is already operational.'}
                 </span>
               </div>
             </div>
@@ -141,7 +141,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
               href="/onboarding"
               className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
             >
-              {readinessPct > 0 ? 'Continue Setup' : 'Get Started'} &rarr;
+              {readinessPct > 0 ? 'Continue setup' : 'Begin setup guide'} &rarr;
             </Link>
           </div>
         </div>
@@ -151,10 +151,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <div className="border-b border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-900 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              Payment is overdue. Full access remains available until {billingGraceEndsAt ?? 'the end of the current grace period'}.
+              Your subscription payment is pending. Full access continues until {billingGraceEndsAt ?? 'the end of your grace period'}.
             </p>
             <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
-              Review billing
+              Update payment
             </Link>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <div className="border-b border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-900 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              This business is on Starter fallback access until {billingStarterFallbackEndsAt ?? billingReadOnlyAt ?? 'the fallback window ends'}.
+              Running on Starter access. Upgrade to restore full features before {billingStarterFallbackEndsAt ?? billingReadOnlyAt ?? 'the fallback window closes'}.
             </p>
             <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
               Open billing controls
@@ -177,7 +177,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <div className="border-b border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-900 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p>
-              This business is read-only. New write activity is blocked until payment is recorded.
+              Write access paused. Record payment to resume full operations.
             </p>
             <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
               Restore access
@@ -186,9 +186,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-      <main id="main-content" className="w-full min-w-0 max-w-full px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-        {children}
-      </main>
+        <main id="main-content" className="app-main-shell w-full min-w-0 max-w-full px-4 py-3 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
+          {children}
+        </main>
     </div>
   );
 }

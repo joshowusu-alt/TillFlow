@@ -72,9 +72,9 @@ export async function getReadiness(): Promise<ReadinessData> {
   const steps: ReadinessStep[] = [
     {
       key: 'store',
-      title: 'Configure your business',
-      subtitle: 'Add your address, phone & receipt branding',
-      benefit: 'Professional receipts build customer trust',
+      title: 'Confirm business details',
+      subtitle: 'Add your phone, address, and receipt details',
+      benefit: 'Receipts and reports carry your business identity from the very first transaction',
       estimatedMinutes: 2,
       done: hasAddress,
       href: '/settings',
@@ -82,9 +82,9 @@ export async function getReadiness(): Promise<ReadinessData> {
     },
     {
       key: 'products',
-      title: 'Add your products',
-      subtitle: productCount >= 3 ? `${productCount} products loaded` : productCount > 0 ? `${productCount} added — add at least 3 to complete this step` : 'Add at least 3 products to complete this step',
-      benefit: 'Accurate pricing = no more price-tag arguments',
+      title: 'Load your first products',
+      subtitle: productCount >= 3 ? `${productCount} products ready for sale` : productCount > 0 ? `${productCount} added — load at least 3 core items to complete this step` : 'Start with your fastest-moving products first',
+      benefit: 'Accurate prices and barcodes mean faster checkouts and reliable margin tracking from day one',
       estimatedMinutes: 5,
       done: productCount >= 3,
       href: '/products',
@@ -95,9 +95,9 @@ export async function getReadiness(): Promise<ReadinessData> {
       title: 'Record opening stock & cash',
       subtitle:
         (business as any).openingCapitalPence > 0 || purchaseCount > 0
-          ? 'Opening capital recorded'
-          : 'Enter the stock you have and cash in the till',
-      benefit: 'Your Balance Sheet starts accurate from day one',
+          ? 'Opening balances or first stock receipt recorded'
+          : 'Record what is already on the shelf and in the drawer',
+      benefit: 'Stock counts, cash position, and gross profit all start from the correct baseline',
       estimatedMinutes: 5,
       done: ((business as any).openingCapitalPence ?? 0) > 0 || purchaseCount > 0,
       href: '/setup/opening-stock',
@@ -106,8 +106,8 @@ export async function getReadiness(): Promise<ReadinessData> {
     {
       key: 'staff',
       title: 'Invite your team',
-      subtitle: staffCount > 1 ? `${staffCount - 1} staff member${staffCount > 2 ? 's' : ''} added` : 'Add cashiers & managers with PINs',
-      benefit: 'Role-based access keeps cash safe',
+      subtitle: staffCount > 1 ? `${staffCount - 1} staff member${staffCount > 2 ? 's' : ''} added` : 'Add cashiers and managers when you are ready',
+      benefit: 'Access controls protect cash, stock approvals, and discount overrides across every shift',
       estimatedMinutes: 3,
       done: staffCount > 1,
       href: '/users',
@@ -116,8 +116,8 @@ export async function getReadiness(): Promise<ReadinessData> {
     {
       key: 'demo',
       title: 'Run Demo Day',
-      subtitle: business.hasDemoData ? 'Demo transactions generated' : 'See TillFlow with a week of realistic data',
-      benefit: 'Explore reports, margins & dashboards risk-free',
+      subtitle: business.hasDemoData ? 'Sample trading data loaded' : 'Preview reports and dashboards with realistic sample activity',
+      benefit: 'Explore every report, chart, and workflow before any customer walks through the door',
       estimatedMinutes: 1,
       done: business.hasDemoData,
       href: '/onboarding#demo',
@@ -126,8 +126,8 @@ export async function getReadiness(): Promise<ReadinessData> {
     {
       key: 'first-sale',
       title: 'Make your first real sale',
-      subtitle: saleCount > 0 ? `${saleCount} sale${saleCount > 1 ? 's' : ''} completed` : 'Open the POS and sell to a customer',
-      benefit: 'Every sale is tracked, receipted & accounted for',
+      subtitle: saleCount > 0 ? `${saleCount} sale${saleCount > 1 ? 's' : ''} recorded` : 'Open the POS and complete one real checkout',
+      benefit: 'Stock, cash flow, and trading reports all update in real time from the first checkout',
       estimatedMinutes: 2,
       done: saleCount > 0,
       href: '/pos',

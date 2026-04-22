@@ -80,7 +80,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Business Settings" subtitle="VAT settings and company profile." />
+      <PageHeader title="Business Settings" subtitle="Business profile, receipts, VAT configuration, and system controls." />
       <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
         <form action={updateBusinessAction} className="grid gap-4 md:grid-cols-2">
@@ -139,7 +139,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
           <div className="md:col-span-2 pt-2">
             <h2 className="text-base font-display font-semibold">Printing & tax</h2>
-            <p className="mt-1 text-sm text-black/55">Receipt output, printer setup, and tax registration details.</p>
+            <p className="mt-1 text-sm text-black/55">Receipt output, printer setup, and tax registration details for live shop use.</p>
           </div>
           <div>
             <label className="label">Receipt Template</label>
@@ -156,7 +156,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               <option value="BROWSER_DIALOG">Browser dialog</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Direct printing uses QZ Tray, a small desktop helper that sends receipts straight to the printer.
+              Direct printing uses QZ Tray, a small desktop helper that sends receipts straight to the printer from a till computer.
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               <a
@@ -184,7 +184,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
               }`}
             >
               {qzSigningConfigured
-                ? 'Trusted QZ signing is configured. Install and run QZ Tray on each till, then allow the site once in QZ Tray to enable automatic direct printing.'
+                ? 'Trusted QZ signing is configured. Install and run QZ Tray on each till computer, then allow the site once in QZ Tray to enable direct receipt printing.'
                 : 'Trusted QZ signing is not configured yet. Direct print can still work, but fully trusted automatic printing needs QZ_TRAY_CERTIFICATE and QZ_TRAY_PRIVATE_KEY on the server.'}
             </div>
           </div>
@@ -193,6 +193,24 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="printerName" defaultValue={business.printerName ?? ''} />
             <div className="mt-1 text-xs text-black/50">
               Leave blank to use the system default printer.
+            </div>
+          </div>
+
+          <div className="md:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Deployment notes</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-white/60 bg-white px-3 py-3 text-sm text-slate-700">
+                <div className="font-semibold text-ink">Desktop till</div>
+                <div className="mt-1 text-xs text-slate-600">Best for direct thermal printing with QZ Tray and an attached receipt printer.</div>
+              </div>
+              <div className="rounded-xl border border-white/60 bg-white px-3 py-3 text-sm text-slate-700">
+                <div className="font-semibold text-ink">Tablet or phone</div>
+                <div className="mt-1 text-xs text-slate-600">Use browser print or PDF/share output when direct printer drivers are not available.</div>
+              </div>
+              <div className="rounded-xl border border-white/60 bg-white px-3 py-3 text-sm text-slate-700">
+                <div className="font-semibold text-ink">If printing is unavailable</div>
+                <div className="mt-1 text-xs text-slate-600">Sales still complete normally. Receipts can be reopened later from Sales History for reprint.</div>
+              </div>
             </div>
           </div>
 

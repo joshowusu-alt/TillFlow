@@ -89,12 +89,18 @@ function ReadinessRing({ pct }: { pct: number }) {
         />
         <defs>
           <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#1E40AF" />
-            <stop offset="100%" stopColor="#3B82F6" />
+            <stop offset="0%" stopColor="#06b6d4" />
+            <stop offset="60%" stopColor="#2563eb" />
+            <stop offset="100%" stopColor="#10b981" />
           </linearGradient>
         </defs>
       </svg>
-      <span className="absolute text-2xl font-bold tabular-nums text-ink">{pct}%</span>
+      <div className="absolute flex flex-col items-center">
+        <span className="text-2xl font-black tabular-nums text-ink">{pct}%</span>
+        <span className="text-[9px] font-bold uppercase tracking-widest text-black/30 mt-0.5">
+          {pct === 100 ? 'Ready' : pct >= 67 ? 'Almost' : pct >= 33 ? 'In progress' : 'Getting started'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -160,17 +166,17 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
           {StepIcons.play}
         </div>
         <div>
-          <h3 className="text-sm font-bold text-ink">Demo Day</h3>
-          <p className="text-xs text-muted">See TillFlow in action with a week of realistic data</p>
+          <h3 className="text-sm font-bold text-ink">Live preview mode</h3>
+          <p className="text-xs text-muted">Explore every chart and report with a week of realistic trading activity</p>
         </div>
       </div>
 
       {hasDemoData ? (
         <div className="space-y-3">
-          <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/20 px-3 py-2">
-            <CheckIcon />
-            <span className="text-sm text-success font-medium">Demo data active — explore your dashboard!</span>
-          </div>
+            <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/20 px-3 py-2">
+              <CheckIcon />
+              <span className="text-sm text-success font-medium">Preview data loaded — explore freely. Your real setup is unaffected.</span>
+            </div>
           <div className="flex gap-2">
             <Link href="/pos" className="btn-primary flex-1 text-center text-sm py-2">
               Open POS
@@ -205,16 +211,16 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
             {isPending ? (
               <>
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Generating...
+                Loading preview data...
               </>
             ) : (
               <>
                 {StepIcons.play}
-                <span>Run Demo Day</span>
+                <span>Load preview data</span>
               </>
             )}
           </button>
-          <p className="text-center text-[10px] text-muted">100% reversible — wipe anytime</p>
+          <p className="text-center text-[10px] text-muted">Removed with one click — your real setup is never affected</p>
         </div>
       )}
     </div>
@@ -382,6 +388,11 @@ function WelcomeDashboard({
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {data.businessName}
           </h1>
+          {data.onboardingCompletedAt && (
+            <p className="mt-1 text-[11px] text-blue-200/45">
+              Trading live since {new Date(data.onboardingCompletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          )}
 
           {/* Status pill */}
           <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-300">
@@ -392,8 +403,18 @@ function WelcomeDashboard({
             All systems active
           </div>
 
+          {/* Trust signal chips */}
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            {['Auto-saved', 'Offline ready', 'Encrypted'].map(label => (
+              <span key={label} className="flex items-center gap-1.5 text-[10px] font-medium text-blue-200/40">
+                <span className="h-1 w-1 rounded-full bg-blue-300/35" />
+                {label}
+              </span>
+            ))}
+          </div>
+
           {/* Stat pills — anchored to bottom of hero */}
-          <div className="mt-7 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
             {([
               { label: 'Products', value: data.productCount, href: '/products', icon: '📦' },
               { label: 'Total Sales', value: data.saleCount, href: '/pos', icon: '🧾' },
@@ -631,25 +652,47 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             <ReadinessRing pct={data.pct} />
           </div>
           <h1 className="text-2xl font-bold text-ink">
-            {allDone ? 'You\'re all set!' : `Welcome, ${data.businessName}`}
+            {allDone ? 'TillFlow is ready' : `Set up ${data.businessName}`}
           </h1>
           <p className="mt-1.5 text-sm text-muted max-w-sm mx-auto">
             {allDone
-              ? 'TillFlow is ready. Your shop is about to level up.'
-              : 'Let\'s get your shop running on TillFlow. Each step takes just a few minutes.'}
+              ? 'Your core setup is in place. Keep operating and refine the remaining details as you go.'
+              : 'Start with what matters most. You can open the POS before every setting is configured.'}
           </p>
         </div>
+
+        {!allDone && (
+          <div className="animate-fade-in-up mb-6 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm" style={{ animationDelay: '.05s' }}>
+            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Your launch sequence</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {[
+                { step: '1', title: 'Load your key products', detail: 'Just your top sellers to start — the rest of the catalogue can follow.' },
+                { step: '2', title: 'Record opening stock', detail: 'The quantities on your shelf today, entered once.' },
+                { step: '3', title: 'Complete your first real sale', detail: 'One checkout and your financial reports go live.' },
+              ].map((item) => (
+                <div key={item.step} className="rounded-xl border border-black/5 bg-slate-50 px-4 py-3">
+                  <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
+                    {item.step}
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-ink">{item.title}</div>
+                  <div className="mt-1 text-xs text-muted">{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Next Best Action — only when not complete */}
         {data.nextStep && !allDone && (
           <div className="animate-fade-in-up mb-6" style={{ animationDelay: '.1s' }}>
             <div className="rounded-2xl border-2 border-accent/20 bg-white p-5 shadow-lg shadow-accent/5">
               <div className="flex items-center gap-1.5 mb-2">
-                <span className="animate-pulse-subtle text-accent text-lg">&#x2794;</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-accent">Next step</span>
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white text-[10px] font-black">→</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-accent">Up next</span>
               </div>
               <h2 className="text-lg font-bold text-ink">{data.nextStep.title}</h2>
-              <p className="mt-0.5 text-sm text-muted">{data.nextStep.benefit}</p>
+              <p className="mt-0.5 text-sm text-muted">{data.nextStep.subtitle}</p>
+              <p className="mt-1 text-xs text-accent/70">{data.nextStep.benefit}</p>
               {data.nextStep.key === 'demo' ? (
                 <button
                   onClick={handleGenerateDemo}
@@ -691,18 +734,20 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         {allDone && (
           <div className="animate-fade-in-up mb-6 rounded-2xl border border-success/20 bg-success/5 p-5" style={{ animationDelay: '.35s' }}>
             <div className="mb-4 flex items-center gap-2">
-              <span className="text-xl">🎉</span>
-              <h2 className="text-base font-bold text-ink">Your next 3 wins</h2>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-success text-white">
+                <CheckIcon />
+              </span>
+              <h2 className="text-base font-bold text-ink">Your next operational checks</h2>
             </div>
             <div className="space-y-2.5">
               {([
-                { emoji: '📦', label: 'Add your first product', href: '/products', cta: 'Go to Products' },
-                { emoji: '🛒', label: 'Receive your first purchase', href: '/purchases', cta: 'Record Purchase' },
-                { emoji: '💳', label: 'Make your first real sale', href: '/pos', cta: 'Open POS' },
-              ] as const).map(({ emoji, label, href, cta }) => (
+                { label: 'Add your first product', href: '/products', cta: 'Go to products' },
+                { label: 'Receive your first purchase', href: '/purchases', cta: 'Record purchase' },
+                { label: 'Complete your first live sale', href: '/pos', cta: 'Open POS' },
+              ] as const).map(({ label, href, cta }, index) => (
                 <div key={href} className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-lg">{emoji}</span>
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">{index + 1}</span>
                     <span className="text-sm font-medium text-ink">{label}</span>
                   </div>
                   <Link href={href} className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
@@ -715,7 +760,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             <div className="mt-4 flex items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3">
               <div>
                 <p className="text-sm font-medium text-ink">Guided Setup Tips</p>
-                <p className="text-xs text-muted">Show helpful tooltips on POS, Purchases &amp; Catalog</p>
+                <p className="text-xs text-muted">Keep gentle prompts visible while your team learns the flow</p>
               </div>
               <GuidedToggle initial={data.guidedSetup} />
             </div>
@@ -732,14 +777,14 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
               </svg>
-              Open the POS — Start Selling
+              Open POS and start trading
             </button>
           ) : (
             <button
               onClick={handleComplete}
               className="text-sm text-black/30 hover:text-black/50 transition"
             >
-              Skip for now — go to POS
+              Skip to POS
             </button>
           )}
 
