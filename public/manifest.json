@@ -2,7 +2,7 @@
   "name": "TillFlow",
   "short_name": "TillFlow",
   "description": "Sales made simple. The complete point of sale system with inventory management, accounting, and offline support.",
-  "start_url": "/pos",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

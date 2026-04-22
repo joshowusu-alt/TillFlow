@@ -354,55 +354,61 @@ function WelcomeDashboard({
     },
   ] as const;
 
-  return (
-    <div className="min-h-screen bg-paper">
-      {/* ── Hero ── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e3a8a] to-[#1d4ed8]">
-        {/* decorative blobs */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-blue-500/10 blur-3xl" />
-          <div className="absolute -left-16 bottom-0 h-72 w-72 rounded-full bg-indigo-400/10 blur-3xl" />
-        </div>
+  const secondaryLinks = [
+    { label: 'Purchases', href: '/purchases' },
+    { label: 'Sales History', href: '/sales' },
+    { label: 'Inventory', href: '/stock-movements' },
+    { label: 'Team', href: '/users' },
+    { label: 'Setup checklist', href: '/onboarding' },
+  ] as const;
 
-        <div className="relative mx-auto max-w-5xl px-4 pb-10 pt-8 sm:px-6 sm:pb-16 sm:pt-12 lg:pb-20 lg:pt-16">
-          {/* Greeting */}
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70 sm:mb-3 sm:text-xs">
+  return (
+    <div className="min-h-screen" style={{ background: '#f0f2f5' }}>
+
+      {/* ── Hero header ── */}
+      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}>
+        {/* Mesh texture overlay */}
+        <div className="pointer-events-none absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.2) 0%, transparent 40%)',
+        }} />
+        {/* Bottom fade */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.3))' }} />
+
+        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:pb-16 lg:pt-14">
+          {/* Greeting + business name */}
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
             {greeting}{firstName ? `, ${firstName}` : ''}
           </p>
-
-          {/* Business name */}
-          <h1 className="text-3xl font-black leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+          <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {data.businessName}
           </h1>
 
-          {/* Setup-complete badge */}
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/15 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-              </svg>
-              Setup complete
+          {/* Status pill */}
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-300">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
+            All systems active
           </div>
 
-          {/* Quick stats — 3-col grid that works at any width */}
-          <div className="mt-8 grid grid-cols-3 gap-2 sm:mt-10 sm:flex sm:flex-wrap sm:gap-4">
-            {(
-              [
-                { label: 'Products', value: data.productCount, href: '/products' },
-                { label: 'Sales', value: data.saleCount, href: '/pos' },
-                { label: 'Team', value: data.staffCount, href: '/users' },
-              ] as const
-            ).map(({ label, value, href }) => (
+          {/* Stat pills — anchored to bottom of hero */}
+          <div className="mt-7 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+            {([
+              { label: 'Products', value: data.productCount, href: '/products', icon: '📦' },
+              { label: 'Total Sales', value: data.saleCount, href: '/pos', icon: '🧾' },
+              { label: 'Team', value: data.staffCount, href: '/users', icon: '👥' },
+            ] as const).map(({ label, value, href, icon }) => (
               <Link
                 key={href}
                 href={href}
-                className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/10 px-2 py-3 text-center backdrop-blur-sm transition hover:bg-white/15 sm:min-w-[120px] sm:px-5 sm:py-4"
+                className="group flex flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-center backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[110px] sm:px-5 sm:py-4"
               >
-                <span className="text-2xl font-black tabular-nums text-white sm:text-4xl">
+                <span className="text-lg sm:text-2xl">{icon}</span>
+                <span className="mt-1 text-xl font-black tabular-nums text-white sm:text-3xl">
                   {value.toLocaleString()}
                 </span>
-                <span className="mt-1 text-[10px] font-medium uppercase tracking-wider text-blue-200/60 sm:text-[11px]">
+                <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-200/50">
                   {label}
                 </span>
               </Link>
@@ -411,95 +417,110 @@ function WelcomeDashboard({
         </div>
       </div>
 
-      {/* ── Content area ── */}
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:py-10">
+      {/* ── Main content ── */}
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:py-8">
 
-        {/* Quick Actions ── mobile: stacked rows / desktop: 4-col card grid */}
-        <h2 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">Quick Actions</h2>
+        {/* Quick action label */}
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
 
-        {/* Mobile list (hidden on sm+) */}
-        <div className="mb-6 flex flex-col gap-2 sm:hidden">
+        {/* Mobile: full-width rows */}
+        <div className="flex flex-col gap-2.5 sm:hidden">
           {quickActions.map(({ label, desc, href, primary, icon }) => (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-4 rounded-2xl px-4 py-4 transition active:scale-[0.98] ${
+              className={`group flex items-center gap-4 rounded-2xl px-4 py-4 shadow-sm transition active:scale-[0.985] ${
                 primary
-                  ? 'bg-accent shadow-lg shadow-accent/20'
-                  : 'border border-black/5 bg-white shadow-sm'
+                  ? 'bg-accent text-white shadow-accent/30 shadow-md'
+                  : 'bg-white text-ink'
               }`}
             >
-              <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
-                primary ? 'bg-white/20 text-white' : 'bg-accentSoft text-accent'
+              <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl ${
+                primary ? 'bg-white/20' : 'bg-accentSoft'
               }`}>
-                {icon}
+                <span className={primary ? 'text-white' : 'text-accent'}>{icon}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-bold ${primary ? 'text-white' : 'text-ink'}`}>{label}</p>
-                <p className={`text-xs ${primary ? 'text-white/60' : 'text-muted'}`}>{desc}</p>
+                <p className={`text-sm font-bold ${
+                  primary ? 'text-white' : 'text-ink'
+                }`}>{label}</p>
+                <p className={`text-xs ${
+                  primary ? 'text-white/60' : 'text-muted'
+                }`}>{desc}</p>
               </div>
-              <svg className={`h-4 w-4 flex-shrink-0 ${primary ? 'text-white/50' : 'text-black/20'}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <svg className={`h-4 w-4 flex-shrink-0 transition group-active:translate-x-0.5 ${
+                primary ? 'text-white/40' : 'text-black/20'
+              }`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </Link>
           ))}
         </div>
 
-        {/* Desktop grid (hidden on mobile) */}
+        {/* Desktop: 4-col card grid */}
         <div className="mb-8 hidden grid-cols-4 gap-3 sm:grid">
           {quickActions.map(({ label, desc, href, primary, icon }) => (
             <Link
               key={href}
               href={href}
-              className={`group flex flex-col gap-3 rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-md ${
+              className={`group relative flex flex-col overflow-hidden rounded-2xl p-5 transition hover:-translate-y-0.5 ${
                 primary
-                  ? 'bg-accent shadow-lg shadow-accent/20 hover:bg-[#1a37a0] hover:shadow-xl'
-                  : 'border border-black/5 bg-white shadow-sm hover:border-accent/15'
+                  ? 'bg-accent shadow-lg shadow-accent/25 hover:shadow-xl hover:shadow-accent/30'
+                  : 'border border-black/[0.06] bg-white shadow-sm hover:shadow-md'
               }`}
             >
-              <div className={`flex h-11 w-11 items-center justify-center rounded-xl transition ${
+              {/* Subtle inner highlight for depth */}
+              {!primary && (
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent" />
+              )}
+              <div className={`mb-3 flex h-11 w-11 items-center justify-center rounded-xl transition ${
                 primary
                   ? 'bg-white/20 text-white'
                   : 'bg-accentSoft text-accent group-hover:bg-accent group-hover:text-white'
               }`}>
                 {icon}
               </div>
-              <div>
-                <p className={`text-sm font-bold ${primary ? 'text-white' : 'text-ink'}`}>{label}</p>
-                <p className={`mt-0.5 text-xs ${primary ? 'text-white/60' : 'text-muted'}`}>{desc}</p>
-              </div>
+              <p className={`text-sm font-bold ${
+                primary ? 'text-white' : 'text-ink'
+              }`}>{label}</p>
+              <p className={`mt-0.5 text-xs ${
+                primary ? 'text-white/60' : 'text-muted'
+              }`}>{desc}</p>
+              {/* Arrow indicator */}
+              <svg className={`absolute bottom-4 right-4 h-4 w-4 transition group-hover:translate-x-0.5 ${
+                primary ? 'text-white/30' : 'text-black/15 group-hover:text-accent/40'
+              }`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
             </Link>
           ))}
         </div>
 
-        {/* Secondary nav chips */}
-        <div className="mb-8 flex flex-wrap gap-2">
-          {(
-            [
-              { label: 'Purchases', href: '/purchases' },
-              { label: 'Sales History', href: '/sales' },
-              { label: 'Inventory', href: '/stock-movements' },
-              { label: 'Team', href: '/users' },
-              { label: 'Setup checklist', href: '/onboarding' },
-            ] as const
-          ).map(({ label, href }) => (
-            <Link
-              key={href}
-              href={href}
-              className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium text-muted shadow-sm transition hover:border-accent/20 hover:text-accent"
-            >
-              {label}
-            </Link>
-          ))}
+        {/* ── More links — visible only on mobile below action rows ── */}
+        <div className="mt-4 mb-1 sm:mt-0">
+          <p className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">More</p>
+          <div className="flex flex-wrap gap-2">
+            {secondaryLinks.map(({ label, href }) => (
+              <Link
+                key={href}
+                href={href}
+                className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-xs font-medium text-black/60 shadow-sm transition hover:border-accent/25 hover:text-accent active:scale-[0.97]"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
         </div>
 
-        {/* Demo Day */}
-        <DemoDaySection
-          hasDemoData={data.hasDemoData}
-          onGenerate={onGenerateDemo}
-          onWipe={onWipeDemo}
-          isPending={isBusy}
-        />
+        {/* ── Demo Day ── */}
+        <div className="mt-6">
+          <DemoDaySection
+            hasDemoData={data.hasDemoData}
+            onGenerate={onGenerateDemo}
+            onWipe={onWipeDemo}
+            isPending={isBusy}
+          />
+        </div>
       </div>
     </div>
   );
