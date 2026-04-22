@@ -17,6 +17,7 @@ export type ReadinessStep = {
 
 export type ReadinessData = {
   businessName: string;
+  userName: string;
   currency: string;
   pct: number;
   steps: ReadinessStep[];
@@ -26,6 +27,7 @@ export type ReadinessData = {
   staffCount: number;
   saleCount: number;
   onboardingComplete: boolean;
+  onboardingCompletedAt: Date | null;
   guidedSetup: boolean;
 };
 
@@ -139,6 +141,7 @@ export async function getReadiness(): Promise<ReadinessData> {
 
   return {
     businessName: business.name,
+    userName: user.name,
     currency: business.currency,
     pct,
     steps,
@@ -148,6 +151,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     staffCount,
     saleCount,
     onboardingComplete,
+    onboardingCompletedAt: business.onboardingCompletedAt ?? null,
     guidedSetup: business.guidedSetup,
   };
 }
