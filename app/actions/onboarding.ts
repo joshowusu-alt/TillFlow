@@ -54,7 +54,7 @@ function getNextRequiredReadinessStep(steps: ReadinessStep[]) {
  * Returns percentage complete, individual step statuses, and the "next best action".
  */
 export async function getReadiness(): Promise<ReadinessData> {
-  const { business } = await requireBusiness();
+  const { user, business } = await requireBusiness();
 
   const [productCount, staffCount, saleCount, hasAddress, purchaseCount] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
