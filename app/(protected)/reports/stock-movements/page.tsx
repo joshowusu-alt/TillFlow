@@ -117,44 +117,62 @@ export default async function StockMovementsPage({
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Stock Movements"
         subtitle="Full ledger of every stock change — sales, purchases, adjustments, transfers, and opening stock."
       />
 
-      <ReportFilterCard columnsClassName="sm:grid-cols-5">
-        <div>
-          <label className="label">Branch</label>
-          <select className="input" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+      <details className="details-mobile">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25" />
+            </svg>
+            Filters
+            {(q || typeFilter || fromIso || toIso) && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Active</span>
+            )}
+          </span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="mt-2">
+          <ReportFilterCard columnsClassName="sm:grid-cols-5">
+            <div>
+              <label className="label">Branch</label>
+              <select className="input" name="storeId" defaultValue={selectedStoreId}>
+                <option value="ALL">All branches</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">From</label>
+              <input className="input" type="date" name="from" defaultValue={fromIso} />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" name="to" defaultValue={toIso} />
+            </div>
+            <div>
+              <label className="label">Movement type</label>
+              <select className="input" name="type" defaultValue={typeFilter ?? ''}>
+                <option value="">All types</option>
+                {MOVEMENT_TYPES.map((t) => (
+                  <option key={t} value={t}>{typeLabel(t)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Product</label>
+              <input className="input" type="text" name="q" defaultValue={q} placeholder="Search by name…" />
+            </div>
+          </ReportFilterCard>
         </div>
-        <div>
-          <label className="label">From</label>
-          <input className="input" type="date" name="from" defaultValue={fromIso} />
-        </div>
-        <div>
-          <label className="label">To</label>
-          <input className="input" type="date" name="to" defaultValue={toIso} />
-        </div>
-        <div>
-          <label className="label">Movement type</label>
-          <select className="input" name="type" defaultValue={typeFilter ?? ''}>
-            <option value="">All types</option>
-            {MOVEMENT_TYPES.map((t) => (
-              <option key={t} value={t}>{typeLabel(t)}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">Product</label>
-          <input className="input" type="text" name="q" defaultValue={q} placeholder="Search by name…" />
-        </div>
-      </ReportFilterCard>
+      </details>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <StatCard label="Total movements" value={totalCount.toLocaleString()} />

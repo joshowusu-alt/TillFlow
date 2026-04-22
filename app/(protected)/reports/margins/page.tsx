@@ -132,74 +132,90 @@ export default async function MarginsPage({
     : `Showing ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} flagged for ${viewLabel.toLowerCase()} in this period.`;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
       <PageHeader
         title="Profit Margins"
-        subtitle="Track every sold product, spot lines below cost, and drill into products falling below the set margin target."
+        subtitle="Spot below-cost lines and products falling short of your target margin."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <DownloadLink
+              href={`${exportHrefBase}&format=xlsx`}
+              className="btn-secondary text-xs"
+              fallbackFilename="margins.xlsx"
+            >
+              Excel
+            </DownloadLink>
+            <a
+              href={`${exportHrefBase}&format=pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary text-xs"
+            >
+              Print / PDF
+            </a>
+          </div>
+        }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-black/60">Export this view:</span>
-        <DownloadLink
-          href={`${exportHrefBase}&format=xlsx`}
-          className="btn-secondary text-xs"
-          fallbackFilename="margins.xlsx"
-        >
-          Excel
-        </DownloadLink>
-        <a
-          href={`${exportHrefBase}&format=pdf`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary text-xs"
-        >
-          Print / PDF
-        </a>
-      </div>
-
-      <ReportFilterCard
-        columnsClassName="lg:grid-cols-6"
-        submitLabel="Apply filters"
-        submitTone="primary"
-        actions={
-          <a href="/reports/margins?period=30d&view=all" className="btn-secondary w-full justify-center text-sm sm:w-auto">
-            Reset
-          </a>
-        }
-      >
-        <div>
-          <label className="label">View</label>
-          <select className="input" name="view" defaultValue={currentView}>
-            {viewOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+      <details className="details-mobile">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
+            </svg>
+            Filters
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="hidden rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent sm:inline-block">
+              {periodOptions.find(o => o.value === periodInputValue)?.label ?? periodInputValue} &middot; {viewLabel}
+            </span>
+            <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+            </svg>
+          </span>
+        </summary>
+        <div className="mt-2">
+          <ReportFilterCard
+            columnsClassName="lg:grid-cols-6"
+            submitLabel="Apply filters"
+            submitTone="primary"
+            actions={
+              <a href="/reports/margins?period=30d&view=all" className="btn-secondary w-full justify-center text-sm sm:w-auto">
+                Reset
+              </a>
+            }
+          >
+            <div>
+              <label className="label">View</label>
+              <select className="input" name="view" defaultValue={currentView}>
+                {viewOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Quick period</label>
+              <select className="input" name="period" defaultValue={periodInputValue}>
+                {periodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">From</label>
+              <input className="input" type="date" name="from" defaultValue={fromInputValue} />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" name="to" defaultValue={toInputValue} />
+            </div>
+          </ReportFilterCard>
         </div>
-        <div>
-          <label className="label">Quick period</label>
-          <select className="input" name="period" defaultValue={periodInputValue}>
-            {periodOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">From</label>
-          <input className="input" type="date" name="from" defaultValue={fromInputValue} />
-        </div>
-        <div>
-          <label className="label">To</label>
-          <input className="input" type="date" name="to" defaultValue={toInputValue} />
-        </div>
-      </ReportFilterCard>
-
-      <p className="text-xs text-black/55">
-        Tip: if you change <span className="font-semibold text-black">From</span> or <span className="font-semibold text-black">To</span>, the page will automatically use that custom range.
-      </p>
+      </details>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -230,14 +246,14 @@ export default async function MarginsPage({
         {filterSummary}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Revenue in period" value={formatMoney(totalRevenue, business.currency)} tone="accent" />
         <StatCard label="Cost in period" value={formatMoney(totalCost, business.currency)} />
         <StatCard label="Gross profit" value={formatMoney(totalProfit, business.currency)} tone={totalProfit >= 0 ? 'success' : 'danger'} />
         <StatCard label="Overall margin" value={formatMarginPercent(overallMargin)} tone={overallMargin >= snapshot.businessDefaultThresholdBps / 100 ? 'success' : 'warn'} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Products in scope" value={String(snapshot.totalProducts)} />
         <StatCard label="Below cost" value={String(snapshot.belowCostCount)} tone={snapshot.belowCostCount > 0 ? 'danger' : 'success'} />
         <StatCard label="Below target margin" value={String(snapshot.belowTargetMarginCount)} tone={snapshot.belowTargetMarginCount > 0 ? 'warn' : 'success'} />

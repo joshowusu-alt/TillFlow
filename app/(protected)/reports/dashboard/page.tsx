@@ -375,7 +375,7 @@ export default async function DashboardPage({
   const activeCashierCount = openShifts.length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title={isToday ? "Today's Dashboard" : 'Owner Dashboard'}
         subtitle={isToday ? 'Live snapshot — auto-refreshes every 2 minutes.' : `${fromIso} to ${toIso}`}

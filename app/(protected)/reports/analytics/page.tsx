@@ -254,10 +254,10 @@ export default async function AnalyticsPage({
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-5">
             <PageHeader
                 title="Advanced Analytics"
-                subtitle="Deep insights into your business performance."
+                subtitle="Trend analysis, product performance, and peak trading insights."
                 actions={
                     <>
                         <PlanFeatureBadge plan="GROWTH" />
@@ -265,9 +265,9 @@ export default async function AnalyticsPage({
                     </>
                 }
             />
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                Profit analytics use the stored sale-line cost where available. If an older sale never captured line cost, analytics temporarily fall back to the current product base cost until those lines are backfilled or corrected.
-            </div>
+            <p className="text-xs text-black/45">
+                Profit data uses stored sale-line cost where available; older lines fall back to current base cost until backfilled.
+            </p>
             <AnalyticsClient data={analyticsData} />
         </div>
     );
