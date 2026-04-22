@@ -25,15 +25,18 @@ import {
   getParkedCartsStorageKey,
   getPosCartStorageKey,
   getPosCustomerStorageKey,
+  getPosTillStorageKey,
 } from '@/lib/business-scope';
 import { DISCOUNT_REASON_CODES } from '@/lib/fraud/reason-codes';
 import { queueOfflineSale } from '@/lib/offline';
+import { usePosCustomers, type PosCustomerOption } from '@/hooks/usePosCustomers';
 import SummarySidebar from './components/SummarySidebar';
 import KeyboardHelpModal from './components/KeyboardHelpModal';
 import QuickAddPanel from './components/QuickAddPanel';
 import ParkModal from './components/ParkModal';
 import QuickAddCustomer from './components/QuickAddCustomer';
 import CameraScanner from './components/CameraScanner';
+import CustomerSelector from './components/CustomerSelector';
 
 function formatRelativeTime(timestamp: string) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -89,7 +92,7 @@ type PosClientProps = {
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
   products: ProductDto[];
-  customers: { id: string; name: string }[];
+  customers: PosCustomerOption[];
   units: { id: string; name: string }[];
   categories: CategoryDto[];
 };
@@ -134,7 +137,17 @@ export default function PosClient({
   const [qtyInUnitInput, setQtyInUnitInput] = useState('1');
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
   const [barcode, setBarcode] = useState('');
-  const [tillId, setTillId] = useState(tills[0]?.id ?? '');
+  const [tillId, setTillId] = useState(() => {
+    // Priority 1: explicit URL param (allows deep-link to a specific till)
+    const urlTillId = searchParams.get('tillId');
+    if (urlTillId && tills.some((t) => t.id === urlTillId)) return urlTillId;
+    // Priority 2: till with an open shift (when exactly one is open)
+    if (openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])) {
+      return openShiftTillIds[0];
+    }
+    // Priority 3: first till (fallback — localStorage override happens in useEffect after mount)
+    return tills[0]?.id ?? '';
+  });
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
@@ -200,9 +213,14 @@ export default function PosClient({
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
   const maxUndoSteps = 10;
-  const [customerOptions, setCustomerOptions] = useState(customers);
-  const [customerSearch, setCustomerSearch] = useState('');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
+  const {
+    customerOptions,
+    customerSearch,
+    customerSearchError,
+    setCustomerSearch,
+    addCustomerOption,
+  } = usePosCustomers(customers);
 
   // Park/hold state
   const [showParkModal, setShowParkModal] = useState(false);
@@ -215,6 +233,7 @@ export default function PosClient({
   const customerStorageKey = useMemo(() => getPosCustomerStorageKey(storageScope), [storageScope]);
   const parkedCartsStorageKey = useMemo(() => getParkedCartsStorageKey(storageScope), [storageScope]);
   const lastReceiptStorageKey = useMemo(() => getLastReceiptStorageKey(storageScope), [storageScope]);
+  const tillStorageKey = useMemo(() => getPosTillStorageKey(storageScope), [storageScope]);
   const {
     parkedCarts,
     parkCurrentCart,
@@ -302,21 +321,24 @@ export default function PosClient({
     }
   }, [lastReceiptStorageKey]);
 
-  // Debounced customer search — fetches from /api/customers/search
+  // Restore saved till from localStorage on mount (skipped when URL param already set)
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/customers/search?q=${encodeURIComponent(customerSearch)}&limit=20`);
-        if (res.ok) {
-          const data: { customers: { id: string; name: string }[] } = await res.json();
-          setCustomerOptions(data.customers);
-        }
-      } catch {
-        // network error — keep existing options
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [customerSearch]);
+    if (typeof window === 'undefined') return;
+    const urlTillId = searchParams.get('tillId');
+    if (urlTillId) return; // URL param takes precedence
+    const saved = window.localStorage.getItem(tillStorageKey);
+    if (saved && tills.some((t) => t.id === saved)) {
+      setTillId(saved);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tillStorageKey]);
+
+  // Persist till selection to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && tillId) {
+      window.localStorage.setItem(tillStorageKey, tillId);
+    }
+  }, [tillId, tillStorageKey]);
 
   const resetActiveSale = useCallback((options?: { resetPaymentStatus?: boolean; playSuccessTone?: boolean }) => {
     setCart([]);
@@ -1768,37 +1790,16 @@ export default function PosClient({
               </div>
             </div>
 
-            {/* Customer */}
-            <div className={`flex flex-col gap-3 sm:flex-row sm:items-end ${requiresCustomer && !customerId ? 'rounded-lg border-2 border-amber-400 bg-amber-50 p-3' : ''}`}>
-              <div className="flex-1">
-                <label className="label">{requiresCustomer ? 'Customer (required)' : 'Customer'}</label>
-                <input
-                  type="text"
-                  className="input mb-1"
-                  placeholder="Search by name or phone…"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                />
-                <select
-                  className="input"
-                  name="customerId"
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                >
-                  <option value="">{requiresCustomer ? 'Select a customer…' : 'Walk-in / No customer'}</option>
-                  {customerOptions.map((customer) => (
-                    <option key={customer.id} value={customer.id}>{customer.name}</option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="button"
-                className="btn-secondary w-full text-xs sm:mt-0 sm:w-auto sm:whitespace-nowrap"
-                onClick={() => setShowQuickCustomer(true)}
-              >
-                + New
-              </button>
-            </div>
+            <CustomerSelector
+              requiresCustomer={requiresCustomer}
+              customerId={customerId}
+              customerOptions={customerOptions}
+              customerSearch={customerSearch}
+              customerSearchError={customerSearchError}
+              onCustomerSearchChange={setCustomerSearch}
+              onCustomerChange={setCustomerId}
+              onQuickAdd={() => setShowQuickCustomer(true)}
+            />
 
             {/* Order discount */}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">
@@ -2091,7 +2092,7 @@ export default function PosClient({
         <QuickAddCustomer
           currency={business.currency}
           onCreated={(customer) => {
-            setCustomerOptions((prev) => [...prev, customer]);
+            addCustomerOption(customer);
             setCustomerId(customer.id);
             setShowQuickCustomer(false);
           }}

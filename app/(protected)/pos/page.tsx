@@ -73,6 +73,18 @@ const getCachedTills = unstable_cache(
   { revalidate: 300, tags: ['pos-tills'] }
 );
 
+const getCachedCustomers = unstable_cache(
+  (businessId: string) =>
+    prisma.customer.findMany({
+      where: { businessId },
+      select: { id: true, name: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ['pos-customers'],
+  { revalidate: 60, tags: ['pos-customers'] }
+);
+
 const getCachedShifts = unstable_cache(
   (storeId: string) =>
     prisma.shift.findMany({
@@ -90,7 +102,7 @@ export default async function PosPage() {
   }
 
   // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
-  const [tills, openShifts, inventory, products, units, categories] = await Promise.all([
+  const [tills, openShifts, inventory, products, units, categories, customers] = await Promise.all([
     // Short-lived cache: till/shift/inventory bust quickly or on-demand
     getCachedTills(baseStore.id),
     getCachedShifts(baseStore.id),
@@ -99,6 +111,7 @@ export default async function PosPage() {
     getCachedProducts(business.id),
     getCachedUnits(business.id),
     getCachedCategories(business.id),
+    getCachedCustomers(business.id),
   ]);
 
   const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
@@ -141,7 +154,7 @@ export default async function PosPage() {
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       openShiftTillIds={openShifts.map((shift) => shift.tillId)}
       products={productDtos}
-      customers={[]}
+      customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
     />

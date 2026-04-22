@@ -4,6 +4,7 @@ import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
 import { updateBusinessAction } from '@/app/actions/settings';
 import CashDrawerSetup from '@/components/CashDrawerSetup';
+import TillManagement from '@/components/TillManagement';
 import OpeningBalancesForm from '@/components/OpeningBalancesForm';
 import { getCurrencySymbol } from '@/lib/format';
 import { isQzSigningConfigured } from '@/lib/qz-signing.server';
@@ -16,7 +17,12 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
   const qzSigningConfigured = isQzSigningConfigured();
 
   // Fetch opening balance data in parallel
-  const [openingBalances, customers, suppliers, arInvoices, apInvoices] = await Promise.all([
+  const store = await prisma.store.findFirst({
+    where: { businessId: business.id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  const [openingBalances, customers, suppliers, arInvoices, apInvoices, activeTills] = await Promise.all([
     prisma.openingBalance.findMany({ where: { businessId: business.id } }),
     prisma.customer.findMany({
       where: { businessId: business.id },
@@ -44,6 +50,13 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       },
       select: { supplierId: true, totalPence: true, supplier: { select: { name: true } } },
     }),
+    store
+      ? prisma.till.findMany({
+          where: { storeId: store.id, active: true },
+          select: { id: true, name: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : Promise.resolve([]),
   ]);
 
   const obData = openingBalances.map(ob => ({
@@ -369,6 +382,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
         </div>
       </div>
       <CashDrawerSetup businessId={business.id} />
+      <TillManagement tills={activeTills} />
 
       <div className="card p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

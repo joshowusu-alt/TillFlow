@@ -38,6 +38,10 @@ export function getLastReceiptStorageKey(scope: { businessId: string; storeId: s
   return buildScopedStorageKey('pos.lastReceiptId', scope);
 }
 
+export function getPosTillStorageKey(scope: { businessId: string; storeId: string }) {
+  return buildScopedStorageKey('pos.savedTill', scope);
+}
+
 export function getCashDrawerEnabledStorageKey(scope: { businessId: string }) {
   return buildScopedStorageKey('pos.cashDrawerEnabled', scope);
 }
@@ -50,8 +54,12 @@ export function getOfflineActiveStoreMetaKey() {
   return 'active-store';
 }
 
-export function getOfflineCacheUrl(businessId: string) {
-  return `/api/offline/cache-data?businessId=${encodeURIComponent(businessId)}`;
+export function getOfflineCacheUrl(businessId: string, storeId?: string | null) {
+  const params = new URLSearchParams({ businessId });
+  if (storeId) {
+    params.set('storeId', storeId);
+  }
+  return `/api/offline/cache-data?${params.toString()}`;
 }
 
 export function getActiveBusinessIdFromCookieString(cookieString: string): string | null {

@@ -4,7 +4,7 @@ import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, toPence } from '@/lib/form-helpers';
-import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { getBusinessPlan, hasPlanAccess, type BusinessPlan } from '@/lib/features';
@@ -266,4 +266,57 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
 
     redirect('/settings/loyalty');
   }, '/settings/loyalty');
+}
+
+export async function createTillAction(formData: FormData): Promise<ActionResult> {
+  const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+  const name = formData.get('name')?.toString().trim() ?? '';
+  if (!name) return { success: false, error: 'Till name is required.' };
+  if (name.length > 50) return { success: false, error: 'Till name must be 50 characters or fewer.' };
+
+  const existing = await prisma.till.count({ where: { storeId, active: true } });
+  if (existing >= 10) return { success: false, error: 'Maximum of 10 active tills per store.' };
+
+  await prisma.till.create({ data: { storeId, name } });
+
+  audit({
+    businessId,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Till',
+    entityId: storeId,
+    details: { source: 'till-management', action: 'create', name },
+  }).catch((e) => console.error('[audit]', e));
+
+  redirect('/settings?section=tills');
+}
+
+export async function deactivateTillAction(tillId: string): Promise<ActionResult> {
+  const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+
+  const till = await prisma.till.findFirst({ where: { id: tillId, storeId } });
+  if (!till) return { success: false, error: 'Till not found.' };
+
+  const activeCount = await prisma.till.count({ where: { storeId, active: true } });
+  if (activeCount <= 1) return { success: false, error: 'Cannot deactivate the last active till.' };
+
+  const openShift = await prisma.shift.findFirst({ where: { tillId, status: 'OPEN' } });
+  if (openShift) return { success: false, error: 'This till has an open shift. Close the shift before deactivating.' };
+
+  await prisma.till.update({ where: { id: tillId }, data: { active: false } });
+
+  audit({
+    businessId,
+    userId: user.id,
+    userName: user.name,
+    userRole: user.role,
+    action: 'SETTINGS_UPDATE',
+    entity: 'Till',
+    entityId: tillId,
+    details: { source: 'till-management', action: 'deactivate', name: till.name },
+  }).catch((e) => console.error('[audit]', e));
+
+  redirect('/settings?section=tills');
 }
