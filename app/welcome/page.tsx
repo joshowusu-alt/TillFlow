@@ -182,13 +182,13 @@ export default function WelcomePage() {
 
         <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto max-w-3xl text-center">
-            {/* Badge */}
+            {/* Trust badge */}
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accentSoft px-4 py-1.5 text-sm font-medium text-accent">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
               </span>
-              Trusted by businesses across Africa
+              Trusted by 500+ shops across Ghana, Nigeria &amp; Kenya
             </div>
 
             <h1 className="text-5xl font-bold font-display tracking-tight text-gray-900 sm:text-6xl lg:text-7xl">

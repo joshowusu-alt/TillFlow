@@ -127,7 +127,7 @@ export async function register(formData: FormData) {
     expires: expiresAt,
   });
 
-  redirect('/onboarding');
+  redirect(mode === 'demo' ? '/getting-started?demo=1' : '/getting-started');
 }
 
 // ---------------------------------------------------------------------------
