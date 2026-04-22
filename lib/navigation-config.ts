@@ -67,6 +67,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     id: 'reports',
     label: 'Reports',
     items: [
+      { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
