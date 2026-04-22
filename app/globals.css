@@ -450,6 +450,17 @@ input, select, textarea {
   }
 }
 
+/* ── Mobile collapsible filter/form shell ── */
+details.details-mobile > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+details.details-mobile > summary::-webkit-details-marker { display: none; }
+
 .responsive-table-shell {
   width: 100%;
   max-width: 100%;
@@ -475,6 +486,14 @@ input, select, textarea {
 
   .responsive-table-shell > table {
     min-width: 100%;
+  }
+
+  /* On desktop, force details.details-mobile open: hide summary, always show content */
+  details.details-mobile > summary {
+    display: none;
+  }
+  details.details-mobile > :not(summary) {
+    display: block !important;
   }
 }
 

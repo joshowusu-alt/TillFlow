@@ -52,8 +52,9 @@ export default async function OwnerIntelligencePage() {
     <div className="space-y-5 pb-2 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
+          eyebrow="Owner Intelligence"
           title="Owner Dashboard"
-          subtitle={`Live operating brief for ${business.name} ÔÇö generated ${new Date(snapshot.generatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
+          subtitle={`Live operating brief for ${business.name} — generated ${new Date(snapshot.generatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
           description="See business health, cash pressure, stock risk, debtor follow-up, and trading activity in one serious retail control center."
         />
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
