@@ -1466,45 +1466,74 @@ export default function PosClient({
 
           {/* Success toast */}
           {saleSuccess && (
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-scale-in">
-              {/* Confetti dots */}
-              <span className="confetti-dot" style={{ left: '30%', top: '50%' }} />
-              <span className="confetti-dot" style={{ left: '50%', top: '50%' }} />
-              <span className="confetti-dot" style={{ left: '70%', top: '50%' }} />
-              <span className="confetti-dot" style={{ left: '40%', top: '50%' }} />
-              <span className="confetti-dot" style={{ left: '60%', top: '50%' }} />
-              <span className="confetti-dot" style={{ left: '80%', top: '50%' }} />
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="success-ring flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" className="animate-check-draw" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="font-semibold">Sale Complete!</div>
-                    <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
-                    <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
+            saleSuccess.transactionNumber === '(Queued offline)'
+              ? (
+                /* Offline queued — amber reassurance banner */
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-4 text-white shadow-lg animate-scale-in">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/20">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="font-semibold">Saved offline &mdash; {formatMoney(saleSuccess.totalPence, business.currency)}</div>
+                        <div className="text-xs opacity-90 mt-0.5">No connection. This sale will sync automatically when you&apos;re back online.</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition flex-shrink-0"
+                      onClick={() => setSaleSuccess(null)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-semibold hover:bg-white/30 transition"
-                    onClick={() => window.open(`/receipts/${saleSuccess.receiptId}`, '_blank', 'noopener')}
-                  >
-                    Print Receipt
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition"
-                    onClick={() => setSaleSuccess(null)}
-                  >
-                    ✕
-                  </button>
+              )
+              : (
+                /* Online success — blue celebration banner */
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-4 py-4 text-white shadow-lg animate-scale-in">
+                  {/* Confetti dots */}
+                  <span className="confetti-dot" style={{ left: '30%', top: '50%' }} />
+                  <span className="confetti-dot" style={{ left: '50%', top: '50%' }} />
+                  <span className="confetti-dot" style={{ left: '70%', top: '50%' }} />
+                  <span className="confetti-dot" style={{ left: '40%', top: '50%' }} />
+                  <span className="confetti-dot" style={{ left: '60%', top: '50%' }} />
+                  <span className="confetti-dot" style={{ left: '80%', top: '50%' }} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="success-ring flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" className="animate-check-draw" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="font-semibold">Sale Complete!</div>
+                        <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
+                        <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-white/20 px-3 py-1.5 text-xs font-semibold hover:bg-white/30 transition"
+                        onClick={() => window.open(`/receipts/${saleSuccess.receiptId}`, '_blank', 'noopener')}
+                      >
+                        Print Receipt
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition"
+                        onClick={() => setSaleSuccess(null)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )
           )}
 
           {/* Sale error */}
