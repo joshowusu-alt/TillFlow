@@ -159,7 +159,7 @@ export default async function PurchasesPage({
       )}
 
       {/* Receive stock — collapsible on mobile, always open on desktop */}
-      <details className="details-mobile">
+      <details className="details-mobile" open>
         <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">

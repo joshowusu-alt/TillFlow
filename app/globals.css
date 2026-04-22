@@ -460,6 +460,7 @@ details.details-mobile > summary {
   user-select: none;
 }
 details.details-mobile > summary::-webkit-details-marker { display: none; }
+details.details-mobile[open] > summary svg:last-child { transform: rotate(180deg); }
 
 .responsive-table-shell {
   width: 100%;
