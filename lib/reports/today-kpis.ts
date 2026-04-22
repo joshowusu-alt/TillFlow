@@ -25,7 +25,7 @@ export type TodayKPIs = {
   productsAboveReorderPoint: number;
   paymentSplit: Record<string, number>;
   avgDailyExpensesPence: number;
-  cashOnHandEstimatePence: number;
+  cashOnHandEstimatePence: number; // cash (1000) + bank/MoMo (1010) combined
   negativeMarginProductCount: number;
   momoPendingCount: number;
   stockoutImminentCount: number;
@@ -132,7 +132,10 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         salesInvoice: { select: { createdAt: true, paymentStatus: true } },
       },
     }),
-    getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
+    Promise.all([
+      getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
+      getAccountBalance(businessId, ACCOUNT_CODES.bank, todayEnd),
+    ]).then(([c, b]) => c + b),
   ]);
 
   const validTodaySales = salesRows.filter((row) =>
@@ -419,7 +422,10 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         product: { select: { defaultCostBasePence: true } },
       },
     }),
-    getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
+    Promise.all([
+      getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
+      getAccountBalance(businessId, ACCOUNT_CODES.bank, todayEnd),
+    ]).then(([c, b]) => c + b),
   ]);
 
   // Sales KPIs — already aggregated by the DB

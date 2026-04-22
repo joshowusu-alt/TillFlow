@@ -360,9 +360,9 @@ function PostureStrip({ kpis, currency }: {
       tone: kpis && kpis.gpPercent < 10 ? 'danger' : kpis && kpis.gpPercent < 20 ? 'warning' : 'ok' as const,
     },
     {
-      label: 'Cash on hand',
+      label: 'Liquid assets',
       value: kpis ? formatMoney(kpis.cashOnHandEstimatePence, currency) : '—',
-      sub: 'Estimated balance',
+      sub: 'Cash + MoMo/bank balance',
       tone: kpis && kpis.cashOnHandEstimatePence < 0 ? 'danger' : 'ok' as const,
     },
     {
