@@ -40,7 +40,7 @@ export default async function LoyaltySettingsPage({
   // Example: spending GHS 10.00
   const exampleSpend = 10;
   const examplePoints = exampleSpend * loyaltyPointsPerGhsPence;
-  const exampleRedemptionPence = Math.floor(examplePoints / 100) * loyaltyGhsPerHundredPoints;
+  const exampleRedemptionPesewas = Math.floor(examplePoints / 100) * loyaltyGhsPerHundredPoints;
 
   return (
     <div className="space-y-6">
@@ -94,7 +94,7 @@ export default async function LoyaltySettingsPage({
 
           {/* Redemption rate */}
           <div>
-            <label className="label">Pence redeemable per 100 points</label>
+            <label className="label">Pesewas redeemable per 100 points</label>
             <input
               className="input"
               name="loyaltyGhsPerHundredPoints"
@@ -104,7 +104,7 @@ export default async function LoyaltySettingsPage({
               defaultValue={loyaltyGhsPerHundredPoints}
             />
             <p className="mt-1 text-xs text-black/50">
-              How much discount (in pesewas / pence) every 100 points is worth at redemption.
+              How much discount in pesewas every 100 points is worth at redemption.
               e.g. <strong>100</strong> = 100 points → GHS 1.00 off.
             </p>
           </div>
@@ -115,7 +115,7 @@ export default async function LoyaltySettingsPage({
             <span className="text-emerald-700">
               Customer spends GHS {exampleSpend.toFixed(2)} → earns{' '}
               <strong>{examplePoints}</strong> points. Redeeming those {examplePoints} points gives{' '}
-              <strong>GHS {(exampleRedemptionPence / 100).toFixed(2)}</strong> off a future purchase.
+              <strong>GHS {(exampleRedemptionPesewas / 100).toFixed(2)}</strong> off a future purchase.
             </span>
           </div>
 
