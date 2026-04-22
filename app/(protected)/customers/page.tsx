@@ -32,25 +32,14 @@ export default async function CustomersPage({
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Customers" subtitle="Credit customers and contact details." />
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Add customer</h2>
-        <FormError error={searchParams?.error} />
-        <form action={createCustomerAction} className="mt-4 grid gap-4 md:grid-cols-3">
-          {business.customerScope === 'BRANCH' ? (
-            <input type="hidden" name="storeId" value={selectedStoreId} />
-          ) : null}
-          <input className="input" name="name" placeholder="Customer name" required />
-          <input className="input" name="phone" placeholder="Phone" />
-          <input className="input" name="email" placeholder="Email" />
-          <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
-          <div className="md:col-span-3">
-            <SubmitButton className="btn-primary" loadingText="Adding...">Add customer</SubmitButton>
-          </div>
-        </form>
-      </div>
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader
+        title="Customers"
+        subtitle="Credit accounts, balances, and contact details."
+        primaryCta={{ label: 'Add customer', href: '#add-customer' }}
+      />
 
+      {/* Search & branch filter */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full max-w-sm">
           <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>
@@ -74,7 +63,56 @@ export default async function CustomersPage({
         ) : null}
       </div>
 
-      <div className="card p-6">
+      <details className="details-mobile" id="add-customer">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add customer
+          </span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="card mt-2 p-4 sm:p-5">
+          <FormError error={searchParams?.error} />
+          <form action={createCustomerAction} className="grid gap-4 md:grid-cols-3">
+            <div>
+              <label className="label">Name <span className="text-red-500">*</span></label>
+              <input className="input" name="name" placeholder="e.g. Akosua Mensah" required />
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input className="input" name="phone" placeholder="e.g. 0244 123 456" />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input className="input" name="email" type="email" placeholder="e.g. akosua@email.com" />
+            </div>
+            <div>
+              <label className="label">Credit Limit (GHS)</label>
+              <input className="input" name="creditLimit" placeholder="0.00" />
+            </div>
+            {business.customerScope === 'BRANCH' && stores.length > 0 ? (
+              <div>
+                <label className="label">Branch</label>
+                <select className="input" name="storeId">
+                  <option value="">All branches</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>{store.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="flex items-end md:col-start-3 md:justify-end">
+              <SubmitButton className="btn-primary w-full md:w-auto">Add customer</SubmitButton>
+            </div>
+          </form>
+        </div>
+      </details>
+
+      <div className="card p-4 sm:p-5">
         <div className="space-y-3 lg:hidden">
           {customers.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
@@ -85,7 +123,7 @@ export default async function CustomersPage({
                   </svg>
                 </div>
                 <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
-                <div className="mt-1 text-xs text-black/40">Add your first customer using the form above.</div>
+                <div className="mt-1 text-xs text-black/40">Use the &lsquo;Add customer&rsquo; section above.</div>
               </div>
             </div>
           ) : customers.map((customer) => {
@@ -142,7 +180,7 @@ export default async function CustomersPage({
                         </svg>
                       </div>
                       <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
-                      <div className="text-xs text-black/40 mt-1">Add your first customer using the form above.</div>
+                      <div className="text-xs text-black/40 mt-1">Use the &lsquo;Add customer&rsquo; section above.</div>
                     </div>
                   </td>
                 </tr>

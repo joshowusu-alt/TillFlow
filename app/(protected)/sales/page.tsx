@@ -82,50 +82,67 @@ export default async function SalesPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Sales"
-        subtitle="Latest sales invoices and receipts."
+        subtitle="Latest invoices, receipts, and payment status."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <form method="GET" className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="label">Branch</label>
-            <select className="input" name="storeId" defaultValue={selectedStoreId}>
-              <option value="ALL">All branches</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="label">From</label>
-            <input className="input" type="date" name="from" defaultValue={fromParam} />
-          </div>
-          <div>
-            <label className="label">To</label>
-            <input className="input" type="date" name="to" defaultValue={toParam} />
-          </div>
-          <div>
-            <label className="label">Customer</label>
-            <input className="input" name="q" defaultValue={q} placeholder="Search by customer..." />
-          </div>
-          <button className="btn-secondary" type="submit">
-            Apply
-          </button>
-          {(!!searchParams?.from || !!searchParams?.to) && (
-            <a href="/sales?from=&to=" className="text-xs text-muted hover:text-primary underline underline-offset-2 self-center">
-              Clear filter
-            </a>
-          )}
-        </form>
-      </div>
+      {/* Collapsible filter — collapsed on mobile, always-open on desktop */}
+      <details className="details-mobile">
+        <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25" />
+            </svg>
+            Filters
+            {(q || (searchParams?.from && searchParams.from !== todayIso) || (searchParams?.to && searchParams.to !== todayIso) || (searchParams?.storeId && searchParams.storeId !== 'ALL')) ? (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Active</span>
+            ) : null}
+          </span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="mt-2 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-4 shadow-sm">
+          <form method="GET" className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="label">Branch</label>
+              <select className="input" name="storeId" defaultValue={selectedStoreId}>
+                <option value="ALL">All branches</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">From</label>
+              <input className="input" type="date" name="from" defaultValue={fromParam} />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" name="to" defaultValue={toParam} />
+            </div>
+            <div>
+              <label className="label">Customer</label>
+              <input className="input" name="q" defaultValue={q} placeholder="Search by customer..." />
+            </div>
+            <button className="btn-secondary" type="submit">
+              Apply
+            </button>
+            {(!!searchParams?.from || !!searchParams?.to) && (
+              <a href="/sales?from=&to=" className="self-center text-xs text-muted underline underline-offset-2 hover:text-primary">
+                Clear filter
+              </a>
+            )}
+          </form>
+        </div>
+      </details>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-5">
         <div className="space-y-3 lg:hidden">
           {sales.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">

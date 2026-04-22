@@ -140,56 +140,72 @@ export default async function PurchasesPage({
         </div>
       )}
 
-      <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <div className="min-w-0">
-          <label className="label">Branch</label>
-          <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button className="btn-secondary w-full sm:w-auto" type="submit">
-          Apply
-        </button>
-      </form>
-
-      <div className="card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-display font-semibold">Receive stock</h2>
-            <p className="mt-1 text-sm text-black/55">A single purchase entry updates stock quantities, average cost, and your supplier payable simultaneously.</p>
+      {stores.length > 1 && (
+        <form method="GET" className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div className="min-w-0">
+            <label className="label">Branch</label>
+            <select className="input w-full" name="storeId" defaultValue={selectedStoreId}>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
           </div>
-          <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/suppliers">
-            Add supplier
-          </Link>
+          <button className="btn-secondary w-full sm:w-auto" type="submit">
+            Apply
+          </button>
+        </form>
+      )}
+
+      {/* Receive stock — collapsible on mobile, always open on desktop */}
+      <details className="details-mobile">
+        <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Record delivery
+          </span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="card mt-2 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-display font-semibold">Receive stock</h2>
+              <p className="mt-1 text-sm text-black/55">A single purchase entry updates stock quantities, average cost, and your supplier payable simultaneously.</p>
+            </div>
+            <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/suppliers">
+              Add supplier
+            </Link>
+          </div>
+          <PurchaseFormClient
+            key={searchParams?.created ?? 'default'}
+            storeId={selectedStoreId}
+            currency={business.currency}
+            vatEnabled={business.vatEnabled}
+            units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
+            suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
+            products={products.map((product) => ({
+              id: product.id,
+              name: product.name,
+              barcode: product.barcode,
+              defaultCostBasePence: product.defaultCostBasePence,
+              sellingPriceBasePence: product.sellingPriceBasePence,
+              vatRateBps: product.vatRateBps,
+              units: product.productUnits.map((pu) => ({
+                id: pu.unitId,
+                name: pu.unit.name,
+                pluralName: pu.unit.pluralName ?? undefined,
+                conversionToBase: pu.conversionToBase,
+                isBaseUnit: pu.isBaseUnit,
+              })),
+            }))}
+          />
         </div>
-        <PurchaseFormClient
-          key={searchParams?.created ?? 'default'}
-          storeId={selectedStoreId}
-          currency={business.currency}
-          vatEnabled={business.vatEnabled}
-          units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
-          suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
-          products={products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            barcode: product.barcode,
-            defaultCostBasePence: product.defaultCostBasePence,
-            sellingPriceBasePence: product.sellingPriceBasePence,
-            vatRateBps: product.vatRateBps,
-            units: product.productUnits.map((pu) => ({
-              id: pu.unitId,
-              name: pu.unit.name,
-              pluralName: pu.unit.pluralName ?? undefined,
-              conversionToBase: pu.conversionToBase,
-              isBaseUnit: pu.isBaseUnit,
-            })),
-          }))}
-        />
-      </div>
+      </details>
 
       <div className="card p-4 sm:p-5">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -205,7 +221,7 @@ export default async function PurchasesPage({
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6">
               <div className="text-sm font-semibold text-ink">No purchases recorded yet.</div>
               <div className="mt-1 text-sm text-black/55">
-                Use the form above when stock arrives from a supplier. TillFlow will increase inventory and track what is still unpaid.
+                Tap "Record delivery" above when stock arrives from a supplier. TillFlow will increase inventory and track what is still unpaid.
               </div>
             </div>
           ) : (

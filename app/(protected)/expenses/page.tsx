@@ -52,13 +52,24 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
   const totalPages = Math.max(1, Math.ceil(expenseCount / DEFAULT_PAGE_SIZE));
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Expenses" subtitle="Track operating costs and cash outflows." />
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader title="Expenses" subtitle="Track operating costs and cash outflows." primaryCta={{ label: 'Record expense', href: '#record-expense' }} />
 
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Record expense</h2>
-        <FormError error={searchParams?.error} />
-        <form action={createExpenseAction} className="mt-4 grid gap-4 md:grid-cols-4" encType="multipart/form-data">
+      <details className="details-mobile" id="record-expense">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Record expense
+          </span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="card mt-2 p-4 sm:p-5">
+          <FormError error={searchParams?.error} />
+          <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
           <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
           {features.detailedExpenseCategories ? (
             <div>
@@ -132,9 +143,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
             <SubmitButton className="btn-primary" loadingText="Recording…">Record expense</SubmitButton>
           </div>
         </form>
-      </div>
+        </div>
+      </details>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-5">
         <h2 className="text-lg font-display font-semibold">Recent expenses</h2>
         <div className="mt-4 space-y-4 lg:hidden">
           {expenses.map((expense) => (
