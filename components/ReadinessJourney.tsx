@@ -290,6 +290,186 @@ function CelebrationOverlay({ show }: { show: boolean }) {
   );
 }
 
+/* ────────────────────────────── Welcome Dashboard (post-setup) ──── */
+function WelcomeDashboard({
+  data,
+  onGenerateDemo,
+  onWipeDemo,
+  isBusy,
+}: {
+  data: ReadinessData;
+  onGenerateDemo: () => void;
+  onWipeDemo: () => void;
+  isBusy: boolean;
+}) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = data.userName ? data.userName.split(' ')[0] : null;
+
+  return (
+    <div className="min-h-screen bg-paper">
+      {/* ── Hero ── */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e3a8a] to-[#1d4ed8]">
+        {/* decorative blobs */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute -left-16 bottom-0 h-72 w-72 rounded-full bg-indigo-400/10 blur-3xl" />
+          <div className="absolute left-1/2 top-0 h-px w-full -translate-x-1/2 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent" />
+        </div>
+
+        <div className="relative mx-auto max-w-5xl px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pt-20">
+          {/* Greeting line */}
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+            {greeting}{firstName ? `, ${firstName}` : ''}
+          </p>
+
+          {/* Business name */}
+          <h1 className="text-4xl font-black leading-none tracking-tight text-white sm:text-5xl lg:text-6xl">
+            {data.businessName}
+          </h1>
+
+          {/* Setup-complete badge */}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/15 px-3.5 py-1.5 text-xs font-semibold text-emerald-300">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+              </svg>
+              Setup complete
+            </span>
+          </div>
+
+          {/* Quick stats */}
+          <div className="mt-10 grid grid-cols-3 gap-3 sm:flex sm:flex-wrap sm:gap-4">
+            {(
+              [
+                { label: 'Products', value: data.productCount, href: '/products' },
+                { label: 'Total Sales', value: data.saleCount, href: '/pos' },
+                { label: 'Team Members', value: data.staffCount, href: '/users' },
+              ] as const
+            ).map(({ label, value, href }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-center backdrop-blur-sm transition hover:bg-white/15 sm:min-w-[130px]"
+              >
+                <span className="text-3xl font-black tabular-nums text-white sm:text-4xl">
+                  {value.toLocaleString()}
+                </span>
+                <span className="mt-1 text-[11px] font-medium uppercase tracking-wider text-blue-200/60">
+                  {label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content area ── */}
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:py-10">
+        {/* Quick Actions */}
+        <h2 className="mb-4 text-[10px] font-bold uppercase tracking-[0.18em] text-muted">Quick Actions</h2>
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {/* POS — primary accent tile */}
+          <Link
+            href="/pos"
+            className="group col-span-2 flex items-center gap-4 rounded-2xl bg-accent px-6 py-5 shadow-lg shadow-accent/20 transition hover:-translate-y-0.5 hover:bg-[#1a37a0] hover:shadow-xl sm:col-span-1 sm:flex-col sm:items-start sm:gap-3"
+          >
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/20 text-white">
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Open POS</p>
+              <p className="text-xs text-white/60">Serve customers &amp; record sales</p>
+            </div>
+          </Link>
+
+          {/* Secondary tiles */}
+          {(
+            [
+              {
+                label: 'Dashboard',
+                desc: "Today's performance",
+                href: '/reports/dashboard',
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Products',
+                desc: 'Manage your catalogue',
+                href: '/products',
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                  </svg>
+                ),
+              },
+              {
+                label: 'Settings',
+                desc: 'Business & team config',
+                href: '/settings',
+                icon: (
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                ),
+              },
+            ] as const
+          ).map(({ label, desc, href, icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="group flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/15 hover:shadow-md"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-accent transition group-hover:bg-accent group-hover:text-white">
+                {icon}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-ink">{label}</p>
+                <p className="mt-0.5 text-xs text-muted">{desc}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* Secondary links row */}
+        <div className="mb-8 flex flex-wrap gap-2">
+          {(
+            [
+              { label: 'Purchases', href: '/purchases' },
+              { label: 'Sales History', href: '/sales' },
+              { label: 'Inventory', href: '/stock-movements' },
+              { label: 'Team', href: '/users' },
+              { label: 'Setup checklist', href: '/onboarding' },
+            ] as const
+          ).map(({ label, href }) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-medium text-muted shadow-sm transition hover:border-accent/20 hover:text-accent"
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+
+        {/* Demo Day */}
+        <DemoDaySection
+          hasDemoData={data.hasDemoData}
+          onGenerate={onGenerateDemo}
+          onWipe={onWipeDemo}
+          isPending={isBusy}
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ────────────────────────────── Main Journey ─────────────────────── */
 export default function ReadinessJourney({ initial }: { initial: ReadinessData }) {
   const router = useRouter();
@@ -368,6 +548,21 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   };
 
   const allDone = data.onboardingComplete || data.pct === 100;
+
+  // ── When setup is complete, show the premium welcome experience ──
+  if (allDone) {
+    return (
+      <>
+        <CelebrationOverlay show={showCelebration} />
+        <WelcomeDashboard
+          data={data}
+          onGenerateDemo={handleGenerateDemo}
+          onWipeDemo={handleWipeDemo}
+          isBusy={isBusy}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
