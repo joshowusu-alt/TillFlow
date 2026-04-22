@@ -108,7 +108,7 @@ export function middleware(request: NextRequest) {
     // auth checks validate any stale session cookie on /pos.
     if (pathname === '/') {
         const rootUrl = request.nextUrl.clone();
-        rootUrl.pathname = sessionToken ? '/pos' : '/welcome';
+        rootUrl.pathname = sessionToken ? '/onboarding' : '/welcome';
         return NextResponse.redirect(rootUrl);
     }
 

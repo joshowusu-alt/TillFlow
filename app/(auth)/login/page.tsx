@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
   // If the user already has a valid session, send them to their landing page
   const user = await getUser();
-  if (user) redirect(user.role === 'OWNER' ? '/reports/dashboard' : '/pos');
+  if (user) redirect(user.role === 'OWNER' ? '/onboarding' : '/pos');
 
   const error = searchParams?.error;
   const success = searchParams?.success;
