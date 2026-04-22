@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Tile base gradient: upper-left royal blue → lower-right deep navy -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#1a368c"/>
+      <stop offset="52%"  stop-color="#0e1f6a"/>
+      <stop offset="100%" stop-color="#080e44"/>
+    </linearGradient>
+
+    <!-- Top-left sheen: ambient highlight for material depth -->
+    <radialGradient id="sheen" cx="34%" cy="27%" r="54%">
+      <stop offset="0%"   stop-color="#7ab4ff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#7ab4ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Sync ring: cyan at the bottom of the arc, emerald at the top -->
+    <linearGradient id="ring" x1="512" y1="807" x2="512" y2="217" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#22d3ee"/>
+      <stop offset="55%"  stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+
+    <!-- Clip path for the rounded-square tile -->
+    <clipPath id="tile">
+      <rect width="1024" height="1024" rx="226" ry="226"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+
+    <!-- ── 1. Background tile ─────────────────────────────────────────────── -->
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+    <rect width="1024" height="1024" fill="url(#sheen)"/>
+
+    <!-- ── 2. Motion lines — left side, 3 white lines, very subtle ────────── -->
+    <!-- Top line (shorter) -->
+    <line x1="84"  y1="464" x2="222" y2="464"
+      stroke="white" stroke-width="3.4" stroke-linecap="round" opacity="0.26"/>
+    <!-- Middle line (longest) -->
+    <line x1="62"  y1="511" x2="236" y2="511"
+      stroke="white" stroke-width="3.4" stroke-linecap="round" opacity="0.34"/>
+    <!-- Bottom line (shorter) -->
+    <line x1="84"  y1="558" x2="222" y2="558"
+      stroke="white" stroke-width="3.4" stroke-linecap="round" opacity="0.26"/>
+
+    <!-- ── 3. Sync ring ───────────────────────────────────────────────────── -->
+    <!--
+      280° clockwise arc, R = 295, centre (512, 512)
+      Start:  50° → (512 + 295·cos50°, 512 + 295·sin50°) = (701.6, 738.0)
+      End:   330° → (512 + 295·cos330°, 512 + 295·sin330°) = (767.5, 364.5)
+      Gap (80°) sits on the right: ~1 o'clock → 5 o'clock — expresses forward motion
+      large-arc-flag=1, sweep-flag=1 (clockwise)
+    -->
+
+    <!-- Glow layer -->
+    <path d="M 701.6 738.0 A 295 295 0 1 1 767.5 364.5"
+      fill="none"
+      stroke="url(#ring)" stroke-width="44"
+      stroke-linecap="round" opacity="0.18"/>
+
+    <!-- Main ring stroke -->
+    <path d="M 701.6 738.0 A 295 295 0 1 1 767.5 364.5"
+      fill="none"
+      stroke="url(#ring)" stroke-width="22"
+      stroke-linecap="round"/>
+
+    <!-- ── 4. TF monogram — white geometric letterforms ───────────────────── -->
+    <!--
+      Combined mark: x 367–669 (302 px wide), y 392–632 (240 px tall)
+      Horizontal centre: (367+669)/2 = 518  ≈ 512  ✓
+      Vertical centre:   (392+632)/2 = 512          ✓
+      Stroke weight (rectangle thickness): 34 px
+    -->
+
+    <!-- T — crossbar (367 to 509) -->
+    <rect x="367" y="392" width="142" height="34" fill="white" rx="2"/>
+    <!-- T — vertical stem (crossbar centre 438, half 17 → starts at 421) -->
+    <rect x="421" y="392" width="34"  height="240" fill="white" rx="2"/>
+
+    <!-- F — starts at x=531 (22 px gap after T crossbar end 509) -->
+    <!-- F — vertical stem -->
+    <rect x="531" y="392" width="34"  height="240" fill="white" rx="2"/>
+    <!-- F — top crossbar -->
+    <rect x="531" y="392" width="138" height="34"  fill="white" rx="2"/>
+    <!-- F — mid crossbar (~40 % letter height → y = 392 + 96 = 488) -->
+    <rect x="531" y="488" width="105" height="30"  fill="white" rx="2"/>
+
+    <!-- ── 5. Inner-edge border for tile definition ───────────────────────── -->
+    <rect width="1024" height="1024" rx="226"
+      fill="none" stroke="white" stroke-width="2.5" opacity="0.07"/>
+
+  </g>
+</svg>
