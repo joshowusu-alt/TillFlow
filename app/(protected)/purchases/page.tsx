@@ -122,7 +122,7 @@ export default async function PurchasesPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader title="Purchases" subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together." density="compact" />
+      <PageHeader title="Purchases" subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together." />
       <FormError error={searchParams?.error} />
 
       {searchParams?.created === '1' && (

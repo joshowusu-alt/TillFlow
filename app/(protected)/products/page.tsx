@@ -78,7 +78,6 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       <PageHeader
         title="Products"
         subtitle="Your live catalogue for pricing, stock, and barcode selling."
-        density="compact"
         actions={
           <Link href="/products/labels" className="btn-secondary justify-center text-sm">
             Print Labels
