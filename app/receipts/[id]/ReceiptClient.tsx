@@ -6,6 +6,7 @@ import { formatDateTime, formatMoney } from '@/lib/format';
 import { openCashDrawer, isCashDrawerEnabled } from '@/lib/hardware';
 import { buildEscPosReceipt, toHexString } from '@/lib/escpos';
 import { ensureQzConnection, printRawEscPos } from '@/lib/qz';
+import { reportPrintEvent } from '@/lib/print-telemetry';
 
 type ReceiptClientProps = {
   business: {
@@ -97,6 +98,7 @@ export default function ReceiptClient({
       : 'grid-cols-[1.25rem_minmax(0,1fr)_3.75rem_4.25rem] sm:grid-cols-[1.5rem_minmax(0,1fr)_4.75rem_5rem]';
 
   const handleDirectPrint = useCallback(async () => {
+    const startedAt = Date.now();
     try {
       setDirectStatus('printing');
       setDirectError(null);
@@ -114,10 +116,25 @@ export default function ReceiptClient({
       const hex = toHexString(bytes);
       await printRawEscPos(business.printerName ?? null, hex);
       setDirectStatus('success');
+      reportPrintEvent({
+        kind: 'receipt',
+        mode: 'DIRECT_ESC_POS',
+        success: true,
+        printerName: business.printerName ?? null,
+        durationMs: Date.now() - startedAt,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Direct print failed.';
       setDirectError(message);
       setDirectStatus('failed');
+      reportPrintEvent({
+        kind: 'receipt',
+        mode: 'DIRECT_ESC_POS',
+        success: false,
+        error: message,
+        printerName: business.printerName ?? null,
+        durationMs: Date.now() - startedAt,
+      });
     }
   }, [business, cashier, customer, invoice, lines, payments, store, template]);
 
@@ -137,6 +154,9 @@ export default function ReceiptClient({
 
     if (printMode === 'BROWSER_DIALOG') {
       window.print();
+      // Browser print dialogs give no success/cancel callback, so we report
+      // the invocation itself as the signal of mode usage.
+      reportPrintEvent({ kind: 'receipt', mode: 'BROWSER_DIALOG', success: true });
       return;
     }
 

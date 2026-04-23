@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { generateLabelsHtmlAction } from '@/app/actions/labels';
+import { reportPrintEvent } from '@/lib/print-telemetry';
 import type { LabelSize } from '@/lib/labels/types';
 
 export type PrintLabelSelection = {
@@ -61,6 +62,7 @@ export default function PrintLabelsButton({
 
     popup.document.write('<title>Preparing labels…</title><body style="font-family:system-ui;padding:24px;">Preparing labels for printing…</body>');
 
+    const startedAt = Date.now();
     startTransition(async () => {
       const result = await generateLabelsHtmlAction({
         products: selectedProducts.map(({ product, quantity }) => ({
@@ -75,15 +77,35 @@ export default function PrintLabelsButton({
           popup.close();
         }
         onError?.(result.error);
+        reportPrintEvent({
+          kind: 'label',
+          mode: 'BROWSER_PDF',
+          success: false,
+          error: result.error,
+          durationMs: Date.now() - startedAt,
+        });
         return;
       }
 
       setLastCount(result.data.labelCount);
       try {
         writeHtmlToWindow(popup, result.data.html, true);
+        reportPrintEvent({
+          kind: 'label',
+          mode: 'BROWSER_PDF',
+          success: true,
+          durationMs: Date.now() - startedAt,
+        });
       } catch (error) {
         console.error('[labels] Failed to write print window', error);
         onError?.('The print window was closed before the labels were ready. Please try again.');
+        reportPrintEvent({
+          kind: 'label',
+          mode: 'BROWSER_PDF',
+          success: false,
+          error: error instanceof Error ? error.message : 'print window closed',
+          durationMs: Date.now() - startedAt,
+        });
       }
     });
   };
