@@ -132,6 +132,84 @@ const defaultAccounts = [
   { code: '1200', id: 'acc-inv' },
 ];
 
+type PricingMatrixCase = {
+  name: string;
+  vatEnabled: boolean;
+  qtyInUnit: number;
+  conversionToBase: number;
+  basePricePence: number;
+  configuredUnitPricePence?: number;
+  overrideUnitPricePence?: number;
+  defaultCostBasePence: number;
+  avgCostBasePence: number;
+  promoBuyQty?: number;
+  promoGetQty?: number;
+  discountType?: 'NONE' | 'PERCENT' | 'AMOUNT';
+  discountValue?: number;
+  orderDiscountType?: 'NONE' | 'PERCENT' | 'AMOUNT';
+  orderDiscountValue?: number;
+  vatRateBps?: number;
+};
+
+function discountFor(subtotal: number, type: PricingMatrixCase['discountType'], value?: number) {
+  if (!subtotal || !type || type === 'NONE') return 0;
+  if (type === 'PERCENT') return Math.round((subtotal * Math.min(Math.max(value ?? 0, 0), 100)) / 100);
+  return Math.min(Math.max(value ?? 0, 0), subtotal);
+}
+
+function baseValueForUnit(totalUnitPence: number, conversionToBase: number, qtyBase: number) {
+  if (qtyBase <= 0) return 0;
+  if (conversionToBase <= 1) return totalUnitPence * qtyBase;
+  return Math.round((totalUnitPence * qtyBase) / conversionToBase);
+}
+
+function expectedPricingFor(testCase: PricingMatrixCase) {
+  const vatRateBps = testCase.vatRateBps ?? 1500;
+  const unitPricePence =
+    testCase.overrideUnitPricePence ??
+    testCase.configuredUnitPricePence ??
+    testCase.basePricePence * testCase.conversionToBase;
+  const qtyBase = testCase.qtyInUnit * testCase.conversionToBase;
+  const lineSubtotal = unitPricePence * testCase.qtyInUnit;
+  const lineDiscount = discountFor(lineSubtotal, testCase.discountType, testCase.discountValue);
+  const promoGroup = (testCase.promoBuyQty ?? 0) + (testCase.promoGetQty ?? 0);
+  const promoFreeBase =
+    (testCase.promoBuyQty ?? 0) > 0 && (testCase.promoGetQty ?? 0) > 0 && promoGroup > 0
+      ? Math.floor(qtyBase / promoGroup) * (testCase.promoGetQty ?? 0)
+      : 0;
+  const promoDiscount = Math.min(
+    baseValueForUnit(unitPricePence, testCase.conversionToBase, promoFreeBase),
+    Math.max(lineSubtotal - lineDiscount, 0),
+  );
+  const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);
+  const lineVat = testCase.vatEnabled ? Math.round((lineNetSubtotal * vatRateBps) / 10000) : 0;
+  const orderDiscount = discountFor(
+    lineNetSubtotal,
+    testCase.orderDiscountType,
+    testCase.orderDiscountValue,
+  );
+  const invoiceSubtotal = Math.max(lineNetSubtotal - orderDiscount, 0);
+  const vatRatio = testCase.vatEnabled && lineNetSubtotal > 0 ? invoiceSubtotal / lineNetSubtotal : 1;
+  const invoiceVat = testCase.vatEnabled ? Math.round(lineVat * vatRatio) : 0;
+  const cogs = testCase.avgCostBasePence * qtyBase;
+
+  return {
+    qtyBase,
+    unitPricePence,
+    lineSubtotal,
+    lineDiscount,
+    promoDiscount,
+    lineNetSubtotal,
+    lineVat,
+    lineTotal: lineNetSubtotal + lineVat,
+    orderDiscount,
+    invoiceSubtotal,
+    invoiceVat,
+    invoiceTotal: invoiceSubtotal + invoiceVat,
+    cogs,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -325,6 +403,190 @@ describe('createSale — VAT', () => {
     const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
     expect(createCall.data.vatPence).toBe(0);
     expect(createCall.data.totalPence).toBe(1000);
+  });
+});
+
+describe('createSale — pricing interaction matrix', () => {
+  const matrix: PricingMatrixCase[] = [
+    {
+      name: 'multi-unit configured price with percent line discount, promo, order amount discount, no VAT',
+      vatEnabled: false,
+      qtyInUnit: 2,
+      conversionToBase: 12,
+      basePricePence: 500,
+      configuredUnitPricePence: 5400,
+      defaultCostBasePence: 300,
+      avgCostBasePence: 250,
+      promoBuyQty: 2,
+      promoGetQty: 1,
+      discountType: 'PERCENT',
+      discountValue: 10,
+      orderDiscountType: 'AMOUNT',
+      orderDiscountValue: 500,
+    },
+    {
+      name: 'multi-unit configured price with percent line discount, promo, order amount discount, and VAT',
+      vatEnabled: true,
+      qtyInUnit: 2,
+      conversionToBase: 12,
+      basePricePence: 500,
+      configuredUnitPricePence: 5400,
+      defaultCostBasePence: 300,
+      avgCostBasePence: 250,
+      promoBuyQty: 2,
+      promoGetQty: 1,
+      discountType: 'PERCENT',
+      discountValue: 10,
+      orderDiscountType: 'AMOUNT',
+      orderDiscountValue: 500,
+    },
+    {
+      name: 'mid-sale price override beats configured unit price inside the same VAT and promo path',
+      vatEnabled: true,
+      qtyInUnit: 2,
+      conversionToBase: 12,
+      basePricePence: 500,
+      configuredUnitPricePence: 5400,
+      overrideUnitPricePence: 6000,
+      defaultCostBasePence: 300,
+      avgCostBasePence: 250,
+      promoBuyQty: 2,
+      promoGetQty: 1,
+      discountType: 'PERCENT',
+      discountValue: 10,
+      orderDiscountType: 'AMOUNT',
+      orderDiscountValue: 500,
+    },
+    {
+      name: 'amount line discount with base-derived multi-unit price and order percent discount',
+      vatEnabled: true,
+      qtyInUnit: 3,
+      conversionToBase: 6,
+      basePricePence: 420,
+      defaultCostBasePence: 180,
+      avgCostBasePence: 175,
+      discountType: 'AMOUNT',
+      discountValue: 700,
+      orderDiscountType: 'PERCENT',
+      orderDiscountValue: 5,
+    },
+    {
+      name: 'promo discount is capped after a large amount line discount',
+      vatEnabled: true,
+      qtyInUnit: 1,
+      conversionToBase: 12,
+      basePricePence: 500,
+      configuredUnitPricePence: 5400,
+      defaultCostBasePence: 300,
+      avgCostBasePence: 250,
+      promoBuyQty: 1,
+      promoGetQty: 11,
+      discountType: 'AMOUNT',
+      discountValue: 5000,
+      orderDiscountType: 'NONE',
+      orderDiscountValue: 0,
+    },
+  ];
+
+  it.each(matrix)('$name', async (testCase) => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: testCase.vatEnabled,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000,
+    });
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      makeProductUnit({
+        conversionToBase: testCase.conversionToBase,
+        sellingPricePence: testCase.configuredUnitPricePence,
+        product: {
+          sellingPriceBasePence: testCase.basePricePence,
+          defaultCostBasePence: testCase.defaultCostBasePence,
+          vatRateBps: testCase.vatRateBps ?? 1500,
+          promoBuyQty: testCase.promoBuyQty ?? 0,
+          promoGetQty: testCase.promoGetQty ?? 0,
+        },
+      }),
+    ]);
+    fetchInventoryMapMock.mockResolvedValue(
+      new Map([[PRODUCT_ID, { qtyOnHandBase: 1000, avgCostBasePence: testCase.avgCostBasePence }]])
+    );
+
+    await createSale(makeBaseInput({
+      orderDiscountType: testCase.orderDiscountType,
+      orderDiscountValue: testCase.orderDiscountValue,
+      lines: [{
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        qtyInUnit: testCase.qtyInUnit,
+        unitPricePence: testCase.overrideUnitPricePence,
+        discountType: testCase.discountType,
+        discountValue: testCase.discountValue,
+      }],
+    }));
+
+    const expected = expectedPricingFor(testCase);
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    const persistedLine = createCall.data.lines.create[0];
+
+    expect(createCall.data.subtotalPence).toBe(expected.invoiceSubtotal);
+    expect(createCall.data.discountPence).toBe(expected.orderDiscount);
+    expect(createCall.data.vatPence).toBe(expected.invoiceVat);
+    expect(createCall.data.totalPence).toBe(expected.invoiceTotal);
+    expect(createCall.data.grossMarginPence).toBe(expected.invoiceSubtotal - expected.cogs);
+    if (expected.invoiceTotal > 0) {
+      expect(createCall.data.payments.create).toEqual([
+        expect.objectContaining({
+          method: 'CASH',
+          amountPence: expected.invoiceTotal,
+        }),
+      ]);
+    } else {
+      expect(createCall.data.payments.create).toEqual([]);
+    }
+
+    expect(persistedLine).toMatchObject({
+      qtyInUnit: testCase.qtyInUnit,
+      conversionToBase: testCase.conversionToBase,
+      qtyBase: expected.qtyBase,
+      unitPricePence: expected.unitPricePence,
+      lineDiscountPence: expected.lineDiscount,
+      promoDiscountPence: expected.promoDiscount,
+      lineSubtotalPence: expected.lineSubtotal,
+      lineVatPence: expected.lineVat,
+      lineTotalPence: expected.lineTotal,
+      lineCostPence: expected.cogs,
+    });
+
+    expect(batchDecrementInventoryBalanceMock).toHaveBeenCalledWith(
+      prismaMock,
+      STORE_ID,
+      expect.any(Map),
+    );
+    const decrements = batchDecrementInventoryBalanceMock.mock.calls[0][2] as Map<string, number>;
+    expect(decrements.get(PRODUCT_ID)).toBe(expected.qtyBase);
+
+    const journalLines = postJournalEntryMock.mock.calls[0][0].lines;
+    if (expected.invoiceTotal > 0) {
+      expect(journalLines).toEqual(
+        expect.arrayContaining([{ accountCode: '1000', debitPence: expected.invoiceTotal }])
+      );
+    }
+    expect(journalLines).toEqual(
+      expect.arrayContaining([
+        { accountCode: '4000', creditPence: expected.invoiceSubtotal },
+        { accountCode: '5000', debitPence: expected.cogs },
+        { accountCode: '1200', creditPence: expected.cogs },
+      ])
+    );
+    if (testCase.vatEnabled && expected.invoiceVat > 0) {
+      expect(journalLines).toEqual(
+        expect.arrayContaining([{ accountCode: '2100', creditPence: expected.invoiceVat }])
+      );
+    } else {
+      expect(journalLines.some((line: { accountCode: string }) => line.accountCode === '2100')).toBe(false);
+    }
   });
 });
 

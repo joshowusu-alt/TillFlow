@@ -87,7 +87,8 @@ describe('ReadinessJourney home stats', () => {
     expect(revenueCard).not.toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
-    expect(revenueValue).toHaveClass('text-sm');
+    expect(revenueValue).toHaveClass('text-xs');
+    expect(revenueValue).toHaveClass('sm:text-sm');
     expect(revenueValue).toHaveClass('leading-tight');
     expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -130,7 +131,8 @@ describe('ReadinessJourney home stats', () => {
       element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,234,567.89'
     );
 
-    expect(revenueValue).toHaveClass('text-sm');
+    expect(revenueValue).toHaveClass('text-xs');
+    expect(revenueValue).toHaveClass('sm:text-sm');
     expect(revenueValue).not.toHaveClass('truncate');
   });
 
