@@ -376,6 +376,7 @@ function WelcomeDashboard({
   onWipeDemo: () => void;
   isBusy: boolean;
 }) {
+  const [expandedStat, setExpandedStat] = useState<string | null>(null);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = data.userName ? data.userName.split(' ')[0] : null;
@@ -395,7 +396,17 @@ function WelcomeDashboard({
         dot: 'bg-emerald-400',
       };
 
-  const buildDelta = (current: number, previous: number) => {
+  // Suppress vs-yesterday deltas early in the trading day so a partial morning
+  // (e.g. 7 sales vs. yesterday's 120) doesn't look like a -94% collapse.
+  const suppressDelta = hour < 14 && data.todayTransactionCount < 20;
+
+  const buildDelta = (
+    current: number,
+    previous: number
+  ): { text: string; positive: boolean; neutral?: boolean } | null => {
+    if (suppressDelta) {
+      return { text: 'Day in progress', positive: true, neutral: true };
+    }
     const diff = current - previous;
     if (previous === 0 && current === 0) return null;
     if (previous === 0) return { text: 'New today', positive: true };
@@ -513,21 +524,46 @@ function WelcomeDashboard({
 
           <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
             {heroStats.map(({ label, value, href, delta }) => (
-              <Link
+              <div
                 key={label}
-                href={href}
-                className="group flex min-h-[7rem] flex-col justify-between rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
+                className="group relative flex min-h-[7rem] flex-col justify-between rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
               >
-                <span className="text-[10px] font-medium uppercase tracking-wide text-blue-200/50">{label}</span>
-                <span className="mt-1 break-words text-xl font-black tabular-nums text-white sm:text-3xl">{value}</span>
+                <Link
+                  href={href}
+                  className="absolute inset-0 rounded-2xl"
+                  aria-label={`${label}: ${value}`}
+                  onFocus={() => setExpandedStat(null)}
+                />
+                <span className="pointer-events-none relative z-10 text-[10px] font-medium uppercase tracking-wide text-blue-200/50">{label}</span>
+                <div className="relative z-20 mt-1">
+                  <button
+                    type="button"
+                    className="block max-w-full truncate whitespace-nowrap text-left text-base font-black tabular-nums text-white sm:text-2xl lg:text-3xl"
+                    title={typeof value === 'string' ? value : undefined}
+                    aria-label={`${label}: ${value}`}
+                    aria-expanded={expandedStat === label}
+                    onClick={() => setExpandedStat(expandedStat === label ? null : label)}
+                    onBlur={() => setExpandedStat(null)}
+                  >
+                    {value}
+                  </button>
+                  {expandedStat === label ? (
+                    <div
+                      role="tooltip"
+                      className="absolute left-0 top-full mt-1 max-w-[14rem] rounded-lg border border-white/15 bg-slate-950/95 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xl shadow-black/20"
+                    >
+                      {value}
+                    </div>
+                  ) : null}
+                </div>
                 {delta ? (
-                  <span className={`mt-1 text-[10px] font-semibold ${delta.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  <span className={`pointer-events-none relative z-10 mt-1 text-[10px] font-semibold ${delta.neutral ? 'text-slate-300/75' : delta.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {delta.text}
                   </span>
                 ) : (
-                  <span className="mt-1 text-[10px] font-semibold text-blue-200/35">Live</span>
+                  <span className="pointer-events-none relative z-10 mt-1 text-[10px] font-semibold text-blue-200/35">Live</span>
                 )}
-              </Link>
+              </div>
             ))}
           </div>
         </div>
