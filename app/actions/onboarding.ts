@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
+import { getTodayKPIs } from '@/lib/reports/today-kpis';
 
 export type ReadinessStep = {
   key: string;
@@ -29,6 +30,15 @@ export type ReadinessData = {
   onboardingComplete: boolean;
   onboardingCompletedAt: Date | null;
   guidedSetup: boolean;
+  todayRevenuePence: number;
+  yesterdayRevenuePence: number;
+  todayTransactionCount: number;
+  yesterdayTransactionCount: number;
+  openIssueCount: number;
+  openShiftCount: number;
+  openShiftSalesCount: number;
+  reorderNeededCount: number;
+  overdueSupplierInvoiceCount: number;
 };
 
 const OPTIONAL_READINESS_STEP_KEYS = new Set(['demo']);
@@ -55,18 +65,73 @@ function getNextRequiredReadinessStep(steps: ReadinessStep[]) {
  */
 export async function getReadiness(): Promise<ReadinessData> {
   const { user, business } = await requireBusiness();
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const yesterdayEnd = new Date(todayStart.getTime() - 1);
 
-  const [productCount, staffCount, saleCount, hasAddress, purchaseCount] = await Promise.all([
+  const [
+    productCount,
+    staffCount,
+    saleCount,
+    hasAddress,
+    purchaseCount,
+    todayKpis,
+    yesterdaySalesAgg,
+    openShifts,
+    overdueSupplierInvoiceCount,
+  ] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
     prisma.salesInvoice.count({
       where: {
         businessId: business.id,
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
       },
     }),
     Promise.resolve(!!(business.address || business.phone)),
     prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
+    getTodayKPIs(business.id).catch(() => null),
+    prisma.salesInvoice.aggregate({
+      where: {
+        businessId: business.id,
+        createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+      },
+      _sum: { totalPence: true },
+      _count: { id: true },
+    }),
+    prisma.shift.findMany({
+      where: {
+        status: 'OPEN',
+        closedAt: null,
+        till: { store: { businessId: business.id } },
+      },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            salesInvoices: {
+              where: {
+                paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+                OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.purchaseInvoice.count({
+      where: {
+        businessId: business.id,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        dueDate: { lt: todayStart },
+      },
+    }),
   ]);
 
   const steps: ReadinessStep[] = [
@@ -138,6 +203,19 @@ export async function getReadiness(): Promise<ReadinessData> {
   const pct = getReadinessPct(steps);
   const nextStep = getNextRequiredReadinessStep(steps);
   const onboardingComplete = !!business.onboardingCompletedAt || pct === 100;
+  const openIssueCount = todayKpis
+    ? [
+        todayKpis.stockoutImminentCount > 0,
+        todayKpis.urgentReorderCount > 0,
+        todayKpis.arOver60Pence > 0,
+        todayKpis.outstandingAPPence > 0,
+        todayKpis.cashVarianceTotalPence > 0,
+        todayKpis.momoPendingCount > 0,
+        todayKpis.negativeMarginProductCount > 0,
+        todayKpis.discountOverrideCount > 0,
+        todayKpis.openHighAlerts > 0,
+      ].filter(Boolean).length
+    : 0;
 
   return {
     businessName: business.name,
@@ -153,6 +231,15 @@ export async function getReadiness(): Promise<ReadinessData> {
     onboardingComplete,
     onboardingCompletedAt: business.onboardingCompletedAt ?? null,
     guidedSetup: business.guidedSetup,
+    todayRevenuePence: todayKpis?.totalSalesPence ?? 0,
+    yesterdayRevenuePence: yesterdaySalesAgg._sum.totalPence ?? 0,
+    todayTransactionCount: todayKpis?.txCount ?? 0,
+    yesterdayTransactionCount: yesterdaySalesAgg._count.id,
+    openIssueCount,
+    openShiftCount: openShifts.length,
+    openShiftSalesCount: openShifts.reduce((sum, shift) => sum + shift._count.salesInvoices, 0),
+    reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
+    overdueSupplierInvoiceCount,
   };
 }
 
