@@ -113,7 +113,43 @@ Additional important services include:
 - **`day-closure.ts`** and **`shifts.ts`** for end-of-day and cashier shift controls
 - **`stock-transfers.ts`** for multi-store inventory transfer workflows
 
-## 7. Offline Architecture
+## 7. Domain and Aggregate Boundaries
+
+The Prisma schema is intentionally broad because TillFlow combines POS, stock, accounting, reporting, offline operation, and control-plane billing in one deployable system. The service layer should still treat the schema as a set of bounded contexts rather than one large mutable graph. A service should normally load and write through the aggregate it owns, then cross into another context through an explicit service call, accounting post, audit record, sync event, or notification.
+
+`Business` is the tenant boundary. Most records carry `businessId` directly or inherit it through `Store`, `Branch`, or invoice ownership. `Store` and `Branch` are operational scopes used to partition inventory, till activity, reporting, and branch-specific customers; they are not a license to update every related child record from generic store code.
+
+| Context | Aggregate root | Owned records | Boundary rule |
+| --- | --- | --- | --- |
+| Business setup and tenancy | `Business` | `Organization`, `Store`, `Branch`, `Device`, business settings, plan and receipt configuration | Owns tenant-level configuration and operational scopes. Feature gating and billing state should be resolved here before write actions proceed. |
+| Identity and access | `User` | `Session`, `PasswordResetToken`, manager approval PIN state, 2FA state | Authentication code owns sessions and credential lifecycle. Domain services receive an authenticated user or user ID rather than reading cookies directly. |
+| Product catalogue | `Product` | `ProductUnit`, `Category`, supplier preference, reorder thresholds, pricing fields | Product services own catalogue shape and unit pricing defaults. Sales and purchases snapshot prices and costs onto invoice lines instead of treating product fields as historical truth. |
+| Inventory | `InventoryBalance` per store/product | `StockMovement`, `StockAdjustment`, `Stocktake`, `StocktakeLine`, `StockTransfer`, `StockTransferLine`, `ReorderAction` | Inventory quantities are store-scoped. Sales, purchases, returns, and transfers may move stock, but they should do so through transaction-safe inventory helpers and leave movement records. |
+| Sales | `SalesInvoice` | `SalesInvoiceLine`, `SalesPayment`, `SalesReturn`, discount approval fields, sale-level external references | Sales is the checkout consistency boundary. Creating or amending a sale must coordinate invoice rows, payments, stock decrement/restoration, cash drawer effects, customer credit exposure, and ledger posting. |
+| Purchases | `PurchaseInvoice` | `PurchaseInvoiceLine`, `PurchasePayment`, `PurchaseReturn` | Purchases own supplier invoice intake and inventory cost updates. Supplier balance, stock, and ledger effects should be posted from purchase services rather than generic payment or inventory screens. |
+| Customers and receivables | `Customer` | customer credit terms, loyalty balance, customer-linked sales and statements | Customer services own customer master data and credit rules. Sales may reference a customer and update exposure, but customer history remains derived from invoices and payments. |
+| Suppliers and payables | `Supplier` | supplier profile, preferred-product links, supplier-linked purchases and payments | Supplier services own supplier master data. Payables are derived from purchase invoices and supplier payments, not from mutable supplier balance fields. |
+| Ledger and accounting | `JournalEntry` | `JournalLine`, `Account`, `OpeningBalance` | Accounting is append-oriented. Operational contexts post balanced journal entries through `postJournalEntry()` rather than editing ledger lines directly after the fact. |
+| Till, shift, and cash drawer | `Shift` | `Till`, `CashDrawerEntry`, day cash expectations and closure approval fields | Cash drawer writes should be tied to an open shift when the business requires it. Sales, refunds, expense payments, and amendments record drawer movements through cash-drawer helpers. |
+| Payments and reconciliation | `PaymentReconciliation` | method/date/store reconciliation state, recorded variances | Reconciliation compares operational payment records against actual settlement totals. It should not rewrite source sales or purchase payments except through explicit correction flows. |
+| Mobile money collections | `MobileMoneyCollection` | `MobileMoneyStatusLog`, provider references and webhook metadata | Provider status belongs to the collection aggregate. Sales may attach a confirmed collection, while webhooks only update collection state and status logs. |
+| Notifications and jobs | `MessageLog` | `ScheduledJob`, notification payloads, delivery status | Notification code owns outbound message history and scheduled job execution state. Business events should request notifications without directly mutating provider delivery rows. |
+| Risk, audit, and compliance | `RiskAlert` | `AuditLog`, acknowledgement fields, risk context snapshots | Risk and audit records are append-first operational evidence. Domain services emit them as side effects and should avoid deleting or rewriting them during normal workflows. |
+| Offline sync | `SyncEvent` | browser IndexedDB `salesQueue`, service-worker `pos-dead-letter` records, offline replay references | Offline writes are reconciled through idempotent sync endpoints. Server code stores durable `SyncEvent`/external references; browser-only queue and dead-letter stores are client recovery state. |
+| Reporting and day closure | `DayClosure` | closure snapshots, report aggregates derived from invoices, inventory, payments, and ledger | Reports read across contexts but should not own source data. Day closure stores a point-in-time summary while underlying invoices, payments, and ledger entries remain the source of truth. |
+| Control plane | `ControlBusinessProfile` | `ControlSubscription`, `ControlPayment`, `ControlNote`, `ControlStaff` assignments | Control-plane services manage account-manager review, support status, subscription state, and billing collection. Tenant app code consumes effective entitlement state rather than editing control rows directly. |
+
+Cross-boundary writes should be rare and deliberate:
+
+1. **Sale completion** is allowed to cross Sales, Inventory, Ledger, Cash Drawer, Customer Credit, Mobile Money, Risk, and Audit because checkout must commit a financially consistent transaction.
+2. **Purchase recording** is allowed to cross Purchases, Inventory, Ledger, Supplier Payables, and Audit because incoming stock and supplier liability must agree.
+3. **Returns and amendments** should reverse or adjust the original aggregate through explicit corrective records, not silent row edits.
+4. **Reports** may query across contexts but should remain read-only except for saved closure or export artefacts.
+5. **Offline replay** should be idempotent, business-scoped, and should produce the same aggregate effects as the online sale path.
+
+When adding a model, first decide which aggregate owns it. If it does not have a clear owner, it is probably an event, audit record, report snapshot, or control-plane concern and should be named that way.
+
+## 8. Offline Architecture
 
 TillFlow includes a browser-first offline model for POS resilience:
 
@@ -126,7 +162,7 @@ TillFlow includes a browser-first offline model for POS resilience:
 
 This design lets the POS continue capturing sales during outages while reconciling with the server when the network recovers.
 
-## 8. Database Strategy
+## 9. Database Strategy
 
 TillFlow uses a dual-schema Prisma strategy:
 
@@ -141,7 +177,7 @@ Operationally:
 
 Local iteration favors a portable SQLite database, while production uses Postgres connection strings such as `POSTGRES_PRISMA_URL` and `POSTGRES_URL_NON_POOLING`.
 
-## 9. Deployment
+## 10. Deployment
 
 The primary production target is **Vercel + Neon Postgres**:
 
@@ -157,7 +193,7 @@ Local deployment remains possible with the SQLite-backed workflow:
 
 That gives the project a lightweight single-machine development mode alongside a hosted production topology.
 
-## 10. Monitoring and Observability
+## 11. Monitoring and Observability
 
 TillFlow ships with several operational checks:
 
