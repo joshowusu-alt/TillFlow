@@ -80,10 +80,16 @@ describe('ReadinessJourney home stats', () => {
     const revenueValue = screen.getByText((_, element) =>
       element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,149.50'
     );
+    const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
+    expect(revenueCard.parentElement).toHaveClass(
+      'grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)_minmax(0,1fr)]'
+    );
+    expect(revenueCard).toHaveClass('min-w-0');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
     expect(revenueValue).toHaveClass('text-base');
+    expect(revenueValue).toHaveClass('leading-tight');
     expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });

@@ -523,15 +523,16 @@ function WelcomeDashboard({
             {statusPill.label}
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+          <div className="mt-5 grid grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:gap-3">
             {heroStats.map(({ label, value, href, delta }) => (
               <Link
                 key={label}
                 href={href}
-                className="group relative flex min-h-[7rem] flex-col justify-between rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
+                aria-label={`${label}: ${value}`}
+                className="group relative flex min-h-[7rem] min-w-0 flex-col justify-between rounded-2xl border border-white/10 bg-white/8 px-2.5 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
               >
                 <span className="pointer-events-none relative z-10 text-[10px] font-medium uppercase tracking-wide text-blue-200/50">{label}</span>
-                <span className={`mt-1 block max-w-full whitespace-nowrap font-black tabular-nums text-white ${getStatValueSize(value)}`}>
+                <span className={`mt-1 block max-w-full whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}>
                   {value}
                 </span>
                 {delta ? (
