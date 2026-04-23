@@ -19,6 +19,16 @@ export async function GET(request: Request) {
   }
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  // Exclude demo businesses from system-wide operational metrics.
+  // AuditLog has no Business relation, so filter via businessId lookup.
+  const demoBusinessIds = (
+    await prisma.business.findMany({ where: { isDemo: true }, select: { id: true } })
+  ).map((b) => b.id);
+  const excludeDemo = { business: { isDemo: false } };
+  const excludeDemoByBusinessId =
+    demoBusinessIds.length > 0 ? { businessId: { notIn: demoBusinessIds } } : {};
+
   const [
     businesses,
     users,
@@ -29,22 +39,22 @@ export async function GET(request: Request) {
     unpaidPurchases,
     recentLoginFailures
   ] = await Promise.all([
-    prisma.business.count(),
-    prisma.user.count({ where: { active: true } }),
-    prisma.shift.count({ where: { status: 'OPEN' } }),
+    prisma.business.count({ where: { isDemo: false } }),
+    prisma.user.count({ where: { active: true, ...excludeDemo } }),
+    prisma.shift.count({ where: { status: 'OPEN', till: { store: excludeDemo } } }),
     prisma.salesInvoice.aggregate({
-      where: { createdAt: { gte: since }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      where: { createdAt: { gte: since }, paymentStatus: { notIn: ['RETURNED', 'VOID'] }, ...excludeDemo },
       _count: { _all: true },
       _sum: { totalPence: true }
     }),
     prisma.purchaseInvoice.aggregate({
-      where: { createdAt: { gte: since }, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+      where: { createdAt: { gte: since }, paymentStatus: { notIn: ['RETURNED', 'VOID'] }, ...excludeDemo },
       _count: { _all: true },
       _sum: { totalPence: true }
     }),
-    prisma.salesInvoice.count({ where: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] } } }),
-    prisma.purchaseInvoice.count({ where: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] } } }),
-    prisma.auditLog.count({ where: { action: 'LOGIN_FAILED', createdAt: { gte: since } } })
+    prisma.salesInvoice.count({ where: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, ...excludeDemo } }),
+    prisma.purchaseInvoice.count({ where: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, ...excludeDemo } }),
+    prisma.auditLog.count({ where: { action: 'LOGIN_FAILED', createdAt: { gte: since }, ...excludeDemoByBusinessId } })
   ]);
 
   return NextResponse.json({

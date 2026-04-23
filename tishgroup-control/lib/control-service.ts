@@ -175,6 +175,7 @@ const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => {
   try {
     const [businesses, controlProfiles] = await Promise.all([
       prisma.business.findMany({
+      where: { isDemo: false },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

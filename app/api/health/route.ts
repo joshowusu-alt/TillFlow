@@ -78,8 +78,9 @@ export async function GET() {
   ]);
 
   try {
-    const userCount = await prisma.user.count();
-    const businessCount = await prisma.business.count();
+    // Exclude demo businesses from operator-facing health metrics.
+    const userCount = await prisma.user.count({ where: { business: { isDemo: false } } });
+    const businessCount = await prisma.business.count({ where: { isDemo: false } });
     console.log(`[health] users=${userCount} businesses=${businessCount}`);
   } catch (err: any) {
     console.error('[health] Data count failed:', err?.message);
