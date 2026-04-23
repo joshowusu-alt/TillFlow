@@ -3,6 +3,7 @@ import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
+import NotesCell from './NotesCell';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -24,10 +25,6 @@ function reasonCodeLabel(code: string | null | undefined): string {
 
 function notesText(varianceReason: string | null | undefined, notes: string | null | undefined): string {
   return varianceReason || notes || '-';
-}
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + '...' : text;
 }
 
 export default async function CashDrawerReportPage({
@@ -205,8 +202,8 @@ export default async function CashDrawerReportPage({
                   <span className="text-black/40">-</span>
                 )}
               </td>
-              <td className="px-3 py-3 text-sm text-black/50" title={notesText(shift.varianceReason, shift.notes)}>
-                {truncate(notesText(shift.varianceReason, shift.notes), 40)}
+              <td className="px-3 py-3 align-top text-sm">
+                <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
               </td>
               <td className="px-3 py-3 text-xs">
                 {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
