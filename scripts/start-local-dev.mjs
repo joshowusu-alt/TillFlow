@@ -157,7 +157,26 @@ async function maybeReuseRunningServer() {
 	return runningPort;
 }
 
+function warnIfInOneDrive() {
+	if (process.platform !== 'win32') return;
+	if (!/onedrive/i.test(repoRoot)) return;
+	if (process.env.TILLFLOW_SUPPRESS_ONEDRIVE_WARNING === '1') return;
+
+	console.warn('');
+	console.warn('[33m[local-dev] WARNING: repo is running from a OneDrive-synced folder.[0m');
+	console.warn(`[local-dev]   Path: ${repoRoot}`);
+	console.warn('[local-dev]   OneDrive\'s files-on-demand can cause intermittent');
+	console.warn('[local-dev]   "UNKNOWN: unknown error, read" and "EINVAL: readlink"');
+	console.warn('[local-dev]   failures in ESLint, Vitest, and Next.js. If you hit');
+	console.warn('[local-dev]   random build errors, move the repo to a plain local path');
+	console.warn('[local-dev]   such as C:\\dev\\supermarket-pos.');
+	console.warn('[local-dev]   Suppress with TILLFLOW_SUPPRESS_ONEDRIVE_WARNING=1.');
+	console.warn('');
+}
+
 async function main() {
+	warnIfInOneDrive();
+
 	if ((await maybeReuseRunningServer()) != null) {
 		return;
 	}
