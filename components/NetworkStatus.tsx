@@ -12,12 +12,14 @@ import {
     getPendingSales,
     type SyncResult
 } from '@/lib/offline';
+import { getDeadLetterCount } from '@/lib/offline/dead-letter';
 import { getClientActiveBusinessId } from '@/lib/business-scope';
 
 export default function NetworkStatus() {
     const pathname = usePathname();
     const online = useNetworkStatus();
     const [pendingCount, setPendingCount] = useState(0);
+    const [deadLetterCount, setDeadLetterCount] = useState(0);
     const [syncing, setSyncing] = useState(false);
     const [lastSync, setLastSync] = useState<SyncResult | null>(null);
     const [lastSyncIssue, setLastSyncIssue] = useState<string | null>(null);
@@ -29,13 +31,18 @@ export default function NetworkStatus() {
         ? !['/welcome', '/login', '/register', '/demo'].some((route) => pathname.startsWith(route))
         : true;
 
-    // Check pending sales count
+    // Check pending sales + dead-letter counts
     const checkPending = useCallback(async () => {
         try {
-            const pending = await getPendingSales(getClientActiveBusinessId() ?? undefined);
+            const [pending, deadLetters] = await Promise.all([
+                getPendingSales(getClientActiveBusinessId() ?? undefined),
+                getDeadLetterCount(),
+            ]);
             setPendingCount(pending.length);
+            setDeadLetterCount(deadLetters);
         } catch {
             setPendingCount(0);
+            setDeadLetterCount(0);
         }
     }, []);
 
@@ -121,9 +128,26 @@ export default function NetworkStatus() {
         // Periodically check pending
         const interval = setInterval(checkPending, 30000);
 
+        // Service worker broadcasts OFFLINE_SALE_FAILED when a sale is
+        // permanently rejected (4xx) and moved to the dead-letter store.
+        // Bubble that up as a toast and refresh the counter.
+        const handleServiceWorkerMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'OFFLINE_SALE_FAILED') {
+                toast(
+                    'A sale was rejected on sync — open Recovery centre to review.',
+                    'error'
+                );
+                checkPending();
+            }
+        };
+
+        const swContainer = typeof navigator !== 'undefined' ? navigator.serviceWorker : null;
+        swContainer?.addEventListener('message', handleServiceWorkerMessage);
+
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            swContainer?.removeEventListener('message', handleServiceWorkerMessage);
             cleanup();
             clearInterval(interval);
         };
@@ -133,13 +157,19 @@ export default function NetworkStatus() {
         return null;
     }
 
-    // Don't show status pill if fully online with nothing pending
-    if (online && pendingCount === 0 && !syncing) {
+    // Don't show status pill if fully online with nothing pending and no failed sales
+    if (online && pendingCount === 0 && deadLetterCount === 0 && !syncing) {
         return null;
     }
 
-    // Choose status appearance
+    // Choose status appearance \u2014 dead-letter failures take precedence because
+    // they need owner action and won't self-resolve.
     const statusConfig = (() => {
+        if (deadLetterCount > 0) return {
+            bg: 'bg-rose-700',
+            text: `${deadLetterCount} sale${deadLetterCount !== 1 ? 's' : ''} rejected`,
+            sub: 'Needs review',
+        };
         if (!online) return {
             bg: 'bg-red-600',
             text: 'Offline',
@@ -229,6 +259,12 @@ export default function NetworkStatus() {
                             <span className="text-gray-500">Pending</span>
                             <span className="font-semibold">{pendingCount} sale{pendingCount !== 1 ? 's' : ''}</span>
                         </div>
+                        {deadLetterCount > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-500">Rejected</span>
+                                <span className="font-semibold text-rose-600">{deadLetterCount} sale{deadLetterCount !== 1 ? 's' : ''}</span>
+                            </div>
+                        )}
                         {lastSync && (
                             <>
                                 <div className="border-t border-gray-100 pt-2.5">
@@ -259,6 +295,23 @@ export default function NetworkStatus() {
                     {!online && (
                         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
                             Sales are being saved to this device. They will sync automatically when you\u2019re back online.
+                        </div>
+                    )}
+
+                    {deadLetterCount > 0 && (
+                        <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800">
+                            <div className="font-semibold">
+                                {deadLetterCount} sale{deadLetterCount !== 1 ? 's' : ''} rejected by the server
+                            </div>
+                            <p className="mt-1 text-rose-700">
+                                Open Recovery centre to retry or remove.
+                            </p>
+                            <a
+                                href="/offline/sales"
+                                className="mt-2 block w-full rounded-lg bg-rose-600 px-3 py-2 text-center text-xs font-semibold text-white hover:bg-rose-700"
+                            >
+                                Open recovery centre
+                            </a>
                         </div>
                     )}
 

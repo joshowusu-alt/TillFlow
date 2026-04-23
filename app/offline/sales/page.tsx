@@ -11,6 +11,13 @@ import {
   type OfflineSale,
   type OfflineProduct,
 } from '@/lib/offline/storage';
+import {
+  getDeadLetterSales,
+  retryDeadLetterSale,
+  removeDeadLetterSale,
+  clearAllDeadLetterSales,
+  type DeadLetterRecord,
+} from '@/lib/offline/dead-letter';
 import { getClientActiveBusinessId } from '@/lib/business-scope';
 import { formatMoney } from '@/lib/format';
 import { resolveEffectiveSellingPricePence } from '@/lib/services/shared';
@@ -43,6 +50,8 @@ type NewAmendLine = AmendingState['newLines'][number];
 
 export default function OfflineSalesPage() {
   const [sales, setSales] = useState<OfflineSale[]>([]);
+  const [deadLetters, setDeadLetters] = useState<DeadLetterRecord[]>([]);
+  const [retryingKey, setRetryingKey] = useState<number | null>(null);
   const [products, setProducts] = useState<OfflineProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GHS');
@@ -57,12 +66,14 @@ export default function OfflineSalesPage() {
   const refresh = useCallback(async () => {
     try {
       const activeBusinessId = getClientActiveBusinessId() ?? undefined;
-      const [pending, cached] = await Promise.all([
+      const [pending, cached, failed] = await Promise.all([
         getPendingSales(activeBusinessId),
         getCachedProducts(activeBusinessId),
+        getDeadLetterSales().catch(() => [] as DeadLetterRecord[]),
       ]);
       setSales(pending);
       setProducts(cached);
+      setDeadLetters(failed);
 
       // Try to get currency from cached business
       const biz = await getCachedBusiness(activeBusinessId);
@@ -110,6 +121,45 @@ export default function OfflineSalesPage() {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
+
+  /* ---- Dead-letter actions ---- */
+  const handleRetryDeadLetter = async (record: DeadLetterRecord) => {
+    setRetryingKey(record.key);
+    try {
+      const result = await retryDeadLetterSale(record);
+      if (result.ok) {
+        showToast('Sale re-synced successfully');
+        await refresh();
+      } else {
+        showToast(`Still failing: ${result.error}`);
+      }
+    } finally {
+      setRetryingKey(null);
+    }
+  };
+
+  const handleRemoveDeadLetter = async (key: number) => {
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm('Remove this failed sale permanently? This cannot be undone.')
+      : false;
+    if (!confirmed) return;
+    await removeDeadLetterSale(key);
+    showToast('Failed sale removed');
+    await refresh();
+  };
+
+  const handleClearAllDeadLetters = async () => {
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm(`Clear all ${deadLetters.length} failed sales? This cannot be undone.`)
+      : false;
+    if (!confirmed) return;
+    const cleared = await clearAllDeadLetterSales();
+    showToast(`Cleared ${cleared} failed sale${cleared === 1 ? '' : 's'}`);
+    await refresh();
+  };
+
+  const deadLetterTotal = (record: DeadLetterRecord) =>
+    record.payload.lines.reduce((sum, l) => sum + linePrice(l), 0);
 
   /* ---- Open amend ---- */
   const startAmend = async (saleId: string) => {
@@ -523,6 +573,98 @@ export default function OfflineSalesPage() {
           </Link>
         </div>
       </div>
+
+      {/* Dead-letter (permanently failed) sales — shown first because they need owner action */}
+      {deadLetters.length > 0 && (
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-rose-300 bg-rose-50 px-4 py-4 text-sm text-rose-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold text-rose-900">
+                  {deadLetters.length} sale{deadLetters.length === 1 ? '' : 's'} rejected by the server
+                </div>
+                <p className="mt-1 text-rose-800">
+                  These sales were saved offline but the server refused them when sync retried (usually because a product, price, or stock state changed in the meantime). Review each one and decide whether to retry or remove.
+                </p>
+              </div>
+              {deadLetters.length > 1 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllDeadLetters}
+                  className="flex-none rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          </div>
+
+          {deadLetters.map((record) => {
+            const total = deadLetterTotal(record);
+            const itemCount = record.payload.lines.length;
+            const isRetrying = retryingKey === record.key;
+            return (
+              <div key={record.key} className="card border-rose-200 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold">
+                      {formatMoney(total, currency)}
+                      <span className="ml-2 text-xs font-normal text-black/50">
+                        {itemCount} item{itemCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="text-xs text-black/40">
+                      Originally {new Date(record.payload.createdAt).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-black/40">
+                      Failed {new Date(record.failedAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <span className="flex-none rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    HTTP {record.statusCode}
+                  </span>
+                </div>
+
+                <div className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs text-rose-800">
+                  {record.errorMessage}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {record.payload.lines.slice(0, 3).map((line, i) => (
+                    <span key={i} className="rounded bg-black/5 px-2 py-0.5 text-[11px] text-black/60">
+                      {lineName(line)}
+                    </span>
+                  ))}
+                  {record.payload.lines.length > 3 && (
+                    <span className="rounded bg-black/5 px-2 py-0.5 text-[11px] text-black/40">
+                      +{record.payload.lines.length - 3} more
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleRetryDeadLetter(record)}
+                    disabled={isRetrying}
+                    className="btn-primary flex-1 text-xs disabled:opacity-60"
+                  >
+                    {isRetrying ? 'Retrying…' : 'Retry sync'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDeadLetter(record.key)}
+                    disabled={isRetrying}
+                    className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between">
         <div>
