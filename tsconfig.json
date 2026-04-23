@@ -38,9 +38,6 @@
   "exclude": [
     "node_modules",
     "scripts",
-    "tishgroup-control",
-    "test_adapter.ts",
-    "test-prisma.ts",
-    "reproduce_prisma_error.ts"
+    "tishgroup-control"
   ]
 }
