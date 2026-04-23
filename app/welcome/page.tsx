@@ -223,6 +223,15 @@ export default function WelcomePage() {
               </Link>
             </div>
 
+            <div className="mt-4">
+              <a
+                href="#pricing"
+                className="text-sm text-black/45 underline-offset-4 transition hover:text-black/70 hover:underline"
+              >
+                View pricing ↓
+              </a>
+            </div>
+
             {/* Social Proof */}
             <div className="mt-12 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-black/40">
               <span className="flex items-center gap-1.5">
@@ -331,7 +340,7 @@ export default function WelcomePage() {
                 What a live business is saying after switching fully to TillFlow.
               </h2>
               <p className="mt-3 text-base leading-7 text-black/55">
-                These are real-life comments from a business now running daily operations on TillFlow. They show what matters once the system is no longer a trial and has become part of normal trade.
+                From a business running daily operations on TillFlow.
               </p>
             </div>
             <div className="rounded-2xl border border-black/5 bg-white/80 px-4 py-3 text-left text-sm text-black/50 shadow-sm">
@@ -413,7 +422,7 @@ export default function WelcomePage() {
       </section>
 
       {/* Features Grid */}
-      <section className="relative py-20 px-6">
+      <section className="relative pt-20 pb-10 px-6">
         <div className="mx-auto max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold font-display sm:text-4xl">
@@ -441,7 +450,7 @@ export default function WelcomePage() {
       </section>
 
       {/* Final CTA */}
-      <section className="relative py-24 px-6">
+      <section id="pricing" className="relative scroll-mt-24 pt-10 pb-24 px-6">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-bold font-display sm:text-4xl">
             Pick the setup that matches how your business runs today.

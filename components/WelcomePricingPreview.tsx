@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 type BillingCycle = 'monthly' | 'yearly';
@@ -67,7 +68,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
           return (
             <div
               key={plan.name}
-              className={`rounded-2xl border bg-white px-4 py-4 text-left shadow-sm ${plan.featured ? 'border-accent/20 ring-1 ring-accent/10' : 'border-black/5'}`}
+              className={`flex flex-col rounded-2xl border bg-white px-4 py-4 text-left shadow-sm ${plan.featured ? 'border-accent/20 ring-1 ring-accent/10' : 'border-black/5'}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-gray-900">{plan.name}</div>
@@ -94,7 +95,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
               </div>
 
               <div className="mt-3 text-xs font-medium text-black/50">{plan.note}</div>
-              <div className="mt-4 space-y-2">
+              <div className="mt-4 flex-1 space-y-2">
                 {plan.bullets.map((bullet) => (
                   <div key={bullet} className="flex items-start gap-2 text-xs leading-5 text-black/50">
                     <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />
@@ -102,6 +103,17 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                   </div>
                 ))}
               </div>
+
+              <Link
+                href="/register"
+                className={
+                  plan.featured
+                    ? 'mt-5 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-all hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5'
+                    : 'mt-5 inline-flex items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-all hover:border-accent/30 hover:text-accent'
+                }
+              >
+                Start Free
+              </Link>
             </div>
           );
         })}
