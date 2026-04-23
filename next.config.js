@@ -36,32 +36,51 @@ const nextConfig = {
     ];
   },
   async headers() {
+    // Camera is needed for the POS / purchases barcode scanner (html5-qrcode).
+    // Blocking it outright (camera=()) would silently break the in-app scanner
+    // on production, so we allow self and deny everywhere else.
+    const permissionsPolicy = 'camera=(self), microphone=(), geolocation=()';
+
+    // unsafe-inline on script-src is a known weakness kept because Next.js 14
+    // still ships un-nonced inline scripts for hydration. Moving to a nonce
+    // pipeline requires middleware changes and is tracked separately.
+    const csp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      // Receipt logos and expense attachments can point at arbitrary HTTPS
+      // hosts (including Vercel Blob's *.public.blob.vercel-storage.com).
+      // Images cannot execute code, so allowing https: is a deliberate
+      // usability trade-off.
+      "img-src 'self' data: blob: https:",
+      // Sentry ingest + replay. Neon is kept for environments that may drive
+      // the browser-side driver. Localhost websockets allow Next dev HMR.
+      "connect-src 'self' https://*.neon.tech wss://*.neon.tech " +
+        "https://*.ingest.sentry.io https://*.ingest.us.sentry.io " +
+        "ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*",
+      // Service worker (offline POS) + Sentry replay use blob: workers.
+      "worker-src 'self' blob:",
+      // Defense in depth — no Flash/PDF plugin content.
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      'upgrade-insecure-requests',
+    ].join('; ');
+
     return [
       {
         source: '/(.*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // X-Frame-Options is redundant with frame-ancestors for CSP3
+          // browsers but still useful for older browsers that ignore CSP.
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          {
-            key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com${isDev ? " 'unsafe-eval'" : ''}`,  // unsafe-eval dev-only
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob:",
-              "connect-src 'self' https://*.neon.tech wss://*.neon.tech ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
-          },
+          { key: 'Permissions-Policy', value: permissionsPolicy },
+          { key: 'Content-Security-Policy', value: csp },
         ],
       },
     ];
