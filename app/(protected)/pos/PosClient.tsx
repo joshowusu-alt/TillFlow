@@ -6,6 +6,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
+import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
+import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
 import {
   useMomoCollection,
@@ -17,7 +19,7 @@ import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecreme
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { getEnabledPosPaymentMethods, getMomoManualGuidance } from '@/lib/payments/pos-momo';
-import { calculateCompactDropdownViewport, handleScannerEnter, resetScannerBuffer, updateScannerBufferState } from '@/lib/payments/pos-scanner';
+import { calculateCompactDropdownViewport } from '@/lib/payments/pos-scanner';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
 import {
@@ -193,13 +195,6 @@ export default function PosClient({
 
   const cashRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const scanBufferRef = useRef<{
-    value: string;
-    lastTime: number;
-    fastCount: number;
-    timer?: ReturnType<typeof setTimeout>;
-    active: boolean;
-  }>({ value: '', lastTime: 0, fastCount: 0, active: false });
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
@@ -950,14 +945,15 @@ export default function PosClient({
   const momoReady = true;
   const tillReady =
     !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
-  const canSubmit =
+  const canSubmit = Boolean(
     cart.length > 0 &&
     fullyPaid &&
     !hasPaymentError &&
     momoReady &&
     discountApprovalReady &&
     tillReady &&
-    (!requiresCustomer || customerId);
+    (!requiresCustomer || customerId)
+  );
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
     if (requiresCustomer && !customerId) {
@@ -990,134 +986,27 @@ export default function PosClient({
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams.get('error');
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const isField =
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT');
+  usePosKeyboardShortcuts({
+    activeLineId,
+    barcodeRef,
+    canSubmit,
+    cartLength: cart.length,
+    cashRef,
+    formRef,
+    lastCartLineId: cart[cart.length - 1]?.id ?? null,
+    lastReceiptId,
+    productSearchRef,
+    onCloseKeyboardHelp: () => setShowKeyboardHelp(false),
+    onOpenParkModal: () => setShowParkModal(true),
+    onRemoveLine: removeLine,
+    onToggleKeyboardHelp: () => setShowKeyboardHelp((prev) => !prev),
+    onUndo: handleUndo,
+  });
 
-      if (event.key === 'F2') {
-        event.preventDefault();
-        barcodeRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F3') {
-        event.preventDefault();
-        productSearchRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F4') {
-        event.preventDefault();
-        productSearchRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F8') {
-        event.preventDefault();
-        cashRef.current?.focus();
-        return;
-      }
-      if (event.key === 'F9') {
-        event.preventDefault();
-        if (cart.length > 0) {
-          setShowParkModal(true);
-        }
-        return;
-      }
-      if (!isField && event.key === '/') {
-        event.preventDefault();
-        barcodeRef.current?.focus();
-        return;
-      }
-      if (event.ctrlKey && event.key === 'Enter') {
-        event.preventDefault();
-        if (canSubmit) {
-          formRef.current?.requestSubmit();
-        }
-        return;
-      }
-      if (event.ctrlKey && event.key.toLowerCase() === 'z') {
-        event.preventDefault();
-        handleUndo();
-        return;
-      }
-      if (event.ctrlKey && event.key === 'Backspace') {
-        event.preventDefault();
-        const lastLine = cart[cart.length - 1];
-        if (lastLine) {
-          removeLine(lastLine.id);
-        }
-        return;
-      }
-      if (event.key === 'Delete' && activeLineId) {
-        event.preventDefault();
-        removeLine(activeLineId);
-        return;
-      }
-      if (event.ctrlKey && event.key.toLowerCase() === 'p') {
-        if (lastReceiptId) {
-          event.preventDefault();
-          window.open(`/receipts/${lastReceiptId}`, '_blank', 'noopener');
-        }
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setShowKeyboardHelp(false);
-        return;
-      }
-      if (!isField && event.key === '?') {
-        event.preventDefault();
-        setShowKeyboardHelp((prev) => !prev);
-        return;
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [activeLineId, canSubmit, cart, handleUndo, lastReceiptId, removeLine]);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target && barcodeRef.current && target === barcodeRef.current) return;
-      const isEditable =
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT');
-      const key = event.key;
-      const now = Date.now();
-      const state = scanBufferRef.current;
-
-      if (key === 'Enter') {
-        const enterResult = handleScannerEnter(state);
-        if (enterResult.shouldScan && enterResult.code) {
-          event.preventDefault();
-          if (state.timer) clearTimeout(state.timer);
-          handleBarcodeScan(enterResult.code);
-        }
-        return;
-      }
-
-      updateScannerBufferState(state, key, now);
-      if (key.length !== 1) return;
-
-      if (state.active && (!isEditable || target !== barcodeRef.current)) {
-        event.preventDefault();
-      }
-
-      if (state.timer) clearTimeout(state.timer);
-      state.timer = setTimeout(() => {
-        resetScannerBuffer(state);
-      }, 250);
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleBarcodeScan]);
+  usePosScannerBuffer({
+    barcodeRef,
+    onScan: handleBarcodeScan,
+  });
 
   return (
     <div className="grid gap-6 pb-36 lg:grid-cols-[3fr_1fr] lg:items-start lg:pb-0">
