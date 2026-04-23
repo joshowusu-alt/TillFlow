@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostsMatch, normalizeComparableHost } from './middleware';
+import { hostsMatch, normalizeComparableHost } from './hosts';
 
 describe('normalizeComparableHost', () => {
   it('normalizes loopback aliases with the same port', () => {

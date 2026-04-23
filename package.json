@@ -11,7 +11,7 @@
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.postgres.prisma",
     "postinstall": "prisma generate --schema=prisma/schema.postgres.prisma",
     "start": "next start",
-    "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint app components hooks lib prisma scripts middleware.ts middleware.test.ts instrumentation.ts next.config.js postcss.config.js tailwind.config.ts vitest.config.ts vitest.setup.ts sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts --ext .js,.ts,.tsx --no-error-on-unmatched-pattern",
+    "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint app components hooks lib prisma scripts middleware.ts instrumentation.ts next.config.js postcss.config.js tailwind.config.ts vitest.config.ts vitest.setup.ts sentry.client.config.ts sentry.edge.config.ts sentry.server.config.ts --ext .js,.ts,.tsx --no-error-on-unmatched-pattern",
     "test": "vitest run --reporter=dot",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
