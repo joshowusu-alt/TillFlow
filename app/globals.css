@@ -125,6 +125,10 @@ body {
   body {
     overscroll-behavior-y: contain; /* Prevent pull-to-refresh in the installed PWA */
   }
+
+  .app-shell-header {
+    padding-top: max(var(--safe-area-top), 1.25rem);
+  }
 }
 
 main#main-content,

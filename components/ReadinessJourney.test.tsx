@@ -82,10 +82,9 @@ describe('ReadinessJourney home stats', () => {
     );
     const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
-    expect(revenueCard.parentElement).toHaveClass(
-      'grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)_minmax(0,1fr)]'
-    );
+    expect(revenueCard.parentElement).toHaveClass('grid-cols-2');
     expect(revenueCard).toHaveClass('min-w-0');
+    expect(revenueCard).toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
     expect(revenueValue).toHaveClass('text-base');
@@ -103,6 +102,8 @@ describe('ReadinessJourney home stats', () => {
     const revenueLabel = screen.getByText('Revenue');
     const transactionsLabel = screen.getByText('Transactions');
     const issuesLabel = screen.getByText('Issues');
+    const transactionsCard = screen.getByRole('link', { name: /Today's Transactions:/ });
+    const issuesCard = screen.getByRole('link', { name: /Open Issues:/ });
 
     for (const label of [revenueLabel, transactionsLabel, issuesLabel]) {
       expect(label).toHaveClass('text-xs');
@@ -115,6 +116,8 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByText("Today's Revenue")).not.toBeInTheDocument();
     expect(screen.queryByText("Today's Transactions")).not.toBeInTheDocument();
     expect(screen.queryByText('Open Issues')).not.toBeInTheDocument();
+    expect(transactionsCard).not.toHaveClass('col-span-2');
+    expect(issuesCard).not.toHaveClass('col-span-2');
   });
 
   it('drops very long revenue values to the smallest stat size', () => {
