@@ -436,7 +436,7 @@ function WelcomeDashboard({
         { label: 'Open Issues', displayLabel: 'Issues', value: data.openIssueCount.toLocaleString(), href: '/reports/command-center', delta: null, footer: 'Live' },
       ];
   const getStatValueSize = (value: string) =>
-    value.length > 13 ? 'text-sm' : value.length > 10 ? 'text-base' : 'text-lg';
+    value.length > 10 ? 'text-sm' : 'text-lg';
 
   const dynamicActions = ([
     data.openShiftCount > 0 ? {
@@ -523,13 +523,13 @@ function WelcomeDashboard({
             {statusPill.label}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:gap-3">
-            {heroStats.map(({ label, displayLabel, value, href, delta, footer }, index) => (
+          <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+            {heroStats.map(({ label, displayLabel, value, href, delta, footer }) => (
               <Link
                 key={label}
                 href={href}
                 aria-label={`${label}: ${value}`}
-                className={`group relative flex min-h-[7rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4 ${index === 0 ? 'col-span-2 sm:col-span-1' : ''}`}
+                className="group relative flex min-h-[7rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
               >
                 <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
                 <span className={`mt-1 block max-w-full whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}>

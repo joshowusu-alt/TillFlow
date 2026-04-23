@@ -82,12 +82,12 @@ describe('ReadinessJourney home stats', () => {
     );
     const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
-    expect(revenueCard.parentElement).toHaveClass('grid-cols-2');
+    expect(revenueCard.parentElement).toHaveClass('grid-cols-3');
     expect(revenueCard).toHaveClass('min-w-0');
-    expect(revenueCard).toHaveClass('col-span-2');
+    expect(revenueCard).not.toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
-    expect(revenueValue).toHaveClass('text-base');
+    expect(revenueValue).toHaveClass('text-sm');
     expect(revenueValue).toHaveClass('leading-tight');
     expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -144,7 +144,7 @@ describe('ReadinessJourney home stats', () => {
 
     expect(transactionValue).toHaveClass('whitespace-nowrap');
     expect(transactionValue).toHaveClass('tabular-nums');
-    expect(transactionValue).toHaveClass('text-base');
+    expect(transactionValue).toHaveClass('text-sm');
     expect(transactionValue).not.toHaveClass('truncate');
   });
 
