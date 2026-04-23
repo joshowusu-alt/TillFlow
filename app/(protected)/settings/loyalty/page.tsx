@@ -53,6 +53,13 @@ export default async function LoyaltySettingsPage({
 
       <div className="card p-4 sm:p-6">
         <form action={updateLoyaltySettingsAction} className="grid gap-6 sm:grid-cols-2">
+          <div className="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="font-semibold">Redemption at checkout is coming soon.</div>
+            <p className="mt-1 text-amber-700">
+              Customers can earn points now. The redemption settings below prepare checkout discounts for when redemption ships.
+            </p>
+          </div>
+
           {/* Enable toggle */}
           <div className="sm:col-span-2">
             <div className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4">

@@ -71,6 +71,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
           <FormError error={searchParams?.error} />
           <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
           <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
+          {/* Section: What & How Much */}
+          <div className="md:col-span-4 border-t border-black/8 pt-3 mt-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">What &amp; How Much</div>
+          </div>
           {features.detailedExpenseCategories ? (
             <div>
               <label className="label">Category</label>
@@ -97,6 +101,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
             <label className="label">Amount</label>
             <input className="input" name="amount" placeholder="0.00" required />
           </div>
+          {/* Section: Payment */}
+          <div className="md:col-span-4 border-t border-black/8 pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">Payment</div>
+          </div>
           <div>
             <label className="label">Payment Status</label>
             <select className="input" name="paymentStatus" defaultValue="PAID">
@@ -118,6 +126,10 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
               <option value="TRANSFER">Transfer</option>
               <option value="MOBILE_MONEY">Mobile Money</option>
             </select>
+          </div>
+          {/* Section: Details */}
+          <div className="md:col-span-4 border-t border-black/8 pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/40">Details</div>
           </div>
           <div>
             <label className="label">Vendor / Payee</label>

@@ -230,7 +230,13 @@ export default async function PurchasesPage({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-ink">#{purchase.id.slice(0, 8)}</div>
-                    <div className="mt-1 text-sm text-black/60">{purchase.supplier?.name ?? 'Supplier not set'}</div>
+                    {purchase.supplier?.name
+                      ? <div className="mt-1 text-sm text-black/60">{purchase.supplier.name}</div>
+                      : <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                          Supplier not set
+                        </span>}
+
                   </div>
                   <span className={`pill-${purchase.paymentStatus.toLowerCase().replace('_', '-')}`}>{purchase.paymentStatus.replace('_', ' ')}</span>
                 </div>
@@ -309,7 +315,14 @@ export default async function PurchasesPage({
               return (
                 <tr key={purchase.id} className="rounded-xl bg-white">
                   <td className="px-3 py-3 text-sm">{purchase.id.slice(0, 8)}</td>
-                  <td className="px-3 py-3 text-sm">{purchase.supplier?.name ?? 'Supplier not set'}</td>
+                  <td className="px-3 py-3 text-sm">
+                    {purchase.supplier?.name
+                      ? purchase.supplier.name
+                      : <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                          Supplier not set
+                        </span>}
+                  </td>
                   <td className="px-3 py-3 text-sm">{formatDateTime(purchase.createdAt)}</td>
                   <td className="px-3 py-3 text-sm">{lineLabel}</td>
                   <td className="px-3 py-3">
