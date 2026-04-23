@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
@@ -94,6 +94,29 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
+  it('uses short one-line labels in the hero stat cards', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 23, 9, 30));
+
+    renderDashboard();
+
+    const revenueLabel = screen.getByText('Revenue');
+    const transactionsLabel = screen.getByText('Transactions');
+    const issuesLabel = screen.getByText('Issues');
+
+    for (const label of [revenueLabel, transactionsLabel, issuesLabel]) {
+      expect(label).toHaveClass('text-xs');
+      expect(label).toHaveClass('uppercase');
+      expect(label).toHaveClass('tracking-wider');
+      expect(label).toHaveClass('opacity-70');
+      expect(label).toHaveClass('whitespace-nowrap');
+    }
+
+    expect(screen.queryByText("Today's Revenue")).not.toBeInTheDocument();
+    expect(screen.queryByText("Today's Transactions")).not.toBeInTheDocument();
+    expect(screen.queryByText('Open Issues')).not.toBeInTheDocument();
+  });
+
   it('drops very long revenue values to the smallest stat size', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 23, 15, 0));
@@ -129,10 +152,12 @@ describe('ReadinessJourney home stats', () => {
     renderDashboard();
 
     const deltas = screen.getAllByText('Day in progress');
-    expect(deltas).toHaveLength(2);
+    expect(deltas).toHaveLength(1);
     for (const delta of deltas) {
       expect(delta).toHaveClass('text-slate-300/75');
     }
+    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('Day in progress')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText('Day in progress')).not.toBeInTheDocument();
     expect(screen.queryByText('-93% vs yesterday')).not.toBeInTheDocument();
   });
 
@@ -142,7 +167,9 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    expect(screen.getAllByText('-93% vs yesterday')).toHaveLength(2);
+    expect(screen.getAllByText('-93% vs yesterday')).toHaveLength(1);
+    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('-93% vs yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/vs yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
   });
 
@@ -153,7 +180,7 @@ describe('ReadinessJourney home stats', () => {
     renderDashboard({ todayTransactionCount: 20 });
 
     expect(screen.getByText('-93% vs yesterday')).toBeInTheDocument();
-    expect(screen.getByText('-80% vs yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText('-80% vs yesterday')).not.toBeInTheDocument();
     expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
   });
 });
