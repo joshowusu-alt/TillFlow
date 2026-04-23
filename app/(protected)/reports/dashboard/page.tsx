@@ -373,6 +373,7 @@ export default async function DashboardPage({
     ? Math.floor((Date.now() - lastSaleRecord.createdAt.getTime()) / 60_000)
     : null;
   const activeCashierCount = openShifts.length;
+  const hasNonDefaultParams = !!(searchParams?.from || searchParams?.to || (searchParams?.storeId && searchParams?.storeId !== 'ALL'));
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -386,31 +387,6 @@ export default async function DashboardPage({
           </div>
         }
       />
-
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        Gross profit uses the stored sale-line cost whenever it exists. Older sales that never captured a line cost fall back to the product&apos;s current base cost until you backfill or target-correct them.
-      </div>
-
-      {/* Filter */}
-      <ReportFilterCard columnsClassName="sm:grid-cols-4" submitLabel="Apply" submitTone="secondary">
-        <div>
-          <label className="label">Branch</label>
-          <select className="input" name="storeId" defaultValue={selectedStoreId}>
-            <option value="ALL">All branches</option>
-            {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label">From</label>
-          <input className="input" type="date" name="from" defaultValue={fromIso} />
-        </div>
-        <div>
-          <label className="label">To</label>
-          <input className="input" type="date" name="to" defaultValue={toIso} />
-        </div>
-      </ReportFilterCard>
 
       {/* Live status bar — today's pulse at a glance (only when viewing today) */}
       {isToday && (
@@ -458,6 +434,54 @@ export default async function DashboardPage({
         <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} />
         <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} />
       </div>
+
+      <details className="details-mobile" open={hasNonDefaultParams}>
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+          <span className="text-sm font-semibold text-ink">Adjust date range / branch</span>
+          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="mt-2 space-y-2">
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+            Gross profit uses sale-line cost snapshots. Expenses and net profit use accounting journals.
+          </div>
+          <ReportFilterCard
+            columnsClassName={stores.length > 1 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}
+            submitLabel="Apply filters"
+            submitTone="primary"
+            actions={
+              <a href="/reports/dashboard" className="btn-secondary w-full justify-center text-sm sm:w-auto">
+                Reset
+              </a>
+            }
+          >
+            <div>
+              <label className="label">From</label>
+              <input className="input" type="date" name="from" defaultValue={fromIso} />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" name="to" defaultValue={toIso} />
+            </div>
+            {stores.length > 1 ? (
+              <div>
+                <label className="label">Branch</label>
+                <select className="input" name="storeId" defaultValue={selectedStoreId}>
+                  <option value="ALL">All branches</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {store.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <input type="hidden" name="storeId" value={selectedStoreId} />
+            )}
+          </ReportFilterCard>
+        </div>
+      </details>
 
       {/* Data-quality warning: extremely negative GP almost always means wrong cost prices */}
       {gpPercent < -50 && totalSales > 0 && (

@@ -131,6 +131,8 @@ export default async function MarginsPage({
     ? `Showing all ${products.length} sold product${products.length === 1 ? '' : 's'} in this period.`
     : `Showing ${filteredRows.length} product${filteredRows.length === 1 ? '' : 's'} flagged for ${viewLabel.toLowerCase()} in this period.`;
 
+  const hasNonDefaultFilterParams = !!(searchParams?.from || searchParams?.to || (searchParams?.view && searchParams?.view !== 'all') || (searchParams?.period && searchParams?.period !== '30d'));
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
       <PageHeader
@@ -157,7 +159,7 @@ export default async function MarginsPage({
         }
       />
 
-      <details className="details-mobile" open>
+      <details className="details-mobile" open={hasNonDefaultFilterParams}>
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

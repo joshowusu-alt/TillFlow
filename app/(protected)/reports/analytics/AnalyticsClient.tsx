@@ -57,22 +57,6 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
     return (
         <div className="space-y-4 sm:space-y-6">
-            {/* Period Selector */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
-                {PERIOD_OPTIONS.map((opt) => (
-                    <button
-                        key={opt.value}
-                        onClick={() => handlePeriodChange(opt.value)}
-                        className={`flex-1 sm:flex-none rounded-lg px-3 py-2 text-xs sm:text-sm font-medium transition-all ${currentPeriod === opt.value
-                                ? 'bg-accent text-white shadow-sm'
-                                : 'bg-black/5 text-black/60 hover:bg-black/10'
-                            }`}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
-
             {/* KPI Cards */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
                 <div className="card p-3 sm:p-4">
@@ -123,6 +107,22 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
 
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-xs text-emerald-900 sm:text-sm">
                 Revenue and gross profit cards are aligned to the accounting journals used by the dashboard and income statement. Product rankings below still use item-level cost snapshots for drill-down.
+            </div>
+
+            {/* Period Selector */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+                {PERIOD_OPTIONS.map((opt) => (
+                    <button
+                        key={opt.value}
+                        onClick={() => handlePeriodChange(opt.value)}
+                        className={`flex-1 sm:flex-none rounded-lg px-3 py-2 text-xs sm:text-sm font-medium transition-all ${currentPeriod === opt.value
+                                ? 'bg-accent text-white shadow-sm'
+                                : 'bg-black/5 text-black/60 hover:bg-black/10'
+                            }`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
             </div>
 
             {/* Main Charts */}
