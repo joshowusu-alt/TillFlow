@@ -532,7 +532,10 @@ function WelcomeDashboard({
                 className="group relative flex min-h-[7rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
               >
                 <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
-                <span className={`mt-1 block max-w-full whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}>
+                <span
+                  className={`mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}
+                  title={value}
+                >
                   {value}
                 </span>
                 {delta ? (
