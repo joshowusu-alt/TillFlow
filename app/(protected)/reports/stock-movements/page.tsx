@@ -11,7 +11,7 @@ import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores'
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   SALE: 'Sale',
@@ -73,6 +73,7 @@ export default async function StockMovementsPage({
     type: typeof searchParams?.type === 'string' ? searchParams.type : undefined,
     q: typeof searchParams?.q === 'string' ? searchParams.q : undefined,
     page: typeof searchParams?.page === 'string' ? searchParams.page : undefined,
+    pageSize: typeof searchParams?.pageSize === 'string' ? searchParams.pageSize : undefined,
   };
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } =
@@ -81,6 +82,8 @@ export default async function StockMovementsPage({
   const selectedStoreId = resolveStoreSelection(stores, params.storeId, 'ALL') ?? 'ALL';
 
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
+  const requestedPageSize = parseInt(params.pageSize ?? '20', 10) || 20;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const typeFilter = params.type && MOVEMENT_TYPES.includes(params.type) ? params.type : undefined;
   const q = params.q?.trim() ?? '';
 
@@ -99,8 +102,8 @@ export default async function StockMovementsPage({
     prisma.stockMovement.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       select: {
         id: true,
         type: true,
@@ -114,7 +117,7 @@ export default async function StockMovementsPage({
     }),
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -231,6 +234,8 @@ export default async function StockMovementsPage({
           currentPage={page}
           totalPages={totalPages}
           basePath="/reports/stock-movements"
+          pageSize={pageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
           searchParams={{
             from: fromIso,
             to: toIso,

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import PageHeader from '@/components/PageHeader';
+import Pagination from '@/components/Pagination';
 import type { AuditAction } from '@/lib/audit';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
@@ -62,10 +63,12 @@ const ACTION_COLOURS: Record<string, string> = {
 
 export const dynamic = 'force-dynamic';
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
 export default async function AuditLogPage({
   searchParams
 }: {
-  searchParams: { action?: string; user?: string; page?: string };
+  searchParams: { action?: string; user?: string; page?: string; pageSize?: string };
 }) {
   const { user, business } = await requireBusiness(['OWNER']);
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
@@ -80,7 +83,8 @@ export default async function AuditLogPage({
     );
   }
 
-  const pageSize = 50;
+  const requestedPageSize = parseInt(searchParams.pageSize || '20', 10) || 20;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const currentPage = Math.max(1, parseInt(searchParams.page || '1', 10) || 1);
   const skip = (currentPage - 1) * pageSize;
 
@@ -103,7 +107,7 @@ export default async function AuditLogPage({
     }),
   ]);
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function parseDetails(raw: unknown): Record<string, unknown> | null {
     if (!raw) return null;
@@ -200,30 +204,19 @@ export default async function AuditLogPage({
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 pt-2">
-          {currentPage > 1 && (
-            <a
-              href={`/reports/audit-log?page=${currentPage - 1}${searchParams.action ? `&action=${searchParams.action}` : ''}${searchParams.user ? `&user=${searchParams.user}` : ''}`}
-              className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
-            >
-              ← Prev
-            </a>
-          )}
-          <span className="px-3 py-1 text-sm text-gray-500">
-            Page {currentPage} of {totalPages}
-          </span>
-          {currentPage < totalPages && (
-            <a
-              href={`/reports/audit-log?page=${currentPage + 1}${searchParams.action ? `&action=${searchParams.action}` : ''}${searchParams.user ? `&user=${searchParams.user}` : ''}`}
-              className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
-            >
-              Next →
-            </a>
-          )}
-        </div>
-      )}
+      {total > 0 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          basePath="/reports/audit-log"
+          pageSize={pageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          searchParams={{
+            action: searchParams.action,
+            user: searchParams.user,
+          }}
+        />
+      ) : null}
     </div>
   );
 }

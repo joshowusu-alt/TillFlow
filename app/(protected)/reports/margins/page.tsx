@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
+import Pagination from '@/components/Pagination';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
@@ -27,6 +28,8 @@ const viewOptions = [
   { value: 'below-cost', label: 'Selling below cost' },
   { value: 'below-target', label: 'Below target margin' },
 ] as const;
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 function buildMarginsHref(
   view: 'all' | 'below-cost' | 'below-target',
@@ -72,7 +75,7 @@ function sortRowsForView(rows: MarginAnalysisRow[], view: 'all' | 'below-cost' |
 export default async function MarginsPage({
   searchParams,
 }: {
-  searchParams?: { period?: string; from?: string; to?: string; view?: string };
+  searchParams?: { period?: string; from?: string; to?: string; view?: string; page?: string; pageSize?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Business not found.</div>;
@@ -90,6 +93,9 @@ export default async function MarginsPage({
 
   const { start, end, fromInputValue, toInputValue, periodInputValue } = resolveSelectableReportDateRange(searchParams, '30d');
   const currentView = resolveMarginsView(searchParams?.view);
+  const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
+  const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const snapshot = await getMarginAnalysisSnapshot({ businessId: business.id, start, end });
   const products = snapshot.rows;
 
@@ -106,6 +112,11 @@ export default async function MarginsPage({
         : products,
     currentView,
   );
+
+  const totalRows = filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const topPerformers = [...products]
     .sort((a, b) => b.profitPence - a.profitPence)
@@ -248,6 +259,11 @@ export default async function MarginsPage({
         {filterSummary}
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-black/70">
+        Showing {totalRows === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+        -{Math.min(currentPage * pageSize, totalRows)} of {totalRows} products.
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Revenue in period" value={formatMoney(totalRevenue, business.currency)} tone="accent" />
         <StatCard label="Cost in period" value={formatMoney(totalCost, business.currency)} />
@@ -281,7 +297,7 @@ export default async function MarginsPage({
           </tr>
         </thead>
         <tbody>
-          {filteredRows.map((row) => (
+          {pagedRows.map((row) => (
             <tr key={row.productId} className="rounded-xl bg-white">
               <td className="px-3 py-3">
                 <div className="flex flex-col gap-1">
@@ -312,7 +328,7 @@ export default async function MarginsPage({
               </td>
             </tr>
           ))}
-          {filteredRows.length === 0 ? (
+          {pagedRows.length === 0 ? (
             <ReportTableEmptyRow
               colSpan={10}
               message={currentView === 'all' ? 'No sold products found for this date range.' : `No products found for ${viewLabel.toLowerCase()} in this date range.`}
@@ -320,6 +336,22 @@ export default async function MarginsPage({
           ) : null}
         </tbody>
       </ReportTableCard>
+
+      {totalRows > 0 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          basePath="/reports/margins"
+          pageSize={pageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          searchParams={{
+            period: periodInputValue,
+            from: fromInputValue,
+            to: toInputValue,
+            view: currentView,
+          }}
+        />
+      ) : null}
 
       {currentView === 'all' ? (
         <div className="grid gap-6 lg:grid-cols-2">

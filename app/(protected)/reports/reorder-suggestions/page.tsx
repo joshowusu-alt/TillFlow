@@ -4,6 +4,7 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
+import Pagination from '@/components/Pagination';
 import ReportActionGroup from '@/components/reports/ReportActionGroup';
 import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { markAsOrdered } from '@/app/actions/reorder';
@@ -15,7 +16,11 @@ type QueryParams = {
   lead?: string;
   storeId?: string;
   group?: string;
+  page?: string;
+  pageSize?: string;
 };
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 const urgencyTone = {
   URGENT: 'danger' as const,
@@ -48,6 +53,9 @@ export default async function ReorderSuggestionsPage({
   const lookbackDays = Math.min(Math.max(parseInt(searchParams.days ?? '14', 10) || 14, 7), 90);
   const leadDays = Math.min(Math.max(parseInt(searchParams.lead ?? '7', 10) || 7, 1), 30);
   const groupBySupplier = searchParams.group === 'supplier';
+  const requestedPageSize = parseInt(searchParams.pageSize ?? '20', 10) || 20;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
+  const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
   const stores = await prisma.store.findMany({
     where: { businessId: business.id },
@@ -187,10 +195,15 @@ export default async function ReorderSuggestionsPage({
     .sort((a, b) => b.suggestedQty - a.suggestedQty)
     .slice(0, 200);
 
+  const totalSuggestions = suggestions.length;
+  const totalPages = Math.max(1, Math.ceil(totalSuggestions / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedSuggestions = suggestions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   // Group by supplier if requested
   const supplierGroups = groupBySupplier
     ? Array.from(
-        suggestions.reduce((acc, item) => {
+        pagedSuggestions.reduce((acc, item) => {
           const key = item.supplierName ?? 'Unassigned';
           if (!acc.has(key)) acc.set(key, []);
           acc.get(key)!.push(item);
@@ -199,7 +212,7 @@ export default async function ReorderSuggestionsPage({
       ).sort(([a], [b]) => a.localeCompare(b))
     : null;
 
-  const baseSearchParams = `days=${lookbackDays}&lead=${leadDays}&storeId=${selectedStoreId}`;
+  const baseSearchParams = `days=${lookbackDays}&lead=${leadDays}&storeId=${selectedStoreId}&pageSize=${pageSize}`;
 
   return (
     <div className="space-y-6">
@@ -269,9 +282,25 @@ export default async function ReorderSuggestionsPage({
         </div>
       ) : (
         <div className="card overflow-hidden p-4 sm:p-6">
-          <ReorderTable items={suggestions} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
+          <ReorderTable items={pagedSuggestions} lookbackDays={lookbackDays} selectedStoreId={selectedStoreId} />
         </div>
       )}
+
+      {suggestions.length > 0 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          basePath="/reports/reorder-suggestions"
+          pageSize={pageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          searchParams={{
+            days: String(lookbackDays),
+            lead: String(leadDays),
+            storeId: selectedStoreId,
+            group: groupBySupplier ? 'supplier' : undefined,
+          }}
+        />
+      ) : null}
     </div>
   );
 }

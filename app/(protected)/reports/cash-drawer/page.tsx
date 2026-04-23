@@ -1,4 +1,5 @@
 import DownloadLink from '@/components/DownloadLink';
+import Pagination from '@/components/Pagination';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -18,6 +19,8 @@ const REASON_CODE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
 function reasonCodeLabel(code: string | null | undefined): string {
   if (!code) return '-';
   return REASON_CODE_LABELS[code] ?? code;
@@ -30,7 +33,7 @@ function notesText(varianceReason: string | null | undefined, notes: string | nu
 export default async function CashDrawerReportPage({
   searchParams,
 }: {
-  searchParams?: { from?: string; to?: string; storeId?: string };
+  searchParams?: { from?: string; to?: string; storeId?: string; page?: string; pageSize?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const today = new Date();
@@ -40,18 +43,29 @@ export default async function CashDrawerReportPage({
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
   const selectedStoreId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
+  const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
+  const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+
+  const where = {
+    till: {
+      store: {
+        businessId: business.id,
+        ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
+      },
+    },
+    openedAt: { gte: from, lte: to },
+  };
+
+  const totalRows = await prisma.shift.count({ where });
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(requestedPage, totalPages);
 
   const shifts = await prisma.shift.findMany({
-    where: {
-      till: {
-        store: {
-          businessId: business.id,
-          ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
-        },
-      },
-      openedAt: { gte: from, lte: to },
-    },
+    where,
     orderBy: { openedAt: 'desc' },
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
     select: {
       id: true,
       openedAt: true,
@@ -215,6 +229,21 @@ export default async function CashDrawerReportPage({
           ) : null}
         </tbody>
       </ReportTableCard>
+
+      {totalRows > 0 ? (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          basePath="/reports/cash-drawer"
+          pageSize={pageSize}
+          pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+          searchParams={{
+            from: fromIso,
+            to: toIso,
+            storeId: selectedStoreId,
+          }}
+        />
+      ) : null}
     </div>
   );
 }
