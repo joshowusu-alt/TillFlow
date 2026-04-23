@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
@@ -71,27 +71,49 @@ afterEach(() => {
 });
 
 describe('ReadinessJourney home stats', () => {
-  it('keeps the revenue value on one line and reveals the full value on tap', () => {
+  it('shows the full revenue value on one line without truncation', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 23, 15, 0));
 
-    renderDashboard();
+    renderDashboard({ todayRevenuePence: 114_950 });
 
-    const revenueValue = screen.getByRole('button', { name: /Today's Revenue:/ });
+    const revenueValue = screen.getByText((_, element) =>
+      element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,149.50'
+    );
 
-    expect(revenueValue).toHaveClass('truncate');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
-
-    const fullValue = revenueValue.textContent ?? '';
+    expect(revenueValue).toHaveClass('text-base');
+    expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(revenueValue);
+  it('drops very long revenue values to the smallest stat size', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 23, 15, 0));
 
-    expect(revenueValue).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('tooltip').textContent?.replace(/\u00a0/g, ' ')).toBe(
-      fullValue.replace(/\u00a0/g, ' ')
+    renderDashboard({ todayRevenuePence: 123_456_789 });
+
+    const revenueValue = screen.getByText((_, element) =>
+      element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,234,567.89'
     );
+
+    expect(revenueValue).toHaveClass('text-sm');
+    expect(revenueValue).not.toHaveClass('truncate');
+  });
+
+  it('applies the same one-line sizing to the transactions value', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 3, 23, 15, 0));
+
+    renderDashboard({ todayTransactionCount: 123_456_789 });
+
+    const transactionValue = screen.getByText('123,456,789');
+
+    expect(transactionValue).toHaveClass('whitespace-nowrap');
+    expect(transactionValue).toHaveClass('tabular-nums');
+    expect(transactionValue).toHaveClass('text-base');
+    expect(transactionValue).not.toHaveClass('truncate');
   });
 
   it('shows a neutral in-progress message before 14:00 when fewer than 20 transactions are recorded', () => {

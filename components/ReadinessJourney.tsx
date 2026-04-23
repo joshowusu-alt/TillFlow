@@ -376,7 +376,6 @@ function WelcomeDashboard({
   onWipeDemo: () => void;
   isBusy: boolean;
 }) {
-  const [expandedStat, setExpandedStat] = useState<string | null>(null);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = data.userName ? data.userName.split(' ')[0] : null;
@@ -436,6 +435,8 @@ function WelcomeDashboard({
         { label: "Today's Transactions", value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: buildDelta(data.todayTransactionCount, data.yesterdayTransactionCount) },
         { label: 'Open Issues', value: data.openIssueCount.toLocaleString(), href: '/reports/command-center', delta: null },
       ];
+  const getStatValueSize = (value: string) =>
+    value.length > 13 ? 'text-sm' : value.length > 10 ? 'text-base' : 'text-lg';
 
   const dynamicActions = ([
     data.openShiftCount > 0 ? {
@@ -524,38 +525,15 @@ function WelcomeDashboard({
 
           <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
             {heroStats.map(({ label, value, href, delta }) => (
-              <div
+              <Link
                 key={label}
+                href={href}
                 className="group relative flex min-h-[7rem] flex-col justify-between rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
               >
-                <Link
-                  href={href}
-                  className="absolute inset-0 rounded-2xl"
-                  aria-label={`${label}: ${value}`}
-                  onFocus={() => setExpandedStat(null)}
-                />
                 <span className="pointer-events-none relative z-10 text-[10px] font-medium uppercase tracking-wide text-blue-200/50">{label}</span>
-                <div className="relative z-20 mt-1">
-                  <button
-                    type="button"
-                    className="block max-w-full truncate whitespace-nowrap text-left text-base font-black tabular-nums text-white sm:text-2xl lg:text-3xl"
-                    title={typeof value === 'string' ? value : undefined}
-                    aria-label={`${label}: ${value}`}
-                    aria-expanded={expandedStat === label}
-                    onClick={() => setExpandedStat(expandedStat === label ? null : label)}
-                    onBlur={() => setExpandedStat(null)}
-                  >
-                    {value}
-                  </button>
-                  {expandedStat === label ? (
-                    <div
-                      role="tooltip"
-                      className="absolute left-0 top-full mt-1 max-w-[14rem] rounded-lg border border-white/15 bg-slate-950/95 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xl shadow-black/20"
-                    >
-                      {value}
-                    </div>
-                  ) : null}
-                </div>
+                <span className={`mt-1 block max-w-full whitespace-nowrap font-black tabular-nums text-white ${getStatValueSize(value)}`}>
+                  {value}
+                </span>
                 {delta ? (
                   <span className={`pointer-events-none relative z-10 mt-1 text-[10px] font-semibold ${delta.neutral ? 'text-slate-300/75' : delta.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {delta.text}
@@ -563,7 +541,7 @@ function WelcomeDashboard({
                 ) : (
                   <span className="pointer-events-none relative z-10 mt-1 text-[10px] font-semibold text-blue-200/35">Live</span>
                 )}
-              </div>
+              </Link>
             ))}
           </div>
         </div>
