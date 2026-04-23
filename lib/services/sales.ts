@@ -56,7 +56,10 @@ function buildLinePricing(
       throw new Error('Unit not configured for product');
     }
     const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
-    const unitPricePence = resolveEffectiveSellingPricePence(productUnit.product, productUnit);
+    const unitPricePence =
+      typeof line.unitPricePence === 'number' && Number.isFinite(line.unitPricePence) && line.unitPricePence > 0
+        ? Math.round(line.unitPricePence)
+        : resolveEffectiveSellingPricePence(productUnit.product, productUnit);
     const lineSubtotal = unitPricePence * line.qtyInUnit;
     const lineDiscount = computeDiscount(lineSubtotal, line.discountType, line.discountValue);
     const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
@@ -98,6 +101,7 @@ export type SaleLineInput = {
   productId: string;
   unitId: string;
   qtyInUnit: number;
+  unitPricePence?: number;
   discountType?: DiscountType;
   discountValue?: number;
 };
@@ -669,7 +673,7 @@ export async function amendSale(input: AmendSaleInput) {
     include: {
       business: true,
       store: true,
-      lines: { include: { product: true } },
+      lines: { include: { product: true, unit: true } },
       payments: true,
       salesReturn: true,
     },
@@ -735,15 +739,20 @@ export async function amendSale(input: AmendSaleInput) {
     removedItems: removedLines.map((l) => ({
       productId: l.productId,
       productName: l.product.name,
+      unitName: l.unit.name,
       qtyInUnit: l.qtyInUnit,
       qtyBase: l.qtyBase,
+      unitPricePence: l.unitPricePence,
       lineTotalPence: l.lineTotalPence,
     })),
     addedItems: newLineDetails.map((l) => ({
       productId: l.productId,
       productName: l.productUnit.product.name,
+      unitName: l.productUnit.unit?.name ?? l.unitId,
       qtyInUnit: l.qtyInUnit,
       qtyBase: l.qtyBase,
+      unitPricePence: l.unitPricePence,
+      lineVatPence: l.lineVat,
       lineTotalPence: l.lineTotal,
     })),
   };
@@ -1068,6 +1077,16 @@ export async function amendSale(input: AmendSaleInput) {
       subtotalPence: newSubtotal,
       vatPence: newVat,
       lineCount: keptLines.length + newLineDetails.length,
+      addedItems: newLineDetails.map((line) => ({
+        productId: line.productId,
+        productName: line.productUnit.product.name,
+        unitName: line.productUnit.unit?.name ?? line.unitId,
+        qtyInUnit: line.qtyInUnit,
+        qtyBase: line.qtyBase,
+        unitPricePence: line.unitPricePence,
+        lineVatPence: line.lineVat,
+        lineTotalPence: line.lineTotal,
+      })),
     },
     refundAmount: result.refundAmount,
     refundMethod: result.refundAmount > 0 ? refundMethod : null,

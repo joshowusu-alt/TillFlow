@@ -34,6 +34,7 @@ type AvailableProduct = {
   name: string;
   barcode: string | null;
   sellingPriceBasePence: number;
+  vatRateBps: number;
   categoryName: string | null;
   imageUrl: string | null;
   onHandBase: number;
@@ -46,8 +47,13 @@ type NewLineItem = {
   unitId: string;
   unitName: string;
   qtyInUnit: number;
+  originalPricePence: number;
   unitPricePence: number;
+  vatRateBps: number;
+  lineSubtotalPence: number;
+  lineVatPence: number;
   lineTotalPence: number;
+  managerPin?: string;
 };
 
 type Props = {
@@ -56,6 +62,8 @@ type Props = {
   totalPence: number;
   totalPaid: number;
   currency: string;
+  vatEnabled: boolean;
+  discountApprovalThresholdBps: number;
   availableProducts: AvailableProduct[];
 };
 
@@ -65,6 +73,8 @@ export default function AmendSaleClient({
   totalPence,
   totalPaid,
   currency,
+  vatEnabled,
+  discountApprovalThresholdBps,
   availableProducts,
 }: Props) {
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
@@ -77,6 +87,11 @@ export default function AmendSaleClient({
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'remove' | 'add'>('remove');
+  const [pendingProduct, setPendingProduct] = useState<AvailableProduct | null>(null);
+  const [pendingUnitId, setPendingUnitId] = useState('');
+  const [pendingPriceInput, setPendingPriceInput] = useState('');
+  const [managerPin, setManagerPin] = useState('');
+  const [pendingError, setPendingError] = useState<string | null>(null);
 
   const keptLines = lines.filter((l) => !removedIds.has(l.id));
   const removedLines = lines.filter((l) => removedIds.has(l.id));
@@ -116,25 +131,94 @@ export default function AmendSaleClient({
     });
   };
 
-  const addProduct = (product: AvailableProduct) => {
+  const parseMoneyToPence = (value: string) => {
+    const parsed = Number(value.replace(/,/g, '').trim());
+    return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+  };
+
+  const getLineTotals = (product: AvailableProduct, qtyInUnit: number, unitPricePence: number) => {
+    const lineSubtotalPence = unitPricePence * qtyInUnit;
+    const lineVatPence = vatEnabled ? Math.round((lineSubtotalPence * product.vatRateBps) / 10000) : 0;
+    return {
+      lineSubtotalPence,
+      lineVatPence,
+      lineTotalPence: lineSubtotalPence + lineVatPence,
+    };
+  };
+
+  const selectProductForAdd = (product: AvailableProduct) => {
     const baseUnit = product.units.find((u) => u.isBaseUnit) ?? product.units[0];
     if (!baseUnit) return;
+    const price = resolveEffectiveSellingPricePence(product, baseUnit);
+    setPendingProduct(product);
+    setPendingUnitId(baseUnit.id);
+    setPendingPriceInput((price / 100).toFixed(2));
+    setManagerPin('');
+    setPendingError(null);
+    setShowAddPanel(false);
+    setSearchQuery('');
+  };
 
-    const unitPricePence = resolveEffectiveSellingPricePence(product, baseUnit);
+  const pendingUnit = pendingProduct?.units.find((u) => u.id === pendingUnitId) ?? pendingProduct?.units[0] ?? null;
+  const pendingOriginalPricePence = pendingProduct && pendingUnit
+    ? resolveEffectiveSellingPricePence(pendingProduct, pendingUnit)
+    : 0;
+  const pendingOverridePricePence = parseMoneyToPence(pendingPriceInput);
+  const pendingPriceDiffBps = pendingOriginalPricePence > 0
+    ? Math.round((Math.abs(pendingOriginalPricePence - pendingOverridePricePence) * 10000) / pendingOriginalPricePence)
+    : pendingOverridePricePence === pendingOriginalPricePence ? 0 : Number.POSITIVE_INFINITY;
+  const pendingRequiresPin = pendingPriceDiffBps > discountApprovalThresholdBps;
+
+  const changePendingUnit = (unitId: string) => {
+    if (!pendingProduct) return;
+    const unit = pendingProduct.units.find((u) => u.id === unitId);
+    if (!unit) return;
+    const price = resolveEffectiveSellingPricePence(pendingProduct, unit);
+    setPendingUnitId(unit.id);
+    setPendingPriceInput((price / 100).toFixed(2));
+    setManagerPin('');
+    setPendingError(null);
+  };
+
+  const confirmPendingProduct = () => {
+    if (!pendingProduct) return;
+    const unit = pendingProduct.units.find((u) => u.id === pendingUnitId) ?? pendingProduct.units[0];
+    if (!unit) return;
+    const priceNum = parseMoneyToPence(pendingPriceInput);
+    if (priceNum <= 0) {
+      setPendingError('Enter a valid unit price.');
+      return;
+    }
+    const originalPricePence = resolveEffectiveSellingPricePence(pendingProduct, unit);
+    const priceDiffBps = originalPricePence > 0
+      ? Math.round((Math.abs(originalPricePence - priceNum) * 10000) / originalPricePence)
+      : priceNum === originalPricePence ? 0 : Number.POSITIVE_INFINITY;
+    const requiresPin = priceDiffBps > discountApprovalThresholdBps;
+    if (requiresPin && !managerPin.trim()) {
+      setPendingError('Manager PIN required for this price change.');
+      return;
+    }
+    const totals = getLineTotals(pendingProduct, 1, priceNum);
     setNewItems((prev) => [
       ...prev,
       {
-        productId: product.id,
-        productName: product.name,
-        unitId: baseUnit.id,
-        unitName: baseUnit.name,
+        productId: pendingProduct.id,
+        productName: pendingProduct.name,
+        unitId: unit.id,
+        unitName: unit.name,
         qtyInUnit: 1,
-        unitPricePence,
-        lineTotalPence: unitPricePence,
+        originalPricePence,
+        unitPricePence: priceNum,
+        vatRateBps: pendingProduct.vatRateBps,
+        ...totals,
+        managerPin: requiresPin ? managerPin.trim() : undefined,
       },
     ]);
-    setSearchQuery('');
-    setShowAddPanel(false);
+    setPendingProduct(null);
+    setPendingUnitId('');
+    setPendingPriceInput('');
+    setManagerPin('');
+    setPendingError(null);
   };
 
   const updateNewItemQty = (productId: string, qty: number) => {
@@ -145,7 +229,15 @@ export default function AmendSaleClient({
     setNewItems((prev) =>
       prev.map((i) =>
         i.productId === productId
-          ? { ...i, qtyInUnit: qty, lineTotalPence: i.unitPricePence * qty }
+          ? {
+              ...i,
+              qtyInUnit: qty,
+              lineSubtotalPence: i.unitPricePence * qty,
+              lineVatPence: vatEnabled ? Math.round((i.unitPricePence * qty * i.vatRateBps) / 10000) : 0,
+              lineTotalPence:
+                i.unitPricePence * qty +
+                (vatEnabled ? Math.round((i.unitPricePence * qty * i.vatRateBps) / 10000) : 0),
+            }
           : i
       )
     );
@@ -172,6 +264,8 @@ export default function AmendSaleClient({
             productId: i.productId,
             unitId: i.unitId,
             qtyInUnit: i.qtyInUnit,
+            unitPricePence: i.unitPricePence,
+            managerPin: i.managerPin,
           }))
         )
       );
@@ -278,7 +372,14 @@ export default function AmendSaleClient({
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold truncate">{item.productName}</div>
-                    <div className="text-xs text-black/50">{item.unitName}</div>
+                    <div className="text-xs text-black/50">
+                      {item.unitName} @ {formatMoney(item.unitPricePence, currency)}
+                      {item.unitPricePence !== item.originalPricePence ? (
+                        <span className="ml-1 text-amber-700">
+                          was {formatMoney(item.originalPricePence, currency)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -351,7 +452,7 @@ export default function AmendSaleClient({
                         <button
                           key={product.id}
                           type="button"
-                          onClick={() => addProduct(product)}
+                          onClick={() => selectProductForAdd(product)}
                           className="flex w-full items-center gap-3 p-3 text-left hover:bg-emerald-50 transition-colors"
                         >
                           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
@@ -377,6 +478,115 @@ export default function AmendSaleClient({
               </div>
             )}
           </div>
+
+          {pendingProduct && pendingUnit ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-ink">{pendingProduct.name}</div>
+                  <div className="mt-1 text-xs text-black/50">
+                    {pendingProduct.categoryName ?? 'Uncategorised'} · {pendingProduct.onHandBase} base units in stock
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-ghost text-xs"
+                  onClick={() => {
+                    setPendingProduct(null);
+                    setPendingUnitId('');
+                    setPendingPriceInput('');
+                    setManagerPin('');
+                    setPendingError(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {pendingProduct.units.length > 1 ? (
+                <div className="mt-3">
+                  <div className="label">Unit</div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {pendingProduct.units.map((unit) => (
+                      <button
+                        key={unit.id}
+                        type="button"
+                        onClick={() => changePendingUnit(unit.id)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          pendingUnitId === unit.id
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white text-black/60 hover:bg-black/5'
+                        }`}
+                      >
+                        {unit.name} ({unit.conversionToBase}x)
+                        <span className={pendingUnitId === unit.id ? 'ml-1 text-white/70' : 'ml-1 text-black/35'}>
+                          {Math.floor(pendingProduct.onHandBase / Math.max(unit.conversionToBase, 1))} in stock
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 text-xs text-black/55">
+                  Unit: <span className="font-semibold text-ink">{pendingUnit.name}</span>
+                </div>
+              )}
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label">Unit price</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    value={pendingPriceInput}
+                    onChange={(e) => {
+                      setPendingPriceInput(e.target.value);
+                      setPendingError(null);
+                    }}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <div className="mt-1 text-xs text-black/50">
+                    Standard price: {formatMoney(pendingOriginalPricePence, currency)}
+                  </div>
+                </div>
+                {pendingRequiresPin ? (
+                  <div>
+                    <label className="label">Manager PIN required for this price change</label>
+                    <input
+                      className="input"
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={managerPin}
+                      onChange={(e) => {
+                        setManagerPin(e.target.value);
+                        setPendingError(null);
+                      }}
+                      placeholder="Enter approval PIN"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {pendingError ? (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {pendingError}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                className="btn-primary mt-4"
+                onClick={confirmPendingProduct}
+                disabled={pendingRequiresPin && !managerPin.trim()}
+              >
+                Add item
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 

@@ -30,12 +30,15 @@ describe('AmendSaleClient', () => {
         totalPence={600}
         totalPaid={600}
         currency="GHS"
+        vatEnabled={false}
+        discountApprovalThresholdBps={1500}
         availableProducts={[
           {
             id: 'out-oscar',
             name: 'OUT/OSCAR / TIGERHEAD/HOLY MATCHES/VOLCANO',
             barcode: '12345',
             sellingPriceBasePence: 300,
+            vatRateBps: 0,
             categoryName: 'Matches',
             imageUrl: null,
             onHandBase: 40,
@@ -73,6 +76,8 @@ describe('AmendSaleClient', () => {
 
     const productButton = screen.getByRole('button', { name: /OUT\/OSCAR/i });
     fireEvent.click(productButton);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
 
     expect(screen.getByRole('button', { name: 'Review & Confirm Amendment' })).not.toBeDisabled();
   });

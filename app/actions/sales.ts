@@ -6,12 +6,12 @@ import { revalidateTag, revalidatePath } from 'next/cache';
 import { toInt, formString, formInt, formDate } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { parseDiscountValue } from '@/lib/format';
-import { withBusinessContext, formAction, safeAction, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, formAction, safeAction, UserError, type ActionResult } from '@/lib/action-utils';
 import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
-import type { PaymentStatus } from '@/lib/services/shared';
+import { resolveEffectiveSellingPricePence, type PaymentStatus } from '@/lib/services/shared';
 import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
@@ -343,7 +343,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       }
     }
 
-    let newLines: { productId: string; unitId: string; qtyInUnit: number }[] = [];
+    let newLines: { productId: string; unitId: string; qtyInUnit: number; unitPricePence?: number; managerPin?: string }[] = [];
     const newLinesRaw = formData.get('newLines');
     if (newLinesRaw) {
       try {
@@ -355,6 +355,11 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
               productId: String(l.productId),
               unitId: String(l.unitId),
               qtyInUnit: Number(l.qtyInUnit),
+              unitPricePence:
+                l.unitPricePence !== undefined && Number(l.unitPricePence) > 0
+                  ? Math.round(Number(l.unitPricePence))
+                  : undefined,
+              managerPin: typeof l.managerPin === 'string' ? l.managerPin : undefined,
             }));
         }
       } catch {
@@ -362,13 +367,56 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       }
     }
 
+    let priceOverrideApprovedBy: { id: string; name: string | null; role: string } | null = null;
+    if (newLines.some((line) => line.unitPricePence !== undefined)) {
+      const [business, productUnits] = await Promise.all([
+        prisma.business.findUnique({
+          where: { id: businessId },
+          select: { discountApprovalThresholdBps: true },
+        }),
+        prisma.productUnit.findMany({
+          where: {
+            product: { businessId },
+            OR: newLines.map((line) => ({ productId: line.productId, unitId: line.unitId })),
+          },
+          include: { product: true },
+        }),
+      ]);
+      const thresholdBps = business?.discountApprovalThresholdBps ?? 1500;
+      const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
+      const needsApproval = newLines.some((line) => {
+        if (line.unitPricePence === undefined) return false;
+        const productUnit = unitMap.get(`${line.productId}:${line.unitId}`);
+        if (!productUnit) return false;
+        const originalPricePence = resolveEffectiveSellingPricePence(productUnit.product, productUnit);
+        const diffBps = originalPricePence > 0
+          ? Math.round((Math.abs(originalPricePence - line.unitPricePence) * 10000) / originalPricePence)
+          : line.unitPricePence === originalPricePence ? 0 : Number.POSITIVE_INFINITY;
+        return diffBps > thresholdBps;
+      });
+
+      if (needsApproval) {
+        const managerPin = newLines.find((line) => line.managerPin)?.managerPin?.trim() ?? '';
+        if (!managerPin) {
+          throw new UserError('Manager PIN required for this price change.');
+        }
+        const approvedBy = await verifyManagerPin({ businessId, pin: managerPin });
+        if (!approvedBy) {
+          throw new UserError('Invalid manager PIN for price change approval.');
+        }
+        priceOverrideApprovedBy = approvedBy;
+      }
+    }
+
+    const sanitizedNewLines = newLines.map(({ managerPin, ...line }) => line);
+
     const result = await amendSale({
       salesInvoiceId,
       businessId,
       userId: user.id,
       reason,
       keepLineIds,
-      newLines: newLines.length > 0 ? newLines : undefined,
+      newLines: sanitizedNewLines.length > 0 ? sanitizedNewLines : undefined,
       refundMethod,
       additionalPaymentMethod,
     });
@@ -389,6 +437,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
         refundMethod: result.refundMethod,
         additionalPaymentNeeded: result.additionalPaymentNeeded,
         additionalPaymentMethod: result.additionalPaymentMethod,
+        priceOverrideApprovedBy,
       },
     }).catch(() => {});
 

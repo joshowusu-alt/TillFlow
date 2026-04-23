@@ -116,6 +116,7 @@ export default async function AmendSalePage({ params }: { params: { id: string }
       name: p.name,
       barcode: p.barcode,
       sellingPriceBasePence: p.sellingPriceBasePence,
+      vatRateBps: p.vatRateBps,
       categoryName: p.category?.name ?? null,
       imageUrl: p.imageUrl,
       onHandBase: inventoryMap.get(p.id) ?? 0,
@@ -182,6 +183,8 @@ export default async function AmendSalePage({ params }: { params: { id: string }
         totalPence={invoice.totalPence}
         totalPaid={totalPaid}
         currency={business.currency}
+        vatEnabled={business.vatEnabled}
+        discountApprovalThresholdBps={business.discountApprovalThresholdBps}
         availableProducts={availableProducts}
       />
     </div>
