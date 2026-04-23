@@ -435,8 +435,11 @@ function WelcomeDashboard({
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: null, footer: null },
         { label: 'Open Issues', displayLabel: 'Issues', value: data.openIssueCount.toLocaleString(), href: '/reports/command-center', delta: null, footer: 'Live' },
       ];
-  const getStatValueSize = (value: string) =>
-    value.length > 10 ? 'text-sm' : 'text-lg';
+  const getStatValueSize = (value: string) => {
+    if (value.length > 11) return 'text-xs sm:text-sm';
+    if (value.length > 8) return 'text-sm';
+    return 'text-lg';
+  };
 
   const dynamicActions = ([
     data.openShiftCount > 0 ? {
