@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction } from '@/app/actions/shifts';
 
@@ -434,24 +435,43 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
                       {' · '}{shift.salesCount} sale{shift.salesCount !== 1 ? 's' : ''}
                     </div>
                     {/* Row 3: Cash metrics */}
-                    <div className="mt-2.5 grid grid-cols-3 gap-2 text-xs">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider text-black/35">Expected</div>
-                        <div className="mt-0.5 font-semibold text-ink">{formatMoney(shift.expectedCashPence, currency)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider text-black/35">Actual</div>
-                        <div className="mt-0.5 font-semibold text-ink">
-                          {shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, currency) : <span className="text-black/30">&mdash;</span>}
+                    <div className="mt-2.5 space-y-2 text-xs">
+                      {/* Row 3a: Expected + Actual side by side */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-black/35">Expected</div>
+                          <div className="mt-0.5 font-semibold text-ink">{formatMoney(shift.expectedCashPence, currency)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-black/35">Actual</div>
+                          <div className="mt-0.5 font-semibold text-ink">
+                            {shift.actualCashPence !== null ? formatMoney(shift.actualCashPence, currency) : <span className="text-black/30">&mdash;</span>}
+                          </div>
                         </div>
                       </div>
-                      <div>
+                      {/* Row 3b: Variance full-width */}
+                      <div className="flex items-center gap-1.5">
                         <div className="text-[10px] uppercase tracking-wider text-black/35">Variance</div>
-                        <div className={`mt-0.5 font-semibold ${hasVariance ? (varianceZero ? 'text-emerald-700' : variancePositive ? 'text-accent' : 'text-rose-600') : 'text-black/30'}`}>
+                        <svg
+                          className="h-3.5 w-3.5 flex-shrink-0 text-black/30"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <title>Variance = actual cash counted minus expected. Negative means a cash shortfall.</title>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                        </svg>
+                        <div className={`font-semibold ${hasVariance ? (varianceZero ? 'text-emerald-700' : variancePositive ? 'text-accent' : 'text-rose-600') : 'text-black/30'}`}>
                           {hasVariance
                             ? `${(shift.variance ?? 0) >= 0 ? '+' : ''}${formatMoney(shift.variance!, currency)}`
                             : <span>&mdash;</span>}
                         </div>
+                        {shift.status === 'CLOSED' && shift.variance !== null && Math.abs(shift.variance) > 50000 && (
+                          <Link href="/reports/cash-drawer" className="ml-auto text-xs font-medium text-rose-600 underline">
+                            Investigate →
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
