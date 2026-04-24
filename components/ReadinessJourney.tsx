@@ -308,7 +308,7 @@ type HomeAction = {
   icon: React.ReactNode;
 };
 
-function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shift' | 'alert' | 'reorder' | 'payables' | 'purchases' | 'sales' | 'inventory' | 'team' | 'setup' }) {
+function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shift' | 'alert' | 'reorder' | 'payables' | 'purchases' | 'sales' | 'inventory' | 'team' | 'setup' | 'receipt' }) {
   const common = { className: 'h-5 w-5', fill: 'none', viewBox: '0 0 24 24', strokeWidth: 1.8, stroke: 'currentColor' };
   const pathProps = { strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   const paths: Record<typeof name, React.ReactNode> = {
