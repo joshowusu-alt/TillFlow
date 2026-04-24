@@ -59,6 +59,9 @@ const baseReadinessData: ReadinessData = {
   openShiftSalesCount: 0,
   reorderNeededCount: 0,
   overdueSupplierInvoiceCount: 0,
+  expectedCashPence: 125_000,
+  lastShiftClosedAt: null,
+  lastReceiptId: 'receipt-1',
 };
 
 function renderDashboard(overrides: Partial<ReadinessData> = {}) {
@@ -78,7 +81,7 @@ describe('ReadinessJourney home stats', () => {
     renderDashboard({ todayRevenuePence: 114_950 });
 
     const revenueValue = screen.getByText((_, element) =>
-      element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,149.50'
+      element?.textContent?.replace(/\u00a0/g, ' ') === 'GH₵1,149.50'
     );
     const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
@@ -87,8 +90,7 @@ describe('ReadinessJourney home stats', () => {
     expect(revenueCard).not.toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
-    expect(revenueValue).toHaveClass('text-xs');
-    expect(revenueValue).toHaveClass('sm:text-sm');
+    expect(revenueValue).toHaveClass('text-sm');
     expect(revenueValue).toHaveClass('leading-tight');
     expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -102,11 +104,11 @@ describe('ReadinessJourney home stats', () => {
 
     const revenueLabel = screen.getByText('Revenue');
     const transactionsLabel = screen.getByText('Transactions');
-    const issuesLabel = screen.getByText('Issues');
+    const expectedCashLabel = screen.getByText('Expected Cash');
     const transactionsCard = screen.getByRole('link', { name: /Today's Transactions:/ });
-    const issuesCard = screen.getByRole('link', { name: /Open Issues:/ });
+    const expectedCashCard = screen.getByRole('link', { name: /Expected Cash:/ });
 
-    for (const label of [revenueLabel, transactionsLabel, issuesLabel]) {
+    for (const label of [revenueLabel, transactionsLabel, expectedCashLabel]) {
       expect(label).toHaveClass('text-xs');
       expect(label).toHaveClass('uppercase');
       expect(label).toHaveClass('tracking-wider');
@@ -118,7 +120,7 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByText("Today's Transactions")).not.toBeInTheDocument();
     expect(screen.queryByText('Open Issues')).not.toBeInTheDocument();
     expect(transactionsCard).not.toHaveClass('col-span-2');
-    expect(issuesCard).not.toHaveClass('col-span-2');
+    expect(expectedCashCard).not.toHaveClass('col-span-2');
   });
 
   it('drops very long revenue values to the smallest stat size', () => {
@@ -128,7 +130,7 @@ describe('ReadinessJourney home stats', () => {
     renderDashboard({ todayRevenuePence: 123_456_789 });
 
     const revenueValue = screen.getByText((_, element) =>
-      element?.textContent?.replace(/\u00a0/g, ' ') === 'GHS 1,234,567.89'
+      element?.textContent?.replace(/\u00a0/g, ' ') === 'GH₵1,234,567.89'
     );
 
     expect(revenueValue).toHaveClass('text-xs');
@@ -156,36 +158,31 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    const deltas = screen.getAllByText('Day in progress');
-    expect(deltas).toHaveLength(1);
-    for (const delta of deltas) {
-      expect(delta).toHaveClass('text-slate-300/75');
-    }
-    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('Day in progress')).toBeInTheDocument();
-    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText('Day in progress')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
     expect(screen.queryByText('-93% vs yesterday')).not.toBeInTheDocument();
   });
 
-  it('shows the actual delta after 14:00', () => {
+  it('shows side-by-side today versus yesterday after 14:00', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 23, 14, 0));
 
     renderDashboard();
 
-    expect(screen.getAllByText('-93% vs yesterday')).toHaveLength(1);
-    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('-93% vs yesterday')).toBeInTheDocument();
-    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/vs yesterday/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
   });
 
-  it('shows the actual delta before 14:00 once 20 transactions are recorded', () => {
+  it('shows side-by-side today versus yesterday before 14:00 once 20 transactions are recorded', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 23, 9, 30));
 
     renderDashboard({ todayTransactionCount: 20 });
 
-    expect(screen.getByText('-93% vs yesterday')).toBeInTheDocument();
-    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText('-80% vs yesterday')).not.toBeInTheDocument();
-    expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
   });
 });

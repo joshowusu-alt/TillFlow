@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
 import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
 import { generateDemoDay, wipeDemoData, clearSampleData } from '@/app/actions/demo-day';
+import { formatMoney } from '@/lib/format';
 
 const OPTIONAL_STEP_KEYS = new Set(['demo']);
 
@@ -379,13 +380,12 @@ function WelcomeDashboard({
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = data.userName ? data.userName.split(' ')[0] : null;
-  const formatMoney = (pence: number) =>
-    new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency }).format(pence / 100);
+  const formatCurrency = (pence: number) => formatMoney(pence, data.currency);
   const revenueAheadPence = data.todayRevenuePence - data.yesterdayRevenuePence;
   const isNewAccount = data.saleCount < 10;
   const statusPill = data.openIssueCount > 0
     ? {
-        label: `${data.openIssueCount} item${data.openIssueCount === 1 ? ' needs' : 's need'} attention`,
+        label: `${data.openIssueCount} item${data.openIssueCount === 1 ? '' : 's'} need attention`,
         shell: 'border-amber-300/25 bg-amber-400/15 text-amber-200',
         dot: 'bg-amber-300',
       }
@@ -417,23 +417,36 @@ function WelcomeDashboard({
   };
 
   const smartSubtitle = data.openIssueCount > 0
-    ? { text: `You have ${data.openIssueCount} item${data.openIssueCount === 1 ? '' : 's'} needing attention today.`, href: '/reports/command-center' }
+    ? { text: 'Command center is ready for follow-up.', href: '/reports/command-center' }
     : hour < 11 && data.todayTransactionCount === 0
     ? { text: 'No sales recorded yet today. Ready to open?', href: '/pos' }
     : revenueAheadPence > 0 && data.yesterdayRevenuePence > 0
-    ? { text: `Great day so far - ${formatMoney(revenueAheadPence)} ahead of yesterday.`, href: '/reports/dashboard' }
+    ? { text: `Great day so far - ${formatCurrency(revenueAheadPence)} ahead of yesterday.`, href: '/reports/dashboard' }
     : { text: "Here's your business at a glance.", href: '/reports/dashboard' };
+
+  const lastCloseText = data.lastShiftClosedAt
+    ? `Last close: ${new Date(data.lastShiftClosedAt).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`
+    : 'No close recorded yet';
+
+  const todayVsYesterdayText = data.yesterdayRevenuePence > 0
+    ? `${formatCurrency(data.todayRevenuePence)} today / ${formatCurrency(data.yesterdayRevenuePence)} yesterday`
+    : `${formatCurrency(data.todayRevenuePence)} today`;
 
   const heroStats = data.saleCount === 0
     ? [
         { label: 'Products', displayLabel: 'Products', value: data.productCount.toLocaleString(), href: '/products', delta: null, footer: 'Live' },
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: null, footer: null },
-        { label: 'Open Issues', displayLabel: 'Issues', value: data.openIssueCount.toLocaleString(), href: '/reports/command-center', delta: null, footer: 'Live' },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', delta: null, footer: lastCloseText },
       ]
     : [
-        { label: "Today's Revenue", displayLabel: 'Revenue', value: formatMoney(data.todayRevenuePence), href: '/reports/dashboard', delta: buildDelta(data.todayRevenuePence, data.yesterdayRevenuePence), footer: null },
+        { label: "Today's Revenue", displayLabel: 'Revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard', delta: null, footer: todayVsYesterdayText },
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: null, footer: null },
-        { label: 'Open Issues', displayLabel: 'Issues', value: data.openIssueCount.toLocaleString(), href: '/reports/command-center', delta: null, footer: 'Live' },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', delta: null, footer: lastCloseText },
       ];
   const getStatValueSize = (value: string) => {
     if (value.length > 11) return 'text-xs sm:text-sm';
@@ -476,14 +489,18 @@ function WelcomeDashboard({
     { label: 'Open POS', desc: 'Serve customers and record sales', href: '/pos', primary: true, icon: <HomeIcon name="pos" /> },
     { label: 'Dashboard', desc: "Today's performance", href: '/reports/dashboard', icon: <HomeIcon name="chart" /> },
     { label: 'Products', desc: 'Manage your catalogue', href: '/products', icon: <HomeIcon name="box" /> },
-    { label: 'Settings', desc: 'Business and team config', href: '/settings', icon: <HomeIcon name="settings" /> },
-    { label: 'Purchases', desc: 'Record deliveries and costs', href: '/purchases', breakBefore: true, icon: <HomeIcon name="purchases" /> },
     { label: 'Sales History', desc: 'Find invoices and returns', href: '/sales', icon: <HomeIcon name="sales" /> },
     { label: 'Inventory', desc: 'Review stock movements', href: '/reports/stock-movements', icon: <HomeIcon name="inventory" /> },
+    ...(data.lastReceiptId ? [{ label: 'Last Receipt', desc: 'Reprint the latest completed sale', href: `/receipts/${data.lastReceiptId}`, icon: <HomeIcon name="receipt" /> }] : []),
+    { label: 'Purchases', desc: 'Record deliveries and costs', href: '/purchases', breakBefore: true, icon: <HomeIcon name="purchases" /> },
+    { label: 'Settings', desc: 'Business and team config', href: '/settings', icon: <HomeIcon name="settings" /> },
     { label: 'Team', desc: 'Users and approvals', href: '/users', icon: <HomeIcon name="team" /> },
-    { label: 'Setup Checklist', desc: 'Review launch progress', href: '/onboarding', icon: <HomeIcon name="setup" /> },
   ];
   const quickActions = [...dynamicActions, ...staticActions];
+
+  const primaryActions = quickActions.filter((action) => action.primary);
+  const secondaryActions = quickActions.filter((action) => !action.primary && !['/settings', '/users', '/purchases'].includes(action.href));
+  const adminActions = quickActions.filter((action) => ['/settings', '/users', '/purchases'].includes(action.href));
 
   const previewCard = (
     <DemoDaySection
@@ -503,20 +520,18 @@ function WelcomeDashboard({
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.3))' }} />
 
         <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:pb-16 lg:pt-14">
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
-            {greeting}{firstName ? `, ${firstName}` : ''}
-          </p>
+          {hour < 12 && firstName ? (
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
+              {greeting}, {firstName}
+            </p>
+          ) : null}
           <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
             {data.businessName}
           </h1>
           <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/75 underline-offset-4 hover:text-white hover:underline">
             {smartSubtitle.text}
           </Link>
-          {data.onboardingCompletedAt && (
-            <p className="mt-1 text-[11px] text-blue-200/45">
-              Trading live since {new Date(data.onboardingCompletedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          )}
+          <p className="mt-1 text-[11px] text-blue-200/45">{lastCloseText}</p>
 
           <div className={`mt-4 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
             <span className="relative flex h-2 w-2">
@@ -546,7 +561,7 @@ function WelcomeDashboard({
                     {delta.text}
                   </span>
                 ) : footer ? (
-                  <span className="pointer-events-none relative z-10 mt-auto pt-3 text-[10px] font-semibold text-blue-200/35">{footer}</span>
+                  <span className="pointer-events-none relative z-10 mt-auto pt-3 text-[10px] font-semibold text-blue-200/55">{footer}</span>
                 ) : (
                   null
                 )}
@@ -560,10 +575,26 @@ function WelcomeDashboard({
         {isNewAccount ? <div className="mb-5">{previewCard}</div> : null}
 
         <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
-        <div className="grid gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-          {quickActions.map((action) => (
+
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {primaryActions.map((action) => (
             <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
           ))}
+        </div>
+
+        <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {secondaryActions.map((action) => (
+            <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
+          ))}
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Admin</p>
+          <div className="grid gap-2.5 sm:grid-cols-3">
+            {adminActions.map((action) => (
+              <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
+            ))}
+          </div>
         </div>
 
         {!isNewAccount && data.hasDemoData ? <div className="mt-6">{previewCard}</div> : null}

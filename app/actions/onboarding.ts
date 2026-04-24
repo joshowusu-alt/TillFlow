@@ -39,6 +39,9 @@ export type ReadinessData = {
   openShiftSalesCount: number;
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
+  expectedCashPence: number;
+  lastShiftClosedAt: string | null;
+  lastReceiptId: string | null;
 };
 
 const OPTIONAL_READINESS_STEP_KEYS = new Set(['demo']);
@@ -82,6 +85,8 @@ export async function getReadiness(): Promise<ReadinessData> {
     yesterdaySalesAgg,
     openShifts,
     overdueSupplierInvoiceCount,
+    lastClosedShift,
+    lastReceipt,
   ] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
@@ -131,6 +136,23 @@ export async function getReadiness(): Promise<ReadinessData> {
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
         dueDate: { lt: todayStart },
       },
+    }),
+    prisma.shift.findFirst({
+      where: {
+        till: { store: { businessId: business.id } },
+        closedAt: { not: null },
+      },
+      orderBy: { closedAt: 'desc' },
+      select: { closedAt: true },
+    }),
+    prisma.salesInvoice.findFirst({
+      where: {
+        businessId: business.id,
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
     }),
   ]);
 
@@ -240,6 +262,9 @@ export async function getReadiness(): Promise<ReadinessData> {
     openShiftSalesCount: openShifts.reduce((sum, shift) => sum + shift._count.salesInvoices, 0),
     reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
     overdueSupplierInvoiceCount,
+    expectedCashPence: todayKpis?.cashOnHandEstimatePence ?? 0,
+    lastShiftClosedAt: lastClosedShift?.closedAt?.toISOString() ?? null,
+    lastReceiptId: lastReceipt?.id ?? null,
   };
 }
 
