@@ -9,6 +9,7 @@ import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
 import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
 import { usePosOrderDiscount } from '@/hooks/usePosOrderDiscount';
 import { usePosProductDropdownViewport } from '@/hooks/usePosProductDropdownViewport';
+import { usePosSaleResult } from '@/hooks/usePosSaleResult';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
@@ -191,11 +192,22 @@ export default function PosClient({
     reasonCode: discountReasonCode,
     reason: discountReason,
   } = orderDiscountForm;
-  const [lastReceiptId, setLastReceiptId] = useState('');
-  const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number; transactionNumber: string | null } | null>(null);
-  const [saleError, setSaleError] = useState<string | null>(null);
-  const [isCompletingSale, setIsCompletingSale] = useState(false);
-  const [nextCustomerReady, setNextCustomerReady] = useState(false);
+  const saleResult = usePosSaleResult({ nextCustomerReadyMs: 2600 });
+  const {
+    lastReceiptId,
+    saleSuccess,
+    saleError,
+    isCompletingSale,
+    nextCustomerReady,
+    setLastReceiptId,
+    showSaleSuccess,
+    dismissSaleSuccess,
+    setSaleError,
+    dismissSaleError,
+    beginCompletion,
+    endCompletion,
+    setNextCustomerReady,
+  } = saleResult;
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   const cashRef = useRef<HTMLInputElement>(null);
@@ -323,7 +335,7 @@ export default function PosClient({
     if (typeof window !== 'undefined') {
       setLastReceiptId(window.localStorage.getItem(lastReceiptStorageKey) ?? '');
     }
-  }, [lastReceiptStorageKey]);
+  }, [lastReceiptStorageKey, setLastReceiptId]);
 
   // Restore saved till from localStorage on mount (skipped when URL param already set)
   useEffect(() => {
@@ -416,6 +428,7 @@ export default function PosClient({
     setMomoPaid,
     setMomoPayerMsisdn,
     setMomoRef,
+    setSaleError,
   ]);
 
   const handleParkCurrentCart = useCallback((label: string) => {
@@ -438,12 +451,11 @@ export default function PosClient({
     setCustomerId(result.restoredCustomerId);
     setNextCustomerReady(false);
     playBeep(true);
-  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart, setCart, setCustomerId]);
+  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart, setCart, setCustomerId, setNextCustomerReady]);
 
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
-    setIsCompletingSale(true);
-    setSaleError(null);
+    beginCompletion();
 
     const saleSnapshot = createSaleCompletionSnapshot<CartLine, ProductDto, 'PAID' | 'PART_PAID' | 'UNPAID', PaymentMethod, DiscountType, CollectionNetwork, MomoCollectionState>({
       productOptions,
@@ -509,12 +521,8 @@ export default function PosClient({
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(lastReceiptStorageKey, receiptId);
         }
-        // Show success toast
-        setSaleSuccess({ receiptId, totalPence, transactionNumber });
-        setNextCustomerReady(true);
         // Inventory already updated optimistically above — no server round-trip needed.
-        // Auto-dismiss success toast after 3 seconds
-        setTimeout(() => setSaleSuccess(null), 3000);
+        showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
       } else {
         restoreSaleSnapshot(saleSnapshot, result.error);
       }
@@ -541,9 +549,7 @@ export default function PosClient({
             createdAt: new Date().toISOString(),
           });
           // Show success with offline indicator — cart already cleared optimistically
-          setSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' });
-          setNextCustomerReady(true);
-          setTimeout(() => setSaleSuccess(null), 4000);
+          showSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' }, 4000);
         } catch {
           restoreSaleSnapshot(saleSnapshot, 'Offline queue failed. Please try again.');
         }
@@ -551,7 +557,7 @@ export default function PosClient({
         restoreSaleSnapshot(saleSnapshot, 'Something went wrong. Please try again.');
       }
     } finally {
-      setIsCompletingSale(false);
+      endCompletion();
     }
   };
 
@@ -863,12 +869,6 @@ export default function PosClient({
     () => parkedCarts[0] ?? null,
     [parkedCarts]
   );
-
-  useEffect(() => {
-    if (!nextCustomerReady) return;
-    const timer = window.setTimeout(() => setNextCustomerReady(false), 2600);
-    return () => window.clearTimeout(timer);
-  }, [nextCustomerReady]);
 
   useEffect(() => {
     if (!momoCollectionId) return;
@@ -1337,7 +1337,7 @@ export default function PosClient({
                     <button
                       type="button"
                       className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition flex-shrink-0"
-                      onClick={() => setSaleSuccess(null)}
+                      onClick={dismissSaleSuccess}
                     >
                       ✕
                     </button>
@@ -1378,7 +1378,7 @@ export default function PosClient({
                       <button
                         type="button"
                         className="rounded-lg bg-white/10 px-2 py-1.5 text-xs hover:bg-white/20 transition"
-                        onClick={() => setSaleSuccess(null)}
+                        onClick={dismissSaleSuccess}
                       >
                         ✕
                       </button>
@@ -1392,7 +1392,7 @@ export default function PosClient({
           {saleError && (
             <div className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose flex items-center justify-between">
               <span>{saleError}</span>
-              <button type="button" className="text-xs font-semibold ml-2" onClick={() => setSaleError(null)}>✕</button>
+              <button type="button" className="text-xs font-semibold ml-2" onClick={dismissSaleError}>✕</button>
             </div>
           )}
 
