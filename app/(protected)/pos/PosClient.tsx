@@ -309,6 +309,64 @@ export default function PosClient({
     playBeep(true);
   }, [popUndoSnapshot, playBeep, setCart]);
 
+  // O(1) product lookup via Map — avoids O(n) find() per cart line
+  const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
+
+  const getProduct = useCallback(
+    (id: string) => productMap.get(id),
+    [productMap]
+  );
+  const getUnit = useCallback(getUnitFromProduct, []);
+
+  const getAvailableBase = useCallback((targetProductId: string, excludeLineId?: string) => {
+    return getAvailableBaseForCart(cart, productMap, targetProductId, excludeLineId);
+  }, [cart, productMap]);
+
+  const clampQtyInUnit = useCallback((
+    targetProductId: string,
+    targetUnitId: string,
+    desiredQty: number,
+    excludeLineId?: string
+  ) => {
+    const product = getProduct(targetProductId);
+    const unit = getUnit(product, targetUnitId);
+    if (!product || !unit) return desiredQty;
+    const availableBase = getAvailableBase(targetProductId, excludeLineId);
+    if (availableBase <= 0) {
+      setStockAlert(`No stock available for ${product.name}.`);
+      return 0;
+    }
+    const maxQty = Math.floor(availableBase / unit.conversionToBase);
+    if (desiredQty > maxQty) {
+      const availableLabel = formatAvailable(product, availableBase);
+      setStockAlert(`Only ${availableLabel} available for ${product.name}.`);
+      return maxQty;
+    }
+    setStockAlert(null);
+    return desiredQty;
+  }, [getAvailableBase, getProduct, getUnit]);
+
+  const {
+    activeLineId,
+    qtyDrafts,
+    setActiveLineId,
+    setQtyDrafts,
+    removeLine,
+    addToCart,
+    commitLineQty,
+    decrementLineQty,
+    incrementLineQty,
+    setLineDiscountType,
+    setLineDiscountValue,
+    changeLineUnit,
+  } = usePosCartActions<CartLine>({
+    cart,
+    setCart,
+    pushUndo,
+    clampQtyInUnit,
+    onFirstCartLine: () => router.prefetch('/pos'),
+  });
+
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
     [productOptions, productId]
@@ -376,6 +434,7 @@ export default function PosClient({
     resetMomoPaymentFields,
     setCart,
     setCustomerId,
+    setQtyDrafts,
   ]);
 
   const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
@@ -400,6 +459,7 @@ export default function PosClient({
     restoreMomoSnapshot,
     setCart,
     setCustomerId,
+    setQtyDrafts,
     setSaleError,
   ]);
 
@@ -533,43 +593,6 @@ export default function PosClient({
     }
   };
 
-  // O(1) product lookup via Map — avoids O(n) find() per cart line
-  const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
-
-  const getProduct = useCallback(
-    (id: string) => productMap.get(id),
-    [productMap]
-  );
-  const getUnit = useCallback(getUnitFromProduct, []);
-
-  const getAvailableBase = useCallback((targetProductId: string, excludeLineId?: string) => {
-    return getAvailableBaseForCart(cart, productMap, targetProductId, excludeLineId);
-  }, [cart, productMap]);
-
-  const clampQtyInUnit = useCallback((
-    targetProductId: string,
-    targetUnitId: string,
-    desiredQty: number,
-    excludeLineId?: string
-  ) => {
-    const product = getProduct(targetProductId);
-    const unit = getUnit(product, targetUnitId);
-    if (!product || !unit) return desiredQty;
-    const availableBase = getAvailableBase(targetProductId, excludeLineId);
-    if (availableBase <= 0) {
-      setStockAlert(`No stock available for ${product.name}.`);
-      return 0;
-    }
-    const maxQty = Math.floor(availableBase / unit.conversionToBase);
-    if (desiredQty > maxQty) {
-      const availableLabel = formatAvailable(product, availableBase);
-      setStockAlert(`Only ${availableLabel} available for ${product.name}.`);
-      return maxQty;
-    }
-    setStockAlert(null);
-    return desiredQty;
-  }, [getAvailableBase, getProduct, getUnit]);
-
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
 
   const togglePaymentMethod = (method: PaymentMethod) => {
@@ -618,26 +641,6 @@ export default function PosClient({
     };
   }, [recomputeProductDropdownViewport]);
 
-  const {
-    activeLineId,
-    qtyDrafts,
-    setActiveLineId,
-    setQtyDrafts,
-    removeLine,
-    addToCart,
-    commitLineQty,
-    decrementLineQty,
-    incrementLineQty,
-    setLineDiscountType,
-    setLineDiscountValue,
-    changeLineUnit,
-  } = usePosCartActions<CartLine>({
-    cart,
-    setCart,
-    pushUndo,
-    clampQtyInUnit,
-    onFirstCartLine: () => router.prefetch('/pos'),
-  });
   const {
     stagedProduct,
     stagedUnitId,
