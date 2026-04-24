@@ -655,3 +655,428 @@ describe('createSale — payments & stock', () => {
     ).rejects.toThrow('Customer is required');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Multi-line sales
+// ---------------------------------------------------------------------------
+describe('createSale — multi-line', () => {
+  const PRODUCT_B = 'prod-2';
+  const UNIT_B = 'unit-piece-b';
+
+  it('aggregates two lines with heterogeneous VAT rates into the invoice totals', async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: true,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000,
+    });
+
+    // Product A: 1000p @ 15% VAT = 150p VAT
+    // Product B:  500p @  0% VAT =   0p VAT (zero-rated essentials)
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      makeProductUnit({
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        product: {
+          id: PRODUCT_ID,
+          sellingPriceBasePence: 1000,
+          defaultCostBasePence: 400,
+          vatRateBps: 1500,
+        },
+      }),
+      makeProductUnit({
+        productId: PRODUCT_B,
+        unitId: UNIT_B,
+        product: {
+          id: PRODUCT_B,
+          sellingPriceBasePence: 500,
+          defaultCostBasePence: 200,
+          vatRateBps: 0,
+        },
+      }),
+    ]);
+    fetchInventoryMapMock.mockResolvedValue(
+      new Map([
+        [PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 400 }],
+        [PRODUCT_B, { qtyOnHandBase: 100, avgCostBasePence: 200 }],
+      ])
+    );
+
+    await createSale(makeBaseInput({
+      lines: [
+        { productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 },
+        { productId: PRODUCT_B, unitId: UNIT_B, qtyInUnit: 2 },
+      ],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.subtotalPence).toBe(2000); // 1000 + 2×500
+    expect(createCall.data.vatPence).toBe(150); // only A is VAT-rated
+    expect(createCall.data.totalPence).toBe(2150);
+
+    // Both products decremented
+    const decrements = batchDecrementInventoryBalanceMock.mock.calls[0][2] as Map<string, number>;
+    expect(decrements.get(PRODUCT_ID)).toBe(1);
+    expect(decrements.get(PRODUCT_B)).toBe(2);
+
+    // COGS adds both costs: 1×400 + 2×200 = 800
+    const journalLines = postJournalEntryMock.mock.calls[0][0].lines;
+    expect(journalLines).toEqual(
+      expect.arrayContaining([
+        { accountCode: '5000', debitPence: 800 },
+        { accountCode: '1200', creditPence: 800 },
+      ])
+    );
+  });
+
+  it('applies order percent discount proportionally across mixed-VAT lines', async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: true,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000,
+    });
+
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      makeProductUnit({
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        product: {
+          id: PRODUCT_ID,
+          sellingPriceBasePence: 1000,
+          defaultCostBasePence: 400,
+          vatRateBps: 1500,
+        },
+      }),
+      makeProductUnit({
+        productId: PRODUCT_B,
+        unitId: UNIT_B,
+        product: {
+          id: PRODUCT_B,
+          sellingPriceBasePence: 500,
+          defaultCostBasePence: 200,
+          vatRateBps: 0,
+        },
+      }),
+    ]);
+    fetchInventoryMapMock.mockResolvedValue(
+      new Map([
+        [PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 400 }],
+        [PRODUCT_B, { qtyOnHandBase: 100, avgCostBasePence: 200 }],
+      ])
+    );
+
+    // 1×1000 + 2×500 = 2000 net. 10% order discount → 200 off → 1800 net.
+    // Pre-discount VAT = 150 (only on A). After discount, vatRatio = 1800/2000 = 0.9.
+    // Invoice VAT = round(150 × 0.9) = 135.
+    await createSale(makeBaseInput({
+      orderDiscountType: 'PERCENT',
+      orderDiscountValue: 10,
+      lines: [
+        { productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 },
+        { productId: PRODUCT_B, unitId: UNIT_B, qtyInUnit: 2 },
+      ],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.subtotalPence).toBe(1800);
+    expect(createCall.data.discountPence).toBe(200);
+    expect(createCall.data.vatPence).toBe(135);
+    expect(createCall.data.totalPence).toBe(1935);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mixed payments + PART_PAID
+// ---------------------------------------------------------------------------
+describe('createSale — payments split & AR posting', () => {
+  it('splits mixed cash + card payments across cash and bank journal accounts', async () => {
+    // 5×500 = 2500p total; pay 1000 cash + 1500 card → no AR
+    await createSale(makeBaseInput({
+      payments: [
+        { method: 'CASH', amountPence: 1000 },
+        { method: 'CARD', amountPence: 1500 },
+      ],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 5 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.totalPence).toBe(2500);
+
+    const journalLines = postJournalEntryMock.mock.calls[0][0].lines;
+    expect(journalLines).toEqual(
+      expect.arrayContaining([
+        { accountCode: '1000', debitPence: 1000 }, // cash
+        { accountCode: '1010', debitPence: 1500 }, // bank (card)
+      ])
+    );
+    // No accounts receivable line when fully paid
+    expect(journalLines.some((l: any) => l.accountCode === '1100')).toBe(false);
+  });
+
+  it('debits accounts receivable for the unpaid balance on PART_PAID', async () => {
+    prismaMock.customer.findFirst.mockResolvedValue({ id: 'cust-1', creditLimitPence: 100000 });
+
+    // 10×500 = 5000p total; pay 2000 cash → 3000 on AR
+    await createSale(makeBaseInput({
+      paymentStatus: 'PART_PAID',
+      customerId: 'cust-1',
+      payments: [{ method: 'CASH', amountPence: 2000 }],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 10 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.totalPence).toBe(5000);
+
+    const journalLines = postJournalEntryMock.mock.calls[0][0].lines;
+    expect(journalLines).toEqual(
+      expect.arrayContaining([
+        { accountCode: '1000', debitPence: 2000 }, // cash received
+        { accountCode: '1100', debitPence: 3000 }, // AR for unpaid
+        { accountCode: '4000', creditPence: 5000 }, // full revenue
+      ])
+    );
+  });
+
+  it('rejects overpayment that a non-cash refund cannot absorb', async () => {
+    // 2×500 = 1000p; card 1500 → 500 overpayment with no cash to trim
+    await expect(
+      createSale(makeBaseInput({
+        payments: [{ method: 'CARD', amountPence: 1500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 2 }],
+      }))
+    ).rejects.toThrow('Payment exceeds total due');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Discount approval threshold
+// ---------------------------------------------------------------------------
+describe('createSale — discount approval', () => {
+  beforeEach(() => {
+    // Tighten threshold to 10% so 50% line discount breaches it
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: false,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 1000,
+    });
+  });
+
+  it('rejects an above-threshold discount with no approver', async () => {
+    await expect(
+      createSale(makeBaseInput({
+        lines: [{
+          productId: PRODUCT_ID,
+          unitId: UNIT_ID,
+          qtyInUnit: 2,
+          discountType: 'PERCENT',
+          discountValue: 50,
+        }],
+      }))
+    ).rejects.toThrow('Manager discount PIN approval is required');
+  });
+
+  it('requires a reason when an approver is provided', async () => {
+    await expect(
+      createSale(makeBaseInput({
+        discountApprovedByUserId: 'mgr-1',
+        lines: [{
+          productId: PRODUCT_ID,
+          unitId: UNIT_ID,
+          qtyInUnit: 2,
+          discountType: 'PERCENT',
+          discountValue: 50,
+        }],
+      }))
+    ).rejects.toThrow('Discount reason is required');
+  });
+
+  it('passes when approver + reason are supplied and manager exists', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'mgr-1' });
+
+    await expect(
+      createSale(makeBaseInput({
+        discountApprovedByUserId: 'mgr-1',
+        discountOverrideReason: 'VIP customer loyalty',
+        lines: [{
+          productId: PRODUCT_ID,
+          unitId: UNIT_ID,
+          qtyInUnit: 2,
+          discountType: 'PERCENT',
+          discountValue: 50,
+        }],
+      }))
+    ).resolves.toBeTruthy();
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    // 2×500 = 1000, 50% off = 500
+    expect(createCall.data.totalPence).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Risk monitor fire-and-forget signals
+// ---------------------------------------------------------------------------
+describe('createSale — risk signals', () => {
+  it('fires excessive-discount alert with real discount/gross figures', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'mgr-1' });
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: false,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 1000,
+    });
+
+    await createSale(makeBaseInput({
+      discountApprovedByUserId: 'mgr-1',
+      discountOverrideReason: 'VIP',
+      lines: [{
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        qtyInUnit: 2,
+        discountType: 'PERCENT',
+        discountValue: 50,
+      }],
+    }));
+
+    expect(detectExcessiveDiscountRiskMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: BIZ_ID,
+        discountPence: 500,
+        grossSalesPence: 1000,
+        thresholdBps: 1000,
+      })
+    );
+  });
+
+  it('fires negative-margin alert when selling below cost', async () => {
+    // Cost 800p/base, selling at 500p → margin = -300 per unit × 2 = -600
+    fetchInventoryMapMock.mockResolvedValue(
+      new Map([[PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 800 }]])
+    );
+
+    await createSale(makeBaseInput({
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 2 }],
+    }));
+
+    expect(detectNegativeMarginRiskMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessId: BIZ_ID,
+        grossMarginPence: expect.any(Number),
+      })
+    );
+    const call = detectNegativeMarginRiskMock.mock.calls[0][0];
+    expect(call.grossMarginPence).toBeLessThan(0);
+  });
+
+  it('does not fire negative-margin when margin is positive', async () => {
+    // Cost 300, sell 500 → positive margin
+    await createSale(makeBaseInput({
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 2 }],
+    }));
+
+    // detectNegativeMarginRisk is still called, but the real impl no-ops on >= 0.
+    // Assert the call carried a non-negative margin so the real detector would exit early.
+    expect(detectNegativeMarginRiskMock).toHaveBeenCalled();
+    const call = detectNegativeMarginRiskMock.mock.calls[0][0];
+    expect(call.grossMarginPence).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Discount clamping edge cases
+// ---------------------------------------------------------------------------
+describe('createSale — discount clamping', () => {
+  it('clamps a percent line discount > 100 down to 100', async () => {
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'mgr-1' });
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: false,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000, // permissive so approval isn't the thing under test
+    });
+
+    await createSale(makeBaseInput({
+      lines: [{
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        qtyInUnit: 2,
+        discountType: 'PERCENT',
+        discountValue: 150, // must clamp to 100 → full discount
+      }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.totalPence).toBe(0);
+    expect(createCall.data.subtotalPence).toBe(0);
+    // Zero-total sales should not create a fallback cash payment
+    expect(createCall.data.payments.create).toEqual([]);
+  });
+
+  it('clamps an amount line discount > subtotal down to subtotal', async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: false,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000,
+    });
+
+    // 2×500 = 1000 subtotal; discount 5000 → clamp to 1000 → total 0
+    await createSale(makeBaseInput({
+      lines: [{
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        qtyInUnit: 2,
+        discountType: 'AMOUNT',
+        discountValue: 5000,
+      }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.totalPence).toBe(0);
+  });
+
+  it('clamps an order amount discount exceeding net subtotal to net (not below zero)', async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: BIZ_ID,
+      vatEnabled: false,
+      currency: 'GHS',
+      requireOpenTillForSales: false,
+      discountApprovalThresholdBps: 10000,
+    });
+
+    // 2×500 = 1000 net; order discount 5000 → clamp to 1000 → invoice total 0
+    await createSale(makeBaseInput({
+      orderDiscountType: 'AMOUNT',
+      orderDiscountValue: 5000,
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 2 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.discountPence).toBe(1000);
+    expect(createCall.data.subtotalPence).toBe(0);
+    expect(createCall.data.totalPence).toBe(0);
+  });
+
+  it('treats a negative percent discount as zero (no discount)', async () => {
+    await createSale(makeBaseInput({
+      lines: [{
+        productId: PRODUCT_ID,
+        unitId: UNIT_ID,
+        qtyInUnit: 2,
+        discountType: 'PERCENT',
+        discountValue: -25, // nonsense → must coerce to 0
+      }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.totalPence).toBe(1000); // full price
+  });
+});
