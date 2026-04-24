@@ -65,6 +65,7 @@ export default function TopNav({
   const showMobileSalesPulse =
     Boolean(todaySales && (user.role === 'MANAGER' || user.role === 'OWNER')) &&
     !pathname.startsWith('/onboarding');
+  const mobileSales = showMobileSalesPulse ? todaySales : undefined;
 
   useEffect(() => {
     setOpenGroup(null);
@@ -202,9 +203,9 @@ export default function TopNav({
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
           </div>
-          {showMobileSalesPulse ? (
+          {mobileSales ? (
             <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
-              {formatMoney(todaySales.totalPence, todaySales.currency)} · {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+              {formatMoney(mobileSales.totalPence, mobileSales.currency)} · {mobileSales.txCount} txn{mobileSales.txCount !== 1 ? 's' : ''} today
             </div>
           ) : null}
         </div>
