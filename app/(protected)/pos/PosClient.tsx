@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
+import { usePosCartActions } from '@/hooks/usePosCartActions';
 import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
 import {
   usePosMomoPayment,
@@ -153,8 +154,6 @@ export default function PosClient({
     // Priority 3: first till (fallback — localStorage override happens in useEffect after mount)
     return tills[0]?.id ?? '';
   });
-  const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
-  const [activeLineId, setActiveLineId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
   const [cashTendered, setCashTendered] = useState('');
   const [cardPaid, setCardPaid] = useState('');
@@ -592,52 +591,6 @@ export default function PosClient({
     setPaymentMethods(next);
   };
 
-  const clearQtyDraft = useCallback((lineId: string) => {
-    setQtyDrafts((prev) => {
-      if (!prev[lineId]) return prev;
-      const next = { ...prev };
-      delete next[lineId];
-      return next;
-    });
-  }, []);
-
-  const removeLine = useCallback((lineId: string) => {
-    pushUndo(cart);
-    setCart((prev) => prev.filter((item) => item.id !== lineId));
-    clearQtyDraft(lineId);
-    if (activeLineId === lineId) {
-      setActiveLineId(null);
-    }
-  }, [activeLineId, cart, clearQtyDraft, pushUndo, setCart]);
-
-  const commitLineQty = (line: CartLine) => {
-    const draft = qtyDrafts[line.id];
-    if (draft === undefined) return;
-    const trimmed = draft.trim();
-    if (!trimmed) {
-      clearQtyDraft(line.id);
-      return;
-    }
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed)) {
-      clearQtyDraft(line.id);
-      return;
-    }
-    const desiredQty = Math.max(0, Math.floor(parsed));
-    const clampedQty = clampQtyInUnit(line.productId, line.unitId, desiredQty, line.id);
-    setCart((prev) => {
-      if (clampedQty <= 0) {
-        return prev.filter((item) => item.id !== line.id);
-      }
-      return prev.map((item) =>
-        item.id === line.id ? { ...item, qtyInUnit: clampedQty } : item
-      );
-    });
-    clearQtyDraft(line.id);
-  };
-
-
-
   const filteredProducts = useMemo(() => {
     return filterPosProducts(productOptions, productSearch);
   }, [productOptions, productSearch]);
@@ -665,26 +618,26 @@ export default function PosClient({
     };
   }, [recomputeProductDropdownViewport]);
 
-
-
-  const addToCart = useCallback((line: { productId: string; unitId: string; qtyInUnit: number }) => {
-    if (!line.productId || !line.unitId || line.qtyInUnit <= 0) return;
-    if (cart.length === 0) router.prefetch('/pos'); // prime RSC cache while cashier enters payment
-    const id = `${line.productId}:${line.unitId}`;
-    const existing = cart.find((item) => item.id === id);
-    const desiredQty = (existing?.qtyInUnit ?? 0) + line.qtyInUnit;
-    const clampedQty = clampQtyInUnit(line.productId, line.unitId, desiredQty, existing?.id);
-    if (clampedQty <= 0) return;
-    setCart((prev) => {
-      if (existing) {
-        return prev.map((item) => (item.id === id ? { ...item, qtyInUnit: clampedQty } : item));
-      }
-      return [
-        ...prev,
-        { id, ...line, qtyInUnit: clampedQty, discountType: 'NONE', discountValue: '' }
-      ];
-    });
-  }, [cart, clampQtyInUnit, router, setCart]);
+  const {
+    activeLineId,
+    qtyDrafts,
+    setActiveLineId,
+    setQtyDrafts,
+    removeLine,
+    addToCart,
+    commitLineQty,
+    decrementLineQty,
+    incrementLineQty,
+    setLineDiscountType,
+    setLineDiscountValue,
+    changeLineUnit,
+  } = usePosCartActions<CartLine>({
+    cart,
+    setCart,
+    pushUndo,
+    clampQtyInUnit,
+    onFirstCartLine: () => router.prefetch('/pos'),
+  });
   const {
     stagedProduct,
     stagedUnitId,
@@ -1476,12 +1429,7 @@ export default function PosClient({
                             className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const newQty = line.qtyInUnit - 1;
-                              if (newQty <= 0) { removeLine(line.id); }
-                              else {
-                                pushUndo(cart);
-                                setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
-                              }
+                              decrementLineQty(line);
                             }}
                           >
                             −
@@ -1504,11 +1452,7 @@ export default function PosClient({
                             className="flex h-11 w-11 items-center justify-center rounded-lg border border-black/10 bg-white text-lg font-bold hover:bg-black/5 transition"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const newQty = clampQtyInUnit(line.productId, line.unitId, line.qtyInUnit + 1, line.id);
-                              if (newQty > line.qtyInUnit) {
-                                pushUndo(cart);
-                                setCart((prev) => prev.map((item) => item.id === line.id ? { ...item, qtyInUnit: newQty } : item));
-                              }
+                              incrementLineQty(line);
                             }}
                           >
                             +
@@ -1535,11 +1479,7 @@ export default function PosClient({
                   value={cartDetails.find((l) => l.id === activeLineId)?.discountType ?? 'NONE'}
                   onChange={(e) => {
                     const nextType = e.target.value as DiscountType;
-                    setCart((prev) =>
-                      prev.map((item) =>
-                        item.id === activeLineId ? { ...item, discountType: nextType, discountValue: nextType === 'NONE' ? '' : item.discountValue ?? '' } : item
-                      )
-                    );
+                    setLineDiscountType(activeLineId, nextType);
                   }}
                 >
                   <option value="NONE">None</option>
@@ -1557,7 +1497,7 @@ export default function PosClient({
                       step={activeLine.discountType === 'PERCENT' ? '1' : '0.01'}
                       inputMode="decimal"
                       value={activeLine.discountValue ?? ''}
-                      onChange={(e) => setCart((prev) => prev.map((item) => item.id === activeLineId ? { ...item, discountValue: e.target.value } : item))}
+                      onChange={(e) => setLineDiscountValue(activeLineId, e.target.value)}
                       onFocus={(e) => e.currentTarget.select()}
                       placeholder={activeLine.discountType === 'PERCENT' ? '10' : '0.00'}
                     />
@@ -1571,11 +1511,7 @@ export default function PosClient({
                       value={cartDetails.find((l) => l.id === activeLineId)?.unitId ?? ''}
                       onChange={(e) => {
                         const newUnitId = e.target.value;
-                        setCart((prev) =>
-                          prev.map((item) =>
-                            item.id === activeLineId ? { ...item, id: `${item.productId}:${newUnitId}`, unitId: newUnitId, qtyInUnit: 1 } : item
-                          )
-                        );
+                        changeLineUnit(activeLineId, newUnitId);
                       }}
                     >
                       {(cartDetails.find((l) => l.id === activeLineId)?.product.units ?? []).map((u) => (
