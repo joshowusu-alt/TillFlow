@@ -10,6 +10,7 @@ import { NAV_GROUPS } from '@/lib/navigation-config';
 import InstallButton from './InstallButton';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
+import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
 
 export type TopNavUser = {
   name: string;
@@ -81,6 +82,15 @@ export default function TopNav({
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // BottomTabBar's "More" tab opens the mobile drawer via this custom
+  // event. Siblings in the layout tree can't share React state directly,
+  // and a context would force the server-component layout to wrap.
+  useEffect(() => {
+    const handleOpen = () => setMobileOpen(true);
+    window.addEventListener(OPEN_MOBILE_NAV_EVENT, handleOpen);
+    return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, handleOpen);
   }, []);
 
   return (

@@ -3,6 +3,7 @@ import { getBusinessPlan } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import TopNav from '@/components/TopNav';
+import BottomTabBar from '@/components/BottomTabBar';
 import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -186,9 +187,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       )}
 
-        <main id="main-content" className="app-main-shell w-full min-w-0 max-w-full px-4 py-3 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
+        <main
+          id="main-content"
+          className="app-main-shell w-full min-w-0 max-w-full px-4 py-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 lg:px-6 lg:py-5 lg:pb-5"
+        >
           {children}
         </main>
+        <BottomTabBar />
     </div>
   );
 }

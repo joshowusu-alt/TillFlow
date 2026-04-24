@@ -194,7 +194,15 @@ input, select, textarea {
 }
 
 .safe-floating-bottom {
-  bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  /* 5rem clears the persistent mobile BottomTabBar (h-14 + padding + safe-area).
+     On lg+ the tab bar is hidden so the floating element can use the compact offset. */
+  bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 5rem));
+}
+
+@media (min-width: 1024px) {
+  .safe-floating-bottom {
+    bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  }
 }
 
 .nav-mobile-panel {
