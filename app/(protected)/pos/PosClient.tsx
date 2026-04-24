@@ -7,7 +7,9 @@ import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
 import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
+import { usePosProductDropdownViewport } from '@/hooks/usePosProductDropdownViewport';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
+import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
 import {
   useMomoCollection,
@@ -19,7 +21,6 @@ import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecreme
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { getEnabledPosPaymentMethods, getMomoManualGuidance } from '@/lib/payments/pos-momo';
-import { calculateCompactDropdownViewport } from '@/lib/payments/pos-scanner';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
 import {
@@ -200,14 +201,23 @@ export default function PosClient({
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
-  const [isCompactViewport, setIsCompactViewport] = useState(false);
-  const [productDropdownViewport, setProductDropdownViewport] = useState({ top: 112, maxHeight: 320 });
   const [cameraOpen, setCameraOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
   const productSearchShellRef = useRef<HTMLDivElement>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
-  const [undoStack, setUndoStack] = useState<CartLine[][]>([]);
-  const maxUndoSteps = 10;
+  const {
+    canUndo,
+    stack: undoStack,
+    push: pushUndo,
+    undo: popUndoSnapshot,
+    clear: clearUndoStack,
+    replace: restoreUndoStack,
+  } = usePosUndoHistory<CartLine[]>({ maxSteps: 10 });
+  const {
+    isCompactViewport,
+    viewport: productDropdownViewport,
+    recompute: recomputeProductDropdownViewport,
+  } = usePosProductDropdownViewport(productDropdownOpen, productSearchShellRef);
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const {
     customerOptions,
@@ -265,10 +275,6 @@ export default function PosClient({
     customerStorageKey,
   });
 
-  const pushUndo = useCallback((currentCart: CartLine[]) => {
-    setUndoStack((prev) => [...prev.slice(-(maxUndoSteps - 1)), currentCart]);
-  }, [maxUndoSteps]);
-
   const playBeep = useCallback((success: boolean) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -287,12 +293,11 @@ export default function PosClient({
   }, []);
 
   const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return;
-    const previousCart = undoStack[undoStack.length - 1];
-    setUndoStack((prev) => prev.slice(0, -1));
+    const previousCart = popUndoSnapshot();
+    if (!previousCart) return;
     setCart(previousCart);
     playBeep(true);
-  }, [undoStack, playBeep, setCart]);
+  }, [popUndoSnapshot, playBeep, setCart]);
 
   const selectedProduct = useMemo(
     () => productOptions.find((product) => product.id === productId),
@@ -353,7 +358,7 @@ export default function PosClient({
     setDiscountReasonCode('');
     setDiscountReason('');
     setQtyDrafts({});
-    setUndoStack([]);
+    clearUndoStack();
     if (options?.resetPaymentStatus) {
       setPaymentStatus('PAID');
     }
@@ -362,6 +367,7 @@ export default function PosClient({
     }
   }, [
     clearSavedCart,
+    clearUndoStack,
     playBeep,
     resetMomoCollection,
     setCart,
@@ -395,11 +401,12 @@ export default function PosClient({
     setDiscountReasonCode(snapshot.discountReasonCode);
     setDiscountReason(snapshot.discountReason);
     setQtyDrafts(snapshot.qtyDrafts);
-    setUndoStack(snapshot.undoStack);
+    restoreUndoStack(snapshot.undoStack);
     setSaleError(errorMessage);
     playBeep(false);
   }, [
     playBeep,
+    restoreUndoStack,
     setCart,
     setCustomerId,
     setMomoCollectionError,
@@ -666,47 +673,9 @@ export default function PosClient({
   }, [productOptions, productSearch]);
   const productSearchMatches = filteredProducts.length;
 
-  const updateProductDropdownViewport = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const compact = window.innerWidth < 640;
-    setIsCompactViewport(compact);
-    if (!compact) return;
-
-    const visualViewport = window.visualViewport;
-    const viewport = calculateCompactDropdownViewport({
-      viewportHeight: visualViewport?.height ?? window.innerHeight,
-      viewportOffsetTop: visualViewport?.offsetTop ?? 0,
-      shellBottom: productSearchShellRef.current?.getBoundingClientRect().bottom ?? null,
-    });
-
-    setProductDropdownViewport(viewport);
-  }, []);
-
-  useEffect(() => {
-    updateProductDropdownViewport();
-  }, [updateProductDropdownViewport]);
-
-  useEffect(() => {
-    if (!productDropdownOpen) return;
-
-    updateProductDropdownViewport();
-    const handleViewportChange = () => {
-      window.requestAnimationFrame(updateProductDropdownViewport);
-    };
-
-    window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('orientationchange', handleViewportChange);
-    window.visualViewport?.addEventListener('resize', handleViewportChange);
-    window.visualViewport?.addEventListener('scroll', handleViewportChange);
-
-    return () => {
-      window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('orientationchange', handleViewportChange);
-      window.visualViewport?.removeEventListener('resize', handleViewportChange);
-      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
-    };
-  }, [productDropdownOpen, updateProductDropdownViewport]);
-
+  // Viewport sizing for the product dropdown in compact mode is handled by
+  // usePosProductDropdownViewport. This useEffect only dismisses popovers on
+  // orientation change and nudges the hook to remeasure afterwards.
   useEffect(() => {
     const handleOrientationChange = () => {
       setProductDropdownOpen(false);
@@ -716,7 +685,7 @@ export default function PosClient({
       setQuickAddOpen(false);
       setShowParkModal(false);
 
-      window.requestAnimationFrame(updateProductDropdownViewport);
+      window.requestAnimationFrame(recomputeProductDropdownViewport);
     };
 
     window.addEventListener('orientationchange', handleOrientationChange);
@@ -724,7 +693,7 @@ export default function PosClient({
     return () => {
       window.removeEventListener('orientationchange', handleOrientationChange);
     };
-  }, [updateProductDropdownViewport]);
+  }, [recomputeProductDropdownViewport]);
 
 
 
@@ -1061,11 +1030,11 @@ export default function PosClient({
                 onChange={(event) => {
                   setProductSearch(event.target.value);
                   setProductDropdownOpen(true);
-                  window.requestAnimationFrame(updateProductDropdownViewport);
+                  window.requestAnimationFrame(recomputeProductDropdownViewport);
                 }}
                 onFocus={() => {
                   setProductDropdownOpen(true);
-                  window.requestAnimationFrame(updateProductDropdownViewport);
+                  window.requestAnimationFrame(recomputeProductDropdownViewport);
                 }}
                 onBlur={() => {
                   setTimeout(() => setProductDropdownOpen(false), 200);
@@ -1171,7 +1140,7 @@ export default function PosClient({
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto">
-              {undoStack.length > 0 && (
+              {canUndo && (
                 <button
                   type="button"
                   className="flex items-center gap-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold hover:bg-black/5 transition"
