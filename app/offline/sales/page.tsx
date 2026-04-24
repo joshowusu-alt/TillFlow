@@ -675,7 +675,7 @@ export default function OfflineSalesPage() {
               : `${sales.length} sale${sales.length !== 1 ? 's' : ''} waiting to sync.`}
           </p>
         </div>
-        <Link href="/pos" className="btn-ghost text-sm">
+        <Link href="/pos" className="btn-ghost min-h-11 text-sm">
           ← Back to POS
         </Link>
       </div>

@@ -71,7 +71,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
             placeholder="123456"
           />
         </div>
-        <SubmitButton loadingText="Signing in…">Sign in</SubmitButton>
+        <SubmitButton className="btn-primary min-h-11 w-full" loadingText="Signing in…">Sign in</SubmitButton>
       </form>
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">

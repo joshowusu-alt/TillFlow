@@ -164,7 +164,7 @@ export default function WelcomePage() {
             </Link>
             <Link
               href="/register"
-              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/25 transition hover:bg-accent/80 hover:shadow-accent/40"
+              className="inline-flex min-h-11 items-center rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent/25 transition hover:bg-accent/80 hover:shadow-accent/40"
             >
               Start Free
             </Link>
