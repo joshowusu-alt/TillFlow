@@ -13,7 +13,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
         </span>
         <a
           href="/register"
-          className="ml-4 shrink-0 rounded-full bg-amber-900 px-3 py-1 text-xs text-amber-50 hover:bg-amber-800"
+          className="ml-4 inline-flex min-h-11 shrink-0 items-center rounded-full bg-amber-900 px-3 py-1 text-xs text-amber-50 hover:bg-amber-800"
         >
           Get Started Free →
         </a>

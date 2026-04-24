@@ -67,7 +67,7 @@ export default async function DemoPosPage() {
         <div className="flex gap-2">
           <a
             href="/register"
-            className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80"
+            className="inline-flex min-h-11 items-center rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80"
           >
             Start Free Trial →
           </a>
@@ -177,7 +177,7 @@ export default async function DemoPosPage() {
             </p>
             <a
               href="/register"
-              className="block rounded-xl bg-white px-4 py-2 text-center text-sm font-semibold text-accent hover:bg-accentSoft"
+              className="flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 text-center text-sm font-semibold text-accent hover:bg-accentSoft"
             >
               Create Free Account
             </a>

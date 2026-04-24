@@ -55,7 +55,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
           <div className="mt-1 text-right">
             <Link
               href="/login/forgot-password"
-              className="text-xs text-accent hover:underline underline-offset-4"
+              className="inline-flex min-h-11 items-center text-xs text-accent underline-offset-4 hover:underline"
             >
               Forgot password?
             </Link>
@@ -76,12 +76,12 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-medium text-accent hover:text-accent underline underline-offset-4">
+          <Link href="/register" className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-4 hover:text-accent">
             Create one free
           </Link>
         </p>
         <p className="text-sm text-black/30">
-          <Link href="/welcome" className="hover:text-black/50 transition">
+          <Link href="/welcome" className="inline-flex min-h-11 items-center transition hover:text-black/50">
             &larr; Back to TillFlow
           </Link>
         </p>
