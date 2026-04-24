@@ -521,13 +521,13 @@ function WelcomeDashboard({
             {statusPill.label}
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+          <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
             {heroStats.map(({ label, displayLabel, value, href, footer }) => (
               <Link
                 key={label}
                 href={href}
                 aria-label={`${label}: ${value}`}
-                className="group relative flex min-h-[7rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-w-[150px] sm:px-5 sm:py-4"
+                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4"
               >
                 <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
                 <span

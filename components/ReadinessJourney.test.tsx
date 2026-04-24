@@ -85,7 +85,7 @@ describe('ReadinessJourney home stats', () => {
     );
     const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
-    expect(revenueCard.parentElement).toHaveClass('grid-cols-3');
+    expect(revenueCard.parentElement).toHaveClass('grid-cols-1');
     expect(revenueCard).toHaveClass('min-w-0');
     expect(revenueCard).not.toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');

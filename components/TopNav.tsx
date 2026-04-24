@@ -62,6 +62,10 @@ export default function TopNav({
       .filter((group) => group.items.length > 0);
   }, [user.role, features.multiStore, momoEnabled]);
 
+  const showMobileSalesPulse =
+    Boolean(todaySales && (user.role === 'MANAGER' || user.role === 'OWNER')) &&
+    !pathname.startsWith('/onboarding');
+
   useEffect(() => {
     setOpenGroup(null);
     setMobileOpen(false);
@@ -198,7 +202,7 @@ export default function TopNav({
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
           </div>
-          {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+          {showMobileSalesPulse ? (
             <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
               {formatMoney(todaySales.totalPence, todaySales.currency)} · {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
             </div>
