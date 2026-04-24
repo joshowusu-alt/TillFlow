@@ -1,4 +1,11 @@
 export function formatMoney(pence: number, currency = 'GHS') {
+  if (currency === 'GHS') {
+    return `GH₵${(pence / 100).toLocaleString('en-GH', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
   try {
     return new Intl.NumberFormat('en-GH', {
       style: 'currency',
@@ -12,7 +19,7 @@ export function formatMoney(pence: number, currency = 'GHS') {
 export function getCurrencySymbol(currency: string): string {
   const symbols: Record<string, string> = {
     GBP: '£', USD: '$', EUR: '€',
-    GHS: '₵', NGN: '₦', KES: 'KSh', ZAR: 'R',
+    GHS: 'GH₵', NGN: '₦', KES: 'KSh', ZAR: 'R',
     UGX: 'USh', TZS: 'TSh', CAD: 'C$', AUD: 'A$',
     INR: '₹', JPY: '¥', CNY: '¥', XOF: 'CFA', XAF: 'CFA',
     EGP: 'E£', MAD: 'DH', BWP: 'P', MZN: 'MT', ZMW: 'K'
