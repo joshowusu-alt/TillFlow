@@ -322,6 +322,7 @@ function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shif
     payables: <path {...pathProps} d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18" />,
     purchases: <path {...pathProps} d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0h6m5.25 0a1.5 1.5 0 01-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25m0 11.177v-12.135c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v10.51c0 .621.504 1.125 1.125 1.125H5.25" />,
     sales: <path {...pathProps} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192A48.424 48.424 0 0012 3.75c-2.088 0-4.131.134-6.124.392C4.745 4.288 3.75 5.245 3.75 6.392V19.5a2.25 2.25 0 002.25 2.25h9.75" />,
+    receipt: <path {...pathProps} d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />,
     inventory: <path {...pathProps} d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3" />,
     team: <path {...pathProps} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />,
     setup: <path {...pathProps} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
@@ -395,27 +396,6 @@ function WelcomeDashboard({
         dot: 'bg-emerald-400',
       };
 
-  // Suppress vs-yesterday deltas early in the trading day so a partial morning
-  // (e.g. 7 sales vs. yesterday's 120) doesn't look like a -94% collapse.
-  const suppressDelta = hour < 14 && data.todayTransactionCount < 20;
-
-  const buildDelta = (
-    current: number,
-    previous: number
-  ): { text: string; positive: boolean; neutral?: boolean } | null => {
-    if (suppressDelta) {
-      return { text: 'Day in progress', positive: true, neutral: true };
-    }
-    const diff = current - previous;
-    if (previous === 0 && current === 0) return null;
-    if (previous === 0) return { text: 'New today', positive: true };
-    const pct = Math.round((Math.abs(diff) / previous) * 100);
-    return {
-      text: `${diff >= 0 ? '+' : '-'}${pct}% vs yesterday`,
-      positive: diff >= 0,
-    };
-  };
-
   const smartSubtitle = data.openIssueCount > 0
     ? { text: 'Command center is ready for follow-up.', href: '/reports/command-center' }
     : hour < 11 && data.todayTransactionCount === 0
@@ -439,14 +419,14 @@ function WelcomeDashboard({
 
   const heroStats = data.saleCount === 0
     ? [
-        { label: 'Products', displayLabel: 'Products', value: data.productCount.toLocaleString(), href: '/products', delta: null, footer: 'Live' },
-        { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: null, footer: null },
-        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', delta: null, footer: lastCloseText },
+        { label: 'Products', displayLabel: 'Products', value: data.productCount.toLocaleString(), href: '/products', footer: `${data.productCount} listed` },
+        { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', footer: null },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: lastCloseText },
       ]
     : [
-        { label: "Today's Revenue", displayLabel: 'Revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard', delta: null, footer: todayVsYesterdayText },
-        { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', delta: null, footer: null },
-        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', delta: null, footer: lastCloseText },
+        { label: "Today's Revenue", displayLabel: 'Revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard', footer: todayVsYesterdayText },
+        { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', footer: null },
+        { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: lastCloseText },
       ];
   const getStatValueSize = (value: string) => {
     if (value.length > 11) return 'text-xs sm:text-sm';
@@ -542,7 +522,7 @@ function WelcomeDashboard({
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-2 sm:flex sm:gap-3">
-            {heroStats.map(({ label, displayLabel, value, href, delta, footer }) => (
+            {heroStats.map(({ label, displayLabel, value, href, footer }) => (
               <Link
                 key={label}
                 href={href}
@@ -556,11 +536,7 @@ function WelcomeDashboard({
                 >
                   {value}
                 </span>
-                {delta ? (
-                  <span className={`pointer-events-none relative z-10 mt-auto pt-3 text-[10px] font-semibold ${delta.neutral ? 'text-slate-300/75' : delta.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {delta.text}
-                  </span>
-                ) : footer ? (
+                {footer ? (
                   <span className="pointer-events-none relative z-10 mt-auto pt-3 text-[10px] font-semibold text-blue-200/55">{footer}</span>
                 ) : (
                   null
