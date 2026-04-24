@@ -45,14 +45,14 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
           <button
             type="button"
             onClick={() => setBillingCycle('monthly')}
-            className={`rounded-full px-4 py-2 text-xs font-semibold transition ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-black/45 hover:text-black/70'}`}
+            className={`min-h-11 rounded-full px-4 py-2 text-xs font-semibold transition ${billingCycle === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-black/45 hover:text-black/70'}`}
           >
             Monthly
           </button>
           <button
             type="button"
             onClick={() => setBillingCycle('yearly')}
-            className={`rounded-full px-4 py-2 text-xs font-semibold transition ${billingCycle === 'yearly' ? 'bg-accent text-white shadow-sm' : 'text-black/45 hover:text-black/70'}`}
+            className={`min-h-11 rounded-full px-4 py-2 text-xs font-semibold transition ${billingCycle === 'yearly' ? 'bg-accent text-white shadow-sm' : 'text-black/45 hover:text-black/70'}`}
           >
             Yearly
           </button>
@@ -108,8 +108,8 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                 href="/register"
                 className={
                   plan.featured
-                    ? 'mt-5 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-all hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5'
-                    : 'mt-5 inline-flex items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-all hover:border-accent/30 hover:text-accent'
+                    ? 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-all hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5'
+                    : 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-all hover:border-accent/30 hover:text-accent'
                 }
               >
                 Start Free

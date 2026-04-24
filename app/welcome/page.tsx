@@ -158,7 +158,7 @@ export default function WelcomePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-black/60 transition hover:text-black"
+              className="inline-flex min-h-11 items-center rounded-xl px-4 py-2.5 text-sm font-semibold text-black/60 transition hover:text-black"
             >
               Sign In
             </Link>
@@ -226,7 +226,7 @@ export default function WelcomePage() {
             <div className="mt-4">
               <a
                 href="#pricing"
-                className="text-sm text-black/45 underline-offset-4 transition hover:text-black/70 hover:underline"
+                className="inline-flex min-h-11 items-center text-sm text-black/45 underline-offset-4 transition hover:text-black/70 hover:underline"
               >
                 View pricing ↓
               </a>

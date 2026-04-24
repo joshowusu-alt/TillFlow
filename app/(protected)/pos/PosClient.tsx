@@ -1589,7 +1589,7 @@ export default function PosClient({
           )}
 
           {/* ── Payment section ─────────────────────────────── */}
-          <div className="card p-4 space-y-4">
+          <div id="pos-payment-panel" className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] p-4 space-y-4" tabIndex={-1}>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="label">Till</label>
@@ -2012,7 +2012,7 @@ export default function PosClient({
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 safe-area-bottom">
+        <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 pt-3 safe-area-bottom">
           <div className="space-y-3">
             <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
               {canSubmit
@@ -2038,6 +2038,19 @@ export default function PosClient({
               ) : null}
             </div>
             <div className="flex items-center gap-2">
+              {!canSubmit ? (
+                <button
+                  type="button"
+                  className="rounded-xl border border-accent/20 bg-accentSoft px-3 py-3 text-xs font-semibold text-accent transition hover:bg-accent/10"
+                  onClick={() => {
+                    const paymentPanel = document.getElementById('pos-payment-panel');
+                    paymentPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    paymentPanel?.focus({ preventScroll: true });
+                  }}
+                >
+                  Review
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"

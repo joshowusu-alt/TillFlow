@@ -183,7 +183,7 @@ input, select, textarea {
 
 /* Safe-area bottom padding for sticky bars on notch devices */
 .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
 }
 
 .overlay-shell {

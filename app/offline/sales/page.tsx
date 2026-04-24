@@ -565,10 +565,10 @@ export default function OfflineSalesPage() {
           Use this page when sync is delayed, a cashier needs to amend a queued sale, or you want to verify what is still waiting on this device.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Link href="/settings/system-health" className="btn-secondary text-xs">
+          <Link href="/settings/system-health" className="btn-secondary min-h-11 text-xs">
             Open System Health
           </Link>
-          <Link href="/settings/backup" className="btn-secondary text-xs">
+          <Link href="/settings/backup" className="btn-secondary min-h-11 text-xs">
             Review Backup Plan
           </Link>
         </div>
