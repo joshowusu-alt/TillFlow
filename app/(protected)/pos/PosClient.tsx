@@ -7,6 +7,7 @@ import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
 import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
+import { usePosOrderDiscount } from '@/hooks/usePosOrderDiscount';
 import { usePosProductDropdownViewport } from '@/hooks/usePosProductDropdownViewport';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
@@ -182,11 +183,14 @@ export default function PosClient({
   } = useMomoCollection({ storeId: store.id });
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
-  const [orderDiscountType, setOrderDiscountType] = useState<DiscountType>('NONE');
-  const [orderDiscountInput, setOrderDiscountInput] = useState('');
-  const [discountManagerPin, setDiscountManagerPin] = useState('');
-  const [discountReasonCode, setDiscountReasonCode] = useState('');
-  const [discountReason, setDiscountReason] = useState('');
+  const orderDiscountForm = usePosOrderDiscount<DiscountType>('NONE');
+  const {
+    type: orderDiscountType,
+    input: orderDiscountInput,
+    managerPin: discountManagerPin,
+    reasonCode: discountReasonCode,
+    reason: discountReason,
+  } = orderDiscountForm;
   const [lastReceiptId, setLastReceiptId] = useState('');
   const [saleSuccess, setSaleSuccess] = useState<{ receiptId: string; totalPence: number; transactionNumber: string | null } | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
@@ -352,11 +356,7 @@ export default function PosClient({
     setMomoNetwork('MTN');
     resetMomoCollection();
     setPaymentMethods(['CASH']);
-    setOrderDiscountType('NONE');
-    setOrderDiscountInput('');
-    setDiscountManagerPin('');
-    setDiscountReasonCode('');
-    setDiscountReason('');
+    orderDiscountForm.reset();
     setQtyDrafts({});
     clearUndoStack();
     if (options?.resetPaymentStatus) {
@@ -368,6 +368,7 @@ export default function PosClient({
   }, [
     clearSavedCart,
     clearUndoStack,
+    orderDiscountForm,
     playBeep,
     resetMomoCollection,
     setCart,
@@ -395,16 +396,13 @@ export default function PosClient({
     setMomoCollectionSignature(snapshot.momoCollectionSignature);
     setPaymentStatus(snapshot.paymentStatus);
     setPaymentMethods(snapshot.paymentMethods);
-    setOrderDiscountType(snapshot.orderDiscountType);
-    setOrderDiscountInput(snapshot.orderDiscountInput);
-    setDiscountManagerPin(snapshot.discountManagerPin);
-    setDiscountReasonCode(snapshot.discountReasonCode);
-    setDiscountReason(snapshot.discountReason);
+    orderDiscountForm.restore(snapshot);
     setQtyDrafts(snapshot.qtyDrafts);
     restoreUndoStack(snapshot.undoStack);
     setSaleError(errorMessage);
     playBeep(false);
   }, [
+    orderDiscountForm,
     playBeep,
     restoreUndoStack,
     setCart,
@@ -493,8 +491,7 @@ export default function PosClient({
         paymentStatus,
         customerId,
         dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
-        orderDiscountType,
-        orderDiscountValue: orderDiscountInput,
+        ...orderDiscountForm.toServicePayload(),
         cashPaid: Math.max(0, Math.round(cashApplied)),
         cardPaid: Math.max(0, Math.round(cardPaidValue)),
         transferPaid: Math.max(0, Math.round(transferPaidValue)),
@@ -503,9 +500,6 @@ export default function PosClient({
         momoCollectionId: momoCollectionId || undefined,
         momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
         momoNetwork,
-        discountManagerPin: discountManagerPin.trim() || undefined,
-        discountReasonCode: discountReasonCode || undefined,
-        discountReason: discountReason.trim() || undefined,
       });
 
       if (result.success) {
@@ -1694,7 +1688,7 @@ export default function PosClient({
               <select
                 className="input w-full"
                 value={orderDiscountType}
-                onChange={(e) => { const t = e.target.value as DiscountType; setOrderDiscountType(t); if (t === 'NONE') setOrderDiscountInput(''); }}
+                onChange={(e) => orderDiscountForm.setType(e.target.value as DiscountType)}
               >
                 <option value="NONE">None</option>
                 <option value="PERCENT">%</option>
@@ -1707,7 +1701,7 @@ export default function PosClient({
                 step={orderDiscountType === 'PERCENT' ? '1' : '0.01'}
                 inputMode="decimal"
                 value={orderDiscountInput}
-                onChange={(e) => setOrderDiscountInput(e.target.value)}
+                onChange={(e) => orderDiscountForm.setInput(e.target.value)}
                 disabled={orderDiscountType === 'NONE'}
                 onFocus={(e) => e.currentTarget.select()}
                 placeholder={orderDiscountType === 'PERCENT' ? '10' : '0.00'}
@@ -1727,7 +1721,7 @@ export default function PosClient({
                   <select
                     className="input"
                     value={discountReasonCode}
-                    onChange={(e) => setDiscountReasonCode(e.target.value)}
+                    onChange={(e) => orderDiscountForm.setReasonCode(e.target.value)}
                   >
                     <option value="">Select reason code</option>
                     {DISCOUNT_REASON_CODES.map((code) => (
@@ -1739,14 +1733,14 @@ export default function PosClient({
                   <input
                     className="input"
                     value={discountReason}
-                    onChange={(e) => setDiscountReason(e.target.value)}
+                    onChange={(e) => orderDiscountForm.setReason(e.target.value)}
                     placeholder="Reason details"
                   />
                   <input
                     className="input"
                     type="password"
                     value={discountManagerPin}
-                    onChange={(e) => setDiscountManagerPin(e.target.value)}
+                    onChange={(e) => orderDiscountForm.setManagerPin(e.target.value)}
                     inputMode="numeric"
                     pattern="[0-9]*"
                     placeholder="Manager PIN"
