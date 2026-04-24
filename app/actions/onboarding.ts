@@ -87,6 +87,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     overdueSupplierInvoiceCount,
     lastClosedShift,
     lastReceipt,
+    openingBalanceCash,
   ] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
@@ -153,6 +154,13 @@ export async function getReadiness(): Promise<ReadinessData> {
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
+    }),
+    prisma.openingBalance.findFirst({
+      where: {
+        businessId: business.id,
+        accountCode: '1000', // Cash account
+      },
+      select: { amountPence: true },
     }),
   ]);
 
@@ -262,7 +270,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     openShiftSalesCount: openShifts.reduce((sum, shift) => sum + shift._count.salesInvoices, 0),
     reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
     overdueSupplierInvoiceCount,
-    expectedCashPence: todayKpis?.cashOnHandEstimatePence ?? 0,
+    expectedCashPence: openingBalanceCash?.amountPence ?? (todayKpis?.cashOnHandEstimatePence ?? 0),
     lastShiftClosedAt: lastClosedShift?.closedAt?.toISOString() ?? null,
     lastReceiptId: lastReceipt?.id ?? null,
   };
