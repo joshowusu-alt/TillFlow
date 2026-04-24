@@ -7,22 +7,22 @@ import { formatMoney } from '@/lib/format';
 import { useParkedCarts } from '@/hooks/useParkedCarts';
 import { usePersistedPosCart } from '@/hooks/usePersistedPosCart';
 import { usePosKeyboardShortcuts } from '@/hooks/usePosKeyboardShortcuts';
+import {
+  usePosMomoPayment,
+  useStalePosMomoCollectionReset,
+  type CollectionNetwork,
+  type MomoCollectionState,
+} from '@/hooks/usePosMomoPayment';
 import { usePosOrderDiscount } from '@/hooks/usePosOrderDiscount';
 import { usePosProductDropdownViewport } from '@/hooks/usePosProductDropdownViewport';
 import { usePosSaleResult } from '@/hooks/usePosSaleResult';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
-import {
-  useMomoCollection,
-  type CollectionNetwork,
-  type MomoCollectionState,
-} from '@/hooks/useMomoCollection';
 import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
 import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
-import { getEnabledPosPaymentMethods, getMomoManualGuidance } from '@/lib/payments/pos-momo';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
 import {
@@ -169,19 +169,22 @@ export default function PosClient({
     momoNetwork,
     setMomoNetwork,
     momoCollectionId,
-    setMomoCollectionId,
     momoCollectionStatus,
-    setMomoCollectionStatus,
     momoCollectionError,
-    setMomoCollectionError,
     momoIdempotencyKey,
-    setMomoIdempotencyKey,
     momoCollectionSignature,
-    setMomoCollectionSignature,
     isInitiatingMomo,
     resetMomoCollection,
+    resetMomoPaymentFields,
+    restoreMomoSnapshot,
     handleInitiateMomoCollection,
-  } = useMomoCollection({ storeId: store.id });
+    availablePaymentMethods,
+    momoGuidance,
+  } = usePosMomoPayment({
+    storeId: store.id,
+    momoEnabled: business.momoEnabled ?? false,
+    momoProvider: business.momoProvider,
+  });
   const [stockAlert, setStockAlert] = useState<string | null>(null);
   const [barcodeAlert, setBarcodeAlert] = useState<string | null>(null);
   const orderDiscountForm = usePosOrderDiscount<DiscountType>('NONE');
@@ -261,14 +264,6 @@ export default function PosClient({
     recallParkedCart,
     deleteParkedCart,
   } = useParkedCarts<CartLine>({ storageKey: parkedCartsStorageKey });
-  const availablePaymentMethods = useMemo(
-    () => getEnabledPosPaymentMethods(business.momoEnabled ?? false),
-    [business.momoEnabled]
-  );
-  const momoGuidance = useMemo(
-    () => getMomoManualGuidance(business.momoProvider),
-    [business.momoProvider]
-  );
   const productExists = useCallback(
     (productId: string) => productOptions.some((product) => product.id === productId),
     [productOptions]
@@ -363,10 +358,7 @@ export default function PosClient({
     setCashTendered('');
     setCardPaid('');
     setTransferPaid('');
-    setMomoPaid('');
-    setMomoPayerMsisdn('');
-    setMomoNetwork('MTN');
-    resetMomoCollection();
+    resetMomoPaymentFields();
     setPaymentMethods(['CASH']);
     orderDiscountForm.reset();
     setQtyDrafts({});
@@ -382,12 +374,9 @@ export default function PosClient({
     clearUndoStack,
     orderDiscountForm,
     playBeep,
-    resetMomoCollection,
+    resetMomoPaymentFields,
     setCart,
     setCustomerId,
-    setMomoNetwork,
-    setMomoPaid,
-    setMomoPayerMsisdn,
   ]);
 
   const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
@@ -397,15 +386,7 @@ export default function PosClient({
     setCashTendered(snapshot.cashTendered);
     setCardPaid(snapshot.cardPaid);
     setTransferPaid(snapshot.transferPaid);
-    setMomoPaid(snapshot.momoPaid);
-    setMomoRef(snapshot.momoRef);
-    setMomoPayerMsisdn(snapshot.momoPayerMsisdn);
-    setMomoNetwork(snapshot.momoNetwork);
-    setMomoCollectionId(snapshot.momoCollectionId);
-    setMomoCollectionStatus(snapshot.momoCollectionStatus);
-    setMomoCollectionError(snapshot.momoCollectionError);
-    setMomoIdempotencyKey(snapshot.momoIdempotencyKey);
-    setMomoCollectionSignature(snapshot.momoCollectionSignature);
+    restoreMomoSnapshot(snapshot);
     setPaymentStatus(snapshot.paymentStatus);
     setPaymentMethods(snapshot.paymentMethods);
     orderDiscountForm.restore(snapshot);
@@ -417,17 +398,9 @@ export default function PosClient({
     orderDiscountForm,
     playBeep,
     restoreUndoStack,
+    restoreMomoSnapshot,
     setCart,
     setCustomerId,
-    setMomoCollectionError,
-    setMomoCollectionId,
-    setMomoCollectionSignature,
-    setMomoCollectionStatus,
-    setMomoIdempotencyKey,
-    setMomoNetwork,
-    setMomoPaid,
-    setMomoPayerMsisdn,
-    setMomoRef,
     setSaleError,
   ]);
 
@@ -613,10 +586,7 @@ export default function PosClient({
       if (method === 'CARD') setCardPaid('');
       if (method === 'TRANSFER') setTransferPaid('');
       if (method === 'MOBILE_MONEY') {
-        setMomoPaid('');
-        setMomoPayerMsisdn('');
-        setMomoNetwork('MTN');
-        resetMomoCollection();
+        resetMomoPaymentFields();
       }
     }
     setPaymentMethods(next);
@@ -855,6 +825,16 @@ export default function PosClient({
     momoConfirmed,
     momoSignature,
   } = checkoutSummary;
+
+  useStalePosMomoCollectionReset({
+    momoCollectionId,
+    momoCollectionStatus,
+    momoCollectionSignature,
+    momoSignature,
+    needsMomoConfirmation,
+    resetMomoCollection,
+  });
+
   const activePaymentMethodLabels = useMemo(
     () => paymentMethods.map((method) =>
       method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'
@@ -869,26 +849,6 @@ export default function PosClient({
     () => parkedCarts[0] ?? null,
     [parkedCarts]
   );
-
-  useEffect(() => {
-    if (!momoCollectionId) return;
-    if (momoCollectionStatus === 'PENDING') return;
-    if (momoCollectionSignature && momoCollectionSignature !== momoSignature) {
-      resetMomoCollection();
-    }
-  }, [
-    momoCollectionId,
-    momoCollectionSignature,
-    momoCollectionStatus,
-    momoSignature,
-    resetMomoCollection,
-  ]);
-
-  useEffect(() => {
-    if (needsMomoConfirmation) return;
-    if (!momoCollectionId && momoCollectionStatus === 'IDLE') return;
-    resetMomoCollection();
-  }, [momoCollectionId, momoCollectionStatus, needsMomoConfirmation, resetMomoCollection]);
 
   const handleBarcodeKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
