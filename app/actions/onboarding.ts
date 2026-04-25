@@ -62,7 +62,7 @@ function getNextRequiredReadinessStep(steps: ReadinessStep[]) {
   return getRequiredReadinessSteps(steps).find((step) => !step.done) ?? null;
 }
 
-export function resolveReadinessExpectedCashPence(input: {
+export async function resolveReadinessExpectedCashPence(input: {
   openShiftExpectedCashPence: number[];
   lastClosedShiftExpectedCashPence?: number | null;
   openingBalanceCashPence?: number | null;
@@ -268,7 +268,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         todayKpis.openHighAlerts > 0,
       ].filter(Boolean).length
     : 0;
-  const expectedCashPence = resolveReadinessExpectedCashPence({
+  const expectedCashPence = await resolveReadinessExpectedCashPence({
     openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),
     lastClosedShiftExpectedCashPence: lastClosedShift?.expectedCashPence,
     openingBalanceCashPence: openingBalanceCash?.amountPence,
