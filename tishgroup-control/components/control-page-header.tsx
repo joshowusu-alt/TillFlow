@@ -36,7 +36,8 @@ export default function ControlPageHeader({
             <div className="space-y-2">
               <div className="eyebrow">{eyebrow}</div>
               <h1 className="page-title font-[var(--font-display)] text-control-ink">{title}</h1>
-              <p className="max-w-3xl text-sm leading-6 text-black/60 sm:text-[0.95rem]">{description}</p>
+              {/* Description is verbose context for first-time operators; it hides on mobile so repeat users get straight to the data. */}
+              <p className="hidden max-w-3xl text-sm leading-6 text-black/60 sm:block sm:text-[0.95rem]">{description}</p>
             </div>
 
             {chips && chips.length > 0 ? (

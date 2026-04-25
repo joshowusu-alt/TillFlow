@@ -11,7 +11,8 @@ export default function SectionHeading({
     <div className="space-y-1.5">
       <div className="eyebrow">{eyebrow}</div>
       <h2 className="section-title text-control-ink">{title}</h2>
-      <p className="max-w-3xl text-sm leading-5 text-black/58">{description}</p>
+      {/* Section description is intentionally desktop-only; mobile users get the eyebrow + title only to keep dense lists tight. */}
+      <p className="hidden max-w-3xl text-sm leading-5 text-black/58 sm:block">{description}</p>
     </div>
   );
 }
