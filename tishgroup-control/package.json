@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node scripts/ensure-control-schema.mjs && next build",
     "db:generate": "prisma generate",
     "start": "next start",
     "lint": "eslint app components lib prisma --ext .ts,.tsx --no-error-on-unmatched-pattern",
