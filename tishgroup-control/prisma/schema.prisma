@@ -19,6 +19,7 @@ model Business {
   lastPaymentAt    DateTime?
   nextPaymentDueAt DateTime?
   billingNotes     String?
+  isDemo           Boolean                @default(false)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   users            User[]
