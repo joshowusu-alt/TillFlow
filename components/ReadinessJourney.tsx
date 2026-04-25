@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -586,6 +586,10 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   const [isBusy, setIsBusy] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const { toast: showToast } = useToast();
+
+  useEffect(() => {
+    setData(initial);
+  }, [initial]);
 
   const handleGenerateDemo = async () => {
     setIsBusy(true);

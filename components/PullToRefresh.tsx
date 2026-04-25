@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { refreshCurrentView } from '@/app/actions/refresh';
 
 const TRIGGER_DISTANCE = 68;
 const MAX_PULL_DISTANCE = 112;
@@ -86,14 +87,18 @@ export default function PullToRefresh() {
       setDistance(TRIGGER_DISTANCE);
 
       startTransition(() => {
-        router.refresh();
-      });
+        void refreshCurrentView(window.location.pathname)
+          .catch(() => null)
+          .finally(() => {
+            router.refresh();
 
-      window.setTimeout(() => {
-        refreshingRef.current = false;
-        setRefreshing(false);
-        setDistance(0);
-      }, 1200);
+            window.setTimeout(() => {
+              refreshingRef.current = false;
+              setRefreshing(false);
+              setDistance(0);
+            }, 900);
+          });
+      });
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });
