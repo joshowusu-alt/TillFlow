@@ -4,10 +4,14 @@ import { addControlNoteAction, recordControlPaymentAction, reopenControlBusiness
 import BillingScheduleFields from '@/components/BillingScheduleFields';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
-import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
+import { PlanPill, StatePill } from '@/components/status-pill';
 import { canManageSubscriptions, canRecordPayments, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { getManagedBusinessDetail } from '@/lib/control-service';
 import { getActionChecklist, formatCedi } from '@/lib/control-metrics';
+import { listBusinessAuditTrail } from '@/lib/audit';
+import BusinessTimeline from '@/components/business-timeline';
+import SlaFlags from '@/components/sla-flags';
+import { getSlaFlags } from '@/lib/sla';
 
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -30,9 +34,10 @@ export default async function BusinessDetailPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
 }) {
   const staff = await requireControlStaff();
-  const [business, staffOptions] = await Promise.all([
+  const [business, staffOptions, auditTrail] = await Promise.all([
     getManagedBusinessDetail(params.businessId),
     listActiveControlStaff(),
+    listBusinessAuditTrail(params.businessId, 50),
   ]);
 
   if (!business) {
@@ -50,16 +55,16 @@ export default async function BusinessDetailPage({
   const checklist = getActionChecklist(business);
   const updated = readSearchParam(resolvedSearchParams.updated);
   const error = readSearchParam(resolvedSearchParams.error);
-  const tab = readSearchParam(resolvedSearchParams.tab) ?? 'overview';
+  const tab = readSearchParam(resolvedSearchParams.tab) ?? 'timeline';
   const canEditSubscription = canManageSubscriptions(staff.role);
   const canTakePayments = canRecordPayments(staff.role);
   const canAddNotes = canWriteNotes(staff.role);
 
   function TabStrip() {
     const tabs = [
+      { id: 'timeline', label: 'Timeline' },
       { id: 'overview', label: 'Overview' },
       { id: 'billing', label: 'Billing' },
-      { id: 'activity', label: 'Activity' },
       { id: 'notes', label: 'Notes' },
     ];
     return (
@@ -128,8 +133,8 @@ export default async function BusinessDetailPage({
         chips={[
           { label: 'Call owner', href: toPhoneHref(business.ownerPhone), tone: 'dark' },
           ...(business.ownerEmail !== 'Email not recorded' ? [{ label: 'Email owner', href: `mailto:${business.ownerEmail}` }] : []),
+          { label: 'Timeline', href: `/businesses/${businessId}?tab=timeline` },
           { label: 'Billing', href: `/businesses/${businessId}?tab=billing` },
-          { label: 'Activity', href: `/businesses/${businessId}?tab=activity` },
         ]}
         stats={[
           { label: 'Outstanding', value: formatCedi(business.outstandingAmount), hint: 'Current amount exposed to renewal follow-up or recovery.' },
@@ -142,7 +147,7 @@ export default async function BusinessDetailPage({
             <div className="flex flex-wrap gap-2">
               <PlanPill plan={business.plan} />
               <StatePill state={business.state} />
-              <HealthPill health={business.health} />
+              <SlaFlags flags={getSlaFlags(business)} />
             </div>
             <div>
               <div className="eyebrow">Today's move</div>
@@ -163,6 +168,14 @@ export default async function BusinessDetailPage({
       />
 
       <TabStrip />
+
+      {tab === 'timeline' ? (
+        <BusinessTimeline
+          payments={business.recentPayments}
+          notes={business.recentNotes}
+          audits={auditTrail}
+        />
+      ) : null}
 
       <section className={`grid gap-4 lg:grid-cols-2 ${tab !== 'overview' ? 'hidden' : ''}`}>
         <div className="control-callout">
@@ -712,34 +725,7 @@ export default async function BusinessDetailPage({
         </div>
       ) : null}
 
-      {tab === 'activity' ? (
-        <div className="panel p-6">
-          <SectionHeading
-            eyebrow="Payment history"
-            title="Recent recorded payments"
-            description="These are the control-plane payment records that should line up with Tillflow access restoration and next-due scheduling."
-          />
-          <div className="mt-5 space-y-3">
-            {business.recentPayments.length > 0 ? business.recentPayments.map((payment) => (
-              <div key={payment.id} className="rounded-2xl border border-black/8 bg-white/80 px-4 py-4 text-sm text-black/66">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="font-semibold text-control-ink">{formatCedi(payment.amountPence)} via {payment.method}</div>
-                  <div>{payment.paidAt}</div>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-4 text-xs text-black/56">
-                  <span>Recorded by {payment.receivedBy}</span>
-                  {payment.reference ? <span>Reference: {payment.reference}</span> : null}
-                </div>
-                {payment.note ? <p className="mt-3 leading-6 text-black/64">{payment.note}</p> : null}
-              </div>
-            )) : (
-              <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
-                No control-plane payment records yet.
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {/* Activity tab is replaced by the unified Timeline; legacy URLs (?tab=activity) fall through to no-op render. */}
 
       {tab === 'notes' ? (
         <div className="space-y-6">
