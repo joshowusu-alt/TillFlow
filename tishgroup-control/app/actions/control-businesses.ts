@@ -1,10 +1,12 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
+import { recordAudit } from '@/lib/audit';
+import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
 type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'SUSPENDED' | 'READ_ONLY' | 'INACTIVE';
@@ -222,6 +224,7 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
 }
 
 function revalidateControlViews(businessId: string) {
+  revalidateTag('control-portfolio');
   revalidatePath('/');
   revalidatePath('/businesses');
   revalidatePath(`/businesses/${businessId}`);
@@ -352,6 +355,27 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to update the subscription.'));
   }
 
+  await recordAudit({
+    staff,
+    action: 'SUBSCRIPTION_UPDATED',
+    businessId,
+    summary: `Subscription set to ${purchasedPlan} · ${status} · ${billingCadence}`,
+    metadata: { purchasedPlan, status, billingCadence, monthlyValuePence, outstandingAmountPence },
+  });
+
+  if (status === 'INACTIVE' || status === 'READ_ONLY') {
+    const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
+    await notifyStateTransition({
+      businessId,
+      businessName,
+      fromState: 'ACTIVE',
+      toState: status,
+      monthlyValuePence,
+      outstandingPence: outstandingAmountPence,
+      triggeredBy: { name: staff.name, email: staff.email, role: staff.role },
+    });
+  }
+
   revalidateControlViews(businessId);
   redirect(withRedirectParam(returnPath, 'updated', 'subscription'));
 }
@@ -447,6 +471,22 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to record the payment.')}`);
   }
 
+  const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
+  await recordAudit({
+    staff,
+    action: 'PAYMENT_RECORDED',
+    businessId,
+    summary: `Payment GHc ${(amountPence / 100).toLocaleString('en-GH')} via ${method}`,
+    metadata: { amountPence, method, reference, paidAt: paidAt.toISOString(), nextDueDate: nextDueDate.toISOString() },
+  });
+  await notifyPaymentRecorded({
+    businessId,
+    businessName,
+    amountPence,
+    method,
+    recordedBy: { name: staff.name, email: staff.email },
+  });
+
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=payment`);
 }
@@ -495,6 +535,14 @@ export async function addControlNoteAction(formData: FormData): Promise<void> {
   } catch (error) {
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to save the note.')}`);
   }
+
+  await recordAudit({
+    staff,
+    action: 'NOTE_ADDED',
+    businessId,
+    summary: `Note added (${category}): ${note.slice(0, 80)}${note.length > 80 ? '…' : ''}`,
+    metadata: { category },
+  });
 
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=note`);
@@ -572,6 +620,14 @@ export async function reviewControlBusinessAction(formData: FormData): Promise<v
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to review the business.')}`);
   }
 
+  await recordAudit({
+    staff,
+    action: 'REVIEW_COMPLETED',
+    businessId,
+    summary: soldPlan ? `Review completed · sold plan set to ${soldPlan}` : 'Review completed',
+    metadata: { soldPlan, billingCadence, requestedManager, reviewNote: reviewNote ?? null },
+  });
+
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=review`);
 }
@@ -622,6 +678,14 @@ export async function reopenControlBusinessReviewAction(formData: FormData): Pro
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to return the business to the review queue.')}`);
   }
 
+  await recordAudit({
+    staff,
+    action: 'REVIEW_REOPENED',
+    businessId,
+    summary: 'Returned to review queue',
+    metadata: { reviewNote: reviewNote ?? null },
+  });
+
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=reopened`);
 }
@@ -655,6 +719,15 @@ export async function createControlStaffAction(formData: FormData): Promise<void
     redirect(`/staff?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to save the staff account.')}`);
   }
 
+  await recordAudit({
+    staff,
+    action: 'STAFF_CREATED',
+    businessId: null,
+    summary: `Staff account upserted: ${name} (${role})`,
+    metadata: { email, role },
+  });
+
+  revalidateTag('control-portfolio');
   revalidatePath('/staff');
   redirect('/staff?updated=staff-created');
 }
@@ -677,6 +750,15 @@ export async function toggleControlStaffAction(formData: FormData): Promise<void
     redirect(`/staff?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to update the staff account.')}`);
   }
 
+  await recordAudit({
+    staff,
+    action: makeActive ? 'STAFF_ACTIVATED' : 'STAFF_DEACTIVATED',
+    businessId: null,
+    summary: `Staff ${makeActive ? 'activated' : 'deactivated'} (id ${staffId})`,
+    metadata: { staffId, makeActive },
+  });
+
+  revalidateTag('control-portfolio');
   revalidatePath('/staff');
   redirect(`/staff?updated=${makeActive ? 'staff-activated' : 'staff-deactivated'}`);
 }
@@ -695,10 +777,15 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
   const billingCadence = soldPlan ? normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase()) : null;
   const startDate = soldPlan ? parseOptionalDate(readOptional(formData, 'startDate')) : undefined;
   const nextDueDate = soldPlan ? parseOptionalDate(readOptional(formData, 'nextDueDate')) : undefined;
-  const businessIds = readRequired(formData, 'businessIds')
+  // Accept either the legacy comma-separated `businessIds` (filled by the
+  // server-rendered form for "review the whole page") or the new
+  // multi-value `selectedId` (filled by the mobile bulk-select bar).
+  const multiSelected = formData.getAll('selectedId').map((value) => String(value).trim()).filter(Boolean);
+  const legacyCsv = String(formData.get('businessIds') ?? '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
+  const businessIds = multiSelected.length > 0 ? multiSelected : legacyCsv;
 
   if (businessIds.length === 0) {
     redirect(withRedirectParam(returnPath, 'error', 'No businesses were selected for bulk review.'));
@@ -765,6 +852,15 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to bulk review the selected businesses.'));
   }
 
+  await recordAudit({
+    staff,
+    action: 'BULK_REVIEW',
+    businessId: null,
+    summary: `Bulk review: ${businessIds.length} businesses${soldPlan ? ` · sold plan ${soldPlan}` : ''}`,
+    metadata: { count: businessIds.length, soldPlan, billingCadence, requestedManager },
+  });
+
+  revalidateTag('control-portfolio');
   revalidatePath('/');
   revalidatePath('/businesses');
   redirect(withRedirectParam(returnPath, 'updated', 'bulk-review'));

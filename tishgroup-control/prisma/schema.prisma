@@ -149,3 +149,23 @@ model ControlNote {
   @@index([controlBusinessId, createdAt])
   @@index([createdByStaffId])
 }
+
+// Append-only audit trail for accountability across the control plane.
+// Every server action that mutates state writes one row here; reads are
+// surfaced in the per-business timeline and (eventually) a portfolio-wide
+// activity feed.
+model ControlAuditLog {
+  id          String   @id @default(cuid())
+  staffId     String?
+  staffEmail  String
+  staffRole   String
+  action      String   // e.g. SUBSCRIPTION_UPDATED, PAYMENT_RECORDED, NOTE_ADDED, REVIEW_COMPLETED, REVIEW_REOPENED, STAFF_CREATED, STAFF_TOGGLED, BULK_REVIEW
+  businessId  String?  // nullable for staff-mgmt actions
+  summary     String   // short human-readable line, mobile-friendly
+  metadata    String?  // JSON blob of structured before/after, kept as text to avoid prisma JSON variance
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([staffId, createdAt])
+  @@index([action, createdAt])
+}
