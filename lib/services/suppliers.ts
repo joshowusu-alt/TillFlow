@@ -54,6 +54,7 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
         email: true,
         creditLimitPence: true,
         purchaseInvoices: {
+          where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
           select: {
             paymentStatus: true,
             totalPence: true,

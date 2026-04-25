@@ -24,7 +24,7 @@ const {
     account: { findMany: vi.fn() },
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
-    salesInvoice: { create: vi.fn(), count: vi.fn(), aggregate: vi.fn() },
+    salesInvoice: { create: vi.fn(), count: vi.fn(), aggregate: vi.fn(), findMany: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -231,6 +231,7 @@ beforeEach(() => {
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
   prismaMock.salesInvoice.count.mockResolvedValue(0);
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
+  prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
   prismaMock.salesInvoice.create.mockResolvedValue({
     id: 'inv-1',
@@ -838,6 +839,33 @@ describe('createSale — payments split & AR posting', () => {
         { accountCode: '4000', creditPence: 5000 }, // full revenue
       ])
     );
+  });
+
+  it('checks customer credit limit against outstanding balances after receipts', async () => {
+    prismaMock.customer.findFirst.mockResolvedValue({ id: 'cust-1', creditLimitPence: 10_000 });
+    prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { totalPence: 9_000, payments: [{ amountPence: 7_000 }] },
+    ]);
+
+    await createSale(makeBaseInput({
+      paymentStatus: 'UNPAID',
+      customerId: 'cust-1',
+      payments: [],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 10 }],
+    }));
+
+    expect(prismaMock.salesInvoice.findMany).toHaveBeenCalledWith({
+      where: {
+        customerId: 'cust-1',
+        businessId: BIZ_ID,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      },
+      select: {
+        totalPence: true,
+        payments: { select: { amountPence: true } },
+      },
+    });
+    expect(prismaMock.salesInvoice.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects overpayment that a non-cash refund cannot absorb', async () => {

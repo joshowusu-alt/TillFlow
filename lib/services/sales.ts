@@ -409,15 +409,21 @@ export async function createSale(input: CreateSaleInput) {
     async (tx) => {
     // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
     if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
-      const outstandingBalance = await tx.salesInvoice.aggregate({
+      const openInvoices = await tx.salesInvoice.findMany({
         where: {
           customerId: input.customerId,
           businessId: input.businessId,
           paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
         },
-        _sum: { totalPence: true },
+        select: {
+          totalPence: true,
+          payments: { select: { amountPence: true } },
+        },
       });
-      const outstanding = outstandingBalance._sum.totalPence ?? 0;
+      const outstanding = openInvoices.reduce((sum, invoice) => {
+        const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
+        return sum + Math.max(invoice.totalPence - paid, 0);
+      }, 0);
       const newCreditExposure = outstanding + balanceDue;
       if (newCreditExposure > customerResult.creditLimitPence) {
         throw new UserError(

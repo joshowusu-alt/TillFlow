@@ -34,6 +34,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         email: true,
         creditLimitPence: true,
         purchaseInvoices: {
+          where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
           select: {
             paymentStatus: true,
             totalPence: true,

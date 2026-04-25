@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
+import { computeOutstandingBalance } from '@/lib/accounting';
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -48,6 +49,13 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
     }),
   ]);
 
+  const outstandingInvoices = invoices
+    .map((invoice) => ({
+      ...invoice,
+      outstanding: computeOutstandingBalance(invoice),
+    }))
+    .filter((invoice) => invoice.outstanding > 0);
+
   return (
     <div className="space-y-6">
       <PageHeader title="Supplier Payments" subtitle="Settle outstanding payables." />
@@ -68,9 +76,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((invoice) => {
+                  {outstandingInvoices.map((invoice) => {
                     const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
-                    const outstanding = Math.max(invoice.totalPence - paid, 0);
                     const now = new Date();
                     const isOverdue = invoice.dueDate && invoice.dueDate < now;
                     const isDueSoon = !isOverdue && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
@@ -104,7 +111,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           ) : <span className="text-black/30">—</span>}
                         </td>
                         <td className="px-3 py-3 text-sm font-semibold">
-                          {formatMoney(outstanding, business.currency)}
+                          {formatMoney(invoice.outstanding, business.currency)}
                           {invoice.payments.length > 0 && (
                             <div className="mt-0.5 text-xs font-normal text-black/40">
                               {invoice.payments.length} payment{invoice.payments.length > 1 ? 's' : ''} made
@@ -161,7 +168,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                       </tr>
                     );
                   })}
-                  {invoices.length === 0 ? (
+                  {outstandingInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-3 py-8 text-center text-sm text-black/50">
                         No outstanding invoices.

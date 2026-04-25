@@ -201,6 +201,9 @@ export function computeOutstandingBalance(invoice: {
   if (invoice.paymentStatus && ['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
     return 0;
   }
+  if (invoice.paymentStatus === 'PAID') {
+    return 0;
+  }
   const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
   return Math.max(invoice.totalPence - paid, 0);
 }
