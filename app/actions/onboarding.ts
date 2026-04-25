@@ -62,6 +62,27 @@ function getNextRequiredReadinessStep(steps: ReadinessStep[]) {
   return getRequiredReadinessSteps(steps).find((step) => !step.done) ?? null;
 }
 
+export function resolveReadinessExpectedCashPence(input: {
+  openShiftExpectedCashPence: number[];
+  lastClosedShiftExpectedCashPence?: number | null;
+  openingBalanceCashPence?: number | null;
+  cashOnHandEstimatePence?: number | null;
+}) {
+  if (input.openShiftExpectedCashPence.length > 0) {
+    return input.openShiftExpectedCashPence.reduce((sum, value) => sum + value, 0);
+  }
+
+  if (input.lastClosedShiftExpectedCashPence != null) {
+    return input.lastClosedShiftExpectedCashPence;
+  }
+
+  if (input.openingBalanceCashPence != null && input.openingBalanceCashPence > 0) {
+    return input.openingBalanceCashPence;
+  }
+
+  return input.cashOnHandEstimatePence ?? 0;
+}
+
 /**
  * Compute the owner's readiness score by checking real data conditions.
  * Returns percentage complete, individual step statuses, and the "next best action".
@@ -119,6 +140,7 @@ export async function getReadiness(): Promise<ReadinessData> {
       },
       select: {
         id: true,
+        expectedCashPence: true,
         _count: {
           select: {
             salesInvoices: {
@@ -144,7 +166,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         closedAt: { not: null },
       },
       orderBy: { closedAt: 'desc' },
-      select: { closedAt: true },
+      select: { closedAt: true, expectedCashPence: true },
     }),
     prisma.salesInvoice.findFirst({
       where: {
@@ -246,6 +268,12 @@ export async function getReadiness(): Promise<ReadinessData> {
         todayKpis.openHighAlerts > 0,
       ].filter(Boolean).length
     : 0;
+  const expectedCashPence = resolveReadinessExpectedCashPence({
+    openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),
+    lastClosedShiftExpectedCashPence: lastClosedShift?.expectedCashPence,
+    openingBalanceCashPence: openingBalanceCash?.amountPence,
+    cashOnHandEstimatePence: todayKpis?.cashOnHandEstimatePence,
+  });
 
   return {
     businessName: business.name,
@@ -270,7 +298,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     openShiftSalesCount: openShifts.reduce((sum, shift) => sum + shift._count.salesInvoices, 0),
     reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
     overdueSupplierInvoiceCount,
-    expectedCashPence: openingBalanceCash?.amountPence ?? (todayKpis?.cashOnHandEstimatePence ?? 0),
+    expectedCashPence,
     lastShiftClosedAt: lastClosedShift?.closedAt?.toISOString() ?? null,
     lastReceiptId: lastReceipt?.id ?? null,
   };
