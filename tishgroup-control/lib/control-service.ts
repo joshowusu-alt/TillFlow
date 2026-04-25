@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { managedBusinesses, planRates, type BusinessHealth, type ManagedBusiness, type ManagedPlan, type ManagedState } from '@/lib/control-data';
 import { deriveManagedState } from '@/lib/billing-state';
 import { prisma } from '@/lib/prisma';
@@ -171,7 +172,20 @@ async function getControlProfilesByBusinessId() {
   }
 }
 
-const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => {
+// Per-request memo (React cache) layered on top of a 60s cross-request
+// data cache (unstable_cache). Mutations invalidate the data cache via
+// revalidateTag('control-portfolio') from revalidateControlViews().
+const _loadLiveBusinesses = unstable_cache(
+  async (): Promise<ManagedBusiness[]> => {
+    return computeLiveBusinesses();
+  },
+  ['control-live-businesses'],
+  { revalidate: 60, tags: ['control-portfolio'] }
+);
+
+const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => _loadLiveBusinesses());
+
+async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
   try {
     const [businesses, controlProfiles] = await Promise.all([
       prisma.business.findMany({
@@ -267,7 +281,7 @@ const getLiveBusinesses = cache(async (): Promise<ManagedBusiness[]> => {
     }
     return managedBusinesses;
   }
-});
+}
 
 export async function listManagedBusinesses() {
   return getLiveBusinesses();

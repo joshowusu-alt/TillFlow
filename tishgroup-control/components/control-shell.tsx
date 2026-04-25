@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import GlobalSearch, { type SearchBusiness } from '@/components/GlobalSearch';
+import GlobalSearch from '@/components/GlobalSearch';
 
 type ControlShellStaff = {
   name: string;
@@ -86,12 +86,10 @@ export default function ControlShell({
   children,
   staff,
   navCounts,
-  businesses,
 }: {
   children: ReactNode;
   staff: ControlShellStaff;
   navCounts?: { urgent: number; collections: number; unreviewed: number };
-  businesses?: SearchBusiness[];
 }) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -213,7 +211,7 @@ export default function ControlShell({
             </p>
           </div>
 
-          <GlobalSearch businesses={businesses ?? []} variant="dark" />
+          <GlobalSearch variant="dark" />
 
           <nav className="space-y-1.5">
             {navigation.map((item) => {
@@ -301,7 +299,7 @@ export default function ControlShell({
               </div>
 
               <div className="mt-3">
-                <GlobalSearch businesses={businesses ?? []} variant="light" />
+                <GlobalSearch variant="light" />
               </div>
 
               <div className="mobile-nav-strip mt-3 flex gap-2 overflow-x-auto pb-0.5">

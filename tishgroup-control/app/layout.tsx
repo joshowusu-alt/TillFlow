@@ -55,11 +55,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const staff = await getControlStaffOptional();
 
   let navCounts: { urgent: number; collections: number; unreviewed: number } | undefined;
-  let searchList: Array<{ id: string; name: string; ownerName: string; ownerPhone: string; plan: string; state: string }> = [];
 
   if (staff) {
     try {
-      const businesses = await listManagedBusinesses();
+      // Layout only needs aggregate counts; the search input fetches matches
+      // from /api/search on demand so we no longer ship the full portfolio
+      // to every page.
+      const businesses = await getCachedNavCounts();
       const summary = getPortfolioSummaryFor(businesses);
       const queues = getCollectionQueuesFor(businesses);
       navCounts = {
@@ -67,16 +69,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         collections: queues.overdue.length + queues.locked.length,
         unreviewed: businesses.filter((b) => b.needsReview).length,
       };
-      searchList = businesses.map((b) => ({
-        id: b.id,
-        name: b.name,
-        ownerName: b.ownerName,
-        ownerPhone: b.ownerPhone,
-        plan: b.plan,
-        state: b.state,
-      }));
     } catch {
-      // Graceful degradation — nav counts and search not available
+      // Graceful degradation — nav counts not available
     }
   }
 
@@ -86,9 +80,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <ServiceWorkerRegistration />
         <InstallPrompt />
         {staff ? (
-          <ControlShell staff={staff} navCounts={navCounts} businesses={searchList}>{children}</ControlShell>
+          <ControlShell staff={staff} navCounts={navCounts}>{children}</ControlShell>
         ) : children}
       </body>
     </html>
   );
 }
+
+import { unstable_cache } from 'next/cache';
+// 60-second TTL on portfolio nav counts. Mutations call revalidatePath
+// on `/`, `/businesses`, `/collections`, etc., which wipes this cache
+// because the layout consumes it via Next's data cache wrapper.
+const getCachedNavCounts = unstable_cache(
+  () => listManagedBusinesses(),
+  ['control-nav-counts'],
+  { revalidate: 60, tags: ['control-portfolio'] }
+);

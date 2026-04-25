@@ -13,39 +13,73 @@ export type SearchBusiness = {
   state: string;
 };
 
+/**
+ * Server-side search via /api/search. The whole portfolio is no longer
+ * shipped to every page — the input fetches matches on each keystroke
+ * (debounced) for queries with at least 2 characters. At small
+ * portfolio sizes this is essentially free; the API route can swap to
+ * Postgres FTS when the list crosses a few hundred records without any
+ * client-side change.
+ */
 export default function GlobalSearch({
-  businesses,
   variant = 'dark',
 }: {
-  businesses: SearchBusiness[];
+  /** Legacy prop kept for backwards compatibility — server pages used to pass the full list. Ignored now. */
+  businesses?: SearchBusiness[];
   variant?: 'dark' | 'light';
 }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<SearchBusiness[]>([]);
+  const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const results =
-    query.trim().length < 2
-      ? []
-      : businesses
-          .filter((b) => {
-            const q = query.toLowerCase();
-            const phone = b.ownerPhone.replace(/\s/g, '');
-            return (
-              b.name.toLowerCase().includes(q) ||
-              b.ownerName.toLowerCase().includes(q) ||
-              phone.includes(q.replace(/\s/g, '')) ||
-              b.ownerPhone.includes(q)
-            );
-          })
-          .slice(0, 7);
+  // Debounced fetch from /api/search; aborts on input change so we don't race.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          setResults([]);
+          return;
+        }
+        const data = (await res.json()) as { ok: boolean; results?: SearchBusiness[] };
+        if (data.ok && data.results) {
+          setResults(data.results);
+        } else {
+          setResults([]);
+        }
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') return;
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [results.length]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -154,7 +188,7 @@ export default function GlobalSearch({
         </ul>
       ) : open && query.trim().length >= 2 ? (
          <div className="absolute left-0 right-0 top-full z-50 mt-1.5 rounded-[18px] border border-black/10 bg-white px-3.5 py-3 text-sm text-black/50 shadow-xl">
-          No match for &ldquo;{query}&rdquo;
+          {loading ? 'Searching…' : `No match for "${query}"`}
         </div>
       ) : null}
     </div>
