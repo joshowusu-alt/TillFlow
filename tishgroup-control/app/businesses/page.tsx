@@ -3,10 +3,13 @@ import { bulkReviewControlBusinessesAction, updateControlSubscriptionAction } fr
 import BillingScheduleFields from '@/components/BillingScheduleFields';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
-import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
+import { PlanPill, StatePill } from '@/components/status-pill';
+import SlaFlags from '@/components/sla-flags';
+import BulkRosterClient from '@/components/bulk-roster-client';
 import { listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinessesPage } from '@/lib/control-service';
 import { formatCedi } from '@/lib/control-metrics';
+import { getSlaFlags } from '@/lib/sla';
 
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -276,71 +279,76 @@ export default async function BusinessesPage({
         )}
       </section>
 
-      {filter === 'unreviewed' && pageBusinesses.length > 0 ? (
-        <section id="bulk-review" className="panel p-4 sm:p-5">
-          <SectionHeading
-            eyebrow="Bulk review"
-            title="Assign and clear the current page"
-            description="Assign the current unreviewed slice, mark it reviewed, and optionally update the sold plan in one controlled pass."
-          />
-
-          <form action={bulkReviewControlBusinessesAction} className="mt-5 grid gap-4 sm:grid-cols-2">
+      <BulkRosterClient
+        rosterId="businesses"
+        totalOnPage={pageBusinesses.length}
+        bulkActions={(selectedIds) => (
+          <form action={bulkReviewControlBusinessesAction} className="space-y-2.5">
             <input type="hidden" name="returnPath" value={buildBusinessesHref({ filter, search, page: roster.page, pageSize: roster.pageSize })} />
-            <input type="hidden" name="businessIds" value={pageBusinesses.map((business) => business.id).join(',')} />
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Assigned manager</span>
-              <select name="assignedManagerId" defaultValue="SELF" className="control-field">
+            {selectedIds.map((id) => (
+              <input key={id} type="hidden" name="selectedId" value={id} />
+            ))}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select name="assignedManagerId" defaultValue="SELF" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
                 <option value="SELF">Assign to me</option>
                 <option value="UNASSIGNED">Leave unassigned</option>
                 {staffOptions.map((option) => (
                   <option key={option.id} value={option.id}>{option.name} · {option.role.replace(/_/g, ' ')}</option>
                 ))}
               </select>
-            </label>
-
-            <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Sold plan</span>
-              <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="control-field">
-                <option value="KEEP_CURRENT">Keep current sold plan</option>
+              <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
+                <option value="KEEP_CURRENT">Keep sold plan</option>
                 <option value="STARTER">Starter</option>
                 <option value="GROWTH">Growth</option>
                 <option value="PRO">Pro</option>
               </select>
-            </label>
-
-            <BillingScheduleFields />
-
-            <label className="block space-y-1 text-sm sm:col-span-2">
-              <span className="font-medium text-control-ink">Bulk review note</span>
-              <input type="text" name="reviewNote" placeholder="Optional note to append to each reviewed business" className="control-field" />
-            </label>
-
-            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
-              Review {pageBusinesses.length} businesses on this page
+            </div>
+            <input
+              type="text"
+              name="reviewNote"
+              placeholder="Optional review note"
+              className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white placeholder:text-white/45"
+            />
+            <button
+              type="submit"
+              className="inline-flex h-10 w-full items-center justify-center rounded-[14px] bg-white px-3 text-sm font-bold text-control-ink transition hover:bg-white/90"
+            >
+              Review {selectedIds.length} selected
             </button>
           </form>
-        </section>
-      ) : null}
+        )}
+      >
 
       <section id="business-roster" className="panel overflow-hidden p-0">
         <div className="space-y-3 p-4 md:hidden">
-          {pageBusinesses.length > 0 ? pageBusinesses.map((business) => (
+          {pageBusinesses.length > 0 ? pageBusinesses.map((business) => {
+            const slaFlags = getSlaFlags(business);
+            return (
             <div key={business.id} className="mobile-card">
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
-                    {business.name}
-                  </Link>
-                  <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.assignedManager}</div>
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <input
+                    type="checkbox"
+                    name="selectedId"
+                    value={business.id}
+                    data-roster-id="businesses"
+                    aria-label={`Select ${business.name}`}
+                    className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-[#122126]"
+                  />
+                  <div className="min-w-0">
+                    <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
+                      {business.name}
+                    </Link>
+                    <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.assignedManager}</div>
+                  </div>
                 </div>
-                <HealthPill health={business.health} />
+                <StatePill state={business.state} />
               </div>
 
               <div className="mt-2.5 flex flex-wrap gap-2">
                 <PlanPill plan={business.plan} />
                 {business.plan !== business.effectivePlan ? <PlanPill plan={business.effectivePlan} /> : null}
-                <StatePill state={business.state} />
+                <SlaFlags flags={slaFlags} compact />
               </div>
 
               <div className="mobile-card-grid">
@@ -368,7 +376,8 @@ export default async function BusinessesPage({
                 Open billing
               </Link>
             </div>
-          )) : (
+            );
+          }) : (
             <div className="control-inline-note">No businesses match this view.</div>
           )}
         </div>
@@ -377,6 +386,7 @@ export default async function BusinessesPage({
           <table className="data-table">
             <thead>
               <tr>
+                <th className="w-8" aria-label="Select" />
                 <th>Business</th>
                 <th>Sold Plan</th>
                 <th>Access today</th>
@@ -385,13 +395,23 @@ export default async function BusinessesPage({
                 <th>Outstanding</th>
                 <th>Reviewed by</th>
                 <th>Reviewed at</th>
-                <th>Health</th>
+                <th>SLA</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {pageBusinesses.map((business) => (
                 <tr key={business.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      name="selectedId"
+                      value={business.id}
+                      data-roster-id="businesses"
+                      aria-label={`Select ${business.name}`}
+                      className="h-4 w-4 rounded border-black/20 accent-[#122126]"
+                    />
+                  </td>
                   <td>
                     <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
                       {business.name}
@@ -414,7 +434,7 @@ export default async function BusinessesPage({
                   <td className="font-semibold text-control-ink">{formatCedi(business.outstandingAmount)}</td>
                   <td className="text-sm text-black/66">{business.reviewedBy ?? 'Pending'}</td>
                   <td className="text-sm text-black/66">{business.reviewedAt ?? 'Pending'}</td>
-                  <td><HealthPill health={business.health} /></td>
+                  <td><SlaFlags flags={getSlaFlags(business)} compact /></td>
                   <td>
                     <Link href={`/businesses/${business.id}`} className="inline-flex rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
                       Open billing
@@ -431,6 +451,7 @@ export default async function BusinessesPage({
           </table>
         </div>
       </section>
+      </BulkRosterClient>
 
       {roster.totalPages > 1 ? (
         <section className="control-toolbar flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
