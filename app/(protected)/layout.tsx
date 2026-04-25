@@ -5,6 +5,7 @@ import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import TopNav from '@/components/TopNav';
 import BottomTabBar from '@/components/BottomTabBar';
 import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
+import PullToRefresh from '@/components/PullToRefresh';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
@@ -104,6 +105,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen w-full max-w-full">
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
+      <PullToRefresh />
       <TopNav
         user={{ name: user.name, role: user.role as 'CASHIER' | 'MANAGER' | 'OWNER' }}
         plan={getBusinessPlan((business as any).plan ?? (business?.mode as any), ((business as any).storeMode as any) ?? 'SINGLE_STORE')}
