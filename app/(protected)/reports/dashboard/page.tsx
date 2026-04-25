@@ -1,4 +1,5 @@
 import PageHeader from '@/components/PageHeader';
+import DashboardWelcomeHeader from '@/components/DashboardWelcomeHeader';
 import StatCard from '@/components/StatCard';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -19,7 +20,7 @@ export default async function DashboardPage({
 }: {
   searchParams?: { from?: string; to?: string; storeId?: string };
 }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {
     return (
       <div className="card p-6 text-center">
@@ -37,7 +38,12 @@ export default async function DashboardPage({
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  const { start, end, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, todayStart, todayEnd);
+  // Default range: last 7 days. Today's pulse lives on the home brief / Operations Today
+  // surface; this Trading Report is for period analysis, not real-time monitoring.
+  const defaultRangeStart = new Date(todayStart);
+  defaultRangeStart.setDate(defaultRangeStart.getDate() - 6);
+
+  const { start, end, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, defaultRangeStart, todayEnd);
 
   const selectedStoreId = rawStoreId ?? 'ALL';
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
@@ -375,11 +381,31 @@ export default async function DashboardPage({
   const activeCashierCount = openShifts.length;
   const hasNonDefaultParams = !!(searchParams?.from || searchParams?.to || (searchParams?.storeId && searchParams?.storeId !== 'ALL'));
 
+  const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
+  const lastSaleChipLabel =
+    lastSaleMinutesAgo === null
+      ? 'No sales yet today'
+      : lastSaleMinutesAgo === 0
+      ? 'Last sale just now'
+      : lastSaleMinutesAgo < 60
+      ? `Last sale ${lastSaleMinutesAgo}m ago`
+      : `Last sale ${Math.floor(lastSaleMinutesAgo / 60)}h ${lastSaleMinutesAgo % 60}m ago`;
+  const cashierChipLabel = `${activeCashierCount} cashier${activeCashierCount === 1 ? '' : 's'} on shift`;
+  const headerPulse = isToday
+    ? [
+        { label: lastSaleChipLabel, tone: lastSaleRecord ? ('positive' as const) : ('neutral' as const) },
+        { label: cashierChipLabel, tone: activeCashierCount > 0 ? ('positive' as const) : ('warning' as const) },
+      ]
+    : [];
+
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader
-        title={isToday ? "Today's Dashboard" : 'Owner Dashboard'}
-        subtitle={isToday ? 'Live snapshot — auto-refreshes every 2 minutes.' : `${fromIso} to ${toIso}`}
+      <DashboardWelcomeHeader
+        firstName={firstName}
+        businessName={business.name}
+        caption={isToday ? 'Trading Report · today (live).' : `Trading Report · ${fromIso} to ${toIso}`}
+        pulse={headerPulse}
+        userKey={user.id}
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
             <a href="/reports/weekly-digest" className="btn-secondary justify-center text-sm">Weekly Digest</a>
@@ -388,32 +414,14 @@ export default async function DashboardPage({
         }
       />
 
-      {/* Live status bar — today's pulse at a glance (only when viewing today) */}
-      {isToday && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
-            <span className={`h-2 w-2 flex-shrink-0 rounded-full ${lastSaleRecord ? 'bg-success animate-pulse' : 'bg-black/20'}`} />
-            <span className="text-black/50">Last sale</span>
-            <span className="font-semibold text-ink">
-              {lastSaleMinutesAgo === null
-                ? 'No sales today yet'
-                : lastSaleMinutesAgo === 0
-                ? 'Just now'
-                : lastSaleMinutesAgo < 60
-                ? `${lastSaleMinutesAgo}m ago`
-                : `${Math.floor(lastSaleMinutesAgo / 60)}h ${lastSaleMinutesAgo % 60}m ago`}
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
-            <span className="text-black/50">Active cashiers</span>
-            <span className="font-semibold text-ink">{activeCashierCount}</span>
-            {activeCashierCount > 0 && (
-              <span className="text-black/40">
-                {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
-                {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
-              </span>
-            )}
-          </div>
+      {/* Active cashier names rail — only when at least one shift is open */}
+      {isToday && activeCashierCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-black/5 bg-white px-3 py-2 text-xs shadow-sm">
+          <span className="text-black/50">On shift now</span>
+          <span className="font-semibold text-ink">
+            {openShifts.slice(0, 3).map((s) => s.user?.name ?? '—').join(', ')}
+            {openShifts.length > 3 ? ` +${openShifts.length - 3} more` : ''}
+          </span>
         </div>
       )}
 

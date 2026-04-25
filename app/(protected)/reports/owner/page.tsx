@@ -3,12 +3,13 @@ import DownloadLink from '@/components/DownloadLink';
 import { requireBusiness } from '@/lib/auth';
 import { getOwnerDashboardSnapshot, type ActivityItem, type AttentionItem, type BusinessHealthCard, type LeakageMetric, type InventoryRiskRow } from '@/lib/reports/owner-dashboard';
 import type { PriorityAction } from '@/lib/owner-intel';
-import PageHeader from '@/components/PageHeader';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import OwnerStatusStrip from '@/components/owner/OwnerStatusStrip';
+import OwnerWelcomeHeader from '@/components/owner/OwnerWelcomeHeader';
+import { prisma } from '@/lib/prisma';
 import { getBusinessStores } from '@/lib/services/stores';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
@@ -38,44 +39,69 @@ export default async function OwnerIntelligencePage() {
     );
   }
 
-  const [{ stores }, snapshot] = await Promise.all([
+  const [{ stores }, snapshot, anySale] = await Promise.all([
     getBusinessStores(business.id),
     getOwnerDashboardSnapshot(business.id, business.currency),
+    prisma.salesInvoice.findFirst({ where: { businessId: business.id }, select: { id: true } }),
   ]);
+  const coldStart = !anySale;
 
   const currency = business.currency;
   const scopeLabel = stores.length <= 1
     ? `Branch: ${stores[0]?.name ?? 'Main branch'}`
     : `Scope: All ${stores.length} branches`;
 
+  const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
+
+  // Pick a single nudge for returning owners. Priority: critical health → many attention items → Monday digest.
+  const isMonday = new Date().getDay() === 1;
+  const nudge: { label: string; href: string; tone: 'info' | 'warning' | 'critical' } | null = coldStart
+    ? null
+    : snapshot.brief.healthScore.grade === 'RED'
+    ? { label: 'Health is critical — review priority actions', href: snapshot.brief.healthScore.scoreUrl, tone: 'critical' }
+    : snapshot.attentionItems.length > 5
+    ? { label: `${snapshot.attentionItems.length} items need attention today`, href: '#attention-needed-today', tone: 'warning' }
+    : isMonday
+    ? { label: 'Monday brief — your weekly digest is ready', href: '/reports/weekly-digest', tone: 'info' }
+    : null;
+
   return (
     <div className="space-y-5 pb-2 sm:space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <PageHeader
-          eyebrow="Owner Intelligence"
-          title="Owner Dashboard"
-          subtitle={`Live operating brief for ${business.name} — generated ${new Date(snapshot.generatedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}
-          description="See business health, cash pressure, stock risk, debtor follow-up, and trading activity in one serious retail control center."
-        />
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <PlanFeatureBadge plan="PRO" />
-          <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={60_000} />
-          <a
-            href="/reports/owner/export?format=html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary justify-center text-sm"
-          >
-            Export Brief
-          </a>
-        </div>
-      </div>
+      <OwnerWelcomeHeader
+        firstName={firstName}
+        businessName={business.name}
+        healthScore={snapshot.brief.healthScore.score}
+        healthGrade={snapshot.brief.healthScore.grade}
+        attentionCount={snapshot.attentionItems.length}
+        nudge={nudge}
+        coldStart={coldStart}
+        userKey={user.id}
+        actions={
+          <>
+            <PlanFeatureBadge plan="PRO" />
+            <RefreshIndicator fetchedAt={snapshot.generatedAt} autoRefreshMs={60_000} />
+            <a
+              href="/reports/owner/export?format=html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary justify-center text-sm"
+            >
+              Export Brief
+            </a>
+          </>
+        }
+      />
 
       <OwnerStatusStrip
         businessName={business.name}
         scopeLabel={scopeLabel}
         roleLabel={user.role}
         fetchedAt={snapshot.generatedAt}
+      />
+
+      <MobileTopThree
+        attention={snapshot.attentionItems}
+        priorityActions={snapshot.brief.priorityActions}
       />
 
       <LayerShell
@@ -100,6 +126,7 @@ export default async function OwnerIntelligencePage() {
         </div>
       </LayerShell>
 
+      <div id="attention-needed-today" className="scroll-mt-20" />
       <LayerShell
         eyebrow="Attention Needed Today"
         title="Act on the risks that can hurt cash, stock, or control"
@@ -183,6 +210,8 @@ export default async function OwnerIntelligencePage() {
         </div>
       </LayerShell>
 
+      <GoDeeperFooter advancedReports={features.advancedReports} />
+
       <div className="rounded-[1.35rem] border border-slate-200/90 bg-white/90 px-4 py-4 shadow-card backdrop-blur-sm sm:px-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -200,6 +229,99 @@ export default async function OwnerIntelligencePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function GoDeeperFooter({ advancedReports }: { advancedReports: boolean }) {
+  const links: Array<{ label: string; desc: string; href: string }> = [
+    { label: 'Trading Report', desc: 'Sales, debtors, and stock pressure for any date range', href: '/reports/dashboard' },
+    { label: 'Operations Today', desc: 'Today’s pulse, attention items, and next actions', href: '/reports/command-center' },
+  ];
+  if (advancedReports) {
+    links.push({ label: 'Trend Analytics', desc: 'Period-over-period trends and product performance', href: '/reports/analytics' });
+  }
+
+  return (
+    <section className="rounded-[1.35rem] border border-slate-200/80 bg-white/70 px-4 py-4 shadow-card backdrop-blur-sm sm:px-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Go deeper</p>
+          <p className="mt-0.5 text-sm font-semibold text-ink">Drill into the supporting surfaces</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-card transition-transform hover:-translate-y-0.5 hover:border-primary/25"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink">{link.label}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">{link.desc}</p>
+            </div>
+            <ChevronRightIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MobileTopThree({ attention, priorityActions }: { attention: AttentionItem[]; priorityActions: PriorityAction[] }) {
+  // Prefer real attention items; fall back to priority actions when nothing is shouting.
+  const items: Array<{ key: string; title: string; subtitle: string; href: string; tone: 'critical' | 'warning' | 'info' }> =
+    attention.length > 0
+      ? attention.slice(0, 3).map((item) => ({
+          key: item.id,
+          title: item.title,
+          subtitle: item.whyItMatters,
+          href: item.href,
+          tone: item.severity === 'critical' ? 'critical' : item.severity === 'warning' ? 'warning' : 'info',
+        }))
+      : priorityActions.slice(0, 3).map((action) => ({
+          key: action.id,
+          title: action.title,
+          subtitle: action.why,
+          href: action.href,
+          tone: action.severity === 'critical' ? 'critical' : action.severity === 'warn' ? 'warning' : 'info',
+        }));
+
+  if (items.length === 0) return null;
+
+  return (
+    <section className="lg:hidden">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Three things to know now</p>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Mobile brief</span>
+      </div>
+      <div className="space-y-2">
+        {items.map((item) => {
+          const toneClass =
+            item.tone === 'critical'
+              ? 'border-red-200 bg-red-50/70'
+              : item.tone === 'warning'
+              ? 'border-amber-200 bg-amber-50/70'
+              : 'border-blue-100 bg-blue-50/60';
+          const dotClass =
+            item.tone === 'critical' ? 'bg-red-500' : item.tone === 'warning' ? 'bg-amber-500' : 'bg-blue-500';
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`flex items-start gap-3 rounded-2xl border px-3.5 py-3 shadow-card transition-transform active:scale-[0.99] ${toneClass}`}
+            >
+              <span className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${dotClass}`} aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
+                {item.subtitle ? <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-600">{item.subtitle}</p> : null}
+              </div>
+              <ChevronRightIcon className="mt-1 h-4 w-4 flex-shrink-0 text-slate-400" />
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
