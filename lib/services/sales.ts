@@ -44,7 +44,7 @@ function computeDiscount(
 
 function buildLinePricing(
   lines: SaleLineInput[],
-  unitMap: Map<string, { product: { sellingPriceBasePence: number; promoBuyQty: number | null; promoGetQty: number | null; vatRateBps: number; defaultCostBasePence: number; name: string }; conversionToBase: number; productId: string; unitId: string; [key: string]: any }>,
+  unitMap: Map<string, { product: SaleCostProduct; conversionToBase: number; productId: string; unitId: string; [key: string]: any }>,
   vatEnabled: boolean
 ) {
   return lines.map((line) => {
@@ -91,6 +91,59 @@ function buildLinePricing(
       conversionToBase: productUnit.conversionToBase,
     };
   });
+}
+
+type SaleCostProduct = {
+  sellingPriceBasePence: number;
+  promoBuyQty: number | null;
+  promoGetQty: number | null;
+  vatRateBps: number;
+  defaultCostBasePence: number;
+  name: string;
+  productUnits?: Array<{
+    isBaseUnit: boolean;
+    conversionToBase: number;
+    defaultCostPence?: number | null;
+  }>;
+};
+
+function getPackageLevelCosts(product: SaleCostProduct) {
+  return new Set(
+    (product.productUnits ?? [])
+      .filter((unit) => !unit.isBaseUnit && unit.conversionToBase > 1)
+      .map((unit) => unit.defaultCostPence ?? product.defaultCostBasePence * unit.conversionToBase)
+      .filter((cost) => cost > 0 && cost !== product.defaultCostBasePence)
+  );
+}
+
+function isPackageCostStoredAsBase(avgCostBasePence: number, product: SaleCostProduct) {
+  return getPackageLevelCosts(product).has(avgCostBasePence);
+}
+
+function resolveSaleUnitCostBasePence(
+  inventoryMap: Map<string, { qtyOnHandBase: number; avgCostBasePence: number }>,
+  productId: string,
+  product: SaleCostProduct,
+) {
+  const avgCost = resolveAvgCost(inventoryMap, productId, product.defaultCostBasePence);
+  return isPackageCostStoredAsBase(avgCost, product)
+    ? product.defaultCostBasePence
+    : avgCost;
+}
+
+function getPackageCostRepairs(
+  lineDetails: ReturnType<typeof buildLinePricing>,
+  inventoryMap: Map<string, { qtyOnHandBase: number; avgCostBasePence: number }>,
+) {
+  const repairs = new Map<string, number>();
+  for (const line of lineDetails) {
+    if (repairs.has(line.productId)) continue;
+    const avgCost = inventoryMap.get(line.productId)?.avgCostBasePence ?? 0;
+    if (avgCost > 0 && isPackageCostStoredAsBase(avgCost, line.productUnit.product)) {
+      repairs.set(line.productId, line.productUnit.product.defaultCostBasePence);
+    }
+  }
+  return repairs;
 }
 
 export type SalePaymentInput = PaymentInput;
@@ -192,7 +245,20 @@ export async function createSale(input: CreateSaleInput) {
           unitId: line.unitId,
         })),
       },
-      include: { product: true, unit: true },
+      include: {
+        product: {
+          include: {
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                defaultCostPence: true,
+              },
+            },
+          },
+        },
+        unit: true,
+      },
     }),
     prisma.till.findFirst({
       where: { id: input.tillId, storeId: input.storeId, active: true },
@@ -249,9 +315,10 @@ export async function createSale(input: CreateSaleInput) {
     if (costByProduct.has(line.productId)) continue;
     costByProduct.set(
       line.productId,
-      resolveAvgCost(inventoryMap, line.productId, line.productUnit.product.defaultCostBasePence)
+      resolveSaleUnitCostBasePence(inventoryMap, line.productId, line.productUnit.product)
     );
   }
+  const packageCostRepairs = getPackageCostRepairs(lineDetails, inventoryMap);
 
   const lineNetSubtotalTotal = lineDetails.reduce((sum, line) => sum + line.lineNetSubtotal, 0);
   const lineVatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
@@ -541,6 +608,16 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     if (enforceInventory) {
+      if (packageCostRepairs.size > 0) {
+        await Promise.all(
+          [...packageCostRepairs.entries()].map(([productId, defaultCostBasePence]) =>
+            tx.inventoryBalance.updateMany({
+              where: { storeId: input.storeId, productId },
+              data: { avgCostBasePence: defaultCostBasePence },
+            })
+          )
+        );
+      }
       // Single SQL UPDATE for all products — 1 RTT regardless of cart size
       txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
     } else {
@@ -552,10 +629,10 @@ export async function createSale(input: CreateSaleInput) {
         if (!sampleLine) continue;
 
         const onHand = inventoryMapInTx.get(productId)?.qtyOnHandBase ?? 0;
-        const avgCost = resolveAvgCost(
+        const avgCost = resolveSaleUnitCostBasePence(
           inventoryMapInTx,
           productId,
-          sampleLine.productUnit.product.defaultCostBasePence,
+          sampleLine.productUnit.product,
         );
 
         txPromises.push(
@@ -679,7 +756,22 @@ export async function amendSale(input: AmendSaleInput) {
     include: {
       business: true,
       store: true,
-      lines: { include: { product: true, unit: true } },
+      lines: {
+        include: {
+          product: {
+            include: {
+              productUnits: {
+                select: {
+                  isBaseUnit: true,
+                  conversionToBase: true,
+                  defaultCostPence: true,
+                },
+              },
+            },
+          },
+          unit: true,
+        },
+      },
       payments: true,
       salesReturn: true,
     },
@@ -725,7 +817,20 @@ export async function amendSale(input: AmendSaleInput) {
           unitId: line.unitId,
         })),
       },
-      include: { product: true, unit: true },
+      include: {
+        product: {
+          include: {
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                defaultCostPence: true,
+              },
+            },
+          },
+        },
+        unit: true,
+      },
     });
 
     const unitMap = new Map(
@@ -811,14 +916,14 @@ export async function amendSale(input: AmendSaleInput) {
       if (avgCostMap.has(line.productId)) continue;
       avgCostMap.set(
         line.productId,
-        resolveAvgCost(inventoryMap, line.productId, line.product.defaultCostBasePence)
+        resolveSaleUnitCostBasePence(inventoryMap, line.productId, line.product)
       );
     }
     for (const line of newLineDetails) {
       if (avgCostMap.has(line.productId)) continue;
       avgCostMap.set(
         line.productId,
-        resolveAvgCost(inventoryMap, line.productId, line.productUnit.product.defaultCostBasePence)
+        resolveSaleUnitCostBasePence(inventoryMap, line.productId, line.productUnit.product)
       );
     }
 

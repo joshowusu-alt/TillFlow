@@ -243,7 +243,10 @@ beforeEach(() => {
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
   (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
-  (prismaMock as any).inventoryBalance = { upsert: vi.fn().mockResolvedValue({}) };
+  (prismaMock as any).inventoryBalance = {
+    upsert: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
 
   fetchInventoryMapMock.mockResolvedValue(
     new Map([[PRODUCT_ID, { qtyOnHandBase: 100, avgCostBasePence: 300 }]])
@@ -372,6 +375,38 @@ describe('createSale — pricing', () => {
     expect(createCall.data.lines.create[0].unitPricePence).toBe(2600);
     expect(createCall.data.subtotalPence).toBe(2600);
     expect(createCall.data.totalPence).toBe(2600);
+  });
+
+  it('uses base cost and repairs inventory average when a package cost was stored as base', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      makeProductUnit({
+        product: {
+          defaultCostBasePence: 239,
+          sellingPriceBasePence: 300,
+          productUnits: [
+            { isBaseUnit: true, conversionToBase: 1, defaultCostPence: null },
+            { isBaseUnit: false, conversionToBase: 48, defaultCostPence: 11500 },
+          ],
+        },
+      }),
+    ]);
+    fetchInventoryMapMock.mockResolvedValue(
+      new Map([[PRODUCT_ID, { qtyOnHandBase: 10, avgCostBasePence: 11500 }]])
+    );
+
+    await createSale(makeBaseInput({
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 2 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.lines.create[0].lineCostPence).toBe(478);
+    expect(createCall.data.grossMarginPence).toBe(122);
+    expect((prismaMock as any).inventoryBalance.updateMany).toHaveBeenCalledWith({
+      where: { storeId: STORE_ID, productId: PRODUCT_ID },
+      data: { avgCostBasePence: 239 },
+    });
+    const movementCall = prismaMock.stockMovement.createMany.mock.calls[0][0];
+    expect(movementCall.data[0].unitCostBasePence).toBe(239);
   });
 });
 
