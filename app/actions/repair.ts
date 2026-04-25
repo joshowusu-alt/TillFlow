@@ -14,6 +14,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { audit } from '@/lib/audit';
 import { cleanupOwnerVoidedSale } from '@/lib/services/owner-sale-cleanup';
 import { repairInventoryAverageCostDrift } from '@/lib/services/products';
+import { repairStalePaymentStatuses } from '@/lib/services/payment-status-health';
 
 /**
  * Find purchase invoices that have no journal entry and create the missing entries.
@@ -232,6 +233,37 @@ export async function repairInventoryAverageCostsAction(): Promise<
     revalidatePath('/products');
     revalidatePath('/reports/dashboard');
     revalidatePath('/reports/income-statement');
+    revalidatePath('/settings/data-repair');
+
+    return ok(result);
+  });
+}
+
+export async function repairPaymentStatusDriftAction(): Promise<
+  ActionResult<{ updatedSales: number; updatedPurchases: number; skippedReview: number }>
+> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    const result = await repairStalePaymentStatuses(businessId);
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRICE_REPAIR',
+      entity: 'InvoicePaymentStatus',
+      details: result,
+    });
+
+    revalidateTag('reports');
+    revalidatePath('/customers');
+    revalidatePath('/suppliers');
+    revalidatePath('/payments/customer-receipts');
+    revalidatePath('/payments/supplier-payments');
+    revalidatePath('/reports/dashboard');
+    revalidatePath('/reports/command-center');
     revalidatePath('/settings/data-repair');
 
     return ok(result);

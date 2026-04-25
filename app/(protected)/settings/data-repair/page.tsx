@@ -6,9 +6,12 @@ import RestoreOrphanedProductsButton from '@/components/RestoreOrphanedProductsB
 import RepairJournalEntriesButton from '@/components/RepairJournalEntriesButton';
 import BackfillLineCostButton from '@/components/BackfillLineCostButton';
 import RepairInventoryAverageCostsButton from '@/components/RepairInventoryAverageCostsButton';
+import RepairPaymentStatusButton from '@/components/RepairPaymentStatusButton';
+import { getPaymentStatusHealth } from '@/lib/services/payment-status-health';
 
 export default async function DataRepairPage() {
-  await requireBusiness(['OWNER']);
+  const { business } = await requireBusiness(['OWNER']);
+  const paymentHealth = await getPaymentStatusHealth(business.id);
 
   return (
     <div className="space-y-6">
@@ -95,6 +98,25 @@ export default async function DataRepairPage() {
           Sync stale inventory average costs to the current product default cost only where the stock has no authoritative inbound cost trail yet. Use this when the product setup now shows the right base-unit cost, but inventory and gross profit still reflect an older value.
         </p>
         <RepairInventoryAverageCostsButton />
+      </div>
+
+      <div className="card p-6">
+        <h3 className="font-semibold mb-1">Repair Payment Status Drift</h3>
+        <p className="text-sm text-black/50 mb-3">
+          Finds invoices where payment rows and status disagree. The repair only updates safe cases, such as a part-paid invoice whose payments now cover the full total.
+        </p>
+        <div className="mb-4 grid gap-2 text-sm sm:grid-cols-3">
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            Issues: <span className="font-semibold">{paymentHealth.issueCount}</span>
+          </div>
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            Safe repairs: <span className="font-semibold">{paymentHealth.repairableCount}</span>
+          </div>
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            Review only: <span className="font-semibold">{paymentHealth.issueCount - paymentHealth.repairableCount}</span>
+          </div>
+        </div>
+        <RepairPaymentStatusButton />
       </div>
 
       <div className="card p-6">
