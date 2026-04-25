@@ -10,6 +10,7 @@ export default function RepairInventoryAverageCostsButton() {
     affectedProducts?: number;
     syncedBalances?: number;
     skippedAuthoritativeBalances?: number;
+    repairedPackageCostBalances?: number;
     error?: string;
   } | null>(null);
 
@@ -32,6 +33,7 @@ export default function RepairInventoryAverageCostsButton() {
               affectedProducts: number;
               syncedBalances: number;
               skippedAuthoritativeBalances: number;
+              repairedPackageCostBalances: number;
             }),
           });
         } else {
@@ -48,6 +50,7 @@ export default function RepairInventoryAverageCostsButton() {
     const syncedBalances = result.syncedBalances ?? 0;
     const affectedProducts = result.affectedProducts ?? 0;
     const skipped = result.skippedAuthoritativeBalances ?? 0;
+    const packageRepairs = result.repairedPackageCostBalances ?? 0;
 
     if (syncedBalances === 0) {
       return skipped > 0
@@ -55,7 +58,7 @@ export default function RepairInventoryAverageCostsButton() {
         : 'All inventory average costs already align with their current product defaults.';
     }
 
-    return `Synced ${syncedBalances} inventory balance${syncedBalances === 1 ? '' : 's'} across ${affectedProducts} product${affectedProducts === 1 ? '' : 's'}. ${skipped > 0 ? `${skipped} authoritative balance${skipped === 1 ? '' : 's'} were preserved.` : 'Future sales and inventory margins will now use the corrected cost.'}`;
+    return `Synced ${syncedBalances} inventory balance${syncedBalances === 1 ? '' : 's'} across ${affectedProducts} product${affectedProducts === 1 ? '' : 's'}. ${packageRepairs > 0 ? `${packageRepairs} looked like package cost stored as base cost and were repaired. ` : ''}${skipped > 0 ? `${skipped} authoritative balance${skipped === 1 ? '' : 's'} were preserved.` : 'Future sales and inventory margins will now use the corrected cost.'}`;
   };
 
   return (

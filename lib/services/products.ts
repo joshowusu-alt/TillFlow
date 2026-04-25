@@ -283,6 +283,7 @@ const AUTHORITATIVE_INBOUND_COST_TYPES = ['PURCHASE', 'TRANSFER_IN', 'SALE_VOID'
 type InventoryCostSyncResult = {
   syncedBalances: number;
   skippedAuthoritativeBalances: number;
+  repairedPackageCostBalances: number;
 };
 
 async function syncDefaultCostManagedInventoryBalances(
@@ -290,8 +291,19 @@ async function syncDefaultCostManagedInventoryBalances(
   input: {
     productId: string;
     defaultCostBasePence: number;
+    productUnits?: Array<{
+      isBaseUnit: boolean;
+      conversionToBase: number;
+      defaultCostPence?: number | null;
+    }>;
   }
 ): Promise<InventoryCostSyncResult> {
+  const packageLevelCosts = new Set(
+    (input.productUnits ?? [])
+      .filter((unit) => !unit.isBaseUnit && unit.conversionToBase > 1)
+      .map((unit) => unit.defaultCostPence ?? input.defaultCostBasePence * unit.conversionToBase)
+      .filter((cost) => cost > 0 && cost !== input.defaultCostBasePence)
+  );
   const candidateBalances = await tx.inventoryBalance.findMany({
     where: {
       productId: input.productId,
@@ -303,11 +315,12 @@ async function syncDefaultCostManagedInventoryBalances(
     select: {
       id: true,
       storeId: true,
+      avgCostBasePence: true,
     },
   });
 
   if (candidateBalances.length === 0) {
-    return { syncedBalances: 0, skippedAuthoritativeBalances: 0 };
+    return { syncedBalances: 0, skippedAuthoritativeBalances: 0, repairedPackageCostBalances: 0 };
   }
 
   const storeIds = [...new Set(candidateBalances.map((balance: { storeId: string }) => balance.storeId))];
@@ -326,14 +339,20 @@ async function syncDefaultCostManagedInventoryBalances(
   const authoritativeStoreIds = new Set(
     authoritativeMovements.map((movement: { storeId: string }) => movement.storeId)
   );
+  const packageCostBalanceIds = candidateBalances
+    .filter((balance: { id: string; avgCostBasePence: number }) => packageLevelCosts.has(balance.avgCostBasePence))
+    .map((balance: { id: string }) => balance.id);
   const balanceIdsToSync = candidateBalances
-    .filter((balance: { storeId: string }) => !authoritativeStoreIds.has(balance.storeId))
+    .filter((balance: { id: string; storeId: string }) =>
+      !authoritativeStoreIds.has(balance.storeId) || packageCostBalanceIds.includes(balance.id)
+    )
     .map((balance: { id: string }) => balance.id);
 
   if (balanceIdsToSync.length === 0) {
     return {
       syncedBalances: 0,
       skippedAuthoritativeBalances: candidateBalances.length,
+      repairedPackageCostBalances: 0,
     };
   }
 
@@ -345,6 +364,7 @@ async function syncDefaultCostManagedInventoryBalances(
   return {
     syncedBalances: balanceIdsToSync.length,
     skippedAuthoritativeBalances: candidateBalances.length - balanceIdsToSync.length,
+    repairedPackageCostBalances: packageCostBalanceIds.filter((id: string) => balanceIdsToSync.includes(id)).length,
   };
 }
 
@@ -490,7 +510,7 @@ export async function updateProduct(
 
 export async function repairInventoryAverageCostDrift(
   businessId: string
-): Promise<{ affectedProducts: number; syncedBalances: number; skippedAuthoritativeBalances: number }> {
+): Promise<{ affectedProducts: number; syncedBalances: number; skippedAuthoritativeBalances: number; repairedPackageCostBalances: number }> {
   const products = await prisma.product.findMany({
     where: {
       businessId,
@@ -501,22 +521,31 @@ export async function repairInventoryAverageCostDrift(
     select: {
       id: true,
       defaultCostBasePence: true,
+      productUnits: {
+        select: {
+          isBaseUnit: true,
+          conversionToBase: true,
+          defaultCostPence: true,
+        },
+      },
     },
   });
 
   if (products.length === 0) {
-    return { affectedProducts: 0, syncedBalances: 0, skippedAuthoritativeBalances: 0 };
+    return { affectedProducts: 0, syncedBalances: 0, skippedAuthoritativeBalances: 0, repairedPackageCostBalances: 0 };
   }
 
   return prisma.$transaction(async (tx) => {
     let affectedProducts = 0;
     let syncedBalances = 0;
     let skippedAuthoritativeBalances = 0;
+    let repairedPackageCostBalances = 0;
 
     for (const product of products) {
       const result = await syncDefaultCostManagedInventoryBalances(tx, {
         productId: product.id,
         defaultCostBasePence: product.defaultCostBasePence,
+        productUnits: product.productUnits,
       });
 
       if (result.syncedBalances > 0) {
@@ -524,9 +553,10 @@ export async function repairInventoryAverageCostDrift(
       }
       syncedBalances += result.syncedBalances;
       skippedAuthoritativeBalances += result.skippedAuthoritativeBalances;
+      repairedPackageCostBalances += result.repairedPackageCostBalances;
     }
 
-    return { affectedProducts, syncedBalances, skippedAuthoritativeBalances };
+    return { affectedProducts, syncedBalances, skippedAuthoritativeBalances, repairedPackageCostBalances };
   });
 }
 

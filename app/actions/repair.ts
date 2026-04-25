@@ -204,7 +204,7 @@ export async function repairSalesJournalEntriesAction(): Promise<ActionResult<{ 
 }
 
 export async function repairInventoryAverageCostsAction(): Promise<
-  ActionResult<{ affectedProducts: number; syncedBalances: number; skippedAuthoritativeBalances: number }>
+  ActionResult<{ affectedProducts: number; syncedBalances: number; skippedAuthoritativeBalances: number; repairedPackageCostBalances: number }>
 > {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext(['OWNER']);
@@ -223,6 +223,7 @@ export async function repairInventoryAverageCostsAction(): Promise<
         affectedProducts: result.affectedProducts,
         syncedBalances: result.syncedBalances,
         skippedAuthoritativeBalances: result.skippedAuthoritativeBalances,
+        repairedPackageCostBalances: result.repairedPackageCostBalances,
       },
     });
 

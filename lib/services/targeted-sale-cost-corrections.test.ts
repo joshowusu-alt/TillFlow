@@ -84,6 +84,37 @@ describe('buildHistoricalSaleLineCandidate', () => {
     expect(candidate.correctedUnitCostBasePence).toBe(400);
     expect(candidate.correctedLineCostPence).toBe(2_000);
     expect(candidate.needsCorrection).toBe(true); // lineCostPence=0 ≠ 2000
+    expect(candidate.correctionCostSource).toBe('sale-movement');
+  });
+
+  it('repairs movement cost when a package cost was stored as the base cost', () => {
+    const candidate = buildHistoricalSaleLineCandidate({
+      id: 'line-5',
+      salesInvoiceId: 'invoice-5',
+      transactionNumber: 'INV-001205',
+      createdAt: new Date('2026-04-01T12:00:00.000Z'),
+      productId: 'product-5',
+      productName: 'DORCO',
+      sku: null,
+      unitName: 'pack',
+      qtyInUnit: 4,
+      qtyBase: 80,
+      unitPricePence: 300,
+      lineSubtotalPence: 12_000,
+      lineTotalPence: 12_000,
+      lineCostPence: 464_000,
+      currentProductCostBasePence: 290,
+      movementUnitCostBasePence: 5_800,
+      productUnits: [
+        { isBaseUnit: true, conversionToBase: 1, defaultCostPence: null },
+        { isBaseUnit: false, conversionToBase: 20, defaultCostPence: null },
+      ],
+    });
+
+    expect(candidate.correctedUnitCostBasePence).toBe(290);
+    expect(candidate.correctedLineCostPence).toBe(23_200);
+    expect(candidate.correctionCostSource).toBe('package-cost-repair');
+    expect(candidate.needsCorrection).toBe(true);
   });
 
   it('does not re-flag a previously corrected line even when the product cost changes — no drift', () => {

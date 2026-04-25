@@ -91,6 +91,13 @@ export default async function SaleCostCorrectionsPage({
           name: true,
           sku: true,
           defaultCostBasePence: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              defaultCostPence: true,
+            },
+          },
         },
       },
       unit: {
@@ -156,6 +163,7 @@ export default async function SaleCostCorrectionsPage({
       lineCostPence: line.lineCostPence,
       currentProductCostBasePence: line.product.defaultCostBasePence,
       movementUnitCostBasePence: movementCostMap.get(`${line.salesInvoiceId}:${line.productId}`) ?? null,
+      productUnits: line.product.productUnits,
     }),
   );
 
@@ -266,7 +274,7 @@ export default async function SaleCostCorrectionsPage({
               <th className="text-right">Qty</th>
               <th className="text-right">Sell / base</th>
               <th className="text-right">Stored cost / base</th>
-              <th className="text-right">Current setup cost / base</th>
+              <th className="text-right">Correction cost / base</th>
               <th className="text-right">Profit now</th>
               <th className="text-right">Profit if corrected</th>
               <th className="text-right">Impact</th>
@@ -274,6 +282,11 @@ export default async function SaleCostCorrectionsPage({
           </thead>
           <tbody>
             {candidates.map((line) => {
+              const sourceLabel = line.correctionCostSource === 'package-cost-repair'
+                ? 'Pack cost stored as base'
+                : line.correctionCostSource === 'sale-movement'
+                  ? 'From sale movement'
+                  : 'From product default';
               const impactTone = !line.needsCorrection
                 ? 'bg-slate-100 text-slate-600'
                 : line.belowCostBefore && !line.belowCostAfter
@@ -292,7 +305,13 @@ export default async function SaleCostCorrectionsPage({
               return (
                 <tr key={line.id} className="rounded-xl bg-white">
                   <td className="px-3 py-3 align-top">
-                    <input className="mt-1 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent" name="lineIds" type="checkbox" value={line.id} />
+                    <input
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent disabled:opacity-40"
+                      disabled={!line.needsCorrection}
+                      name="lineIds"
+                      type="checkbox"
+                      value={line.id}
+                    />
                   </td>
                   <td className="px-3 py-3 align-top">
                     <div className="space-y-1">
@@ -308,7 +327,10 @@ export default async function SaleCostCorrectionsPage({
                   <td className="px-3 py-3 text-right text-sm">{line.qtyInUnit}</td>
                   <td className="px-3 py-3 text-right text-sm">{formatMoney(line.unitPricePence, business.currency)}</td>
                   <td className="px-3 py-3 text-right text-sm">{formatMoney(line.storedUnitCostBasePence, business.currency)}</td>
-                  <td className="px-3 py-3 text-right text-sm font-semibold text-accent">{formatMoney(line.correctedUnitCostBasePence, business.currency)}</td>
+                  <td className="px-3 py-3 text-right text-sm">
+                    <div className="font-semibold text-accent">{formatMoney(line.correctedUnitCostBasePence, business.currency)}</div>
+                    <div className="mt-1 text-[11px] font-medium text-black/45">{sourceLabel}</div>
+                  </td>
                   <td className={`px-3 py-3 text-right text-sm font-semibold ${line.profitBeforePence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
                     {formatMoney(line.profitBeforePence, business.currency)}
                   </td>

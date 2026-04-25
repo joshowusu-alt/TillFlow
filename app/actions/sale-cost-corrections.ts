@@ -6,7 +6,7 @@ import { audit } from '@/lib/audit';
 import { ok, safeAction, UserError, withBusinessContext } from '@/lib/action-utils';
 import { formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
-import { buildInvoiceGrossMarginMap } from '@/lib/services/targeted-sale-cost-corrections';
+import { buildInvoiceGrossMarginMap, resolveHistoricalSaleCorrectionCost } from '@/lib/services/targeted-sale-cost-corrections';
 
 const TARGETED_SALE_COST_CORRECTION_PATH = '/settings/data-repair/sale-cost-corrections';
 const PRESERVED_FILTER_KEYS = ['q', 'status', 'period', 'from', 'to'] as const;
@@ -69,6 +69,13 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
           select: {
             name: true,
             defaultCostBasePence: true,
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                defaultCostPence: true,
+              },
+            },
           },
         },
       },
@@ -112,11 +119,11 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
     const corrections = selectedLines
       .map((line) => {
         const movementCost = existingMovementCostMap.get(`${line.salesInvoiceId}:${line.productId}`);
-        // Use the stable movement cost when available; fall back to the product's current default.
-        const correctedUnitCostBasePence =
-          movementCost != null && movementCost > 0
-            ? movementCost
-            : line.product.defaultCostBasePence;
+        const correctionCost = resolveHistoricalSaleCorrectionCost({
+          currentProductCostBasePence: line.product.defaultCostBasePence,
+          movementUnitCostBasePence: movementCost ?? null,
+          productUnits: line.product.productUnits,
+        });
         return {
           id: line.id,
           salesInvoiceId: line.salesInvoiceId,
@@ -124,8 +131,9 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
           productName: line.product.name,
           transactionNumber: line.salesInvoice.transactionNumber,
           previousLineCostPence: line.lineCostPence,
-          correctedUnitCostBasePence,
-          correctedLineCostPence: correctedUnitCostBasePence * line.qtyBase,
+          correctedUnitCostBasePence: correctionCost.unitCostBasePence,
+          correctedLineCostPence: correctionCost.unitCostBasePence * line.qtyBase,
+          correctionCostSource: correctionCost.source,
         };
       })
       .filter((line) => line.previousLineCostPence !== line.correctedLineCostPence);
@@ -193,6 +201,7 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
       entity: 'SalesInvoiceLine',
       details: {
         source: 'current-product-cost',
+        correctionSources: [...new Set(corrections.map((line) => line.correctionCostSource))],
         lineCount: corrections.length,
         invoiceCount: affectedInvoiceIds.length,
         reason,

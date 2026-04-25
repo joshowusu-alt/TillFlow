@@ -245,7 +245,7 @@ describe('product unit configuration helpers', () => {
 
   it('does not override balances with authoritative inbound cost history during drift repair', async () => {
     prismaMock.product.findMany.mockResolvedValue([
-      { id: 'prod-1', defaultCostBasePence: 550 },
+      { id: 'prod-1', defaultCostBasePence: 550, productUnits: [] },
     ]);
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback({
@@ -267,6 +267,47 @@ describe('product unit configuration helpers', () => {
       affectedProducts: 0,
       syncedBalances: 0,
       skippedAuthoritativeBalances: 1,
+      repairedPackageCostBalances: 0,
+    });
+  });
+
+  it('repairs package cost accidentally stored as base average cost even with inbound history', async () => {
+    prismaMock.product.findMany.mockResolvedValue([
+      {
+        id: 'prod-1',
+        defaultCostBasePence: 290,
+        productUnits: [
+          { isBaseUnit: true, conversionToBase: 1, defaultCostPence: null },
+          { isBaseUnit: false, conversionToBase: 20, defaultCostPence: null },
+        ],
+      },
+    ]);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback({
+        inventoryBalance: {
+          findMany: vi.fn().mockResolvedValue([
+            { id: 'balance-1', storeId: 'store-1', avgCostBasePence: 5800 },
+          ]),
+          updateMany,
+        },
+        stockMovement: {
+          findMany: vi.fn().mockResolvedValue([{ storeId: 'store-1' }]),
+        },
+      })
+    );
+
+    const result = await repairInventoryAverageCostDrift('biz-1');
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['balance-1'] } },
+      data: { avgCostBasePence: 290 },
+    });
+    expect(result).toEqual({
+      affectedProducts: 1,
+      syncedBalances: 1,
+      skippedAuthoritativeBalances: 0,
+      repairedPackageCostBalances: 1,
     });
   });
 });

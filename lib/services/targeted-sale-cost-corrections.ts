@@ -23,6 +23,11 @@ export type HistoricalSaleLineCandidateInput = {
    * the product's setup cost is later changed.
    */
   movementUnitCostBasePence?: number | null;
+  productUnits?: Array<{
+    isBaseUnit: boolean;
+    conversionToBase: number;
+    defaultCostPence?: number | null;
+  }>;
 };
 
 export type HistoricalSaleLineCandidate = HistoricalSaleLineCandidateInput & {
@@ -37,11 +42,35 @@ export type HistoricalSaleLineCandidate = HistoricalSaleLineCandidateInput & {
   belowCostBefore: boolean;
   belowCostAfter: boolean;
   needsCorrection: boolean;
+  correctionCostSource: 'product-default' | 'sale-movement' | 'package-cost-repair';
 };
 
 function toMarginPercent(revenuePence: number, profitPence: number) {
   if (revenuePence <= 0) return 0;
   return (profitPence / revenuePence) * 100;
+}
+
+export function resolveHistoricalSaleCorrectionCost(input: Pick<
+  HistoricalSaleLineCandidateInput,
+  'currentProductCostBasePence' | 'movementUnitCostBasePence' | 'productUnits'
+>): { unitCostBasePence: number; source: HistoricalSaleLineCandidate['correctionCostSource'] } {
+  const movementCost = input.movementUnitCostBasePence ?? 0;
+
+  if (movementCost > 0) {
+    const packageCostWasStoredAsBaseCost = (input.productUnits ?? []).some((unit) => {
+      if (unit.isBaseUnit || unit.conversionToBase <= 1) return false;
+      const expectedPackageCost = unit.defaultCostPence ?? input.currentProductCostBasePence * unit.conversionToBase;
+      return expectedPackageCost > 0 && movementCost === expectedPackageCost;
+    });
+
+    if (packageCostWasStoredAsBaseCost) {
+      return { unitCostBasePence: input.currentProductCostBasePence, source: 'package-cost-repair' };
+    }
+
+    return { unitCostBasePence: movementCost, source: 'sale-movement' };
+  }
+
+  return { unitCostBasePence: input.currentProductCostBasePence, source: 'product-default' };
 }
 
 export function buildHistoricalSaleLineCandidate(
@@ -51,16 +80,8 @@ export function buildHistoricalSaleLineCandidate(
     ? Math.round(input.lineCostPence / input.qtyBase)
     : 0;
 
-  // Prefer the stable StockMovement cost (updated atomically with lineCostPence during every
-  // correction) over the mutable product setup cost.  This prevents drift: once a line has been
-  // corrected the movement and lineCostPence agree, so changing defaultCostBasePence later will
-  // not re-flag the line.  Fall back to currentProductCostBasePence only when no movement exists
-  // (genuine pre-movement-data gap) — in that case the comparison anchors to the current
-  // product cost as the best available reference.
-  const correctedUnitCostBasePence =
-    input.movementUnitCostBasePence != null && input.movementUnitCostBasePence > 0
-      ? input.movementUnitCostBasePence
-      : input.currentProductCostBasePence;
+  const correctionCost = resolveHistoricalSaleCorrectionCost(input);
+  const correctedUnitCostBasePence = correctionCost.unitCostBasePence;
 
   const correctedLineCostPence = correctedUnitCostBasePence * input.qtyBase;
   const effectiveLineCostPence = input.lineCostPence > 0
@@ -82,6 +103,7 @@ export function buildHistoricalSaleLineCandidate(
     belowCostBefore: profitBeforePence < 0,
     belowCostAfter: profitAfterPence < 0,
     needsCorrection: input.lineCostPence !== correctedLineCostPence,
+    correctionCostSource: correctionCost.source,
   };
 }
 
