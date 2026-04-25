@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import ControlPageHeader from '@/components/control-page-header';
+import ControlGreeting from '@/components/control-greeting';
 import KpiCard from '@/components/kpi-card';
 import SectionHeading from '@/components/section-heading';
 import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
@@ -8,7 +9,9 @@ import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 
 export default async function PortfolioPage() {
-  await requireControlStaff();
+  const staff = await requireControlStaff();
+  const firstName = (staff.name ?? '').trim().split(/\s+/)[0] || staff.email.split('@')[0] || 'there';
+  const roleLabel = staff.role.replace(/_/g, ' ').toLowerCase();
   const businesses = await listManagedBusinesses();
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
@@ -81,6 +84,7 @@ export default async function PortfolioPage() {
 
   return (
     <div className="space-y-4 lg:space-y-5">
+      <ControlGreeting firstName={firstName} roleLabel={roleLabel} staffKey={staff.id} />
       <ControlPageHeader
         eyebrow="Portfolio command"
         title="Portfolio posture and next move."
