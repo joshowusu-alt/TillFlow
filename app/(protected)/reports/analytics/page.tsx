@@ -256,8 +256,9 @@ export default async function AnalyticsPage({
     return (
         <div className="space-y-4 sm:space-y-5">
             <PageHeader
-                title="Advanced Analytics"
-                subtitle="Trend analysis, product performance, and peak trading insights."
+                eyebrow="Reports"
+                title="Trend Analytics"
+                subtitle="Period-over-period trends, product performance, and peak trading windows."
                 actions={
                     <>
                         <PlanFeatureBadge plan="GROWTH" />

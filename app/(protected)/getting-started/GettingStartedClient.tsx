@@ -27,8 +27,8 @@ const CLEAN_START_STEPS = [
     number: '03',
     title: 'Check your dashboard',
     desc: 'See today\'s sales, cash position, and key insights on your owner dashboard.',
-    href: '/reports',
-    cta: 'View Reports',
+    href: '/',
+    cta: 'Open Dashboard',
   },
 ];
 
@@ -44,8 +44,8 @@ const DEMO_STEPS = [
     number: '02',
     title: 'Review the reports',
     desc: 'Check margins, stock movements, and daily cash close — all pre-filled with demo data.',
-    href: '/reports',
-    cta: 'View Reports',
+    href: '/',
+    cta: 'Open Dashboard',
   },
   {
     number: '03',

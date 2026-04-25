@@ -202,12 +202,12 @@ export default async function CommandCenterPage() {
 
   /* ── Deeper analysis links ──────────────────────────────────────── */
   const deeperLinks: DeeperLink[] = [
-    { label: 'Dashboard', desc: 'Full trading summary with date range filter', href: '/reports/dashboard' },
+    { label: 'Trading Report', desc: 'Sales, debtors, and stock pressure for any date range', href: '/reports/dashboard' },
   ];
 
   if (features.advancedReports) {
     deeperLinks.push(
-      { label: 'Analytics', desc: 'Sales trends, product performance, and customer mix', href: '/reports/analytics', plan: 'GROWTH' },
+      { label: 'Trend Analytics', desc: 'Period-over-period trends, product performance, and customer mix', href: '/reports/analytics', plan: 'GROWTH' },
       { label: 'Profit Margins', desc: 'Product-level margin analysis with cost breakdown', href: '/reports/margins', plan: 'GROWTH' },
       { label: 'Risk Monitor', desc: 'Overrides, variances, and control alerts', href: '/reports/risk-monitor', plan: 'GROWTH' },
       { label: 'Reorder Queue', desc: 'Stock replenishment priorities ranked by urgency', href: '/reports/reorder-suggestions', plan: 'GROWTH' },
@@ -239,7 +239,7 @@ export default async function CommandCenterPage() {
             Operations
           </div>
           <h1 className="mt-2 text-2xl font-display font-bold tracking-tight text-ink sm:text-3xl">
-            Command Center
+            Operations Today
           </h1>
           <p className="mt-1 text-sm text-muted">
             {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · {store?.name ?? 'Main branch'}
