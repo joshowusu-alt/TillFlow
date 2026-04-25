@@ -84,8 +84,8 @@ export default async function CommandCenterPage() {
         detail: kpis.arOver90Pence > 0
           ? `${formatMoney(kpis.arOver90Pence, currency)} is 90+ days overdue — risk of write-off.`
           : 'Outstanding customer invoices over 60 days — follow up to protect cashflow.',
-        href: '/customers',
-        cta: 'Review debtors',
+        href: '/payments/customer-receipts',
+        cta: 'Collect receipts',
       });
     }
 
@@ -95,8 +95,8 @@ export default async function CommandCenterPage() {
         severity: 'warning',
         title: `${formatMoney(kpis.outstandingAPPence, currency)} payable to suppliers`,
         detail: 'Outstanding purchase invoices need attention to maintain supplier relationships.',
-        href: '/purchases',
-        cta: 'Review payables',
+        href: '/payments/supplier-payments',
+        cta: 'Pay suppliers',
       });
     }
 
@@ -180,7 +180,7 @@ export default async function CommandCenterPage() {
       id: 'chase-debtors',
       label: 'Chase overdue invoices',
       detail: `${formatMoney(kpis!.arOver60Pence, currency)} in customer debt over 60 days.`,
-      href: '/customers',
+      href: '/payments/customer-receipts',
     });
   }
 

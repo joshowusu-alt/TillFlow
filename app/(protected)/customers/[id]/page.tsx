@@ -4,7 +4,7 @@ import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, formatDateTime } from '@/lib/format';
+import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
@@ -42,7 +42,10 @@ export default async function CustomerDetailPage({
           createdAt: true,
           paymentStatus: true,
           totalPence: true,
-          payments: { select: { amountPence: true } }
+          payments: {
+            select: { id: true, amountPence: true, receivedAt: true, method: true, reference: true },
+            orderBy: { receivedAt: 'asc' }
+          }
         },
         orderBy: { createdAt: 'desc' },
         take: 200
@@ -58,13 +61,56 @@ export default async function CustomerDetailPage({
     const balance = computeOutstandingBalance(invoice);
     const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
     const paid = invoice.payments.reduce((sum, p) => sum + p.amountPence, 0);
-    return { ...invoice, paid, balance, isClosed };
+    const effectivePaid = !isClosed && invoice.paymentStatus === 'PAID' ? invoice.totalPence : paid;
+    return { ...invoice, paid, effectivePaid, balance, isClosed };
   });
 
   const activeInvoices = invoices.filter((invoice) => !invoice.isClosed);
   const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
-  const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.paid, 0);
+  const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
+  const ledgerRows = invoices
+    .flatMap((invoice) => {
+      const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
+        ? [{
+            key: `${invoice.id}-status-settled`,
+            date: invoice.createdAt,
+            description: 'Marked paid without receipt row',
+            debitPence: 0,
+            creditPence: invoice.totalPence - invoice.paid,
+          }]
+        : [];
+
+      return [{
+        key: `${invoice.id}-invoice`,
+        date: invoice.createdAt,
+        description: `Sale ${invoice.id.slice(0, 8)}`,
+        debitPence: invoice.isClosed ? 0 : invoice.totalPence,
+        creditPence: 0,
+      },
+      ...invoice.payments.map((payment) => ({
+        key: payment.id,
+        date: payment.receivedAt,
+        description: `${payment.method} receipt${payment.reference ? ` - ${payment.reference}` : ''}`,
+        debitPence: 0,
+        creditPence: payment.amountPence,
+      })),
+      ...settlementAdjustment,
+      ];
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .reduce<Array<{
+      key: string;
+      date: Date;
+      description: string;
+      debitPence: number;
+      creditPence: number;
+      balancePence: number;
+    }>>((rows, row) => {
+      const previousBalance = rows.at(-1)?.balancePence ?? 0;
+      rows.push({ ...row, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
+      return rows;
+    }, []);
 
   return (
     <div className="space-y-6">
@@ -201,6 +247,44 @@ export default async function CustomerDetailPage({
             </div>
           }
         />
+      </div>
+
+      <div className="card p-6">
+        <h2 className="text-lg font-display font-semibold">Statement ledger</h2>
+        <p className="mt-1 text-sm text-black/50">Sales increase the customer balance; receipts reduce it.</p>
+        <div className="responsive-table-shell mt-4">
+          <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Invoice</th>
+                <th>Receipt</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledgerRows.slice(-80).map((row) => (
+                <tr key={row.key} className="rounded-xl bg-white">
+                  <td className="px-3 py-3 text-sm text-black/60">{formatDate(row.date)}</td>
+                  <td className="px-3 py-3 text-sm">{row.description}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {row.debitPence > 0 ? formatMoney(row.debitPence, business.currency) : '-'}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {row.creditPence > 0 ? formatMoney(row.creditPence, business.currency) : '-'}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">{formatMoney(row.balancePence, business.currency)}</td>
+                </tr>
+              ))}
+              {ledgerRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-black/50">No ledger activity yet.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
