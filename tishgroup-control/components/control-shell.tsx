@@ -124,7 +124,7 @@ export default function ControlShell({
   }, [mobileMenuOpen]);
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-[calc(var(--safe-bottom)+1rem)] sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6">
+    <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1640px] gap-4 px-2.5 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.35rem)] sm:gap-5 sm:px-4 sm:pb-5 lg:px-6 lg:pb-6 lg:pt-4">
       {mobileMenuOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
@@ -269,7 +269,7 @@ export default function ControlShell({
 
       <div className="flex min-w-0 flex-1 flex-col gap-3 lg:gap-4">
         <div className="sticky top-0 z-40 lg:hidden">
-          <div className="bg-[linear-gradient(180deg,rgba(244,248,249,0.96)_0%,rgba(244,248,249,0.92)_78%,rgba(244,248,249,0)_100%)] pb-2 pt-2 backdrop-blur">
+          <div className="bg-[linear-gradient(180deg,rgba(244,248,249,0.97)_0%,rgba(244,248,249,0.93)_78%,rgba(244,248,249,0)_100%)] pb-2 pt-1.5 backdrop-blur">
             <div className="rounded-[22px] border border-black/8 bg-white/92 px-3 py-3 shadow-[0_8px_24px_rgba(13,27,30,0.08)]">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">

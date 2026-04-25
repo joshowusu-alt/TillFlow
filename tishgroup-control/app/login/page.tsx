@@ -28,23 +28,23 @@ export default async function LoginPage({
   const authConfigured = controlAuthConfigured();
 
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-6xl items-center justify-center px-4 py-4 sm:px-6 sm:py-10 lg:px-8">
-      <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="panel overflow-hidden p-5 sm:p-10">
+    <div className="login-page-shell mx-auto flex min-h-[100dvh] w-full max-w-6xl items-start justify-center px-3.5 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.75rem)] sm:px-6 sm:py-10 lg:items-center lg:px-8">
+      <div className="grid w-full max-w-5xl gap-3.5 sm:gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="panel order-2 overflow-hidden p-4 sm:p-8 lg:order-1 lg:p-10">
           <div className="eyebrow">Internal control plane</div>
           <h1 className="page-title mt-4 font-[var(--font-display)] text-control-ink">Tish Group Control keeps billing decisions in one place and pushes the result back into Tillflow.</h1>
-          <p className="mt-5 max-w-2xl text-base leading-8 text-black/64">
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-black/64 sm:mt-5 sm:text-base sm:leading-8">
             Staff sign in here to manage subscriptions, record payments, capture internal notes, and restore or restrict access across the managed Tillflow portfolio.
           </p>
 
-          <div className="mobile-nav-strip mt-5 -mx-1 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+          <div className="mobile-nav-strip mt-4 -mx-1 flex gap-2 overflow-x-auto pb-1 lg:hidden">
             <span className="control-chip">Subscriptions</span>
             <span className="control-chip">Collections</span>
             <span className="control-chip">Revenue risk</span>
             <span className="control-chip">Recovery</span>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="mt-5 grid gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
             <div className="control-stat-card">
               <div className="eyebrow">Source of truth</div>
               <p className="mt-2 text-sm leading-6 text-black/64">Commercial changes are written here first, then mirrored into Tillflow entitlement fields.</p>
@@ -60,10 +60,10 @@ export default async function LoginPage({
           </div>
         </section>
 
-        <section className="panel p-5 sm:p-10">
+        <section className="panel order-1 p-4 sm:p-8 lg:order-2 lg:p-10">
           <div className="eyebrow">Staff sign-in</div>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-control-ink">Access Tish Group Control</h2>
-          <p className="mt-3 text-sm leading-6 text-black/64">
+          <h2 className="mt-2.5 text-[1.65rem] font-semibold leading-tight tracking-tight text-control-ink sm:mt-3 sm:text-2xl">Access Tish Group Control</h2>
+          <p className="mt-2.5 text-sm leading-6 text-black/64 sm:mt-3">
             Use your Control staff email plus the shared internal access key. For the first bootstrap login, set CONTROL_BOOTSTRAP_ADMIN_EMAIL to your email.
           </p>
 
@@ -79,7 +79,7 @@ export default async function LoginPage({
             </div>
           ) : null}
 
-          <form action={loginControlStaffAction} className="mt-6 space-y-4">
+          <form action={loginControlStaffAction} className="mt-5 space-y-4 sm:mt-6">
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">Staff email</span>
               <input
@@ -105,7 +105,7 @@ export default async function LoginPage({
 
             <button
               type="submit"
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-[18px] bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]"
             >
               Sign in to Control
             </button>
