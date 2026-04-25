@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
-const TRIGGER_DISTANCE = 92;
-const MAX_PULL_DISTANCE = 124;
+const TRIGGER_DISTANCE = 68;
+const MAX_PULL_DISTANCE = 112;
 
 function shouldIgnoreTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -13,25 +13,37 @@ function shouldIgnoreTarget(target: EventTarget | null) {
 
 export default function PullToRefresh() {
   const router = useRouter();
+  const [, startTransition] = useTransition();
   const startYRef = useRef(0);
   const startXRef = useRef(0);
   const trackingRef = useRef(false);
   const refreshingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-    if (!isCoarsePointer) return;
+    const isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice) return;
+
+    const getScrollTop = () => {
+      const scroller = document.scrollingElement || document.documentElement;
+      return scroller.scrollTop || window.scrollY || 0;
+    };
+
+    const setDistance = (distance: number) => {
+      pullDistanceRef.current = distance;
+      setPullDistance(distance);
+    };
 
     const reset = () => {
       trackingRef.current = false;
-      setPullDistance(0);
+      setDistance(0);
     };
 
     const onTouchStart = (event: TouchEvent) => {
       if (refreshingRef.current || shouldIgnoreTarget(event.target)) return;
-      if (window.scrollY > 2) return;
+      if (getScrollTop() > 4) return;
       const touch = event.touches[0];
       if (!touch) return;
       startYRef.current = touch.clientY;
@@ -50,35 +62,38 @@ export default function PullToRefresh() {
         reset();
         return;
       }
-      if (deltaY <= 0 || window.scrollY > 2) {
+      if (deltaY <= 0 || getScrollTop() > 4) {
         reset();
         return;
       }
 
       event.preventDefault();
-      setPullDistance(Math.min(MAX_PULL_DISTANCE, Math.round(deltaY * 0.55)));
+      setDistance(Math.min(MAX_PULL_DISTANCE, Math.round(deltaY * 0.62)));
     };
 
     const onTouchEnd = () => {
       if (!trackingRef.current) return;
-      const shouldRefresh = pullDistance >= TRIGGER_DISTANCE;
+      const shouldRefresh = pullDistanceRef.current >= TRIGGER_DISTANCE;
       trackingRef.current = false;
 
       if (!shouldRefresh) {
-        setPullDistance(0);
+        setDistance(0);
         return;
       }
 
       refreshingRef.current = true;
       setRefreshing(true);
-      setPullDistance(TRIGGER_DISTANCE);
-      router.refresh();
+      setDistance(TRIGGER_DISTANCE);
+
+      startTransition(() => {
+        router.refresh();
+      });
 
       window.setTimeout(() => {
         refreshingRef.current = false;
         setRefreshing(false);
-        setPullDistance(0);
-      }, 900);
+        setDistance(0);
+      }, 1200);
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });
@@ -92,7 +107,7 @@ export default function PullToRefresh() {
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', reset);
     };
-  }, [pullDistance, router]);
+  }, [router, startTransition]);
 
   const visible = pullDistance > 0 || refreshing;
   const armed = pullDistance >= TRIGGER_DISTANCE;
