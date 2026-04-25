@@ -7,6 +7,7 @@ import { HealthPill, PlanPill, StatePill } from '@/components/status-pill';
 import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
+import { getPortfolioSlaCounts } from '@/lib/sla';
 
 export default async function PortfolioPage() {
   const staff = await requireControlStaff();
@@ -15,6 +16,7 @@ export default async function PortfolioPage() {
   const businesses = await listManagedBusinesses();
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
+  const slaCounts = getPortfolioSlaCounts(businesses);
   const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
   const workboardCards = [
@@ -57,9 +59,9 @@ export default async function PortfolioPage() {
       hint: 'Accounts already restricted and waiting on payment confirmation or decision.',
     },
     {
-      label: 'Unreviewed new accounts',
-      value: String(unreviewedBusinesses.length),
-      hint: 'New accounts still waiting for first commercial confirmation and assignment.',
+      label: 'SLA breaches',
+      value: slaCounts.total === 0 ? '0' : `${slaCounts.red}R · ${slaCounts.amber}A`,
+      hint: 'Accounts ageing on the team\'s own queue (unreviewed or no contact).',
     },
   ];
   const focusOrder = [
