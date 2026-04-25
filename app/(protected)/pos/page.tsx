@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { unstable_cache } from 'next/cache';
 import PosClient from './PosClient';
+import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
 
 // ── Cached lookups for data that rarely changes ───────────────────
 // Revalidates every 60 s or when explicitly invalidated.
@@ -96,7 +97,7 @@ const getCachedShifts = unstable_cache(
 );
 
 export default async function PosPage() {
-  const { business, store: baseStore } = await requireBusinessStore();
+  const { business, store: baseStore, user } = await requireBusinessStore();
   if (!business) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
@@ -113,6 +114,12 @@ export default async function PosPage() {
     getCachedCategories(business.id),
     getCachedCustomers(business.id),
   ]);
+
+  const userOpenShift = await prisma.shift.findFirst({
+    where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
+    select: { till: { select: { name: true } } },
+  });
+  const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
 
   const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
 
@@ -140,6 +147,14 @@ export default async function PosPage() {
   }));
 
   return (
+    <>
+      <PosWelcomeShelf
+        firstName={firstName}
+        storeName={baseStore.name}
+        hasOpenShift={!!userOpenShift}
+        openTillName={userOpenShift?.till?.name ?? null}
+        userKey={user.id}
+      />
     <PosClient
       business={{
         id: business.id,
@@ -158,5 +173,6 @@ export default async function PosPage() {
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
     />
+    </>
   );
 }
