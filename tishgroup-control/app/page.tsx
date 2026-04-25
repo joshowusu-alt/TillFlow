@@ -8,6 +8,8 @@ import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getPortfolioSummaryFor, getRevenueByPlanFor } from '@/lib/control-metrics';
 import { getPortfolioSlaCounts } from '@/lib/sla';
+import { getCollectionsRhythm } from '@/lib/collections-trend';
+import Sparkline from '@/components/sparkline';
 
 export default async function PortfolioPage() {
   const staff = await requireControlStaff();
@@ -17,6 +19,7 @@ export default async function PortfolioPage() {
   const summary = getPortfolioSummaryFor(businesses);
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const slaCounts = getPortfolioSlaCounts(businesses);
+  const rhythm = await getCollectionsRhythm();
   const urgentBusinesses = businesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).slice(0, 5);
   const unreviewedBusinesses = businesses.filter((business) => business.needsReview).slice(0, 6);
   const workboardCards = [
@@ -121,6 +124,17 @@ export default async function PortfolioPage() {
 
             <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3 text-sm leading-6 text-white/74">
               Revenue at risk now: <strong>{formatCedi(summary.expectedCollections)}</strong>. Active paid base: <strong>{summary.activePaid}</strong>.
+            </div>
+
+            <div className="rounded-[18px] border border-white/10 bg-white/6 px-3.5 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="eyebrow text-white/55">Collections · 14d</div>
+                  <div className="mt-1 text-base font-semibold tracking-tight">{formatCedi(Math.round(rhythm.totalPence / 100))}</div>
+                  <div className="mt-0.5 text-xs text-white/60">Today {formatCedi(Math.round(rhythm.todayPence / 100))}</div>
+                </div>
+                <Sparkline values={rhythm.daily} tone="teal" width={88} height={32} ariaLabel="Daily collections trend" />
+              </div>
             </div>
           </div>
         )}
