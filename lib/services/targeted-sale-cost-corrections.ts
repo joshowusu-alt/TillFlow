@@ -52,7 +52,7 @@ function toMarginPercent(revenuePence: number, profitPence: number) {
 
 export function resolveHistoricalSaleCorrectionCost(input: Pick<
   HistoricalSaleLineCandidateInput,
-  'currentProductCostBasePence' | 'movementUnitCostBasePence' | 'productUnits'
+  'currentProductCostBasePence' | 'movementUnitCostBasePence' | 'productUnits' | 'qtyBase' | 'lineSubtotalPence'
 >): { unitCostBasePence: number; source: HistoricalSaleLineCandidate['correctionCostSource'] } {
   const movementCost = input.movementUnitCostBasePence ?? 0;
 
@@ -65,6 +65,21 @@ export function resolveHistoricalSaleCorrectionCost(input: Pick<
 
     if (packageCostWasStoredAsBaseCost) {
       return { unitCostBasePence: input.currentProductCostBasePence, source: 'package-cost-repair' };
+    }
+
+    const qtyBase = input.qtyBase ?? 0;
+    const lineSubtotalPence = input.lineSubtotalPence ?? 0;
+    const movementLineCost = movementCost * qtyBase;
+    const currentSetupLineCost = input.currentProductCostBasePence * qtyBase;
+    const currentSetupWouldRecover =
+      qtyBase > 0 &&
+      lineSubtotalPence > 0 &&
+      movementCost > input.currentProductCostBasePence &&
+      movementLineCost > lineSubtotalPence &&
+      currentSetupLineCost <= lineSubtotalPence;
+
+    if (currentSetupWouldRecover) {
+      return { unitCostBasePence: input.currentProductCostBasePence, source: 'product-default' };
     }
 
     return { unitCostBasePence: movementCost, source: 'sale-movement' };

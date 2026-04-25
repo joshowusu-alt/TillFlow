@@ -117,6 +117,33 @@ describe('buildHistoricalSaleLineCandidate', () => {
     expect(candidate.needsCorrection).toBe(true);
   });
 
+  it('uses the current setup cost when stale movement cost keeps a corrected product below cost', () => {
+    const candidate = buildHistoricalSaleLineCandidate({
+      id: 'line-6',
+      salesInvoiceId: 'invoice-6',
+      transactionNumber: 'INV-001206',
+      createdAt: new Date('2026-04-21T12:00:00.000Z'),
+      productId: 'product-6',
+      productName: 'Candy Soap',
+      sku: null,
+      unitName: 'piece',
+      qtyInUnit: 3,
+      qtyBase: 3,
+      unitPricePence: 650,
+      lineSubtotalPence: 1_950,
+      lineTotalPence: 1_950,
+      lineCostPence: 2_250,
+      currentProductCostBasePence: 550,
+      movementUnitCostBasePence: 750,
+    });
+
+    expect(candidate.correctedUnitCostBasePence).toBe(550);
+    expect(candidate.correctedLineCostPence).toBe(1_650);
+    expect(candidate.belowCostBefore).toBe(true);
+    expect(candidate.belowCostAfter).toBe(false);
+    expect(candidate.correctionCostSource).toBe('product-default');
+  });
+
   it('does not re-flag a previously corrected line even when the product cost changes — no drift', () => {
     // Simulates the post-correction state:
     //   lineCostPence was corrected to 350 × 10 = 3500

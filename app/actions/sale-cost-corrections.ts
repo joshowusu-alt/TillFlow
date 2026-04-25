@@ -122,6 +122,8 @@ export async function correctTargetedSaleCostsAction(formData: FormData): Promis
         const correctionCost = resolveHistoricalSaleCorrectionCost({
           currentProductCostBasePence: line.product.defaultCostBasePence,
           movementUnitCostBasePence: movementCost ?? null,
+          qtyBase: line.qtyBase,
+          lineSubtotalPence: line.lineSubtotalPence,
           productUnits: line.product.productUnits,
         });
         return {
