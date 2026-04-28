@@ -18,6 +18,8 @@ function initialSelections(storefront: PublicStorefront) {
   }, {});
 }
 
+const PRODUCTS_PER_PAGE = 12;
+
 export default function StorefrontClient({ storefront }: { storefront: PublicStorefront }) {
   const router = useRouter();
   const [cart, setCart] = useState<PosCartLine[]>([]);
@@ -30,6 +32,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   const [network, setNetwork] = useState<'MTN' | 'TELECEL' | 'AIRTELTIGO'>('MTN');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const selectedStore = useMemo(
     () => storefront.stores.find((store) => store.id === selectedStoreId) ?? null,
@@ -45,6 +49,28 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     [storefront.products, selectedStoreId],
   );
 
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return productsForStore;
+    return productsForStore.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.categoryName?.toLowerCase() ?? '').includes(q),
+    );
+  }, [productsForStore, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedProducts = filteredProducts.slice(
+    (safePage - 1) * PRODUCTS_PER_PAGE,
+    safePage * PRODUCTS_PER_PAGE,
+  );
+
+  function handleSearch(value: string) {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  }
+
   const productMap = useMemo(() => buildProductMap(productsForStore), [productsForStore]);
   const cartDetails = useMemo(
     () => buildCartDetails(cart, productMap, storefront.vatEnabled),
@@ -56,6 +82,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     setSelectedStoreId(nextStoreId);
     setCart([]);
     setError(null);
+    setCurrentPage(1);
   }
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
   const orderTotal = totals.netSubtotal + totals.vat;
@@ -200,12 +227,43 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
         <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,2fr)_380px]">
           <section className="space-y-4">
-            {productsForStore.length === 0 ? (
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <svg
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                <input
+                  className="input pl-9"
+                  placeholder="Search products…"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+              </div>
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="text-sm text-black/50 hover:text-ink"
+                  onClick={() => handleSearch('')}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {filteredProducts.length === 0 ? (
               <div className="rounded-[1.5rem] border border-dashed border-black/10 bg-white px-6 py-12 text-center text-black/55">
-                This store has not published products yet.
+                {searchQuery ? `No products match "${searchQuery}".` : 'This store has not published products yet.'}
               </div>
             ) : (
-              productsForStore.map((product) => {
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {pagedProducts.map((product) => {
                 const selected = selectionState[product.id];
                 const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
                 const unitPrice = selectedUnit ? formatMoney(selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase, storefront.currency) : formatMoney(product.sellingPriceBasePence, storefront.currency);
@@ -304,7 +362,34 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     </div>
                   </article>
                 );
-              })
+              })}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between rounded-2xl bg-white px-5 py-3 shadow-sm ring-1 ring-black/5">
+                    <button
+                      type="button"
+                      className="btn-ghost text-sm disabled:opacity-40"
+                      disabled={safePage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    >
+                      ← Previous
+                    </button>
+                    <span className="text-sm text-black/55">
+                      Page {safePage} of {totalPages}
+                      <span className="ml-2 text-black/35">({filteredProducts.length} products)</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-ghost text-sm disabled:opacity-40"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
 
