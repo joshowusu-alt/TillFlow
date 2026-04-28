@@ -20,6 +20,7 @@ model Business {
   nextPaymentDueAt DateTime?
   billingNotes     String?
   isDemo           Boolean                @default(false)
+  addonOnlineStorefront Boolean           @default(false)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   users            User[]

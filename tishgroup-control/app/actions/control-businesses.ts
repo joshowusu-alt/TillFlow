@@ -271,6 +271,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
   const trialEndsAt = parseOptionalDate(readOptional(formData, 'trialEndsAt'));
   const monthlyValuePence = parseOptionalInteger(readOptional(formData, 'monthlyValuePence'), planRates[purchasedPlan]);
   const outstandingAmountPence = parseOptionalInteger(readOptional(formData, 'outstandingAmountPence'), 0);
+  const addonOnlineStorefront = formData.get('addonOnlineStorefront') === 'on';
   const now = new Date();
 
   try {
@@ -331,6 +332,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           trialEndsAt: status === 'TRIAL' ? trialEndsAt : null,
           planSetAt: startDate,
           nextPaymentDueAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
+          addonOnlineStorefront,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
             `Plan: ${purchasedPlan}`,
@@ -338,6 +340,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
             `Cadence: ${billingCadence}`,
             `Start date: ${startDate.toISOString().slice(0, 10)}`,
             `Next due: ${resolvedNextDueDate ? resolvedNextDueDate.toISOString().slice(0, 10) : 'Not set'}`,
+            `Online storefront add-on: ${addonOnlineStorefront ? 'Enabled' : 'Disabled'}`,
           ]),
         },
       });
@@ -360,7 +363,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     action: 'SUBSCRIPTION_UPDATED',
     businessId,
     summary: `Subscription set to ${purchasedPlan} · ${status} · ${billingCadence}`,
-    metadata: { purchasedPlan, status, billingCadence, monthlyValuePence, outstandingAmountPence },
+    metadata: { purchasedPlan, status, billingCadence, monthlyValuePence, outstandingAmountPence, addonOnlineStorefront },
   });
 
   if (status === 'INACTIVE' || status === 'READ_ONLY') {

@@ -27,6 +27,7 @@ const PLAN_DETAILS: Record<BusinessPlan, { name: string; tone: string; highlight
       'Analytics, margins, reorder suggestions, and richer reporting',
       'Income statement, balance sheet, cashflow, and risk monitor',
       'Detailed expense categories and notification automation',
+      'Optional: Online storefront add-on available for +GH₵200/mo',
     ],
   },
   PRO: {
@@ -35,6 +36,7 @@ const PLAN_DETAILS: Record<BusinessPlan, { name: string; tone: string; highlight
     highlights: [
       'Owner dashboard, audit log, and cashflow forecast',
       'Multi-branch workflows, transfer surfaces, and broader command visibility',
+      'Online storefront with mobile-money checkout included (no add-on needed)',
       'Best fit for executive oversight across more complex operations',
     ],
   },
@@ -63,6 +65,10 @@ const PLAN_COMPARISON_ROWS: Array<{ feature: string; includedIn: BusinessPlan[] 
   },
   {
     feature: 'Multi-branch workflows, transfers, and broader command visibility',
+    includedIn: ['PRO'],
+  },
+  {
+    feature: 'Online storefront, public checkout, and online order operations (Pro: included · Growth: +GH₵200/mo add-on)',
     includedIn: ['PRO'],
   },
 ];
@@ -327,6 +333,29 @@ export default async function BillingPage({
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="card p-6">
+        <h2 className="text-lg font-display font-semibold">Available add-ons</h2>
+        <p className="mt-1 text-sm text-black/55">
+          Add-ons extend a plan with optional capabilities. They are activated by Tishgroup and billed separately.
+        </p>
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+          <div className="flex-1 rounded-2xl border border-blue-200 bg-blue-50/60 px-5 py-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-semibold text-ink">Online Storefront</div>
+                <div className="mt-0.5 text-xs font-medium text-blue-700">Growth plan · +GH₵200/mo</div>
+              </div>
+              <span className="shrink-0 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">
+                Pro: included
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-black/65">
+              Publish a customer-facing catalogue, accept mobile-money checkout, and manage pickup orders — without upgrading to Pro. Contact Tishgroup to activate.
+            </p>
+          </div>
         </div>
       </div>
 

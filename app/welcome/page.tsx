@@ -127,11 +127,12 @@ const planPreview: WelcomePlanPreview[] = [
   {
     name: 'Pro',
     monthlyPrice: PLAN_MONTHLY_PRICES.PRO,
-    note: 'For larger operational control',
+    note: 'Multi-branch + sell online',
     bullets: [
-      'Everything in Growth, plus broader owner command capability',
-      'Best for more complex operations and multi-branch growth',
-      'Built for operators who want stronger oversight and control depth',
+      'Public online storefront with mobile-money checkout for pickup orders',
+      'Multi-branch operations with stock transfers between stores',
+      'Owner dashboard, audit log, and cashflow forecast for executive oversight',
+      'Best for operators running more than one store or selling beyond the counter',
     ],
   },
 ];
@@ -456,7 +457,7 @@ export default function WelcomePage() {
             Pick the setup that matches how your business runs today.
           </h2>
           <p className="mt-4 text-lg text-black/50">
-            Start with Starter, move into Growth when reporting and control matter more, and step into Pro when the operation gets broader.
+            Start with Starter, move into Growth when reporting and control matter more, and step into Pro when you're running multiple branches or selling online.
           </p>
           <WelcomePricingPreview plans={planPreview} />
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">

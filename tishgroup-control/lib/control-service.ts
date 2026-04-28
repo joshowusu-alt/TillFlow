@@ -32,6 +32,7 @@ export type ManagedBusinessDetail = ManagedBusiness & {
   reviewedBy: string | null;
   recentPayments: ManagedBusinessPayment[];
   recentNotes: ManagedBusinessNote[];
+  addonOnlineStorefront: boolean;
 };
 
 export type ManagedBusinessRosterFilter = 'all' | 'unreviewed';
@@ -375,6 +376,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         id: true,
         planStatus: true,
         trialEndsAt: true,
+        addonOnlineStorefront: true,
       },
     }),
   ]);
@@ -424,6 +426,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         reviewedBy: null,
         recentPayments: [],
         recentNotes: [],
+        addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
       };
     }
 
@@ -452,6 +455,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         createdAt: formatIsoDateTime(note.createdAt) ?? 'Not recorded',
         createdBy: note.createdByStaff?.name ?? 'Unknown staff',
       })),
+      addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
     };
   } catch (error) {
     if (!isMissingControlPlaneError(error)) {
@@ -469,6 +473,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
       reviewedBy: null,
       recentPayments: [],
       recentNotes: [],
+      addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
     };
   }
 }

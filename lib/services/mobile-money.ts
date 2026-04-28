@@ -23,14 +23,66 @@ function normalizeNetwork(value: string | null | undefined): CollectionNetwork {
   return 'UNKNOWN';
 }
 
+// Country dial codes supported for mobile-money checkout. Each entry maps a
+// domestic 0-prefixed format and an international format to an MSISDN with no
+// leading + (the format MoMo providers expect).
+const SUPPORTED_DIAL_CODES = [
+  { code: '233', domesticLength: 10 }, // Ghana
+  { code: '234', domesticLength: 11 }, // Nigeria
+  { code: '254', domesticLength: 10 }, // Kenya
+] as const;
+
+/**
+ * @deprecated Prefer normalizeAfricanMsisdn; kept for backwards compatibility.
+ */
 export function normalizeGhanaMsisdn(value: string): string {
+  return normalizeAfricanMsisdn(value, '233');
+}
+
+export function normalizeAfricanMsisdn(value: string, defaultCountryCode: string = '233'): string {
   const digits = value.replace(/[^\d+]/g, '');
   if (!digits) return '';
-  if (digits.startsWith('+233') && digits.length === 13) return digits.slice(1);
-  if (digits.startsWith('233') && digits.length === 12) return digits;
-  if (digits.startsWith('0') && digits.length === 10) return `233${digits.slice(1)}`;
-  if (digits.startsWith('+')) return digits.slice(1);
+
+  // International format: +233..., +234..., +254...
+  if (digits.startsWith('+')) {
+    const stripped = digits.slice(1);
+    for (const entry of SUPPORTED_DIAL_CODES) {
+      if (stripped.startsWith(entry.code) && stripped.length === entry.code.length + entry.domesticLength - 1) {
+        return stripped;
+      }
+    }
+    return stripped;
+  }
+
+  // Already in international form without +
+  for (const entry of SUPPORTED_DIAL_CODES) {
+    if (digits.startsWith(entry.code) && digits.length === entry.code.length + entry.domesticLength - 1) {
+      return digits;
+    }
+  }
+
+  // Domestic form starting with 0 — apply default country code
+  if (digits.startsWith('0')) {
+    const defaultEntry = SUPPORTED_DIAL_CODES.find((entry) => entry.code === defaultCountryCode)
+      ?? SUPPORTED_DIAL_CODES[0];
+    if (digits.length === defaultEntry.domesticLength) {
+      return `${defaultEntry.code}${digits.slice(1)}`;
+    }
+  }
+
   return digits;
+}
+
+export function currencyToDialCode(currency: string | null | undefined): string {
+  switch ((currency ?? '').toUpperCase()) {
+    case 'NGN':
+      return '234';
+    case 'KES':
+      return '254';
+    case 'GHS':
+    default:
+      return '233';
+  }
 }
 
 function stringifyPayload(payload: unknown): string | null {
@@ -74,6 +126,59 @@ function buildProviderRecord(
     salesInvoiceId: collection.salesInvoiceId,
     lastCheckedAt: collection.lastCheckedAt ?? null,
   };
+}
+
+async function syncOnlineOrderPaymentStatus(collectionId: string, status: string, observedAt: Date) {
+  const order = await prisma.onlineOrder.findFirst({
+    where: { paymentCollectionId: collectionId },
+    select: {
+      id: true,
+      status: true,
+      paymentStatus: true,
+      paidAt: true,
+      salesInvoiceId: true,
+    },
+  });
+
+  if (!order) {
+    return;
+  }
+
+  if (status === 'CONFIRMED') {
+    await prisma.onlineOrder.update({
+      where: { id: order.id },
+      data: {
+        status:
+          order.status === 'AWAITING_PAYMENT' || order.status === 'PAYMENT_FAILED'
+            ? 'PAID'
+            : order.status,
+        paymentStatus: 'PAID',
+        paidAt: order.paidAt ?? observedAt,
+      },
+    });
+
+    // Commit the order to a SalesInvoice + decrement inventory. Imported here
+    // (rather than at the top of the file) to avoid a circular import via sales.ts.
+    if (!order.salesInvoiceId) {
+      try {
+        const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
+        await commitOnlineOrderSale(order.id);
+      } catch (commitError) {
+        console.error('[online-order-commit] Failed to commit sale for order', order.id, commitError);
+      }
+    }
+    return;
+  }
+
+  if (status === 'FAILED' || status === 'TIMEOUT') {
+    await prisma.onlineOrder.update({
+      where: { id: order.id },
+      data: {
+        status: order.status === 'AWAITING_PAYMENT' ? 'PAYMENT_FAILED' : order.status,
+        paymentStatus: 'FAILED',
+      },
+    });
+  }
 }
 
 async function applyProviderStatusUpdate(
@@ -128,7 +233,7 @@ async function applyProviderStatusUpdate(
     delete updateData.confirmedAt;
   }
 
-  return prisma.$transaction(async (tx) => {
+  const updatedCollection = await prisma.$transaction(async (tx) => {
     const updated = await tx.mobileMoneyCollection.update({
       where: { id: collection.id },
       data: updateData,
@@ -159,6 +264,9 @@ async function applyProviderStatusUpdate(
 
     return updated;
   });
+
+  await syncOnlineOrderPaymentStatus(collection.id, nextStatus, observedAt);
+  return updatedCollection;
 }
 
 export type InitiateMobileMoneyCollectionInput = {
@@ -206,7 +314,8 @@ export async function initiateMobileMoneyCollection(input: InitiateMobileMoneyCo
     }
   }
 
-  const normalizedMsisdn = normalizeGhanaMsisdn(input.payerMsisdn);
+  const defaultDialCode = currencyToDialCode(business.currency);
+  const normalizedMsisdn = normalizeAfricanMsisdn(input.payerMsisdn, defaultDialCode);
   if (!normalizedMsisdn || normalizedMsisdn.length < 10) {
     throw new Error('Enter a valid payer mobile number.');
   }

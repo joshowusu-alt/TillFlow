@@ -11,7 +11,9 @@ const PUBLIC_PATHS = [
   '/offline',
   '/welcome',
   '/demo',
+  '/shop',
   '/api/health',
+  '/api/storefront',
   '/api/payments/momo/webhook/mtn',
   '/api/notifications/webhook/meta',
 ];

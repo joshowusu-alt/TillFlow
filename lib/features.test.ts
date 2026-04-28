@@ -30,6 +30,7 @@ describe('getFeatures', () => {
     expect(f.plan).toBe('PRO');
     expect(f.ownerIntelligence).toBe(true);
     expect(f.auditLog).toBe(true);
+    expect(f.onlineStorefront).toBe(true);
     expect(f.multiStore).toBe(true);
   });
 
@@ -47,6 +48,7 @@ describe('getFeatures', () => {
   it('requires Pro plan before multi-branch features turn on', () => {
     const f = getFeatures('GROWTH', 'MULTI_STORE');
     expect(f.multiStore).toBe(false);
+    expect(f.onlineStorefront).toBe(false);
   });
 });
 

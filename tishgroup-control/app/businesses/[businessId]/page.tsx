@@ -468,6 +468,20 @@ export default async function BusinessDetailPage({
                     </select>
                   </label>
 
+                  <div className="flex items-start gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      id="addonOnlineStorefront-overview"
+                      name="addonOnlineStorefront"
+                      className="mt-0.5 h-4 w-4"
+                      defaultChecked={business.addonOnlineStorefront ?? false}
+                    />
+                    <label htmlFor="addonOnlineStorefront-overview" className="space-y-0.5">
+                      <span className="block font-medium text-control-ink">Online storefront add-on</span>
+                      <span className="block text-black/60">Enables the Growth online store add-on (+GH₵200/mo). No effect on Pro plans — storefront is included.</span>
+                    </label>
+                  </div>
+
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Subscription status</span>
                     <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
@@ -632,6 +646,19 @@ export default async function BusinessDetailPage({
                     <option value="PRO">Pro</option>
                   </select>
                 </label>
+                <div className="flex items-start gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    id="addonOnlineStorefront-billing"
+                    name="addonOnlineStorefront"
+                    className="mt-0.5 h-4 w-4"
+                    defaultChecked={business.addonOnlineStorefront ?? false}
+                  />
+                  <label htmlFor="addonOnlineStorefront-billing" className="space-y-0.5">
+                    <span className="block font-medium text-control-ink">Online storefront add-on</span>
+                    <span className="block text-black/60">Enables the Growth online store add-on (+GH₵200/mo). No effect on Pro plans — storefront is included.</span>
+                  </label>
+                </div>
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-control-ink">Subscription status</span>
                   <select name="status" defaultValue={business.subscriptionStatus} className="control-field">

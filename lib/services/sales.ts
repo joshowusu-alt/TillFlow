@@ -177,6 +177,12 @@ export type CreateSaleInput = {
   externalRef?: string | null;
   createdAt?: Date | null;
   inventoryPolicy?: 'enforce' | 'allow-negative';
+  /**
+   * Set true for system-driven sales (e.g. online orders) where no human cashier
+   * has an open till. The require-open-till business setting still applies to
+   * staff-initiated sales.
+   */
+  bypassOpenTillRequirement?: boolean;
   lines: SaleLineInput[];
 };
 
@@ -278,7 +284,7 @@ export async function createSale(input: CreateSaleInput) {
   if (!business) throw new Error('Business not found');
   if (!store) throw new Error('Store not found');
   if (!till) throw new Error('Till not found');
-  if (business.requireOpenTillForSales && !openShift) {
+  if (business.requireOpenTillForSales && !openShift && !input.bypassOpenTillRequirement) {
     throw new UserError('Open till is required before recording sales.');
   }
   if (input.customerId) {

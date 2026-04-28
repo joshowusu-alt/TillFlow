@@ -28,6 +28,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     items: [
       { href: '/pos', label: 'POS', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/sales', label: 'Sales', roles: ['MANAGER', 'OWNER'] },
+      { href: '/online-orders', label: 'Online Orders', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
       { href: '/shifts', label: 'Shifts', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
     ],
   },
@@ -103,6 +104,7 @@ export const SETTINGS_TAB_SECTIONS: SettingsTabSection[] = [
       { href: '/settings', label: 'Business', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/organization', label: 'Organization', roles: ['MANAGER', 'OWNER'] },
       { href: '/settings/billing', label: 'Billing', roles: ['MANAGER', 'OWNER'] },
+      { href: '/settings/online-store', label: 'Online Store', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
       { href: '/settings/notifications', label: 'Notifications', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/settings/loyalty', label: 'Loyalty', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/settings/receipt-design', label: 'Receipt Design', roles: ['MANAGER', 'OWNER'] },

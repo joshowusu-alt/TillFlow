@@ -30,7 +30,7 @@ export function getPlanSummary(plan: BusinessPlan) {
     case 'PRO':
       return {
         name: 'Pro',
-        summary: 'Everything in Growth, plus stronger owner oversight, deeper audit visibility, and broader operational command.',
+        summary: 'Everything in Growth, plus multi-branch operations, executive oversight tools, and the online storefront included by default.',
       };
     case 'GROWTH':
       return {
@@ -46,11 +46,21 @@ export function getPlanSummary(plan: BusinessPlan) {
   }
 }
 
-export function getFeatures(planOrMode?: BusinessPlan | BusinessMode | null, storeMode?: StoreMode | null) {
+export type BusinessAddons = {
+  /** Growth-tier businesses can buy the online storefront as an add-on. Pro includes it by default. */
+  onlineStorefront?: boolean | null;
+};
+
+export function getFeatures(
+  planOrMode?: BusinessPlan | BusinessMode | null,
+  storeMode?: StoreMode | null,
+  addons?: BusinessAddons | null,
+) {
   const plan = getBusinessPlan(planOrMode, storeMode);
   const multi = storeMode === 'MULTI_STORE' && hasPlanAccess(plan, 'PRO');
   const growth = hasPlanAccess(plan, 'GROWTH');
   const pro = hasPlanAccess(plan, 'PRO');
+  const storefrontAddon = Boolean(addons?.onlineStorefront);
 
   return {
     plan,
@@ -64,6 +74,7 @@ export function getFeatures(planOrMode?: BusinessPlan | BusinessMode | null, sto
     ownerIntelligence: pro,
     cashflowForecast: pro,
     auditLog: pro,
+    onlineStorefront: pro || (growth && storefrontAddon),
     multiStore: multi,
   };
 }

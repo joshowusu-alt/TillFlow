@@ -6,6 +6,8 @@ export const PLAN_MONTHLY_PRICES: Record<BusinessPlan, number> = {
   PRO: 699,
 };
 
+export const ADDON_ONLINE_STOREFRONT_MONTHLY = 200;
+
 export function getAnnualPlanPrice(monthlyPrice: number) {
   return monthlyPrice * 10;
 }

@@ -66,6 +66,15 @@ model Business {
   timezone                             String   @default("Africa/Accra")
   // Phase 3B: demo mode flag
   isDemo                               Boolean  @default(false)
+  storefrontEnabled                    Boolean  @default(false)
+  storefrontSlug                       String?  @unique
+  storefrontHeadline                   String?
+  storefrontDescription                String?
+  storefrontPickupInstructions         String?
+  // Add-on: Growth businesses can purchase the online storefront for an
+  // additional monthly fee. Pro plans get it included by default. Toggle is
+  // assisted (Tish Group control plane writes; Tillflow reads).
+  addonOnlineStorefront                Boolean  @default(false)
   // Loyalty programme (GROWTH tier)
   loyaltyEnabled                       Boolean  @default(false)
   loyaltyPointsPerGhsPence             Int      @default(100)
@@ -103,6 +112,7 @@ model Business {
   reorderActions             ReorderAction[]
   paymentReconciliations     PaymentReconciliation[]
   openingBalances            OpeningBalance[]
+  onlineOrders               OnlineOrder[]
   controlProfile             ControlBusinessProfile?
 }
 
@@ -227,6 +237,7 @@ model Store {
   expenses               Expense[]
   expensePayments        ExpensePayment[]
   dayClosures            DayClosure[]
+  onlineOrders           OnlineOrder[]
   branch                 Branch?
   mobileMoneyCollections MobileMoneyCollection[]
   cashDrawerEntries      CashDrawerEntry[]
@@ -453,6 +464,8 @@ model Product {
   promoGetQty           Int      @default(0)
   preferredSupplierId   String?
   minimumMarginThresholdBps Int?
+  storefrontPublished   Boolean  @default(false)
+  storefrontDescription String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @default(now()) @updatedAt
 
@@ -468,6 +481,7 @@ model Product {
   stocktakeLines     StocktakeLine[]
   stockTransferLines StockTransferLine[]
   reorderActions     ReorderAction[]
+  onlineOrderLines   OnlineOrderLine[]
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
@@ -486,6 +500,72 @@ model Unit {
   salesInvoiceLines    SalesInvoiceLine[]
   purchaseInvoiceLines PurchaseInvoiceLine[]
   stockAdjustments     StockAdjustment[]
+  onlineOrderLines     OnlineOrderLine[]
+}
+
+model OnlineOrder {
+  id                  String   @id @default(cuid())
+  businessId          String
+  storeId             String
+  paymentCollectionId String?  @unique
+  salesInvoiceId      String?  @unique
+  publicToken         String   @unique
+  orderNumber         String
+  status              String   @default("AWAITING_PAYMENT")
+  paymentStatus       String   @default("PENDING")
+  fulfillmentMethod   String   @default("PICKUP")
+  fulfillmentStatus   String   @default("PENDING")
+  refundStatus        String?
+  refundedAt          DateTime?
+  customerName        String
+  customerPhone       String
+  customerEmail       String?
+  customerNotes       String?
+  subtotalPence       Int
+  vatPence            Int      @default(0)
+  totalPence          Int
+  currency            String   @default("GHS")
+  paidAt              DateTime?
+  fulfilledAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  business          Business               @relation(fields: [businessId], references: [id])
+  store             Store                  @relation(fields: [storeId], references: [id])
+  paymentCollection MobileMoneyCollection? @relation("OnlineOrderPaymentCollection", fields: [paymentCollectionId], references: [id])
+  salesInvoice      SalesInvoice?          @relation("OnlineOrderSalesInvoice", fields: [salesInvoiceId], references: [id])
+  lines             OnlineOrderLine[]
+
+  @@unique([businessId, orderNumber])
+  @@index([businessId, createdAt])
+  @@index([storeId, createdAt])
+  @@index([businessId, status, createdAt])
+  @@index([paymentStatus, createdAt])
+}
+
+model OnlineOrderLine {
+  id                String   @id @default(cuid())
+  onlineOrderId     String
+  productId         String
+  unitId            String
+  productName       String
+  unitName          String
+  imageUrl          String?
+  qtyInUnit         Int
+  conversionToBase  Int      @default(1)
+  qtyBase           Int
+  unitPricePence    Int
+  lineSubtotalPence Int
+  lineVatPence      Int      @default(0)
+  lineTotalPence    Int
+  createdAt         DateTime @default(now())
+
+  onlineOrder OnlineOrder @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+  unit        Unit        @relation(fields: [unitId], references: [id])
+
+  @@index([onlineOrderId])
+  @@index([productId])
 }
 
 model ProductUnit {
@@ -615,6 +695,7 @@ model SalesInvoice {
   lines                  SalesInvoiceLine[]
   payments               SalesPayment[]
   salesReturn            SalesReturn?
+  onlineOrder            OnlineOrder?            @relation("OnlineOrderSalesInvoice")
 
   @@unique([businessId, transactionNumber])
   @@unique([businessId, externalRef])
@@ -1037,6 +1118,7 @@ model MobileMoneyCollection {
   store         Store                  @relation(fields: [storeId], references: [id])
   salesInvoice  SalesInvoice?          @relation(fields: [salesInvoiceId], references: [id])
   initiatedBy   User?                  @relation("CollectionInitiatedBy", fields: [initiatedByUserId], references: [id])
+  onlineOrderPayment OnlineOrder?      @relation("OnlineOrderPaymentCollection")
   statusLogs    MobileMoneyStatusLog[]
   salesPayments SalesPayment[]
 
