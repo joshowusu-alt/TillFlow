@@ -11,6 +11,11 @@ export type WelcomePlanPreview = {
   note: string;
   featured?: boolean;
   bullets: string[];
+  addon?: {
+    name: string;
+    monthlyPrice: number;
+    description: string;
+  };
 };
 
 function formatCedi(value: number) {
@@ -37,7 +42,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
             Switch between monthly and yearly billing. Yearly gives 2 months off.
           </div>
           <div className="mt-2 text-xs text-black/40">
-            Most owner-led stores will feel at home on Growth. Starter is for a lean start. Pro adds multi-branch operations and your own online store.
+            Most owner-led stores will feel at home on Growth. Starter is for a lean start. Pro is for multi-branch operations and executive control — and the online store is included.
           </div>
         </div>
 
@@ -103,6 +108,17 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                   </div>
                 ))}
               </div>
+
+              {plan.addon ? (
+                <div className="mt-4 rounded-xl border border-dashed border-accent/25 bg-accentSoft/40 px-3 py-3 text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">Add-on</span>
+                    <span className="text-xs font-bold text-accent">+{formatCedi(plan.addon.monthlyPrice)}/mo</span>
+                  </div>
+                  <div className="mt-1 text-xs font-semibold text-gray-900">{plan.addon.name}</div>
+                  <div className="mt-0.5 text-[11px] leading-4 text-black/55">{plan.addon.description}</div>
+                </div>
+              ) : null}
 
               <Link
                 href="/register"

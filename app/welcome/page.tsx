@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
-import { PLAN_MONTHLY_PRICES } from '@/lib/plan-pricing';
+import { PLAN_MONTHLY_PRICES, ADDON_ONLINE_STOREFRONT_MONTHLY } from '@/lib/plan-pricing';
 
 const features = [
   {
@@ -123,16 +123,21 @@ const planPreview: WelcomePlanPreview[] = [
       'Margins, accounting visibility, reorder support, and owner insight',
       'Best for serious supermarkets that want tighter operational discipline',
     ],
+    addon: {
+      name: 'Add online store',
+      monthlyPrice: ADDON_ONLINE_STOREFRONT_MONTHLY,
+      description: 'Public online storefront with mobile-money checkout for pickup orders. Speak to TillFlow to enable.',
+    },
   },
   {
     name: 'Pro',
     monthlyPrice: PLAN_MONTHLY_PRICES.PRO,
-    note: 'Multi-branch + sell online',
+    note: 'Multi-branch + executive control',
     bullets: [
-      'Public online storefront with mobile-money checkout for pickup orders',
       'Multi-branch operations with stock transfers between stores',
       'Owner dashboard, audit log, and cashflow forecast for executive oversight',
-      'Best for operators running more than one store or selling beyond the counter',
+      'Online storefront with mobile-money checkout — included by default',
+      'Best for operators running multiple stores or selling beyond the counter',
     ],
   },
 ];
@@ -457,7 +462,7 @@ export default function WelcomePage() {
             Pick the setup that matches how your business runs today.
           </h2>
           <p className="mt-4 text-lg text-black/50">
-            Start with Starter, move into Growth when reporting and control matter more, and step into Pro when you're running multiple branches or selling online.
+            Start with Starter, move into Growth when reporting and control matter more, and step into Pro for multi-branch operations and executive oversight. The online store is included on Pro and available on Growth as an add-on.
           </p>
           <WelcomePricingPreview plans={planPreview} />
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
