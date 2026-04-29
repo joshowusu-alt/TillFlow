@@ -4,6 +4,7 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { buildQtyByProductMap, fetchInventoryMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
+import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 
 export type StorefrontCatalogProduct = {
   id: string;
@@ -49,6 +50,7 @@ export type PublicStorefront = {
   address: string | null;
   stores: StorefrontPickupStore[];
   products: Array<StorefrontCatalogProduct & { onHandByStore: Record<string, number> }>;
+  openStatus: OpenStatus | null;
 };
 
 export type OnlineCheckoutItemInput = {
@@ -230,8 +232,11 @@ async function getStorefrontBusinessBySlug(slug: string) {
       plan: true,
       storeMode: true,
       addonOnlineStorefront: true,
+      timezone: true,
       storefrontEnabled: true,
       storefrontSlug: true,
+      storefrontHoursJson: true,
+      storefrontPickupPrepMinutes: true,
       storefrontHeadline: true,
       storefrontDescription: true,
       storefrontPickupInstructions: true,
@@ -321,6 +326,13 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
     },
   });
 
+  const weeklyHours = parseWeeklyHours((business as any).storefrontHoursJson ?? null);
+  const openStatus = getOpenStatus({
+    hours: weeklyHours,
+    timezone: (business as any).timezone ?? null,
+    pickupPrepMinutes: (business as any).storefrontPickupPrepMinutes ?? 0,
+  });
+
   return {
     businessId: business.id,
     name: business.name,
@@ -332,6 +344,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
     pickupInstructions: business.storefrontPickupInstructions,
     phone: business.phone,
     address: business.address,
+    openStatus,
     stores: business.stores.map((store) => ({
       id: store.id,
       name: store.name,

@@ -9,6 +9,7 @@ import { formOptionalString, formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
 import { normalizeStorefrontSlug } from '@/lib/services/online-orders';
 import { createSalesReturn } from '@/lib/services/returns';
+import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -101,6 +102,79 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
       revalidatePath(`/shop/${storefrontSlug}`);
     }
     redirect('/settings/online-store?saved=1');
+  }, '/settings/online-store');
+}
+
+const HHMM_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export async function updateStorefrontHoursAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    await requireOnlineStorefrontAccess(businessId);
+
+    const hoursEnabled = formData.get('hoursEnabled') === 'on';
+
+    if (!hoursEnabled) {
+      await prisma.business.update({
+        where: { id: businessId },
+        data: { storefrontHoursJson: null, storefrontPickupPrepMinutes: 0 },
+      });
+      audit({
+        businessId,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: 'SETTINGS_UPDATE',
+        entity: 'Business',
+        entityId: businessId,
+        details: { source: 'online-storefront-hours', hoursEnabled: false },
+      }).catch((error) => console.error('[audit]', error));
+
+      revalidatePath('/settings/online-store');
+      const business = await prisma.business.findUnique({ where: { id: businessId }, select: { storefrontSlug: true } });
+      if (business?.storefrontSlug) revalidatePath(`/shop/${business.storefrontSlug}`);
+      redirect('/settings/online-store?saved=hours');
+    }
+
+    const hours = makeDefaultWeeklyHours();
+    for (const day of DAY_KEYS) {
+      const closed = formData.get(`${day}_closed`) === 'on';
+      const openValue = String(formData.get(`${day}_open`) ?? '').trim();
+      const closeValue = String(formData.get(`${day}_close`) ?? '').trim();
+      const open = HHMM_PATTERN.test(openValue) ? openValue : hours[day].open;
+      const close = HHMM_PATTERN.test(closeValue) ? closeValue : hours[day].close;
+      if (!closed && parseInt(open.replace(':', ''), 10) >= parseInt(close.replace(':', ''), 10)) {
+        throw new Error(`Closing time on ${day} must be after opening time.`);
+      }
+      hours[day] = { open, close, closed };
+    }
+
+    const prepRaw = String(formData.get('pickupPrepMinutes') ?? '').trim();
+    const prep = Math.max(0, Math.min(parseInt(prepRaw, 10) || 0, 24 * 60));
+
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        storefrontHoursJson: serializeWeeklyHours(hours satisfies WeeklyHours),
+        storefrontPickupPrepMinutes: prep,
+      },
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: { source: 'online-storefront-hours', pickupPrepMinutes: prep },
+    }).catch((error) => console.error('[audit]', error));
+
+    revalidatePath('/settings/online-store');
+    const business = await prisma.business.findUnique({ where: { id: businessId }, select: { storefrontSlug: true } });
+    if (business?.storefrontSlug) revalidatePath(`/shop/${business.storefrontSlug}`);
+    redirect('/settings/online-store?saved=hours');
   }, '/settings/online-store');
 }
 

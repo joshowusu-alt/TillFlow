@@ -71,6 +71,10 @@ model Business {
   storefrontHeadline                   String?
   storefrontDescription                String?
   storefrontPickupInstructions         String?
+  // JSON-encoded weekly opening hours (keyed by day name, 24h HH:MM range,
+  // or marked closed). When unset, the storefront hides the open/closed badge.
+  storefrontHoursJson                  String?
+  storefrontPickupPrepMinutes          Int      @default(0)
   // Add-on: Growth businesses can purchase the online storefront for an
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).

@@ -1,10 +1,11 @@
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { toggleStorefrontProductAction, updateStorefrontSettingsAction } from '@/app/actions/online-storefront';
+import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
+import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
 
 export default async function OnlineStoreSettingsPage({
   searchParams,
@@ -41,6 +42,8 @@ export default async function OnlineStoreSettingsPage({
         storefrontHeadline: true,
         storefrontDescription: true,
         storefrontPickupInstructions: true,
+        storefrontHoursJson: true,
+        storefrontPickupPrepMinutes: true,
       },
     }),
     prisma.product.findMany({
@@ -76,6 +79,12 @@ export default async function OnlineStoreSettingsPage({
       {searchParams?.saved === '1' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Storefront settings saved.
+        </div>
+      ) : null}
+
+      {searchParams?.saved === 'hours' ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          Pickup hours saved.
         </div>
       ) : null}
 
@@ -154,6 +163,93 @@ export default async function OnlineStoreSettingsPage({
           </div>
         </form>
       </div>
+
+      {(() => {
+        const parsedHours = parseWeeklyHours(storefrontBusiness.storefrontHoursJson);
+        const hoursEnabled = Boolean(parsedHours);
+        const hours = parsedHours ?? makeDefaultWeeklyHours();
+        const prepMinutes = storefrontBusiness.storefrontPickupPrepMinutes ?? 0;
+        return (
+          <div className="card p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-display font-semibold">Pickup hours</h2>
+                <p className="mt-1 text-sm text-black/55">
+                  When set, customers see a green "Open now · Ready in ~X min" badge — or "Closed · Opens at HH:MM" outside hours. Times are in the business timezone.
+                </p>
+              </div>
+            </div>
+
+            <form action={updateStorefrontHoursAction} className="mt-5 space-y-4">
+              <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
+                <input
+                  type="checkbox"
+                  name="hoursEnabled"
+                  defaultChecked={hoursEnabled}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-medium text-ink">Show pickup hours on the public storefront</span>
+              </label>
+
+              <div className="grid gap-3">
+                {DAY_KEYS.map((day) => {
+                  const config = hours[day];
+                  return (
+                    <div
+                      key={day}
+                      className="grid grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3"
+                    >
+                      <div className="text-sm font-medium text-ink">{DAY_LABELS[day]}</div>
+                      <input
+                        className="input"
+                        type="time"
+                        name={`${day}_open`}
+                        defaultValue={config.open}
+                        disabled={config.closed}
+                      />
+                      <input
+                        className="input"
+                        type="time"
+                        name={`${day}_close`}
+                        defaultValue={config.close}
+                        disabled={config.closed}
+                      />
+                      <label className="flex items-center gap-2 text-xs text-black/65">
+                        <input
+                          type="checkbox"
+                          name={`${day}_closed`}
+                          defaultChecked={config.closed}
+                          className="h-4 w-4"
+                        />
+                        Closed
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div>
+                <label className="label">Pickup preparation time (minutes)</label>
+                <input
+                  className="input max-w-xs"
+                  type="number"
+                  name="pickupPrepMinutes"
+                  min={0}
+                  max={1440}
+                  defaultValue={prepMinutes}
+                />
+                <div className="mt-1 text-xs text-black/50">
+                  Used to render the "Ready in ~X min" line on the storefront when open. Set to 0 to hide it.
+                </div>
+              </div>
+
+              <button type="submit" className="btn-primary">
+                Save pickup hours
+              </button>
+            </form>
+          </div>
+        );
+      })()}
 
       <div className="card p-6">
         <div className="flex items-start justify-between gap-4">
