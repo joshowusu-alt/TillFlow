@@ -44,6 +44,8 @@ export default async function OnlineStoreSettingsPage({
         storefrontPickupInstructions: true,
         storefrontHoursJson: true,
         storefrontPickupPrepMinutes: true,
+        storefrontMomoNumber: true,
+        storefrontMomoNetwork: true,
       },
     }),
     prisma.product.findMany({
@@ -154,6 +156,37 @@ export default async function OnlineStoreSettingsPage({
               defaultValue={storefrontBusiness.storefrontPickupInstructions ?? ''}
               placeholder="Example: Pick up at the main counter after confirming your order number."
             />
+          </div>
+
+          <div className="lg:col-span-2 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-4">
+            <div className="text-sm font-semibold text-ink">Mobile money payout</div>
+            <p className="mt-1 text-xs text-black/55">
+              Customers send manual MoMo payments to this number using their order reference. Shown on the order confirmation page.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_180px]">
+              <div>
+                <label className="label">MoMo number</label>
+                <input
+                  className="input"
+                  name="storefrontMomoNumber"
+                  defaultValue={storefrontBusiness.storefrontMomoNumber ?? ''}
+                  placeholder="e.g. 024 123 4567"
+                />
+              </div>
+              <div>
+                <label className="label">Network</label>
+                <select
+                  className="input"
+                  name="storefrontMomoNetwork"
+                  defaultValue={storefrontBusiness.storefrontMomoNetwork ?? ''}
+                >
+                  <option value="">Not set</option>
+                  <option value="MTN">MTN</option>
+                  <option value="TELECEL">Telecel</option>
+                  <option value="AIRTELTIGO">AirtelTigo</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div className="lg:col-span-2">

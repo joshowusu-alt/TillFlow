@@ -134,9 +134,33 @@ export function normalizeStorefrontSlug(value: string) {
     .slice(0, 60);
 }
 
+/** Friendly order reference customers use as the MoMo payment note. */
+export function createOnlineOrderRef() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // omit similar-looking chars
+  let suffix = '';
+  for (let i = 0; i < 4; i += 1) {
+    suffix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `ORD-${suffix}`;
+}
+
+/** @deprecated Kept for backwards compatibility with older callers. Prefer createOnlineOrderRef. */
 export function createOnlineOrderNumber(now = new Date(), random = Math.floor(Math.random() * 10_000)) {
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
   return `WEB-${datePart}-${String(Math.max(0, random) % 10_000).padStart(4, '0')}`;
+}
+
+async function generateUniqueOnlineOrderRef(businessId: string): Promise<string> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const candidate = createOnlineOrderRef();
+    const existing = await prisma.onlineOrder.findFirst({
+      where: { businessId, orderNumber: candidate },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  // Extremely unlikely fallback: append a longer random suffix.
+  return `${createOnlineOrderRef()}-${Date.now().toString(36).slice(-3).toUpperCase()}`;
 }
 
 export function getOnlineOrderStateForCollectionStatus(status: string) {
@@ -399,10 +423,6 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
 
   assertOnlineStorefrontAvailable(business);
 
-  if (!business.momoEnabled) {
-    throw new UserError('Online payment is not enabled for this store yet.');
-  }
-
   const customerName = input.customerName.trim();
   const rawCustomerPhone = input.customerPhone.trim();
   const customerEmail = input.customerEmail?.trim() ? input.customerEmail.trim() : null;
@@ -482,7 +502,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   const vatPence = lineDetails.reduce((sum, line) => sum + line.lineVatPence, 0);
   const totalPence = lineDetails.reduce((sum, line) => sum + line.lineTotalPence, 0);
   const publicToken = randomUUID();
-  const orderNumber = createOnlineOrderNumber();
+  const orderNumber = await generateUniqueOnlineOrderRef(business.id);
 
   const order = await prisma.onlineOrder.create({
     data: {
@@ -522,55 +542,9 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     },
   });
 
-  let collection;
-  try {
-    collection = await initiateMobileMoneyCollection({
-      businessId: business.id,
-      storeId: store.id,
-      amountPence: totalPence,
-      currency: business.currency,
-      payerMsisdn: customerPhone,
-      network: input.network,
-      payeeNote: `${business.name} ${order.orderNumber}`,
-      payerMessage: `Pay ${business.name} for order ${order.orderNumber}`,
-      metadata: {
-        source: 'ONLINE_STOREFRONT',
-        storefrontSlug: business.storefrontSlug,
-        onlineOrderId: order.id,
-        orderNumber: order.orderNumber,
-      },
-    });
-  } catch (initError) {
-    // MoMo init threw before any collection row was created. The order has no
-    // collection it could ever resolve through, so remove it instead of leaving
-    // it as an orphan in the merchant's dashboard.
-    await prisma.onlineOrder.delete({ where: { id: order.id } }).catch(() => {});
-    throw initError;
-  }
-
-  const nextState = getOnlineOrderStateForCollectionStatus(collection.status);
-  await prisma.onlineOrder.update({
-    where: { id: order.id },
-    data: {
-      paymentCollectionId: collection.id,
-      status: nextState.status,
-      paymentStatus: nextState.paymentStatus,
-      paidAt: collection.status === 'CONFIRMED' ? new Date() : null,
-    },
-  });
-
-  // If the provider confirms synchronously (rare in production but supported by
-  // the in-memory test provider), the webhook-driven commit path won't fire —
-  // commit the sale directly here. Imported lazily to avoid a circular import.
-  if (collection.status === 'CONFIRMED') {
-    try {
-      const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
-      await commitOnlineOrderSale(order.id);
-    } catch (commitError) {
-      console.error('[online-order-commit] Failed to commit sale on initiate', order.id, commitError);
-    }
-  }
-
+  // Manual reference flow: order is created in AWAITING_PAYMENT state. Customer
+  // sends MoMo to the store's payout number using the order reference, then the
+  // merchant confirms receipt in /online-orders to flip the status to PAID.
   return {
     orderId: order.id,
     orderNumber: order.orderNumber,
@@ -620,8 +594,19 @@ export async function getPublicOnlineOrder(input: {
         select: {
           id: true,
           name: true,
+          phone: true,
           storefrontPickupInstructions: true,
           storefrontSlug: true,
+          storefrontMomoNumber: true,
+          storefrontMomoNetwork: true,
+        },
+      },
+      store: {
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
         },
       },
       paymentCollection: {
@@ -658,6 +643,11 @@ export async function getPublicOnlineOrder(input: {
     ...order,
     storefrontSlug: order.business.storefrontSlug,
     storefrontName: order.business.name,
+    storefrontPhone: order.business.phone,
     pickupInstructions: order.business.storefrontPickupInstructions,
+    momoPayoutNumber: order.business.storefrontMomoNumber,
+    momoPayoutNetwork: order.business.storefrontMomoNetwork,
+    pickupStoreName: order.store?.name ?? null,
+    pickupStoreAddress: order.store?.address ?? null,
   };
 }

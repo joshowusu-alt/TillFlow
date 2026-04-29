@@ -151,6 +151,15 @@ export default async function OnlineOrdersPage() {
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                  {order.paymentStatus !== 'PAID' && order.status !== 'CANCELLED' ? (
+                    <form action={updateOnlineOrderStatusAction}>
+                      <input type="hidden" name="orderId" value={order.id} />
+                      <input type="hidden" name="nextStatus" value="MARK_PAID" />
+                      <button type="submit" className="btn-primary w-full justify-center">
+                        Mark payment received
+                      </button>
+                    </form>
+                  ) : null}
                   <form action={updateOnlineOrderStatusAction}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="nextStatus" value="PROCESSING" />

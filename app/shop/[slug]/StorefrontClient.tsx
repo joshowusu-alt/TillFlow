@@ -271,7 +271,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 xl:pb-8">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-accentSoft/70 via-white to-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-24 -left-16 h-48 w-48 rounded-full bg-blue-200/40 blur-3xl" />
@@ -488,7 +488,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               </div>
             ) : (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
                   {pagedProducts.map((product) => {
                     const selected = selectionState[product.id];
                     const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
@@ -506,9 +506,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     return (
                       <article
                         key={product.id}
-                        className="group flex flex-col overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:ring-accent/15"
+                        className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:ring-accent/15 sm:rounded-[1.5rem]"
                       >
-                        <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+                        <div className="relative h-28 w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-36 lg:aspect-square lg:h-auto">
                           {product.imageUrl ? (
                             <img
                               src={product.imageUrl}
@@ -517,7 +517,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-accent/45">
-                              <PackageIcon className="h-14 w-14" />
+                              <PackageIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-14 lg:w-14" />
                             </div>
                           )}
                           {hasPromo ? (
@@ -534,38 +534,38 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                           ) : null}
                         </div>
 
-                        <div className="flex flex-1 flex-col gap-3 p-4">
-                          <div className="min-h-[3.5rem]">
+                        <div className="flex flex-1 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
+                          <div className="min-h-[2.75rem]">
                             {displayCategory ? (
-                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent/80">
+                              <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent/80 sm:text-[10px]">
                                 {displayCategory}
                               </div>
                             ) : null}
-                            <h2 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-ink">
+                            <h2 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-ink sm:text-base">
                               {displayName}
                             </h2>
                           </div>
 
                           {product.storefrontDescription ? (
-                            <p className="line-clamp-2 text-xs leading-5 text-black/55">
+                            <p className="hidden text-xs leading-5 text-black/55 sm:line-clamp-2">
                               {product.storefrontDescription}
                             </p>
                           ) : null}
 
-                          <div className="flex items-baseline justify-between">
+                          <div className="flex items-baseline justify-between gap-2">
                             <div>
-                              <div className="text-[10px] uppercase tracking-[0.18em] text-black/40">From</div>
-                              <div className="text-lg font-bold text-ink">{unitPrice}</div>
+                              <div className="text-[9px] uppercase tracking-[0.18em] text-black/40 sm:text-[10px]">From</div>
+                              <div className="text-base font-bold text-ink sm:text-lg">{unitPrice}</div>
                             </div>
-                            <div className={`text-[11px] font-medium ${inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
-                              {inStock ? `In stock · ${formatAvailable(product, product.onHandBase)}` : 'Unavailable'}
+                            <div className={`text-[10px] font-medium sm:text-[11px] ${inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
+                              {inStock ? 'In stock' : 'Unavailable'}
                             </div>
                           </div>
 
                           <div className="mt-auto space-y-2 pt-1">
                             {product.units.length > 1 ? (
                               <select
-                                className="input h-10 text-sm"
+                                className="input h-9 text-xs sm:h-10 sm:text-sm"
                                 value={selected?.unitId ?? ''}
                                 onChange={(event) =>
                                   setSelectionState((prev) => ({
@@ -589,67 +589,65 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               </select>
                             ) : null}
 
-                            <div className="flex items-stretch gap-2">
-                              <div className="flex items-center rounded-xl border border-black/10 bg-white">
-                                <button
-                                  type="button"
-                                  aria-label="Decrease quantity"
-                                  className="px-3 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
-                                  disabled={(selected?.qtyInUnit ?? 1) <= 1 || !inStock}
-                                  onClick={() =>
-                                    setSelectionState((prev) => ({
-                                      ...prev,
-                                      [product.id]: {
-                                        ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                        qtyInUnit: Math.max(1, (prev[product.id]?.qtyInUnit ?? 1) - 1),
-                                      },
-                                    }))
-                                  }
-                                >
-                                  −
-                                </button>
-                                <input
-                                  className="w-10 border-0 bg-transparent text-center text-sm font-semibold focus:outline-none"
-                                  type="number"
-                                  min={1}
-                                  value={selected?.qtyInUnit ?? 1}
-                                  onChange={(event) =>
-                                    setSelectionState((prev) => ({
-                                      ...prev,
-                                      [product.id]: {
-                                        ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                        qtyInUnit: Math.max(1, parseInt(event.target.value || '1', 10) || 1),
-                                      },
-                                    }))
-                                  }
-                                />
-                                <button
-                                  type="button"
-                                  aria-label="Increase quantity"
-                                  className="px-3 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
-                                  disabled={!inStock}
-                                  onClick={() =>
-                                    setSelectionState((prev) => ({
-                                      ...prev,
-                                      [product.id]: {
-                                        ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                        qtyInUnit: (prev[product.id]?.qtyInUnit ?? 1) + 1,
-                                      },
-                                    }))
-                                  }
-                                >
-                                  +
-                                </button>
-                              </div>
+                            <div className="flex items-center justify-between rounded-xl border border-black/10 bg-white px-1">
                               <button
                                 type="button"
-                                className="flex-1 rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
-                                onClick={() => addToCart(product.id)}
-                                disabled={!inStock}
+                                aria-label="Decrease quantity"
+                                className="px-2.5 py-1.5 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
+                                disabled={(selected?.qtyInUnit ?? 1) <= 1 || !inStock}
+                                onClick={() =>
+                                  setSelectionState((prev) => ({
+                                    ...prev,
+                                    [product.id]: {
+                                      ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                      qtyInUnit: Math.max(1, (prev[product.id]?.qtyInUnit ?? 1) - 1),
+                                    },
+                                  }))
+                                }
                               >
-                                {inStock ? 'Add to cart' : 'Out of stock'}
+                                −
+                              </button>
+                              <input
+                                className="w-8 border-0 bg-transparent text-center text-sm font-semibold focus:outline-none"
+                                type="number"
+                                min={1}
+                                value={selected?.qtyInUnit ?? 1}
+                                onChange={(event) =>
+                                  setSelectionState((prev) => ({
+                                    ...prev,
+                                    [product.id]: {
+                                      ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                      qtyInUnit: Math.max(1, parseInt(event.target.value || '1', 10) || 1),
+                                    },
+                                  }))
+                                }
+                              />
+                              <button
+                                type="button"
+                                aria-label="Increase quantity"
+                                className="px-2.5 py-1.5 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
+                                disabled={!inStock}
+                                onClick={() =>
+                                  setSelectionState((prev) => ({
+                                    ...prev,
+                                    [product.id]: {
+                                      ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                      qtyInUnit: (prev[product.id]?.qtyInUnit ?? 1) + 1,
+                                    },
+                                  }))
+                                }
+                              >
+                                +
                               </button>
                             </div>
+                            <button
+                              type="button"
+                              className="w-full rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none sm:text-sm"
+                              onClick={() => addToCart(product.id)}
+                              disabled={!inStock}
+                            >
+                              {inStock ? 'Add to cart' : 'Out of stock'}
+                            </button>
                           </div>
                         </div>
                       </article>

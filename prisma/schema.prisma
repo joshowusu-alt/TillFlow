@@ -75,6 +75,10 @@ model Business {
   // or marked closed). When unset, the storefront hides the open/closed badge.
   storefrontHoursJson                  String?
   storefrontPickupPrepMinutes          Int      @default(0)
+  // MoMo number + network customers send manual payments to. Used to render
+  // payment instructions on the order confirmation page.
+  storefrontMomoNumber                 String?
+  storefrontMomoNetwork                String?
   // Add-on: Growth businesses can purchase the online storefront for an
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).

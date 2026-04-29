@@ -67,7 +67,6 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
   if (!order) return null;
   if (order.salesInvoiceId) return order.salesInvoiceId;
   if (order.paymentStatus !== 'PAID') return null;
-  if (!order.paymentCollectionId) return null;
 
   const { tillId, cashierUserId } = await ensureOnlineSalesInfra(order.businessId, order.storeId);
 
@@ -78,8 +77,10 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
       tillId,
       cashierUserId,
       paymentStatus: 'PAID',
+      // Manual reference orders won't have a paymentCollectionId — createSale
+      // accepts that case by recording the MoMo payment as PENDING_MANUAL.
       payments: [{ method: 'MOBILE_MONEY', amountPence: order.totalPence }],
-      momoCollectionId: order.paymentCollectionId,
+      momoCollectionId: order.paymentCollectionId ?? null,
       bypassOpenTillRequirement: true,
       externalRef: `WEB-${order.orderNumber}`,
       lines: order.lines.map((line) => ({

@@ -49,8 +49,17 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontHeadline = formOptionalString(formData, 'storefrontHeadline');
     const storefrontDescription = formOptionalString(formData, 'storefrontDescription');
     const storefrontPickupInstructions = formOptionalString(formData, 'storefrontPickupInstructions');
+    const storefrontMomoNumberRaw = formOptionalString(formData, 'storefrontMomoNumber');
+    const storefrontMomoNetworkRaw = formOptionalString(formData, 'storefrontMomoNetwork');
     const rawSlug = formOptionalString(formData, 'storefrontSlug') || business.storefrontSlug || business.name;
     const storefrontSlug = normalizeStorefrontSlug(rawSlug);
+
+    const allowedNetworks = ['MTN', 'TELECEL', 'AIRTELTIGO'];
+    const storefrontMomoNumber = storefrontMomoNumberRaw?.trim() || null;
+    const storefrontMomoNetwork =
+      storefrontMomoNetworkRaw && allowedNetworks.includes(storefrontMomoNetworkRaw.toUpperCase())
+        ? storefrontMomoNetworkRaw.toUpperCase()
+        : null;
 
     if (storefrontEnabled && storefrontSlug.length < 3) {
       throw new Error('Storefront slug must contain at least 3 letters or numbers.');
@@ -79,6 +88,8 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
         storefrontPickupInstructions: storefrontPickupInstructions?.trim()
           ? storefrontPickupInstructions.trim()
           : null,
+        storefrontMomoNumber,
+        storefrontMomoNetwork,
       },
     });
 
@@ -251,12 +262,29 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       fulfilledAt?: Date | null;
       refundStatus?: string | null;
       refundedAt?: Date | null;
+      paymentStatus?: string;
+      paidAt?: Date | null;
     } = {
       status: order.status,
       fulfillmentStatus: 'PENDING',
     };
 
+    let commitSale = false;
+
     switch (nextStatus) {
+      case 'MARK_PAID':
+        if (order.paymentStatus === 'PAID') {
+          throw new Error('Order is already marked as paid.');
+        }
+        if (order.status !== 'AWAITING_PAYMENT' && order.status !== 'PAYMENT_FAILED') {
+          throw new Error('Only orders awaiting payment can be marked as paid.');
+        }
+        data.status = 'PAID';
+        data.fulfillmentStatus = 'PENDING';
+        data.paymentStatus = 'PAID';
+        data.paidAt = new Date();
+        commitSale = true;
+        break;
       case 'PROCESSING':
         if (order.paymentStatus !== 'PAID') {
           throw new Error('Only paid orders can move into processing.');
@@ -316,6 +344,17 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       where: { id: order.id },
       data,
     });
+
+    if (commitSale) {
+      // For manual reference orders, commit the sale to a SalesInvoice +
+      // decrement inventory now that the merchant has confirmed payment.
+      try {
+        const { commitOnlineOrderSale } = await import('@/lib/services/online-order-commit');
+        await commitOnlineOrderSale(order.id);
+      } catch (commitError) {
+        console.error('[online-order-commit] Failed after manual mark-paid', order.id, commitError);
+      }
+    }
 
     audit({
       businessId,
