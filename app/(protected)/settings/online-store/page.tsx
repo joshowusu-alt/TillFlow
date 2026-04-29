@@ -7,7 +7,9 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
+import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
+import { buildStorefrontUrl } from '@/lib/storefront-url';
 
 export default async function OnlineStoreSettingsPage({
   searchParams,
@@ -77,6 +79,7 @@ export default async function OnlineStoreSettingsPage({
   const publicUrl = storefrontBusiness.storefrontSlug
     ? `/shop/${storefrontBusiness.storefrontSlug}`
     : null;
+  const absoluteStorefrontUrl = buildStorefrontUrl(storefrontBusiness.storefrontSlug);
 
   return (
     <div className="space-y-6">
@@ -91,6 +94,15 @@ export default async function OnlineStoreSettingsPage({
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Storefront settings saved.
         </div>
+      ) : null}
+
+      {storefrontBusiness.storefrontEnabled && absoluteStorefrontUrl ? (
+        <StorefrontAccessCard
+          storeName={storefrontBusiness.name}
+          storefrontUrl={absoluteStorefrontUrl}
+          storeAddress={(business as any).address ?? null}
+          storePhone={(business as any).phone ?? null}
+        />
       ) : null}
 
       {searchParams?.saved === 'hours' ? (

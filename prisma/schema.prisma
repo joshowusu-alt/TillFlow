@@ -36,6 +36,7 @@ model Business {
   receiptFooter                        String?
   receiptShowVatNumber                 Boolean  @default(true)
   receiptShowAddress                   Boolean  @default(true)
+  receiptShowStorefrontQr              Boolean  @default(false)
   socialMediaHandle                    String?
   address                              String?
   phone                                String?

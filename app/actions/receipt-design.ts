@@ -17,6 +17,7 @@ export async function updateReceiptDesignAction(formData: FormData): Promise<voi
         receiptLogoUrl: formOptionalString(formData, 'receiptLogoUrl'),
         receiptShowVatNumber: formData.get('receiptShowVatNumber') === 'on',
         receiptShowAddress: formData.get('receiptShowAddress') === 'on',
+        receiptShowStorefrontQr: formData.get('receiptShowStorefrontQr') === 'on',
         socialMediaHandle: formOptionalString(formData, 'socialMediaHandle'),
         address: formOptionalString(formData, 'address'),
         phone: formOptionalString(formData, 'phone')

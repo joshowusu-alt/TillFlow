@@ -5,12 +5,29 @@ import { prisma } from '@/lib/prisma';
 import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
 
 import { formatMoney } from '@/lib/format';
+import { buildStorefrontUrl } from '@/lib/storefront-url';
+import QRCode from 'qrcode';
 
 export default async function ReceiptDesignPage() {
     const { user, business } = await requireBusiness(['OWNER', 'MANAGER']);
     if (!business) {
         return <div className="card p-6">Business not found. Please complete setup.</div>;
     }
+
+    const businessAny = business as any;
+    const storefrontEnabled = Boolean(businessAny.storefrontEnabled);
+    const storefrontSlug = businessAny.storefrontSlug ?? null;
+    const storefrontUrl = buildStorefrontUrl(storefrontSlug);
+    const showStorefrontQr = Boolean(businessAny.receiptShowStorefrontQr);
+    const storefrontQrPreview =
+        storefrontEnabled && storefrontUrl
+            ? await QRCode.toDataURL(storefrontUrl, {
+                  errorCorrectionLevel: 'M',
+                  margin: 1,
+                  scale: 6,
+                  color: { dark: '#0f172a', light: '#ffffff' },
+              }).catch(() => null)
+            : null;
 
     return (
         <div className="space-y-6">
@@ -117,6 +134,23 @@ export default async function ReceiptDesignPage() {
                                 />
                                 <span className="text-sm">Show Business Address on receipts</span>
                             </label>
+                            <label className="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    name="receiptShowStorefrontQr"
+                                    className="mt-0.5 h-4 w-4 rounded"
+                                    defaultChecked={showStorefrontQr}
+                                    disabled={!storefrontEnabled || !storefrontUrl}
+                                />
+                                <span className="text-sm">
+                                    <span className="block">Show online store QR on receipts</span>
+                                    <span className="block text-xs text-black/50">
+                                        {storefrontEnabled && storefrontUrl
+                                            ? 'Prints a small QR + store URL at the bottom of every receipt with text "Order online — scan to shop".'
+                                            : 'Enable the storefront in Settings → Online Storefront first.'}
+                                    </span>
+                                </span>
+                            </label>
                         </div>
 
                         <SubmitButton className="btn-primary" loadingText="Saving…">
@@ -197,6 +231,24 @@ export default async function ReceiptDesignPage() {
                                     Follow us: {business.socialMediaHandle}
                                 </div>
                             )}
+
+                            {/* Storefront QR */}
+                            {showStorefrontQr && storefrontQrPreview && storefrontUrl ? (
+                                <div className="border-t border-dashed border-black/10 pt-3">
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/55">
+                                        Order online — scan to shop
+                                    </div>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={storefrontQrPreview}
+                                        alt="Storefront QR"
+                                        className="mx-auto mt-2 h-20 w-20"
+                                    />
+                                    <div className="mt-1 break-all font-mono text-[10px] text-black/60">
+                                        {storefrontUrl.replace(/^https?:\/\//, '')}
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {/* Timestamp */}
                             <div className="pt-2 text-xs text-black/40">
