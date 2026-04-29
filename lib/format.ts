@@ -28,6 +28,22 @@ export function getCurrencySymbol(currency: string): string {
 }
 
 /**
+ * Format an MSISDN for local Ghana display. International forms (233/+233 with
+ * 12 digits) are converted to the domestic 0XXXXXXXXX form. Other inputs are
+ * returned unchanged. Display-only — never persist the result.
+ */
+export function formatGhanaPhoneForDisplay(value: string | null | undefined): string {
+  if (!value) return '';
+  const digits = value.replace(/[^\d+]/g, '');
+  if (!digits) return value;
+  // +233XXXXXXXXX (13) -> 0XXXXXXXXX
+  if (digits.startsWith('+233') && digits.length === 13) return `0${digits.slice(4)}`;
+  // 233XXXXXXXXX (12) -> 0XXXXXXXXX
+  if (digits.startsWith('233') && digits.length === 12) return `0${digits.slice(3)}`;
+  return value;
+}
+
+/**
  * Convert a string to Title Case for display purposes only.
  * Lowercases the input then uppercases the first character of every word.
  * Use on the display layer (e.g. customer-facing storefront product names) —

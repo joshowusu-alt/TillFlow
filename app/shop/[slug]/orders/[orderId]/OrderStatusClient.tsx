@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatDateTime, formatMoney, toTitleCase } from '@/lib/format';
+import { formatDateTime, formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
+import {
+  buildPaymentShareMessage,
+  getPaymentInstructionDetails,
+  normalizePaymentMode,
+  type StorefrontPaymentConfig,
+  type StorefrontPaymentMode,
+} from '@/lib/storefront-payments';
 
 type PublicOrder = {
   id: string;
@@ -29,6 +36,13 @@ type PublicOrder = {
   pickupInstructions: string | null;
   momoPayoutNumber: string | null;
   momoPayoutNetwork: string | null;
+  paymentMode: string | null;
+  merchantShortcode: string | null;
+  bankName: string | null;
+  bankAccountName: string | null;
+  bankAccountNumber: string | null;
+  bankBranch: string | null;
+  storeMessage: string | null;
   pickupStoreName: string | null;
   pickupStoreAddress: string | null;
   paymentCollection: {
@@ -85,18 +99,27 @@ function buildPaidShareUrl(order: PublicOrder, pickupLocation: string | null) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
-function buildPaymentShareUrl(order: PublicOrder) {
-  const network = order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : '';
-  const numberLine = order.momoPayoutNumber
-    ? `MoMo number: ${order.momoPayoutNumber}${network}`
-    : 'Ask the store for the MoMo number to pay into.';
-  const lines = [
-    `Hi, I placed an order at ${order.storefrontName}.`,
-    `My reference is *${order.orderNumber}* for ${formatMoney(order.totalPence, order.currency)}.`,
-    numberLine,
-    'I am sending payment now.',
-  ];
-  const message = lines.join('\n');
+function buildOrderPaymentConfig(order: PublicOrder): StorefrontPaymentConfig {
+  return {
+    mode: normalizePaymentMode(order.paymentMode),
+    momoNumber: order.momoPayoutNumber,
+    momoNetwork: order.momoPayoutNetwork,
+    merchantShortcode: order.merchantShortcode,
+    bankName: order.bankName,
+    bankAccountName: order.bankAccountName,
+    bankAccountNumber: order.bankAccountNumber,
+    bankBranch: order.bankBranch,
+    paymentNote: order.storeMessage,
+  };
+}
+
+function buildPaymentShareUrl(order: PublicOrder, config: StorefrontPaymentConfig) {
+  const message = buildPaymentShareMessage({
+    storeName: order.storefrontName,
+    reference: order.orderNumber,
+    amountFormatted: formatMoney(order.totalPence, order.currency),
+    config,
+  });
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
@@ -152,9 +175,13 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const paid = isPaidStatus(order.status);
   const awaitingPayment = !paid && order.status !== 'CANCELLED';
   const pickupLocation = order.pickupStoreAddress ?? order.pickupInstructions ?? null;
+  const paymentConfig = buildOrderPaymentConfig(order);
+  const paymentDetails = getPaymentInstructionDetails(paymentConfig);
   const paidWhatsAppUrl = buildPaidShareUrl(order, pickupLocation);
-  const paymentWhatsAppUrl = buildPaymentShareUrl(order);
+  const paymentWhatsAppUrl = buildPaymentShareUrl(order, paymentConfig);
   const storefrontDisplayName = toTitleCase(order.storefrontName);
+  const customerPhoneDisplay = formatGhanaPhoneForDisplay(order.customerPhone);
+  const storefrontPhoneDisplay = formatGhanaPhoneForDisplay(order.storefrontPhone);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
@@ -240,46 +267,96 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               </div>
 
               <p className="mt-4 max-w-xl text-sm leading-6 text-black/65 sm:text-base">
-                Send the exact amount via mobile money using your reference as the payment note. We&apos;ll confirm your order once {storefrontDisplayName} marks the payment received.
+                {paymentDetails.manual
+                  ? `Thanks for placing your order. ${storefrontDisplayName} will reach out shortly with payment instructions.`
+                  : `After placing your order, you'll receive a unique reference code. Send the exact amount and use ${order.orderNumber} as the payment reference. We'll confirm your order once ${storefrontDisplayName} marks the payment received.`}
               </p>
 
               <div className="mt-5 rounded-2xl border border-amber-200 bg-white px-5 py-4 shadow-sm">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">Your reference</div>
                 <div className="mt-1 font-mono text-3xl font-bold text-ink sm:text-4xl">{order.orderNumber}</div>
-                <div className="mt-1 text-xs text-black/55">Use this as the MoMo payment reference note.</div>
+                <div className="mt-1 text-xs text-black/55">
+                  {paymentDetails.manual
+                    ? 'Quote this when the store contacts you.'
+                    : 'Use this as the payment reference note.'}
+                </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">Amount to send</div>
-                  <div className="mt-1 text-xl font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+              {!paymentDetails.manual ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">Amount to send</div>
+                    <div className="mt-1 text-xl font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">{paymentDetails.modeLabel}</div>
+                    {paymentDetails.recipient ? (
+                      <div className="mt-1">
+                        <div className="font-mono text-lg font-bold text-ink">{paymentDetails.recipient}</div>
+                        {paymentDetails.recipientCaption ? (
+                          <div className="mt-0.5 text-xs font-medium text-black/55">{paymentDetails.recipientCaption}</div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-sm text-black/55">
+                        {storefrontPhoneDisplay
+                          ? <>Contact <a href={`tel:${order.storefrontPhone}`} className="font-semibold text-accent hover:underline">{storefrontPhoneDisplay}</a> for details</>
+                          : 'Contact the store for details'}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">MoMo number</div>
-                  {order.momoPayoutNumber ? (
-                    <div className="mt-1">
-                      <div className="font-mono text-lg font-bold text-ink">{order.momoPayoutNumber}</div>
-                      {order.momoPayoutNetwork ? (
-                        <div className="mt-0.5 text-xs font-medium text-black/55">{order.momoPayoutNetwork}</div>
-                      ) : null}
-                    </div>
-                  ) : order.storefrontPhone ? (
-                    <div className="mt-1 font-mono text-lg font-bold text-ink">{order.storefrontPhone}</div>
-                  ) : (
-                    <div className="mt-1 text-sm text-black/55">Contact store for MoMo number</div>
-                  )}
+              ) : null}
+
+              {paymentConfig.mode === 'BANK_TRANSFER' && paymentDetails.ready ? (
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">Bank details</div>
+                  <div className="mt-2 grid gap-1 text-sm text-black/70">
+                    {order.bankName ? <div><span className="font-semibold text-ink">Bank:</span> {order.bankName}</div> : null}
+                    {order.bankAccountName ? <div><span className="font-semibold text-ink">Account name:</span> {order.bankAccountName}</div> : null}
+                    {order.bankBranch ? <div><span className="font-semibold text-ink">Branch:</span> {order.bankBranch}</div> : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
                 <div className="font-semibold">How to pay</div>
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-                  <li>Open your MoMo app or dial the short code.</li>
-                  <li>Send <span className="font-bold">{formatMoney(order.totalPence, order.currency)}</span> to {order.momoPayoutNumber ? <span className="font-bold">{order.momoPayoutNumber}</span> : 'the number above'}{order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : ''}.</li>
-                  <li>Use <span className="font-mono font-bold">{order.orderNumber}</span> as the payment note / reference.</li>
-                  <li>Come back here — your order will update once payment is confirmed.</li>
-                </ol>
+                {paymentDetails.manual ? (
+                  <p className="mt-2 leading-6">
+                    No upfront payment is required. {storefrontDisplayName} will contact you using the phone number you provided to share next steps. Keep your reference{' '}
+                    <span className="font-mono font-bold">{order.orderNumber}</span> handy.
+                  </p>
+                ) : paymentConfig.mode === 'BANK_TRANSFER' ? (
+                  <ol className="mt-2 list-decimal space-y-1 pl-5">
+                    <li>Open your banking app or visit your branch.</li>
+                    <li>Transfer <span className="font-bold">{formatMoney(order.totalPence, order.currency)}</span>{order.bankAccountNumber ? <> to account <span className="font-bold">{order.bankAccountNumber}</span></> : null}{order.bankName ? ` (${order.bankName})` : null}.</li>
+                    <li>Use <span className="font-mono font-bold">{order.orderNumber}</span> as the payment reference / narration.</li>
+                    <li>Come back here — your order will update once payment is confirmed.</li>
+                  </ol>
+                ) : paymentConfig.mode === 'MERCHANT_SHORTCODE' ? (
+                  <ol className="mt-2 list-decimal space-y-1 pl-5">
+                    <li>Open your MoMo app or dial the short code.</li>
+                    <li>Choose <span className="font-semibold">Pay merchant</span>.</li>
+                    <li>Send <span className="font-bold">{formatMoney(order.totalPence, order.currency)}</span>{order.merchantShortcode ? <> to merchant <span className="font-bold">{order.merchantShortcode}</span></> : ''}.</li>
+                    <li>Use <span className="font-mono font-bold">{order.orderNumber}</span> as the reference note.</li>
+                    <li>Come back here — your order will update once payment is confirmed.</li>
+                  </ol>
+                ) : (
+                  <ol className="mt-2 list-decimal space-y-1 pl-5">
+                    <li>Open your MoMo app or dial the short code.</li>
+                    <li>Send <span className="font-bold">{formatMoney(order.totalPence, order.currency)}</span> to {order.momoPayoutNumber ? <span className="font-bold">{order.momoPayoutNumber}</span> : 'the number above'}{order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : ''}.</li>
+                    <li>Use <span className="font-mono font-bold">{order.orderNumber}</span> as the payment note / reference.</li>
+                    <li>Come back here — your order will update once payment is confirmed.</li>
+                  </ol>
+                )}
               </div>
+
+              {order.storeMessage ? (
+                <div className="mt-3 rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm text-black/70">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">From the store</div>
+                  <div className="mt-1 leading-6">{order.storeMessage}</div>
+                </div>
+              ) : null}
 
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                 <a
@@ -305,7 +382,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
               {order.storefrontPhone ? (
                 <div className="mt-4 text-xs text-black/50">
-                  Questions? Call {storefrontDisplayName} on <a href={`tel:${order.storefrontPhone}`} className="font-semibold text-accent hover:underline">{order.storefrontPhone}</a>.
+                  Questions? Call {storefrontDisplayName} on <a href={`tel:${order.storefrontPhone}`} className="font-semibold text-accent hover:underline">{storefrontPhoneDisplay}</a>.
                 </div>
               ) : null}
             </div>
@@ -384,7 +461,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                   <div>Placed: {formatDateTime(new Date(order.createdAt))}</div>
                   {order.paidAt ? <div>Paid: {formatDateTime(new Date(order.paidAt))}</div> : null}
                   {order.fulfilledAt ? <div>Completed: {formatDateTime(new Date(order.fulfilledAt))}</div> : null}
-                  <div>Phone: {order.customerPhone}</div>
+                  <div>Phone: {customerPhoneDisplay || order.customerPhone}</div>
                   {order.customerEmail ? <div>Email: {order.customerEmail}</div> : null}
                   {order.customerNotes ? <div>Note: {order.customerNotes}</div> : null}
                 </div>

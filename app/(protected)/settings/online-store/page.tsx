@@ -6,6 +6,8 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
+import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
+import { normalizePaymentMode } from '@/lib/storefront-payments';
 
 export default async function OnlineStoreSettingsPage({
   searchParams,
@@ -46,6 +48,13 @@ export default async function OnlineStoreSettingsPage({
         storefrontPickupPrepMinutes: true,
         storefrontMomoNumber: true,
         storefrontMomoNetwork: true,
+        storefrontPaymentMode: true,
+        storefrontMerchantShortcode: true,
+        storefrontBankName: true,
+        storefrontBankAccountName: true,
+        storefrontBankAccountNumber: true,
+        storefrontBankBranch: true,
+        storefrontPaymentNote: true,
       },
     }),
     prisma.product.findMany({
@@ -158,36 +167,17 @@ export default async function OnlineStoreSettingsPage({
             />
           </div>
 
-          <div className="lg:col-span-2 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-4">
-            <div className="text-sm font-semibold text-ink">Mobile money payout</div>
-            <p className="mt-1 text-xs text-black/55">
-              Customers send manual MoMo payments to this number using their order reference. Shown on the order confirmation page.
-            </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_180px]">
-              <div>
-                <label className="label">MoMo number</label>
-                <input
-                  className="input"
-                  name="storefrontMomoNumber"
-                  defaultValue={storefrontBusiness.storefrontMomoNumber ?? ''}
-                  placeholder="e.g. 024 123 4567"
-                />
-              </div>
-              <div>
-                <label className="label">Network</label>
-                <select
-                  className="input"
-                  name="storefrontMomoNetwork"
-                  defaultValue={storefrontBusiness.storefrontMomoNetwork ?? ''}
-                >
-                  <option value="">Not set</option>
-                  <option value="MTN">MTN</option>
-                  <option value="TELECEL">Telecel</option>
-                  <option value="AIRTELTIGO">AirtelTigo</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          <StorefrontPaymentModeCard
+            defaultMode={normalizePaymentMode(storefrontBusiness.storefrontPaymentMode)}
+            defaultMomoNumber={storefrontBusiness.storefrontMomoNumber ?? ''}
+            defaultMomoNetwork={storefrontBusiness.storefrontMomoNetwork ?? ''}
+            defaultMerchantShortcode={storefrontBusiness.storefrontMerchantShortcode ?? ''}
+            defaultBankName={storefrontBusiness.storefrontBankName ?? ''}
+            defaultBankAccountName={storefrontBusiness.storefrontBankAccountName ?? ''}
+            defaultBankAccountNumber={storefrontBusiness.storefrontBankAccountNumber ?? ''}
+            defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
+            defaultPaymentNote={storefrontBusiness.storefrontPaymentNote ?? ''}
+          />
 
           <div className="lg:col-span-2">
             <button type="submit" className="btn-primary">

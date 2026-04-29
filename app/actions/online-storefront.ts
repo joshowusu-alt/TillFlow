@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma';
 import { normalizeStorefrontSlug } from '@/lib/services/online-orders';
 import { createSalesReturn } from '@/lib/services/returns';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
+import { normalizePaymentMode } from '@/lib/storefront-payments';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -51,6 +52,13 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontPickupInstructions = formOptionalString(formData, 'storefrontPickupInstructions');
     const storefrontMomoNumberRaw = formOptionalString(formData, 'storefrontMomoNumber');
     const storefrontMomoNetworkRaw = formOptionalString(formData, 'storefrontMomoNetwork');
+    const storefrontPaymentModeRaw = formOptionalString(formData, 'storefrontPaymentMode');
+    const storefrontMerchantShortcodeRaw = formOptionalString(formData, 'storefrontMerchantShortcode');
+    const storefrontBankNameRaw = formOptionalString(formData, 'storefrontBankName');
+    const storefrontBankAccountNameRaw = formOptionalString(formData, 'storefrontBankAccountName');
+    const storefrontBankAccountNumberRaw = formOptionalString(formData, 'storefrontBankAccountNumber');
+    const storefrontBankBranchRaw = formOptionalString(formData, 'storefrontBankBranch');
+    const storefrontPaymentNoteRaw = formOptionalString(formData, 'storefrontPaymentNote');
     const rawSlug = formOptionalString(formData, 'storefrontSlug') || business.storefrontSlug || business.name;
     const storefrontSlug = normalizeStorefrontSlug(rawSlug);
 
@@ -60,6 +68,13 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
       storefrontMomoNetworkRaw && allowedNetworks.includes(storefrontMomoNetworkRaw.toUpperCase())
         ? storefrontMomoNetworkRaw.toUpperCase()
         : null;
+    const storefrontPaymentMode = normalizePaymentMode(storefrontPaymentModeRaw);
+    const storefrontMerchantShortcode = storefrontMerchantShortcodeRaw?.trim() || null;
+    const storefrontBankName = storefrontBankNameRaw?.trim() || null;
+    const storefrontBankAccountName = storefrontBankAccountNameRaw?.trim() || null;
+    const storefrontBankAccountNumber = storefrontBankAccountNumberRaw?.trim() || null;
+    const storefrontBankBranch = storefrontBankBranchRaw?.trim() || null;
+    const storefrontPaymentNote = storefrontPaymentNoteRaw?.trim() || null;
 
     if (storefrontEnabled && storefrontSlug.length < 3) {
       throw new Error('Storefront slug must contain at least 3 letters or numbers.');
@@ -90,6 +105,13 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
           : null,
         storefrontMomoNumber,
         storefrontMomoNetwork,
+        storefrontPaymentMode,
+        storefrontMerchantShortcode,
+        storefrontBankName,
+        storefrontBankAccountName,
+        storefrontBankAccountNumber,
+        storefrontBankBranch,
+        storefrontPaymentNote,
       },
     });
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatMoney, toTitleCase } from '@/lib/format';
+import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import type { PublicStorefront } from '@/lib/services/online-orders';
 
@@ -308,14 +308,14 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                       <svg className="h-3.5 w-3.5 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.272.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                       </svg>
-                      {selectedStore.phone}
+                      {formatGhanaPhoneForDisplay(selectedStore.phone)}
                     </span>
                   ) : storefront.phone ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-black/5 bg-white/80 px-3 py-1.5 shadow-sm">
                       <svg className="h-3.5 w-3.5 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.272.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                       </svg>
-                      {storefront.phone}
+                      {formatGhanaPhoneForDisplay(storefront.phone)}
                     </span>
                   ) : null}
                   {storefront.openStatus ? (
@@ -506,28 +506,32 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     return (
                       <article
                         key={product.id}
-                        className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:ring-accent/15 sm:rounded-[1.5rem]"
+                        className={`group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 transition-all sm:rounded-[1.5rem] ${
+                          inStock
+                            ? 'hover:-translate-y-0.5 hover:shadow-lg hover:ring-accent/15'
+                            : 'opacity-70'
+                        }`}
                       >
-                        <div className="relative h-28 w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-36 lg:aspect-square lg:h-auto">
+                        <div className="relative h-[100px] w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-32 lg:aspect-square lg:h-auto">
                           {product.imageUrl ? (
                             <img
                               src={product.imageUrl}
                               alt={displayName}
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                              className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-accent/45">
-                              <PackageIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-14 lg:w-14" />
+                            <div className={`flex h-full w-full items-center justify-center ${inStock ? 'text-accent/45' : 'text-black/30'}`}>
+                              <PackageIcon className="h-9 w-9 sm:h-10 sm:w-10 lg:h-14 lg:w-14" />
                             </div>
                           )}
-                          {hasPromo ? (
-                            <div className="absolute left-3 top-3 rounded-full bg-accent px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                          {hasPromo && inStock ? (
+                            <div className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-[10px]">
                               Promo {product.promoBuyQty}+{product.promoGetQty}
                             </div>
                           ) : null}
                           {!inStock ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-[1px]">
-                              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-rose-600 shadow-sm">
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/55 backdrop-blur-[1px]">
+                              <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
                                 Out of stock
                               </span>
                             </div>
@@ -567,6 +571,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               <select
                                 className="input h-9 text-xs sm:h-10 sm:text-sm"
                                 value={selected?.unitId ?? ''}
+                                disabled={!inStock}
                                 onChange={(event) =>
                                   setSelectionState((prev) => ({
                                     ...prev,
@@ -579,11 +584,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               >
                                 {product.units.map((unit) => (
                                   <option key={unit.id} value={unit.id}>
-                                    {toTitleCase(unit.name)} ·{' '}
-                                    {formatMoney(
-                                      unit.sellingPricePence ?? product.sellingPriceBasePence * unit.conversionToBase,
-                                      storefront.currency,
-                                    )}
+                                    {toTitleCase(unit.name)}
                                   </option>
                                 ))}
                               </select>
@@ -846,7 +847,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                 </button>
 
                 <div className="text-center text-[11px] text-black/40">
-                  You'll receive an MTN/Telecel/AirtelTigo prompt on your phone to confirm payment.
+                  After placing your order, you&apos;ll receive payment instructions and a unique reference code.
                 </div>
               </div>
             </div>

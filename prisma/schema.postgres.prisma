@@ -80,6 +80,15 @@ model Business {
   // payment instructions on the order confirmation page.
   storefrontMomoNumber                 String?
   storefrontMomoNetwork                String?
+  // Payment collection mode for online orders:
+  //   MOMO_NUMBER | MERCHANT_SHORTCODE | BANK_TRANSFER | MANUAL_CONFIRMATION
+  storefrontPaymentMode                String?  @default("MOMO_NUMBER")
+  storefrontMerchantShortcode          String?
+  storefrontBankName                   String?
+  storefrontBankAccountName            String?
+  storefrontBankAccountNumber          String?
+  storefrontBankBranch                 String?
+  storefrontPaymentNote                String?
   // Add-on: Growth businesses can purchase the online storefront for an
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).
