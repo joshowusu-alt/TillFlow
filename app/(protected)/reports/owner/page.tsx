@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { getBusinessStores } from '@/lib/services/stores';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
+import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-attention';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,10 +40,11 @@ export default async function OwnerIntelligencePage() {
     );
   }
 
-  const [{ stores }, snapshot, anySale] = await Promise.all([
+  const [{ stores }, snapshot, anySale, onlineOrdersAttention] = await Promise.all([
     getBusinessStores(business.id),
     getOwnerDashboardSnapshot(business.id, business.currency),
     prisma.salesInvoice.findFirst({ where: { businessId: business.id }, select: { id: true } }),
+    countOnlineOrdersNeedingAttention(business.id),
   ]);
   const coldStart = !anySale;
 
@@ -194,6 +196,23 @@ export default async function OwnerIntelligencePage() {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {onlineOrdersAttention > 0 ? (
+            <Link
+              href="/online-orders"
+              className="card animate-fade-in-up flex h-full items-start justify-between gap-3 rounded-[1.35rem] border border-amber-200 bg-amber-50/80 p-4 transition-transform hover:-translate-y-0.5"
+            >
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">Online orders</p>
+                <p className="mt-1.5 text-sm font-semibold text-ink">
+                  {onlineOrdersAttention} online order{onlineOrdersAttention === 1 ? '' : 's'} need{onlineOrdersAttention === 1 ? 's' : ''} attention
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-900/70">
+                  Review payment confirmations and prepare orders for pickup.
+                </p>
+              </div>
+              <ChevronRightIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+            </Link>
+          ) : null}
           {quickLinks.map((link) => (
             <Link
               key={link.href}

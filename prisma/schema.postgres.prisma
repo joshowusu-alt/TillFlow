@@ -541,6 +541,11 @@ model OnlineOrder {
   currency            String   @default("GHS")
   paidAt              DateTime?
   fulfilledAt         DateTime?
+  paymentConfirmedAt  DateTime?
+  preparingAt         DateTime?
+  readyAt             DateTime?
+  collectedAt         DateTime?
+  cancelledAt         DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

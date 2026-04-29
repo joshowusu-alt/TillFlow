@@ -211,6 +211,48 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
   }, '/settings/online-store');
 }
 
+export async function bulkSetStorefrontPublishAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const business = await requireOnlineStorefrontAccess(businessId);
+    const publish = formData.get('publish') === '1';
+    const categoryId = formOptionalString(formData, 'categoryId');
+
+    const where: { businessId: string; active: boolean; categoryId?: string } = {
+      businessId,
+      active: true,
+    };
+    if (categoryId) where.categoryId = categoryId;
+
+    const result = await prisma.product.updateMany({
+      where,
+      data: { storefrontPublished: publish },
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRODUCT_UPDATE',
+      entity: 'Product',
+      entityId: 'BULK',
+      details: {
+        source: 'online-storefront-bulk-publish',
+        publish,
+        categoryId: categoryId ?? null,
+        affected: result.count,
+      },
+    }).catch((error) => console.error('[audit]', error));
+
+    revalidatePath('/settings/online-store');
+    if (business.storefrontSlug) {
+      revalidatePath(`/shop/${business.storefrontSlug}`);
+    }
+    redirect('/settings/online-store');
+  }, '/settings/online-store');
+}
+
 export async function toggleStorefrontProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
@@ -286,12 +328,18 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       refundedAt?: Date | null;
       paymentStatus?: string;
       paidAt?: Date | null;
+      paymentConfirmedAt?: Date | null;
+      preparingAt?: Date | null;
+      readyAt?: Date | null;
+      collectedAt?: Date | null;
+      cancelledAt?: Date | null;
     } = {
       status: order.status,
       fulfillmentStatus: 'PENDING',
     };
 
     let commitSale = false;
+    const now = new Date();
 
     switch (nextStatus) {
       case 'MARK_PAID':
@@ -304,7 +352,8 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         data.status = 'PAID';
         data.fulfillmentStatus = 'PENDING';
         data.paymentStatus = 'PAID';
-        data.paidAt = new Date();
+        data.paidAt = now;
+        data.paymentConfirmedAt = now;
         commitSale = true;
         break;
       case 'PROCESSING':
@@ -314,6 +363,7 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         data.status = 'PROCESSING';
         data.fulfillmentStatus = 'PROCESSING';
         data.fulfilledAt = null;
+        data.preparingAt = now;
         break;
       case 'READY_FOR_PICKUP':
         if (order.paymentStatus !== 'PAID') {
@@ -322,6 +372,7 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         data.status = 'READY_FOR_PICKUP';
         data.fulfillmentStatus = 'READY';
         data.fulfilledAt = null;
+        data.readyAt = now;
         break;
       case 'COMPLETED':
         if (order.paymentStatus !== 'PAID') {
@@ -329,7 +380,8 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         }
         data.status = 'COMPLETED';
         data.fulfillmentStatus = 'COMPLETED';
-        data.fulfilledAt = new Date();
+        data.fulfilledAt = now;
+        data.collectedAt = now;
         break;
       case 'CANCELLED': {
         // For paid orders that already have a SalesInvoice, reverse the sale
@@ -352,9 +404,10 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         data.status = 'CANCELLED';
         data.fulfillmentStatus = 'CANCELLED';
         data.fulfilledAt = null;
+        data.cancelledAt = now;
         if (order.paymentStatus === 'PAID' && !order.refundStatus) {
           data.refundStatus = 'MANUAL_REFUND_NEEDED';
-          data.refundedAt = new Date();
+          data.refundedAt = now;
         }
         break;
       }

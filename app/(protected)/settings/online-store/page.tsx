@@ -1,7 +1,7 @@
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction } from '@/app/actions/online-storefront';
+import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -68,9 +68,26 @@ export default async function OnlineStoreSettingsPage({
         imageUrl: true,
         storefrontPublished: true,
         sellingPriceBasePence: true,
+        categoryId: true,
+        category: { select: { name: true } },
       },
     }),
   ]);
+
+  const categoryStats = (() => {
+    const map = new Map<string, { id: string; name: string; total: number; published: number }>();
+    for (const product of products) {
+      const id = product.categoryId ?? '__uncategorised__';
+      const name = product.category?.name ?? 'Uncategorised';
+      const entry = map.get(id) ?? { id, name, total: 0, published: 0 };
+      entry.total += 1;
+      if (product.storefrontPublished) entry.published += 1;
+      map.set(id, entry);
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+  const totalProducts = products.length;
+  const totalPublished = products.filter((p) => p.storefrontPublished).length;
 
   if (!storefrontBusiness) {
     return <div className="card p-6">Business not found.</div>;
@@ -287,9 +304,81 @@ export default async function OnlineStoreSettingsPage({
       })()}
 
       <div className="card p-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-display font-semibold">Published products</h2>
+            <h2 className="text-lg font-display font-semibold">Catalogue visibility</h2>
+            <p className="mt-1 text-sm text-black/55">
+              Bulk publish or hide products. {totalPublished} of {totalProducts} active products are currently visible online.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <form action={bulkSetStorefrontPublishAction}>
+              <input type="hidden" name="publish" value="1" />
+              <button type="submit" className="btn-primary text-sm" disabled={totalProducts === 0 || totalPublished === totalProducts}>
+                Publish all products
+              </button>
+            </form>
+            <form action={bulkSetStorefrontPublishAction}>
+              <input type="hidden" name="publish" value="0" />
+              <button type="submit" className="btn-secondary text-sm" disabled={totalPublished === 0}>
+                Hide all products
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {categoryStats.length > 1 ? (
+          <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {categoryStats.map((category) => {
+                const allPublished = category.published === category.total;
+                const nonePublished = category.published === 0;
+                return (
+                  <div
+                    key={category.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-ink">{category.name}</div>
+                      <div className="text-xs text-black/55">{category.published} of {category.total} published</div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <form action={bulkSetStorefrontPublishAction}>
+                        <input type="hidden" name="publish" value="1" />
+                        <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-[11px] font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-40"
+                          disabled={allPublished || category.id === '__uncategorised__'}
+                          title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
+                        >
+                          Publish
+                        </button>
+                      </form>
+                      <form action={bulkSetStorefrontPublishAction}>
+                        <input type="hidden" name="publish" value="0" />
+                        <input type="hidden" name="categoryId" value={category.id === '__uncategorised__' ? '' : category.id} />
+                        <button
+                          type="submit"
+                          className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-semibold text-black/65 transition hover:border-black/20 disabled:opacity-40"
+                          disabled={nonePublished || category.id === '__uncategorised__'}
+                          title={category.id === '__uncategorised__' ? 'Assign these to a category first' : ''}
+                        >
+                          Hide
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-base font-display font-semibold">Published products</h3>
             <p className="mt-1 text-sm text-black/55">
               Only products marked as published appear in the public storefront.
             </p>

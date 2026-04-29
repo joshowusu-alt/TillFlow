@@ -2,7 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
-import { formatDateTime, formatMoney } from '@/lib/format';
+import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 
@@ -131,13 +131,32 @@ export default async function OnlineOrdersPage() {
                     ) : null}
                   </div>
                   <div className="text-sm text-black/60">
-                    {order.customerName} · {order.customerPhone}
+                    {order.customerName}
                   </div>
+                  {order.customerPhone ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
+                      <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
+                      <a
+                        href={`tel:${order.customerPhone}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+                      >
+                        Call
+                      </a>
+                      <a
+                        href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        WhatsApp
+                      </a>
+                    </div>
+                  ) : null}
                   <div className="text-sm text-black/50">
                     {formatDateTime(order.createdAt)} · {formatMoney(order.totalPence, order.currency)}
                   </div>
                   <div className="text-xs text-black/50">
-                    {order.lines.map((line) => `${line.qtyInUnit} x ${line.productName} (${line.unitName})`).join(', ')}
+                    {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(', ')}
                   </div>
                   {order.paymentCollection?.providerStatus ? (
                     <div className="text-xs text-black/45">
@@ -156,35 +175,35 @@ export default async function OnlineOrdersPage() {
                       <input type="hidden" name="orderId" value={order.id} />
                       <input type="hidden" name="nextStatus" value="MARK_PAID" />
                       <button type="submit" className="btn-primary w-full justify-center">
-                        Mark payment received
+                        Confirm payment
                       </button>
                     </form>
                   ) : null}
                   <form action={updateOnlineOrderStatusAction}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="nextStatus" value="PROCESSING" />
-                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID'}>
-                      Mark processing
+                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
+                      Mark preparing
                     </button>
                   </form>
                   <form action={updateOnlineOrderStatusAction}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="nextStatus" value="READY_FOR_PICKUP" />
-                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID'}>
-                      Ready for pickup
+                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
+                      Mark ready
                     </button>
                   </form>
                   <form action={updateOnlineOrderStatusAction}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="nextStatus" value="COMPLETED" />
-                    <button type="submit" className="btn-primary w-full justify-center" disabled={order.paymentStatus !== 'PAID'}>
-                      Complete order
+                    <button type="submit" className="btn-primary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
+                      Mark collected
                     </button>
                   </form>
                   <form action={updateOnlineOrderStatusAction}>
                     <input type="hidden" name="orderId" value={order.id} />
                     <input type="hidden" name="nextStatus" value="CANCELLED" />
-                    <button type="submit" className="btn-ghost w-full justify-center">
+                    <button type="submit" className="btn-ghost w-full justify-center" disabled={order.status === 'CANCELLED' || order.status === 'COMPLETED'}>
                       Cancel
                     </button>
                   </form>
