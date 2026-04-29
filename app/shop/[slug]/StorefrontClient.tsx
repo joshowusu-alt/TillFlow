@@ -2,9 +2,41 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, toTitleCase } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import type { PublicStorefront } from '@/lib/services/online-orders';
+
+const ALL_CATEGORIES = '__all__';
+
+function PackageIcon({ className = 'h-10 w-10' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  );
+}
+
+function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={2}
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.935-2.186 2.25 2.25 0 00-3.935 2.186z" />
+    </svg>
+  );
+}
 
 type ProductSelectionState = Record<string, { unitId: string; qtyInUnit: number }>;
 
@@ -34,6 +66,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
+  const [shareToast, setShareToast] = useState<string | null>(null);
 
   const selectedStore = useMemo(
     () => storefront.stores.find((store) => store.id === selectedStoreId) ?? null,
@@ -49,15 +83,36 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     [storefront.products, selectedStoreId],
   );
 
+  const categories = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const product of productsForStore) {
+      if (product.categoryId && product.categoryName) {
+        seen.set(product.categoryId, product.categoryName);
+      }
+    }
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [productsForStore]);
+
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId) ?? null,
+    [categories, selectedCategoryId],
+  );
+
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return productsForStore;
-    return productsForStore.filter(
-      (p) =>
+    return productsForStore.filter((p) => {
+      if (selectedCategoryId !== ALL_CATEGORIES && p.categoryId !== selectedCategoryId) {
+        return false;
+      }
+      if (!q) return true;
+      return (
         p.name.toLowerCase().includes(q) ||
-        (p.categoryName?.toLowerCase() ?? '').includes(q),
-    );
-  }, [productsForStore, searchQuery]);
+        (p.categoryName?.toLowerCase() ?? '').includes(q)
+      );
+    });
+  }, [productsForStore, searchQuery, selectedCategoryId]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
@@ -69,6 +124,39 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   function handleSearch(value: string) {
     setSearchQuery(value);
     setCurrentPage(1);
+  }
+
+  function handleCategoryChange(nextId: string) {
+    setSelectedCategoryId(nextId);
+    setCurrentPage(1);
+  }
+
+  async function handleShareStore() {
+    if (typeof window === 'undefined') return;
+    const shareUrl = window.location.href;
+    const message = `Shop at ${storefront.name} — browse and pay with MoMo: ${shareUrl}`;
+
+    if (typeof navigator !== 'undefined' && (navigator as Navigator & { share?: unknown }).share) {
+      try {
+        await (navigator as Navigator & { share: (data: ShareData) => Promise<void> }).share({
+          title: storefront.name,
+          text: message,
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // user cancelled — fall through to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(message);
+      setShareToast('Store link copied to clipboard');
+      window.setTimeout(() => setShareToast(null), 2500);
+    } catch {
+      setShareToast('Could not share or copy link');
+      window.setTimeout(() => setShareToast(null), 2500);
+    }
   }
 
   const productMap = useMemo(() => buildProductMap(productsForStore), [productsForStore]);
@@ -194,10 +282,23 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                 {storefrontInitials}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">TillFlow online store</div>
-                <h1 className="mt-2 break-words text-3xl font-display font-bold capitalize tracking-tight text-ink sm:text-4xl">
-                  {storefrontTitle.toLowerCase()}
-                </h1>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">TillFlow online store</div>
+                    <h1 className="mt-2 break-words text-3xl font-display font-bold capitalize tracking-tight text-ink sm:text-4xl">
+                      {storefrontTitle.toLowerCase()}
+                    </h1>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleShareStore}
+                    className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/10 bg-white text-black/65 shadow-sm transition hover:border-accent/30 hover:text-accent sm:h-11 sm:w-11"
+                    aria-label="Share store link"
+                    title="Share store link"
+                  >
+                    <ShareIcon className="h-4 w-4" />
+                  </button>
+                </div>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-black/60 sm:text-base">
                   {storefront.description || 'Browse available products, build your cart, and pay with mobile money for pickup.'}
                 </p>
@@ -276,33 +377,78 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
         <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,2fr)_380px]">
           <section className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <svg
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-                <input
-                  className="input pl-9"
-                  placeholder="Search products…"
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                />
+            <div className="sticky top-0 z-30 -mx-4 space-y-3 bg-slate-50/95 px-4 pb-3 pt-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 xl:relative xl:top-auto xl:z-auto xl:mx-0 xl:bg-transparent xl:p-0 xl:backdrop-blur-none">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <svg
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                  </svg>
+                  <input
+                    className="input pl-9"
+                    placeholder="Search products by name or category…"
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                  />
+                </div>
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="text-sm text-black/50 hover:text-ink"
+                    onClick={() => handleSearch('')}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="text-sm text-black/50 hover:text-ink"
-                  onClick={() => handleSearch('')}
-                >
-                  Clear
-                </button>
-              )}
+
+              {categories.length > 0 ? (
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <button
+                    type="button"
+                    onClick={() => handleCategoryChange(ALL_CATEGORIES)}
+                    className={
+                      selectedCategoryId === ALL_CATEGORIES
+                        ? 'shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
+                        : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-accent/30 hover:text-accent'
+                    }
+                  >
+                    All
+                  </button>
+                  {categories.map((category) => {
+                    const active = category.id === selectedCategoryId;
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => handleCategoryChange(category.id)}
+                        className={
+                          active
+                            ? 'shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
+                            : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-accent/30 hover:text-accent'
+                        }
+                      >
+                        {toTitleCase(category.name)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="text-xs text-black/45">
+                {filteredProducts.length === 0
+                  ? selectedCategory
+                    ? `No products in ${toTitleCase(selectedCategory.name)}`
+                    : 'No products to show'
+                  : selectedCategory
+                  ? `Showing ${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'} in ${toTitleCase(selectedCategory.name)}`
+                  : `Showing ${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}`}
+              </div>
             </div>
 
             {filteredProducts.length === 0 ? (
@@ -333,23 +479,24 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                       : formatMoney(product.sellingPriceBasePence, storefront.currency);
                     const inStock = product.onHandBase > 0;
                     const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
-                    const monogram = product.name.charAt(0).toUpperCase();
+                    const displayName = toTitleCase(product.name);
+                    const displayCategory = product.categoryName ? toTitleCase(product.categoryName) : null;
 
                     return (
                       <article
                         key={product.id}
                         className="group flex flex-col overflow-hidden rounded-[1.5rem] bg-white shadow-sm ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:ring-accent/15"
                       >
-                        <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-accentSoft via-accentSoft/60 to-blue-100/60">
+                        <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
                           {product.imageUrl ? (
                             <img
                               src={product.imageUrl}
-                              alt={product.name}
+                              alt={displayName}
                               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-6xl font-bold text-accent/50">
-                              {monogram}
+                            <div className="flex h-full w-full items-center justify-center text-accent/45">
+                              <PackageIcon className="h-14 w-14" />
                             </div>
                           )}
                           {hasPromo ? (
@@ -368,13 +515,13 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
                         <div className="flex flex-1 flex-col gap-3 p-4">
                           <div className="min-h-[3.5rem]">
-                            {product.categoryName ? (
+                            {displayCategory ? (
                               <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent/80">
-                                {product.categoryName}
+                                {displayCategory}
                               </div>
                             ) : null}
                             <h2 className="mt-1 line-clamp-2 text-base font-semibold leading-snug text-ink">
-                              {product.name}
+                              {displayName}
                             </h2>
                           </div>
 
@@ -411,7 +558,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               >
                                 {product.units.map((unit) => (
                                   <option key={unit.id} value={unit.id}>
-                                    {unit.name} ·{' '}
+                                    {toTitleCase(unit.name)} ·{' '}
                                     {formatMoney(
                                       unit.sellingPricePence ?? product.sellingPriceBasePence * unit.conversionToBase,
                                       storefront.currency,
@@ -553,9 +700,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     <div key={line.id} className="rounded-2xl bg-black/[0.03] px-4 py-3 transition hover:bg-black/[0.05]">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-ink">{line.product.name}</div>
+                          <div className="truncate font-medium text-ink">{toTitleCase(line.product.name)}</div>
                           <div className="mt-0.5 text-xs text-black/50">
-                            {line.qtyInUnit} × {line.unit.name}
+                            {line.qtyInUnit} × {toTitleCase(line.unit.name)}
                           </div>
                         </div>
                         <div className="text-right">
@@ -672,7 +819,11 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   disabled={submitting || cart.length === 0}
                   onClick={submitCheckout}
                 >
-                  {submitting ? 'Starting payment…' : cart.length === 0 ? 'Add items to checkout' : `Pay ${formatMoney(orderTotal, storefront.currency)}`}
+                  {submitting
+                    ? 'Starting payment…'
+                    : cart.length === 0
+                    ? 'Place Order'
+                    : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
                 </button>
 
                 <div className="text-center text-[11px] text-black/40">
@@ -698,6 +849,14 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           </div>
         </footer>
       </div>
+
+      {shareToast ? (
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="pointer-events-auto rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white shadow-lg">
+            {shareToast}
+          </div>
+        </div>
+      ) : null}
 
       {cartItemCount > 0 ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4 xl:hidden">

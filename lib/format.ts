@@ -27,6 +27,17 @@ export function getCurrencySymbol(currency: string): string {
   return symbols[currency] || currency + ' ';
 }
 
+/**
+ * Convert a string to Title Case for display purposes only.
+ * Lowercases the input then uppercases the first character of every word.
+ * Use on the display layer (e.g. customer-facing storefront product names) —
+ * never write the result back to the database.
+ */
+export function toTitleCase(value: string | null | undefined): string {
+  if (!value) return '';
+  return value.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /** User-friendly label for the minor unit (e.g. "pesewas" for GHS, "cents" for USD). */
 export function getMinorUnitLabel(currency: string): string {
   const labels: Record<string, string> = {
