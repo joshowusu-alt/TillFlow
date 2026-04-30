@@ -11,6 +11,8 @@ import { normalizeStorefrontSlug } from '@/lib/services/online-orders';
 import { createSalesReturn } from '@/lib/services/returns';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
+import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
+import { normalizeBrandColor } from '@/lib/storefront-branding';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -59,6 +61,10 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontBankAccountNumberRaw = formOptionalString(formData, 'storefrontBankAccountNumber');
     const storefrontBankBranchRaw = formOptionalString(formData, 'storefrontBankBranch');
     const storefrontPaymentNoteRaw = formOptionalString(formData, 'storefrontPaymentNote');
+    const storefrontLogoUrlRaw = formOptionalString(formData, 'storefrontLogoUrl');
+    const storefrontPrimaryColorRaw = formOptionalString(formData, 'storefrontPrimaryColor');
+    const storefrontAccentColorRaw = formOptionalString(formData, 'storefrontAccentColor');
+    const storefrontTaglineRaw = formOptionalString(formData, 'storefrontTagline');
     const rawSlug = formOptionalString(formData, 'storefrontSlug') || business.storefrontSlug || business.name;
     const storefrontSlug = normalizeStorefrontSlug(rawSlug);
 
@@ -75,6 +81,30 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontBankAccountNumber = storefrontBankAccountNumberRaw?.trim() || null;
     const storefrontBankBranch = storefrontBankBranchRaw?.trim() || null;
     const storefrontPaymentNote = storefrontPaymentNoteRaw?.trim() || null;
+
+    // Branding fields are plan-gated so a Starter merchant can't bypass the
+    // limit by hand-crafting a POST.
+    const businessForPlan = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { plan: true, mode: true, storeMode: true, addonOnlineStorefront: true },
+    });
+    const plan = getBusinessPlan(
+      (businessForPlan?.plan ?? businessForPlan?.mode) as any,
+      businessForPlan?.storeMode as any,
+    );
+    const basicBrandingAllowed = hasPlanAccess(plan, 'GROWTH');
+    const extendedBrandingAllowed = hasPlanAccess(plan, 'PRO');
+
+    const storefrontLogoUrl = basicBrandingAllowed ? storefrontLogoUrlRaw?.trim() || null : null;
+    const storefrontPrimaryColor = basicBrandingAllowed
+      ? normalizeBrandColor(storefrontPrimaryColorRaw)
+      : null;
+    const storefrontAccentColor = extendedBrandingAllowed
+      ? normalizeBrandColor(storefrontAccentColorRaw)
+      : null;
+    const storefrontTagline = extendedBrandingAllowed
+      ? storefrontTaglineRaw?.trim().slice(0, 120) || null
+      : null;
 
     if (storefrontEnabled && storefrontSlug.length < 3) {
       throw new Error('Storefront slug must contain at least 3 letters or numbers.');
@@ -112,6 +142,10 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
         storefrontBankAccountNumber,
         storefrontBankBranch,
         storefrontPaymentNote,
+        storefrontLogoUrl,
+        storefrontPrimaryColor,
+        storefrontAccentColor,
+        storefrontTagline,
       },
     });
 

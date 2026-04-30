@@ -37,6 +37,13 @@ export type StorefrontPickupStore = {
   phone: string | null;
 };
 
+export type StorefrontBrandingData = {
+  logoUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  tagline: string | null;
+};
+
 export type PublicStorefront = {
   businessId: string;
   name: string;
@@ -48,6 +55,7 @@ export type PublicStorefront = {
   pickupInstructions: string | null;
   phone: string | null;
   address: string | null;
+  branding: StorefrontBrandingData;
   stores: StorefrontPickupStore[];
   products: Array<StorefrontCatalogProduct & { onHandByStore: Record<string, number> }>;
   openStatus: OpenStatus | null;
@@ -264,6 +272,10 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontHeadline: true,
       storefrontDescription: true,
       storefrontPickupInstructions: true,
+      storefrontLogoUrl: true,
+      storefrontPrimaryColor: true,
+      storefrontAccentColor: true,
+      storefrontTagline: true,
       phone: true,
       address: true,
       stores: {
@@ -368,6 +380,12 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
     pickupInstructions: business.storefrontPickupInstructions,
     phone: business.phone,
     address: business.address,
+    branding: {
+      logoUrl: (business as any).storefrontLogoUrl ?? null,
+      primaryColor: (business as any).storefrontPrimaryColor ?? null,
+      accentColor: (business as any).storefrontAccentColor ?? null,
+      tagline: (business as any).storefrontTagline ?? null,
+    },
     openStatus,
     stores: business.stores.map((store) => ({
       id: store.id,

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
+import { resolveBrandStyles } from '@/lib/storefront-branding';
 import type { PublicStorefront } from '@/lib/services/online-orders';
 
 const ALL_CATEGORIES = '__all__';
@@ -269,8 +270,22 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     .join('') || 'TF';
   const cartItemCount = cartDetails.length;
 
+  const brandStyles = resolveBrandStyles(storefront.branding);
+  const primaryStyle = brandStyles.hasPrimary
+    ? {
+        backgroundColor: 'var(--brand-primary)',
+        color: 'var(--brand-primary-foreground)',
+      }
+    : undefined;
+  const primaryTextStyle = brandStyles.hasPrimary
+    ? { color: 'var(--brand-primary)' }
+    : undefined;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
+    <div
+      className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50"
+      style={(brandStyles.hasPrimary || brandStyles.hasAccent) ? (brandStyles.cssVars as React.CSSProperties) : undefined}
+    >
       <div className="mx-auto max-w-7xl px-4 py-8 pb-32 sm:px-6 lg:px-8 xl:pb-8">
         <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-accentSoft/70 via-white to-white p-6 shadow-sm ring-1 ring-black/5 sm:p-8">
           <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
@@ -278,16 +293,36 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
           <div className="relative flex flex-col gap-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent/80 text-xl font-bold text-white shadow-lg shadow-accent/20 sm:h-20 sm:w-20 sm:text-2xl">
-                {storefrontInitials}
-              </div>
+              {storefront.branding.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={storefront.branding.logoUrl}
+                  alt={storefront.name}
+                  className="h-16 w-16 shrink-0 rounded-2xl object-contain bg-white p-1 shadow-lg ring-1 ring-black/5 sm:h-20 sm:w-20"
+                />
+              ) : (
+                <div
+                  className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-xl font-bold shadow-lg sm:h-20 sm:w-20 sm:text-2xl"
+                  style={primaryStyle ?? { background: 'linear-gradient(135deg, var(--color-accent), color-mix(in srgb, var(--color-accent) 80%, transparent))' }}
+                >
+                  <span style={primaryStyle ? undefined : { color: '#fff' }}>{storefrontInitials}</span>
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">TillFlow online store</div>
+                    <div
+                      className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent"
+                      style={primaryTextStyle}
+                    >
+                      TillFlow online store
+                    </div>
                     <h1 className="mt-2 break-words text-3xl font-display font-bold capitalize tracking-tight text-ink sm:text-4xl">
                       {storefrontTitle.toLowerCase()}
                     </h1>
+                    {storefront.branding.tagline && (
+                      <p className="mt-1 text-sm font-medium text-black/55 italic">{storefront.branding.tagline}</p>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -525,7 +560,10 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             </div>
                           )}
                           {hasPromo && inStock ? (
-                            <div className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-[10px]">
+                            <div
+                              className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-[10px]"
+                              style={primaryStyle}
+                            >
                               Promo {product.promoBuyQty}+{product.promoGetQty}
                             </div>
                           ) : null}
@@ -644,6 +682,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             <button
                               type="button"
                               className="w-full rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none sm:text-sm"
+                              style={inStock ? primaryStyle : undefined}
                               onClick={() => addToCart(product.id)}
                               disabled={!inStock}
                             >
@@ -836,6 +875,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                 <button
                   type="button"
                   className="w-full rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-3.5 text-base font-bold text-white shadow-lg shadow-accent/20 transition-all hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-black/15 disabled:bg-none disabled:text-white/70 disabled:shadow-none disabled:translate-y-0"
+                  style={cart.length > 0 ? primaryStyle : undefined}
                   disabled={submitting || cart.length === 0}
                   onClick={submitCheckout}
                 >

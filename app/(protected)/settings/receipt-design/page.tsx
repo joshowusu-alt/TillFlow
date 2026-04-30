@@ -19,13 +19,17 @@ export default async function ReceiptDesignPage() {
     const storefrontSlug = businessAny.storefrontSlug ?? null;
     const storefrontUrl = buildStorefrontUrl(storefrontSlug);
     const showStorefrontQr = Boolean(businessAny.receiptShowStorefrontQr);
+    const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+    const storefrontPrimaryColor = typeof businessAny.storefrontPrimaryColor === 'string' && HEX_PATTERN.test(businessAny.storefrontPrimaryColor.trim())
+        ? businessAny.storefrontPrimaryColor.trim()
+        : '#0f172a';
     const storefrontQrPreview =
         storefrontEnabled && storefrontUrl
             ? await QRCode.toDataURL(storefrontUrl, {
                   errorCorrectionLevel: 'M',
                   margin: 1,
                   scale: 6,
-                  color: { dark: '#0f172a', light: '#ffffff' },
+                  color: { dark: storefrontPrimaryColor, light: '#ffffff' },
               }).catch(() => null)
             : null;
 

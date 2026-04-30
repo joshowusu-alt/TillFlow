@@ -90,6 +90,12 @@ model Business {
   storefrontBankAccountNumber          String?
   storefrontBankBranch                 String?
   storefrontPaymentNote                String?
+  // Storefront branding. Logo + primary colour are basic (Growth+). Accent
+  // colour + tagline are extended (Pro only).
+  storefrontLogoUrl                    String?
+  storefrontPrimaryColor               String?
+  storefrontAccentColor                String?
+  storefrontTagline                    String?
   // Add-on: Growth businesses can purchase the online storefront for an
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).

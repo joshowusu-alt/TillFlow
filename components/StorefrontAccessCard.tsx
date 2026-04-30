@@ -7,6 +7,7 @@ type Props = {
   storefrontUrl: string;
   storeAddress?: string | null;
   storePhone?: string | null;
+  brandPrimaryColor?: string | null;
 };
 
 /**
@@ -15,7 +16,7 @@ type Props = {
  * printable poster. iOS Safari is supported via anchor-href download with
  * the data: URL produced by the qrcode library.
  */
-export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAddress, storePhone }: Props) {
+export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAddress, storePhone, brandPrimaryColor }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -24,11 +25,15 @@ export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAd
     (async () => {
       try {
         const qrcode = await import('qrcode');
+        const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+        const darkColor = brandPrimaryColor && HEX_PATTERN.test(brandPrimaryColor.trim())
+          ? brandPrimaryColor.trim()
+          : '#0f172a';
         const dataUrl = await qrcode.toDataURL(storefrontUrl, {
           errorCorrectionLevel: 'M',
           margin: 1,
           scale: 8,
-          color: { dark: '#0f172a', light: '#ffffff' },
+          color: { dark: darkColor, light: '#ffffff' },
         });
         if (!cancelled) setQrDataUrl(dataUrl);
       } catch (error) {
@@ -38,7 +43,7 @@ export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAd
     return () => {
       cancelled = true;
     };
-  }, [storefrontUrl]);
+  }, [storefrontUrl, brandPrimaryColor]);
 
   function flashToast(message: string) {
     setToast(message);
@@ -96,6 +101,7 @@ export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAd
       storeAddress: storeAddress ?? null,
       storePhone: storePhone ?? null,
       qrDataUrl,
+      brandPrimaryColor: brandPrimaryColor ?? null,
     });
     const win = window.open('', '_blank', 'width=720,height=900');
     if (!win) {
@@ -206,7 +212,12 @@ function renderPosterHtml(args: {
   storeAddress: string | null;
   storePhone: string | null;
   qrDataUrl: string;
+  brandPrimaryColor: string | null;
 }) {
+  const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+  const accentColor = args.brandPrimaryColor && HEX_PATTERN.test(args.brandPrimaryColor.trim())
+    ? args.brandPrimaryColor.trim()
+    : '#1E40AF';
   const escapedName = escapeHtml(args.storeName);
   const escapedUrl = escapeHtml(args.storefrontUrl);
   const escapedAddress = args.storeAddress ? escapeHtml(args.storeAddress) : '';
@@ -218,7 +229,7 @@ function renderPosterHtml(args: {
 <title>${escapedName} — Online store poster</title>
 <style>
   :root {
-    --accent: #1E40AF;
+    --accent: ${accentColor};
     --ink: #0f172a;
     --muted: #475569;
   }

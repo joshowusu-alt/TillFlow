@@ -8,8 +8,10 @@ import { prisma } from '@/lib/prisma';
 import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
+import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
+import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 
 export default async function OnlineStoreSettingsPage({
   searchParams,
@@ -57,6 +59,10 @@ export default async function OnlineStoreSettingsPage({
         storefrontBankAccountNumber: true,
         storefrontBankBranch: true,
         storefrontPaymentNote: true,
+        storefrontLogoUrl: true,
+        storefrontPrimaryColor: true,
+        storefrontAccentColor: true,
+        storefrontTagline: true,
       },
     }),
     prisma.product.findMany({
@@ -89,6 +95,13 @@ export default async function OnlineStoreSettingsPage({
   const totalProducts = products.length;
   const totalPublished = products.filter((p) => p.storefrontPublished).length;
 
+  const plan = getBusinessPlan(
+    ((business as any).plan ?? (business.mode as any)) as any,
+    (business as any).storeMode as any,
+  );
+  const basicBrandingEnabled = hasPlanAccess(plan, 'GROWTH');
+  const extendedBrandingEnabled = hasPlanAccess(plan, 'PRO');
+
   if (!storefrontBusiness) {
     return <div className="card p-6">Business not found.</div>;
   }
@@ -119,6 +132,7 @@ export default async function OnlineStoreSettingsPage({
           storefrontUrl={absoluteStorefrontUrl}
           storeAddress={(business as any).address ?? null}
           storePhone={(business as any).phone ?? null}
+          brandPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? null}
         />
       ) : null}
 
@@ -207,6 +221,17 @@ export default async function OnlineStoreSettingsPage({
             defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
             defaultPaymentNote={storefrontBusiness.storefrontPaymentNote ?? ''}
           />
+
+          <div className="lg:col-span-2">
+            <StorefrontBrandingCard
+              defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
+              defaultPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? ''}
+              defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
+              defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
+              basicBrandingEnabled={basicBrandingEnabled}
+              extendedBrandingEnabled={extendedBrandingEnabled}
+            />
+          </div>
 
           <div className="lg:col-span-2">
             <button type="submit" className="btn-primary">
