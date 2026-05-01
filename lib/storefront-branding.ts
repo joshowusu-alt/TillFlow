@@ -12,7 +12,7 @@
 
 const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 export const DEFAULT_STOREFRONT_PRIMARY = '#2563eb';
-const ACCIDENTAL_CYAN_DEFAULTS = new Set(['#06b6d4', '#0ea5e9', '#22d3ee']);
+const ACCIDENTAL_CYAN_DEFAULTS = new Set(['#01f7ff', '#06b6d4', '#0ea5e9', '#22d3ee']);
 
 export function normalizeBrandColor(value: string | null | undefined): string | null {
   if (!value) return null;

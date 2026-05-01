@@ -13,6 +13,7 @@ import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
+import { resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 
 function SectionHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
   return (
@@ -125,6 +126,7 @@ export default async function OnlineStoreSettingsPage({
   const requestProtocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
   const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;
   const absoluteStorefrontUrl = buildStorefrontUrl(storefrontBusiness.storefrontSlug, requestOrigin);
+  const storefrontPrimaryColor = resolvePrimaryBrandColor(storefrontBusiness.storefrontPrimaryColor);
 
   return (
     <div className="space-y-6">
@@ -153,7 +155,7 @@ export default async function OnlineStoreSettingsPage({
             storefrontUrl={absoluteStorefrontUrl}
             storeAddress={(business as any).address ?? null}
             storePhone={(business as any).phone ?? null}
-            brandPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? null}
+            brandPrimaryColor={storefrontPrimaryColor}
           />
         </>
       ) : null}
@@ -237,11 +239,11 @@ export default async function OnlineStoreSettingsPage({
           </div>
         </div>
 
-        <StorefrontBrandingCard
-          defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
-          defaultPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? ''}
-          defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
-          defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
+          <StorefrontBrandingCard
+            defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
+            defaultPrimaryColor={storefrontPrimaryColor}
+            defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
+            defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
           basicBrandingEnabled={basicBrandingEnabled}
           extendedBrandingEnabled={extendedBrandingEnabled}
         />
