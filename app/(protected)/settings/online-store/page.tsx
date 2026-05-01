@@ -13,6 +13,16 @@ import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 
+function SectionHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
+  return (
+    <div className="space-y-1 px-1 pt-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-accent">{eyebrow}</div>
+      <h2 className="text-xl font-display font-bold text-ink">{title}</h2>
+      {description ? <p className="text-sm text-black/55">{description}</p> : null}
+    </div>
+  );
+}
+
 export default async function OnlineStoreSettingsPage({
   searchParams,
 }: {
@@ -127,13 +137,20 @@ export default async function OnlineStoreSettingsPage({
       ) : null}
 
       {storefrontBusiness.storefrontEnabled && absoluteStorefrontUrl ? (
-        <StorefrontAccessCard
-          storeName={storefrontBusiness.name}
-          storefrontUrl={absoluteStorefrontUrl}
-          storeAddress={(business as any).address ?? null}
-          storePhone={(business as any).phone ?? null}
-          brandPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? null}
-        />
+        <>
+          <SectionHeading
+            eyebrow="1 · Storefront access"
+            title="Share your storefront"
+            description="Link, QR code, and printable poster customers can find you with."
+          />
+          <StorefrontAccessCard
+            storeName={storefrontBusiness.name}
+            storefrontUrl={absoluteStorefrontUrl}
+            storeAddress={(business as any).address ?? null}
+            storePhone={(business as any).phone ?? null}
+            brandPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? null}
+          />
+        </>
       ) : null}
 
       {searchParams?.saved === 'hours' ? (
@@ -141,6 +158,12 @@ export default async function OnlineStoreSettingsPage({
           Pickup hours saved.
         </div>
       ) : null}
+
+      <SectionHeading
+        eyebrow="2 · Store identity & ordering"
+        title="How customers see and pay your store"
+        description="Public name, description, payment instructions, and your storefront branding."
+      />
 
       <div className="card p-6">
         <form action={updateStorefrontSettingsAction} className="grid gap-4 lg:grid-cols-2">
@@ -241,6 +264,12 @@ export default async function OnlineStoreSettingsPage({
         </form>
       </div>
 
+      <SectionHeading
+        eyebrow="3 · Pickup settings"
+        title="When and how customers collect"
+        description="Opening hours and the preparation time shown on the public storefront."
+      />
+
       {(() => {
         const parsedHours = parseWeeklyHours(storefrontBusiness.storefrontHoursJson);
         const hoursEnabled = Boolean(parsedHours);
@@ -327,6 +356,12 @@ export default async function OnlineStoreSettingsPage({
           </div>
         );
       })()}
+
+      <SectionHeading
+        eyebrow="4 · Catalogue visibility"
+        title="What customers can buy"
+        description="Bulk publish or hide products. Per-category controls let you bring whole sections online at once."
+      />
 
       <div className="card p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
