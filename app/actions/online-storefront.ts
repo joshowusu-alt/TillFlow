@@ -12,7 +12,7 @@ import { createSalesReturn } from '@/lib/services/returns';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
-import { normalizeBrandColor } from '@/lib/storefront-branding';
+import { normalizeBrandColor, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -97,7 +97,7 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
 
     const storefrontLogoUrl = basicBrandingAllowed ? storefrontLogoUrlRaw?.trim() || null : null;
     const storefrontPrimaryColor = basicBrandingAllowed
-      ? normalizeBrandColor(storefrontPrimaryColorRaw)
+      ? (storefrontPrimaryColorRaw?.trim() ? resolvePrimaryBrandColor(storefrontPrimaryColorRaw) : null)
       : null;
     const storefrontAccentColor = extendedBrandingAllowed
       ? normalizeBrandColor(storefrontAccentColorRaw)

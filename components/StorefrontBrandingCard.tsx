@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DEFAULT_STOREFRONT_PRIMARY } from '@/lib/storefront-branding';
 
 type Props = {
   defaultLogoUrl: string;
@@ -21,7 +22,7 @@ export default function StorefrontBrandingCard({
   basicBrandingEnabled,
   extendedBrandingEnabled,
 }: Props) {
-  const [primary, setPrimary] = useState(defaultPrimaryColor || '#1E40AF');
+  const [primary, setPrimary] = useState(defaultPrimaryColor || DEFAULT_STOREFRONT_PRIMARY);
   const [accent, setAccent] = useState(defaultAccentColor || '#3B82F6');
 
   return (

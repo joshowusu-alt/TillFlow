@@ -417,6 +417,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             ? 'min-h-11 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm'
                             : 'min-h-11 rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold text-black/65 transition hover:border-accent/30 hover:text-accent'
                         }
+                        style={isSelected ? primaryStyle : undefined}
                       >
                         {store.name}
                       </button>
@@ -473,6 +474,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                         ? 'shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
                         : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-accent/30 hover:text-accent'
                     }
+                    style={selectedCategoryId === ALL_CATEGORIES ? primaryStyle : undefined}
                   >
                     All
                   </button>
@@ -488,6 +490,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             ? 'shrink-0 rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
                             : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-accent/30 hover:text-accent'
                         }
+                        style={active ? primaryStyle : undefined}
                       >
                         {toTitleCase(category.name)}
                       </button>

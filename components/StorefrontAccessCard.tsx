@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { DEFAULT_STOREFRONT_PRIMARY, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 
 type Props = {
   storeName: string;
@@ -25,10 +26,7 @@ export default function StorefrontAccessCard({ storeName, storefrontUrl, storeAd
     (async () => {
       try {
         const qrcode = await import('qrcode');
-        const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-        const darkColor = brandPrimaryColor && HEX_PATTERN.test(brandPrimaryColor.trim())
-          ? brandPrimaryColor.trim()
-          : '#0f172a';
+        const darkColor = resolvePrimaryBrandColor(brandPrimaryColor);
         const dataUrl = await qrcode.toDataURL(storefrontUrl, {
           errorCorrectionLevel: 'M',
           margin: 1,
@@ -216,8 +214,8 @@ function renderPosterHtml(args: {
 }) {
   const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
   const accentColor = args.brandPrimaryColor && HEX_PATTERN.test(args.brandPrimaryColor.trim())
-    ? args.brandPrimaryColor.trim()
-    : '#1E40AF';
+    ? resolvePrimaryBrandColor(args.brandPrimaryColor)
+    : DEFAULT_STOREFRONT_PRIMARY;
   const escapedName = escapeHtml(args.storeName);
   const escapedUrl = escapeHtml(args.storefrontUrl);
   const escapedAddress = args.storeAddress ? escapeHtml(args.storeAddress) : '';

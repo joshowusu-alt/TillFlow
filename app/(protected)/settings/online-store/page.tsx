@@ -6,6 +6,7 @@ import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { DAY_KEYS, DAY_LABELS, makeDefaultWeeklyHours, parseWeeklyHours } from '@/lib/business-hours';
+import { headers } from 'next/headers';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
@@ -119,7 +120,11 @@ export default async function OnlineStoreSettingsPage({
   const publicUrl = storefrontBusiness.storefrontSlug
     ? `/shop/${storefrontBusiness.storefrontSlug}`
     : null;
-  const absoluteStorefrontUrl = buildStorefrontUrl(storefrontBusiness.storefrontSlug);
+  const requestHeaders = headers();
+  const requestHost = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
+  const requestProtocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
+  const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;
+  const absoluteStorefrontUrl = buildStorefrontUrl(storefrontBusiness.storefrontSlug, requestOrigin);
 
   return (
     <div className="space-y-6">
@@ -318,18 +323,18 @@ export default async function OnlineStoreSettingsPage({
                   return (
                     <div
                       key={day}
-                      className="grid grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3"
+                      className="grid grid-cols-[76px_86px_86px_auto] items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 py-3 sm:grid-cols-[120px_minmax(104px,1fr)_minmax(104px,1fr)_auto] sm:gap-3 sm:px-4"
                     >
                       <div className="text-sm font-medium text-ink">{DAY_LABELS[day]}</div>
                       <input
-                        className="input"
+                        className="input min-w-[86px] px-2 text-sm"
                         type="time"
                         name={`${day}_open`}
                         defaultValue={config.open}
                         disabled={config.closed}
                       />
                       <input
-                        className="input"
+                        className="input min-w-[86px] px-2 text-sm"
                         type="time"
                         name={`${day}_close`}
                         defaultValue={config.close}

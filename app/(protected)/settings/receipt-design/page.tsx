@@ -6,7 +6,9 @@ import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
 
 import { formatMoney } from '@/lib/format';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
+import { resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 import QRCode from 'qrcode';
+import { headers } from 'next/headers';
 
 export default async function ReceiptDesignPage() {
     const { user, business } = await requireBusiness(['OWNER', 'MANAGER']);
@@ -17,12 +19,13 @@ export default async function ReceiptDesignPage() {
     const businessAny = business as any;
     const storefrontEnabled = Boolean(businessAny.storefrontEnabled);
     const storefrontSlug = businessAny.storefrontSlug ?? null;
-    const storefrontUrl = buildStorefrontUrl(storefrontSlug);
+    const requestHeaders = headers();
+    const requestHost = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
+    const requestProtocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
+    const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;
+    const storefrontUrl = buildStorefrontUrl(storefrontSlug, requestOrigin);
     const showStorefrontQr = Boolean(businessAny.receiptShowStorefrontQr);
-    const HEX_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-    const storefrontPrimaryColor = typeof businessAny.storefrontPrimaryColor === 'string' && HEX_PATTERN.test(businessAny.storefrontPrimaryColor.trim())
-        ? businessAny.storefrontPrimaryColor.trim()
-        : '#0f172a';
+    const storefrontPrimaryColor = resolvePrimaryBrandColor(businessAny.storefrontPrimaryColor);
     const storefrontQrPreview =
         storefrontEnabled && storefrontUrl
             ? await QRCode.toDataURL(storefrontUrl, {
