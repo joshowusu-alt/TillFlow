@@ -103,8 +103,8 @@ export default function TopNav({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
-        <div className="flex w-full items-center justify-between gap-2 px-4 py-3 sm:px-6 lg:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-4">
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
             <a href="/pos" className="flex min-w-0 items-center gap-3" aria-label="TillFlow — go to POS">
               <img src="/icon.svg" alt="" width="36" height="36" className="h-9 w-9 rounded-xl shadow-sm" aria-hidden="true" />
               <div className="min-w-0">
@@ -112,13 +112,13 @@ export default function TopNav({
                   <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
                   <span className="text-gray-800">Flow</span>
                 </div>
-                <div className="hidden text-[11px] font-medium uppercase tracking-[0.18em] text-muted 2xl:block">
-                  Executive retail
+                <div className="hidden text-[11px] font-medium uppercase tracking-[0.24em] text-muted sm:block">
+                  Executive retail operations
                 </div>
               </div>
             </a>
 
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
                 <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
                 {storeName || 'Main branch'}
