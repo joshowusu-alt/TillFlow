@@ -24,6 +24,7 @@ export default function TopNav({
   storeName,
   momoEnabled,
   todaySales,
+  onlineOrdersCount = 0,
 }: {
   user: TopNavUser;
   plan?: BusinessPlan;
@@ -31,7 +32,8 @@ export default function TopNav({
   storeName?: string;
   momoEnabled?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
-}) {
+  onlineOrdersCount?: number;
+}){
   const pathname = usePathname();
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -134,6 +136,8 @@ export default function TopNav({
               const isActive = group.items.some(
                 (item) => pathname === item.href || pathname.startsWith(item.href + '/')
               );
+              const groupHasOnlineOrders = group.items.some((i) => i.href === '/online-orders');
+              const showGroupBadge = groupHasOnlineOrders && onlineOrdersCount > 0;
               return (
                 <div key={group.id} className="relative">
                   <button
@@ -144,6 +148,11 @@ export default function TopNav({
                     className={isActive ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'}
                   >
                     {group.label}
+                    {showGroupBadge ? (
+                      <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                        {onlineOrdersCount > 99 ? '99+' : onlineOrdersCount}
+                      </span>
+                    ) : null}
                   </button>
                   {openGroup === group.id ? (
                     <div
@@ -157,6 +166,7 @@ export default function TopNav({
                         const active = pathname === item.href;
                         const minimumPlan = planGatedLinks.get(item.href);
                         const planLocked = minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                        const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
                         return (
                           <Link
                             key={item.href}
@@ -168,6 +178,10 @@ export default function TopNav({
                             {planLocked && minimumPlan ? (
                               <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
                                 {minimumPlan}
+                              </span>
+                            ) : itemCount > 0 ? (
+                              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                                {itemCount > 99 ? '99+' : itemCount}
                               </span>
                             ) : null}
                           </Link>
@@ -232,6 +246,7 @@ export default function TopNav({
         pathname={pathname}
         planGatedLinks={planGatedLinks}
         todaySales={todaySales}
+        onlineOrdersCount={onlineOrdersCount}
       />
     </>
   );

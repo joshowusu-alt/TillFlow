@@ -2,13 +2,88 @@ import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
-import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
+import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, formatOnlineOrderStatus, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OnlineOrdersPage() {
+const STATUS_TABS = [
+  { key: 'all',              label: 'All' },
+  { key: 'AWAITING_PAYMENT', label: 'Awaiting payment' },
+  { key: 'PAID',             label: 'Payment confirmed' },
+  { key: 'PROCESSING',       label: 'Preparing' },
+  { key: 'READY_FOR_PICKUP', label: 'Ready for pickup' },
+  { key: 'COMPLETED',        label: 'Collected' },
+  { key: 'CANCELLED',        label: 'Cancelled' },
+] as const;
+
+type StatusKey = typeof STATUS_TABS[number]['key'];
+
+function isValidStatus(val: unknown): val is Exclude<StatusKey, 'all'> {
+  return typeof val === 'string' && STATUS_TABS.some((t) => t.key !== 'all' && t.key === val);
+}
+
+function NextStepCTA({ order }: {
+  order: {
+    id: string;
+    status: string;
+    paymentStatus: string;
+  };
+}) {
+  const done = order.status === 'COMPLETED' || order.status === 'CANCELLED';
+  if (done) return null;
+
+  const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
+  let nextStatus: string;
+  let nextLabel: string;
+  let variant: 'primary' | 'secondary' = 'primary';
+
+  if (order.paymentStatus !== 'PAID') {
+    nextStatus = 'MARK_PAID';
+    nextLabel = 'Confirm payment';
+  } else if (order.status === 'PAID') {
+    nextStatus = 'PROCESSING';
+    nextLabel = 'Mark preparing';
+    variant = 'secondary';
+  } else if (order.status === 'PROCESSING') {
+    nextStatus = 'READY_FOR_PICKUP';
+    nextLabel = 'Mark ready for pickup';
+    variant = 'secondary';
+  } else if (order.status === 'READY_FOR_PICKUP') {
+    nextStatus = 'COMPLETED';
+    nextLabel = 'Mark collected';
+  } else {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <form action={updateOnlineOrderStatusAction}>
+        <input type="hidden" name="orderId" value={order.id} />
+        <input type="hidden" name="nextStatus" value={nextStatus} />
+        <button type="submit" className={variant === 'primary' ? 'btn-primary' : 'btn-secondary'}>
+          {nextLabel}
+        </button>
+      </form>
+      {canCancel ? (
+        <form action={updateOnlineOrderStatusAction}>
+          <input type="hidden" name="orderId" value={order.id} />
+          <input type="hidden" name="nextStatus" value="CANCELLED" />
+          <button type="submit" className="btn-ghost text-rose-600 hover:bg-rose-50">
+            Cancel order
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+export default async function OnlineOrdersPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string };
+}) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const features = getFeatures(
     (business as any).plan ?? (business.mode as any),
@@ -27,11 +102,14 @@ export default async function OnlineOrdersPage() {
     );
   }
 
+  const activeTab: StatusKey = isValidStatus(searchParams?.status) ? searchParams!.status! : 'all';
+  const statusFilter = activeTab !== 'all' ? { status: activeTab as string } : {};
+
   const [orders, summary] = await Promise.all([
     prisma.onlineOrder.findMany({
-      where: { businessId: business.id },
+      where: { businessId: business.id, ...statusFilter },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 100,
       select: {
         id: true,
         orderNumber: true,
@@ -48,10 +126,7 @@ export default async function OnlineOrdersPage() {
         paidAt: true,
         publicToken: true,
         store: {
-          select: {
-            id: true,
-            name: true,
-          },
+          select: { id: true, name: true },
         },
         paymentCollection: {
           select: {
@@ -77,142 +152,169 @@ export default async function OnlineOrdersPage() {
     }),
   ]);
 
-  const awaiting = summary.find((row) => row.status === 'AWAITING_PAYMENT')?._count._all ?? 0;
-  const paid = summary.find((row) => row.status === 'PAID')?._count._all ?? 0;
-  const ready = summary.find((row) => row.status === 'READY_FOR_PICKUP')?._count._all ?? 0;
+  const countFor = (s: string) => summary.find((r) => r.status === s)?._count._all ?? 0;
+  const awaiting = countFor('AWAITING_PAYMENT');
+  const paid = countFor('PAID');
+  const processing = countFor('PROCESSING');
+  const ready = countFor('READY_FOR_PICKUP');
+  const totalActive = awaiting + paid + processing + ready;
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Online Orders"
-        subtitle="Track mobile-money checkout, confirm pickup progress, and keep customer-facing orders moving."
+        subtitle="Confirm payments, prepare orders, and track pickup progress."
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="card p-5">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-black/40">Awaiting payment</div>
-          <div className="mt-2 text-3xl font-display font-bold text-ink">{awaiting}</div>
+      {/* Status summary cards */}
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+        <div className="card p-4">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Awaiting payment</div>
+          <div className={`mt-1.5 text-2xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-ink'}`}>{awaiting}</div>
         </div>
-        <div className="card p-5">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-black/40">Paid</div>
-          <div className="mt-2 text-3xl font-display font-bold text-ink">{paid}</div>
+        <div className="card p-4">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Payment confirmed</div>
+          <div className={`mt-1.5 text-2xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-ink'}`}>{paid}</div>
         </div>
-        <div className="card p-5">
-          <div className="text-[11px] uppercase tracking-[0.2em] text-black/40">Ready for pickup</div>
-          <div className="mt-2 text-3xl font-display font-bold text-ink">{ready}</div>
+        <div className="card p-4">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Preparing</div>
+          <div className={`mt-1.5 text-2xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-ink'}`}>{processing}</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Ready for pickup</div>
+          <div className={`mt-1.5 text-2xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-ink'}`}>{ready}</div>
         </div>
       </div>
 
+      {/* Filter tabs */}
+      <div className="flex flex-wrap gap-2">
+        {STATUS_TABS.map((tab) => {
+          const tabCount =
+            tab.key === 'all' ? totalActive :
+            tab.key === 'AWAITING_PAYMENT' ? awaiting :
+            tab.key === 'PAID' ? paid :
+            tab.key === 'PROCESSING' ? processing :
+            tab.key === 'READY_FOR_PICKUP' ? ready :
+            tab.key === 'COMPLETED' ? countFor('COMPLETED') :
+            tab.key === 'CANCELLED' ? countFor('CANCELLED') : 0;
+          const isActive = activeTab === tab.key;
+          return (
+            <a
+              key={tab.key}
+              href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                isActive
+                  ? 'border-accent bg-accent text-white shadow-sm'
+                  : 'border-slate-200 bg-white text-black/60 hover:border-accent/30 hover:text-accent'
+              }`}
+            >
+              {tab.label}
+              {tabCount > 0 && !isActive ? (
+                <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                  {tabCount}
+                </span>
+              ) : null}
+            </a>
+          );
+        })}
+      </div>
+
+      {/* Orders list */}
       <div className="space-y-4">
         {orders.length === 0 ? (
-          <div className="card p-6 text-sm text-black/55">No online orders yet.</div>
+          <div className="card p-6 text-sm text-black/55">
+            {activeTab === 'all' ? 'No online orders yet.' : `No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
+          </div>
         ) : (
-          orders.map((order) => (
-            <div key={order.id} className="card p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-display font-semibold text-ink">{order.orderNumber}</h2>
-                    <span className="rounded-full bg-black/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">
-                      {order.status.split('_').join(' ')}
-                    </span>
-                    <span className="rounded-full bg-accentSoft px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
-                      {order.paymentStatus}
-                    </span>
-                    {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
-                      <span className="rounded-full bg-rose-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">
-                        Refund needed
-                      </span>
-                    ) : null}
-                    {order.store ? (
-                      <span className="rounded-full bg-black/[0.04] px-3 py-1 text-[11px] font-medium text-black/55">
-                        Pickup: {order.store.name}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-sm text-black/60">
-                    {order.customerName}
-                  </div>
-                  {order.customerPhone ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
-                      <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
-                      <a
-                        href={`tel:${order.customerPhone}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
-                      >
-                        Call
-                      </a>
-                      <a
-                        href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                      >
-                        WhatsApp
-                      </a>
+          orders.map((order) => {
+            const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
+            return (
+              <div key={order.id} className={`card p-5 ${statusDone ? 'opacity-70' : ''}`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-display font-semibold text-ink">{order.orderNumber}</h2>
+                      <StatusBadge status={order.status} />
+                      {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+                        <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+                          Refund needed
+                        </span>
+                      ) : null}
+                      {order.store ? (
+                        <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
+                          {order.store.name}
+                        </span>
+                      ) : null}
                     </div>
-                  ) : null}
-                  <div className="text-sm text-black/50">
-                    {formatDateTime(order.createdAt)} · {formatMoney(order.totalPence, order.currency)}
-                  </div>
-                  <div className="text-xs text-black/50">
-                    {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(', ')}
-                  </div>
-                  {order.paymentCollection?.providerStatus ? (
-                    <div className="text-xs text-black/45">
-                      Provider: {order.paymentCollection.providerStatus}
-                      {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
-                    </div>
-                  ) : null}
-                  {order.paymentCollection?.failureReason ? (
-                    <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
-                  ) : null}
-                </div>
 
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  {order.paymentStatus !== 'PAID' && order.status !== 'CANCELLED' ? (
-                    <form action={updateOnlineOrderStatusAction}>
-                      <input type="hidden" name="orderId" value={order.id} />
-                      <input type="hidden" name="nextStatus" value="MARK_PAID" />
-                      <button type="submit" className="btn-primary w-full justify-center">
-                        Confirm payment
-                      </button>
-                    </form>
-                  ) : null}
-                  <form action={updateOnlineOrderStatusAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="nextStatus" value="PROCESSING" />
-                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
-                      Mark preparing
-                    </button>
-                  </form>
-                  <form action={updateOnlineOrderStatusAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="nextStatus" value="READY_FOR_PICKUP" />
-                    <button type="submit" className="btn-secondary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
-                      Mark ready
-                    </button>
-                  </form>
-                  <form action={updateOnlineOrderStatusAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="nextStatus" value="COMPLETED" />
-                    <button type="submit" className="btn-primary w-full justify-center" disabled={order.paymentStatus !== 'PAID' || order.status === 'COMPLETED' || order.status === 'CANCELLED'}>
-                      Mark collected
-                    </button>
-                  </form>
-                  <form action={updateOnlineOrderStatusAction}>
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="nextStatus" value="CANCELLED" />
-                    <button type="submit" className="btn-ghost w-full justify-center" disabled={order.status === 'CANCELLED' || order.status === 'COMPLETED'}>
-                      Cancel
-                    </button>
-                  </form>
+                    <div className="font-medium text-sm text-ink">{order.customerName}</div>
+
+                    {order.customerPhone ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
+                        <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
+                        <a
+                          href={`tel:${order.customerPhone}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+                        >
+                          Call
+                        </a>
+                        <a
+                          href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          WhatsApp
+                        </a>
+                      </div>
+                    ) : null}
+
+                    <div className="text-xs text-black/50">
+                      {formatDateTime(order.createdAt)} · <span className="font-semibold text-ink">{formatMoney(order.totalPence, order.currency)}</span>
+                    </div>
+
+                    <div className="text-xs text-black/45 leading-relaxed">
+                      {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
+                    </div>
+
+                    {order.paymentCollection?.providerStatus ? (
+                      <div className="text-xs text-black/40">
+                        Provider: {order.paymentCollection.providerStatus}
+                        {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
+                      </div>
+                    ) : null}
+                    {order.paymentCollection?.failureReason ? (
+                      <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex-shrink-0 lg:pl-4">
+                    <NextStepCTA order={{ id: order.id, status: order.status, paymentStatus: order.paymentStatus }} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const label = formatOnlineOrderStatus(status);
+  const cls = {
+    AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
+    PAID:             'bg-blue-100 text-blue-800',
+    PROCESSING:       'bg-indigo-100 text-indigo-800',
+    READY_FOR_PICKUP: 'bg-emerald-100 text-emerald-800',
+    COMPLETED:        'bg-slate-100 text-slate-600',
+    CANCELLED:        'bg-rose-100 text-rose-700',
+    PAYMENT_FAILED:   'bg-rose-100 text-rose-700',
+  }[status] ?? 'bg-black/5 text-black/55';
+  return (
+    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] ${cls}`}>
+      {label}
+    </span>
   );
 }

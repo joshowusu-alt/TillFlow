@@ -108,3 +108,18 @@ export function parseDiscountValue(type: string | undefined, raw: unknown): numb
 /** Default number of items per page for paginated list views. */
 export const DEFAULT_PAGE_SIZE = 25;
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  AWAITING_PAYMENT: 'Awaiting payment',
+  PAID: 'Payment confirmed',
+  PROCESSING: 'Preparing',
+  READY_FOR_PICKUP: 'Ready for pickup',
+  COMPLETED: 'Collected',
+  CANCELLED: 'Cancelled',
+  PAYMENT_FAILED: 'Payment failed',
+  REFUND_NEEDED: 'Refund needed',
+};
+
+export function formatOnlineOrderStatus(status: string): string {
+  return ORDER_STATUS_LABELS[status] ?? status.split('_').map((w) => w[0] + w.slice(1).toLowerCase()).join(' ');
+}
+

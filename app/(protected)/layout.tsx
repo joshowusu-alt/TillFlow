@@ -2,6 +2,7 @@ import { requireBusiness, getFirstStore } from '@/lib/auth';
 import { getBusinessPlan } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-attention';
 import TopNav from '@/components/TopNav';
 import BottomTabBar from '@/components/BottomTabBar';
 import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
@@ -64,6 +65,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     currency: business.currency,
   };
 
+  // Online orders attention count — shown as a badge on the Online Orders nav item.
+  // Only fetch for OWNER/MANAGER to avoid unnecessary queries for cashiers.
+  const onlineOrdersCount =
+    (user.role === 'OWNER' || user.role === 'MANAGER')
+      ? await countOnlineOrdersNeedingAttention(business.id).catch(() => 0)
+      : 0;
+
   // Show onboarding banner when onboarding is not complete
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
@@ -113,6 +121,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         storeName={store?.name}
         momoEnabled={!!business.momoEnabled}
         todaySales={todaySales}
+        onlineOrdersCount={onlineOrdersCount}
       />
 
       {/* Setup banner for owners who haven't completed onboarding */}

@@ -580,7 +580,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             : 'opacity-70'
                         }`}
                       >
-                        <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-36 lg:aspect-square lg:h-auto">
+                        <div className="relative h-24 w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-28 lg:aspect-square lg:h-auto">
                           <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} />
                           {hasPromo && inStock ? (
                             <div

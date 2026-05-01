@@ -24,6 +24,7 @@ interface NavMobileMenuProps {
   pathname: string;
   planGatedLinks: Map<string, BusinessPlan>;
   todaySales?: { totalPence: number; txCount: number; currency: string };
+  onlineOrdersCount?: number;
 }
 
 export default function NavMobileMenu({
@@ -37,6 +38,7 @@ export default function NavMobileMenu({
   pathname,
   planGatedLinks,
   todaySales,
+  onlineOrdersCount = 0,
 }: NavMobileMenuProps) {
   useBodyScrollLock(mobileOpen);
 
@@ -175,6 +177,10 @@ export default function NavMobileMenu({
                           {planLocked && minimumPlan ? (
                             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
                               {minimumPlan}
+                            </span>
+                          ) : item.href === '/online-orders' && onlineOrdersCount > 0 ? (
+                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white">
+                              {onlineOrdersCount > 99 ? '99+' : onlineOrdersCount}
                             </span>
                           ) : null}
                         </Link>
