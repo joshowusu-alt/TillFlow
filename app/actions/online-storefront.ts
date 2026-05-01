@@ -180,11 +180,19 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
     await requireOnlineStorefrontAccess(businessId);
 
     const hoursEnabled = formData.get('hoursEnabled') === 'on';
+    const storefrontPickupInstructions = formOptionalString(formData, 'storefrontPickupInstructions');
+    const pickupInstructions = storefrontPickupInstructions?.trim()
+      ? storefrontPickupInstructions.trim()
+      : null;
 
     if (!hoursEnabled) {
       await prisma.business.update({
         where: { id: businessId },
-        data: { storefrontHoursJson: null, storefrontPickupPrepMinutes: 0 },
+        data: {
+          storefrontHoursJson: null,
+          storefrontPickupPrepMinutes: 0,
+          storefrontPickupInstructions: pickupInstructions,
+        },
       });
       audit({
         businessId,
@@ -224,6 +232,7 @@ export async function updateStorefrontHoursAction(formData: FormData): Promise<v
       data: {
         storefrontHoursJson: serializeWeeklyHours(hours satisfies WeeklyHours),
         storefrontPickupPrepMinutes: prep,
+        storefrontPickupInstructions: pickupInstructions,
       },
     });
 

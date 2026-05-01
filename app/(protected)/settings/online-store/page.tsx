@@ -140,7 +140,7 @@ export default async function OnlineStoreSettingsPage({
         <>
           <SectionHeading
             eyebrow="1 · Storefront access"
-            title="Share your storefront"
+            title="Storefront access"
             description="Link, QR code, and printable poster customers can find you with."
           />
           <StorefrontAccessCard
@@ -159,80 +159,95 @@ export default async function OnlineStoreSettingsPage({
         </div>
       ) : null}
 
-      <SectionHeading
-        eyebrow="2 · Store identity & ordering"
-        title="How customers see and pay your store"
-        description="Public name, description, payment instructions, and your storefront branding."
-      />
+      <form action={updateStorefrontSettingsAction} className="space-y-6">
+        <input
+          type="hidden"
+          name="storefrontPickupInstructions"
+          value={storefrontBusiness.storefrontPickupInstructions ?? ''}
+        />
 
-      <div className="card p-6">
-        <form action={updateStorefrontSettingsAction} className="grid gap-4 lg:grid-cols-2">
-          <div className="lg:col-span-2 flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-4">
-            <input
-              id="storefrontEnabled"
-              name="storefrontEnabled"
-              type="checkbox"
-              className="h-4 w-4"
-              defaultChecked={storefrontBusiness.storefrontEnabled}
-            />
-            <label htmlFor="storefrontEnabled" className="text-sm font-medium text-ink">
-              Enable public storefront and online checkout
-            </label>
-          </div>
+        <SectionHeading
+          eyebrow="2 · Store identity"
+          title="Store identity"
+          description="Public name, description, and storefront branding."
+        />
 
-          <div>
-            <label className="label">Storefront slug</label>
-            <input
-              className="input"
-              name="storefrontSlug"
-              defaultValue={storefrontBusiness.storefrontSlug ?? storefrontBusiness.name}
-              placeholder="your-business-name"
-            />
-            <div className="mt-1 text-xs text-black/50">This becomes the public path customers open online.</div>
-          </div>
-
-          <div>
-            <label className="label">Public link</label>
-            <div className="input flex items-center bg-black/[0.03] text-sm text-black/60">
-              {publicUrl ? publicUrl : 'Save a slug to generate the link'}
+        <div className="card p-6">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="lg:col-span-2 flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-4">
+              <input
+                id="storefrontEnabled"
+                name="storefrontEnabled"
+                type="checkbox"
+                className="h-4 w-4"
+                defaultChecked={storefrontBusiness.storefrontEnabled}
+              />
+              <label htmlFor="storefrontEnabled" className="text-sm font-medium text-ink">
+                Enable public storefront and online checkout
+              </label>
             </div>
-            {publicUrl ? (
-              <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline">
-                Open storefront
-              </a>
-            ) : null}
-          </div>
 
-          <div className="lg:col-span-2">
-            <label className="label">Headline</label>
-            <input
-              className="input"
-              name="storefrontHeadline"
-              defaultValue={storefrontBusiness.storefrontHeadline ?? ''}
-              placeholder="Fresh groceries ready for pickup"
-            />
-          </div>
+            <div>
+              <label className="label">Storefront slug</label>
+              <input
+                className="input"
+                name="storefrontSlug"
+                defaultValue={storefrontBusiness.storefrontSlug ?? storefrontBusiness.name}
+                placeholder="your-business-name"
+              />
+              <div className="mt-1 text-xs text-black/50">This becomes the public path customers open online.</div>
+            </div>
 
-          <div className="lg:col-span-2">
-            <label className="label">Description</label>
-            <textarea
-              className="input min-h-24"
-              name="storefrontDescription"
-              defaultValue={storefrontBusiness.storefrontDescription ?? ''}
-              placeholder="Tell customers what they can expect from your online shop."
-            />
-          </div>
+            <div>
+              <label className="label">Public link</label>
+              <div className="input flex items-center bg-black/[0.03] text-sm text-black/60">
+                {publicUrl ? publicUrl : 'Save a slug to generate the link'}
+              </div>
+              {publicUrl ? (
+                <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline">
+                  Open storefront
+                </a>
+              ) : null}
+            </div>
 
-          <div className="lg:col-span-2">
-            <label className="label">Pickup instructions</label>
-            <textarea
-              className="input min-h-24"
-              name="storefrontPickupInstructions"
-              defaultValue={storefrontBusiness.storefrontPickupInstructions ?? ''}
-              placeholder="Example: Pick up at the main counter after confirming your order number."
-            />
-          </div>
+            <div className="lg:col-span-2">
+              <label className="label">Headline</label>
+              <input
+                className="input"
+                name="storefrontHeadline"
+                defaultValue={storefrontBusiness.storefrontHeadline ?? ''}
+                placeholder="Fresh groceries ready for pickup"
+              />
+            </div>
 
+            <div className="lg:col-span-2">
+              <label className="label">Description</label>
+              <textarea
+                className="input min-h-24"
+                name="storefrontDescription"
+                defaultValue={storefrontBusiness.storefrontDescription ?? ''}
+                placeholder="Tell customers what they can expect from your online shop."
+              />
+            </div>
+          </div>
+        </div>
+
+        <StorefrontBrandingCard
+          defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
+          defaultPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? ''}
+          defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
+          defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
+          basicBrandingEnabled={basicBrandingEnabled}
+          extendedBrandingEnabled={extendedBrandingEnabled}
+        />
+
+        <SectionHeading
+          eyebrow="3 · Ordering & payment"
+          title="Ordering & payment"
+          description="Choose how customers place orders and see payment instructions."
+        />
+
+        <div className="card p-6">
           <StorefrontPaymentModeCard
             defaultMode={normalizePaymentMode(storefrontBusiness.storefrontPaymentMode)}
             defaultMomoNumber={storefrontBusiness.storefrontMomoNumber ?? ''}
@@ -244,29 +259,16 @@ export default async function OnlineStoreSettingsPage({
             defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
             defaultPaymentNote={storefrontBusiness.storefrontPaymentNote ?? ''}
           />
+        </div>
 
-          <div className="lg:col-span-2">
-            <StorefrontBrandingCard
-              defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
-              defaultPrimaryColor={storefrontBusiness.storefrontPrimaryColor ?? ''}
-              defaultAccentColor={storefrontBusiness.storefrontAccentColor ?? ''}
-              defaultTagline={storefrontBusiness.storefrontTagline ?? ''}
-              basicBrandingEnabled={basicBrandingEnabled}
-              extendedBrandingEnabled={extendedBrandingEnabled}
-            />
-          </div>
-
-          <div className="lg:col-span-2">
-            <button type="submit" className="btn-primary">
-              Save storefront settings
-            </button>
-          </div>
-        </form>
-      </div>
+        <button type="submit" className="btn-primary">
+          Save storefront settings
+        </button>
+      </form>
 
       <SectionHeading
-        eyebrow="3 · Pickup settings"
-        title="When and how customers collect"
+        eyebrow="4 · Pickup settings"
+        title="Pickup settings"
         description="Opening hours and the preparation time shown on the public storefront."
       />
 
@@ -287,6 +289,19 @@ export default async function OnlineStoreSettingsPage({
             </div>
 
             <form action={updateStorefrontHoursAction} className="mt-5 space-y-4">
+              <div>
+                <label className="label">Pickup instructions</label>
+                <textarea
+                  className="input min-h-24"
+                  name="storefrontPickupInstructions"
+                  defaultValue={storefrontBusiness.storefrontPickupInstructions ?? ''}
+                  placeholder="Example: Pick up at the main counter after confirming your order number."
+                />
+                <div className="mt-1 text-xs text-black/50">
+                  Shown to customers after checkout and on their order status page.
+                </div>
+              </div>
+
               <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
                 <input
                   type="checkbox"
@@ -358,8 +373,8 @@ export default async function OnlineStoreSettingsPage({
       })()}
 
       <SectionHeading
-        eyebrow="4 · Catalogue visibility"
-        title="What customers can buy"
+        eyebrow="5 · Catalogue visibility"
+        title="Catalogue visibility"
         description="Bulk publish or hide products. Per-category controls let you bring whole sections online at once."
       />
 
