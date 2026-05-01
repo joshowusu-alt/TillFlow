@@ -24,6 +24,36 @@ function PackageIcon({ className = 'h-10 w-10' }: { className?: string }) {
   );
 }
 
+function ProductImage({
+  src,
+  alt,
+  inStock,
+}: {
+  src: string | null;
+  alt: string;
+  inStock: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className={`flex h-full w-full items-center justify-center ${inStock ? 'text-accent/45' : 'text-black/30'}`}>
+        <PackageIcon className="h-12 w-12 sm:h-10 sm:w-10 lg:h-14 lg:w-14" />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg
@@ -526,7 +556,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {pagedProducts.map((product) => {
                     const selected = selectionState[product.id];
                     const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
@@ -550,18 +580,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             : 'opacity-70'
                         }`}
                       >
-                        <div className="relative h-[100px] w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-32 lg:aspect-square lg:h-auto">
-                          {product.imageUrl ? (
-                            <img
-                              src={product.imageUrl}
-                              alt={displayName}
-                              className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
-                            />
-                          ) : (
-                            <div className={`flex h-full w-full items-center justify-center ${inStock ? 'text-accent/45' : 'text-black/30'}`}>
-                              <PackageIcon className="h-9 w-9 sm:h-10 sm:w-10 lg:h-14 lg:w-14" />
-                            </div>
-                          )}
+                        <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 sm:h-36 lg:aspect-square lg:h-auto">
+                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} />
                           {hasPromo && inStock ? (
                             <div
                               className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-sm sm:left-3 sm:top-3 sm:px-2.5 sm:py-1 sm:text-[10px]"
@@ -579,20 +599,20 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                           ) : null}
                         </div>
 
-                        <div className="flex flex-1 flex-col gap-2.5 p-3 sm:gap-3 sm:p-4">
-                          <div className="min-h-[2.75rem]">
+                        <div className="flex flex-1 flex-col gap-3 p-4 sm:gap-3 sm:p-4">
+                          <div className="min-h-[3rem]">
                             {displayCategory ? (
                               <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-accent/80 sm:text-[10px]">
                                 {displayCategory}
                               </div>
                             ) : null}
-                            <h2 className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-ink sm:text-base">
+                            <h2 className="mt-0.5 line-clamp-2 text-base font-semibold leading-snug text-ink sm:text-base">
                               {displayName}
                             </h2>
                           </div>
 
                           {product.storefrontDescription ? (
-                            <p className="hidden text-xs leading-5 text-black/55 sm:line-clamp-2">
+                            <p className="line-clamp-2 text-xs leading-5 text-black/55">
                               {product.storefrontDescription}
                             </p>
                           ) : null}
@@ -602,15 +622,15 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               <div className="text-[9px] uppercase tracking-[0.18em] text-black/40 sm:text-[10px]">From</div>
                               <div className="text-base font-bold text-ink sm:text-lg">{unitPrice}</div>
                             </div>
-                            <div className={`text-[10px] font-medium sm:text-[11px] ${inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
+                            <div className={`text-xs font-medium sm:text-[11px] ${inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
                               {inStock ? 'In stock' : 'Unavailable'}
                             </div>
                           </div>
 
-                          <div className="mt-auto space-y-2 pt-1">
+                          <div className="mt-auto space-y-3 pt-1">
                             {product.units.length > 1 ? (
                               <select
-                                className="input h-9 text-xs sm:h-10 sm:text-sm"
+                                className="input h-11 text-sm sm:h-10"
                                 value={selected?.unitId ?? ''}
                                 disabled={!inStock}
                                 onChange={(event) =>
@@ -631,11 +651,11 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               </select>
                             ) : null}
 
-                            <div className="flex items-center justify-between rounded-xl border border-black/10 bg-white px-1">
+                            <div className="flex min-h-11 items-center justify-between rounded-xl border border-black/10 bg-white px-1">
                               <button
                                 type="button"
                                 aria-label="Decrease quantity"
-                                className="px-2.5 py-1.5 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
+                                className="px-4 py-2 text-lg text-black/55 transition hover:text-accent disabled:opacity-30 sm:px-2.5 sm:py-1.5 sm:text-base"
                                 disabled={(selected?.qtyInUnit ?? 1) <= 1 || !inStock}
                                 onClick={() =>
                                   setSelectionState((prev) => ({
@@ -650,7 +670,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                                 −
                               </button>
                               <input
-                                className="w-8 border-0 bg-transparent text-center text-sm font-semibold focus:outline-none"
+                                className="w-12 border-0 bg-transparent text-center text-base font-semibold focus:outline-none sm:w-8 sm:text-sm"
                                 type="number"
                                 min={1}
                                 value={selected?.qtyInUnit ?? 1}
@@ -667,7 +687,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               <button
                                 type="button"
                                 aria-label="Increase quantity"
-                                className="px-2.5 py-1.5 text-base text-black/55 transition hover:text-accent disabled:opacity-30"
+                                className="px-4 py-2 text-lg text-black/55 transition hover:text-accent disabled:opacity-30 sm:px-2.5 sm:py-1.5 sm:text-base"
                                 disabled={!inStock}
                                 onClick={() =>
                                   setSelectionState((prev) => ({
@@ -684,7 +704,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             </div>
                             <button
                               type="button"
-                              className="w-full rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none sm:text-sm"
+                              className="w-full rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none sm:px-3 sm:py-2"
                               style={inStock ? primaryStyle : undefined}
                               onClick={() => addToCart(product.id)}
                               disabled={!inStock}

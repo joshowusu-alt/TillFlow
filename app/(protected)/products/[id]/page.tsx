@@ -10,6 +10,7 @@ import DeleteProductButton from './DeleteProductButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import BarcodeFieldWithGenerate from '@/components/BarcodeFieldWithGenerate';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
+import ProductImageInput from '@/components/ProductImageInput';
 
 export default async function ProductDetailPage({
   params,
@@ -149,9 +150,8 @@ export default async function ProductDetailPage({
               <BarcodeFieldWithGenerate productId={product.id} defaultValue={product.barcode ?? ''} />
             </div>
             <div>
-              <label className="label">Image URL</label>
-              <input className="input" name="imageUrl" type="url" defaultValue={product.imageUrl ?? ''} placeholder="https://example.com/product.jpg" />
-              <div className="mt-1 text-xs text-black/50">Optional product photo URL.</div>
+              <div className="label">Product image</div>
+              <ProductImageInput defaultUrl={product.imageUrl} />
             </div>
             <div>
               <label className="label">Category</label>

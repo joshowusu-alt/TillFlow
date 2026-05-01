@@ -22,6 +22,7 @@ import {
   type ProductUnitInput,
   type QuickCreateProductInput,
 } from '@/lib/services/products';
+import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
 
 // ---------------------------------------------------------------------------
 // Private helpers (FormData parsing — stays in the action layer)
@@ -58,7 +59,28 @@ function parseUnitConfigs(formData: FormData): ProductUnitInput[] | undefined {
   }
 }
 
-function parseProductFields(formData: FormData): ProductCoreInput {
+async function resolveProductImageUrl(formData: FormData): Promise<string | null> {
+  if (formData.get('removeImage') === '1') {
+    return null;
+  }
+
+  const uploaded = await saveProductImageFile(formData.get('imageFile'));
+  if (uploaded && typeof uploaded === 'object' && 'error' in uploaded) {
+    throw new Error(uploaded.error);
+  }
+  if (typeof uploaded === 'string') {
+    return uploaded;
+  }
+
+  const external = await validateExternalProductImageUrl(formOptionalString(formData, 'imageUrl'));
+  if (external && typeof external === 'object' && 'error' in external) {
+    throw new Error(external.error);
+  }
+
+  return external;
+}
+
+async function parseProductFields(formData: FormData): Promise<ProductCoreInput> {
   const unitConfigs = parseUnitConfigs(formData);
   const baseUnit = unitConfigs?.find((config) => config.isBaseUnit);
   const firstNonBaseUnit = unitConfigs?.find((config) => !config.isBaseUnit);
@@ -72,7 +94,7 @@ function parseProductFields(formData: FormData): ProductCoreInput {
     sku: formString(formData, 'sku') || null,
     barcode: formString(formData, 'barcode') || null,
     categoryId: formOptionalString(formData, 'categoryId') || null,
-    imageUrl: formOptionalString(formData, 'imageUrl') || null,
+    imageUrl: await resolveProductImageUrl(formData),
     sellingPriceBasePence: formPence(formData, 'sellingPriceBasePence'),
     defaultCostBasePence: formPence(formData, 'defaultCostBasePence'),
     minimumMarginThresholdBps,
@@ -95,7 +117,7 @@ function parseProductFields(formData: FormData): ProductCoreInput {
 export async function createProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
-    const fields = parseProductFields(formData);
+    const fields = await parseProductFields(formData);
 
     const product = await createProduct(businessId, fields);
 
@@ -123,7 +145,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     const id = formString(formData, 'id');
     if (!id) redirect('/products');
 
-    const fields = parseProductFields(formData);
+    const fields = await parseProductFields(formData);
     const productId = await updateProduct(id, businessId, fields);
 
     audit({

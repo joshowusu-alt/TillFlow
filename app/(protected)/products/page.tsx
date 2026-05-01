@@ -15,6 +15,7 @@ import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
+import ProductImageInput from '@/components/ProductImageInput';
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -138,9 +139,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <BarcodeScanInput name="barcode" />
                 </div>
                 <div>
-                  <label className="label">Image URL</label>
-                  <input className="input" name="imageUrl" type="url" placeholder="https://example.com/product.jpg" />
-                  <div className="mt-1 text-xs text-black/50">Optional product photo URL.</div>
+                  <div className="label">Product image</div>
+                  <ProductImageInput />
                 </div>
                 <div>
                   <label className="label">Category</label>

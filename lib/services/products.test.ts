@@ -29,7 +29,7 @@ const { prismaMock } = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { buildProductUnitCreates, quickCreateProduct, repairInventoryAverageCostDrift, updateProduct } from './products';
+import { buildProductUnitCreates, createProduct, quickCreateProduct, repairInventoryAverageCostDrift, updateProduct } from './products';
 
 describe('product unit configuration helpers', () => {
   beforeEach(() => {
@@ -192,6 +192,36 @@ describe('product unit configuration helpers', () => {
 
     expect(dbMock.product.create).not.toHaveBeenCalled();
     expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('persists a normalized product image URL when creating a product', async () => {
+    prismaMock.product.create.mockResolvedValue({ id: 'prod-image', name: 'Image product' });
+
+    await createProduct('biz-1', {
+      name: 'Image product',
+      sku: null,
+      barcode: null,
+      categoryId: null,
+      imageUrl: ' https://cdn.example.com/image.webp ',
+      sellingPriceBasePence: 900,
+      defaultCostBasePence: 550,
+      minimumMarginThresholdBps: null,
+      vatRateBps: 0,
+      promoBuyQty: 0,
+      promoGetQty: 0,
+      baseUnitId: 'unit-piece',
+      packagingUnitId: '',
+      packagingConversion: 0,
+      unitConfigs: [{ unitId: 'unit-piece', conversionToBase: 1, isBaseUnit: true }],
+    });
+
+    expect(prismaMock.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          imageUrl: 'https://cdn.example.com/image.webp',
+        }),
+      }),
+    );
   });
 
   it('syncs default-cost-managed inventory balances when product cost changes', async () => {
