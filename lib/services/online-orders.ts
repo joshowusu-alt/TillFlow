@@ -719,3 +719,73 @@ export async function getPublicOnlineOrder(input: {
     pickupStoreAddress: order.store?.address ?? null,
   };
 }
+
+function buildOrderLookupPhoneVariants(rawPhone: string) {
+  const compact = rawPhone.replace(/\s+/g, '').trim();
+  const digits = compact.replace(/\D/g, '');
+  const normalizedIntl = digits.startsWith('233') ? digits : `233${digits.replace(/^0+/, '')}`;
+  const normalizedLocal = normalizedIntl.startsWith('233') ? `0${normalizedIntl.slice(3)}` : digits;
+
+  return [...new Set([compact, digits, normalizedIntl, `+${normalizedIntl}`, normalizedLocal].filter(Boolean))];
+}
+
+export async function getOrdersByPhone(slugInput: string, rawPhone: string) {
+  const slug = normalizeStorefrontSlug(slugInput);
+  if (!slug || !rawPhone.trim()) {
+    return null;
+  }
+
+  const store = await prisma.business.findFirst({
+    where: {
+      storefrontSlug: slug,
+      storefrontEnabled: true,
+    },
+    select: {
+      name: true,
+    },
+  });
+
+  if (!store) {
+    return null;
+  }
+
+  const phoneVariants = buildOrderLookupPhoneVariants(rawPhone);
+
+  const orders = await prisma.onlineOrder.findMany({
+    where: {
+      business: {
+        storefrontSlug: slug,
+      },
+      OR: phoneVariants.flatMap((phone) => [
+        { customerPhone: { equals: phone } },
+        { customerPhone: { contains: phone } },
+      ]),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      paymentStatus: true,
+      totalPence: true,
+      currency: true,
+      createdAt: true,
+      customerName: true,
+      publicToken: true,
+      lines: {
+        select: {
+          productName: true,
+          qtyInUnit: true,
+          unitName: true,
+        },
+        take: 3,
+      },
+    },
+  });
+
+  return {
+    storeName: store.name,
+    orders,
+  };
+}

@@ -36,7 +36,7 @@ const PERIOD_OPTIONS = [
 export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const currentPeriod = searchParams.get('period') || '7';
+    const currentPeriod = searchParams?.get('period') || '7';
 
     const formatMoney = (pence: number) =>
         new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency }).format(pence / 100);
@@ -44,7 +44,7 @@ export default function AnalyticsClient({ data }: { data: AnalyticsData }) {
     const currencySymbol = getCurrencySymbol(data.currency);
 
     const handlePeriodChange = (period: string) => {
-        const params = new URLSearchParams(searchParams.toString());
+        const params = new URLSearchParams(searchParams?.toString() ?? '');
         params.set('period', period);
         router.push(`?${params.toString()}`);
     };

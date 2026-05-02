@@ -145,7 +145,7 @@ export default function PosClient({
   const [barcode, setBarcode] = useState('');
   const [tillId, setTillId] = useState(() => {
     // Priority 1: explicit URL param (allows deep-link to a specific till)
-    const urlTillId = searchParams.get('tillId');
+    const urlTillId = searchParams?.get('tillId');
     if (urlTillId && tills.some((t) => t.id === urlTillId)) return urlTillId;
     // Priority 2: till with an open shift (when exactly one is open)
     if (openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])) {
@@ -392,7 +392,7 @@ export default function PosClient({
   // Restore saved till from localStorage on mount (skipped when URL param already set)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const urlTillId = searchParams.get('tillId');
+    const urlTillId = searchParams?.get('tillId');
     if (urlTillId) return; // URL param takes precedence
     const saved = window.localStorage.getItem(tillStorageKey);
     if (saved && tills.some((t) => t.id === saved)) {
@@ -863,7 +863,7 @@ export default function PosClient({
         ? 'attention'
         : 'neutral';
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
-  const errorParam = searchParams.get('error');
+  const errorParam = searchParams?.get('error');
 
   usePosKeyboardShortcuts({
     activeLineId,

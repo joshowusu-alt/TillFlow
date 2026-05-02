@@ -483,7 +483,7 @@ export default function LabelPrintClient({
                 <Pagination
                   currentPage={safeCurrentPage}
                   totalPages={totalPages}
-                  basePath={pathname}
+                  basePath={pathname ?? '/products/labels'}
                   searchParams={{
                     q: search || undefined,
                     barcode: barcodeSearch || undefined,

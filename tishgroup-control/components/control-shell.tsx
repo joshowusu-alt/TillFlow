@@ -91,7 +91,7 @@ export default function ControlShell({
   staff: ControlShellStaff;
   navCounts?: { urgent: number; collections: number; unreviewed: number };
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const currentSection = useMemo(

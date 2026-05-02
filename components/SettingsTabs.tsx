@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { SETTINGS_TAB_SECTIONS, type AppRole } from '@/lib/navigation-config';
 
 export default function SettingsTabs({ role }: { role: AppRole }) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const visibleSections = SETTINGS_TAB_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => item.roles.includes(role)),

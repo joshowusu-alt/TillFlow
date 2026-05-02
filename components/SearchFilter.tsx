@@ -8,17 +8,17 @@ export default function SearchFilter({ placeholder = 'Search…' }: { placeholde
   const pathname = usePathname();
   const router = useRouter();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const [value, setValue] = useState(searchParams.get('q') ?? '');
+  const [value, setValue] = useState(searchParams?.get('q') ?? '');
 
   useEffect(() => {
-    setValue(searchParams.get('q') ?? '');
+    setValue(searchParams?.get('q') ?? '');
   }, [searchParams]);
 
   function handleChange(v: string) {
     setValue(v);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
       if (v) {
         params.set('q', v);
       } else {
@@ -26,7 +26,7 @@ export default function SearchFilter({ placeholder = 'Search…' }: { placeholde
       }
       params.delete('page');
       const qs = params.toString();
-      router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+      router.replace(`${pathname ?? ''}${qs ? `?${qs}` : ''}`, { scroll: false });
     }, 300);
   }
 

@@ -56,6 +56,10 @@ function ProductImage({
   );
 }
 
+function ProductCardSkeleton() {
+  return <div className="h-52 animate-pulse rounded-xl bg-slate-100" />;
+}
+
 function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
     <svg
@@ -88,6 +92,7 @@ const PRODUCTS_PER_PAGE = 12;
 export default function StorefrontClient({ storefront }: { storefront: PublicStorefront }) {
   const router = useRouter();
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
+  const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
   const [cart, setCart] = useState<PosCartLine[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -114,12 +119,27 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [mobileStep, setMobileStep] = useState<'browse' | 'cart' | 'checkout'>('browse');
+  const [isMounted, setIsMounted] = useState(false);
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
+  const [lastAddedProductId, setLastAddedProductId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
     } catch {}
   }, [cart, CART_STORAGE_KEY]);
+
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      const raw = localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed)) {
+        setRecentlyViewed(parsed.filter((value) => typeof value === 'string').slice(0, 8));
+      }
+    } catch {}
+  }, [RECENTLY_VIEWED_STORAGE_KEY]);
 
   const selectedStore = useMemo(
     () => storefront.stores.find((store) => store.id === selectedStoreId) ?? null,
@@ -183,6 +203,24 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     setCurrentPage(1);
   }
 
+  function rememberViewedProduct(productId: string) {
+    setRecentlyViewed((prev) => {
+      const next = [productId, ...prev.filter((id) => id !== productId)].slice(0, 8);
+      try {
+        localStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
+
+  function scrollToProduct(productId: string) {
+    if (typeof document === 'undefined') return;
+    document.getElementById(`product-${productId}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+  }
+
   async function handleShareStore() {
     if (typeof window === 'undefined') return;
     const shareUrl = window.location.href;
@@ -216,6 +254,14 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     () => buildCartDetails(cart, productMap, storefront.vatEnabled),
     [cart, productMap, storefront.vatEnabled],
   );
+  const recentlyViewedProducts = useMemo(
+    () =>
+      recentlyViewed
+        .map((productId) => productMap.get(productId))
+        .filter((product): product is NonNullable<typeof product> => Boolean(product))
+        .filter((product) => product.onHandBase > 0),
+    [productMap, recentlyViewed],
+  );
 
   function handleStoreChange(nextStoreId: string) {
     if (nextStoreId === selectedStoreId) return;
@@ -226,6 +272,31 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   }
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
   const orderTotal = totals.netSubtotal + totals.vat;
+  const cartProductIds = useMemo(() => new Set(cart.map((line) => line.productId)), [cart]);
+  const recentCartProduct = useMemo(() => {
+    const productId = lastAddedProductId ?? cart[cart.length - 1]?.productId;
+    return productId ? productMap.get(productId) ?? null : null;
+  }, [cart, lastAddedProductId, productMap]);
+  const suggestedProducts = useMemo(() => {
+    const recentCategoryId = recentCartProduct?.categoryId;
+    const recentCategoryName = recentCartProduct?.categoryName;
+    if (!recentCategoryId && !recentCategoryName) {
+      return [];
+    }
+
+    return productsForStore
+      .filter(
+        (product) =>
+          product.onHandBase > 0 &&
+          !cartProductIds.has(product.id) &&
+          ((recentCategoryId && product.categoryId === recentCategoryId) ||
+            (recentCategoryName && product.categoryName === recentCategoryName)),
+      )
+      .slice(0, 3);
+  }, [cartProductIds, productsForStore, recentCartProduct]);
+  const showRecentlyViewed =
+    recentlyViewedProducts.length >= 2 && selectedCategoryId === ALL_CATEGORIES && searchQuery.trim().length === 0;
+  const showInitialEmptySkeleton = !isMounted && storefront.products.length === 0;
 
   function addToCart(productId: string) {
     const current = selectionState[productId];
@@ -247,6 +318,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
     }
 
     setError(null);
+    setLastAddedProductId(productId);
+    rememberViewedProduct(productId);
     setCart((prev) => {
       const existing = prev.find((line) => line.productId === productId && line.unitId === current.unitId);
       if (existing) {
@@ -518,30 +591,38 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
             {/* Product grid or empty state */}
             {filteredProducts.length === 0 ? (
-              <div className="mt-6 rounded-2xl border border-dashed border-black/10 bg-white px-6 py-16 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-black/30">
-                  {searchQuery ? (
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-                    </svg>
+              showInitialEmptySkeleton ? (
+                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <ProductCardSkeleton key={index} />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-6 rounded-2xl border border-dashed border-black/10 bg-white px-6 py-16 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-black/30">
+                    {searchQuery ? (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="text-sm font-semibold text-ink">
+                    {searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+                  </div>
+                  <div className="mt-1 text-xs text-black/50">
+                    {searchQuery ? 'Try a different category or search term.' : 'Check back soon — this store is getting ready.'}
+                  </div>
+                  {searchQuery && (
+                    <button type="button" onClick={() => handleSearch('')} className="mt-3 text-xs font-semibold text-accent hover:underline">
+                      Clear search
+                    </button>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-ink">
-                  {searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
-                </div>
-                <div className="mt-1 text-xs text-black/50">
-                  {searchQuery ? 'Try a different category or search term.' : 'Check back soon — this store is getting ready.'}
-                </div>
-                {searchQuery && (
-                  <button type="button" onClick={() => handleSearch('')} className="mt-3 text-xs font-semibold text-accent hover:underline">
-                    Clear search
-                  </button>
-                )}
-              </div>
+              )
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
@@ -562,12 +643,18 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     return (
                       <article
                         key={product.id}
+                        id={`product-${product.id}`}
                         className={`group flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 ${
                           inStock ? 'transition hover:shadow-md hover:ring-black/10' : 'opacity-60'
                         }`}
                       >
                         {/* Image area — compact 80px */}
-                        <div className="relative h-20 w-full overflow-hidden bg-slate-50 sm:h-24 lg:h-28">
+                        <button
+                          type="button"
+                          className="relative h-20 w-full overflow-hidden bg-slate-50 text-left sm:h-24 lg:h-28"
+                          onClick={() => rememberViewedProduct(product.id)}
+                          aria-label={`View ${displayName}`}
+                        >
                           <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} />
                           {hasPromo && inStock ? (
                             <div
@@ -584,7 +671,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               </span>
                             </div>
                           ) : null}
-                        </div>
+                        </button>
 
                         {/* Card body */}
                         <div className="flex flex-1 flex-col p-2.5 sm:p-3">
@@ -706,6 +793,53 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     </button>
                   </div>
                 )}
+
+                {showRecentlyViewed ? (
+                  <section className="mt-8">
+                    <div className="mb-3">
+                      <h2 className="text-sm font-semibold text-ink">Recently viewed</h2>
+                      <p className="text-xs text-black/45">Jump back to products you explored earlier.</p>
+                    </div>
+
+                    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+                      {recentlyViewedProducts.map((product) => {
+                        const firstUnit = product.units[0];
+                        const price = formatMoney(
+                          firstUnit?.sellingPricePence ?? product.sellingPriceBasePence * (firstUnit?.conversionToBase ?? 1),
+                          storefront.currency,
+                        );
+
+                        return (
+                          <div
+                            key={product.id}
+                            className="group flex min-w-[220px] items-center gap-3 rounded-2xl border border-black/5 bg-white p-2.5 shadow-sm"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => scrollToProduct(product.id)}
+                              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                            >
+                              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50">
+                                <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
+                                <div className="text-xs text-black/45">{price}</div>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addToCart(product.id)}
+                              className="shrink-0 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
               </>
             )}
 
@@ -771,6 +905,47 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   ))}
                 </div>
               )}
+
+              {suggestedProducts.length > 0 ? (
+                <div className="mt-4 border-t border-black/5 pt-4">
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-ink">You might also like</h3>
+                    <p className="text-xs text-black/45">More from the same category.</p>
+                  </div>
+                  <div className="space-y-2">
+                    {suggestedProducts.map((product) => {
+                      const firstUnit = product.units[0];
+                      const price = formatMoney(
+                        firstUnit?.sellingPricePence ?? product.sellingPriceBasePence * (firstUnit?.conversionToBase ?? 1),
+                        storefront.currency,
+                      );
+
+                      return (
+                        <div key={product.id} className="flex items-center gap-3 rounded-xl bg-black/[0.03] px-3 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => scrollToProduct(product.id)}
+                            className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
+                          >
+                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock />
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
+                            <div className="text-xs text-black/45">{price}</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addToCart(product.id)}
+                            className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {cartDetails.length > 0 && (
                 <div className="mt-4 space-y-1.5 border-t border-black/5 pt-3 text-sm">
@@ -903,6 +1078,47 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               ))}
             </div>
           )}
+
+          {suggestedProducts.length > 0 ? (
+            <div className="mt-5 border-t border-black/5 pt-4">
+              <div className="mb-3">
+                <h3 className="text-sm font-semibold text-ink">You might also like</h3>
+                <p className="text-xs text-black/45">More from the same category.</p>
+              </div>
+              <div className="space-y-2">
+                {suggestedProducts.map((product) => {
+                  const firstUnit = product.units[0];
+                  const price = formatMoney(
+                    firstUnit?.sellingPricePence ?? product.sellingPriceBasePence * (firstUnit?.conversionToBase ?? 1),
+                    storefront.currency,
+                  );
+
+                  return (
+                    <div key={product.id} className="flex items-center gap-3 rounded-xl bg-black/[0.03] px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => scrollToProduct(product.id)}
+                        className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
+                      >
+                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
+                        <div className="text-xs text-black/45">{price}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(product.id)}
+                        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                      >
+                        + Add
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {cartDetails.length > 0 && (
             <div className="mt-5 space-y-1.5 border-t border-black/5 pt-4 text-sm">

@@ -34,7 +34,7 @@ export default function TopNav({
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
 }){
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
