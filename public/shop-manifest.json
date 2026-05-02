@@ -1,0 +1,17 @@
+{
+  "name": "TillFlow Shop",
+  "short_name": "TillFlow",
+  "description": "Browse and order from local stores online",
+  "start_url": "/shop",
+  "scope": "/shop",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/apple-icon", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "categories": ["shopping", "food"],
+  "lang": "en-GH"
+}

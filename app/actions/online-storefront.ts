@@ -545,3 +545,50 @@ export async function recheckOnlineOrderPaymentAction(orderId: string): Promise<
     redirect('/online-orders');
   }, '/online-orders');
 }
+export async function batchMarkPreparingAction(formData: FormData): Promise<void> {
+  return formAction(async (): Promise<never> => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const storeId = formData.get('storeId');
+    if (!storeId || typeof storeId !== 'string') {
+      throw new Error('Missing storeId');
+    }
+    const store = await prisma.store.findFirst({
+      where: { id: storeId, businessId },
+      select: { id: true },
+    });
+    if (!store) throw new Error('Not authorized');
+
+    await prisma.onlineOrder.updateMany({
+      where: { storeId, status: 'PAID', paymentStatus: 'PAID' },
+      data: { status: 'PROCESSING', preparingAt: new Date() },
+    });
+    revalidatePath('/online-orders');
+    redirect('/online-orders');
+  }, '/online-orders');
+}
+
+export async function markOrderRefundedAction(formData: FormData): Promise<void> {
+  return formAction(async (): Promise<never> => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const orderId = formString(formData, 'orderId');
+    const refundNote = formOptionalString(formData, 'refundNote');
+
+    const order = await prisma.onlineOrder.findFirst({
+      where: { id: orderId, businessId },
+      select: { id: true, refundStatus: true },
+    });
+    if (!order) throw new Error('Order not found');
+    if (order.refundStatus === 'REFUNDED') throw new Error('Order already marked as refunded');
+
+    await prisma.onlineOrder.update({
+      where: { id: orderId },
+      data: {
+        refundStatus: 'REFUNDED',
+        refundNote: refundNote?.trim() || null,
+        refundedAt: new Date(),
+      },
+    });
+    revalidatePath('/online-orders');
+    redirect('/online-orders');
+  }, '/online-orders');
+}

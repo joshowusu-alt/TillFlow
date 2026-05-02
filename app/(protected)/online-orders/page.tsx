@@ -1,6 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
+import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, formatOnlineOrderStatus, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
@@ -22,6 +22,39 @@ type StatusKey = typeof STATUS_TABS[number]['key'];
 
 function isValidStatus(val: unknown): val is Exclude<StatusKey, 'all'> {
   return typeof val === 'string' && STATUS_TABS.some((t) => t.key !== 'all' && t.key === val);
+}
+
+function orderAgeMinutes(createdAt: Date | string): number {
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / 60_000);
+}
+
+function slaBand(ageMin: number, status: string): 'ok' | 'warn' | 'urgent' {
+  if (['COMPLETED', 'COLLECTED', 'CANCELLED'].includes(status)) return 'ok';
+  if (ageMin >= 45) return 'urgent';
+  if (ageMin >= 20) return 'warn';
+  return 'ok';
+}
+
+function AgeBadge({ createdAt, status }: { createdAt: Date | string; status: string }) {
+  const ageMin = orderAgeMinutes(createdAt);
+  const band = slaBand(ageMin, status);
+  const label = ageMin < 1 ? 'just now' : `${ageMin} min ago`;
+  if (band === 'urgent') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+        {label}
+      </span>
+    );
+  }
+  if (band === 'warn') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+        {label}
+      </span>
+    );
+  }
+  return <span className="text-[10px] text-black/40">{label}</span>;
 }
 
 function NextStepCTA({ order }: {
@@ -127,6 +160,7 @@ export default async function OnlineOrdersPage({
           paymentCollectionId: true,
           fulfillmentStatus: true,
           refundStatus: true,
+          refundNote: true,
         salesInvoiceId: true,
         customerName: true,
         customerPhone: true,
@@ -197,37 +231,77 @@ export default async function OnlineOrdersPage({
       </div>
 
       {/* Filter tabs */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((tab) => {
-          const tabCount =
-            tab.key === 'all' ? totalActive :
-            tab.key === 'AWAITING_PAYMENT' ? awaiting :
-            tab.key === 'PAID' ? paid :
-            tab.key === 'PROCESSING' ? processing :
-            tab.key === 'READY_FOR_PICKUP' ? ready :
-            tab.key === 'COMPLETED' ? countFor('COMPLETED') :
-            tab.key === 'CANCELLED' ? countFor('CANCELLED') : 0;
-          const isActive = activeTab === tab.key;
-          return (
-            <a
-              key={tab.key}
-              href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                isActive
-                  ? 'border-accent bg-accent text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-black/60 hover:border-accent/30 hover:text-accent'
-              }`}
-            >
-              {tab.label}
-              {tabCount > 0 && !isActive ? (
-                <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold leading-none">
-                  {tabCount}
-                </span>
-              ) : null}
-            </a>
-          );
-        })}
-      </div>
+      <nav aria-label="Filter orders by status">
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TABS.map((tab) => {
+            const tabCount =
+              tab.key === 'all' ? totalActive :
+              tab.key === 'AWAITING_PAYMENT' ? awaiting :
+              tab.key === 'PAID' ? paid :
+              tab.key === 'PROCESSING' ? processing :
+              tab.key === 'READY_FOR_PICKUP' ? ready :
+              tab.key === 'COMPLETED' ? countFor('COMPLETED') :
+              tab.key === 'CANCELLED' ? countFor('CANCELLED') : 0;
+            const isActive = activeTab === tab.key;
+            return (
+              <a
+                key={tab.key}
+                href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
+                aria-current={isActive ? 'page' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  isActive
+                    ? 'border-accent bg-accent text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-black/60 hover:border-accent/30 hover:text-accent'
+                }`}
+              >
+                {tab.label}
+                {tabCount > 0 && !isActive ? (
+                  <span className="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                    {tabCount}
+                  </span>
+                ) : null}
+              </a>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Batch preparing banner — shown when any PAID orders need processing */}
+      {(() => {
+        const paidOrders = orders.filter((o) => o.status === 'PAID');
+        if (paidOrders.length === 0) return null;
+        // Group by store
+        const byStore = new Map<string, { storeId: string; storeName: string; count: number }>();
+        for (const o of paidOrders) {
+          if (!o.store) continue;
+          if (!byStore.has(o.store.id)) {
+            byStore.set(o.store.id, { storeId: o.store.id, storeName: o.store.name, count: 0 });
+          }
+          byStore.get(o.store.id)!.count++;
+        }
+        return (
+          <div role="status" aria-live="polite" className="space-y-2">
+            {Array.from(byStore.values()).map(({ storeId, storeName, count }) => (
+              <div key={storeId} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <p className="text-sm font-medium text-blue-900">
+                  <span className="font-bold">{count} {count === 1 ? 'order' : 'orders'}</span>{' '}
+                  confirmed at <span className="font-semibold">{storeName}</span> — ready to start preparing
+                </p>
+                <form action={batchMarkPreparingAction}>
+                  <input type="hidden" name="storeId" value={storeId} />
+                  <button
+                    type="submit"
+                    className="btn-primary text-xs py-1.5 px-3"
+                    aria-label={`Mark all ${count} paid orders at ${storeName} as preparing`}
+                  >
+                    Mark all as preparing
+                  </button>
+                </form>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Orders list */}
       <div className="space-y-4">
@@ -245,9 +319,15 @@ export default async function OnlineOrdersPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-base font-display font-semibold text-ink">{order.orderNumber}</h2>
                       <StatusBadge status={order.status} />
+                      <AgeBadge createdAt={order.createdAt} status={order.status} />
                       {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
                         <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
-                          Refund needed
+                          ⚠ Refund needed
+                        </span>
+                      ) : null}
+                      {order.refundStatus === 'REFUNDED' ? (
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                          Refunded
                         </span>
                       ) : null}
                       {order.store ? (
@@ -295,6 +375,42 @@ export default async function OnlineOrdersPage({
                     ) : null}
                     {order.paymentCollection?.failureReason ? (
                       <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
+                    ) : null}
+
+                    {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
+                        <p className="text-xs text-rose-800 font-medium">
+                          Payment was received but this order was cancelled. The customer needs a manual refund.
+                        </p>
+                        <form action={markOrderRefundedAction} className="flex flex-wrap items-end gap-2">
+                          <input type="hidden" name="orderId" value={order.id} />
+                          <div className="flex-1 min-w-[140px]">
+                            <label htmlFor={`refundNote-${order.id}`} className="text-[10px] font-semibold text-rose-700 uppercase tracking-wide block mb-1">
+                              Refund note (optional)
+                            </label>
+                            <input
+                              id={`refundNote-${order.id}`}
+                              type="text"
+                              name="refundNote"
+                              placeholder="e.g. MoMo returned via 055…"
+                              className="w-full rounded-md border border-rose-200 bg-white px-2 py-1.5 text-xs focus:border-rose-400 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            aria-label={`Mark order ${order.orderNumber} as refunded`}
+                            className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
+                          >
+                            Mark as refunded
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+
+                    {order.refundStatus === 'REFUNDED' && order.refundNote ? (
+                      <div className="text-xs text-emerald-700">
+                        Refund note: {order.refundNote}
+                      </div>
                     ) : null}
                   </div>
 
