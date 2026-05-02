@@ -7,6 +7,11 @@ const localDevPorts = [6200, 6201, 6202, 6203, 6204];
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+    ],
+  },
   typescript: {
     // Type errors must be fixed before deploying — do not silence them.
     ignoreBuildErrors: false,

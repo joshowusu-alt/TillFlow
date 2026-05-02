@@ -177,6 +177,7 @@ export type CreateSaleInput = {
   externalRef?: string | null;
   createdAt?: Date | null;
   inventoryPolicy?: 'enforce' | 'allow-negative';
+  skipInventoryMovements?: boolean;
   /**
    * Set true for system-driven sales (e.g. online orders) where no human cashier
    * has an open till. The require-open-till business setting still applies to
@@ -306,8 +307,9 @@ export async function createSale(input: CreateSaleInput) {
 
   const qtyByProduct = buildQtyByProductMap(lineDetails);
   const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
+  const shouldApplyInventoryMovements = !input.skipInventoryMovements;
 
-  if (enforceInventory) {
+  if (enforceInventory && shouldApplyInventoryMovements) {
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
       const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
       if (onHand < qtyBase) {
@@ -613,7 +615,7 @@ export async function createSale(input: CreateSaleInput) {
       );
     }
 
-    if (enforceInventory) {
+    if (enforceInventory && shouldApplyInventoryMovements) {
       if (packageCostRepairs.size > 0) {
         await Promise.all(
           [...packageCostRepairs.entries()].map(([productId, defaultCostBasePence]) =>
@@ -626,7 +628,7 @@ export async function createSale(input: CreateSaleInput) {
       }
       // Single SQL UPDATE for all products — 1 RTT regardless of cart size
       txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
-    } else {
+    } else if (!enforceInventory && shouldApplyInventoryMovements) {
       const inventoryMapInTx = await fetchInventoryMap(input.storeId, productIds, tx as any);
       stockMovementInventoryMap = inventoryMapInTx;
 
@@ -685,24 +687,26 @@ export async function createSale(input: CreateSaleInput) {
   );
 
   // Post-tx: stock movement audit trail — non-critical, fire-and-forget
-  void prisma.stockMovement.createMany({
-    data: lineDetails.map((line) => {
-      const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-      const afterQtyBase = beforeQtyBase - line.qtyBase;
-      return {
-        storeId: input.storeId,
-        productId: line.productId,
-        qtyBase: -line.qtyBase,
-        beforeQtyBase,
-        afterQtyBase,
-        unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-        type: 'SALE' as const,
-        referenceType: 'SALES_INVOICE' as const,
-        referenceId: invoice.id,
-        userId: input.cashierUserId,
-      };
-    }),
-  }).catch(() => {});
+  if (shouldApplyInventoryMovements) {
+    void prisma.stockMovement.createMany({
+      data: lineDetails.map((line) => {
+        const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+        const afterQtyBase = beforeQtyBase - line.qtyBase;
+        return {
+          storeId: input.storeId,
+          productId: line.productId,
+          qtyBase: -line.qtyBase,
+          beforeQtyBase,
+          afterQtyBase,
+          unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
+          type: 'SALE' as const,
+          referenceType: 'SALES_INVOICE' as const,
+          referenceId: invoice.id,
+          userId: input.cashierUserId,
+        };
+      }),
+    }).catch(() => {});
+  }
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale
   detectExcessiveDiscountRisk({

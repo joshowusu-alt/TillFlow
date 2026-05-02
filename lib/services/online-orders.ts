@@ -1,8 +1,9 @@
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { UserError } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
-import { buildQtyByProductMap, fetchInventoryMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
+import { buildQtyByProductMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 
@@ -113,6 +114,11 @@ type CheckoutLine = {
   imageUrl: string | null;
 };
 
+type OnlineOrderInventoryLine = {
+  productId: string;
+  qtyBase: number;
+};
+
 type BusinessStorefrontSnapshot = {
   id: string;
   name: string;
@@ -169,6 +175,27 @@ async function generateUniqueOnlineOrderRef(businessId: string): Promise<string>
   }
   // Extremely unlikely fallback: append a longer random suffix.
   return `${createOnlineOrderRef()}-${Date.now().toString(36).slice(-3).toUpperCase()}`;
+}
+
+export async function restoreOnlineOrderInventoryReservation(input: {
+  storeId: string;
+  lines: OnlineOrderInventoryLine[];
+  tx?: Prisma.TransactionClient;
+}) {
+  const client = input.tx ?? prisma;
+  await Promise.all(
+    input.lines.map((line) =>
+      client.inventoryBalance.updateMany({
+        where: {
+          productId: line.productId,
+          storeId: input.storeId,
+        },
+        data: {
+          qtyOnHandBase: { increment: line.qtyBase },
+        },
+      }),
+    ),
+  );
 }
 
 export function getOnlineOrderStateForCollectionStatus(status: string) {
@@ -470,51 +497,40 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   }
   const productIds = [...new Set(input.items.map((item) => item.productId))];
 
-  const [products, inventoryMap] = await Promise.all([
-    prisma.product.findMany({
-      where: {
-        businessId: business.id,
-        active: true,
-        storefrontPublished: true,
-        id: { in: productIds },
-      },
-      select: {
-        id: true,
-        name: true,
-        imageUrl: true,
-        sellingPriceBasePence: true,
-        vatRateBps: true,
-        promoBuyQty: true,
-        promoGetQty: true,
-        productUnits: {
-          select: {
-            unitId: true,
-            conversionToBase: true,
-            sellingPricePence: true,
-            unit: {
-              select: {
-                id: true,
-                name: true,
-                pluralName: true,
-              },
+  const products = await prisma.product.findMany({
+    where: {
+      businessId: business.id,
+      active: true,
+      storefrontPublished: true,
+      id: { in: productIds },
+    },
+    select: {
+      id: true,
+      name: true,
+      imageUrl: true,
+      sellingPriceBasePence: true,
+      vatRateBps: true,
+      promoBuyQty: true,
+      promoGetQty: true,
+      productUnits: {
+        select: {
+          unitId: true,
+          conversionToBase: true,
+          sellingPricePence: true,
+          unit: {
+            select: {
+              id: true,
+              name: true,
+              pluralName: true,
             },
           },
         },
       },
-    }),
-    fetchInventoryMap(store.id, productIds),
-  ]);
+    },
+  });
 
   const lineDetails = buildCheckoutLines(input.items, products, business.vatEnabled);
   const qtyByProduct = buildQtyByProductMap(lineDetails);
-
-  for (const [productId, qtyBase] of qtyByProduct.entries()) {
-    const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;
-    if (onHand < qtyBase) {
-      const product = products.find((candidate) => candidate.id === productId);
-      throw new UserError(`${product?.name ?? 'An item'} does not have enough stock right now.`);
-    }
-  }
 
   const subtotalPence = lineDetails.reduce((sum, line) => sum + line.lineSubtotalPence, 0);
   const vatPence = lineDetails.reduce((sum, line) => sum + line.lineVatPence, 0);
@@ -522,42 +538,62 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   const publicToken = randomUUID();
   const orderNumber = await generateUniqueOnlineOrderRef(business.id);
 
-  const order = await prisma.onlineOrder.create({
-    data: {
-      businessId: business.id,
-      storeId: store.id,
-      publicToken,
-      orderNumber,
-      customerName,
-      customerPhone,
-      customerEmail,
-      customerNotes,
-      subtotalPence,
-      vatPence,
-      totalPence,
-      currency: business.currency,
-      lines: {
-        create: lineDetails.map((line) => ({
-          productId: line.productId,
-          unitId: line.unitId,
-          productName: line.productName,
-          unitName: line.unitName,
-          imageUrl: line.imageUrl,
-          qtyInUnit: line.qtyInUnit,
-          conversionToBase: line.conversionToBase,
-          qtyBase: line.qtyBase,
-          unitPricePence: line.unitPricePence,
-          lineSubtotalPence: line.lineSubtotalPence,
-          lineVatPence: line.lineVatPence,
-          lineTotalPence: line.lineTotalPence,
-        })),
+  const order = await prisma.$transaction(async (tx) => {
+    for (const [productId, qtyBase] of qtyByProduct.entries()) {
+      const result = await tx.inventoryBalance.updateMany({
+        where: {
+          productId,
+          storeId: store.id,
+          qtyOnHandBase: { gte: qtyBase },
+        },
+        data: {
+          qtyOnHandBase: { decrement: qtyBase },
+        },
+      });
+
+      if (result.count === 0) {
+        const product = products.find((candidate) => candidate.id === productId);
+        throw new UserError(`${product?.name ?? 'An item'} is out of stock right now.`);
+      }
+    }
+
+    return tx.onlineOrder.create({
+      data: {
+        businessId: business.id,
+        storeId: store.id,
+        publicToken,
+        orderNumber,
+        customerName,
+        customerPhone,
+        customerEmail,
+        customerNotes,
+        subtotalPence,
+        vatPence,
+        totalPence,
+        currency: business.currency,
+        lines: {
+          create: lineDetails.map((line) => ({
+            productId: line.productId,
+            unitId: line.unitId,
+            productName: line.productName,
+            unitName: line.unitName,
+            imageUrl: line.imageUrl,
+            qtyInUnit: line.qtyInUnit,
+            conversionToBase: line.conversionToBase,
+            qtyBase: line.qtyBase,
+            unitPricePence: line.unitPricePence,
+            lineSubtotalPence: line.lineSubtotalPence,
+            lineVatPence: line.lineVatPence,
+            lineTotalPence: line.lineTotalPence,
+          })),
+        },
       },
-    },
-    select: {
-      id: true,
-      publicToken: true,
-      orderNumber: true,
-    },
+      select: {
+        id: true,
+        publicToken: true,
+        orderNumber: true,
+      },
+    });
   });
 
   // Manual reference flow: order is created in AWAITING_PAYMENT state. Customer

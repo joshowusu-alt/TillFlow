@@ -1,6 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
+import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, formatOnlineOrderStatus, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
@@ -29,10 +29,12 @@ function NextStepCTA({ order }: {
     id: string;
     status: string;
     paymentStatus: string;
+    paymentCollectionId: string | null;
   };
 }) {
   const done = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   if (done) return null;
+  const recheckPaymentAction = recheckOnlineOrderPaymentAction.bind(null, order.id);
 
   const canCancel = order.status !== 'COMPLETED' && order.status !== 'CANCELLED';
   let nextStatus: string;
@@ -75,6 +77,13 @@ function NextStepCTA({ order }: {
           </button>
         </form>
       ) : null}
+      {order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
+        <form action={recheckPaymentAction}>
+          <button type="submit" className="btn-ghost">
+            Re-check payment
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }
@@ -110,13 +119,14 @@ export default async function OnlineOrdersPage({
       where: { businessId: business.id, ...statusFilter },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      select: {
-        id: true,
-        orderNumber: true,
-        status: true,
-        paymentStatus: true,
-        fulfillmentStatus: true,
-        refundStatus: true,
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          paymentStatus: true,
+          paymentCollectionId: true,
+          fulfillmentStatus: true,
+          refundStatus: true,
         salesInvoiceId: true,
         customerName: true,
         customerPhone: true,
@@ -289,7 +299,14 @@ export default async function OnlineOrdersPage({
                   </div>
 
                   <div className="flex-shrink-0 lg:pl-4">
-                    <NextStepCTA order={{ id: order.id, status: order.status, paymentStatus: order.paymentStatus }} />
+                    <NextStepCTA
+                      order={{
+                        id: order.id,
+                        status: order.status,
+                        paymentStatus: order.paymentStatus,
+                        paymentCollectionId: order.paymentCollectionId,
+                      }}
+                    />
                   </div>
                 </div>
               </div>

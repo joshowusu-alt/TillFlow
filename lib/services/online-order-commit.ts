@@ -76,6 +76,7 @@ export async function commitOnlineOrderSale(orderId: string): Promise<string | n
       storeId: order.storeId,
       tillId,
       cashierUserId,
+      skipInventoryMovements: true,
       paymentStatus: 'PAID',
       // Manual reference orders won't have a paymentCollectionId — createSale
       // accepts that case by recording the MoMo payment as PENDING_MANUAL.

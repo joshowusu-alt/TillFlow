@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import Image from 'next/image';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
@@ -44,12 +45,13 @@ function ProductImage({
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <Image
       src={src}
       alt={alt}
-      className={`h-full w-full object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
+      fill
+      className={`object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
       onError={() => setFailed(true)}
+      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
     />
   );
 }
@@ -85,7 +87,19 @@ const PRODUCTS_PER_PAGE = 12;
 
 export default function StorefrontClient({ storefront }: { storefront: PublicStorefront }) {
   const router = useRouter();
-  const [cart, setCart] = useState<PosCartLine[]>([]);
+  const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
+  const [cart, setCart] = useState<PosCartLine[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(`tillflow_cart_${storefront.slug}`);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as PosCartLine[];
+      const productIds = new Set(storefront.products.map((product) => product.id));
+      return parsed.filter((line) => productIds.has(line.productId));
+    } catch {
+      return [];
+    }
+  });
   const [selectionState, setSelectionState] = useState<ProductSelectionState>(() => initialSelections(storefront));
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => storefront.stores[0]?.id ?? '');
   const [customerName, setCustomerName] = useState('');
@@ -100,6 +114,12 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [mobileStep, setMobileStep] = useState<'browse' | 'cart' | 'checkout'>('browse');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    } catch {}
+  }, [cart, CART_STORAGE_KEY]);
 
   const selectedStore = useMemo(
     () => storefront.stores.find((store) => store.id === selectedStoreId) ?? null,
@@ -285,6 +305,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
       }
 
       router.push(payload.redirectPath);
+      try {
+        localStorage.removeItem(CART_STORAGE_KEY);
+      } catch {}
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : 'Unable to start checkout right now.');
     } finally {
@@ -321,10 +344,11 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
         <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-6 sm:px-6 sm:py-8">
           <div className="flex items-start gap-4">
             {storefront.branding.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={storefront.branding.logoUrl}
                 alt={storefront.name}
+                width={80}
+                height={80}
                 className="h-16 w-16 shrink-0 rounded-full object-cover bg-white/20 ring-2 ring-white/30 shadow-lg sm:h-20 sm:w-20"
               />
             ) : (

@@ -7,8 +7,9 @@ import { formAction, withBusinessContext } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
 import { formOptionalString, formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
-import { normalizeStorefrontSlug } from '@/lib/services/online-orders';
+import { normalizeStorefrontSlug, restoreOnlineOrderInventoryReservation } from '@/lib/services/online-orders';
 import { createSalesReturn } from '@/lib/services/returns';
+import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
@@ -351,12 +352,20 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       where: { id: orderId, businessId },
       select: {
         id: true,
+        storeId: true,
         status: true,
         paymentStatus: true,
         publicToken: true,
         salesInvoiceId: true,
+        paymentCollectionId: true,
         totalPence: true,
         refundStatus: true,
+        lines: {
+          select: {
+            productId: true,
+            qtyBase: true,
+          },
+        },
       },
     });
     if (!order) {
@@ -444,6 +453,13 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
             managerApprovalMode: 'INLINE',
           });
         }
+        const shouldRestoreReservedInventory = order.paymentStatus !== 'PAID' || !order.salesInvoiceId;
+        if (shouldRestoreReservedInventory) {
+          await restoreOnlineOrderInventoryReservation({
+            storeId: order.storeId,
+            lines: order.lines,
+          });
+        }
         data.status = 'CANCELLED';
         data.fulfillmentStatus = 'CANCELLED';
         data.fulfilledAt = null;
@@ -487,6 +503,40 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         nextStatus: data.status,
       },
     }).catch((error) => console.error('[audit]', error));
+
+    revalidatePath('/online-orders');
+    if (business.storefrontSlug) {
+      revalidatePath(`/shop/${business.storefrontSlug}/orders/${order.id}`);
+    }
+    redirect('/online-orders');
+  }, '/online-orders');
+}
+
+export async function recheckOnlineOrderPaymentAction(orderId: string): Promise<void> {
+  return formAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const business = await requireOnlineStorefrontAccess(businessId);
+
+    const order = await prisma.onlineOrder.findFirst({
+      where: { id: orderId, businessId },
+      select: {
+        id: true,
+        paymentCollectionId: true,
+      },
+    });
+
+    if (!order) {
+      throw new Error('Online order not found.');
+    }
+    if (!order.paymentCollectionId) {
+      throw new Error('This order does not have a payment collection to re-check.');
+    }
+
+    await checkMobileMoneyCollectionStatus({
+      businessId,
+      collectionId: order.paymentCollectionId,
+      force: true,
+    });
 
     revalidatePath('/online-orders');
     if (business.storefrontSlug) {

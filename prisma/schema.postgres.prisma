@@ -568,6 +568,19 @@ model OnlineOrder {
   @@index([paymentStatus, createdAt])
 }
 
+model WebhookDeadLetter {
+  id           String   @id @default(cuid())
+  source       String
+  payload      String
+  errorMessage String?
+  resolved     Boolean  @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([source, resolved])
+}
+
 model OnlineOrderLine {
   id                String   @id @default(cuid())
   onlineOrderId     String

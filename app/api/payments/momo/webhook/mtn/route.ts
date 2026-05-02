@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { handleMobileMoneyWebhook } from '@/lib/services/mobile-money';
 
 function headersToObject(request: NextRequest): Record<string, string> {
@@ -20,14 +21,14 @@ function verifyWebhookSecret(headers: Record<string, string>): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const headers = headersToObject(request);
-    if (!verifyWebhookSecret(headers)) {
-      return NextResponse.json({ error: 'Unauthorized webhook request.' }, { status: 401 });
-    }
+  const headers = headersToObject(request);
+  if (!verifyWebhookSecret(headers)) {
+    return NextResponse.json({ error: 'Unauthorized webhook request.' }, { status: 401 });
+  }
 
-    const contentType = request.headers.get('content-type') ?? '';
-    const rawBody = await request.text();
+  const contentType = request.headers.get('content-type') ?? '';
+  const rawBody = await request.text();
+  try {
     let parsedBody: unknown = rawBody;
 
     if (contentType.includes('application/json')) {
@@ -48,15 +49,21 @@ export async function POST(request: NextRequest) {
       ok: true,
       received: result.received,
       updated: result.updated,
-      ignored: result.ignored,
-    });
+        ignored: result.ignored,
+      });
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : 'Webhook processing failed.',
-      },
-      { status: 500 }
-    );
+    try {
+      await prisma.webhookDeadLetter.create({
+        data: {
+          source: 'MOMO_MTN_WEBHOOK',
+          payload: rawBody,
+          errorMessage: error instanceof Error ? error.message : 'Webhook processing failed.',
+        },
+      });
+    } catch (deadLetterError) {
+      console.error('[momo-webhook-dead-letter] Failed to persist dead letter', deadLetterError);
+    }
+
+    return NextResponse.json({ ok: true });
   }
 }
