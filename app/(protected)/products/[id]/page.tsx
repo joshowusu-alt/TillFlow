@@ -11,6 +11,7 @@ import BarcodeScanInput from '@/components/BarcodeScanInput';
 import BarcodeFieldWithGenerate from '@/components/BarcodeFieldWithGenerate';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import ProductImageInput from '@/components/ProductImageInput';
+import ProductHeroImage from './ProductHeroImage';
 
 export default async function ProductDetailPage({
   params,
@@ -81,7 +82,7 @@ export default async function ProductDetailPage({
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-24 h-24 rounded-xl object-cover flex-shrink-0" />
+          <ProductHeroImage imageUrl={product.imageUrl} name={product.name} />
         ) : (
           <div className="w-24 h-24 rounded-xl bg-accentSoft flex items-center justify-center text-3xl font-bold text-accent flex-shrink-0">
             {product.name.charAt(0)}
