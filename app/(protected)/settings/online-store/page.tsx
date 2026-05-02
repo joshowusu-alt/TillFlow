@@ -1,3 +1,4 @@
+import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
@@ -470,34 +471,16 @@ export default async function OnlineStoreSettingsPage({
           </a>
         </div>
 
-        <div className="mt-5 space-y-3">
-          {products.map((product) => (
-            <div key={product.id} className="flex flex-col gap-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                {product.imageUrl ? (
-                  <img src={product.imageUrl} alt={product.name} className="h-12 w-12 rounded-xl object-cover" />
-                ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accentSoft text-lg font-bold text-accent">
-                    {product.name.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <div className="font-medium text-ink">{product.name}</div>
-                  <div className="text-xs text-black/50">
-                    {product.storefrontPublished ? 'Visible online' : 'Hidden from storefront'}
-                  </div>
-                </div>
-              </div>
-
-              <form action={toggleStorefrontProductAction}>
-                <input type="hidden" name="productId" value={product.id} />
-                <input type="hidden" name="publish" value={product.storefrontPublished ? '0' : '1'} />
-                <button type="submit" className={product.storefrontPublished ? 'btn-ghost' : 'btn-primary'}>
-                  {product.storefrontPublished ? 'Hide from storefront' : 'Publish online'}
-                </button>
-              </form>
-            </div>
-          ))}
+        <div className="mt-5">
+          <CatalogueVisibilityFilter
+            products={products.map((p) => ({
+              id: p.id,
+              name: p.name,
+              imageUrl: p.imageUrl,
+              storefrontPublished: p.storefrontPublished,
+              categoryName: p.category?.name ?? null,
+            }))}
+          />
         </div>
       </div>
     </div>

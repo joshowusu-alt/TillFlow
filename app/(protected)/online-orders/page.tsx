@@ -304,141 +304,218 @@ export default async function OnlineOrdersPage({
       })()}
 
       {/* Orders list */}
-      <div className="space-y-4">
-        {orders.length === 0 ? (
-          <div className="card p-6 text-sm text-black/55">
-            {activeTab === 'all' ? 'No online orders yet.' : `No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
-          </div>
-        ) : (
-          orders.map((order) => {
-            const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
-            const statusBorderClass = {
-              AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
-              PAID: 'border-l-4 border-l-blue-400',
-              PREPARING: 'border-l-4 border-l-indigo-400',
-              READY_FOR_PICKUP: 'border-l-4 border-l-emerald-400',
-              COMPLETED: 'border-l-2 border-l-slate-300',
-              CANCELLED: 'border-l-2 border-l-rose-300',
-              PAYMENT_FAILED: 'border-l-2 border-l-rose-300',
-            }[order.status] ?? 'border-l-2 border-l-slate-200';
-            return (
-              <div key={order.id} className={`card overflow-hidden p-0 ${statusDone ? 'opacity-70' : ''}`}>
-                <div className={`flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-display font-bold text-ink">{order.orderNumber}</h2>
-                        <StatusBadge status={order.status} />
-                        <AgeBadge createdAt={order.createdAt} status={order.status} />
-                        {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
-                          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
-                            ⚠ Refund needed
-                          </span>
-                        ) : null}
-                        {order.refundStatus === 'REFUNDED' ? (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                            Refunded
-                          </span>
-                        ) : null}
-                        {order.store ? (
-                          <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
-                            {order.store.name}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="text-base font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
-                    </div>
+      {(() => {
+        if (activeTab !== 'all') {
+          // Filtered tab: flat list
+          return (
+            <div className="space-y-4">
+              {orders.length === 0 ? (
+                <div className="card p-6 text-sm text-black/55">
+                  {`No orders with status "${STATUS_TABS.find(t => t.key === activeTab)?.label}".`}
+                </div>
+              ) : (
+                orders.map((order) => <OrderCard key={order.id} order={order} />)
+              )}
+            </div>
+          );
+        }
 
-                    <div className="font-medium text-sm text-ink">{order.customerName}</div>
+        // All tab: split action-needed vs history
+        const actionOrders = orders.filter((o) =>
+          ['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
+        );
+        const historyOrders = orders.filter((o) =>
+          !['AWAITING_PAYMENT', 'PAID', 'PROCESSING', 'READY_FOR_PICKUP'].includes(o.status),
+        );
 
-                    {order.customerPhone ? (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
-                        <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
-                        <a
-                          href={`tel:${order.customerPhone}`}
-                          className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
-                        >
-                          Call
-                        </a>
-                        <a
-                          href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                        >
-                          WhatsApp
-                        </a>
-                      </div>
-                    ) : null}
+        if (orders.length === 0) {
+          return <div className="card p-6 text-sm text-black/55">No online orders yet.</div>;
+        }
 
-                    <div className="text-xs text-black/50">{formatDateTime(order.createdAt)}</div>
-
-                    <div className="text-xs text-black/45 leading-relaxed">
-                      {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
-                    </div>
-
-                    {order.paymentCollection?.providerStatus ? (
-                      <div className="text-xs text-black/40">
-                        Provider: {order.paymentCollection.providerStatus}
-                        {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
-                      </div>
-                    ) : null}
-                    {order.paymentCollection?.failureReason ? (
-                      <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
-                    ) : null}
-
-                    {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
-                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
-                        <p className="text-xs text-rose-800 font-medium">
-                          Payment was received but this order was cancelled. The customer needs a manual refund.
-                        </p>
-                        <form action={markOrderRefundedAction} className="flex flex-wrap items-end gap-2">
-                          <input type="hidden" name="orderId" value={order.id} />
-                          <div className="flex-1 min-w-[140px]">
-                            <label htmlFor={`refundNote-${order.id}`} className="text-[10px] font-semibold text-rose-700 uppercase tracking-wide block mb-1">
-                              Refund note (optional)
-                            </label>
-                            <input
-                              id={`refundNote-${order.id}`}
-                              type="text"
-                              name="refundNote"
-                              placeholder="e.g. MoMo returned via 055…"
-                              className="w-full rounded-md border border-rose-200 bg-white px-2 py-1.5 text-xs focus:border-rose-400 focus:outline-none"
-                            />
-                          </div>
-                          <button
-                            type="submit"
-                            aria-label={`Mark order ${order.orderNumber} as refunded`}
-                            className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
-                          >
-                            Mark as refunded
-                          </button>
-                        </form>
-                      </div>
-                    ) : null}
-
-                    {order.refundStatus === 'REFUNDED' && order.refundNote ? (
-                      <div className="text-xs text-emerald-700">
-                        Refund note: {order.refundNote}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="flex-shrink-0 lg:pl-4">
-                    <NextStepCTA
-                      order={{
-                        id: order.id,
-                        status: order.status,
-                        paymentStatus: order.paymentStatus,
-                        paymentCollectionId: order.paymentCollectionId,
-                      }}
-                    />
+        return (
+          <div className="space-y-8">
+            {actionOrders.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+                    {actionOrders.length} {actionOrders.length === 1 ? 'order' : 'orders'} need attention
                   </div>
                 </div>
+                <div className="space-y-4">
+                  {actionOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+                </div>
               </div>
-            );
-          })
-        )}
+            )}
+            {historyOrders.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">
+                  Recent history
+                </div>
+                <div className="space-y-3">
+                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+type OrderRow = {
+  id: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus: string;
+  paymentCollectionId: string | null;
+  fulfillmentStatus: string;
+  refundStatus: string | null;
+  refundNote: string | null;
+  salesInvoiceId: string | null;
+  customerName: string;
+  customerPhone: string | null;
+  totalPence: number;
+  currency: string;
+  createdAt: Date;
+  paidAt: Date | null;
+  publicToken: string | null;
+  store: { id: string; name: string } | null;
+  paymentCollection: {
+    providerStatus: string | null;
+    providerReference: string | null;
+    failureReason: string | null;
+  } | null;
+  lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string }>;
+};
+
+function OrderCard({ order }: { order: OrderRow }) {
+  const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
+  const statusBorderClass = ({
+    AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
+    PAID: 'border-l-4 border-l-blue-400',
+    PREPARING: 'border-l-4 border-l-indigo-400',
+    PROCESSING: 'border-l-4 border-l-indigo-400',
+    READY_FOR_PICKUP: 'border-l-4 border-l-emerald-400',
+    COMPLETED: 'border-l-2 border-l-slate-300',
+    CANCELLED: 'border-l-2 border-l-rose-300',
+    PAYMENT_FAILED: 'border-l-2 border-l-rose-300',
+  } as Record<string, string>)[order.status] ?? 'border-l-2 border-l-slate-200';
+
+  return (
+    <div className={`card overflow-hidden p-0 ${statusDone ? 'opacity-70' : ''}`}>
+      <div className={`flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-display font-bold text-ink">{order.orderNumber}</h2>
+              <StatusBadge status={order.status} />
+              <AgeBadge createdAt={order.createdAt} status={order.status} />
+              {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+                <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+                  ⚠ Refund needed
+                </span>
+              ) : null}
+              {order.refundStatus === 'REFUNDED' ? (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                  Refunded
+                </span>
+              ) : null}
+              {order.store ? (
+                <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
+                  {order.store.name}
+                </span>
+              ) : null}
+            </div>
+            <div className="text-base font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+          </div>
+
+          <div className="font-medium text-sm text-ink">{order.customerName}</div>
+
+          {order.customerPhone ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
+              <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
+              <a
+                href={`tel:${order.customerPhone}`}
+                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+              >
+                Call
+              </a>
+              <a
+                href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+              >
+                WhatsApp
+              </a>
+            </div>
+          ) : null}
+
+          <div className="text-xs text-black/50">{formatDateTime(order.createdAt)}</div>
+
+          <div className="text-xs text-black/45 leading-relaxed">
+            {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
+          </div>
+
+          {order.paymentCollection?.providerStatus ? (
+            <div className="text-xs text-black/40">
+              Provider: {order.paymentCollection.providerStatus}
+              {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
+            </div>
+          ) : null}
+          {order.paymentCollection?.failureReason ? (
+            <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
+          ) : null}
+
+          {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
+              <p className="text-xs text-rose-800 font-medium">
+                Payment was received but this order was cancelled. The customer needs a manual refund.
+              </p>
+              <form action={markOrderRefundedAction} className="flex flex-wrap items-end gap-2">
+                <input type="hidden" name="orderId" value={order.id} />
+                <div className="flex-1 min-w-[140px]">
+                  <label htmlFor={`refundNote-${order.id}`} className="text-[10px] font-semibold text-rose-700 uppercase tracking-wide block mb-1">
+                    Refund note (optional)
+                  </label>
+                  <input
+                    id={`refundNote-${order.id}`}
+                    type="text"
+                    name="refundNote"
+                    placeholder="e.g. MoMo returned via 055…"
+                    className="w-full rounded-md border border-rose-200 bg-white px-2 py-1.5 text-xs focus:border-rose-400 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  aria-label={`Mark order ${order.orderNumber} as refunded`}
+                  className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 transition"
+                >
+                  Mark as refunded
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {order.refundStatus === 'REFUNDED' && order.refundNote ? (
+            <div className="text-xs text-emerald-700">
+              Refund note: {order.refundNote}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex-shrink-0 lg:pl-4">
+          <NextStepCTA
+            order={{
+              id: order.id,
+              status: order.status,
+              paymentStatus: order.paymentStatus,
+              paymentCollectionId: order.paymentCollectionId,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
