@@ -312,29 +312,41 @@ export default async function OnlineOrdersPage({
         ) : (
           orders.map((order) => {
             const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
+            const statusBorderClass = {
+              AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
+              PAID: 'border-l-4 border-l-blue-400',
+              PREPARING: 'border-l-4 border-l-indigo-400',
+              READY_FOR_PICKUP: 'border-l-4 border-l-emerald-400',
+              COMPLETED: 'border-l-2 border-l-slate-300',
+              CANCELLED: 'border-l-2 border-l-rose-300',
+              PAYMENT_FAILED: 'border-l-2 border-l-rose-300',
+            }[order.status] ?? 'border-l-2 border-l-slate-200';
             return (
-              <div key={order.id} className={`card p-5 ${statusDone ? 'opacity-70' : ''}`}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-base font-display font-semibold text-ink">{order.orderNumber}</h2>
-                      <StatusBadge status={order.status} />
-                      <AgeBadge createdAt={order.createdAt} status={order.status} />
-                      {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
-                        <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
-                          ⚠ Refund needed
-                        </span>
-                      ) : null}
-                      {order.refundStatus === 'REFUNDED' ? (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                          Refunded
-                        </span>
-                      ) : null}
-                      {order.store ? (
-                        <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
-                          {order.store.name}
-                        </span>
-                      ) : null}
+              <div key={order.id} className={`card overflow-hidden p-0 ${statusDone ? 'opacity-70' : ''}`}>
+                <div className={`flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-display font-bold text-ink">{order.orderNumber}</h2>
+                        <StatusBadge status={order.status} />
+                        <AgeBadge createdAt={order.createdAt} status={order.status} />
+                        {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
+                          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-700">
+                            ⚠ Refund needed
+                          </span>
+                        ) : null}
+                        {order.refundStatus === 'REFUNDED' ? (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                            Refunded
+                          </span>
+                        ) : null}
+                        {order.store ? (
+                          <span className="rounded-full bg-black/[0.04] px-2.5 py-0.5 text-[10px] font-medium text-black/55">
+                            {order.store.name}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-base font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
                     </div>
 
                     <div className="font-medium text-sm text-ink">{order.customerName}</div>
@@ -359,9 +371,7 @@ export default async function OnlineOrdersPage({
                       </div>
                     ) : null}
 
-                    <div className="text-xs text-black/50">
-                      {formatDateTime(order.createdAt)} · <span className="font-semibold text-ink">{formatMoney(order.totalPence, order.currency)}</span>
-                    </div>
+                    <div className="text-xs text-black/50">{formatDateTime(order.createdAt)}</div>
 
                     <div className="text-xs text-black/45 leading-relaxed">
                       {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}

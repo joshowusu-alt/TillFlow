@@ -85,6 +85,40 @@ function isPaidStatus(status: string) {
   return status === 'PAID' || status === 'PROCESSING' || status === 'READY_FOR_PICKUP' || status === 'COMPLETED';
 }
 
+function friendlyStatus(status: string): string {
+  const map: Record<string, string> = {
+    AWAITING_PAYMENT: 'Awaiting payment',
+    PAID: 'Payment confirmed',
+    PREPARING: 'Being prepared',
+    READY_FOR_PICKUP: 'Ready for pickup',
+    COMPLETED: 'Collected',
+    CANCELLED: 'Cancelled',
+    PAYMENT_FAILED: 'Payment failed',
+  };
+  return map[status] ?? status.split('_').join(' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function friendlyPaymentStatus(status: string): string {
+  const map: Record<string, string> = {
+    PENDING: 'Pending',
+    PAID: 'Confirmed',
+    FAILED: 'Failed',
+    REFUNDED: 'Refunded',
+  };
+  return map[status] ?? status;
+}
+
+function friendlyFulfillmentStatus(status: string): string {
+  const map: Record<string, string> = {
+    PENDING: 'Not started',
+    PREPARING: 'In preparation',
+    READY: 'Ready',
+    COLLECTED: 'Collected',
+    CANCELLED: 'Cancelled',
+  };
+  return map[status] ?? status;
+}
+
 function buildPaidShareUrl(order: PublicOrder, pickupLocation: string | null) {
   const lines = [
     `*${order.storefrontName}* — Order ${order.orderNumber}`,
@@ -404,9 +438,9 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             </div>
 
             <div className={`mt-6 rounded-2xl border px-5 py-4 text-sm ${statusTone(order.status)}`}>
-              <div className="font-semibold">Current status: {order.status.split('_').join(' ')}</div>
-              <div className="mt-1">
-                Payment: {order.paymentStatus} · Fulfilment: {order.fulfillmentStatus}
+              <div className="font-semibold">{friendlyStatus(order.status)}</div>
+              <div className="mt-1 text-sm opacity-80">
+                Payment: {friendlyPaymentStatus(order.paymentStatus)} · Fulfilment: {friendlyFulfillmentStatus(order.fulfillmentStatus)}
               </div>
               {order.paymentCollection?.providerStatus ? (
                 <div className="mt-1 text-xs opacity-80">Provider status: {order.paymentCollection.providerStatus}</div>

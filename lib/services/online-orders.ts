@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { buildQtyByProductMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
+import { normalizePaymentMode, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 
 export type StorefrontCatalogProduct = {
   id: string;
@@ -60,6 +61,8 @@ export type PublicStorefront = {
   stores: StorefrontPickupStore[];
   products: Array<StorefrontCatalogProduct & { onHandByStore: Record<string, number> }>;
   openStatus: OpenStatus | null;
+  paymentConfig: StorefrontPaymentConfig;
+  prepMinutes: number;
 };
 
 export type OnlineCheckoutItemInput = {
@@ -75,7 +78,7 @@ export type CreateOnlineCheckoutInput = {
   customerPhone: string;
   customerEmail?: string | null;
   customerNotes?: string | null;
-  network: 'MTN' | 'TELECEL' | 'AIRTELTIGO';
+  network?: 'MTN' | 'TELECEL' | 'AIRTELTIGO' | null;
   items: OnlineCheckoutItemInput[];
 };
 
@@ -296,6 +299,15 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontSlug: true,
       storefrontHoursJson: true,
       storefrontPickupPrepMinutes: true,
+      storefrontPaymentMode: true,
+      storefrontMomoNumber: true,
+      storefrontMomoNetwork: true,
+      storefrontMerchantShortcode: true,
+      storefrontBankName: true,
+      storefrontBankAccountName: true,
+      storefrontBankAccountNumber: true,
+      storefrontBankBranch: true,
+      storefrontPaymentNote: true,
       storefrontHeadline: true,
       storefrontDescription: true,
       storefrontPickupInstructions: true,
@@ -414,6 +426,18 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
       tagline: (business as any).storefrontTagline ?? null,
     },
     openStatus,
+    paymentConfig: {
+      mode: normalizePaymentMode((business as any).storefrontPaymentMode),
+      momoNumber: (business as any).storefrontMomoNumber ?? null,
+      momoNetwork: (business as any).storefrontMomoNetwork ?? null,
+      merchantShortcode: (business as any).storefrontMerchantShortcode ?? null,
+      bankName: (business as any).storefrontBankName ?? null,
+      bankAccountName: (business as any).storefrontBankAccountName ?? null,
+      bankAccountNumber: (business as any).storefrontBankAccountNumber ?? null,
+      bankBranch: (business as any).storefrontBankBranch ?? null,
+      paymentNote: (business as any).storefrontPaymentNote ?? null,
+    },
+    prepMinutes: (business as any).storefrontPickupPrepMinutes ?? 0,
     stores: business.stores.map((store) => ({
       id: store.id,
       name: store.name,
@@ -477,7 +501,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     throw new UserError('Enter your name before checking out.');
   }
   if (!rawCustomerPhone) {
-    throw new UserError('Enter your mobile money number before checking out.');
+    throw new UserError('Enter your phone number before checking out.');
   }
   if (!input.items.length) {
     throw new UserError('Add at least one item to your cart.');
@@ -485,7 +509,7 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
 
   const customerPhone = normalizeAfricanMsisdn(rawCustomerPhone, currencyToDialCode(business.currency));
   if (!customerPhone || customerPhone.length < 10) {
-    throw new UserError('Enter a valid mobile money number.');
+    throw new UserError('Enter a valid phone number (e.g. 024 123 4567).');
   }
 
   const requestedStoreId = input.storeId?.trim() ?? '';

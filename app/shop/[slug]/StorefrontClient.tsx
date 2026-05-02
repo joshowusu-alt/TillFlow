@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import { resolveBrandStyles } from '@/lib/storefront-branding';
+import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
 
 const ALL_CATEGORIES = '__all__';
@@ -72,6 +73,50 @@ function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.935-2.186 2.25 2.25 0 00-3.935 2.186z" />
     </svg>
+  );
+}
+
+function PaymentPreviewCard({
+  paymentConfig,
+  currency,
+}: {
+  paymentConfig: import('@/lib/storefront-payments').StorefrontPaymentConfig;
+  currency: string;
+}) {
+  void currency;
+  const details = getPaymentInstructionDetails(paymentConfig);
+  if (details.manual) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Payment</div>
+        <div className="font-medium text-amber-900">Pay on contact</div>
+        <div className="mt-0.5 text-xs text-amber-800/70">We&apos;ll reach out with payment instructions after you place your order.</div>
+      </div>
+    );
+  }
+  if (!details.ready) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Payment</div>
+        The store will contact you with payment details after ordering.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">How you&apos;ll pay</div>
+      <div className="font-semibold text-sky-900">{details.modeLabel}</div>
+      {details.recipient ? (
+        <div className="mt-0.5 text-xs text-sky-800">
+          {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? 'Merchant number: ' : paymentConfig.mode === 'BANK_TRANSFER' ? 'Account: ' : 'Number: '}
+          <span className="font-mono font-bold">{details.recipient}</span>
+        </div>
+      ) : null}
+      {details.recipientCaption && !details.manual ? (
+        <div className="mt-0.5 text-xs text-sky-700/70">{details.recipientCaption}</div>
+      ) : null}
+      <div className="mt-1 text-xs text-sky-800/70">You&apos;ll receive a reference code after placing your order.</div>
+    </div>
   );
 }
 
@@ -174,7 +219,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return productsForStore.filter((p) => {
+    const filtered = productsForStore.filter((p) => {
       if (selectedCategoryId !== ALL_CATEGORIES && p.categoryId !== selectedCategoryId) {
         return false;
       }
@@ -183,6 +228,11 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
         p.name.toLowerCase().includes(q) ||
         (p.categoryName?.toLowerCase() ?? '').includes(q)
       );
+    });
+    return filtered.sort((a, b) => {
+      if (a.onHandBase > 0 && b.onHandBase <= 0) return -1;
+      if (a.onHandBase <= 0 && b.onHandBase > 0) return 1;
+      return 0;
     });
   }, [productsForStore, searchQuery, selectedCategoryId]);
 
@@ -644,8 +694,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex flex-col overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5 ${
-                          inStock ? 'transition hover:shadow-md hover:ring-black/10' : 'opacity-60'
+                        className={`group flex flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/5 ${
+                          inStock ? 'shadow-sm transition hover:shadow-md hover:ring-black/10' : 'opacity-50 shadow-none'
                         }`}
                       >
                         {/* Image area — compact 80px */}
@@ -977,22 +1027,35 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     {storefront.pickupInstructions}
                   </div>
                 ) : null}
+                <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
                 <div>
                   <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Your name</label>
                   <input className="input mt-1" placeholder="Full name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Mobile money number</label>
-                  <input className="input mt-1" placeholder="e.g. 024 123 4567" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">
+                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'Mobile money number' : 'Your phone number'}
+                  </label>
+                  <input
+                    className="input mt-1"
+                    placeholder="e.g. 024 123 4567"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                  />
+                  {storefront.paymentConfig.mode === 'MOMO_NUMBER' && (
+                    <p className="mt-1 text-[10px] text-black/45">Payment will be requested on this number.</p>
+                  )}
                 </div>
-                <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Network</label>
-                  <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
-                    <option value="MTN">MTN</option>
-                    <option value="TELECEL">Telecel</option>
-                    <option value="AIRTELTIGO">AirtelTigo</option>
-                  </select>
-                </div>
+                {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
+                  <div>
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Network</label>
+                    <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
+                      <option value="MTN">MTN</option>
+                      <option value="TELECEL">Telecel</option>
+                      <option value="AIRTELTIGO">AirtelTigo</option>
+                    </select>
+                  </div>
+                ) : null}
                 <div>
                   <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Email (optional)</label>
                   <input className="input mt-1" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
@@ -1011,7 +1074,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   disabled={submitting || cart.length === 0}
                   onClick={submitCheckout}
                 >
-                  {submitting ? 'Starting payment…' : cart.length === 0 ? 'Place Order' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
+                  {submitting ? 'Placing order…' : cart.length === 0 ? 'Place Order' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
                 </button>
                 <div className="text-center text-[11px] text-black/40">
                   After placing your order, you&apos;ll receive payment instructions and a unique reference code.
@@ -1181,6 +1244,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               {storefront.pickupInstructions}
             </div>
           ) : null}
+          <div className="mb-4">
+            <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
+          </div>
 
           <div className="space-y-4">
             <div>
@@ -1188,17 +1254,29 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               <input className="input mt-1" placeholder="Full name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Mobile money number</label>
-              <input className="input mt-1" placeholder="e.g. 024 123 4567" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} />
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">
+                {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'Mobile money number' : 'Your phone number'}
+              </label>
+              <input
+                className="input mt-1"
+                placeholder="e.g. 024 123 4567"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+              />
+              {storefront.paymentConfig.mode === 'MOMO_NUMBER' && (
+                <p className="mt-1 text-[10px] text-black/45">Payment will be requested on this number.</p>
+              )}
             </div>
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Network</label>
-              <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
-                <option value="MTN">MTN</option>
-                <option value="TELECEL">Telecel</option>
-                <option value="AIRTELTIGO">AirtelTigo</option>
-              </select>
-            </div>
+            {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Network</label>
+                <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
+                  <option value="MTN">MTN</option>
+                  <option value="TELECEL">Telecel</option>
+                  <option value="AIRTELTIGO">AirtelTigo</option>
+                </select>
+              </div>
+            ) : null}
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Email (optional)</label>
               <input className="input mt-1" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
@@ -1221,7 +1299,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
             disabled={submitting || cart.length === 0}
             onClick={submitCheckout}
           >
-            {submitting ? 'Starting payment…' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
+            {submitting ? 'Placing order…' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
           </button>
           <div className="mt-3 text-center text-[11px] text-black/40">
             After placing your order, you&apos;ll receive payment instructions and a unique reference code.

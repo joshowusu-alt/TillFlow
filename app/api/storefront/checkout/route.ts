@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
       customerEmail: body?.customerEmail ? String(body.customerEmail) : null,
       customerNotes: body?.customerNotes ? String(body.customerNotes) : null,
       network:
-        body?.network === 'TELECEL' || body?.network === 'AIRTELTIGO'
+        body?.network === 'MTN' || body?.network === 'TELECEL' || body?.network === 'AIRTELTIGO'
           ? body.network
-          : 'MTN',
+          : null,
       items: Array.isArray(body?.items)
         ? body.items.map((item: unknown) => {
             const value = item as { productId?: string; unitId?: string; qtyInUnit?: number };
