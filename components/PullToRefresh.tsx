@@ -6,10 +6,16 @@ import { refreshCurrentView } from '@/app/actions/refresh';
 
 const TRIGGER_DISTANCE = 68;
 const MAX_PULL_DISTANCE = 112;
+const REFRESH_PARAM = '__tf_refresh';
+const ROUTER_REFRESH_ONLY_PREFIXES = ['/pos', '/offline/sales', '/receipts'];
 
 function shouldIgnoreTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [data-pull-refresh-ignore="true"]'));
+}
+
+function shouldForceRouteRefresh(pathname: string) {
+  return !ROUTER_REFRESH_ONLY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 export default function PullToRefresh() {
@@ -85,14 +91,28 @@ export default function PullToRefresh() {
       refreshingRef.current = true;
       setRefreshing(true);
       setDistance(TRIGGER_DISTANCE);
+      const originalHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const shouldForceRefresh = shouldForceRouteRefresh(window.location.pathname);
+      let refreshedHref = originalHref;
+      if (shouldForceRefresh) {
+        const refreshedUrl = new URL(window.location.href);
+        refreshedUrl.searchParams.set(REFRESH_PARAM, Date.now().toString());
+        refreshedHref = `${refreshedUrl.pathname}${refreshedUrl.search}${refreshedUrl.hash}`;
+      }
 
       startTransition(() => {
         void refreshCurrentView(window.location.pathname)
           .catch(() => null)
           .finally(() => {
             router.refresh();
+            if (shouldForceRefresh) {
+              router.replace(refreshedHref, { scroll: false });
+            }
 
             window.setTimeout(() => {
+              if (shouldForceRefresh) {
+                window.history.replaceState(window.history.state, '', originalHref);
+              }
               refreshingRef.current = false;
               setRefreshing(false);
               setDistance(0);
