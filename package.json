@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e:critical": "node scripts/critical-path-smoke.js",
+    "test:e2e:mobile": "node scripts/mobile-responsiveness-audit.js",
     "test:e2e:smoke": "node scripts/manual-e2e-check.js",
     "test:e2e:deep": "node scripts/manual-e2e-deep-check.js",
     "test:qa:phase3a": "tsx scripts/phase3a-qa.ts",

@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
+import KeyboardViewportBridge from '@/components/KeyboardViewportBridge';
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <div className="relative z-10">
           <ServiceWorkerRegistration />
+          <KeyboardViewportBridge />
           <Suspense>
             <ToastProvider>
               {children}
