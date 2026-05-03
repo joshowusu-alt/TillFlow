@@ -137,6 +137,7 @@ model Business {
   paymentReconciliations PaymentReconciliation[]
   openingBalances        OpeningBalance[]
   onlineOrders           OnlineOrder[]
+  storefrontCustomers    StorefrontCustomer[]
   messageOutbox          MessageOutbox[]
   controlProfile         ControlBusinessProfile?
 }
@@ -531,6 +532,7 @@ model OnlineOrder {
   id                  String   @id @default(cuid())
   businessId          String
   storeId             String
+  customerId          String?
   paymentCollectionId String?  @unique
   salesInvoiceId      String?  @unique
   publicToken         String   @unique
@@ -562,6 +564,7 @@ model OnlineOrder {
 
   business          Business               @relation(fields: [businessId], references: [id])
   store             Store                  @relation(fields: [storeId], references: [id])
+  customer          StorefrontCustomer?    @relation(fields: [customerId], references: [id])
   paymentCollection MobileMoneyCollection? @relation("OnlineOrderPaymentCollection", fields: [paymentCollectionId], references: [id])
   salesInvoice      SalesInvoice?          @relation("OnlineOrderSalesInvoice", fields: [salesInvoiceId], references: [id])
   lines             OnlineOrderLine[]
@@ -571,6 +574,54 @@ model OnlineOrder {
   @@index([storeId, createdAt])
   @@index([businessId, status, createdAt])
   @@index([paymentStatus, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model StorefrontCustomer {
+  id          String    @id @default(cuid())
+  businessId  String
+  phone       String
+  name        String?
+  email       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  business Business                    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessions StorefrontCustomerSession[]
+  orders   OnlineOrder[]
+
+  @@unique([businessId, phone])
+  @@index([businessId])
+}
+
+model StorefrontCustomerOtp {
+  id         String    @id @default(cuid())
+  businessId String
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId, phone, createdAt])
+  @@index([expiresAt])
+}
+
+model StorefrontCustomerSession {
+  id         String   @id @default(cuid())
+  customerId String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+
+  customer StorefrontCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([expiresAt])
 }
 
 model WebhookDeadLetter {
