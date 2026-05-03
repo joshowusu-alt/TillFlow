@@ -200,7 +200,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
         <main
           id="main-content"
-          className="app-main-shell w-full min-w-0 max-w-full px-4 py-3 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 lg:px-6 lg:py-5 lg:pb-5"
+          className="app-main-shell w-full min-w-0 max-w-full px-4 py-3 pb-[calc(9rem+env(safe-area-inset-bottom,0px))] sm:px-5 sm:py-4 lg:px-6 lg:py-5 lg:pb-5"
         >
           {children}
         </main>

@@ -128,8 +128,7 @@ export default function BottomTabBar() {
   return (
     <nav
       aria-label="Primary mobile navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-[0_-2px_14px_rgba(15,23,42,0.06)] lg:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className="fixed inset-x-0 z-40 border-t border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-[0_-2px_14px_rgba(15,23,42,0.06)] keyboard-safe-fixed-bottom hide-when-keyboard-open lg:hidden"
     >
       <ul className="mx-auto flex max-w-screen-sm items-stretch justify-around gap-1 px-2 py-1.5">
         {tabs.map((tab) => {

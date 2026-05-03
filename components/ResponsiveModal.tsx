@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
+import { useKeyboardSafeViewport } from '@/hooks/useKeyboardSafeViewport';
 
 type ResponsiveModalProps = {
   open: boolean;
@@ -14,6 +15,9 @@ type ResponsiveModalProps = {
   backdropClassName?: string;
   lockBody?: boolean;
   closeOnBackdrop?: boolean;
+  mobileFullscreen?: boolean;
+  footer?: ReactNode;
+  keyboardSafeFooter?: boolean;
 };
 
 export default function ResponsiveModal({
@@ -27,10 +31,14 @@ export default function ResponsiveModal({
   backdropClassName = 'bg-slate-950/40 backdrop-blur-[1.5px]',
   lockBody = true,
   closeOnBackdrop = true,
+  mobileFullscreen = false,
+  footer,
+  keyboardSafeFooter = true,
 }: ResponsiveModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  useKeyboardSafeViewport();
   useBodyScrollLock(open && lockBody);
 
   useEffect(() => {
@@ -70,7 +78,7 @@ export default function ResponsiveModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overlay-shell">
+    <div className={mobileFullscreen ? 'fixed inset-0 z-50 sm:overlay-shell' : 'fixed inset-0 z-50 overlay-shell'}>
       <button
         type="button"
         aria-hidden="true"
@@ -86,10 +94,21 @@ export default function ResponsiveModal({
           aria-label={ariaLabel}
           aria-labelledby={labelledBy}
           tabIndex={-1}
-          className={`mx-auto w-full max-w-full ${maxWidthClassName} max-h-[min(92vh,92dvh)] overflow-y-auto rounded-2xl bg-white shadow-xl ${panelClassName}`}
+          className={`mx-auto flex w-full max-w-full flex-col bg-white shadow-xl ${
+            mobileFullscreen
+              ? 'h-[100dvh] rounded-none sm:h-auto sm:max-h-[min(92vh,92dvh)] sm:rounded-2xl'
+              : 'max-h-[min(92vh,92dvh)] rounded-2xl'
+          } ${maxWidthClassName} ${panelClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
-          {children}
+          <div className="mobile-scroll-panel flex-1">
+            {children}
+          </div>
+          {footer ? (
+            <div className={`border-t border-black/5 bg-white px-4 py-3 ${keyboardSafeFooter ? 'keyboard-safe-bottom' : 'safe-area-bottom'}`}>
+              {footer}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
