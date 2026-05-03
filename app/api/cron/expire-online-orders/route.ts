@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hasValidCronSecret } from '@/lib/cron-auth';
 import { restoreOnlineOrderInventoryReservation } from '@/lib/services/online-orders';
+import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 
 const DEFAULT_EXPIRY_HOURS = 2;
 
@@ -68,6 +69,7 @@ export async function GET(req: NextRequest) {
 
       if (didExpire) {
         expired += 1;
+        await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'CANCELLED' });
       }
     } catch (error) {
       errors.push({

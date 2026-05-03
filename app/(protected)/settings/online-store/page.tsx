@@ -67,6 +67,8 @@ export default async function OnlineStoreSettingsPage({
         storefrontPrimaryColor: true,
         storefrontAccentColor: true,
         storefrontTagline: true,
+        smsNotificationsEnabled: true,
+        smsSenderId: true,
       },
     }),
     prisma.product.findMany({
@@ -253,6 +255,43 @@ export default async function OnlineStoreSettingsPage({
             defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
             defaultPaymentNote={storefrontBusiness.storefrontPaymentNote ?? ''}
           />
+        </SettingsSection>
+
+        <SettingsSection
+          title="SMS notifications"
+          description="Send customers automatic SMS updates when their order status changes."
+          defaultOpen={false}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-black/55">
+              When enabled, customers receive a short branded SMS at key moments: order placed, payment confirmed, ready for pickup, and cancellation. Standard SMS rates apply — disabled by default.
+            </p>
+            <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
+              <input
+                type="checkbox"
+                name="smsNotificationsEnabled"
+                defaultChecked={storefrontBusiness.smsNotificationsEnabled}
+                className="h-4 w-4"
+              />
+              <span className="text-sm font-medium text-ink">Enable SMS order notifications</span>
+            </label>
+            <div>
+              <label className="label">
+                Custom sender ID{' '}
+                <span className="font-normal text-black/40">(optional)</span>
+              </label>
+              <input
+                className="input max-w-xs"
+                name="smsSenderId"
+                defaultValue={storefrontBusiness.smsSenderId ?? ''}
+                placeholder="TillFlow"
+                maxLength={11}
+              />
+              <div className="mt-1 text-xs text-black/50">
+                Leave blank to use <strong>TillFlow</strong> as the sender. Custom sender IDs (max 11 chars) must be pre-approved by your SMS provider.
+              </div>
+            </div>
+          </div>
         </SettingsSection>
 
         <button type="submit" className="btn-primary">

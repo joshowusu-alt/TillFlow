@@ -5,6 +5,7 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { buildQtyByProductMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
+import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { normalizePaymentMode, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 
@@ -78,6 +79,7 @@ export type CreateOnlineCheckoutInput = {
   customerPhone: string;
   customerEmail?: string | null;
   customerNotes?: string | null;
+  customerId?: string | null;
   network?: 'MTN' | 'TELECEL' | 'AIRTELTIGO' | null;
   items: OnlineCheckoutItemInput[];
 };
@@ -581,10 +583,30 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       }
     }
 
+    // Resolve the customer link: prefer the explicit session customerId
+    // when it really belongs to this business, otherwise opportunistically
+    // attach by phone if an account exists. Anonymous orders stay unlinked.
+    let resolvedCustomerId: string | null = null;
+    if (input.customerId) {
+      const sessionCustomer = await tx.storefrontCustomer.findFirst({
+        where: { id: input.customerId, businessId: business.id },
+        select: { id: true },
+      });
+      resolvedCustomerId = sessionCustomer?.id ?? null;
+    }
+    if (!resolvedCustomerId) {
+      const matchByPhone = await tx.storefrontCustomer.findUnique({
+        where: { businessId_phone: { businessId: business.id, phone: customerPhone } },
+        select: { id: true },
+      });
+      resolvedCustomerId = matchByPhone?.id ?? null;
+    }
+
     return tx.onlineOrder.create({
       data: {
         businessId: business.id,
         storeId: store.id,
+        customerId: resolvedCustomerId,
         publicToken,
         orderNumber,
         customerName,
@@ -619,6 +641,9 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
       },
     });
   });
+
+  // Enqueue ORDER_RECEIVED SMS notification (soft-fail — never aborts checkout)
+  await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'ORDER_RECEIVED' });
 
   // Manual reference flow: order is created in AWAITING_PAYMENT state. Customer
   // sends MoMo to the store's payout number using the order reference, then the

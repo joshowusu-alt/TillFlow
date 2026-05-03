@@ -14,6 +14,7 @@ import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHour
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { normalizeBrandColor, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
+import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -66,6 +67,9 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontPrimaryColorRaw = formOptionalString(formData, 'storefrontPrimaryColor');
     const storefrontAccentColorRaw = formOptionalString(formData, 'storefrontAccentColor');
     const storefrontTaglineRaw = formOptionalString(formData, 'storefrontTagline');
+    const smsNotificationsEnabled = formData.get('smsNotificationsEnabled') === 'on';
+    const smsSenderIdRaw = formOptionalString(formData, 'smsSenderId');
+    const smsSenderId = smsSenderIdRaw?.trim().slice(0, 11) || null;
     const rawSlug = formOptionalString(formData, 'storefrontSlug') || business.storefrontSlug || business.name;
     const storefrontSlug = normalizeStorefrontSlug(rawSlug);
 
@@ -147,6 +151,8 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
         storefrontPrimaryColor,
         storefrontAccentColor,
         storefrontTagline,
+        smsNotificationsEnabled,
+        smsSenderId,
       },
     });
 
@@ -478,6 +484,15 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       where: { id: order.id },
       data,
     });
+
+    // Enqueue SMS notifications for significant status transitions
+    if (data.status === 'PAID') {
+      await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'PAYMENT_CONFIRMED' });
+    } else if (data.status === 'READY_FOR_PICKUP') {
+      await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'READY_FOR_PICKUP' });
+    } else if (data.status === 'CANCELLED') {
+      await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'CANCELLED' });
+    }
 
     if (commitSale) {
       // For manual reference orders, commit the sale to a SalesInvoice +

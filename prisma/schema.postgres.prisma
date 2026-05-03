@@ -100,6 +100,9 @@ model Business {
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).
   addonOnlineStorefront                Boolean  @default(false)
+  // SMS notifications: merchant opt-in + optional custom sender ID
+  smsNotificationsEnabled              Boolean  @default(false)
+  smsSenderId                          String?
   // Onboarding tracking
   onboardingCompletedAt                DateTime?
   hasDemoData                          Boolean  @default(false)
@@ -134,6 +137,7 @@ model Business {
   paymentReconciliations PaymentReconciliation[]
   openingBalances        OpeningBalance[]
   onlineOrders           OnlineOrder[]
+  messageOutbox          MessageOutbox[]
   controlProfile         ControlBusinessProfile?
 }
 
@@ -1428,4 +1432,36 @@ model OpeningBalance {
 
   @@unique([businessId, accountCode])
   @@index([businessId])
+}
+
+/// Durable SMS outbox for online-order transactional notifications.
+/// Each (onlineOrderId, eventType) pair is unique — duplicate enqueue
+/// attempts are silently deduped. The cron dispatcher polls PENDING rows,
+/// sends via Hubtel, and updates status / retry fields.
+model MessageOutbox {
+  id            String    @id @default(cuid())
+  businessId    String
+  onlineOrderId String?
+  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED
+  eventType     String
+  /// One of: SMS
+  channel       String    @default("SMS")
+  recipient     String
+  body          String
+  /// One of: PENDING | SENT | FAILED
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  payloadJson   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([onlineOrderId, eventType])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([businessId, status, sentAt])
 }

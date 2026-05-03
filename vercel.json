@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/expire-online-orders",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/dispatch-storefront-notifications",
+      "schedule": "* * * * *"
     }
   ],
   "functions": {
