@@ -12,7 +12,7 @@
     },
     {
       "path": "/api/cron/dispatch-storefront-notifications",
-      "schedule": "* * * * *"
+      "schedule": "0 7 * * *"
     }
   ],
   "functions": {
