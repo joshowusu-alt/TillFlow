@@ -621,6 +621,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                     placeholder="Search products…"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
+                    inputMode="search"
                   />
                 </div>
                 {searchQuery && (
@@ -1067,7 +1068,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                 ) : null}
                 <div>
                   <label className="block text-sm font-medium text-black/70">Full name</label>
-                  <input className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                  <input className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-black/70">
@@ -1076,6 +1077,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   <input
                     className="input mt-1.5"
                     placeholder="e.g. 024 123 4567"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                   />
@@ -1095,7 +1099,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                 ) : null}
                 <div>
                   <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
-                  <input className="input mt-1.5" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+                  <input className="input mt-1.5" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
@@ -1126,7 +1130,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
       {/* ── MOBILE CART PANEL ──────────────────────────────── */}
       <div
-        className={`fixed inset-0 z-50 flex flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-x-0 top-0 z-50 flex h-[100dvh] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
           mobileStep === 'cart' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
       >
@@ -1247,7 +1251,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           )}
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pb-10 pt-4">
+        <div className="border-t border-black/5 bg-white px-4 pt-4" style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}>
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70"
@@ -1262,7 +1266,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
       {/* ── MOBILE CHECKOUT PANEL ──────────────────────────── */}
       <div
-        className={`fixed inset-0 z-50 flex flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-x-0 top-0 z-50 flex h-[100dvh] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
           mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
       >
@@ -1313,7 +1317,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-black/70">Full name</label>
-              <input className="input mt-1" placeholder="Full name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+              <input className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-black/70">
@@ -1322,6 +1326,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               <input
                 className="input mt-1"
                 placeholder="e.g. 024 123 4567"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
               />
@@ -1341,7 +1348,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
             ) : null}
             <div>
               <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
-              <input className="input mt-1" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+              <input className="input mt-1" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
@@ -1353,10 +1360,10 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           </div>
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pb-10 pt-4">
+        <div className="border-t border-black/5 bg-white px-4 pt-4" style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}>
           <button
             type="button"
-            className="w-full rounded-2xl px-4 py-4.5 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
+            className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
             style={cart.length > 0 ? primaryStyle : undefined}
             disabled={submitting || cart.length === 0}
             onClick={submitCheckout}
@@ -1380,7 +1387,10 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
       {/* ── FLOATING CART BAR (mobile browse) ──────────────── */}
       {cartItemCount > 0 && mobileStep === 'browse' ? (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-5 lg:hidden">
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 lg:hidden"
+          style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))' }}
+        >
           <button
             type="button"
             className="pointer-events-auto inline-flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98]"

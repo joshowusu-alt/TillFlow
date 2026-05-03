@@ -105,7 +105,8 @@
       "Bash(npm run *)",
       "Bash(grep -oE \"\\(Multi-branch[^<]{0,80}|Add online store|GH₵200|Add-on\\)\")",
       "Bash(grep -oE \"\\(Place Order[^<]{0,40}|Showing [0-9]+ product|Search products by name\\)\")",
-      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\josho\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\c--Users-josho-OneDrive-Desktop-supermarket-pos\\\\\\\\4c945898-d894-4dcc-9d82-ef73e593726c\\\\\\\\tasks\\\\\\\\b4hx5ulnn.output\")"
+      "Bash(cat \"C:\\\\\\\\Users\\\\\\\\josho\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\c--Users-josho-OneDrive-Desktop-supermarket-pos\\\\\\\\4c945898-d894-4dcc-9d82-ef73e593726c\\\\\\\\tasks\\\\\\\\b4hx5ulnn.output\")",
+      "Bash(git -C \"c:/Users/josho/OneDrive/Desktop/supermarket-pos\" log --oneline -15 -- tishgroup-control/components/bulk-roster-client.tsx tishgroup-control/app/businesses/page.tsx)"
     ]
   }
 }
