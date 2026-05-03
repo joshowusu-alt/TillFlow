@@ -373,7 +373,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                         <div className={`h-0.5 flex-1 ${idx < activeStep ? 'bg-emerald-400' : 'bg-black/10'}`} />
                       )}
                     </div>
-                    <div className={`mt-2 text-center text-[9px] font-semibold leading-tight ${
+                    <div className={`mt-2 text-center text-[10px] font-semibold leading-tight ${
                       isActive ? 'text-accent' : isDone ? 'text-emerald-600' : 'text-black/30'
                     }`} style={{ maxWidth: 44 }}>
                       {step}
@@ -389,15 +389,15 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">Reference</div>
-            <div className="mt-1 font-mono text-lg font-bold text-ink">{order.orderNumber}</div>
-            <div className="mt-0.5 text-[10px] text-black/40">Quote when collecting</div>
+            <div className="mt-1.5 font-mono text-xl font-bold tracking-wide text-ink">{order.orderNumber}</div>
+            <div className="mt-1 text-[10px] text-black/40">Quote when collecting</div>
           </div>
           <div className="rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">
               {paid ? 'Total paid' : 'Amount due'}
             </div>
-            <div className="mt-1 text-lg font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
-            <div className="mt-0.5 text-[10px] text-black/40">
+            <div className="mt-1.5 text-xl font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+            <div className="mt-1 text-[10px] text-black/40">
               {order.lines.length} item{order.lines.length !== 1 ? 's' : ''}
             </div>
           </div>
@@ -501,7 +501,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 href={paymentWhatsAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1faa54]"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1faa54] active:scale-[0.99]"
               >
                 <WAIcon />
                 Share payment details
@@ -510,7 +510,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 type="button"
                 onClick={() => void refreshStatus()}
                 disabled={refreshing}
-                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3.5 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent disabled:opacity-50 active:scale-[0.99]"
               >
                 {refreshing ? 'Checking…' : 'I paid — check status'}
               </button>
@@ -521,14 +521,14 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                 href={paidWhatsAppUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1faa54]"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#1faa54] active:scale-[0.99]"
               >
                 <WAIcon />
                 Share order details
               </a>
               <Link
                 href={`/shop/${order.storefrontSlug}`}
-                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3.5 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+                className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
               >
                 Back to store
               </Link>
@@ -536,7 +536,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
           ) : (
             <Link
               href={`/shop/${order.storefrontSlug}`}
-              className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3.5 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+              className="inline-flex items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-4 text-sm font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
             >
               Back to store
             </Link>

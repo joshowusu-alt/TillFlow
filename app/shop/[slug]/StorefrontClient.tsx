@@ -132,7 +132,7 @@ function initialSelections(storefront: PublicStorefront) {
   }, {});
 }
 
-const PRODUCTS_PER_PAGE = 12;
+const PRODUCTS_PER_PAGE = 24;
 
 export default function StorefrontClient({ storefront }: { storefront: PublicStorefront }) {
   const router = useRouter();
@@ -238,10 +238,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
-  const pagedProducts = filteredProducts.slice(
-    (safePage - 1) * PRODUCTS_PER_PAGE,
-    safePage * PRODUCTS_PER_PAGE,
-  );
+  const pagedProducts = filteredProducts.slice(0, safePage * PRODUCTS_PER_PAGE);
 
   function handleSearch(value: string) {
     setSearchQuery(value);
@@ -736,7 +733,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                         {/* Image area — compact 80px */}
                         <button
                           type="button"
-                          className="relative h-20 w-full overflow-hidden bg-slate-50 text-left sm:h-24 lg:h-28"
+                          className="relative h-28 w-full overflow-hidden bg-slate-50 text-left sm:h-32 lg:h-36"
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
@@ -847,7 +844,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                                 </div>
                                 <button
                                   type="button"
-                                  className="flex h-8 flex-1 items-center justify-center rounded-lg text-xs font-semibold text-white transition hover:opacity-90"
+                                  className="flex h-9 flex-1 items-center justify-center rounded-lg text-sm font-bold text-white transition active:scale-[0.97] hover:opacity-90"
                                   style={primaryStyle}
                                   onClick={() => addToCart(product.id)}
                                 >
@@ -862,28 +859,18 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   })}
                 </div>
 
-                {totalPages > 1 && (
-                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-white px-5 py-3 shadow-sm ring-1 ring-black/5">
+                {safePage < totalPages && (
+                  <div className="mt-6 flex flex-col items-center gap-2">
                     <button
                       type="button"
-                      className="btn-ghost text-sm disabled:opacity-40"
-                      disabled={safePage <= 1}
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="rounded-2xl border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-black/20 hover:shadow-md active:scale-[0.98]"
+                      onClick={() => setCurrentPage((p) => p + 1)}
                     >
-                      ← Previous
+                      Load more products
                     </button>
-                    <span className="text-sm text-black/55">
-                      Page {safePage} of {totalPages}
-                      <span className="ml-2 text-black/35">({filteredProducts.length})</span>
+                    <span className="text-[11px] text-black/35">
+                      Showing {pagedProducts.length} of {filteredProducts.length}
                     </span>
-                    <button
-                      type="button"
-                      className="btn-ghost text-sm disabled:opacity-40"
-                      disabled={safePage >= totalPages}
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    >
-                      Next →
-                    </button>
                   </div>
                 )}
 
@@ -923,7 +910,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                             <button
                               type="button"
                               onClick={() => addToCart(product.id)}
-                              className="shrink-0 rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                              className="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 active:scale-[0.97]"
+                              style={primaryStyle}
                             >
                               + Add
                             </button>
@@ -990,10 +978,13 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                           <div className="text-sm font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
                           <button
                             type="button"
-                            className="mt-0.5 text-xs font-medium text-rose-600 hover:text-rose-700"
+                            aria-label="Remove item"
+                            className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-black/30 transition hover:bg-rose-50 hover:text-rose-600 active:bg-rose-100"
                             onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
                           >
-                            Remove
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1032,7 +1023,8 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                           <button
                             type="button"
                             onClick={() => addToCart(product.id)}
-                            className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                            className="rounded-full px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 active:scale-[0.97]"
+                            style={primaryStyle}
                           >
                             + Add
                           </button>
@@ -1065,37 +1057,36 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
             {/* Checkout section */}
             <div className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-              <h2 className="text-base font-semibold text-ink">Checkout</h2>
-              <div className="mt-4 space-y-3">
+              <h2 className="text-base font-semibold text-ink">Your details</h2>
+              <div className="mt-4 space-y-4">
                 {storefront.pickupInstructions ? (
                   <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
                     <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
                     {storefront.pickupInstructions}
                   </div>
                 ) : null}
-                <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Your name</label>
-                  <input className="input mt-1" placeholder="Full name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+                  <label className="block text-sm font-medium text-black/70">Full name</label>
+                  <input className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">
-                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'Mobile money number' : 'Your phone number'}
+                  <label className="block text-sm font-medium text-black/70">
+                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'MoMo number' : 'Phone number'}
                   </label>
                   <input
-                    className="input mt-1"
+                    className="input mt-1.5"
                     placeholder="e.g. 024 123 4567"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                   />
                   {storefront.paymentConfig.mode === 'MOMO_NUMBER' && (
-                    <p className="mt-1 text-[10px] text-black/45">Payment will be requested on this number.</p>
+                    <p className="mt-1 text-xs text-black/45">Payment will be sent to this number.</p>
                   )}
                 </div>
                 {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
                   <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Network</label>
-                    <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
+                    <label className="block text-sm font-medium text-black/70">MoMo network</label>
+                    <select className="input mt-1.5" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
                       <option value="MTN">MTN</option>
                       <option value="TELECEL">Telecel</option>
                       <option value="AIRTELTIGO">AirtelTigo</option>
@@ -1103,19 +1094,20 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                   </div>
                 ) : null}
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Email (optional)</label>
-                  <input className="input mt-1" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+                  <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
+                  <input className="input mt-1.5" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wider text-black/50">Pickup note (optional)</label>
-                  <textarea className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
+                  <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
+                  <textarea className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
                 </div>
+                <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
                 {error ? (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">{error}</div>
                 ) : null}
                 <button
                   type="button"
-                  className="w-full rounded-xl px-4 py-3.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
+                  className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
                   style={cart.length > 0 ? primaryStyle : undefined}
                   disabled={submitting || cart.length === 0}
                   onClick={submitCheckout}
@@ -1179,10 +1171,13 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                       <div className="font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
                       <button
                         type="button"
-                        className="mt-0.5 text-xs font-medium text-rose-600 hover:text-rose-700"
+                        aria-label="Remove item"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-black/30 transition hover:bg-rose-50 hover:text-rose-600 active:bg-rose-100"
                         onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
                       >
-                        Remove
+                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -1317,12 +1312,12 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
           <div className="space-y-4">
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Your name</label>
+              <label className="block text-sm font-medium text-black/70">Full name</label>
               <input className="input mt-1" placeholder="Full name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">
-                {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'Mobile money number' : 'Your phone number'}
+              <label className="block text-sm font-medium text-black/70">
+                {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'MoMo number' : 'Phone number'}
               </label>
               <input
                 className="input mt-1"
@@ -1336,7 +1331,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
             </div>
             {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
               <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Network</label>
+                <label className="block text-sm font-medium text-black/70">MoMo network</label>
                 <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
                   <option value="MTN">MTN</option>
                   <option value="TELECEL">Telecel</option>
@@ -1345,11 +1340,11 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               </div>
             ) : null}
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Email (optional)</label>
+              <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
               <input className="input mt-1" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-black/50">Pickup note (optional)</label>
+              <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
               <textarea className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
             </div>
             {error ? (
@@ -1361,7 +1356,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
         <div className="border-t border-black/5 bg-white px-4 pb-10 pt-4">
           <button
             type="button"
-            className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70"
+            className="w-full rounded-2xl px-4 py-4.5 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
             style={cart.length > 0 ? primaryStyle : undefined}
             disabled={submitting || cart.length === 0}
             onClick={submitCheckout}

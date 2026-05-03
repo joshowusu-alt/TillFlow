@@ -212,21 +212,25 @@ export default async function OnlineOrdersPage({
 
       {/* Status summary cards */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <div className="card p-4">
+        <div className={`card p-4 ${awaiting > 0 ? 'ring-1 ring-amber-200 bg-amber-50/40' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Awaiting payment</div>
-          <div className={`mt-1.5 text-2xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-ink'}`}>{awaiting}</div>
+          <div className={`mt-1.5 text-3xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-black/20'}`}>{awaiting}</div>
+          {awaiting > 0 && <div className="mt-1 text-[10px] font-medium text-amber-700">Needs confirmation</div>}
         </div>
-        <div className="card p-4">
+        <div className={`card p-4 ${paid > 0 ? 'ring-1 ring-blue-200 bg-blue-50/40' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Payment confirmed</div>
-          <div className={`mt-1.5 text-2xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-ink'}`}>{paid}</div>
+          <div className={`mt-1.5 text-3xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-black/20'}`}>{paid}</div>
+          {paid > 0 && <div className="mt-1 text-[10px] font-medium text-blue-700">Ready to prepare</div>}
         </div>
-        <div className="card p-4">
+        <div className={`card p-4 ${processing > 0 ? 'ring-1 ring-indigo-200 bg-indigo-50/40' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Preparing</div>
-          <div className={`mt-1.5 text-2xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-ink'}`}>{processing}</div>
+          <div className={`mt-1.5 text-3xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-black/20'}`}>{processing}</div>
+          {processing > 0 && <div className="mt-1 text-[10px] font-medium text-indigo-700">In progress</div>}
         </div>
-        <div className="card p-4">
+        <div className={`card p-4 ${ready > 0 ? 'ring-1 ring-emerald-200 bg-emerald-50/40' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Ready for pickup</div>
-          <div className={`mt-1.5 text-2xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-ink'}`}>{ready}</div>
+          <div className={`mt-1.5 text-3xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-black/20'}`}>{ready}</div>
+          {ready > 0 && <div className="mt-1 text-[10px] font-medium text-emerald-700">Awaiting customer</div>}
         </div>
       </div>
 
@@ -409,7 +413,7 @@ function OrderCard({ order }: { order: OrderRow }) {
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-display font-bold text-ink">{order.orderNumber}</h2>
+              <h2 className="text-base font-display font-bold text-ink">{order.orderNumber}</h2>
               <StatusBadge status={order.status} />
               <AgeBadge createdAt={order.createdAt} status={order.status} />
               {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
@@ -428,10 +432,10 @@ function OrderCard({ order }: { order: OrderRow }) {
                 </span>
               ) : null}
             </div>
-            <div className="text-base font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+            <div className="text-xl font-display font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
           </div>
 
-          <div className="font-medium text-sm text-ink">{order.customerName}</div>
+          <div className="font-semibold text-sm text-ink">{order.customerName}</div>
 
           {order.customerPhone ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
