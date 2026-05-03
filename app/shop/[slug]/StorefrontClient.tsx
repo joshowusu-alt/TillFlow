@@ -323,6 +323,14 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
   const orderTotal = totals.netSubtotal + totals.vat;
   const cartProductIds = useMemo(() => new Set(cart.map((line) => line.productId)), [cart]);
+  const cartQtyByProductId = useMemo(
+    () =>
+      cart.reduce<Record<string, number>>((acc, line) => {
+        acc[line.productId] = (acc[line.productId] ?? 0) + line.qtyInUnit;
+        return acc;
+      }, {}),
+    [cart],
+  );
   const recentCartProduct = useMemo(() => {
     const productId = lastAddedProductId ?? cart[cart.length - 1]?.productId;
     return productId ? productMap.get(productId) ?? null : null;
@@ -746,6 +754,14 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
                               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm">
                                 Sold out
                               </span>
+                            </div>
+                          ) : null}
+                          {inStock && cartProductIds.has(product.id) ? (
+                            <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-ink/85 px-1.5 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-sm">
+                              <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                              </svg>
+                              {cartQtyByProductId[product.id] ?? ''}
                             </div>
                           ) : null}
                         </button>
@@ -1278,6 +1294,24 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
             </div>
           ) : null}
           <div className="mb-4">
+            <div className="mb-3 overflow-hidden rounded-xl border border-black/5 bg-white">
+              <div className="border-b border-black/5 bg-black/[0.02] px-3 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">Order summary</div>
+              </div>
+              <div className="divide-y divide-black/5 text-sm">
+                {cartDetails.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="min-w-0 truncate text-ink">{item.product.name}</span>
+                    <span className="shrink-0 text-xs text-black/50">{item.qtyInUnit} × {formatMoney(item.unitPrice, storefront.currency)}</span>
+                    <span className="shrink-0 font-semibold text-ink">{formatMoney(item.total, storefront.currency)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between border-t border-black/5 px-3 py-2 text-sm font-bold text-ink">
+                <span>Total</span>
+                <span>{formatMoney(orderTotal, storefront.currency)}</span>
+              </div>
+            </div>
             <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
           </div>
 

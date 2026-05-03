@@ -11,6 +11,7 @@ import { headers } from 'next/headers';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
+import SettingsSection from '@/components/SettingsSection';
 import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
@@ -130,7 +131,7 @@ export default async function OnlineStoreSettingsPage({
   const storefrontPrimaryColor = resolvePrimaryBrandColor(storefrontBusiness.storefrontPrimaryColor);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Online Storefront"
         subtitle="Publish a public catalogue, accept mobile-money checkout, and manage pickup orders from TillFlow."
@@ -145,12 +146,11 @@ export default async function OnlineStoreSettingsPage({
       ) : null}
 
       {storefrontBusiness.storefrontEnabled && absoluteStorefrontUrl ? (
-        <>
-          <SectionHeading
-            eyebrow="1 · Storefront access"
-            title="Storefront access"
-            description="Link, QR code, and printable poster customers can find you with."
-          />
+        <SettingsSection
+          title="Storefront access"
+          description="Link, QR code, and printable poster customers can find you with."
+          defaultOpen
+        >
           <StorefrontAccessCard
             storeName={storefrontBusiness.name}
             storefrontUrl={absoluteStorefrontUrl}
@@ -158,7 +158,7 @@ export default async function OnlineStoreSettingsPage({
             storePhone={(business as any).phone ?? null}
             brandPrimaryColor={storefrontPrimaryColor}
           />
-        </>
+        </SettingsSection>
       ) : null}
 
       {searchParams?.saved === 'hours' ? (
@@ -167,20 +167,12 @@ export default async function OnlineStoreSettingsPage({
         </div>
       ) : null}
 
-      <form action={updateStorefrontSettingsAction} className="space-y-6">
-        <input
-          type="hidden"
-          name="storefrontPickupInstructions"
-          value={storefrontBusiness.storefrontPickupInstructions ?? ''}
-        />
-
-        <SectionHeading
-          eyebrow="2 · Store identity"
-          title="Store identity"
-          description="Public name, description, and storefront branding."
-        />
-
-        <div className="card p-6">
+      <form action={updateStorefrontSettingsAction} className="space-y-4">
+        <SettingsSection
+          title="Store identity & branding"
+          description="Public name, headline, description, and brand colours."
+          defaultOpen
+        >
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="lg:col-span-2 flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-4">
               <input
@@ -238,7 +230,6 @@ export default async function OnlineStoreSettingsPage({
               />
             </div>
           </div>
-        </div>
 
           <StorefrontBrandingCard
             defaultLogoUrl={storefrontBusiness.storefrontLogoUrl ?? ''}
@@ -248,14 +239,13 @@ export default async function OnlineStoreSettingsPage({
           basicBrandingEnabled={basicBrandingEnabled}
           extendedBrandingEnabled={extendedBrandingEnabled}
         />
+        </SettingsSection>
 
-        <SectionHeading
-          eyebrow="3 · Ordering & payment"
+        <SettingsSection
           title="Ordering & payment"
           description="Choose how customers place orders and see payment instructions."
-        />
-
-        <div className="card p-6">
+          defaultOpen
+        >
           <StorefrontPaymentModeCard
             defaultMode={normalizePaymentMode(storefrontBusiness.storefrontPaymentMode)}
             defaultMomoNumber={storefrontBusiness.storefrontMomoNumber ?? ''}
@@ -267,36 +257,29 @@ export default async function OnlineStoreSettingsPage({
             defaultBankBranch={storefrontBusiness.storefrontBankBranch ?? ''}
             defaultPaymentNote={storefrontBusiness.storefrontPaymentNote ?? ''}
           />
-        </div>
+        </SettingsSection>
 
         <button type="submit" className="btn-primary">
           Save storefront settings
         </button>
       </form>
 
-      <SectionHeading
-        eyebrow="4 · Pickup settings"
+      <SettingsSection
         title="Pickup settings"
-        description="Opening hours and the preparation time shown on the public storefront."
-      />
-
-      {(() => {
-        const parsedHours = parseWeeklyHours(storefrontBusiness.storefrontHoursJson);
-        const hoursEnabled = Boolean(parsedHours);
-        const hours = parsedHours ?? makeDefaultWeeklyHours();
-        const prepMinutes = storefrontBusiness.storefrontPickupPrepMinutes ?? 0;
-        return (
-          <div className="card p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-display font-semibold">Pickup hours</h2>
-                <p className="mt-1 text-sm text-black/55">
-                  When set, customers see a green "Open now · Ready in ~X min" badge — or "Closed · Opens at HH:MM" outside hours. Times are in the business timezone.
-                </p>
-              </div>
-            </div>
-
-            <form action={updateStorefrontHoursAction} className="mt-5 space-y-4">
+        description="Opening hours and preparation time shown on the public storefront."
+        defaultOpen={false}
+      >
+        {(() => {
+          const parsedHours = parseWeeklyHours(storefrontBusiness.storefrontHoursJson);
+          const hoursEnabled = Boolean(parsedHours);
+          const hours = parsedHours ?? makeDefaultWeeklyHours();
+          const prepMinutes = storefrontBusiness.storefrontPickupPrepMinutes ?? 0;
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-black/55">
+                When set, customers see a green &ldquo;Open now · Ready in ~X min&rdquo; badge — or &ldquo;Closed · Opens at HH:MM&rdquo; outside hours.
+              </p>
+              <form action={updateStorefrontHoursAction} className="space-y-4">
               <div>
                 <label className="label">Pickup instructions</label>
                 <textarea
@@ -375,26 +358,20 @@ export default async function OnlineStoreSettingsPage({
               <button type="submit" className="btn-primary">
                 Save pickup hours
               </button>
-            </form>
-          </div>
-        );
-      })()}
+              </form>
+            </div>
+          );
+        })()}
+      </SettingsSection>
 
-      <SectionHeading
-        eyebrow="5 · Catalogue visibility"
+      <SettingsSection
         title="Catalogue visibility"
-        description="Bulk publish or hide products. Per-category controls let you bring whole sections online at once."
-      />
-
-      <div className="card p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-lg font-display font-semibold">Catalogue visibility</h2>
-            <p className="mt-1 text-sm text-black/55">
-              Bulk publish or hide products. {totalPublished} of {totalProducts} active products are currently visible online.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        description={`${totalPublished} of ${totalProducts} products visible online`}
+        badge={`${totalPublished}/${totalProducts}`}
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
             <form action={bulkSetStorefrontPublishAction}>
               <input type="hidden" name="publish" value="1" />
               <button type="submit" className="btn-primary text-sm" disabled={totalProducts === 0 || totalPublished === totalProducts}>
@@ -408,8 +385,6 @@ export default async function OnlineStoreSettingsPage({
               </button>
             </form>
           </div>
-        </div>
-
         {categoryStats.length > 1 ? (
           <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>
@@ -482,7 +457,8 @@ export default async function OnlineStoreSettingsPage({
             }))}
           />
         </div>
-      </div>
+        </div>
+      </SettingsSection>
     </div>
   );
 }
