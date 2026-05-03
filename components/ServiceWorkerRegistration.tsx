@@ -26,13 +26,15 @@ function logServiceWorkerEvent(message: string, payload?: unknown) {
 export default function ServiceWorkerRegistration() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
+  const applyWorkerUpdate = useCallback((worker: ServiceWorker | null) => {
+    if (!worker) return;
+    worker.postMessage('skipWaiting');
+    setWaitingWorker(null);
+  }, []);
+
   const applyUpdate = useCallback(() => {
-    if (waitingWorker) {
-      waitingWorker.postMessage('skipWaiting');
-      setWaitingWorker(null);
-      window.location.reload();
-    }
-  }, [waitingWorker]);
+    applyWorkerUpdate(waitingWorker);
+  }, [applyWorkerUpdate, waitingWorker]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -67,9 +69,11 @@ export default function ServiceWorkerRegistration() {
           });
         }
 
-        // If there's already a waiting worker on load
+        // If there's already a waiting worker on load, activate it immediately.
+        // iOS PWAs are prone to holding old authenticated shells after deploys;
+        // waiting for a manual prompt can leave staff stuck on a stale 500 page.
         if (registration.waiting) {
-          setWaitingWorker(registration.waiting);
+          applyWorkerUpdate(registration.waiting);
         }
 
         // Listen for new installing workers
@@ -79,13 +83,13 @@ export default function ServiceWorkerRegistration() {
 
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // A new version is ready — prompt user
-              setWaitingWorker(newWorker);
+              applyWorkerUpdate(newWorker);
             }
           });
         });
 
-        // Check for updates periodically
+        // Check once on startup, then periodically while the app stays open.
+        registration.update().catch(() => null);
         updateTimer = setInterval(() => {
           registration.update();
         }, 60 * 60 * 1000); // Every hour
@@ -100,7 +104,7 @@ export default function ServiceWorkerRegistration() {
         clearInterval(updateTimer);
       }
     };
-  }, []);
+  }, [applyWorkerUpdate]);
 
   if (!waitingWorker) return null;
 
