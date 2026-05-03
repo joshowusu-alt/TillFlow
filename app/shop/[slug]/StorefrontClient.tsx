@@ -496,7 +496,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
             )}
 
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-bold leading-tight sm:text-2xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
+              <h1 className="break-words hyphens-auto text-xl font-bold leading-tight sm:text-2xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
                 {storefrontTitle}
               </h1>
               {storefront.branding.tagline && (

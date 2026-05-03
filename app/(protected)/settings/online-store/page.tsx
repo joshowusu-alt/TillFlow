@@ -190,12 +190,18 @@ export default async function OnlineStoreSettingsPage({
 
             <div>
               <label className="label">Public link</label>
-              <div className="input flex items-center bg-black/[0.03] text-sm text-black/60">
-                {publicUrl ? publicUrl : 'Save a slug to generate the link'}
+              <div className="input flex items-center bg-black/[0.03] text-sm text-black/60 overflow-hidden">
+                <span className="truncate">
+                  {absoluteStorefrontUrl ?? publicUrl ?? 'Save a slug to generate the link'}
+                </span>
               </div>
-              {publicUrl ? (
+              {absoluteStorefrontUrl ? (
+                <a href={absoluteStorefrontUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline">
+                  Open storefront ↗
+                </a>
+              ) : publicUrl ? (
                 <a href={publicUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-accent hover:underline">
-                  Open storefront
+                  Open storefront ↗
                 </a>
               ) : null}
             </div>
