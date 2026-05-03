@@ -30,6 +30,10 @@ export async function register(formData: FormData) {
   const password = String(formData.get('password') || '');
   const currency = String(formData.get('currency') || 'GHS');
   const mode = String(formData.get('mode') || 'demo');
+  const rawPlan = String(formData.get('plan') || 'STARTER').toUpperCase();
+  const plan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
+    ? (rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
+    : 'STARTER';
 
   // Validation
   if (!businessName || !ownerName || !email || !password) {
@@ -53,7 +57,7 @@ export async function register(formData: FormData) {
       data: {
         name: businessName,
         currency,
-        plan: 'STARTER',
+        plan: plan,
         planStatus: 'ACTIVE',
         vatEnabled: false,
         mode: 'SIMPLE',

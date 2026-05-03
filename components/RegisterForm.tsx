@@ -5,6 +5,7 @@ import { register } from '@/app/actions/register';
 import SubmitButton from '@/components/SubmitButton';
 import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
 import Link from 'next/link';
+import type { BusinessPlan } from '@/lib/features';
 
 const errorMessages: Record<string, string> = {
   missing: 'Please fill in all fields.',
@@ -32,16 +33,17 @@ interface RegisterFormProps {
 }
 
 export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
 
   const canAdvanceFrom1 = businessName.trim().length > 0 && ownerName.trim().length > 0;
   const canAdvanceFrom2 = email.trim().length > 0 && password.length >= 6;
 
-  const stepLabels = ['Business', 'Account', 'Currency'];
+  const stepLabels = isDemo ? ['Business', 'Account', 'Currency'] : ['Business', 'Account', 'Plan', 'Currency'];
   const accentClasses = isDemo
     ? {
         badge: 'bg-amber-50 border-amber-200 text-amber-800',
@@ -199,14 +201,107 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               disabled={!canAdvanceFrom2}
               className={`flex-[2] ${accentClasses.nextBtn}`}
             >
+              {isDemo ? 'Next — Currency' : 'Next — Choose Plan'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3 (fresh only): Plan selection */}
+      {step === 3 && !isDemo && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-black/70 mb-1">Choose your plan</p>
+            <p className="text-xs text-black/45 mb-3">You can upgrade at any time. All plans include the core POS, inventory, and receipts.</p>
+          </div>
+          <div className="space-y-3">
+            {([
+              {
+                id: 'STARTER' as BusinessPlan,
+                name: 'Starter',
+                tagline: 'Core retail operations',
+                features: ['POS & daily sales', 'Inventory management', 'Receipts & payments', 'Offline selling', 'Basic reporting'],
+                color: 'text-gray-700',
+                ring: 'ring-gray-400',
+                bg: 'bg-gray-50',
+              },
+              {
+                id: 'GROWTH' as BusinessPlan,
+                name: 'Growth',
+                tagline: 'Stronger business insight',
+                features: ['Everything in Starter', 'Advanced & financial reports', 'Expense categories', 'Risk monitoring', 'Loyalty points', 'Online storefront (add-on)'],
+                color: 'text-blue-700',
+                ring: 'ring-blue-500',
+                bg: 'bg-blue-50',
+                recommended: true,
+              },
+              {
+                id: 'PRO' as BusinessPlan,
+                name: 'Pro',
+                tagline: 'Multi-branch & online selling',
+                features: ['Everything in Growth', 'Online storefront included', 'Multi-branch management', 'Cash-flow forecasting', 'Executive analytics', 'Full audit log'],
+                color: 'text-purple-700',
+                ring: 'ring-purple-500',
+                bg: 'bg-purple-50',
+              },
+            ] as const).map((plan) => (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => setSelectedPlan(plan.id)}
+                className={`w-full rounded-xl border-2 p-3 text-left transition ${
+                  selectedPlan === plan.id
+                    ? `border-transparent ring-2 ${plan.ring} ${plan.bg}`
+                    : 'border-black/8 bg-white hover:border-black/15'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${plan.color}`}>{plan.name}</span>
+                    {'recommended' in plan && plan.recommended && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Popular</span>
+                    )}
+                  </div>
+                  <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition ${
+                    selectedPlan === plan.id ? `${plan.ring} border-transparent` : 'border-black/20'
+                  }`}>
+                    {selectedPlan === plan.id && (
+                      <div className={`h-2 w-2 rounded-full ${plan.id === 'STARTER' ? 'bg-gray-500' : plan.id === 'GROWTH' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-black/45 mb-1.5">{plan.tagline}</p>
+                <ul className="space-y-0.5">
+                  {plan.features.map((f) => (
+                    <li key={f} className="text-xs text-black/60 flex items-center gap-1.5">
+                      <span className="text-black/25">·</span> {f}
+                    </li>
+                  ))}
+                </ul>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="flex-1 rounded-xl border border-black/10 py-2.5 text-sm font-semibold text-black/60 transition hover:border-black/20 hover:text-black/80"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep(4)}
+              className={`flex-[2] ${accentClasses.nextBtn}`}
+            >
               Next — Currency
             </button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Currency + final submit */}
-      {step === 3 && (
+      {/* Step 3 (demo) or step 4 (fresh): Currency + final submit */}
+      {((step === 3 && isDemo) || (step === 4 && !isDemo)) && (
         <form action={register} className="space-y-4">
           {/* Carry forward all data as hidden fields */}
           <input type="hidden" name="mode" value={isDemo ? 'demo' : 'fresh'} />
@@ -214,6 +309,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
           <input type="hidden" name="ownerName" value={ownerName} />
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="password" value={password} />
+          <input type="hidden" name="plan" value={isDemo ? 'STARTER' : selectedPlan} />
 
           <div>
             <label className="label">Currency</label>
@@ -240,7 +336,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(isDemo ? 2 : 3)}
               className="flex-1 rounded-xl border border-black/10 py-2.5 text-sm font-semibold text-black/60 transition hover:border-black/20 hover:text-black/80"
             >
               Back
