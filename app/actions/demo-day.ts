@@ -437,10 +437,8 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
 }
 
 // --- Registration-time demo product SKUs (from register.ts seedDemoData) ---
-const DEMO_SKUS = [
-  'CARN-001', 'COCA-001', 'MILO-001', 'SUGAR-001', 'RICE-001',
-  'OIL-001', 'INDO-001', 'SOAP-001', 'CORB-001', 'COLG-001',
-];
+// Defined in lib/demo-data-constants.ts so it can be imported by non-server modules.
+import { DEMO_SKUS } from '@/lib/demo-data-constants';
 const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa', 'Emmanuel Asante', 'Abena Pokua'];
 
 /**

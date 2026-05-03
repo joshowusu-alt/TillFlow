@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { DEMO_SKUS } from '@/lib/demo-data-constants';
 
 export type ReadinessStep = {
   key: string;
@@ -24,6 +25,7 @@ export type ReadinessData = {
   steps: ReadinessStep[];
   nextStep: ReadinessStep | null;
   hasDemoData: boolean;
+  hasSeedData: boolean;
   productCount: number;
   staffCount: number;
   saleCount: number;
@@ -44,7 +46,7 @@ export type ReadinessData = {
   lastReceiptId: string | null;
 };
 
-const OPTIONAL_READINESS_STEP_KEYS = new Set(['demo']);
+const OPTIONAL_READINESS_STEP_KEYS = new Set(['demo', 'staff']);
 
 function getRequiredReadinessSteps(steps: ReadinessStep[]) {
   return steps.filter((step) => !OPTIONAL_READINESS_STEP_KEYS.has(step.key));
@@ -109,6 +111,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     lastClosedShift,
     lastReceipt,
     openingBalanceCash,
+    seedProductCount,
   ] = await Promise.all([
     prisma.product.count({ where: { businessId: business.id } }),
     prisma.user.count({ where: { businessId: business.id } }),
@@ -184,6 +187,7 @@ export async function getReadiness(): Promise<ReadinessData> {
       },
       select: { amountPence: true },
     }),
+    prisma.product.count({ where: { businessId: business.id, sku: { in: DEMO_SKUS } } }),
   ]);
 
   const steps: ReadinessStep[] = [
@@ -283,6 +287,7 @@ export async function getReadiness(): Promise<ReadinessData> {
     steps,
     nextStep,
     hasDemoData: business.hasDemoData,
+    hasSeedData: seedProductCount > 0,
     productCount,
     staffCount,
     saleCount,

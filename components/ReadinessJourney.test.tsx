@@ -44,6 +44,7 @@ const baseReadinessData: ReadinessData = {
   steps: [],
   nextStep: null,
   hasDemoData: false,
+  hasSeedData: false,
   productCount: 120,
   staffCount: 4,
   saleCount: 50,

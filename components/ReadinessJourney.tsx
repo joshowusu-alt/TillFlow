@@ -9,7 +9,7 @@ import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding'
 import { generateDemoDay, wipeDemoData, clearSampleData } from '@/app/actions/demo-day';
 import { formatMoney } from '@/lib/format';
 
-const OPTIONAL_STEP_KEYS = new Set(['demo']);
+const OPTIONAL_STEP_KEYS = new Set(['demo', 'staff']);
 
 function getRequiredSteps(steps: ReadinessStep[]) {
   return steps.filter((step) => !OPTIONAL_STEP_KEYS.has(step.key));
@@ -107,7 +107,7 @@ function ReadinessRing({ pct }: { pct: number }) {
 }
 
 /* ────────────────────────────── Step Card ────────────────────────── */
-function StepCard({ step, index }: { step: ReadinessStep; index: number }) {
+function StepCard({ step, index, isOptional }: { step: ReadinessStep; index: number; isOptional?: boolean }) {
   return (
     <Link
       href={step.href}
@@ -127,10 +127,15 @@ function StepCard({ step, index }: { step: ReadinessStep; index: number }) {
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <h3 className={`text-sm font-semibold ${step.done ? 'text-success line-through decoration-success/30' : 'text-ink'}`}>
             {step.title}
           </h3>
+          {isOptional && !step.done && (
+            <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-muted">
+              Optional
+            </span>
+          )}
           {!step.done && (
             <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-muted tabular-nums">
               ~{step.estimatedMinutes} min
@@ -154,12 +159,14 @@ function StepCard({ step, index }: { step: ReadinessStep; index: number }) {
 }
 
 /* ────────────────────────────── Demo Day Section ──────────────────── */
-function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
+function DemoDaySection({ hasDemoData, hasSeedData, onGenerate, onWipe, isPending }: {
   hasDemoData: boolean;
+  hasSeedData: boolean;
   onGenerate: () => void;
   onWipe: () => void;
   isPending: boolean;
 }) {
+  const hasAnyDemoContent = hasDemoData || hasSeedData;
   return (
     <div id="demo" className="rounded-2xl border border-accent/10 bg-gradient-to-br from-accentSoft/60 via-white to-accentSoft/40 p-5">
       <div className="flex items-center gap-3 mb-3">
@@ -172,26 +179,38 @@ function DemoDaySection({ hasDemoData, onGenerate, onWipe, isPending }: {
         </div>
       </div>
 
-      {hasDemoData ? (
+      {hasAnyDemoContent ? (
         <div className="space-y-3">
+          {hasDemoData && (
             <div className="flex items-center gap-2 rounded-lg bg-success/10 border border-success/20 px-3 py-2">
               <CheckIcon />
               <span className="text-sm text-success font-medium">Preview data loaded — explore freely. Your real setup is unaffected.</span>
             </div>
-          <div className="flex gap-2">
-            <Link href="/pos" className="btn-primary flex-1 text-center text-sm py-2">
-              Open POS
-            </Link>
-            <Link href="/reports/dashboard" className="btn-ghost flex-1 text-center text-sm py-2 border border-black/10">
-              View Reports
-            </Link>
-          </div>
+          )}
+          {hasSeedData && !hasDemoData && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+              <svg className="h-4 w-4 text-amber-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+              </svg>
+              <span className="text-sm text-amber-800 font-medium">Sample products are loaded. Remove them when you&apos;re ready to start fresh.</span>
+            </div>
+          )}
+          {hasDemoData && (
+            <div className="flex gap-2">
+              <Link href="/pos" className="btn-primary flex-1 text-center text-sm py-2">
+                Open POS
+              </Link>
+              <Link href="/reports/dashboard" className="btn-ghost flex-1 text-center text-sm py-2 border border-black/10">
+                View Reports
+              </Link>
+            </div>
+          )}
           <button
             onClick={onWipe}
             disabled={isPending}
             className="w-full text-xs text-rose hover:text-rose/80 py-1.5 transition disabled:opacity-50"
           >
-            {isPending ? 'Wiping...' : 'Clear all sample & demo data'}
+            {isPending ? 'Clearing...' : 'Clear all sample & demo data'}
           </button>
         </div>
       ) : (
@@ -485,6 +504,7 @@ function WelcomeDashboard({
   const previewCard = (
     <DemoDaySection
       hasDemoData={data.hasDemoData}
+      hasSeedData={data.hasSeedData}
       onGenerate={onGenerateDemo}
       onWipe={onWipeDemo}
       isPending={isBusy}
@@ -573,7 +593,7 @@ function WelcomeDashboard({
           </div>
         </div>
 
-        {!isNewAccount && data.hasDemoData ? <div className="mt-6">{previewCard}</div> : null}
+        {!isNewAccount && (data.hasDemoData || data.hasSeedData) ? <div className="mt-6">{previewCard}</div> : null}
       </div>
     </div>
   );
@@ -631,6 +651,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           return {
             ...prev,
             hasDemoData: false,
+            hasSeedData: false,
             steps,
             pct,
             nextStep: getNextStep(steps),
@@ -752,7 +773,14 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         {/* Step List */}
         <div className="space-y-2.5 stagger-children mb-6">
           {data.steps.map((step, i) => (
-            step.key === 'demo' ? null : <StepCard key={step.key} step={step} index={i} />
+            step.key === 'demo' ? null : (
+              <StepCard
+                key={step.key}
+                step={step}
+                index={i}
+                isOptional={OPTIONAL_STEP_KEYS.has(step.key)}
+              />
+            )
           ))}
         </div>
 
@@ -760,6 +788,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
         <div className="animate-fade-in-up mb-6" style={{ animationDelay: '.3s' }}>
           <DemoDaySection
             hasDemoData={data.hasDemoData}
+            hasSeedData={data.hasSeedData}
             onGenerate={handleGenerateDemo}
             onWipe={handleWipeDemo}
             isPending={isBusy}
