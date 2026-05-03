@@ -1,11 +1,11 @@
-const CACHE_NAME = 'pos-cache-v9';
+const CACHE_NAME = 'pos-cache-v10';
 const OFFLINE_URL = '/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
 
-// Assets to cache immediately on install
+// Assets to cache immediately on install. Do not precache authenticated app
+// pages; stale protected HTML can survive deploys in iOS PWAs and surface old
+// server-render errors even after production has been fixed.
 const PRECACHE_ASSETS = [
-  '/',
-  '/pos',
   '/offline',
   '/offline/sales',
   '/manifest.json',
@@ -30,8 +30,10 @@ async function trimCache(cacheName, maxItems) {
   }
 }
 
-// Install event - cache core assets (don't skipWaiting; let client control it)
+// Install event - cache core assets. Activate immediately so stale protected
+// HTML from older service workers is cleared as soon as this version lands.
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS);
@@ -110,17 +112,16 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // Cache successful responses for pages and static assets
+        // Cache successful static responses. Authenticated HTML/RSC pages must
+        // stay network-fresh so dashboard, billing, and POS pages do not hold
+        // stale tenant-specific server output after a deploy.
         if (response.ok && (response.type === 'basic' || response.type === 'cors')) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            // Cache static assets from _next/static
             if (url.pathname.startsWith('/_next/static')) {
               cache.put(request, responseClone);
             }
-            // Cache HTML pages
-            if (request.mode === 'navigate' ||
-              request.headers.get('accept')?.includes('text/html')) {
+            if (url.pathname === OFFLINE_URL || url.pathname === '/offline/sales') {
               cache.put(request, responseClone);
             }
             trimCache(CACHE_NAME, MAX_CACHE_ITEMS);
