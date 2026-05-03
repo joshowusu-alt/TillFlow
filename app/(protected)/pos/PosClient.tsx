@@ -1900,8 +1900,8 @@ export default function PosClient({
 
       {showParkedPanel && parkedCarts.length > 0 ? (
         <div
-          className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:hidden"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' }}
+          className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:hidden hide-when-keyboard-open"
+          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom) + 7rem)' }}
         >
           <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
             <div>
@@ -1951,7 +1951,7 @@ export default function PosClient({
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-white border-t border-black/10 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 pt-3 safe-area-bottom">
+        <div className="fixed inset-x-0 z-30 lg:hidden border-t border-black/10 bg-white px-4 pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom hide-when-keyboard-open">
           <div className="space-y-3">
             <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
               {canSubmit

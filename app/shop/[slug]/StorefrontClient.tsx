@@ -1251,7 +1251,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           )}
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pt-4" style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}>
+        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom">
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70"
@@ -1266,7 +1266,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
 
       {/* ── MOBILE CHECKOUT PANEL ──────────────────────────── */}
       <div
-        className={`fixed inset-x-0 top-0 z-50 flex h-[100dvh] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-x-0 top-0 z-50 flex h-[var(--visual-viewport-height)] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
           mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
       >
@@ -1285,7 +1285,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           <span className="text-sm font-bold text-ink">{formatMoney(orderTotal, storefront.currency)}</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 keyboard-safe-bottom">
           {storefront.pickupInstructions ? (
             <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
@@ -1360,7 +1360,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
           </div>
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pt-4" style={{ paddingBottom: 'max(2.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}>
+        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom">
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
@@ -1388,8 +1388,7 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
       {/* ── FLOATING CART BAR (mobile browse) ──────────────── */}
       {cartItemCount > 0 && mobileStep === 'browse' ? (
         <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 lg:hidden"
-          style={{ paddingBottom: 'max(1.25rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))' }}
+          className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 lg:hidden keyboard-safe-fixed-bottom hide-when-keyboard-open"
         >
           <button
             type="button"

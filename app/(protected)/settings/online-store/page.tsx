@@ -305,24 +305,24 @@ export default async function OnlineStoreSettingsPage({
                   return (
                     <div
                       key={day}
-                      className="grid grid-cols-[76px_86px_86px_auto] items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 py-3 sm:grid-cols-[120px_minmax(104px,1fr)_minmax(104px,1fr)_auto] sm:gap-3 sm:px-4"
+                      className="grid grid-cols-[72px_minmax(94px,1fr)_minmax(94px,1fr)] items-center gap-2 rounded-2xl border border-black/5 bg-white px-3 py-3 sm:grid-cols-[120px_minmax(104px,1fr)_minmax(104px,1fr)_auto] sm:gap-3 sm:px-4"
                     >
                       <div className="text-sm font-medium text-ink">{DAY_LABELS[day]}</div>
                       <input
-                        className="input min-w-[86px] px-2 text-sm"
+                        className="input min-w-[94px] px-2 text-sm"
                         type="time"
                         name={`${day}_open`}
                         defaultValue={config.open}
                         disabled={config.closed}
                       />
                       <input
-                        className="input min-w-[86px] px-2 text-sm"
+                        className="input min-w-[94px] px-2 text-sm"
                         type="time"
                         name={`${day}_close`}
                         defaultValue={config.close}
                         disabled={config.closed}
                       />
-                      <label className="flex items-center gap-2 text-xs text-black/65">
+                      <label className="col-span-3 flex items-center gap-2 text-xs text-black/65 sm:col-span-1">
                         <input
                           type="checkbox"
                           name={`${day}_closed`}

@@ -589,7 +589,7 @@ export default function PurchaseFormClient({
                 autoComplete="off"
               />
               {productDropdownOpen && (
-                <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-black/10 bg-white shadow-xl">
+                <div className="fixed inset-x-3 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-40 max-h-[min(22rem,calc(var(--visual-viewport-height)-2rem))] overflow-auto rounded-2xl border border-black/10 bg-white shadow-2xl sm:absolute sm:inset-x-auto sm:top-auto sm:mt-1 sm:max-h-64 sm:w-full sm:rounded-xl sm:shadow-xl">
                   {filteredProducts.length === 0 ? (
                     <div className="px-4 py-3 text-sm text-black/50">No products match &ldquo;{productSearch}&rdquo;</div>
                   ) : (
@@ -967,7 +967,7 @@ export default function PurchaseFormClient({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky bottom-0 z-10 flex flex-col gap-3 rounded-2xl border border-black/5 bg-white/95 p-4 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur keyboard-safe-bottom hide-when-keyboard-open sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-black/60">
             Ready to receive <span className="font-semibold text-ink">{cart.length}</span> line{cart.length === 1 ? '' : 's'} totaling{' '}
             <span className="font-semibold text-ink">{formatMoney(totals.total, currency)}</span>.
