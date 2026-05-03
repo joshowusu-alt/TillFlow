@@ -282,41 +282,11 @@ export default async function BusinessesPage({
       <BulkRosterClient
         rosterId="businesses"
         totalOnPage={pageBusinesses.length}
-        bulkActions={(selectedIds) => (
-          <form action={bulkReviewControlBusinessesAction} className="space-y-2.5">
-            <input type="hidden" name="returnPath" value={buildBusinessesHref({ filter, search, page: roster.page, pageSize: roster.pageSize })} />
-            {selectedIds.map((id) => (
-              <input key={id} type="hidden" name="selectedId" value={id} />
-            ))}
-            <div className="grid gap-2 sm:grid-cols-2">
-              <select name="assignedManagerId" defaultValue="SELF" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
-                <option value="SELF">Assign to me</option>
-                <option value="UNASSIGNED">Leave unassigned</option>
-                {staffOptions.map((option) => (
-                  <option key={option.id} value={option.id}>{option.name} · {option.role.replace(/_/g, ' ')}</option>
-                ))}
-              </select>
-              <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
-                <option value="KEEP_CURRENT">Keep sold plan</option>
-                <option value="STARTER">Starter</option>
-                <option value="GROWTH">Growth</option>
-                <option value="PRO">Pro</option>
-              </select>
-            </div>
-            <input
-              type="text"
-              name="reviewNote"
-              placeholder="Optional review note"
-              className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white placeholder:text-white/45"
-            />
-            <button
-              type="submit"
-              className="inline-flex h-10 w-full items-center justify-center rounded-[14px] bg-white px-3 text-sm font-bold text-control-ink transition hover:bg-white/90"
-            >
-              Review {selectedIds.length} selected
-            </button>
-          </form>
-        )}
+        bulkAction={{
+          action: bulkReviewControlBusinessesAction,
+          returnPath: buildBusinessesHref({ filter, search, page: roster.page, pageSize: roster.pageSize }),
+          staffOptions: staffOptions.map((option) => ({ id: option.id, name: option.name, role: option.role })),
+        }}
       >
 
       <section id="business-roster" className="panel overflow-hidden p-0">
