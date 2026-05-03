@@ -2,14 +2,24 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 
+type BulkActionStaffOption = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+type BulkActionConfig = {
+  action: (formData: FormData) => void | Promise<void>;
+  returnPath: string;
+  staffOptions: BulkActionStaffOption[];
+  submitLabel?: (count: number) => string;
+};
+
 type BulkRosterClientProps = {
   rosterId: string;
   totalOnPage: number;
   children: ReactNode;
-  /** Slot for the bulk-action panel (form, fields, submit button). The
-   *  client wrapper renders this inside a bottom sheet whose visibility
-   *  is bound to selection count. */
-  bulkActions: (selectedIds: string[]) => ReactNode;
+  bulkAction: BulkActionConfig;
 };
 
 /**
@@ -17,13 +27,13 @@ type BulkRosterClientProps = {
  * via uncontrolled checkbox inputs (so each row in the static markup
  * just renders <input type="checkbox" name="selectedId" data-roster-id>).
  *
- * The wrapper listens for change events bubbling up from those
- * checkboxes, keeps a Set of selected ids in state, and renders a
- * sticky bottom action bar when at least one is selected. The bar holds
- * the bulk-action form. Mobile-first: at md+ screens the bar still
- * appears at bottom but is more compact.
+ * Selection state lives on the client. The bulk-action form is rendered
+ * inside this component because it needs access to the live selectedIds —
+ * functions can't cross the server/client boundary, so the page passes
+ * a serializable BulkActionConfig (server action ref + data) instead of
+ * a render prop.
  */
-export default function BulkRosterClient({ rosterId, totalOnPage, children, bulkActions }: BulkRosterClientProps) {
+export default function BulkRosterClient({ rosterId, totalOnPage, children, bulkAction }: BulkRosterClientProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -62,6 +72,10 @@ export default function BulkRosterClient({ rosterId, totalOnPage, children, bulk
   const count = selected.size;
   const visible = count > 0;
   const allSelected = count > 0 && count === totalOnPage;
+  const selectedIds = Array.from(selected);
+  const submitLabel = bulkAction.submitLabel
+    ? bulkAction.submitLabel(count)
+    : `Review ${count} selected`;
 
   return (
     <>
@@ -103,7 +117,41 @@ export default function BulkRosterClient({ rosterId, totalOnPage, children, bulk
 
           {visible ? (
             <div className="mt-3 border-t border-white/10 pt-3">
-              {bulkActions(Array.from(selected))}
+              <form action={bulkAction.action} className="space-y-2.5">
+                <input type="hidden" name="returnPath" value={bulkAction.returnPath} />
+                {selectedIds.map((id) => (
+                  <input key={id} type="hidden" name="selectedId" value={id} />
+                ))}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <select name="assignedManagerId" defaultValue="SELF" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
+                    <option value="SELF">Assign to me</option>
+                    <option value="UNASSIGNED">Leave unassigned</option>
+                    {bulkAction.staffOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name} · {option.role.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <select name="purchasedPlan" defaultValue="KEEP_CURRENT" className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white">
+                    <option value="KEEP_CURRENT">Keep sold plan</option>
+                    <option value="STARTER">Starter</option>
+                    <option value="GROWTH">Growth</option>
+                    <option value="PRO">Pro</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  name="reviewNote"
+                  placeholder="Optional review note"
+                  className="h-10 w-full rounded-[14px] border border-white/15 bg-white/8 px-3 text-sm font-medium text-white placeholder:text-white/45"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-[14px] bg-white px-3 text-sm font-bold text-control-ink transition hover:bg-white/90"
+                >
+                  {submitLabel}
+                </button>
+              </form>
             </div>
           ) : null}
         </div>
