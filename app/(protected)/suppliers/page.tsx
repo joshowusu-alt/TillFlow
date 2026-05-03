@@ -3,6 +3,8 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
+import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
@@ -70,56 +72,102 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       <div className="mb-4 max-w-xs">
         <Suspense><SearchFilter placeholder="Search suppliers…" /></Suspense>
       </div>
-      <div className="card p-6 overflow-x-auto">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Email</th>
-              <th>Credit Limit</th>
-              <th>Balance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {suppliers.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-12 text-center">
-                  <div className="flex flex-col items-center">
-                    <div className="rounded-full bg-black/5 p-3 mb-2">
-                      <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
+      <div className="card p-4 sm:p-6">
+        <ResponsiveDataTable
+          mode="cards"
+          mobileClassName="mobile-card-list lg:hidden"
+          mobile={
+            suppliers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-black/10 bg-white px-4 py-10 text-center">
+                <div className="mx-auto mb-2 inline-flex rounded-full bg-black/5 p-3">
+                  <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div className="text-sm text-black/70">{q ? `No suppliers matching "${q}"` : 'No suppliers yet'}</div>
+                <div className="mt-1 text-xs text-black/40">Add your first supplier using the form above.</div>
+              </div>
+            ) : (
+              suppliers.map((supplier) => {
+                const balance = supplier.purchaseInvoices.reduce(
+                  (sum, invoice) => sum + computeOutstandingBalance(invoice),
+                  0
+                );
+
+                return (
+                  <DataCard key={supplier.id}>
+                    <DataCardHeader
+                      title={<Link href={`/suppliers/${supplier.id}`} className="hover:underline">{supplier.name}</Link>}
+                      subtitle={supplier.phone ?? 'No phone saved'}
+                      aside={<span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{formatMoney(balance, business.currency)}</span>}
+                    />
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(supplier.creditLimitPence, business.currency)}</span>} />
+                      <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
+                      <DataCardField label="Email" value={<span className="text-black/65">{supplier.email ?? '-'}</span>} className="col-span-2" />
                     </div>
-                    <div className="text-sm text-black/70">{q ? `No suppliers matching "${q}"` : 'No suppliers yet'}</div>
-                    <div className="text-xs text-black/40 mt-1">Add your first supplier using the form above.</div>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {suppliers.map((supplier) => {
-              const balance = supplier.purchaseInvoices.reduce(
-                (sum, invoice) => sum + computeOutstandingBalance(invoice),
-                0
-              );
-              return (
-                <tr key={supplier.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 font-semibold">
-                    <Link href={`/suppliers/${supplier.id}`} className="hover:underline">
-                      {supplier.name}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 text-sm text-black/60">{supplier.phone ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm text-black/60">{supplier.email ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm">{formatMoney(supplier.creditLimitPence, business.currency)}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(balance, business.currency)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <DataCardActions>
+                      <Link href={`/suppliers/${supplier.id}`} className="btn-secondary w-full text-center text-sm">Open supplier</Link>
+                    </DataCardActions>
+                  </DataCard>
+                );
+              })
+            )
+          }
+          desktop={
+            <div className="overflow-x-auto">
+              <table className="table w-full border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Credit Limit</th>
+                    <th>Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suppliers.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-12 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="rounded-full bg-black/5 p-3 mb-2">
+                            <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                          </div>
+                          <div className="text-sm text-black/70">{q ? `No suppliers matching "${q}"` : 'No suppliers yet'}</div>
+                          <div className="text-xs text-black/40 mt-1">Add your first supplier using the form above.</div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  {suppliers.map((supplier) => {
+                    const balance = supplier.purchaseInvoices.reduce(
+                      (sum, invoice) => sum + computeOutstandingBalance(invoice),
+                      0
+                    );
+                    return (
+                      <tr key={supplier.id} className="rounded-xl bg-white">
+                        <td className="px-3 py-3 font-semibold">
+                          <Link href={`/suppliers/${supplier.id}`} className="hover:underline">
+                            {supplier.name}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3 text-sm text-black/60">{supplier.phone ?? '-'}</td>
+                        <td className="px-3 py-3 text-sm text-black/60">{supplier.email ?? '-'}</td>
+                        <td className="px-3 py-3 text-sm">{formatMoney(supplier.creditLimitPence, business.currency)}</td>
+                        <td className="px-3 py-3 text-sm font-semibold">
+                          {formatMoney(balance, business.currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          }
+        />
         <Pagination currentPage={page} totalPages={totalPages} basePath="/suppliers" searchParams={{ q: q || undefined }} />
       </div>
     </div>

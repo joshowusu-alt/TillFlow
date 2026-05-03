@@ -1,6 +1,8 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
+import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { requestStockTransferAction, approveStockTransferAction } from '@/app/actions/transfers';
@@ -127,77 +129,143 @@ export default async function TransfersPage({
         </form>
       </div>
 
-      <div className="card overflow-x-auto p-4">
-        <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Requested</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Line</th>
-              <th>Status</th>
-              <th>Requested By</th>
-              <th>Approved By</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transfers.map((transfer) => {
-              const line = transfer.lines[0];
-              return (
-                <tr key={transfer.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-xs">{formatDateTime(transfer.requestedAt)}</td>
-                  <td className="px-3 py-3 text-sm">{transfer.fromStore.name}</td>
-                  <td className="px-3 py-3 text-sm">{transfer.toStore.name}</td>
-                  <td className="px-3 py-3 text-sm">
-                    {line ? `${line.product.name} x ${line.qtyBase}` : '-'}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        transfer.status === 'COMPLETED'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}
-                    >
-                      {transfer.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-xs">{transfer.requestedByUser.name}</td>
-                  <td className="px-3 py-3 text-xs">{transfer.approvedByUser?.name ?? '-'}</td>
-                  <td className="px-3 py-3">
-                    {transfer.status === 'PENDING' ? (
-                      <form action={approveStockTransferAction} className="flex gap-2">
-                        <input type="hidden" name="transferId" value={transfer.id} />
-                        <input
-                          className="input h-9 text-xs"
-                          type="password"
-                          name="managerPin"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          placeholder="Manager PIN"
-                          required
-                        />
-                        <SubmitButton className="btn-secondary text-xs" loadingText="Approving...">
-                          Approve
-                        </SubmitButton>
-                      </form>
-                    ) : (
-                      <span className="text-xs text-black/40">Completed</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {transfers.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-black/50">
-                  No stock transfers yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="card p-4">
+        <ResponsiveDataTable
+          mode="cards"
+          mobileClassName="mobile-card-list lg:hidden"
+          mobile={
+            transfers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-black/10 bg-white px-4 py-10 text-center text-sm text-black/50">
+                No stock transfers yet.
+              </div>
+            ) : (
+              transfers.map((transfer) => {
+                const line = transfer.lines[0];
+                const statusBadge = (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      transfer.status === 'COMPLETED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {transfer.status}
+                  </span>
+                );
+
+                return (
+                  <DataCard key={transfer.id}>
+                    <DataCardHeader
+                      title={`${transfer.fromStore.name} -> ${transfer.toStore.name}`}
+                      subtitle={formatDateTime(transfer.requestedAt)}
+                      aside={statusBadge}
+                    />
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <DataCardField label="Line" value={<span className="text-black/70">{line ? `${line.product.name} x ${line.qtyBase}` : '-'}</span>} className="col-span-2" />
+                      <DataCardField label="Requested by" value={<span className="text-black/70">{transfer.requestedByUser.name}</span>} />
+                      <DataCardField label="Approved by" value={<span className="text-black/70">{transfer.approvedByUser?.name ?? '-'}</span>} />
+                    </div>
+                    <DataCardActions>
+                      {transfer.status === 'PENDING' ? (
+                        <form action={approveStockTransferAction} className="grid w-full grid-cols-[1fr_auto] gap-2">
+                          <input type="hidden" name="transferId" value={transfer.id} />
+                          <input
+                            className="input text-sm"
+                            type="password"
+                            name="managerPin"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            placeholder="Manager PIN"
+                            required
+                          />
+                          <SubmitButton className="btn-secondary text-sm" loadingText="Approving...">
+                            Approve
+                          </SubmitButton>
+                        </form>
+                      ) : (
+                        <span className="text-xs text-black/40">Completed</span>
+                      )}
+                    </DataCardActions>
+                  </DataCard>
+                );
+              })
+            )
+          }
+          desktop={
+            <div className="overflow-x-auto">
+              <table className="table w-full border-separate border-spacing-y-2">
+                <thead>
+                  <tr>
+                    <th>Requested</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Line</th>
+                    <th>Status</th>
+                    <th>Requested By</th>
+                    <th>Approved By</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transfers.map((transfer) => {
+                    const line = transfer.lines[0];
+                    return (
+                      <tr key={transfer.id} className="rounded-xl bg-white">
+                        <td className="px-3 py-3 text-xs">{formatDateTime(transfer.requestedAt)}</td>
+                        <td className="px-3 py-3 text-sm">{transfer.fromStore.name}</td>
+                        <td className="px-3 py-3 text-sm">{transfer.toStore.name}</td>
+                        <td className="px-3 py-3 text-sm">
+                          {line ? `${line.product.name} x ${line.qtyBase}` : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-sm">
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              transfer.status === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-amber-100 text-amber-700'
+                            }`}
+                          >
+                            {transfer.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-xs">{transfer.requestedByUser.name}</td>
+                        <td className="px-3 py-3 text-xs">{transfer.approvedByUser?.name ?? '-'}</td>
+                        <td className="px-3 py-3">
+                          {transfer.status === 'PENDING' ? (
+                            <form action={approveStockTransferAction} className="flex gap-2">
+                              <input type="hidden" name="transferId" value={transfer.id} />
+                              <input
+                                className="input h-9 text-xs"
+                                type="password"
+                                name="managerPin"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="Manager PIN"
+                                required
+                              />
+                              <SubmitButton className="btn-secondary text-xs" loadingText="Approving...">
+                                Approve
+                              </SubmitButton>
+                            </form>
+                          ) : (
+                            <span className="text-xs text-black/40">Completed</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {transfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-8 text-center text-sm text-black/50">
+                        No stock transfers yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          }
+        />
       </div>
     </div>
   );
