@@ -2,7 +2,7 @@ import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction } from '@/app/actions/online-storefront';
+import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction, hideOutOfStockStorefrontProductsAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -84,6 +84,7 @@ export default async function OnlineStoreSettingsPage({
         sellingPriceBasePence: true,
         categoryId: true,
         category: { select: { name: true } },
+        inventoryBalances: { select: { qtyOnHandBase: true } },
       },
     }),
     prisma.storefrontCategoryMapping.findMany({
@@ -125,6 +126,11 @@ export default async function OnlineStoreSettingsPage({
   })();
   const totalProducts = products.length;
   const totalPublished = products.filter((p) => p.storefrontPublished).length;
+  const publishedOutOfStock = products.filter(
+    (product) =>
+      product.storefrontPublished &&
+      product.inventoryBalances.reduce((sum, balance) => sum + balance.qtyOnHandBase, 0) <= 0,
+  ).length;
 
   const plan = getBusinessPlan(
     ((business as any).plan ?? (business.mode as any)) as any,
@@ -174,6 +180,11 @@ export default async function OnlineStoreSettingsPage({
       {searchParams?.saved === '1' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Storefront settings saved.
+        </div>
+      ) : null}
+      {searchParams?.saved === 'stock' ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          Out-of-stock products hidden from the storefront.
         </div>
       ) : null}
 
@@ -570,6 +581,16 @@ export default async function OnlineStoreSettingsPage({
                 Hide all products
               </button>
             </form>
+            <form action={hideOutOfStockStorefrontProductsAction}>
+              <button type="submit" className="btn-secondary text-sm" disabled={publishedOutOfStock === 0}>
+                Hide out-of-stock products
+              </button>
+            </form>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+            {publishedOutOfStock > 0
+              ? `${publishedOutOfStock} published product${publishedOutOfStock === 1 ? '' : 's'} currently show as out of stock. Hide them now to keep the storefront cleaner for customers.`
+              : 'No published products are currently out of stock.'}
           </div>
         {categoryStats.length > 1 ? (
           <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">

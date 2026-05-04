@@ -304,6 +304,63 @@ export async function bulkSetStorefrontPublishAction(formData: FormData): Promis
   }, '/settings/online-store');
 }
 
+export async function hideOutOfStockStorefrontProductsAction(): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const business = await requireOnlineStorefrontAccess(businessId);
+
+    const publishedProducts = await prisma.product.findMany({
+      where: {
+        businessId,
+        active: true,
+        storefrontPublished: true,
+      },
+      select: {
+        id: true,
+        inventoryBalances: {
+          select: {
+            qtyOnHandBase: true,
+          },
+        },
+      },
+    });
+
+    const outOfStockProductIds = publishedProducts
+      .filter((product) => product.inventoryBalances.reduce((sum, balance) => sum + balance.qtyOnHandBase, 0) <= 0)
+      .map((product) => product.id);
+
+    const result = outOfStockProductIds.length > 0
+      ? await prisma.product.updateMany({
+          where: {
+            businessId,
+            id: { in: outOfStockProductIds },
+          },
+          data: { storefrontPublished: false },
+        })
+      : { count: 0 };
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRODUCT_UPDATE',
+      entity: 'Product',
+      entityId: 'BULK',
+      details: {
+        source: 'online-storefront-hide-out-of-stock',
+        affected: result.count,
+      },
+    }).catch((error) => console.error('[audit]', error));
+
+    revalidatePath('/settings/online-store');
+    if (business.storefrontSlug) {
+      revalidatePath(`/shop/${business.storefrontSlug}`);
+    }
+    redirect('/settings/online-store?saved=stock');
+  }, '/settings/online-store');
+}
+
 export async function toggleStorefrontProductAction(formData: FormData): Promise<void> {
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
