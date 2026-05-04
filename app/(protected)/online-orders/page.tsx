@@ -211,32 +211,32 @@ export default async function OnlineOrdersPage({
       />
 
       {/* Status summary cards */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <div className={`card p-4 ${awaiting > 0 ? 'ring-1 ring-amber-200 bg-amber-50/40' : ''}`}>
+      <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
+        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${awaiting > 0 ? 'ring-1 ring-amber-200 bg-amber-50/50' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Awaiting payment</div>
-          <div className={`mt-1.5 text-3xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-black/20'}`}>{awaiting}</div>
+          <div className={`mt-1 text-2xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-black/20'}`}>{awaiting}</div>
           {awaiting > 0 && <div className="mt-1 text-[10px] font-medium text-amber-700">Needs confirmation</div>}
         </div>
-        <div className={`card p-4 ${paid > 0 ? 'ring-1 ring-blue-200 bg-blue-50/40' : ''}`}>
+        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${paid > 0 ? 'ring-1 ring-blue-200 bg-blue-50/50' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Payment confirmed</div>
-          <div className={`mt-1.5 text-3xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-black/20'}`}>{paid}</div>
+          <div className={`mt-1 text-2xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-black/20'}`}>{paid}</div>
           {paid > 0 && <div className="mt-1 text-[10px] font-medium text-blue-700">Ready to prepare</div>}
         </div>
-        <div className={`card p-4 ${processing > 0 ? 'ring-1 ring-indigo-200 bg-indigo-50/40' : ''}`}>
+        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${processing > 0 ? 'ring-1 ring-indigo-200 bg-indigo-50/50' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Preparing</div>
-          <div className={`mt-1.5 text-3xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-black/20'}`}>{processing}</div>
+          <div className={`mt-1 text-2xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-black/20'}`}>{processing}</div>
           {processing > 0 && <div className="mt-1 text-[10px] font-medium text-indigo-700">In progress</div>}
         </div>
-        <div className={`card p-4 ${ready > 0 ? 'ring-1 ring-emerald-200 bg-emerald-50/40' : ''}`}>
+        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${ready > 0 ? 'ring-1 ring-emerald-200 bg-emerald-50/50' : ''}`}>
           <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Ready for pickup</div>
-          <div className={`mt-1.5 text-3xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-black/20'}`}>{ready}</div>
+          <div className={`mt-1 text-2xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-black/20'}`}>{ready}</div>
           {ready > 0 && <div className="mt-1 text-[10px] font-medium text-emerald-700">Awaiting customer</div>}
         </div>
       </div>
 
       {/* Filter tabs */}
       <nav aria-label="Filter orders by status">
-        <div className="flex flex-wrap gap-2">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap">
           {STATUS_TABS.map((tab) => {
             const tabCount =
               tab.key === 'all' ? totalActive :
@@ -252,7 +252,7 @@ export default async function OnlineOrdersPage({
                 key={tab.key}
                 href={tab.key === 'all' ? '/online-orders' : `/online-orders?status=${tab.key}`}
                 aria-current={isActive ? 'page' : undefined}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-semibold transition ${
                   isActive
                     ? 'border-accent bg-accent text-white shadow-sm'
                     : 'border-slate-200 bg-white text-black/60 hover:border-accent/30 hover:text-accent'
@@ -337,27 +337,33 @@ export default async function OnlineOrdersPage({
         }
 
         return (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {actionOrders.length > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+                    <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
                     {actionOrders.length} {actionOrders.length === 1 ? 'order' : 'orders'} need attention
+                    </div>
                   </div>
+                  <span className="text-xs text-black/40">Newest first</span>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {actionOrders.map((order) => <OrderCard key={order.id} order={order} />)}
                 </div>
               </div>
             )}
             {historyOrders.length > 0 && (
               <div className="space-y-3">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">
-                  Recent history
+                <div className="flex items-center justify-between gap-3 border-t border-black/5 pt-5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">
+                    Recent history
+                  </div>
+                  <div className="text-xs text-black/35">{historyOrders.length} archived</div>
                 </div>
-                <div className="space-y-3">
-                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} />)}
+                <div className="space-y-2.5">
+                  {historyOrders.map((order) => <OrderCard key={order.id} order={order} compact />)}
                 </div>
               </div>
             )}
@@ -394,7 +400,7 @@ type OrderRow = {
   lines: Array<{ id: string; productName: string; qtyInUnit: number; unitName: string }>;
 };
 
-function OrderCard({ order }: { order: OrderRow }) {
+function OrderCard({ order, compact = false }: { order: OrderRow; compact?: boolean }) {
   const statusDone = order.status === 'COMPLETED' || order.status === 'CANCELLED';
   const statusBorderClass = ({
     AWAITING_PAYMENT: 'border-l-4 border-l-amber-400',
@@ -408,12 +414,12 @@ function OrderCard({ order }: { order: OrderRow }) {
   } as Record<string, string>)[order.status] ?? 'border-l-2 border-l-slate-200';
 
   return (
-    <div className={`card overflow-hidden p-0 ${statusDone ? 'opacity-70' : ''}`}>
-      <div className={`flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
-        <div className="min-w-0 space-y-2">
+    <div className={`overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm ${statusDone ? 'opacity-75' : ''}`}>
+      <div className={`flex flex-col gap-3 ${compact ? 'p-3.5' : 'p-4 sm:p-5'} lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
+        <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-base font-display font-bold text-ink">{order.orderNumber}</h2>
+              <h2 className={`${compact ? 'text-sm' : 'text-base'} font-display font-bold text-ink`}>{order.orderNumber}</h2>
               <StatusBadge status={order.status} />
               <AgeBadge createdAt={order.createdAt} status={order.status} />
               {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
@@ -432,10 +438,13 @@ function OrderCard({ order }: { order: OrderRow }) {
                 </span>
               ) : null}
             </div>
-            <div className="text-xl font-display font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</div>
+            <div className={`${compact ? 'text-base' : 'text-xl'} font-display font-bold text-ink`}>{formatMoney(order.totalPence, order.currency)}</div>
           </div>
 
-          <div className="font-semibold text-sm text-ink">{order.customerName}</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="font-semibold text-sm text-ink">{order.customerName}</div>
+            <div className="text-xs text-black/45">{formatDateTime(order.createdAt)}</div>
+          </div>
 
           {order.customerPhone ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
@@ -457,9 +466,7 @@ function OrderCard({ order }: { order: OrderRow }) {
             </div>
           ) : null}
 
-          <div className="text-xs text-black/50">{formatDateTime(order.createdAt)}</div>
-
-          <div className="text-xs text-black/45 leading-relaxed">
+          <div className={`text-xs text-black/45 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
             {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
           </div>
 

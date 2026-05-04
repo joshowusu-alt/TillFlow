@@ -7,6 +7,7 @@ interface SettingsSectionProps {
   description?: string;
   badge?: string;
   defaultOpen?: boolean;
+  eyebrow?: string;
   children: React.ReactNode;
 }
 
@@ -15,6 +16,7 @@ export default function SettingsSection({
   description,
   badge,
   defaultOpen = false,
+  eyebrow,
   children,
 }: SettingsSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -24,9 +26,12 @@ export default function SettingsSection({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-black/[0.015]"
+        className="flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-black/[0.015] sm:px-5 sm:py-4"
       >
         <div className="min-w-0">
+          {eyebrow ? (
+            <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.2em] text-black/35">{eyebrow}</div>
+          ) : null}
           <div className="flex items-center gap-2">
             <span className="font-semibold text-ink">{title}</span>
             {badge && (
@@ -36,7 +41,7 @@ export default function SettingsSection({
             )}
           </div>
           {description && (
-            <div className="mt-0.5 text-xs text-black/45 line-clamp-1">{description}</div>
+            <div className="mt-0.5 text-xs leading-5 text-black/45 line-clamp-2 sm:line-clamp-1">{description}</div>
           )}
         </div>
         <svg
@@ -51,7 +56,7 @@ export default function SettingsSection({
       </button>
 
       {open && (
-        <div className="border-t border-black/5 px-5 pb-6 pt-5">
+        <div className="border-t border-black/5 px-4 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
           {children}
         </div>
       )}
