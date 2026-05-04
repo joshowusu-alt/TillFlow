@@ -137,6 +137,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               placeholder={isDemo ? 'e.g. Demo Supermarket' : 'e.g. El-Shaddai Supermarket'}
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
+              autoComplete="organization"
               autoFocus
             />
           </div>
@@ -148,6 +149,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               placeholder="e.g. Kingsley Atakorah"
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
+              autoComplete="name"
             />
           </div>
           <button
@@ -172,6 +174,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               placeholder="you@yourstore.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
               autoFocus
             />
           </div>
@@ -183,6 +186,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               placeholder="At least 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               minLength={6}
             />
             <PasswordStrengthMeter password={password} />
