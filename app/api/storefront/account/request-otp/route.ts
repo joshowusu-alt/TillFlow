@@ -42,6 +42,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // If OTP was not delivered and we have no dev fallback, return a clear
+  // error so the customer sees a helpful message rather than a confusing
+  // "developer mode" notice. In development the devCode path still works.
+  if (!result.delivered && !result.devCode) {
+    return NextResponse.json(
+      { error: 'We could not send a code to that number right now. Please try again in a moment or contact the store for help.' },
+      { status: 503 },
+    );
+  }
+
   // We never reveal whether the phone has an account, only whether the
   // delivery channel succeeded. The dev fallback returns the code so a
   // developer can sign in locally without configuring SMS or email.
