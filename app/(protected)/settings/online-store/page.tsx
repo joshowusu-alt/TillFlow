@@ -326,12 +326,24 @@ export default async function OnlineStoreSettingsPage({
             return (
               <div className="space-y-4">
                 {smsConfigured ? (
-                  <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    <span className="text-base">✅</span>
-                    <span>
-                      <strong>SMS provider connected</strong> via{' '}
-                      {hubtelConfigured ? 'Hubtel' : 'Arkesel'}.
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                      <span className="text-base">✅</span>
+                      <span>
+                        <strong>SMS provider connected</strong> via{' '}
+                        {hubtelConfigured ? 'Hubtel' : 'Arkesel'}.
+                      </span>
+                    </div>
+                    {arkeselConfigured && !hubtelConfigured && (
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-800 space-y-1">
+                        <p className="font-medium">Arkesel checklist</p>
+                        <ul className="list-disc pl-4 space-y-0.5 text-blue-700">
+                          <li>Using the <strong>Main API key</strong> (not a sub-key) from Arkesel → SMS → API → Main SMS API Info</li>
+                          <li>Sender ID <strong>&quot;TillFlow&quot;</strong> is registered — go to Arkesel → SMS → Sender IDs to check or add it</li>
+                          <li>Account has SMS credits (check balance on your Arkesel dashboard)</li>
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-3">
@@ -339,9 +351,10 @@ export default async function OnlineStoreSettingsPage({
                     <div>
                       <p className="font-medium text-amber-800 mb-1">Option A — Arkesel (recommended, simpler)</p>
                       <p className="text-amber-700 text-xs mb-1">
-                        Sign up free at <strong>account.arkesel.com</strong> → Dashboard → SMS API → copy your API key.
+                        Sign up free at <strong>account.arkesel.com</strong> → SMS → API → <strong>Main SMS API Info</strong> → Generate new key → copy it.
                         You get 10 free credits instantly.
                       </p>
+                      <p className="text-amber-700 text-xs mb-1 font-medium">⚠️ Use the Main API key, not a sub-key (sub-keys have no SMS balance by default).</p>
                       <code className="block font-mono text-xs text-amber-900 bg-amber-100 rounded px-2 py-1">ARKESEL_API_KEY</code>
                     </div>
                     <div>

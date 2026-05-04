@@ -136,16 +136,20 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
             <form onSubmit={handleRequestCode} className="space-y-4 px-6 py-6 sm:px-8">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Mobile number</span>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="0244 123 456"
-                  className="mt-1 block h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
-                />
+                <div className="mt-1 flex h-12 items-center overflow-hidden rounded-2xl border border-slate-200 bg-white focus-within:border-slate-400">
+                  <span className="select-none pl-4 text-base font-medium text-slate-500">+233</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    required
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="244 123 456"
+                    className="h-full flex-1 bg-transparent pl-2 pr-4 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-slate-400">Ghana numbers only. Enter digits after +233 (e.g. 244123456 or 0244123456).</p>
               </label>
 
               <label className="block">

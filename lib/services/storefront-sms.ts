@@ -93,14 +93,23 @@ async function sendViaArkesel(args: {
 
   if (!response.ok || (payload.code && payload.code !== 'ok')) {
     const retryable = response.status === 429 || response.status >= 500;
+    const errorMsg = `Arkesel: ${payload.message ?? payload.code ?? response.status}`;
+    console.error('[storefront-sms] Arkesel send failed', {
+      to: toMsisdn(args.to),
+      senderId: args.senderId,
+      httpStatus: response.status,
+      responseCode: payload.code,
+      responseMessage: payload.message,
+    });
     return {
       ok: false,
-      error: `Arkesel: ${payload.message ?? payload.code ?? response.status}`,
+      error: errorMsg,
       providerStatus: payload.code ?? String(response.status),
       retryable,
     };
   }
 
+  console.info('[storefront-sms] Arkesel send ok', { to: toMsisdn(args.to) });
   return { ok: true, providerStatus: 'ACCEPTED' };
 }
 
