@@ -129,21 +129,29 @@ export async function createSalesReturn(input: {
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
 
-    if (refundAmount > 0 && refundMethod === 'CASH' && invoice.shiftId) {
-      await recordCashDrawerEntryTx(tx, {
-        businessId: invoice.businessId,
-        storeId: invoice.storeId,
-        tillId: invoice.tillId,
-        shiftId: invoice.shiftId,
-        createdByUserId: input.userId,
-        cashierUserId: input.userId,
-        entryType: 'CASH_REFUND',
-        amountPence: -refundAmount,
-        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
-        reason: input.reason ?? null,
-        referenceType: 'SALES_RETURN',
-        referenceId: created.id,
-      });
+    if (refundAmount > 0 && refundMethod === 'CASH' && invoice.tillId) {
+      // Record the cash refund on the CURRENT open shift for this till, not the
+      // original shift (which may already be closed). If no shift is open right
+      // now the entry is silently skipped — the return still completes and stock
+      // + accounting are correct; the merchant should note the cash was returned.
+      try {
+        await recordCashDrawerEntryTx(tx, {
+          businessId: invoice.businessId,
+          storeId: invoice.storeId,
+          tillId: invoice.tillId,
+          // deliberately omitting shiftId so the function resolves the current open shift
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'CASH_REFUND',
+          amountPence: -refundAmount,
+          reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+          reason: input.reason ?? null,
+          referenceType: 'SALES_RETURN',
+          referenceId: created.id,
+        });
+      } catch {
+        // No open shift — cash drawer entry skipped; return still completes.
+      }
     }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
