@@ -137,9 +137,31 @@ export async function approveAndCompleteStockTransfer(input: {
         select: { qtyOnHandBase: true, avgCostBasePence: true },
       });
       const targetBefore = targetExisting?.qtyOnHandBase ?? 0;
-      const targetCost = targetExisting?.avgCostBasePence ?? avgCost;
+      const targetExistingCost = targetExisting?.avgCostBasePence ?? 0;
       const targetAfter = targetBefore + line.qtyBase;
-      await upsertInventoryBalance(tx, transfer.toStoreId, line.productId, targetAfter, targetCost);
+
+      // Weighted-average blend at the destination. Without this the destination
+      // keeps its old WAC even after a large transfer-in lands at a different
+      // cost — which is the common "cost > selling price even without changes"
+      // pattern in multi-store setups.
+      // Edge cases:
+      //   - destination has no prior stock           → use source cost
+      //   - destination had stock but no recorded cost → use source cost
+      //   - source cost is 0/unknown                 → keep destination cost
+      let blendedTargetCost: number;
+      if (targetBefore <= 0 || targetExistingCost <= 0) {
+        blendedTargetCost = avgCost;
+      } else if (avgCost <= 0) {
+        blendedTargetCost = targetExistingCost;
+      } else if (targetAfter <= 0) {
+        blendedTargetCost = targetExistingCost;
+      } else {
+        blendedTargetCost = Math.round(
+          (targetBefore * targetExistingCost + line.qtyBase * avgCost) / targetAfter,
+        );
+      }
+
+      await upsertInventoryBalance(tx, transfer.toStoreId, line.productId, targetAfter, blendedTargetCost);
 
       await tx.stockMovement.createMany({
         data: [
@@ -161,7 +183,9 @@ export async function approveAndCompleteStockTransfer(input: {
             qtyBase: line.qtyBase,
             beforeQtyBase: targetBefore,
             afterQtyBase: targetAfter,
-            unitCostBasePence: targetCost,
+            // Record the cost of the inbound stock itself (source WAC), not the
+            // post-blend destination WAC — the movement reflects what arrived.
+            unitCostBasePence: avgCost,
             type: 'TRANSFER_IN',
             referenceType: 'STOCK_TRANSFER',
             referenceId: transfer.id,
