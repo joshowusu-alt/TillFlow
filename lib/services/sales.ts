@@ -107,43 +107,24 @@ type SaleCostProduct = {
   }>;
 };
 
-function getPackageLevelCosts(product: SaleCostProduct) {
-  return new Set(
-    (product.productUnits ?? [])
-      .filter((unit) => !unit.isBaseUnit && unit.conversionToBase > 1)
-      .map((unit) => unit.defaultCostPence ?? product.defaultCostBasePence * unit.conversionToBase)
-      .filter((cost) => cost > 0 && cost !== product.defaultCostBasePence)
-  );
-}
-
-function isPackageCostStoredAsBase(avgCostBasePence: number, product: SaleCostProduct) {
-  return getPackageLevelCosts(product).has(avgCostBasePence);
-}
-
+/**
+ * COGS / unit-cost resolver for a sale line. Trusts the inventory balance's
+ * recorded WAC; falls back to the product's `defaultCostBasePence` only when
+ * the balance has no positive WAC.
+ *
+ * Note: a previous version of this function included a "package cost stored as
+ * base" heuristic that automatically rewrote any WAC matching a package-level
+ * cost (e.g. case-of-24 cost) back to `defaultCostBasePence`. That heuristic
+ * silently corrupted legitimate WAC values whenever a real purchase landed at
+ * exactly the package price. The heuristic was removed; the manual repair tool
+ * (`repairInventoryAverageCostDrift`) remains available for genuine cleanups.
+ */
 function resolveSaleUnitCostBasePence(
   inventoryMap: Map<string, { qtyOnHandBase: number; avgCostBasePence: number }>,
   productId: string,
   product: SaleCostProduct,
 ) {
-  const avgCost = resolveAvgCost(inventoryMap, productId, product.defaultCostBasePence);
-  return isPackageCostStoredAsBase(avgCost, product)
-    ? product.defaultCostBasePence
-    : avgCost;
-}
-
-function getPackageCostRepairs(
-  lineDetails: ReturnType<typeof buildLinePricing>,
-  inventoryMap: Map<string, { qtyOnHandBase: number; avgCostBasePence: number }>,
-) {
-  const repairs = new Map<string, number>();
-  for (const line of lineDetails) {
-    if (repairs.has(line.productId)) continue;
-    const avgCost = inventoryMap.get(line.productId)?.avgCostBasePence ?? 0;
-    if (avgCost > 0 && isPackageCostStoredAsBase(avgCost, line.productUnit.product)) {
-      repairs.set(line.productId, line.productUnit.product.defaultCostBasePence);
-    }
-  }
-  return repairs;
+  return resolveAvgCost(inventoryMap, productId, product.defaultCostBasePence);
 }
 
 export type SalePaymentInput = PaymentInput;
@@ -326,7 +307,6 @@ export async function createSale(input: CreateSaleInput) {
       resolveSaleUnitCostBasePence(inventoryMap, line.productId, line.productUnit.product)
     );
   }
-  const packageCostRepairs = getPackageCostRepairs(lineDetails, inventoryMap);
 
   const lineNetSubtotalTotal = lineDetails.reduce((sum, line) => sum + line.lineNetSubtotal, 0);
   const lineVatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
@@ -616,16 +596,6 @@ export async function createSale(input: CreateSaleInput) {
     }
 
     if (enforceInventory && shouldApplyInventoryMovements) {
-      if (packageCostRepairs.size > 0) {
-        await Promise.all(
-          [...packageCostRepairs.entries()].map(([productId, defaultCostBasePence]) =>
-            tx.inventoryBalance.updateMany({
-              where: { storeId: input.storeId, productId },
-              data: { avgCostBasePence: defaultCostBasePence },
-            })
-          )
-        );
-      }
       // Single SQL UPDATE for all products — 1 RTT regardless of cart size
       txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
     } else if (!enforceInventory && shouldApplyInventoryMovements) {

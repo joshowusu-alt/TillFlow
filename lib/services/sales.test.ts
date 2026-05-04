@@ -377,7 +377,12 @@ describe('createSale — pricing', () => {
     expect(createCall.data.totalPence).toBe(2600);
   });
 
-  it('uses base cost and repairs inventory average when a package cost was stored as base', async () => {
+  it('trusts the recorded WAC and never silently rewrites it to defaultCostBasePence', async () => {
+    // Regression: an earlier "package cost stored as base" heuristic rewrote
+    // any WAC that happened to equal a package-level cost back to
+    // defaultCostBasePence on every sale. That silently corrupted legitimate
+    // WAC values whenever a real purchase landed at exactly the package
+    // price. The heuristic has been removed; manual repair stays opt-in.
     prismaMock.productUnit.findMany.mockResolvedValue([
       makeProductUnit({
         product: {
@@ -399,14 +404,14 @@ describe('createSale — pricing', () => {
     }));
 
     const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
-    expect(createCall.data.lines.create[0].lineCostPence).toBe(478);
-    expect(createCall.data.grossMarginPence).toBe(122);
-    expect((prismaMock as any).inventoryBalance.updateMany).toHaveBeenCalledWith({
-      where: { storeId: STORE_ID, productId: PRODUCT_ID },
-      data: { avgCostBasePence: 239 },
-    });
+    // Sale uses recorded WAC for COGS — 2 × 11500 = 23000.
+    expect(createCall.data.lines.create[0].lineCostPence).toBe(23000);
+    // Selling 2 × 300 = 600 against cost 23000 → margin -22400.
+    expect(createCall.data.grossMarginPence).toBe(-22400);
+    // No silent rewrite of the inventory's avgCostBasePence.
+    expect((prismaMock as any).inventoryBalance.updateMany).not.toHaveBeenCalled();
     const movementCall = prismaMock.stockMovement.createMany.mock.calls[0][0];
-    expect(movementCall.data[0].unitCostBasePence).toBe(239);
+    expect(movementCall.data[0].unitCostBasePence).toBe(11500);
   });
 });
 
