@@ -282,28 +282,42 @@ export default async function OnlineStoreSettingsPage({
           defaultOpen={false}
         >
           {(() => {
-            const smsConfigured = Boolean(
+            const hubtelConfigured = Boolean(
               process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET,
             );
+            const arkeselConfigured = Boolean(process.env.ARKESEL_API_KEY);
+            const smsConfigured = hubtelConfigured || arkeselConfigured;
             return (
               <div className="space-y-4">
                 {smsConfigured ? (
                   <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                     <span className="text-base">✅</span>
-                    <span><strong>SMS provider connected.</strong> Hubtel credentials are configured and ready to send.</span>
+                    <span>
+                      <strong>SMS provider connected</strong> via{' '}
+                      {hubtelConfigured ? 'Hubtel' : 'Arkesel'}.
+                    </span>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    <p className="font-semibold mb-1">⚠️ SMS provider not connected</p>
-                    <p className="text-amber-800">
-                      To send OTP codes and order notifications, add your Hubtel API credentials to your Vercel environment variables:
-                    </p>
-                    <ul className="mt-2 space-y-0.5 font-mono text-xs text-amber-900">
-                      <li>HUBTEL_CLIENT_ID</li>
-                      <li>HUBTEL_CLIENT_SECRET</li>
-                      <li>HUBTEL_SMS_SENDER_ID <span className="font-sans font-normal text-amber-700">(optional, defaults to &ldquo;TillFlow&rdquo;)</span></li>
-                    </ul>
-                    <p className="mt-2 text-amber-700">Get these from <strong>developers.hubtel.com → Manage API Keys</strong>.</p>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-3">
+                    <p className="font-semibold">⚠️ SMS provider not connected</p>
+                    <div>
+                      <p className="font-medium text-amber-800 mb-1">Option A — Arkesel (recommended, simpler)</p>
+                      <p className="text-amber-700 text-xs mb-1">
+                        Sign up free at <strong>account.arkesel.com</strong> → Dashboard → SMS API → copy your API key.
+                        You get 10 free credits instantly.
+                      </p>
+                      <code className="block font-mono text-xs text-amber-900 bg-amber-100 rounded px-2 py-1">ARKESEL_API_KEY</code>
+                    </div>
+                    <div>
+                      <p className="font-medium text-amber-800 mb-1">Option B — Hubtel</p>
+                      <ul className="space-y-0.5 font-mono text-xs text-amber-900">
+                        <li>HUBTEL_CLIENT_ID</li>
+                        <li>HUBTEL_CLIENT_SECRET</li>
+                        <li>HUBTEL_SMS_SENDER_ID <span className="font-sans font-normal text-amber-700">(optional)</span></li>
+                      </ul>
+                      <p className="mt-1 text-xs text-amber-700">Get from <strong>developers.hubtel.com → Manage API Keys</strong>.</p>
+                    </div>
+                    <p className="text-xs text-amber-700">Add whichever key(s) you choose to your Vercel project environment variables, then redeploy.</p>
                   </div>
                 )}
                 <p className="text-sm text-black/55">

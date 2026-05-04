@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { sendStorefrontSms } from '@/lib/services/storefront-sms';
+import { sendStorefrontSms, hasSmsProviderConfigured } from '@/lib/services/storefront-sms';
 
 export type OtpDeliveryChannel = 'sms' | 'email' | 'console';
 
@@ -24,9 +24,7 @@ const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL || 'TillFlow <noreply@tillflo
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 function hasSmsProvider(): boolean {
-  // Hubtel is the only configured provider today — keep this gate so we can
-  // attempt SMS first, fall back to email second.
-  return Boolean(process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET);
+  return hasSmsProviderConfigured();
 }
 
 async function sendOtpViaSms(args: SendArgs): Promise<boolean> {

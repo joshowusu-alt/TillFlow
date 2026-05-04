@@ -10,6 +10,22 @@
 
 const DEFAULT_SENDER_ID = 'TillFlow';
 
+// ---------------------------------------------------------------------------
+// Provider detection
+// ---------------------------------------------------------------------------
+
+export function hasHubtelCredentials(): boolean {
+  return Boolean(process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET);
+}
+
+export function hasArkeselCredentials(): boolean {
+  return Boolean(process.env.ARKESEL_API_KEY);
+}
+
+export function hasSmsProviderConfigured(): boolean {
+  return hasHubtelCredentials() || hasArkeselCredentials();
+}
+
 export type StorefrontSmsResult =
   | { ok: true; providerStatus: string; messageId?: string }
   | { ok: false; error: string; providerStatus?: string; retryable: boolean };
@@ -37,8 +53,50 @@ function resolveSenderId(override?: string | null): string {
   return DEFAULT_SENDER_ID;
 }
 
-function hasHubtelCredentials(): boolean {
-  return Boolean(process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET);
+async function sendViaArkesel(args: {
+  to: string;
+  body: string;
+  senderId: string;
+}): Promise<StorefrontSmsResult> {
+  const apiKey = process.env.ARKESEL_API_KEY!;
+  const params = new URLSearchParams({
+    action: 'send-sms',
+    api_key: apiKey,
+    to: args.to,
+    from: args.senderId,
+    sms: args.body,
+  });
+  const url = `https://sms.arkesel.com/sms/api?${params.toString()}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'GET' });
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Network error contacting SMS provider.',
+      retryable: true,
+    };
+  }
+
+  let payload: { code?: string; message?: string } = {};
+  try {
+    payload = (await response.json()) as { code?: string; message?: string };
+  } catch {
+    // ignore parse errors
+  }
+
+  if (!response.ok || (payload.code && payload.code !== 'ok')) {
+    const retryable = response.status === 429 || response.status >= 500;
+    return {
+      ok: false,
+      error: `Arkesel: ${payload.message ?? payload.code ?? response.status}`,
+      providerStatus: payload.code ?? String(response.status),
+      retryable,
+    };
+  }
+
+  return { ok: true, providerStatus: 'ACCEPTED' };
 }
 
 async function sendViaHubtel(args: {
@@ -120,17 +178,19 @@ export async function sendStorefrontSms(args: SendStorefrontSmsArgs): Promise<St
     return { ok: true, providerStatus: 'DEV_MODE' };
   }
 
-  if (!hasHubtelCredentials()) {
-    // Production with no provider configured. Don't pretend success — this
-    // gives the dispatcher a clear "FAILED" so ops can see it in the outbox.
-    return {
-      ok: false,
-      error: 'No SMS provider configured (HUBTEL_CLIENT_ID / HUBTEL_CLIENT_SECRET).',
-      retryable: false,
-    };
+  if (hasHubtelCredentials()) {
+    return sendViaHubtel({ to: args.to, body: args.body, senderId });
   }
 
-  return sendViaHubtel({ to: args.to, body: args.body, senderId });
+  if (hasArkeselCredentials()) {
+    return sendViaArkesel({ to: args.to, body: args.body, senderId });
+  }
+
+  return {
+    ok: false,
+    error: 'No SMS provider configured (HUBTEL_CLIENT_ID/HUBTEL_CLIENT_SECRET or ARKESEL_API_KEY).',
+    retryable: false,
+  };
 }
 
 export const STOREFRONT_SMS_DEFAULT_SENDER_ID = DEFAULT_SENDER_ID;
