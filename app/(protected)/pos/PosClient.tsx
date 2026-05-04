@@ -394,12 +394,24 @@ export default function PosClient({
     if (typeof window === 'undefined') return;
     const urlTillId = searchParams?.get('tillId');
     if (urlTillId) return; // URL param takes precedence
+    if (
+      business.requireOpenTillForSales &&
+      openShiftTillIds.length === 1 &&
+      tills.some((t) => t.id === openShiftTillIds[0])
+    ) {
+      setTillId(openShiftTillIds[0]);
+      return;
+    }
     const saved = window.localStorage.getItem(tillStorageKey);
-    if (saved && tills.some((t) => t.id === saved)) {
+    if (
+      saved &&
+      tills.some((t) => t.id === saved) &&
+      (!business.requireOpenTillForSales || openShiftTillIds.includes(saved))
+    ) {
       setTillId(saved);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tillStorageKey]);
+  }, [tillStorageKey, business.requireOpenTillForSales, openShiftTillIds.join('|')]);
 
   // Persist till selection to localStorage whenever it changes
   useEffect(() => {

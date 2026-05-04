@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, toPence } from '@/lib/form-helpers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -79,7 +79,9 @@ export async function openShiftAction(
       },
     });
 
+    revalidateTag('pos-shifts');
     revalidatePath('/shifts');
+    revalidatePath('/pos');
     return ok({ id: shift.id });
   });
 }
@@ -115,7 +117,9 @@ export async function closeShiftAction(
         approval: { mode: 'PIN', approvingManagerId: manager.id },
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
+      revalidateTag('pos-shifts');
       revalidatePath('/shifts');
+      revalidatePath('/pos');
       revalidatePath('/reports', 'layout');
       return ok({ id: result.id });
     } catch (e) {
@@ -230,7 +234,9 @@ export async function closeShiftOwnerOverrideAction(
         },
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
+      revalidateTag('pos-shifts');
       revalidatePath('/shifts');
+      revalidatePath('/pos');
       revalidatePath('/reports', 'layout');
       return ok({ id: result.id });
     } catch (e) {
