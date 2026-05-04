@@ -58,7 +58,7 @@ function ProductImage({
 }
 
 function ProductCardSkeleton() {
-  return <div className="h-52 animate-pulse rounded-xl bg-slate-100" />;
+  return <div className="h-56 animate-pulse rounded-2xl bg-white ring-1 ring-black/5" />;
 }
 
 function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
@@ -87,27 +87,27 @@ function PaymentPreviewCard({
   const details = getPaymentInstructionDetails(paymentConfig);
   if (details.manual) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Payment</div>
-        <div className="font-medium text-amber-900">Pay on contact</div>
-        <div className="mt-0.5 text-xs text-amber-800/70">We&apos;ll reach out with payment instructions after you place your order.</div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Payment plan</div>
+        <div className="font-semibold text-amber-950">The store will confirm payment with you</div>
+        <div className="mt-1 text-xs leading-5 text-amber-800/75">Place the order now. The merchant will contact you with the exact next step.</div>
       </div>
     );
   }
   if (!details.ready) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">Payment</div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Payment plan</div>
         The store will contact you with payment details after ordering.
       </div>
     );
   }
   return (
-    <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">How you&apos;ll pay</div>
-      <div className="font-semibold text-sky-900">{details.modeLabel}</div>
+    <div className="rounded-2xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm">
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-sky-700">How you&apos;ll pay</div>
+      <div className="font-semibold text-sky-950">{details.modeLabel}</div>
       {details.recipient ? (
-        <div className="mt-0.5 text-xs text-sky-800">
+        <div className="mt-1 text-xs text-sky-800">
           {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? 'Merchant number: ' : paymentConfig.mode === 'BANK_TRANSFER' ? 'Account: ' : 'Number: '}
           <span className="font-mono font-bold">{details.recipient}</span>
         </div>
@@ -115,7 +115,9 @@ function PaymentPreviewCard({
       {details.recipientCaption && !details.manual ? (
         <div className="mt-0.5 text-xs text-sky-700/70">{details.recipientCaption}</div>
       ) : null}
-      <div className="mt-1 text-xs text-sky-800/70">You&apos;ll receive a reference code after placing your order.</div>
+      <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-sky-900">
+        Use the unique order reference after checkout so the merchant can confirm quickly.
+      </div>
     </div>
   );
 }
@@ -223,6 +225,15 @@ export default function StorefrontClient({
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
       a.name.localeCompare(b.name),
     );
+  }, [productsForStore]);
+
+  const categoryProductCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const product of productsForStore) {
+      if (!product.categoryId) continue;
+      counts.set(product.categoryId, (counts.get(product.categoryId) ?? 0) + 1);
+    }
+    return counts;
   }, [productsForStore]);
 
   const selectedCategory = useMemo(
@@ -464,6 +475,8 @@ export default function StorefrontClient({
     .map((word) => word[0]?.toUpperCase() ?? '')
     .join('') || 'TF';
   const cartItemCount = cartDetails.length;
+  const cartUnitCount = cart.reduce((sum, line) => sum + line.qtyInUnit, 0);
+  const checkoutReady = cart.length > 0 && customerName.trim().length > 0 && customerPhone.trim().length > 0;
   const brandStyles = resolveBrandStyles(storefront.branding);
   const primaryStyle: React.CSSProperties = {
     backgroundColor: 'var(--brand-primary)',
@@ -491,33 +504,36 @@ export default function StorefrontClient({
       style={brandStyles.cssVars as React.CSSProperties}
     >
       {/* ── STORE HERO ─────────────────────────────────────── */}
-      <header className="relative overflow-hidden" style={heroStyle}>
-        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-6 sm:px-6 sm:py-8">
-          <div className="flex items-start gap-4">
+      <header className="relative overflow-hidden pt-[env(safe-area-inset-top)]" style={heroStyle}>
+        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-4 sm:px-6 sm:py-6">
+          <div className="flex items-start gap-3 sm:gap-4">
             {storefront.branding.logoUrl ? (
               <Image
                 src={storefront.branding.logoUrl}
                 alt={storefront.name}
                 width={80}
                 height={80}
-                className="h-16 w-16 shrink-0 rounded-full object-cover bg-white/20 ring-2 ring-white/30 shadow-lg sm:h-20 sm:w-20"
+                className="h-14 w-14 shrink-0 rounded-2xl object-cover bg-white/20 ring-1 ring-white/30 shadow-lg sm:h-16 sm:w-16"
               />
             ) : (
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30 shadow-lg text-xl font-bold sm:h-20 sm:w-20 sm:text-2xl" style={{ color: 'var(--brand-primary-foreground)' }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 shadow-lg text-lg font-bold sm:h-16 sm:w-16 sm:text-xl" style={{ color: 'var(--brand-primary-foreground)' }}>
                 {storefrontInitials}
               </div>
             )}
 
             <div className="min-w-0 flex-1">
-              <h1 className="break-words hyphens-auto text-xl font-bold leading-tight sm:text-2xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
+              <div className="mb-1 inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.82 }}>
+                TillFlow online store
+              </div>
+              <h1 className="break-words hyphens-auto text-lg font-bold leading-tight sm:text-2xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
                 {storefrontTitle}
               </h1>
               {storefront.branding.tagline && (
-                <p className="mt-0.5 text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.75 }}>
+                <p className="mt-0.5 line-clamp-2 text-xs sm:text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.76 }}>
                   {storefront.branding.tagline}
                 </p>
               )}
-              <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] sm:text-xs">
                 {storefront.openStatus ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 font-semibold" style={{ color: 'var(--brand-primary-foreground)' }}>
                     <span className={`h-1.5 w-1.5 rounded-full ${storefront.openStatus.isOpen ? 'bg-emerald-400' : 'bg-amber-400'}`} />
@@ -537,7 +553,7 @@ export default function StorefrontClient({
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.85 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S12 17.642 12 10.5a7.5 7.5 0 1115 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                     </svg>
                     {selectedStore?.address ?? storefront.address}
                   </span>
@@ -559,14 +575,13 @@ export default function StorefrontClient({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
               {customer ? (
                 <a
                   href={`/shop/${storefront.slug}/account`}
                   className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3 text-xs font-semibold transition hover:bg-white/25"
                   style={{ color: 'var(--brand-primary-foreground)' }}
                 >
-                  <span aria-hidden="true">👤</span>
                   <span className="max-w-[8rem] truncate">
                     {customer.name?.split(' ')[0] ?? 'Account'}
                   </span>
@@ -593,7 +608,7 @@ export default function StorefrontClient({
           </div>
 
           {storefront.stores.length > 1 ? (
-            <div className="mt-5 rounded-2xl bg-white/12 px-4 py-3">
+            <div className="mt-4 rounded-2xl bg-white/12 px-3 py-3 sm:px-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.6 }}>
                 Pick up from
               </div>
@@ -632,8 +647,8 @@ export default function StorefrontClient({
       {/* ── STORE DESCRIPTION STRIP ──────────────────────── */}
       {storefront.description ? (
         <div className="border-b border-black/5 bg-white">
-          <div className="mx-auto max-w-screen-lg px-4 py-3 sm:px-6">
-            <p className="text-sm text-black/60 leading-relaxed">{storefront.description}</p>
+          <div className="mx-auto max-w-screen-lg px-4 py-2.5 sm:px-6">
+            <p className="line-clamp-2 text-sm leading-relaxed text-black/60">{storefront.description}</p>
           </div>
         </div>
       ) : null}
@@ -645,14 +660,14 @@ export default function StorefrontClient({
           {/* ── LEFT: search + chips + product grid ──────── */}
           <section className="min-w-0">
             {/* Sticky search + category chips */}
-            <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none">
+            <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:backdrop-blur-none">
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                   </svg>
                   <input
-                    className="input pl-9"
+                    className="input h-11 rounded-2xl border-black/8 bg-white pl-9 shadow-sm"
                     placeholder="Search products…"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
@@ -660,20 +675,20 @@ export default function StorefrontClient({
                   />
                 </div>
                 {searchQuery && (
-                  <button type="button" className="text-sm font-medium text-black/50 hover:text-ink" onClick={() => handleSearch('')}>
+                  <button type="button" className="rounded-full px-2 text-sm font-semibold text-black/50 hover:bg-black/5 hover:text-ink" onClick={() => handleSearch('')}>
                     Clear
                   </button>
                 )}
               </div>
 
               {categories.length > 0 && (
-                <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
                     className={selectedCategoryId === ALL_CATEGORIES
-                      ? 'shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
-                      : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
+                      ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
+                      : 'shrink-0 rounded-full border border-black/10 bg-white px-3.5 py-2 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
                     }
                     style={selectedCategoryId === ALL_CATEGORIES ? primaryStyle : undefined}
                   >
@@ -687,30 +702,36 @@ export default function StorefrontClient({
                         type="button"
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
-                          ? 'shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold text-white shadow-sm'
-                          : 'shrink-0 rounded-full border border-black/10 bg-white px-4 py-1.5 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
+                          ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
+                          : 'shrink-0 rounded-full border border-black/10 bg-white px-3.5 py-2 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
                         }
                         style={active ? primaryStyle : undefined}
                       >
                         {toTitleCase(category.name)}
+                        <span className="ml-1.5 opacity-60">{categoryProductCounts.get(category.id) ?? 0}</span>
                       </button>
                     );
                   })}
                 </div>
               )}
 
-              <div className="mt-2 text-[11px] text-black/40">
+              <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/45">
+                <span>
                 {filteredProducts.length === 0
                   ? (selectedCategory ? `No products in ${toTitleCase(selectedCategory.name)}` : 'No products to show')
                   : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}`
                 }
+                </span>
+                {cartItemCount > 0 ? (
+                  <span className="font-semibold text-ink">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''} in cart</span>
+                ) : null}
               </div>
             </div>
 
             {/* Product grid or empty state */}
             {filteredProducts.length === 0 ? (
               showInitialEmptySkeleton ? (
-                <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
+                <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3 lg:gap-4">
                   {Array.from({ length: 6 }).map((_, index) => (
                     <ProductCardSkeleton key={index} />
                   ))}
@@ -762,35 +783,34 @@ export default function StorefrontClient({
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/5 ${
-                          inStock ? 'shadow-sm transition hover:shadow-md hover:ring-black/10' : 'opacity-50 shadow-none'
+                        className={`group flex min-h-[17.5rem] flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 ${
+                          inStock ? 'shadow-[0_6px_20px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-black/10' : 'opacity-60 shadow-none'
                         }`}
                       >
-                        {/* Image area — compact 80px */}
                         <button
                           type="button"
-                          className="relative h-28 w-full overflow-hidden bg-slate-50 text-left sm:h-32 lg:h-36"
+                          className="relative h-28 w-full overflow-hidden bg-slate-100 text-left sm:h-32 lg:h-36"
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
                           <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} />
                           {hasPromo && inStock ? (
                             <div
-                              className="absolute left-1.5 top-1.5 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white"
+                              className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
                               style={primaryStyle}
                             >
                               Promo
                             </div>
                           ) : null}
                           {!inStock ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/65">
-                              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600 shadow-sm">
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
+                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
                                 Sold out
                               </span>
                             </div>
                           ) : null}
                           {inStock && cartProductIds.has(product.id) ? (
-                            <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-ink/85 px-1.5 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-sm">
+                            <div className="absolute right-2 top-2 flex items-center gap-0.5 rounded-full bg-ink/90 px-2 py-0.5 text-[9px] font-bold text-white shadow backdrop-blur-sm">
                               <svg className="h-2.5 w-2.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
                               </svg>
@@ -811,11 +831,14 @@ export default function StorefrontClient({
                           </h2>
 
                           <div className="mt-auto pt-2">
-                            <div className="text-sm font-bold text-ink sm:text-base">{unitPrice}</div>
+                            <div className="flex items-end justify-between gap-2">
+                              <div className="text-[15px] font-extrabold leading-none text-ink sm:text-base">{unitPrice}</div>
+                              {inStock ? <span className="text-[9px] font-medium text-emerald-600">Available</span> : null}
+                            </div>
 
                             {product.units.length > 1 ? (
                               <select
-                                className="mt-1 w-full rounded-lg border border-black/10 bg-white px-2 py-1 text-[10px] text-black/60 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:text-xs"
+                                className="mt-2 w-full rounded-xl border border-black/10 bg-slate-50 px-2 py-2 text-[11px] font-medium text-black/65 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:text-xs"
                                 value={selected?.unitId ?? ''}
                                 disabled={!inStock}
                                 onChange={(event) =>
@@ -835,16 +858,16 @@ export default function StorefrontClient({
                                 ))}
                               </select>
                             ) : product.units[0] ? (
-                              <div className="mt-0.5 text-[10px] text-black/40">{toTitleCase(product.units[0].name)}</div>
+                              <div className="mt-1 text-[10px] font-medium text-black/40">{toTitleCase(product.units[0].name)}</div>
                             ) : null}
 
                             {inStock ? (
-                              <div className="mt-2 flex items-center gap-1.5">
-                                <div className="flex items-center overflow-hidden rounded-lg border border-black/10">
+                              <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-1.5">
+                                <div className="flex h-10 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
                                   <button
                                     type="button"
                                     aria-label="Decrease quantity"
-                                    className="flex h-8 w-7 items-center justify-center text-sm text-black/50 transition hover:text-accent disabled:opacity-30"
+                                    className="flex h-10 w-8 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
                                     disabled={(selected?.qtyInUnit ?? 1) <= 1}
                                     onClick={() =>
                                       setSelectionState((prev) => ({
@@ -858,13 +881,13 @@ export default function StorefrontClient({
                                   >
                                     −
                                   </button>
-                                  <span className="w-7 text-center text-xs font-semibold text-ink">
+                                  <span className="w-7 text-center text-xs font-bold text-ink">
                                     {selected?.qtyInUnit ?? 1}
                                   </span>
                                   <button
                                     type="button"
                                     aria-label="Increase quantity"
-                                    className="flex h-8 w-7 items-center justify-center text-sm text-black/50 transition hover:text-accent"
+                                    className="flex h-10 w-8 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
                                     onClick={() =>
                                       setSelectionState((prev) => ({
                                         ...prev,
@@ -880,7 +903,7 @@ export default function StorefrontClient({
                                 </div>
                                 <button
                                   type="button"
-                                  className="flex h-9 flex-1 items-center justify-center rounded-lg text-sm font-bold text-white transition active:scale-[0.97] hover:opacity-90"
+                                  className="flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
                                   style={primaryStyle}
                                   onClick={() => addToCart(product.id)}
                                 >
@@ -974,7 +997,7 @@ export default function StorefrontClient({
           {/* ── RIGHT: Desktop cart + checkout sidebar ───── */}
           <aside className="hidden lg:block lg:sticky lg:top-6 lg:self-start">
             {/* Cart section */}
-            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
+            <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accentSoft text-accent">
@@ -982,7 +1005,12 @@ export default function StorefrontClient({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
                     </svg>
                   </div>
-                  <h2 className="text-base font-semibold text-ink">Your cart</h2>
+                  <div>
+                    <h2 className="text-base font-semibold text-ink">Your cart</h2>
+                    {cartDetails.length > 0 ? (
+                      <div className="text-[11px] text-black/45">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''} ready for pickup</div>
+                    ) : null}
+                  </div>
                 </div>
                 {cartItemCount > 0 ? (
                   <span className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={primaryStyle}>
@@ -994,14 +1022,14 @@ export default function StorefrontClient({
               </div>
 
               {cartDetails.length === 0 ? (
-                <div className="mt-4 rounded-xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-8 text-center">
+                <div className="mt-4 rounded-2xl border border-dashed border-black/10 bg-slate-50 px-4 py-8 text-center">
                   <div className="text-sm font-medium text-ink">Cart is empty</div>
                   <div className="mt-1 text-xs text-black/50">Tap "Add" on a product to get started.</div>
                 </div>
               ) : (
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-2.5">
                   {cartDetails.map((line) => (
-                    <div key={line.id} className="rounded-xl bg-black/[0.03] px-3 py-2.5">
+                    <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-slate-100">
                           <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock />
@@ -1092,8 +1120,16 @@ export default function StorefrontClient({
             </div>
 
             {/* Checkout section */}
-            <div className="mt-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-              <h2 className="text-base font-semibold text-ink">Your details</h2>
+            <div className="mt-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-black/5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-ink">Checkout</h2>
+                  <p className="mt-0.5 text-xs text-black/45">A quick pickup order. No password needed.</p>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-700">
+                  Secure
+                </span>
+              </div>
               <div className="mt-4 space-y-4">
                 {storefront.pickupInstructions ? (
                   <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
@@ -1141,14 +1177,19 @@ export default function StorefrontClient({
                   <textarea className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
                 </div>
                 <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
+                {!checkoutReady && cart.length > 0 ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+                    Add your name and phone number so the store can confirm pickup.
+                  </div>
+                ) : null}
                 {error ? (
-                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">{error}</div>
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900">{error}</div>
                 ) : null}
                 <button
                   type="button"
                   className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
                   style={cart.length > 0 ? primaryStyle : undefined}
-                  disabled={submitting || cart.length === 0}
+                  disabled={submitting || !checkoutReady}
                   onClick={submitCheckout}
                 >
                   {submitting ? 'Placing order…' : cart.length === 0 ? 'Place Order' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
@@ -1169,7 +1210,7 @@ export default function StorefrontClient({
           mobileStep === 'cart' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-4">
+        <div className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-3.5">
           <button
             type="button"
             onClick={() => setMobileStep('browse')}
@@ -1180,7 +1221,10 @@ export default function StorefrontClient({
             </svg>
             Back
           </button>
-          <h2 className="flex-1 text-center font-semibold text-ink">Your cart</h2>
+          <div className="flex-1 text-center">
+            <h2 className="font-semibold text-ink">Your cart</h2>
+            {cartDetails.length > 0 ? <div className="text-[10px] text-black/40">{cartUnitCount} item{cartUnitCount !== 1 ? 's' : ''}</div> : null}
+          </div>
           {cartItemCount > 0 ? (
             <span className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={primaryStyle}>
               {cartItemCount}
@@ -1195,9 +1239,9 @@ export default function StorefrontClient({
               <div className="mt-1 text-xs text-black/50">Add products to continue.</div>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {cartDetails.map((line) => (
-                <div key={line.id} className="rounded-xl bg-black/[0.03] px-4 py-3">
+                <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-100">
                       <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock />
@@ -1226,10 +1270,10 @@ export default function StorefrontClient({
           )}
 
           {suggestedProducts.length > 0 ? (
-            <div className="mt-5 border-t border-black/5 pt-4">
+            <div className="mt-5 rounded-2xl border border-black/5 bg-white p-3">
               <div className="mb-3">
                 <h3 className="text-sm font-semibold text-ink">You might also like</h3>
-                <p className="text-xs text-black/45">More from the same category.</p>
+                <p className="text-xs text-black/45">Small add-ons from the same shelf.</p>
               </div>
               <div className="space-y-2">
                 {suggestedProducts.map((product) => {
@@ -1240,7 +1284,7 @@ export default function StorefrontClient({
                   );
 
                   return (
-                    <div key={product.id} className="flex items-center gap-3 rounded-xl bg-black/[0.03] px-4 py-3">
+                    <div key={product.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
                       <button
                         type="button"
                         onClick={() => scrollToProduct(product.id)}
@@ -1255,7 +1299,8 @@ export default function StorefrontClient({
                       <button
                         type="button"
                         onClick={() => addToCart(product.id)}
-                        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                        className="rounded-full px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                        style={primaryStyle}
                       >
                         + Add
                       </button>
@@ -1267,7 +1312,7 @@ export default function StorefrontClient({
           ) : null}
 
           {cartDetails.length > 0 && (
-            <div className="mt-5 space-y-1.5 border-t border-black/5 pt-4 text-sm">
+            <div className="mt-5 space-y-1.5 rounded-2xl border border-black/5 bg-white px-4 py-3 text-sm">
               <div className="flex items-center justify-between text-black/55">
                 <span>Subtotal</span>
                 <span>{formatMoney(totals.netSubtotal, storefront.currency)}</span>
@@ -1305,7 +1350,7 @@ export default function StorefrontClient({
           mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-4">
+        <div className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-3.5">
           <button
             type="button"
             onClick={() => setMobileStep('cart')}
@@ -1316,7 +1361,10 @@ export default function StorefrontClient({
             </svg>
             Cart
           </button>
-          <h2 className="flex-1 text-center font-semibold text-ink">Checkout</h2>
+          <div className="flex-1 text-center">
+            <h2 className="font-semibold text-ink">Checkout</h2>
+            <div className="text-[10px] text-black/40">Pickup order</div>
+          </div>
           <span className="text-sm font-bold text-ink">{formatMoney(orderTotal, storefront.currency)}</span>
         </div>
 
@@ -1328,7 +1376,7 @@ export default function StorefrontClient({
             </div>
           ) : null}
           <div className="mb-4">
-            <div className="mb-3 overflow-hidden rounded-xl border border-black/5 bg-white">
+            <div className="mb-3 overflow-hidden rounded-2xl border border-black/5 bg-white">
               <div className="border-b border-black/5 bg-black/[0.02] px-3 py-2">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">Order summary</div>
               </div>
@@ -1349,7 +1397,12 @@ export default function StorefrontClient({
             <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
           </div>
 
-          <div className="space-y-4">
+          <div className="rounded-2xl border border-black/5 bg-white p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-ink">Your details</h3>
+              <p className="mt-0.5 text-xs text-black/45">Used only to confirm payment and pickup.</p>
+            </div>
+            <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-black/70">Full name</label>
               <input className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
@@ -1389,9 +1442,15 @@ export default function StorefrontClient({
               <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
               <textarea className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
             </div>
+            {!checkoutReady && cart.length > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                Name and phone number are required before placing the order.
+              </div>
+            ) : null}
             {error ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>
             ) : null}
+            </div>
           </div>
         </div>
 
@@ -1400,7 +1459,7 @@ export default function StorefrontClient({
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
             style={cart.length > 0 ? primaryStyle : undefined}
-            disabled={submitting || cart.length === 0}
+            disabled={submitting || !checkoutReady}
             onClick={submitCheckout}
           >
             {submitting ? 'Placing order…' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}

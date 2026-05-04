@@ -173,7 +173,7 @@ interface StatusConfig {
 function getStatusConfig(status: string): StatusConfig {
   switch (status) {
     case 'AWAITING_PAYMENT':
-      return { icon: 'clock', bg: 'bg-amber-50', ring: 'ring-amber-200/70', iconBg: 'bg-amber-500 shadow-amber-500/25', labelColor: 'text-amber-700', label: 'Order placed', title: 'Send payment to confirm', message: null };
+      return { icon: 'clock', bg: 'bg-amber-50', ring: 'ring-amber-200/70', iconBg: 'bg-amber-500 shadow-amber-500/25', labelColor: 'text-amber-700', label: 'Order placed', title: 'Payment is the next step', message: null };
     case 'PAID':
       return { icon: 'check', bg: 'bg-sky-50', ring: 'ring-sky-200/70', iconBg: 'bg-sky-500 shadow-sky-500/25', labelColor: 'text-sky-700', label: 'Payment confirmed', title: 'Payment received', message: 'Your payment has been confirmed. We\'re preparing your order.' };
     case 'PROCESSING':
@@ -184,7 +184,7 @@ function getStatusConfig(status: string): StatusConfig {
     case 'COMPLETED':
       return { icon: 'check', bg: 'bg-emerald-50', ring: 'ring-emerald-200/70', iconBg: 'bg-emerald-500 shadow-emerald-500/25', labelColor: 'text-emerald-700', label: 'Collected', title: 'Order collected', message: 'Your order has been collected. Thank you for shopping with us!' };
     case 'CANCELLED':
-      return { icon: 'x', bg: 'bg-rose-50', ring: 'ring-rose-200/70', iconBg: 'bg-rose-500 shadow-rose-500/25', labelColor: 'text-rose-700', label: 'Cancelled', title: 'Order cancelled', message: 'This order was cancelled. Contact the store if you have questions.' };
+      return { icon: 'x', bg: 'bg-slate-50', ring: 'ring-slate-200/70', iconBg: 'bg-slate-500 shadow-slate-500/25', labelColor: 'text-slate-600', label: 'Cancelled', title: 'Order cancelled', message: 'This order is no longer active. Contact the store if you need help.' };
     default:
       return { icon: 'clock', bg: 'bg-slate-50', ring: 'ring-slate-200/60', iconBg: 'bg-slate-500 shadow-slate-500/25', labelColor: 'text-slate-600', label: 'Order status', title: friendlyStatus(status), message: null };
   }
@@ -310,7 +310,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
-      <div className="mx-auto max-w-lg px-4 py-6 sm:py-10">
+      <div className="mx-auto max-w-lg px-4 py-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:py-10">
 
         {/* Store nav + order number */}
         <div className="mb-5 flex items-center justify-between">
@@ -327,7 +327,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         </div>
 
         {/* Status hero */}
-        <div className={`relative overflow-hidden rounded-3xl p-6 shadow-sm ring-1 ${statusConfig.ring} ${statusConfig.bg}`}>
+        <div className={`relative overflow-hidden rounded-3xl p-5 shadow-sm ring-1 sm:p-6 ${statusConfig.ring} ${statusConfig.bg}`}>
           <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-white/30 blur-2xl" />
           <div className="relative flex items-start gap-4">
             <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ${statusConfig.iconBg}`}>
@@ -337,7 +337,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
               <div className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${statusConfig.labelColor}`}>
                 {statusConfig.label}
               </div>
-              <h1 className="mt-0.5 text-xl font-display font-bold text-ink sm:text-2xl">
+              <h1 className="mt-0.5 text-xl font-display font-bold leading-tight text-ink sm:text-2xl">
                 {statusConfig.title}
               </h1>
               {heroMessage && (
@@ -349,7 +349,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
         {/* Order progress timeline — not for cancelled */}
         {!isCancelled && (
-          <div className="mt-4 overflow-hidden rounded-2xl bg-white px-4 py-5 shadow-sm ring-1 ring-black/5">
+          <div className="mt-3 overflow-hidden rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-black/5">
             <div className="flex items-start">
               {TIMELINE_STEPS.map((step, idx) => {
                 const isDone = idx < activeStep;
@@ -386,13 +386,13 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         )}
 
         {/* Reference + amount — always visible */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-black/5">
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">Reference</div>
             <div className="mt-1.5 font-mono text-xl font-bold tracking-wide text-ink">{order.orderNumber}</div>
             <div className="mt-1 text-[10px] text-black/40">Quote when collecting</div>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-4 shadow-sm ring-1 ring-black/5">
+          <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
             <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-black/40">
               {paid ? 'Total paid' : 'Amount due'}
             </div>
@@ -405,9 +405,10 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
         {/* Payment instructions — awaiting only */}
         {awaitingPayment && !paymentDetails.manual && (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+          <div className="mt-4 overflow-hidden rounded-3xl border border-amber-200 bg-white shadow-sm">
             <div className="border-b border-amber-200/60 bg-amber-50/70 px-5 py-3">
-              <div className="font-semibold text-amber-900">How to pay</div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-700">Payment instructions</div>
+              <div className="mt-0.5 font-semibold text-amber-950">Pay exactly {formatMoney(order.totalPence, order.currency)}</div>
             </div>
             <div className="px-5 py-4 text-sm text-black/65">
               {paymentConfig.mode === 'MERCHANT_SHORTCODE' ? (
@@ -460,7 +461,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
 
         {/* Manual payment — store will contact */}
         {awaitingPayment && paymentDetails.manual && (
-          <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-900">
+          <div className="mt-4 rounded-3xl border border-sky-200 bg-sky-50 px-5 py-4 text-sm text-sky-900">
             <div className="font-semibold">What happens next</div>
             <p className="mt-1 leading-6">
               {storefrontDisplayName} will contact you on{' '}
@@ -555,9 +556,10 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
         )}
 
         {/* Order items */}
-        <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+        <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
           <div className="border-b border-black/5 px-5 py-4">
-            <h2 className="font-semibold text-ink">Your order</h2>
+            <h2 className="font-semibold text-ink">Order summary</h2>
+            <div className="mt-0.5 text-xs text-black/45">{order.lines.length} item{order.lines.length !== 1 ? 's' : ''} for pickup</div>
           </div>
           <div className="divide-y divide-black/5">
             {order.lines.map((line) => (

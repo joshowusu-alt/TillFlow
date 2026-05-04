@@ -16,7 +16,7 @@ type Step = 'phone' | 'code';
 
 function describeChannel(channel: string | null, delivered: boolean): string {
   if (!delivered) {
-    return 'Code generated. Check the server logs (developer mode).';
+    return 'Code generated for this test environment.';
   }
   if (channel === 'sms') return 'We sent a 6-digit code to your phone.';
   if (channel === 'email') return 'We sent a 6-digit code to your email.';
@@ -112,25 +112,28 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
       className="min-h-screen bg-slate-50"
       style={brand.cssVars as React.CSSProperties}
     >
-      <header className="border-b border-black/5 bg-white">
+      <header className="border-b border-black/5 bg-white pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <Link href={`/shop/${slug}`} className="text-sm font-semibold text-slate-700 hover:underline">
-            ← Back to {storefrontName}
+            Back to {storefrontName}
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-10">
-        <div className="rounded-2xl border border-black/5 bg-white p-6 shadow-sm sm:p-8">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Sign in to {storefrontName}
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            We&apos;ll text you a 6-digit code to confirm your phone. No password needed.
-          </p>
+      <main className="mx-auto max-w-md px-4 py-6 sm:py-10">
+        <div className="overflow-hidden rounded-3xl border border-black/5 bg-white shadow-sm">
+          <div className="border-b border-black/5 bg-slate-50 px-6 py-5 sm:px-8">
+            <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-black/40">Customer account</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+              Sign in securely
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Use your phone number to see recent orders from {storefrontName}. No password to remember.
+            </p>
+          </div>
 
           {step === 'phone' ? (
-            <form onSubmit={handleRequestCode} className="mt-6 space-y-4">
+            <form onSubmit={handleRequestCode} className="space-y-4 px-6 py-6 sm:px-8">
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Mobile number</span>
                 <input
@@ -141,7 +144,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   placeholder="0244 123 456"
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  className="mt-1 block h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 />
               </label>
 
@@ -154,7 +157,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   autoComplete="name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  className="mt-1 block h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 />
               </label>
 
@@ -167,12 +170,12 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
+                  className="mt-1 block h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none"
                 />
               </label>
 
               {error ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                   {error}
                 </div>
               ) : null}
@@ -180,18 +183,21 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[var(--brand-primary)] text-sm font-semibold text-[var(--brand-primary-foreground)] transition disabled:opacity-60"
+                className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[var(--brand-primary)] text-sm font-bold text-[var(--brand-primary-foreground)] shadow-sm transition active:scale-[0.99] disabled:opacity-60"
               >
                 {submitting ? 'Sending…' : 'Send code'}
               </button>
+              <p className="text-center text-xs leading-5 text-slate-400">
+                Works with Ghana mobile numbers. Keep this phone nearby for the one-time code.
+              </p>
             </form>
           ) : (
-            <form onSubmit={handleVerify} className="mt-6 space-y-4">
-              <div className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+            <form onSubmit={handleVerify} className="space-y-4 px-6 py-6 sm:px-8">
+              <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
                 {statusMessage ?? 'A 6-digit code is on the way.'}
                 {devCode ? (
-                  <div className="mt-1 font-mono text-xs text-slate-500">
-                    Dev mode: code is <span className="font-bold">{devCode}</span>
+                  <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 font-mono text-xs text-sky-800">
+                    Test code: <span className="font-bold">{devCode}</span>
                   </div>
                 ) : null}
               </div>
@@ -209,12 +215,12 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   value={code}
                   onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
                   placeholder="123456"
-                  className="mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center font-mono text-2xl tracking-[0.35em] text-slate-900 placeholder:text-slate-300 focus:border-slate-400 focus:outline-none"
+                  className="mt-1 block h-16 w-full rounded-2xl border border-slate-200 bg-white px-3 text-center font-mono text-2xl tracking-[0.35em] text-slate-900 placeholder:text-slate-300 focus:border-slate-400 focus:outline-none"
                 />
               </label>
 
               {error ? (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-900">
                   {error}
                 </div>
               ) : null}
@@ -222,7 +228,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
               <button
                 type="submit"
                 disabled={submitting || code.length !== 6}
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[var(--brand-primary)] text-sm font-semibold text-[var(--brand-primary-foreground)] transition disabled:opacity-60"
+                className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[var(--brand-primary)] text-sm font-bold text-[var(--brand-primary-foreground)] shadow-sm transition active:scale-[0.99] disabled:opacity-60"
               >
                 {submitting ? 'Verifying…' : 'Verify and sign in'}
               </button>
@@ -230,14 +236,14 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
               <button
                 type="button"
                 onClick={backToPhone}
-                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Use a different number
               </button>
             </form>
           )}
 
-          <p className="mt-6 text-xs text-slate-400">
+          <p className="border-t border-black/5 px-6 py-4 text-xs leading-5 text-slate-400 sm:px-8">
             By signing in you agree to receive a one-time code from {storefrontName} on the number above.
           </p>
         </div>
