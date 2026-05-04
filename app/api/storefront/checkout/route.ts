@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createOnlineCheckout } from '@/lib/services/online-orders';
 import { consumeStorefrontCheckoutAttempt } from '@/lib/security/storefront-throttle';
+import { getStorefrontSessionCustomer } from '@/lib/services/storefront-customers';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sessionCustomer = await getStorefrontSessionCustomer(slug);
+
     const result = await createOnlineCheckout({
       slug,
       storeId: String(body?.storeId ?? ''),
@@ -33,6 +36,7 @@ export async function POST(request: NextRequest) {
       customerPhone: String(body?.customerPhone ?? ''),
       customerEmail: body?.customerEmail ? String(body.customerEmail) : null,
       customerNotes: body?.customerNotes ? String(body.customerNotes) : null,
+      customerId: sessionCustomer?.id ?? null,
       network:
         body?.network === 'MTN' || body?.network === 'TELECEL' || body?.network === 'AIRTELTIGO'
           ? body.network

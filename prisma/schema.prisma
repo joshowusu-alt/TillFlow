@@ -139,6 +139,10 @@ model Business {
   paymentReconciliations     PaymentReconciliation[]
   openingBalances            OpeningBalance[]
   onlineOrders               OnlineOrder[]
+  storefrontCustomers        StorefrontCustomer[]
+  messageOutbox              MessageOutbox[]
+  smsNotificationsEnabled    Boolean  @default(false)
+  smsSenderId                String?
   controlProfile             ControlBusinessProfile?
 }
 
@@ -533,6 +537,7 @@ model OnlineOrder {
   id                  String   @id @default(cuid())
   businessId          String
   storeId             String
+  customerId          String?
   paymentCollectionId String?  @unique
   salesInvoiceId      String?  @unique
   publicToken         String   @unique
@@ -565,6 +570,7 @@ model OnlineOrder {
 
   business          Business               @relation(fields: [businessId], references: [id])
   store             Store                  @relation(fields: [storeId], references: [id])
+  customer          StorefrontCustomer?    @relation(fields: [customerId], references: [id])
   paymentCollection MobileMoneyCollection? @relation("OnlineOrderPaymentCollection", fields: [paymentCollectionId], references: [id])
   salesInvoice      SalesInvoice?          @relation("OnlineOrderSalesInvoice", fields: [salesInvoiceId], references: [id])
   lines             OnlineOrderLine[]
@@ -574,6 +580,54 @@ model OnlineOrder {
   @@index([storeId, createdAt])
   @@index([businessId, status, createdAt])
   @@index([paymentStatus, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model StorefrontCustomer {
+  id          String    @id @default(cuid())
+  businessId  String
+  phone       String
+  name        String?
+  email       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  business Business                    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessions StorefrontCustomerSession[]
+  orders   OnlineOrder[]
+
+  @@unique([businessId, phone])
+  @@index([businessId])
+}
+
+model StorefrontCustomerOtp {
+  id         String    @id @default(cuid())
+  businessId String
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([businessId, phone, createdAt])
+  @@index([expiresAt])
+}
+
+model StorefrontCustomerSession {
+  id         String   @id @default(cuid())
+  customerId String
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+
+  customer StorefrontCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([expiresAt])
 }
 
 model WebhookDeadLetter {
@@ -587,6 +641,40 @@ model WebhookDeadLetter {
   updatedAt    DateTime @updatedAt
 
   @@index([source, resolved])
+}
+
+/// Durable outbox for transactional storefront notifications. The
+/// dispatcher cron drains PENDING rows. Strings are used in place of
+/// enums so the schema stays valid against the SQLite local provider;
+/// the production Postgres migration adds CHECK constraints to enforce
+/// the same set of values. See lib/services/storefront-notifications.ts
+/// for the canonical lists.
+model MessageOutbox {
+  id            String    @id @default(cuid())
+  businessId    String
+  onlineOrderId String?
+  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED
+  eventType     String
+  /// One of: SMS
+  channel       String    @default("SMS")
+  recipient     String
+  body          String
+  /// One of: PENDING | SENT | FAILED
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  lastError     String?
+  lockedAt      DateTime?
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  payloadJson   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([onlineOrderId, eventType])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([businessId, status, sentAt])
 }
 
 model OnlineOrderLine {

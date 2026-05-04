@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import StorefrontClient from './StorefrontClient';
 import { getPublicStorefrontBySlug } from '@/lib/services/online-orders';
+import { getStorefrontSessionCustomer } from '@/lib/services/storefront-customers';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,8 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
     notFound();
   }
 
+  const customer = await getStorefrontSessionCustomer(params.slug);
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
@@ -103,7 +106,14 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <StorefrontClient storefront={storefront} />
+      <StorefrontClient
+        storefront={storefront}
+        customer={
+          customer
+            ? { id: customer.id, name: customer.name, phone: customer.phone, email: customer.email }
+            : null
+        }
+      />
     </>
   );
 }

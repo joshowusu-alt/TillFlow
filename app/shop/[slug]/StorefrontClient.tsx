@@ -134,7 +134,20 @@ function initialSelections(storefront: PublicStorefront) {
 
 const PRODUCTS_PER_PAGE = 24;
 
-export default function StorefrontClient({ storefront }: { storefront: PublicStorefront }) {
+export type StorefrontCustomerProp = {
+  id: string;
+  name: string | null;
+  phone: string;
+  email: string | null;
+};
+
+export default function StorefrontClient({
+  storefront,
+  customer,
+}: {
+  storefront: PublicStorefront;
+  customer?: StorefrontCustomerProp | null;
+}) {
   const router = useRouter();
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
@@ -152,9 +165,9 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
   });
   const [selectionState, setSelectionState] = useState<ProductSelectionState>(() => initialSelections(storefront));
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => storefront.stores[0]?.id ?? '');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState(customer?.name ?? '');
+  const [customerPhone, setCustomerPhone] = useState(customer?.phone ?? '');
+  const [customerEmail, setCustomerEmail] = useState(customer?.email ?? '');
   const [customerNotes, setCustomerNotes] = useState('');
   const [network, setNetwork] = useState<'MTN' | 'TELECEL' | 'AIRTELTIGO'>('MTN');
   const [error, setError] = useState<string | null>(null);
@@ -546,15 +559,37 @@ export default function StorefrontClient({ storefront }: { storefront: PublicSto
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleShareStore}
-              className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"
-              aria-label="Share store link"
-              style={{ color: 'var(--brand-primary-foreground)' }}
-            >
-              <ShareIcon className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              {customer ? (
+                <a
+                  href={`/shop/${storefront.slug}/account`}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3 text-xs font-semibold transition hover:bg-white/25"
+                  style={{ color: 'var(--brand-primary-foreground)' }}
+                >
+                  <span aria-hidden="true">👤</span>
+                  <span className="max-w-[8rem] truncate">
+                    {customer.name?.split(' ')[0] ?? 'Account'}
+                  </span>
+                </a>
+              ) : (
+                <a
+                  href={`/shop/${storefront.slug}/login`}
+                  className="inline-flex h-9 items-center rounded-full bg-white/15 px-3 text-xs font-semibold transition hover:bg-white/25"
+                  style={{ color: 'var(--brand-primary-foreground)' }}
+                >
+                  Sign in
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={handleShareStore}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"
+                aria-label="Share store link"
+                style={{ color: 'var(--brand-primary-foreground)' }}
+              >
+                <ShareIcon className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {storefront.stores.length > 1 ? (
