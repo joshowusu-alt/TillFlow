@@ -10,6 +10,14 @@ import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
 
 const ALL_CATEGORIES = '__all__';
+const CATALOG_PAGE_SIZE = 48;
+
+type CatalogResponse = {
+  products: PublicStorefront['products'];
+  total: number;
+  offset: number;
+  limit: number;
+};
 
 function PackageIcon({ className = 'h-10 w-10' }: { className?: string }) {
   return (
@@ -30,17 +38,22 @@ function ProductImage({
   src,
   alt,
   inStock,
+  categoryName,
 }: {
   src: string | null;
   alt: string;
   inStock: boolean;
+  categoryName?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
 
   if (!src || failed) {
+    const fallbackLabel = (categoryName || alt || 'Item').slice(0, 2).toUpperCase();
     return (
-      <div className={`flex h-full w-full items-center justify-center ${inStock ? 'text-accent/40' : 'text-black/20'}`}>
-        <PackageIcon className="h-7 w-7" />
+      <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 ${inStock ? '' : 'opacity-60'}`}>
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/5 bg-white/80 shadow-sm">
+          <span className="text-sm font-black tracking-[0.12em]" style={{ color: 'var(--store-primary)', opacity: 0.62 }}>{fallbackLabel}</span>
+        </div>
       </div>
     );
   }
@@ -165,6 +178,10 @@ export default function StorefrontClient({
       return [];
     }
   });
+  const [catalogProducts, setCatalogProducts] = useState<PublicStorefront['products']>(() => storefront.products);
+  const [catalogTotal, setCatalogTotal] = useState(storefront.totalProductCount ?? storefront.products.length);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [selectionState, setSelectionState] = useState<ProductSelectionState>(() => initialSelections(storefront));
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => storefront.stores[0]?.id ?? '');
   const [customerName, setCustomerName] = useState(customer?.name ?? '');
@@ -175,13 +192,32 @@ export default function StorefrontClient({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [mobileStep, setMobileStep] = useState<'browse' | 'cart' | 'checkout'>('browse');
   const [isMounted, setIsMounted] = useState(false);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [lastAddedProductId, setLastAddedProductId] = useState<string | null>(null);
+  const [storefrontSessionId, setStorefrontSessionId] = useState('');
+
+  function trackEvent(eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start', productId?: string | null, metadata?: Record<string, unknown>) {
+    if (!storefrontSessionId) return;
+    const payload = JSON.stringify({
+      businessId: storefront.businessId,
+      storeSlug: storefront.slug,
+      eventType,
+      productId,
+      sessionId: storefrontSessionId,
+      metadata,
+    });
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/storefront/events', new Blob([payload], { type: 'application/json' }));
+        return;
+      }
+    } catch {}
+    fetch('/api/storefront/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+  }
 
   useEffect(() => {
     try {
@@ -192,6 +228,13 @@ export default function StorefrontClient({
   useEffect(() => {
     setIsMounted(true);
     try {
+      const sessionKey = `tillflow_store_session_${storefront.slug}`;
+      let sessionId = localStorage.getItem(sessionKey);
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+        localStorage.setItem(sessionKey, sessionId);
+      }
+      setStorefrontSessionId(sessionId);
       const raw = localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as string[];
@@ -199,7 +242,57 @@ export default function StorefrontClient({
         setRecentlyViewed(parsed.filter((value) => typeof value === 'string').slice(0, 8));
       }
     } catch {}
-  }, [RECENTLY_VIEWED_STORAGE_KEY]);
+  }, [RECENTLY_VIEWED_STORAGE_KEY, storefront.slug]);
+
+  useEffect(() => {
+    if (storefrontSessionId) {
+      trackEvent('view', null, { productCount: catalogTotal });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storefrontSessionId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = searchQuery.trim();
+    const params = new URLSearchParams({
+      slug: storefront.slug,
+      offset: '0',
+      limit: String(CATALOG_PAGE_SIZE),
+    });
+    if (query) params.set('q', query);
+    if (selectedCategoryId !== ALL_CATEGORIES) params.set('category', selectedCategoryId);
+
+    setCatalogLoading(true);
+    setCatalogError(null);
+    fetch(`/api/storefront/catalog?${params.toString()}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Could not load products.');
+        return response.json() as Promise<CatalogResponse>;
+      })
+      .then((payload) => {
+        setCatalogProducts(payload.products);
+        setCatalogTotal(payload.total);
+      })
+      .catch((loadError) => {
+        if (loadError?.name === 'AbortError') return;
+        setCatalogError('Products could not refresh. Check your connection and try again.');
+      })
+      .finally(() => setCatalogLoading(false));
+
+    return () => controller.abort();
+  }, [searchQuery, selectedCategoryId, storefront.slug]);
+
+  useEffect(() => {
+    setSelectionState((prev) => {
+      const next = { ...prev };
+      for (const product of catalogProducts) {
+        if (!next[product.id]) {
+          next[product.id] = { unitId: product.units[0]?.id ?? '', qtyInUnit: 1 };
+        }
+      }
+      return next;
+    });
+  }, [catalogProducts]);
 
   const selectedStore = useMemo(
     () => storefront.stores.find((store) => store.id === selectedStoreId) ?? null,
@@ -208,33 +301,14 @@ export default function StorefrontClient({
 
   const productsForStore = useMemo(
     () =>
-      storefront.products.map((product) => ({
+      catalogProducts.map((product) => ({
         ...product,
         onHandBase: selectedStoreId ? product.onHandByStore[selectedStoreId] ?? 0 : product.onHandBase,
       })),
-    [storefront.products, selectedStoreId],
+    [catalogProducts, selectedStoreId],
   );
 
-  const categories = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const product of productsForStore) {
-      if (product.categoryId && product.categoryName) {
-        seen.set(product.categoryId, product.categoryName);
-      }
-    }
-    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-  }, [productsForStore]);
-
-  const categoryProductCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const product of productsForStore) {
-      if (!product.categoryId) continue;
-      counts.set(product.categoryId, (counts.get(product.categoryId) ?? 0) + 1);
-    }
-    return counts;
-  }, [productsForStore]);
+  const categories = useMemo(() => storefront.categories ?? [], [storefront.categories]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === selectedCategoryId) ?? null,
@@ -244,13 +318,14 @@ export default function StorefrontClient({
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = productsForStore.filter((p) => {
-      if (selectedCategoryId !== ALL_CATEGORIES && p.categoryId !== selectedCategoryId) {
+      if (selectedCategoryId !== ALL_CATEGORIES && p.publicCategoryId !== selectedCategoryId) {
         return false;
       }
       if (!q) return true;
       return (
         p.name.toLowerCase().includes(q) ||
-        (p.categoryName?.toLowerCase() ?? '').includes(q)
+        (p.categoryName?.toLowerCase() ?? '').includes(q) ||
+        p.publicCategoryName.toLowerCase().includes(q)
       );
     });
     return filtered.sort((a, b) => {
@@ -260,18 +335,43 @@ export default function StorefrontClient({
     });
   }, [productsForStore, searchQuery, selectedCategoryId]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
-  const safePage = Math.min(currentPage, totalPages);
-  const pagedProducts = filteredProducts.slice(0, safePage * PRODUCTS_PER_PAGE);
+  const hasMoreProducts = catalogProducts.length < catalogTotal;
+  const pagedProducts = filteredProducts;
 
   function handleSearch(value: string) {
     setSearchQuery(value);
-    setCurrentPage(1);
   }
 
   function handleCategoryChange(nextId: string) {
     setSelectedCategoryId(nextId);
-    setCurrentPage(1);
+  }
+
+  async function loadMoreProducts() {
+    if (catalogLoading || !hasMoreProducts) return;
+    const params = new URLSearchParams({
+      slug: storefront.slug,
+      offset: String(catalogProducts.length),
+      limit: String(CATALOG_PAGE_SIZE),
+    });
+    const query = searchQuery.trim();
+    if (query) params.set('q', query);
+    if (selectedCategoryId !== ALL_CATEGORIES) params.set('category', selectedCategoryId);
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const response = await fetch(`/api/storefront/catalog?${params.toString()}`);
+      if (!response.ok) throw new Error('Could not load products.');
+      const payload = await response.json() as CatalogResponse;
+      setCatalogProducts((prev) => {
+        const seen = new Set(prev.map((product) => product.id));
+        return [...prev, ...payload.products.filter((product) => !seen.has(product.id))];
+      });
+      setCatalogTotal(payload.total);
+    } catch {
+      setCatalogError('More products could not load. Check your connection and try again.');
+    } finally {
+      setCatalogLoading(false);
+    }
   }
 
   function rememberViewedProduct(productId: string) {
@@ -339,7 +439,6 @@ export default function StorefrontClient({
     setSelectedStoreId(nextStoreId);
     setCart([]);
     setError(null);
-    setCurrentPage(1);
   }
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
   const orderTotal = totals.netSubtotal + totals.vat;
@@ -399,6 +498,7 @@ export default function StorefrontClient({
     setError(null);
     setLastAddedProductId(productId);
     rememberViewedProduct(productId);
+    trackEvent('add_to_cart', productId);
     setCart((prev) => {
       const existing = prev.find((line) => line.productId === productId && line.unitId === current.unitId);
       if (existing) {
@@ -431,6 +531,7 @@ export default function StorefrontClient({
       return;
     }
     try {
+      trackEvent('checkout_start', null, { items: cart.length, totalPence: orderTotal });
       const response = await fetch('/api/storefront/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -441,6 +542,7 @@ export default function StorefrontClient({
           customerPhone,
           customerEmail,
           customerNotes,
+          sessionId: storefrontSessionId,
           network,
           items: cart.map((line) => ({
             productId: line.productId,
@@ -479,13 +581,17 @@ export default function StorefrontClient({
   const checkoutReady = cart.length > 0 && customerName.trim().length > 0 && customerPhone.trim().length > 0;
   const brandStyles = resolveBrandStyles(storefront.branding);
   const primaryStyle: React.CSSProperties = {
-    backgroundColor: 'var(--brand-primary)',
-    color: 'var(--brand-primary-foreground)',
+    backgroundColor: 'var(--store-primary)',
+    color: 'var(--store-primary-foreground)',
   };
   const heroStyle: React.CSSProperties = {
-    backgroundColor: 'var(--brand-primary)',
-    color: 'var(--brand-primary-foreground)',
+    backgroundColor: 'var(--store-primary)',
+    color: 'var(--store-primary-foreground)',
   };
+  const merchProducts = productsForStore.filter((product) => product.onHandBase > 0);
+  const featuredProducts = merchProducts
+    .filter((product) => product.imageUrl || product.promoBuyQty > 0 || product.publicCategoryPriority <= 30)
+    .slice(0, 8);
 
   // Payment mode hint badge shown in hero
   const paymentModeHint = (() => {
@@ -708,7 +814,7 @@ export default function StorefrontClient({
                         style={active ? primaryStyle : undefined}
                       >
                         {toTitleCase(category.name)}
-                        <span className="ml-1.5 opacity-60">{categoryProductCounts.get(category.id) ?? 0}</span>
+                        <span className="ml-1.5 opacity-60">{category.count}</span>
                       </button>
                     );
                   })}
@@ -727,6 +833,63 @@ export default function StorefrontClient({
                 ) : null}
               </div>
             </div>
+
+            {!searchQuery.trim() && selectedCategoryId === ALL_CATEGORIES && featuredProducts.length > 0 ? (
+              <section className="mt-4 rounded-3xl border border-black/5 bg-white p-3 shadow-sm">
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-ink">Popular in this shop</h2>
+                    <p className="text-xs text-black/45">Fast picks customers are likely to need today.</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-black/45">
+                    {catalogTotal} live items
+                  </span>
+                </div>
+                <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {featuredProducts.map((product) => {
+                    const firstUnit = product.units[0];
+                    const price = formatMoney(
+                      firstUnit?.sellingPricePence ?? product.sellingPriceBasePence * (firstUnit?.conversionToBase ?? 1),
+                      storefront.currency,
+                    );
+                    return (
+                      <div key={product.id} className="min-w-[138px] overflow-hidden rounded-2xl border border-black/5 bg-slate-50">
+                        <button
+                          type="button"
+                          className="relative block h-24 w-full overflow-hidden bg-white"
+                          onClick={() => {
+                            rememberViewedProduct(product.id);
+                            trackEvent('product_view', product.id, { source: 'featured' });
+                            scrollToProduct(product.id);
+                          }}
+                          aria-label={`View ${toTitleCase(product.name)}`}
+                        >
+                          <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                        </button>
+                        <div className="p-2">
+                          <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
+                          <div className="mt-1 text-sm font-extrabold text-ink">{price}</div>
+                          <button
+                            type="button"
+                            className="mt-2 h-10 w-full rounded-xl text-xs font-black text-white shadow-sm"
+                            style={primaryStyle}
+                            onClick={() => addToCart(product.id)}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {catalogError ? (
+              <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {catalogError}
+              </div>
+            ) : null}
 
             {/* Product grid or empty state */}
             {filteredProducts.length === 0 ? (
@@ -777,7 +940,7 @@ export default function StorefrontClient({
                     const inStock = product.onHandBase > 0;
                     const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
                     const displayName = toTitleCase(product.name);
-                    const displayCategory = product.categoryName ? toTitleCase(product.categoryName) : null;
+                    const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
 
                     return (
                       <article
@@ -793,7 +956,7 @@ export default function StorefrontClient({
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
-                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} />
+                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} />
                           {hasPromo && inStock ? (
                             <div
                               className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
@@ -918,17 +1081,18 @@ export default function StorefrontClient({
                   })}
                 </div>
 
-                {safePage < totalPages && (
+                {hasMoreProducts && (
                   <div className="mt-6 flex flex-col items-center gap-2">
                     <button
                       type="button"
                       className="rounded-2xl border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-black/20 hover:shadow-md active:scale-[0.98]"
-                      onClick={() => setCurrentPage((p) => p + 1)}
+                      onClick={loadMoreProducts}
+                      disabled={catalogLoading}
                     >
-                      Load more products
+                      {catalogLoading ? 'Loading products...' : 'Load more products'}
                     </button>
                     <span className="text-[11px] text-black/35">
-                      Showing {pagedProducts.length} of {filteredProducts.length}
+                      Showing {catalogProducts.length} of {catalogTotal}
                     </span>
                   </div>
                 )}
@@ -959,7 +1123,7 @@ export default function StorefrontClient({
                               className="flex min-w-0 flex-1 items-center gap-3 text-left"
                             >
                               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50">
-                                <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} />
+                                <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1032,7 +1196,7 @@ export default function StorefrontClient({
                     <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                          <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock />
+                          <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
@@ -1078,7 +1242,7 @@ export default function StorefrontClient({
                             onClick={() => scrollToProduct(product.id)}
                             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                           >
-                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock />
+                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock categoryName={product.publicCategoryName} />
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1244,7 +1408,7 @@ export default function StorefrontClient({
                 <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                      <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock />
+                      <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-ink">{toTitleCase(line.product.name)}</div>
@@ -1290,7 +1454,7 @@ export default function StorefrontClient({
                         onClick={() => scrollToProduct(product.id)}
                         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                       >
-                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock />
+                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock categoryName={product.publicCategoryName} />
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
