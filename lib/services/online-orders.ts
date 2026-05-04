@@ -8,6 +8,12 @@ import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCo
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { normalizePaymentMode, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
+import {
+  buildCategoryMappingLookup,
+  resolvePublicCategory,
+  slugifyPublicCategory,
+  type PublicCategory,
+} from '@/lib/storefront-taxonomy';
 
 export type StorefrontCatalogProduct = {
   id: string;
@@ -19,6 +25,9 @@ export type StorefrontCatalogProduct = {
   promoGetQty: number;
   categoryId: string | null;
   categoryName: string | null;
+  publicCategoryId: string;
+  publicCategoryName: string;
+  publicCategoryPriority: number;
   imageUrl: string | null;
   storefrontDescription: string | null;
   units: Array<{
@@ -61,9 +70,19 @@ export type PublicStorefront = {
   branding: StorefrontBrandingData;
   stores: StorefrontPickupStore[];
   products: Array<StorefrontCatalogProduct & { onHandByStore: Record<string, number> }>;
+  categories: PublicCategory[];
+  totalProductCount: number;
+  initialProductCount: number;
   openStatus: OpenStatus | null;
   paymentConfig: StorefrontPaymentConfig;
   prepMinutes: number;
+};
+
+export type StorefrontCatalogQuery = {
+  search?: string | null;
+  categoryId?: string | null;
+  offset?: number;
+  limit?: number;
 };
 
 export type OnlineCheckoutItemInput = {
@@ -80,6 +99,7 @@ export type CreateOnlineCheckoutInput = {
   customerEmail?: string | null;
   customerNotes?: string | null;
   customerId?: string | null;
+  sessionId?: string | null;
   network?: 'MTN' | 'TELECEL' | 'AIRTELTIGO' | null;
   items: OnlineCheckoutItemInput[];
 };
@@ -332,6 +352,212 @@ async function getStorefrontBusinessBySlug(slug: string) {
   });
 }
 
+const STOREFRONT_INITIAL_PRODUCT_LIMIT = 48;
+const STOREFRONT_MAX_PAGE_SIZE = 60;
+
+function normalizeCatalogQuery(query: StorefrontCatalogQuery = {}) {
+  return {
+    search: (query.search ?? '').trim().slice(0, 80),
+    categoryId: (query.categoryId ?? '').trim(),
+    offset: Math.max(0, Math.floor(query.offset ?? 0)),
+    limit: Math.max(1, Math.min(STOREFRONT_MAX_PAGE_SIZE, Math.floor(query.limit ?? STOREFRONT_INITIAL_PRODUCT_LIMIT))),
+  };
+}
+
+async function getBusinessCategoryMappings(businessId: string) {
+  return prisma.storefrontCategoryMapping.findMany({
+    where: { businessId },
+    orderBy: [{ priority: 'asc' }, { publicCategoryName: 'asc' }],
+    select: {
+      rawCategoryName: true,
+      publicCategoryName: true,
+      priority: true,
+      hidden: true,
+    },
+  });
+}
+
+function productMatchesPublicCategory(product: { category: { name: string } | null }, categoryId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>) {
+  if (!categoryId || categoryId === '__all__') return true;
+  const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
+  return !publicCategory.hidden && publicCategory.id === categoryId;
+}
+
+function formatStorefrontCatalogProduct(
+  product: {
+    id: string;
+    name: string;
+    barcode: string | null;
+    sellingPriceBasePence: number;
+    vatRateBps: number;
+    promoBuyQty: number;
+    promoGetQty: number;
+    categoryId: string | null;
+    storefrontDescription: string | null;
+    imageUrl: string | null;
+    category: { name: string } | null;
+    productUnits: Array<{
+      isBaseUnit: boolean;
+      conversionToBase: number;
+      sellingPricePence: number | null;
+      defaultCostPence: number | null;
+      unit: { id: string; name: string; pluralName: string };
+    }>;
+    inventoryBalances: Array<{ storeId: string; qtyOnHandBase: number }>;
+  },
+  mappingLookup: ReturnType<typeof buildCategoryMappingLookup>,
+) {
+  const onHandByStore: Record<string, number> = {};
+  let totalOnHand = 0;
+  for (const balance of product.inventoryBalances) {
+    onHandByStore[balance.storeId] = balance.qtyOnHandBase;
+    totalOnHand += balance.qtyOnHandBase;
+  }
+  const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
+  return {
+    id: product.id,
+    name: product.name,
+    barcode: product.barcode,
+    sellingPriceBasePence: product.sellingPriceBasePence,
+    vatRateBps: product.vatRateBps,
+    promoBuyQty: product.promoBuyQty,
+    promoGetQty: product.promoGetQty,
+    categoryId: product.categoryId,
+    categoryName: product.category?.name ?? null,
+    publicCategoryId: publicCategory.id,
+    publicCategoryName: publicCategory.name,
+    publicCategoryPriority: publicCategory.priority,
+    imageUrl: product.imageUrl,
+    storefrontDescription: product.storefrontDescription,
+    units: product.productUnits.map((unit) => ({
+      id: unit.unit.id,
+      name: unit.unit.name,
+      pluralName: unit.unit.pluralName,
+      conversionToBase: unit.conversionToBase,
+      isBaseUnit: unit.isBaseUnit,
+      sellingPricePence: unit.sellingPricePence,
+      defaultCostPence: unit.defaultCostPence,
+    })),
+    onHandBase: totalOnHand,
+    onHandByStore,
+  };
+}
+
+async function getStorefrontProductRows(businessId: string, storeIds: string[], query: StorefrontCatalogQuery, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>) {
+  const normalized = normalizeCatalogQuery(query);
+  const where: Prisma.ProductWhereInput = {
+    businessId,
+    active: true,
+    storefrontPublished: true,
+  };
+  if (normalized.search) {
+    where.OR = [
+      { name: { contains: normalized.search } },
+      { barcode: { contains: normalized.search } },
+      { category: { name: { contains: normalized.search } } },
+    ];
+  }
+
+  const rows = await prisma.product.findMany({
+    where,
+    orderBy: [{ name: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      barcode: true,
+      sellingPriceBasePence: true,
+      vatRateBps: true,
+      promoBuyQty: true,
+      promoGetQty: true,
+      categoryId: true,
+      storefrontDescription: true,
+      imageUrl: true,
+      category: { select: { name: true } },
+      productUnits: {
+        orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
+        select: {
+          unitId: true,
+          isBaseUnit: true,
+          conversionToBase: true,
+          sellingPricePence: true,
+          defaultCostPence: true,
+          unit: { select: { id: true, name: true, pluralName: true } },
+        },
+      },
+      inventoryBalances: {
+        where: { storeId: { in: storeIds } },
+        select: { storeId: true, qtyOnHandBase: true },
+      },
+    },
+  });
+
+  const visibleRows = normalized.categoryId && normalized.categoryId !== '__all__'
+    ? rows.filter((product) => productMatchesPublicCategory(product, normalized.categoryId, mappingLookup))
+    : rows.filter((product) => !resolvePublicCategory(product.category?.name ?? null, mappingLookup).hidden);
+
+  const sortedRows = visibleRows.sort((a, b) => {
+    const aCategory = resolvePublicCategory(a.category?.name ?? null, mappingLookup);
+    const bCategory = resolvePublicCategory(b.category?.name ?? null, mappingLookup);
+    if (aCategory.priority !== bCategory.priority) return aCategory.priority - bCategory.priority;
+    const aHasImage = a.imageUrl ? 0 : 1;
+    const bHasImage = b.imageUrl ? 0 : 1;
+    if (aHasImage !== bHasImage) return aHasImage - bHasImage;
+    return a.name.localeCompare(b.name);
+  });
+
+  const pageRows = sortedRows.slice(normalized.offset, normalized.offset + normalized.limit);
+  return {
+    products: pageRows.map((product) => formatStorefrontCatalogProduct(product, mappingLookup)),
+    total: sortedRows.length,
+    offset: normalized.offset,
+    limit: normalized.limit,
+  };
+}
+
+async function getPublicCategoriesForBusiness(businessId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>): Promise<PublicCategory[]> {
+  const rawCategories = await prisma.product.findMany({
+    where: { businessId, active: true, storefrontPublished: true },
+    select: { category: { select: { name: true } } },
+  });
+  const categories = new Map<string, PublicCategory>();
+  for (const product of rawCategories) {
+    const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
+    if (publicCategory.hidden) continue;
+    const existing = categories.get(publicCategory.id);
+    categories.set(publicCategory.id, {
+      id: publicCategory.id,
+      name: publicCategory.name,
+      priority: publicCategory.priority,
+      count: (existing?.count ?? 0) + 1,
+    });
+  }
+  return Array.from(categories.values()).sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
+}
+
+export async function getStorefrontCatalogPage(rawSlug: string, query: StorefrontCatalogQuery = {}) {
+  const slug = normalizeStorefrontSlug(rawSlug);
+  if (!slug) return null;
+
+  const business = await getStorefrontBusinessBySlug(slug);
+  if (!business || !business.storefrontSlug || business.stores.length === 0) return null;
+
+  const features = getFeatures(
+    (business.plan ?? business.mode) as any,
+    business.storeMode as any,
+    { onlineStorefront: business.addonOnlineStorefront },
+  );
+  if (!business.storefrontEnabled || !features.onlineStorefront) return null;
+
+  const mappings = await getBusinessCategoryMappings(business.id);
+  const mappingLookup = buildCategoryMappingLookup(mappings);
+  return getStorefrontProductRows(
+    business.id,
+    business.stores.map((store) => store.id),
+    query,
+    mappingLookup,
+  );
+}
+
 export async function getPublicStorefrontBySlug(rawSlug: string): Promise<PublicStorefront | null> {
   const slug = normalizeStorefrontSlug(rawSlug);
   if (!slug) return null;
@@ -351,57 +577,12 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
   }
 
   const storeIds = business.stores.map((store) => store.id);
-  const products = await prisma.product.findMany({
-    where: {
-      businessId: business.id,
-      active: true,
-      storefrontPublished: true,
-    },
-    orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      barcode: true,
-      sellingPriceBasePence: true,
-      vatRateBps: true,
-      promoBuyQty: true,
-      promoGetQty: true,
-      categoryId: true,
-      storefrontDescription: true,
-      imageUrl: true,
-      category: {
-        select: {
-          name: true,
-        },
-      },
-      productUnits: {
-        orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
-        select: {
-          unitId: true,
-          isBaseUnit: true,
-          conversionToBase: true,
-          sellingPricePence: true,
-          defaultCostPence: true,
-          unit: {
-            select: {
-              id: true,
-              name: true,
-              pluralName: true,
-            },
-          },
-        },
-      },
-      inventoryBalances: {
-        where: {
-          storeId: { in: storeIds },
-        },
-        select: {
-          storeId: true,
-          qtyOnHandBase: true,
-        },
-      },
-    },
-  });
+  const mappings = await getBusinessCategoryMappings(business.id);
+  const mappingLookup = buildCategoryMappingLookup(mappings);
+  const [catalogPage, categories] = await Promise.all([
+    getStorefrontProductRows(business.id, storeIds, { limit: STOREFRONT_INITIAL_PRODUCT_LIMIT }, mappingLookup),
+    getPublicCategoriesForBusiness(business.id, mappingLookup),
+  ]);
 
   const weeklyHours = parseWeeklyHours((business as any).storefrontHoursJson ?? null);
   const openStatus = getOpenStatus({
@@ -446,39 +627,33 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
       address: store.address,
       phone: store.phone,
     })),
-    products: products.map((product) => {
-      const onHandByStore: Record<string, number> = {};
-      let totalOnHand = 0;
-      for (const balance of product.inventoryBalances) {
-        onHandByStore[balance.storeId] = balance.qtyOnHandBase;
-        totalOnHand += balance.qtyOnHandBase;
-      }
-      return {
-        id: product.id,
-        name: product.name,
-        barcode: product.barcode,
-        sellingPriceBasePence: product.sellingPriceBasePence,
-        vatRateBps: product.vatRateBps,
-        promoBuyQty: product.promoBuyQty,
-        promoGetQty: product.promoGetQty,
-        categoryId: product.categoryId,
-        categoryName: product.category?.name ?? null,
-        imageUrl: product.imageUrl,
-        storefrontDescription: product.storefrontDescription,
-        units: product.productUnits.map((unit) => ({
-          id: unit.unit.id,
-          name: unit.unit.name,
-          pluralName: unit.unit.pluralName,
-          conversionToBase: unit.conversionToBase,
-          isBaseUnit: unit.isBaseUnit,
-          sellingPricePence: unit.sellingPricePence,
-          defaultCostPence: unit.defaultCostPence,
-        })),
-        onHandBase: totalOnHand,
-        onHandByStore,
-      };
-    }),
+    products: catalogPage.products,
+    categories,
+    totalProductCount: catalogPage.total,
+    initialProductCount: catalogPage.products.length,
   };
+}
+
+export async function recordStorefrontEvent(input: {
+  businessId: string;
+  storeSlug: string;
+  eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'order_placed';
+  productId?: string | null;
+  sessionId: string;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const sessionId = input.sessionId.trim().slice(0, 120);
+  if (!sessionId) return;
+  await prisma.storefrontEvent.create({
+    data: {
+      businessId: input.businessId,
+      storeSlug: normalizeStorefrontSlug(input.storeSlug),
+      eventType: input.eventType,
+      productId: input.productId ?? null,
+      sessionId,
+      metadata: input.metadata ? JSON.stringify(input.metadata).slice(0, 2000) : null,
+    },
+  });
 }
 
 export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
@@ -644,6 +819,16 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
 
   // Enqueue ORDER_RECEIVED SMS notification (soft-fail — never aborts checkout)
   await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'ORDER_RECEIVED' });
+
+  if (input.sessionId) {
+    recordStorefrontEvent({
+      businessId: business.id,
+      storeSlug: business.storefrontSlug,
+      eventType: 'order_placed',
+      sessionId: input.sessionId,
+      metadata: { orderId: order.id },
+    }).catch((eventError) => console.error('[storefront-event]', eventError));
+  }
 
   // Manual reference flow: order is created in AWAITING_PAYMENT state. Customer
   // sends MoMo to the store's payout number using the order reference, then the

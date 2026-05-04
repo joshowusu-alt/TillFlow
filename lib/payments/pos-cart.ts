@@ -25,6 +25,9 @@ export type PosProduct = {
   promoGetQty: number;
   categoryId: string | null;
   categoryName: string | null;
+  publicCategoryId?: string;
+  publicCategoryName?: string;
+  publicCategoryPriority?: number;
   imageUrl: string | null;
   units: PosUnit[];
   onHandBase: number;

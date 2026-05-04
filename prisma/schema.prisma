@@ -140,6 +140,8 @@ model Business {
   openingBalances            OpeningBalance[]
   onlineOrders               OnlineOrder[]
   storefrontCustomers        StorefrontCustomer[]
+  storefrontCategoryMappings StorefrontCategoryMapping[]
+  storefrontEvents           StorefrontEvent[]
   messageOutbox              MessageOutbox[]
   smsNotificationsEnabled    Boolean  @default(false)
   smsSenderId                String?
@@ -469,6 +471,22 @@ model Category {
   @@index([businessId, sortOrder])
 }
 
+model StorefrontCategoryMapping {
+  id                 String   @id @default(cuid())
+  businessId         String
+  rawCategoryName    String
+  publicCategoryName String
+  priority           Int      @default(100)
+  hidden             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, rawCategoryName])
+  @@index([businessId, priority])
+}
+
 model Product {
   id                    String   @id @default(cuid())
   businessId            String
@@ -512,6 +530,7 @@ model Product {
   stockTransferLines StockTransferLine[]
   reorderActions     ReorderAction[]
   onlineOrderLines   OnlineOrderLine[]
+  storefrontEvents   StorefrontEvent[]
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
@@ -628,6 +647,24 @@ model StorefrontCustomerSession {
 
   @@index([customerId])
   @@index([expiresAt])
+}
+
+model StorefrontEvent {
+  id         String   @id @default(cuid())
+  businessId String
+  storeSlug  String
+  eventType  String
+  productId  String?
+  sessionId  String
+  metadata   String?
+  timestamp  DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, storeSlug, timestamp])
+  @@index([businessId, eventType, timestamp])
+  @@index([productId, eventType])
 }
 
 model WebhookDeadLetter {

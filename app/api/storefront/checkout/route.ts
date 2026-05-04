@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       customerEmail: body?.customerEmail ? String(body.customerEmail) : null,
       customerNotes: body?.customerNotes ? String(body.customerNotes) : null,
       customerId: sessionCustomer?.id ?? null,
+      sessionId: body?.sessionId ? String(body.sessionId) : null,
       network:
         body?.network === 'MTN' || body?.network === 'TELECEL' || body?.network === 'AIRTELTIGO'
           ? body.network

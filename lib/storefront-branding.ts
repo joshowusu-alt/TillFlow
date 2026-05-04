@@ -60,6 +60,8 @@ export function resolveBrandStyles(branding: StorefrontBranding): {
   const primary = resolvePrimaryBrandColor(branding.primaryColor);
   const accent = normalizeBrandColor(branding.accentColor);
   const cssVars: Record<string, string> = {};
+  cssVars['--store-primary'] = primary;
+  cssVars['--store-primary-foreground'] = getContrastForeground(primary);
   cssVars['--brand-primary'] = primary;
   cssVars['--brand-primary-foreground'] = getContrastForeground(primary);
   if (accent) {
