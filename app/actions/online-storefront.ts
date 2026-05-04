@@ -15,6 +15,7 @@ import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { normalizeBrandColor, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
+import { normalizePublicCategoryName } from '@/lib/storefront-taxonomy';
 
 async function requireOnlineStorefrontAccess(businessId: string) {
   const business = await prisma.business.findUnique({
@@ -344,6 +345,63 @@ export async function toggleStorefrontProductAction(formData: FormData): Promise
       revalidatePath(`/shop/${business.storefrontSlug}`);
     }
     redirect('/settings/online-store');
+  }, '/settings/online-store');
+}
+
+export async function updateStorefrontCategoryMappingsAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const business = await requireOnlineStorefrontAccess(businessId);
+    const rawCategories = formData.getAll('rawCategoryName').map((value) => String(value));
+
+    for (const rawCategoryName of rawCategories) {
+      const key = rawCategoryName.trim();
+      if (!key) continue;
+      const publicCategoryNameRaw = String(formData.get(`publicCategoryName:${key}`) ?? '').trim();
+      const priorityRaw = String(formData.get(`priority:${key}`) ?? '').trim();
+      const defaultCategory = normalizePublicCategoryName(key);
+      const publicCategoryName = (publicCategoryNameRaw || defaultCategory.name).slice(0, 80);
+      const priority = Math.max(0, Math.min(999, parseInt(priorityRaw, 10) || defaultCategory.priority));
+      const hidden = formData.get(`hidden:${key}`) === 'on';
+
+      await prisma.storefrontCategoryMapping.upsert({
+        where: {
+          businessId_rawCategoryName: {
+            businessId,
+            rawCategoryName: key,
+          },
+        },
+        create: {
+          businessId,
+          rawCategoryName: key,
+          publicCategoryName,
+          priority,
+          hidden,
+        },
+        update: {
+          publicCategoryName,
+          priority,
+          hidden,
+        },
+      });
+    }
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: { source: 'storefront-category-mappings', count: rawCategories.length },
+    }).catch((error) => console.error('[audit]', error));
+
+    revalidatePath('/settings/online-store');
+    if (business.storefrontSlug) {
+      revalidatePath(`/shop/${business.storefrontSlug}`);
+    }
+    redirect('/settings/online-store?saved=categories');
   }, '/settings/online-store');
 }
 

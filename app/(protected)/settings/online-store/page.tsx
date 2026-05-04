@@ -2,7 +2,7 @@ import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction } from '@/app/actions/online-storefront';
+import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -16,6 +16,7 @@ import { normalizePaymentMode } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { resolvePrimaryBrandColor } from '@/lib/storefront-branding';
+import { normalizePublicCategoryName, suggestedPublicCategoryOptions } from '@/lib/storefront-taxonomy';
 
 export default async function OnlineStoreSettingsPage({
   searchParams,
@@ -41,7 +42,8 @@ export default async function OnlineStoreSettingsPage({
     );
   }
 
-  const [storefrontBusiness, products] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [storefrontBusiness, products, categoryMappings, eventCounts] = await Promise.all([
     prisma.business.findUnique({
       where: { id: business.id },
       select: {
@@ -84,7 +86,30 @@ export default async function OnlineStoreSettingsPage({
         category: { select: { name: true } },
       },
     }),
+    prisma.storefrontCategoryMapping.findMany({
+      where: { businessId: business.id },
+      orderBy: [{ priority: 'asc' }, { publicCategoryName: 'asc' }],
+      select: {
+        rawCategoryName: true,
+        publicCategoryName: true,
+        priority: true,
+        hidden: true,
+      },
+    }),
+    prisma.storefrontEvent.groupBy({
+      by: ['eventType'],
+      where: { businessId: business.id, timestamp: { gte: since } },
+      _count: { _all: true },
+    }),
   ]);
+
+  const mappingByRaw = new Map(categoryMappings.map((mapping) => [mapping.rawCategoryName.toLowerCase(), mapping]));
+  const analytics = new Map(eventCounts.map((event) => [event.eventType, event._count._all]));
+  const visits = analytics.get('view') ?? 0;
+  const addToCart = analytics.get('add_to_cart') ?? 0;
+  const checkoutStarts = analytics.get('checkout_start') ?? 0;
+  const ordersPlaced = analytics.get('order_placed') ?? 0;
+  const conversionRate = visits > 0 ? Math.round((ordersPlaced / visits) * 1000) / 10 : 0;
 
   const categoryStats = (() => {
     const map = new Map<string, { id: string; name: string; total: number; published: number }>();
@@ -463,6 +488,68 @@ export default async function OnlineStoreSettingsPage({
       </SettingsSection>
 
       <SettingsSection
+        title="Public category cleanup"
+        description="Merge messy imported categories into customer-friendly shopping sections."
+        eyebrow="Merchandising"
+        defaultOpen={false}
+      >
+        <form action={updateStorefrontCategoryMappingsAction} className="space-y-4">
+          <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950">
+            These labels only affect the public storefront. Your internal product categories stay unchanged.
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {suggestedPublicCategoryOptions().slice(0, 10).map((option) => (
+              <span key={option.name} className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-xs font-semibold text-black/55">
+                {option.name}
+              </span>
+            ))}
+          </div>
+          <div className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/5 bg-white">
+            {categoryStats.map((category) => {
+              const existing = mappingByRaw.get(category.name.toLowerCase());
+              const suggested = normalizePublicCategoryName(category.name);
+              const publicName = existing?.publicCategoryName ?? suggested.name;
+              const priority = existing?.priority ?? suggested.priority;
+              return (
+                <div key={category.id} className="grid gap-3 px-3 py-3 sm:grid-cols-[1fr_1fr_5rem_auto] sm:items-center">
+                  <input type="hidden" name="rawCategoryName" value={category.name} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-ink">{category.name}</div>
+                    <div className="text-xs text-black/45">{category.total} products, {category.published} live</div>
+                  </div>
+                  <div>
+                    <label className="label sm:hidden">Public category</label>
+                    <input
+                      className="input h-11"
+                      name={`publicCategoryName:${category.name}`}
+                      defaultValue={publicName}
+                      list="storefront-public-category-options"
+                    />
+                  </div>
+                  <div>
+                    <label className="label sm:hidden">Order</label>
+                    <input className="input h-11" name={`priority:${category.name}`} type="number" min={0} max={999} defaultValue={priority} />
+                  </div>
+                  <label className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-black/60">
+                    <input type="checkbox" name={`hidden:${category.name}`} defaultChecked={Boolean(existing?.hidden)} />
+                    Hide
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+          <datalist id="storefront-public-category-options">
+            {suggestedPublicCategoryOptions().map((option) => (
+              <option key={option.name} value={option.name} />
+            ))}
+          </datalist>
+          <button type="submit" className="btn-primary">
+            Save public categories
+          </button>
+        </form>
+      </SettingsSection>
+
+      <SettingsSection
         title="Catalogue visibility"
         description={`${totalPublished} of ${totalProducts} products visible online`}
         badge={`${totalPublished}/${totalProducts}`}
@@ -560,30 +647,30 @@ export default async function OnlineStoreSettingsPage({
       </SettingsSection>
       <SettingsSection
         title="Storefront analytics"
-        description="Track how customers discover and use your online store."
+        description="Last 30 days of customer activity from the public storefront."
         eyebrow="Insights"
         defaultOpen={false}
       >
-        <div className="rounded-3xl border border-black/5 bg-gradient-to-br from-slate-50 to-white p-5 sm:p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/10">
-            <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-            </svg>
-          </div>
-            <div className="min-w-0">
-              <h3 className="font-display font-bold text-ink">Analytics is being prepared</h3>
-              <p className="mt-2 text-sm leading-6 text-black/55">
-                This section will show practical commerce signals, not vanity charts: visits, product interest, add-to-cart, orders placed, and what customers search for.
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
-            {['Store visits', 'Product views', 'Add-to-cart', 'Orders placed', 'Top products', 'Conversion rate'].map((metric) => (
-              <span key={metric} className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-xs font-semibold text-black/55">
-                {metric}
-              </span>
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-5">
+            {[
+              ['Visits', visits],
+              ['Add to cart', addToCart],
+              ['Checkout starts', checkoutStarts],
+              ['Orders placed', ordersPlaced],
+              ['Conversion', `${conversionRate}%`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">{label}</div>
+                <div className="mt-1 text-xl font-black text-ink">{value}</div>
+              </div>
             ))}
+          </div>
+          <div className="rounded-3xl border border-black/5 bg-slate-50 p-5">
+            <h3 className="font-display font-bold text-ink">What to do with this</h3>
+            <p className="mt-2 text-sm leading-6 text-black/55">
+              If visits are healthy but add-to-cart is low, improve product photos and category names. If checkout starts are healthy but orders are low, review payment instructions and pickup confidence.
+            </p>
           </div>
         </div>
       </SettingsSection>
