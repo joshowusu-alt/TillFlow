@@ -17,6 +17,8 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       discountPence: true,
       cashReceivedPence: true,
       changeDuePence: true,
+      paymentStatus: true,
+      salesReturn: { select: { id: true } },
       store: { select: { id: true, name: true } },
       cashierUser: { select: { name: true } },
       customer: { select: { name: true, phone: true } },
@@ -99,6 +101,9 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
     };
   });
 
+  const isReturned = Boolean(invoice.salesReturn) || ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
+  const canReturn = !isReturned;
+
   return (
     <ReceiptClient
       business={{
@@ -140,6 +145,8 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
         receivedAt: payment.receivedAt.toISOString(),
       }))}
       lines={lines}
+      canReturn={canReturn}
+      isReturned={isReturned}
     />
   );
 }

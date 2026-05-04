@@ -55,6 +55,8 @@ type ReceiptClientProps = {
     lineDiscountPence: number;
     promoDiscountPence: number;
   }[];
+  canReturn?: boolean;
+  isReturned?: boolean;
 };
 
 export default function ReceiptClient({
@@ -64,7 +66,9 @@ export default function ReceiptClient({
   customer,
   invoice,
   lines,
-  payments
+  payments,
+  canReturn = false,
+  isReturned = false,
 }: ReceiptClientProps) {
   const [directStatus, setDirectStatus] = useState<'idle' | 'printing' | 'failed' | 'success'>('idle');
   const [directError, setDirectError] = useState<string | null>(null);
@@ -176,24 +180,43 @@ export default function ReceiptClient({
         template === 'A4' ? 'receipt-a4' : 'receipt-thermal'
       }`}
     >
-      <div className="no-print mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+      <div className={`no-print mb-4 rounded-2xl border p-4 ${isReturned ? 'border-amber-300 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500">
-            <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${isReturned ? 'bg-amber-400' : 'bg-emerald-500'}`}>
+            {isReturned ? (
+              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            ) : (
+              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
           </div>
           <div>
-            <div className="font-semibold text-emerald-800">Sale Complete!</div>
-            <div className="text-xs text-emerald-700">
+            <div className={`font-semibold ${isReturned ? 'text-amber-800' : 'text-emerald-800'}`}>
+              {isReturned ? 'Sale Returned / Voided' : 'Sale Complete!'}
+            </div>
+            <div className={`text-xs ${isReturned ? 'text-amber-700' : 'text-emerald-700'}`}>
               {formatMoney(invoice.totalPence, business.currency)} | Receipt {receiptReference}
             </div>
           </div>
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <a href="/pos" className="btn-primary text-xs">
-            New Sale
-          </a>
+          {!isReturned && (
+            <a href="/pos" className="btn-primary text-xs">
+              New Sale
+            </a>
+          )}
+          {isReturned ? (
+            <a href="/sales" className="btn-secondary text-xs">
+              Back to Sales
+            </a>
+          ) : canReturn ? (
+            <a href={`/sales/return/${invoice.id}`} className="btn-ghost text-xs border border-rose-200 text-rose-700 hover:bg-rose-50">
+              Return Sale
+            </a>
+          ) : null}
           <button
             type="button"
             className="btn-secondary text-xs"
@@ -220,7 +243,7 @@ export default function ReceiptClient({
             </button>
           ) : null}
         </div>
-        <div className="mt-3 text-xs text-emerald-700">
+        <div className={`mt-3 text-xs ${isReturned ? 'text-amber-700' : 'text-emerald-700'}`}>
           {printMode === 'DIRECT_ESC_POS' ? 'Direct print enabled' : 'Browser print enabled'}
           {directStatus === 'printing' ? ' | Sending to printer...' : null}
           {directStatus === 'success' ? ' | Printed' : null}

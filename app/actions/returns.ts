@@ -12,6 +12,8 @@ import { isVoidReturnReasonCode } from '@/lib/fraud/reason-codes';
 import { sendVoidReturnAlert } from '@/app/actions/stock-alerts';
 
 export async function createSalesReturnAction(formData: FormData): Promise<void> {
+  const salesInvoiceId = formString(formData, 'salesInvoiceId');
+  const returnErrorPath = salesInvoiceId ? `/sales/return/${salesInvoiceId}` : '/sales';
   return formAction(async () => {
     const { user, businessId } = await withBusinessContext(['CASHIER', 'MANAGER', 'OWNER']);
 
@@ -112,7 +114,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
     revalidateTag('reports');
 
     redirect('/sales');
-  }, '/sales');
+  }, returnErrorPath);
 }
 
 export async function createPurchaseReturnAction(formData: FormData): Promise<void> {

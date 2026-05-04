@@ -4,7 +4,7 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import ReturnFormClient from './ReturnFormClient';
 
-export default async function SalesReturnPage({ params }: { params: { id: string } }) {
+export default async function SalesReturnPage({ params, searchParams }: { params: { id: string }; searchParams?: { error?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) {
     return (
@@ -51,10 +51,17 @@ export default async function SalesReturnPage({ params }: { params: { id: string
   const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
   const balance = Math.max(invoice.totalPence - paid, 0);
   const isVoid = paid === 0;
+  const errorMessage = searchParams?.error ? decodeURIComponent(searchParams.error) : null;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Return Sale" subtitle="Process a full return or void an unpaid sale." secondaryCta={{ label: '← Back to Sales', href: '/sales' }} />
+
+      {errorMessage && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <strong>Error:</strong> {errorMessage}
+        </div>
+      )}
 
       <div className="card p-6 space-y-2 text-sm">
         <div className="flex items-center gap-2">
