@@ -271,6 +271,81 @@ export async function repairPaymentStatusDriftAction(): Promise<
 }
 
 /**
+ * Diagnostic — list inventory balances whose recorded WAC exceeds the
+ * product's selling price. Read-only: returns rows so the merchant can review
+ * and decide whether to correct via the existing repair tools or with a
+ * targeted purchase entry. Does not mutate any data.
+ *
+ * Use this after applying the cost-drift fixes to identify rows that drifted
+ * before the fixes landed.
+ */
+export type OverpricedInventoryRow = {
+  storeId: string;
+  storeName: string;
+  productId: string;
+  productName: string;
+  productSku: string | null;
+  qtyOnHandBase: number;
+  avgCostBasePence: number;
+  sellingPriceBasePence: number;
+  overheadPence: number;
+  ratio: number;
+};
+
+export async function auditOverpricedInventoryAction(): Promise<
+  ActionResult<{ rows: OverpricedInventoryRow[]; checked: number }>
+> {
+  return safeAction(async () => {
+    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const balances = await prisma.inventoryBalance.findMany({
+      where: { product: { businessId } },
+      select: {
+        storeId: true,
+        productId: true,
+        qtyOnHandBase: true,
+        avgCostBasePence: true,
+        store: { select: { name: true } },
+        product: {
+          select: {
+            name: true,
+            sku: true,
+            sellingPriceBasePence: true,
+            allowZeroPrice: true,
+          },
+        },
+      },
+    });
+
+    const rows: OverpricedInventoryRow[] = [];
+    for (const b of balances) {
+      // Skip products explicitly priced at zero (giveaways, promo) — the
+      // comparison isn't meaningful and they'd flood the report.
+      if (b.product.allowZeroPrice && b.product.sellingPriceBasePence === 0) continue;
+      if (b.product.sellingPriceBasePence <= 0) continue;
+      if (b.avgCostBasePence <= b.product.sellingPriceBasePence) continue;
+
+      rows.push({
+        storeId: b.storeId,
+        storeName: b.store.name,
+        productId: b.productId,
+        productName: b.product.name,
+        productSku: b.product.sku,
+        qtyOnHandBase: b.qtyOnHandBase,
+        avgCostBasePence: b.avgCostBasePence,
+        sellingPriceBasePence: b.product.sellingPriceBasePence,
+        overheadPence: b.avgCostBasePence - b.product.sellingPriceBasePence,
+        ratio: b.avgCostBasePence / b.product.sellingPriceBasePence,
+      });
+    }
+
+    rows.sort((a, b) => b.ratio - a.ratio);
+
+    return ok({ rows, checked: balances.length });
+  });
+}
+
+/**
  * Restore products that were deleted by "Clear Sample Data" but still have
  * sales invoice lines referencing them.  Re-creates the product with its
  * original name/SKU/pricing from the known demo definitions so that existing
