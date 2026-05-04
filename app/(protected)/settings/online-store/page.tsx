@@ -129,6 +129,21 @@ export default async function OnlineStoreSettingsPage({
         subtitle="Publish a public catalogue, accept mobile-money checkout, and manage pickup orders from TillFlow."
       />
 
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Status</div>
+          <div className="mt-1 text-sm font-semibold text-ink">{storefrontBusiness.storefrontEnabled ? 'Online store active' : 'Not published yet'}</div>
+        </div>
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Catalogue</div>
+          <div className="mt-1 text-sm font-semibold text-ink">{totalPublished} of {totalProducts} products live</div>
+        </div>
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Payment</div>
+          <div className="mt-1 text-sm font-semibold text-ink">{normalizePaymentMode(storefrontBusiness.storefrontPaymentMode).split('_').join(' ').toLowerCase()}</div>
+        </div>
+      </div>
+
       <FormError error={searchParams?.error} />
 
       {searchParams?.saved === '1' ? (
@@ -141,6 +156,7 @@ export default async function OnlineStoreSettingsPage({
         <SettingsSection
           title="Storefront access"
           description="Link, QR code, and printable poster customers can find you with."
+          eyebrow="Share"
           defaultOpen
         >
           <StorefrontAccessCard
@@ -163,6 +179,7 @@ export default async function OnlineStoreSettingsPage({
         <SettingsSection
           title="Store identity & branding"
           description="Public name, headline, description, and brand colours."
+          eyebrow="Identity"
           defaultOpen
         >
           <div className="grid gap-4 lg:grid-cols-2">
@@ -242,6 +259,7 @@ export default async function OnlineStoreSettingsPage({
         <SettingsSection
           title="Ordering & payment"
           description="Choose how customers place orders and see payment instructions."
+          eyebrow="Checkout"
           defaultOpen
         >
           <StorefrontPaymentModeCard
@@ -260,38 +278,68 @@ export default async function OnlineStoreSettingsPage({
         <SettingsSection
           title="SMS notifications"
           description="Send customers automatic SMS updates when their order status changes."
+          eyebrow="Messaging"
           defaultOpen={false}
         >
-          <div className="space-y-4">
-            <p className="text-sm text-black/55">
-              When enabled, customers receive a short branded SMS at key moments: order placed, payment confirmed, ready for pickup, and cancellation. Standard SMS rates apply — disabled by default.
-            </p>
-            <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
-              <input
-                type="checkbox"
-                name="smsNotificationsEnabled"
-                defaultChecked={storefrontBusiness.smsNotificationsEnabled}
-                className="h-4 w-4"
-              />
-              <span className="text-sm font-medium text-ink">Enable SMS order notifications</span>
-            </label>
-            <div>
-              <label className="label">
-                Custom sender ID{' '}
-                <span className="font-normal text-black/40">(optional)</span>
-              </label>
-              <input
-                className="input max-w-xs"
-                name="smsSenderId"
-                defaultValue={storefrontBusiness.smsSenderId ?? ''}
-                placeholder="TillFlow"
-                maxLength={11}
-              />
-              <div className="mt-1 text-xs text-black/50">
-                Leave blank to use <strong>TillFlow</strong> as the sender. Custom sender IDs (max 11 chars) must be pre-approved by your SMS provider.
+          {(() => {
+            const smsConfigured = Boolean(
+              process.env.HUBTEL_CLIENT_ID && process.env.HUBTEL_CLIENT_SECRET,
+            );
+            return (
+              <div className="space-y-4">
+                {smsConfigured ? (
+                  <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    <span className="text-base">✅</span>
+                    <span><strong>SMS provider connected.</strong> Hubtel credentials are configured and ready to send.</span>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <p className="font-semibold mb-1">⚠️ SMS provider not connected</p>
+                    <p className="text-amber-800">
+                      To send OTP codes and order notifications, add your Hubtel API credentials to your Vercel environment variables:
+                    </p>
+                    <ul className="mt-2 space-y-0.5 font-mono text-xs text-amber-900">
+                      <li>HUBTEL_CLIENT_ID</li>
+                      <li>HUBTEL_CLIENT_SECRET</li>
+                      <li>HUBTEL_SMS_SENDER_ID <span className="font-sans font-normal text-amber-700">(optional, defaults to &ldquo;TillFlow&rdquo;)</span></li>
+                    </ul>
+                    <p className="mt-2 text-amber-700">Get these from <strong>developers.hubtel.com → Manage API Keys</strong>.</p>
+                  </div>
+                )}
+                <p className="text-sm text-black/55">
+                  When enabled, customers receive a short branded SMS at key moments: order placed, payment confirmed, ready for pickup, and cancellation. Standard SMS rates apply — disabled by default.
+                </p>
+                <label className="flex items-center gap-3 rounded-2xl border border-black/5 bg-black/[0.03] px-4 py-3">
+                  <input
+                    type="checkbox"
+                    name="smsNotificationsEnabled"
+                    defaultChecked={storefrontBusiness.smsNotificationsEnabled}
+                    className="h-4 w-4"
+                    disabled={!smsConfigured}
+                  />
+                  <span className={`text-sm font-medium ${smsConfigured ? 'text-ink' : 'text-black/40'}`}>
+                    Enable SMS order notifications{!smsConfigured ? ' (requires SMS provider connection above)' : ''}
+                  </span>
+                </label>
+                <div>
+                  <label className="label">
+                    Custom sender ID{' '}
+                    <span className="font-normal text-black/40">(optional)</span>
+                  </label>
+                  <input
+                    className="input max-w-xs"
+                    name="smsSenderId"
+                    defaultValue={storefrontBusiness.smsSenderId ?? ''}
+                    placeholder="TillFlow"
+                    maxLength={11}
+                  />
+                  <div className="mt-1 text-xs text-black/50">
+                    Leave blank to use <strong>TillFlow</strong> as the sender. Custom sender IDs (max 11 chars) must be pre-approved by your SMS provider.
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </SettingsSection>
 
         <button type="submit" className="btn-primary">
@@ -302,6 +350,7 @@ export default async function OnlineStoreSettingsPage({
       <SettingsSection
         title="Pickup settings"
         description="Opening hours and preparation time shown on the public storefront."
+        eyebrow="Operations"
         defaultOpen={false}
       >
         {(() => {
@@ -403,6 +452,7 @@ export default async function OnlineStoreSettingsPage({
         title="Catalogue visibility"
         description={`${totalPublished} of ${totalProducts} products visible online`}
         badge={`${totalPublished}/${totalProducts}`}
+        eyebrow="Products"
         defaultOpen={false}
       >
         <div className="space-y-4">
@@ -497,21 +547,26 @@ export default async function OnlineStoreSettingsPage({
       <SettingsSection
         title="Storefront analytics"
         description="Track how customers discover and use your online store."
+        eyebrow="Insights"
         defaultOpen={false}
       >
-        <div className="rounded-2xl border border-black/5 bg-gradient-to-br from-slate-50 to-white p-6 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
+        <div className="rounded-3xl border border-black/5 bg-gradient-to-br from-slate-50 to-white p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent/10">
             <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
             </svg>
           </div>
-          <h3 className="font-display font-bold text-ink">Analytics coming soon</h3>
-          <p className="mt-2 text-sm text-black/55 leading-relaxed">
-            We&apos;re building storefront analytics — store visits, product views, cart adds, and order conversion — designed around Ghana retail realities.
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <div className="min-w-0">
+              <h3 className="font-display font-bold text-ink">Analytics is being prepared</h3>
+              <p className="mt-2 text-sm leading-6 text-black/55">
+                This section will show practical commerce signals, not vanity charts: visits, product interest, add-to-cart, orders placed, and what customers search for.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-2 sm:grid-cols-3">
             {['Store visits', 'Product views', 'Add-to-cart', 'Orders placed', 'Top products', 'Conversion rate'].map((metric) => (
-              <span key={metric} className="rounded-full border border-black/8 bg-white px-3 py-1 text-xs font-medium text-black/50">
+              <span key={metric} className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-xs font-semibold text-black/55">
                 {metric}
               </span>
             ))}
