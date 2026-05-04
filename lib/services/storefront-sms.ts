@@ -53,6 +53,11 @@ function resolveSenderId(override?: string | null): string {
   return DEFAULT_SENDER_ID;
 }
 
+/** Strip leading + so both Arkesel and Hubtel receive 233XXXXXXXXX, not +233XXXXXXXXX */
+function toMsisdn(phone: string): string {
+  return phone.startsWith('+') ? phone.slice(1) : phone;
+}
+
 async function sendViaArkesel(args: {
   to: string;
   body: string;
@@ -62,7 +67,7 @@ async function sendViaArkesel(args: {
   const params = new URLSearchParams({
     action: 'send-sms',
     api_key: apiKey,
-    to: args.to,
+    to: toMsisdn(args.to),
     from: args.senderId,
     sms: args.body,
   });
@@ -109,7 +114,7 @@ async function sendViaHubtel(args: {
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const params = new URLSearchParams({
     From: args.senderId,
-    To: args.to,
+    To: toMsisdn(args.to),
     Content: args.body,
     RegisteredDelivery: 'true',
   });
