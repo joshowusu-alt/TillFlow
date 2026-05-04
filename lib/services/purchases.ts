@@ -30,7 +30,40 @@ export type CreatePurchaseInput = {
   payments: PurchasePaymentInput[];
   lines: PurchaseLineInput[];
   userId?: string | null;
+  /**
+   * Pass true to bypass the "cost looks suspiciously high" guard. The UI should
+   * surface the error message and only set this once the user has explicitly
+   * confirmed the cost is correct (e.g. for clearance buys or pricing errors).
+   */
+  acknowledgeHighCost?: boolean;
 };
+
+/**
+ * Multiplier above which a per-base-unit purchase cost is considered
+ * suspicious relative to the product's selling price. Tuned to catch the
+ * common "entered case price into per-bottle field" mistake without firing on
+ * legitimate low-margin purchases.
+ */
+const SUSPICIOUS_COST_TO_SELLING_RATIO = 5;
+
+export class HighPurchaseCostError extends Error {
+  readonly code = 'HIGH_PURCHASE_COST';
+  readonly productName: string;
+  readonly unitCostPence: number;
+  readonly sellingPricePence: number;
+
+  constructor(args: { productName: string; unitCostPence: number; sellingPricePence: number }) {
+    super(
+      `Cost for "${args.productName}" looks too high — please confirm. ` +
+        `You entered ${(args.unitCostPence / 100).toFixed(2)} per unit, ` +
+        `but the selling price is ${(args.sellingPricePence / 100).toFixed(2)}.`,
+    );
+    this.name = 'HighPurchaseCostError';
+    this.productName = args.productName;
+    this.unitCostPence = args.unitCostPence;
+    this.sellingPricePence = args.sellingPricePence;
+  }
+}
 
 export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   if (!input.lines.length) {
@@ -90,6 +123,28 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     const unitCostPence =
       line.unitCostPence ?? resolveEffectiveDefaultCostPence(productUnit.product, productUnit);
     const unitCostBasePence = Math.round(unitCostPence / productUnit.conversionToBase);
+
+    // Sanity guard: a per-base-unit cost more than 5× the selling price almost
+    // always means the merchant typed a per-package cost into a per-base field
+    // (or vice versa). Once committed, that wrong cost permanently inflates
+    // WAC. Allow the merchant to acknowledge intentionally low-margin buys via
+    // input.acknowledgeHighCost.
+    const sellingPriceBasePence = productUnit.product.sellingPriceBasePence;
+    if (
+      !input.acknowledgeHighCost &&
+      sellingPriceBasePence > 0 &&
+      unitCostBasePence > sellingPriceBasePence * SUSPICIOUS_COST_TO_SELLING_RATIO
+    ) {
+      throw new HighPurchaseCostError({
+        productName: productUnit.product.name,
+        unitCostPence,
+        sellingPricePence: resolveEffectiveDefaultCostPence(
+          { defaultCostBasePence: sellingPriceBasePence },
+          productUnit,
+        ),
+      });
+    }
+
     const lineSubtotal = unitCostPence * line.qtyInUnit;
     const vatRate = business.vatEnabled ? productUnit.product.vatRateBps : 0;
     const lineVat = business.vatEnabled ? Math.round((lineSubtotal * vatRate) / 10000) : 0;
