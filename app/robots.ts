@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
+import { getAppBaseUrl } from '@/lib/storefront-url';
 
 export default function robots(): MetadataRoute.Robots {
+  const baseUrl = getAppBaseUrl();
   return {
     rules: [
       {
@@ -9,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/settings/', '/reports/', '/pos/', '/stock/'],
       },
     ],
-    sitemap: 'https://supermarket-pos-five.vercel.app/shop/sitemap.xml',
+    sitemap: `${baseUrl}/shop/sitemap.xml`,
   };
 }

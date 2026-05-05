@@ -1,16 +1,23 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import StorefrontClient from './StorefrontClient';
 import { getPublicStorefrontBySlug } from '@/lib/services/online-orders';
 import { getStorefrontSessionCustomer } from '@/lib/services/storefront-customers';
+import { getAppBaseUrl } from '@/lib/storefront-url';
 
 export const dynamic = 'force-dynamic';
-
-const SHOP_BASE_URL = 'https://supermarket-pos-five.vercel.app';
 
 type StorefrontPageProps = {
   params: { slug: string };
 };
+
+function getRequestOrigin() {
+  const requestHeaders = headers();
+  const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
+  const protocol = requestHeaders.get('x-forwarded-proto') ?? 'https';
+  return host ? `${protocol}://${host}` : null;
+}
 
 export async function generateMetadata({ params }: StorefrontPageProps): Promise<Metadata> {
   const storefront = await getPublicStorefrontBySlug(params.slug);
@@ -18,13 +25,14 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     return { title: 'Store not found' };
   }
 
+  const baseUrl = getAppBaseUrl(getRequestOrigin());
   const title = `${storefront.name} — Online Shop`;
   const description =
     storefront.branding.tagline ??
     storefront.description ??
     `Browse and order from ${storefront.name} online. Fast pickup available.`;
-  const url = `${SHOP_BASE_URL}/shop/${params.slug}`;
-  const ogImage = storefront.branding.logoUrl ?? `${SHOP_BASE_URL}/og-default-store`;
+  const url = `${baseUrl}/shop/${params.slug}`;
+  const ogImage = storefront.branding.logoUrl ?? `${baseUrl}/og-default-store`;
 
   return {
     title,
@@ -56,12 +64,13 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   }
 
   const customer = await getStorefrontSessionCustomer(params.slug);
+  const baseUrl = getAppBaseUrl(getRequestOrigin());
 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: storefront.name,
-    url: `${SHOP_BASE_URL}/shop/${params.slug}`,
+    url: `${baseUrl}/shop/${params.slug}`,
     telephone: storefront.phone ?? undefined,
     address: storefront.address
       ? {
