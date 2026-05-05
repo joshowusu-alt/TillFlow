@@ -46,9 +46,18 @@ function ProductImage({
   categoryName?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
+  const fallbackLabel = (() => {
+    const source = (alt || categoryName || 'Item').trim();
+    const initials = source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? '')
+      .join('');
+    return initials || source.slice(0, 2).toUpperCase();
+  })();
 
   if (!src || failed) {
-    const fallbackLabel = (categoryName || alt || 'Item').slice(0, 2).toUpperCase();
     return (
       <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 ${inStock ? '' : 'opacity-60'}`}>
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/5 bg-white/80 shadow-sm">
@@ -111,7 +120,7 @@ function PaymentPreviewCard({
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
         <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Payment plan</div>
-        The store will contact you with payment details after ordering.
+        The store will share payment details after your order.
       </div>
     );
   }
@@ -136,6 +145,15 @@ function PaymentPreviewCard({
 }
 
 type ProductSelectionState = Record<string, { unitId: string; qtyInUnit: number }>;
+type StorefrontProduct = PublicStorefront['products'][number];
+type RecommendationProductLike = {
+  id: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  publicCategoryName?: string | null;
+  sellingPriceBasePence: number;
+  onHandBase: number;
+};
 
 function initialSelections(storefront: PublicStorefront) {
   return storefront.products.reduce<ProductSelectionState>((acc, product) => {
@@ -145,6 +163,22 @@ function initialSelections(storefront: PublicStorefront) {
     };
     return acc;
   }, {});
+}
+
+function getRecommendationCategoryKey(product: RecommendationProductLike | null | undefined) {
+  if (!product) return null;
+  return product.categoryId ?? product.publicCategoryName?.toLowerCase() ?? product.categoryName?.toLowerCase() ?? null;
+}
+
+function getRecommendationCategoryLabel(product: RecommendationProductLike | null | undefined) {
+  if (!product) return null;
+  return product.publicCategoryName ?? product.categoryName ?? null;
+}
+
+function sortRecommendationProducts(a: RecommendationProductLike, b: RecommendationProductLike) {
+  const stockDifference = Number(b.onHandBase > 0) - Number(a.onHandBase > 0);
+  if (stockDifference !== 0) return stockDifference;
+  return b.sellingPriceBasePence - a.sellingPriceBasePence;
 }
 
 const PRODUCTS_PER_PAGE = 24;
@@ -197,7 +231,6 @@ export default function StorefrontClient({
   const [mobileStep, setMobileStep] = useState<'browse' | 'cart' | 'checkout'>('browse');
   const [isMounted, setIsMounted] = useState(false);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
-  const [lastAddedProductId, setLastAddedProductId] = useState<string | null>(null);
   const [storefrontSessionId, setStorefrontSessionId] = useState('');
 
   function trackEvent(eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start', productId?: string | null, metadata?: Record<string, unknown>) {
@@ -451,27 +484,92 @@ export default function StorefrontClient({
       }, {}),
     [cart],
   );
-  const recentCartProduct = useMemo(() => {
-    const productId = lastAddedProductId ?? cart[cart.length - 1]?.productId;
-    return productId ? productMap.get(productId) ?? null : null;
-  }, [cart, lastAddedProductId, productMap]);
-  const suggestedProducts = useMemo(() => {
-    const recentCategoryId = recentCartProduct?.categoryId;
-    const recentCategoryName = recentCartProduct?.categoryName;
-    if (!recentCategoryId && !recentCategoryName) {
-      return [];
+  const recommendationState = useMemo(() => {
+    const categoryOrder: { key: string; label: string | null }[] = [];
+    const cartCategoryKeys = new Set<string>();
+
+    for (const line of [...cart].reverse()) {
+      const product = productMap.get(line.productId);
+      const key = getRecommendationCategoryKey(product);
+      if (!key || cartCategoryKeys.has(key)) continue;
+      cartCategoryKeys.add(key);
+      categoryOrder.push({ key, label: getRecommendationCategoryLabel(product) });
     }
 
-    return productsForStore
-      .filter(
-        (product) =>
-          product.onHandBase > 0 &&
-          !cartProductIds.has(product.id) &&
-          ((recentCategoryId && product.categoryId === recentCategoryId) ||
-            (recentCategoryName && product.categoryName === recentCategoryName)),
-      )
-      .slice(0, 3);
-  }, [cartProductIds, productsForStore, recentCartProduct]);
+    if (categoryOrder.length === 0) {
+      return {
+        products: [] as StorefrontProduct[],
+        label: 'More to add',
+        description: '',
+      };
+    }
+
+    const sameCategoryCandidates = productsForStore
+      .filter((product) => {
+        const key = getRecommendationCategoryKey(product);
+        return Boolean(key && cartCategoryKeys.has(key) && !cartProductIds.has(product.id));
+      })
+      .sort(sortRecommendationProducts);
+
+    if (sameCategoryCandidates.length > 0) {
+      const maxSuggestions = sameCategoryCandidates.length >= 4 ? 4 : 3;
+      const picked: StorefrontProduct[] = [];
+      const usedProductIds = new Set<string>();
+      const candidatesByCategory = new Map<string, StorefrontProduct[]>();
+
+      for (const product of sameCategoryCandidates) {
+        const key = getRecommendationCategoryKey(product);
+        if (!key) continue;
+        const current = candidatesByCategory.get(key) ?? [];
+        current.push(product);
+        candidatesByCategory.set(key, current);
+      }
+
+      for (const category of categoryOrder) {
+        const nextProduct = candidatesByCategory
+          .get(category.key)
+          ?.find((product) => !usedProductIds.has(product.id));
+        if (!nextProduct) continue;
+        picked.push(nextProduct);
+        usedProductIds.add(nextProduct.id);
+        if (picked.length >= maxSuggestions) break;
+      }
+
+      if (picked.length < maxSuggestions) {
+        for (const product of sameCategoryCandidates) {
+          if (usedProductIds.has(product.id)) continue;
+          picked.push(product);
+          usedProductIds.add(product.id);
+          if (picked.length >= maxSuggestions) break;
+        }
+      }
+
+      const labels = Array.from(
+        new Set(picked.map((product) => getRecommendationCategoryLabel(product)).filter(Boolean)),
+      ) as string[];
+
+      return {
+        products: picked,
+        label: labels.length === 1 ? `More from ${labels[0]}` : 'More to add',
+        description:
+          labels.length === 1
+            ? 'Related picks from the same category.'
+            : 'A few extras from the categories already in your cart.',
+      };
+    }
+
+    const fallbackCandidates = productsForStore
+      .filter((product) => !cartProductIds.has(product.id))
+      .sort(sortRecommendationProducts);
+    const maxFallbackSuggestions = fallbackCandidates.length >= 4 ? 4 : 3;
+
+    return {
+      products: fallbackCandidates.slice(0, maxFallbackSuggestions),
+      label: 'Popular in this store',
+      description: 'Premium picks to round out your order.',
+    };
+  }, [cart, cartProductIds, productMap, productsForStore]);
+  const suggestedProducts = recommendationState.products;
   const showRecentlyViewed =
     recentlyViewedProducts.length >= 2 && selectedCategoryId === ALL_CATEGORIES && searchQuery.trim().length === 0;
   const showInitialEmptySkeleton = !isMounted && storefront.products.length === 0;
@@ -496,7 +594,6 @@ export default function StorefrontClient({
     }
 
     setError(null);
-    setLastAddedProductId(productId);
     rememberViewedProduct(productId);
     trackEvent('add_to_cart', productId);
     setCart((prev) => {
@@ -597,10 +694,10 @@ export default function StorefrontClient({
   const paymentModeHint = (() => {
     const mode = storefront.paymentConfig?.mode;
     if (!mode) return null;
-    if (mode === 'MOMO_NUMBER') return `MoMo · ${storefront.paymentConfig.momoNetwork ?? 'any network'}`;
-    if (mode === 'MERCHANT_SHORTCODE') return `Pay Merchant · ${storefront.paymentConfig.momoNetwork ?? 'MoMo'}`;
+    if (mode === 'MOMO_NUMBER') return `Accepts MoMo${storefront.paymentConfig.momoNetwork ? ` · ${storefront.paymentConfig.momoNetwork}` : ''}`;
+    if (mode === 'MERCHANT_SHORTCODE') return `Pay with MoMo${storefront.paymentConfig.momoNetwork ? ` · ${storefront.paymentConfig.momoNetwork}` : ''}`;
     if (mode === 'BANK_TRANSFER') return 'Bank transfer';
-    if (mode === 'MANUAL_CONFIRMATION') return 'Payment by arrangement';
+    if (mode === 'MANUAL_CONFIRMATION') return 'Payment details shared after order';
     return null;
   })();
 
@@ -648,12 +745,16 @@ export default function StorefrontClient({
                   </span>
                 ) : null}
                 {(selectedStore?.phone ?? storefront.phone) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.85 }}>
+                  <a
+                    href={`tel:${selectedStore?.phone ?? storefront.phone ?? ''}`}
+                    className="inline-flex min-h-9 items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 transition hover:bg-white/20"
+                    style={{ color: 'var(--brand-primary-foreground)', opacity: 0.9 }}
+                  >
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.272.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
                     </svg>
                     {formatGhanaPhoneForDisplay(selectedStore?.phone ?? storefront.phone ?? '')}
-                  </span>
+                  </a>
                 ) : null}
                 {(selectedStore?.address ?? storefront.address) ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.85 }}>
@@ -668,7 +769,7 @@ export default function StorefrontClient({
                   <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Pickup only
+                  Pickup available
                 </span>
                 {paymentModeHint ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.75 }}>
@@ -788,7 +889,7 @@ export default function StorefrontClient({
               </div>
 
               {categories.length > 0 && (
-                <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-1 mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <button
                     type="button"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
@@ -824,7 +925,7 @@ export default function StorefrontClient({
               <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/45">
                 <span>
                 {filteredProducts.length === 0
-                  ? (selectedCategory ? `No products in ${toTitleCase(selectedCategory.name)}` : 'No products to show')
+                  ? (selectedCategory ? `No products found in ${toTitleCase(selectedCategory.name)}` : 'No products found right now')
                   : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}`
                 }
                 </span>
@@ -913,14 +1014,24 @@ export default function StorefrontClient({
                     )}
                   </div>
                   <div className="text-sm font-semibold text-ink">
-                    {searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+                    {searchQuery
+                      ? `No products matched "${searchQuery}"`
+                      : selectedCategory
+                        ? 'No products found in this category'
+                        : 'No products available right now'}
                   </div>
                   <div className="mt-1 text-xs text-black/50">
-                    {searchQuery ? 'Try a different category or search term.' : 'Check back soon — this store is getting ready.'}
+                    {searchQuery || selectedCategoryId !== ALL_CATEGORIES
+                      ? 'Try browsing all products or choose another category.'
+                      : 'Check back soon — this store is getting ready.'}
                   </div>
-                  {searchQuery && (
-                    <button type="button" onClick={() => handleSearch('')} className="mt-3 text-xs font-semibold text-accent hover:underline">
-                      Clear search
+                  {(searchQuery || selectedCategoryId !== ALL_CATEGORIES) && (
+                    <button
+                      type="button"
+                      onClick={() => { handleSearch(''); handleCategoryChange(ALL_CATEGORIES); }}
+                      className="mt-3 text-xs font-semibold text-accent hover:underline"
+                    >
+                      Browse all products
                     </button>
                   )}
                 </div>
@@ -995,7 +1106,7 @@ export default function StorefrontClient({
 
                           <div className="mt-auto pt-2">
                             <div className="flex items-end justify-between gap-2">
-                              <div className="text-[15px] font-extrabold leading-none text-ink sm:text-base">{unitPrice}</div>
+                              <div className="text-lg font-black leading-none text-ink sm:text-xl">{unitPrice}</div>
                               {inStock ? <span className="text-[9px] font-medium text-emerald-600">Available</span> : null}
                             </div>
 
@@ -1025,12 +1136,12 @@ export default function StorefrontClient({
                             ) : null}
 
                             {inStock ? (
-                              <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-1.5">
-                                <div className="flex h-10 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
-                                  <button
-                                    type="button"
-                                    aria-label="Decrease quantity"
-                                    className="flex h-10 w-8 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
+                                <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-1.5">
+                                  <div className="flex h-11 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
+                                    <button
+                                      type="button"
+                                      aria-label="Decrease quantity"
+                                      className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
                                     disabled={(selected?.qtyInUnit ?? 1) <= 1}
                                     onClick={() =>
                                       setSelectionState((prev) => ({
@@ -1044,13 +1155,13 @@ export default function StorefrontClient({
                                   >
                                     −
                                   </button>
-                                  <span className="w-7 text-center text-xs font-bold text-ink">
-                                    {selected?.qtyInUnit ?? 1}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label="Increase quantity"
-                                    className="flex h-10 w-8 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
+                                    <span className="w-9 text-center text-xs font-bold text-ink">
+                                      {selected?.qtyInUnit ?? 1}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label="Increase quantity"
+                                      className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
                                     onClick={() =>
                                       setSelectionState((prev) => ({
                                         ...prev,
@@ -1064,9 +1175,9 @@ export default function StorefrontClient({
                                     +
                                   </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  className="flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
+                                    <button
+                                      type="button"
+                                      className="flex h-11 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
                                   style={primaryStyle}
                                   onClick={() => addToCart(product.id)}
                                 >
@@ -1224,8 +1335,10 @@ export default function StorefrontClient({
               {suggestedProducts.length > 0 ? (
                 <div className="mt-4 border-t border-black/5 pt-4">
                   <div className="mb-3">
-                    <h3 className="text-sm font-semibold text-ink">You might also like</h3>
-                    <p className="text-xs text-black/45">More from the same category.</p>
+                    <h3 className="text-sm font-semibold text-ink">{recommendationState.label}</h3>
+                    {recommendationState.description ? (
+                      <p className="text-xs text-black/45">{recommendationState.description}</p>
+                    ) : null}
                   </div>
                   <div className="space-y-2">
                     {suggestedProducts.map((product) => {
@@ -1242,7 +1355,7 @@ export default function StorefrontClient({
                             onClick={() => scrollToProduct(product.id)}
                             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                           >
-                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock categoryName={product.publicCategoryName} />
+                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1306,21 +1419,17 @@ export default function StorefrontClient({
                   <input className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-black/70">
-                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'MoMo number' : 'Phone number'}
-                  </label>
+                  <label className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
                   <input
                     className="input mt-1.5"
-                    placeholder="e.g. 024 123 4567"
+                    placeholder="024 123 4567 or +233 24 123 4567"
                     type="tel"
                     inputMode="tel"
                     autoComplete="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                   />
-                  {storefront.paymentConfig.mode === 'MOMO_NUMBER' && (
-                    <p className="mt-1 text-xs text-black/45">Payment will be sent to this number.</p>
-                  )}
+                  <p className="mt-1 text-[11px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
                 </div>
                 {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
                   <div>
@@ -1356,7 +1465,7 @@ export default function StorefrontClient({
                   disabled={submitting || !checkoutReady}
                   onClick={submitCheckout}
                 >
-                  {submitting ? 'Placing order…' : cart.length === 0 ? 'Place Order' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
+                  {submitting ? 'Placing order…' : cartUnitCount > 0 ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})` : 'Place order'}
                 </button>
                 <div className="text-center text-[11px] text-black/40">
                   After placing your order, you&apos;ll receive payment instructions and a unique reference code.
@@ -1436,8 +1545,10 @@ export default function StorefrontClient({
           {suggestedProducts.length > 0 ? (
             <div className="mt-5 rounded-2xl border border-black/5 bg-white p-3">
               <div className="mb-3">
-                <h3 className="text-sm font-semibold text-ink">You might also like</h3>
-                <p className="text-xs text-black/45">Small add-ons from the same shelf.</p>
+                <h3 className="text-sm font-semibold text-ink">{recommendationState.label}</h3>
+                {recommendationState.description ? (
+                  <p className="text-xs text-black/45">{recommendationState.description}</p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 {suggestedProducts.map((product) => {
@@ -1454,7 +1565,7 @@ export default function StorefrontClient({
                         onClick={() => scrollToProduct(product.id)}
                         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                       >
-                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock categoryName={product.publicCategoryName} />
+                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1495,7 +1606,7 @@ export default function StorefrontClient({
           )}
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom">
+        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom pb-[env(safe-area-inset-bottom)]">
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70"
@@ -1509,11 +1620,11 @@ export default function StorefrontClient({
       </div>
 
       {/* ── MOBILE CHECKOUT PANEL ──────────────────────────── */}
-      <div
-        className={`fixed inset-x-0 top-0 z-50 flex h-[var(--visual-viewport-height)] flex-col bg-white transition-transform duration-300 ease-in-out lg:hidden ${
-          mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
-        }`}
-      >
+        <div
+          className={`fixed inset-x-0 top-0 z-50 flex h-[var(--visual-viewport-height)] flex-col overflow-hidden bg-white transition-transform duration-300 ease-in-out lg:hidden ${
+            mobileStep === 'checkout' ? 'translate-y-0' : 'translate-y-full pointer-events-none'
+          }`}
+        >
         <div className="flex items-center gap-3 border-b border-black/5 bg-white px-4 py-3.5">
           <button
             type="button"
@@ -1572,21 +1683,17 @@ export default function StorefrontClient({
               <input className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-black/70">
-                {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? 'MoMo number' : 'Phone number'}
-              </label>
+              <label className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
               <input
                 className="input mt-1"
-                placeholder="e.g. 024 123 4567"
+                placeholder="024 123 4567 or +233 24 123 4567"
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
               />
-              {storefront.paymentConfig.mode === 'MOMO_NUMBER' && (
-                <p className="mt-1 text-[10px] text-black/45">Payment will be requested on this number.</p>
-              )}
+              <p className="mt-1 text-[10px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
             </div>
             {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
               <div>
@@ -1618,7 +1725,7 @@ export default function StorefrontClient({
           </div>
         </div>
 
-        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom">
+        <div className="border-t border-black/5 bg-white px-4 pt-4 keyboard-safe-bottom pb-[env(safe-area-inset-bottom)]">
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
@@ -1626,7 +1733,7 @@ export default function StorefrontClient({
             disabled={submitting || !checkoutReady}
             onClick={submitCheckout}
           >
-            {submitting ? 'Placing order…' : `Place Order — ${formatMoney(orderTotal, storefront.currency)}`}
+            {submitting ? 'Placing order…' : cartUnitCount > 0 ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})` : 'Place order'}
           </button>
           <div className="mt-3 text-center text-[11px] text-black/40">
             After placing your order, you&apos;ll receive payment instructions and a unique reference code.

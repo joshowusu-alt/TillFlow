@@ -427,13 +427,20 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the narration / reference.</li>
                   <li>Come back here to confirm when done.</li>
                 </ol>
-              ) : (
+              ) : order.momoPayoutNumber ? (
                 <ol className="list-decimal space-y-2 pl-4">
                   <li>Open your MoMo app or dial the USSD code.</li>
                   <li>Send <span className="font-bold text-ink">{formatMoney(order.totalPence, order.currency)}</span> to <span className="font-mono font-bold text-ink">{order.momoPayoutNumber}</span>{order.momoPayoutNetwork ? ` on ${order.momoPayoutNetwork}` : ''}.</li>
                   <li>Use <span className="font-mono font-bold text-ink">{order.orderNumber}</span> as the payment note.</li>
                   <li>Come back here — your order updates once confirmed.</li>
                 </ol>
+              ) : (
+                <p className="text-sm leading-6 text-sky-800">
+                  The store will contact you on{' '}
+                  <span className="font-semibold">{formatGhanaPhoneForDisplay(order.customerPhone)}</span>{' '}
+                  with payment details. Keep your reference{' '}
+                  <span className="font-mono font-bold">{order.orderNumber}</span> handy.
+                </p>
               )}
 
               {paymentDetails.ready && (

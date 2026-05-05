@@ -35,6 +35,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
   const codeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -43,8 +44,21 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
     }
   }, [step]);
 
-  async function handleRequestCode(event: React.FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    if (step !== 'code' || resendCountdown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [step, resendCountdown]);
+
+  async function requestCode() {
     if (submitting) return;
     setError(null);
     setSubmitting(true);
@@ -62,11 +76,17 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
       setStatusMessage(describeChannel(payload.channel, Boolean(payload.delivered)));
       if (payload.devCode) setDevCode(String(payload.devCode));
       setStep('code');
+      setResendCountdown(30);
     } catch {
       setError('Network error. Check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleRequestCode(event: React.FormEvent) {
+    event.preventDefault();
+    await requestCode();
   }
 
   async function handleVerify(event: React.FormEvent) {
@@ -88,7 +108,12 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
       });
       const payload = await response.json();
       if (!response.ok) {
-        setError(payload.error ?? 'Could not verify code.');
+        const friendlyCodeError =
+          typeof payload.error === 'string' &&
+          (payload.error.toLowerCase().includes("didn't match") || payload.error.toLowerCase().includes('wrong'))
+            ? "That code didn't match. Check your messages and try again."
+            : payload.error;
+        setError(friendlyCodeError ?? 'Could not verify code.');
         return;
       }
       router.replace(redirectTo);
@@ -105,6 +130,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
     setCode('');
     setError(null);
     setDevCode(null);
+    setResendCountdown(0);
   }
 
   return (
@@ -228,6 +254,21 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   {error}
                 </div>
               ) : null}
+
+              {resendCountdown > 0 ? (
+                <div className="text-center text-xs text-slate-500">
+                  Resend code in {resendCountdown}s
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void requestCode()}
+                  disabled={submitting}
+                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Resend code
+                </button>
+              )}
 
               <button
                 type="submit"
