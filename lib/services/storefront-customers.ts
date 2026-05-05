@@ -332,7 +332,7 @@ export async function destroyStorefrontSession(slug: string) {
   clearStorefrontSessionCookie(slug);
 }
 
-export async function getCustomerOrderHistory(customerId: string, phone: string, limit = 20) {
+export async function getCustomerOrderHistory(customerId: string, phone: string, limit = 20, businessId?: string | null) {
   // Also fetch unclaimed legacy orders by phone variants so that customers
   // with orders placed before the E.164 fix still see their history.
   const phoneVariants: string[] = [];
@@ -369,14 +369,14 @@ export async function getCustomerOrderHistory(customerId: string, phone: string,
   };
   const [claimed, unclaimed] = await Promise.all([
     prisma.onlineOrder.findMany({
-      where: { customerId },
+      where: { customerId, ...(businessId ? { businessId } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: orderSelect,
     }),
     phoneVariants.length > 0
       ? prisma.onlineOrder.findMany({
-          where: { customerId: null, customerPhone: { in: phoneVariants } },
+          where: { customerId: null, customerPhone: { in: phoneVariants }, ...(businessId ? { businessId } : {}) },
           orderBy: { createdAt: 'desc' },
           take: limit,
           select: orderSelect,

@@ -30,7 +30,7 @@ export default async function StorefrontAccountPage({ params }: AccountPageProps
     redirect(`/shop/${params.slug}/login?redirect=/shop/${params.slug}/account`);
   }
 
-  const orders = await getCustomerOrderHistory(customer.id, customer.phone, 30);
+  const orders = await getCustomerOrderHistory(customer.id, customer.phone, 30, customer.businessId);
   const publishedProductIds = new Set(storefront.products.map((p) => p.id));
 
   const orderViews = orders.map((order) => {

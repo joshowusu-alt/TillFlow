@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import OrderLookupClient from './OrderLookupClient';
 import { formatDate, formatMoney, formatOnlineOrderStatus } from '@/lib/format';
-import { getOrdersByPhone, getPublicStorefrontBySlug } from '@/lib/services/online-orders';
+import { getPublicStorefrontBySlug } from '@/lib/services/online-orders';
+import {
+  getCustomerOrderHistory,
+  getStorefrontSessionCustomer,
+} from '@/lib/services/storefront-customers';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,9 +21,9 @@ export default async function StorefrontOrdersPage({
     notFound();
   }
 
-  const phoneParam = Array.isArray(searchParams?.phone) ? searchParams?.phone[0] : searchParams?.phone;
-  const trimmedPhone = phoneParam?.trim() ?? '';
-  const results = trimmedPhone ? await getOrdersByPhone(params.slug, trimmedPhone) : null;
+  const customer = await getStorefrontSessionCustomer(params.slug);
+  const orders = customer ? await getCustomerOrderHistory(customer.id, customer.phone, 20, customer.businessId) : [];
+  const loginHref = `/shop/${params.slug}/login?redirect=${encodeURIComponent(`/shop/${params.slug}/orders`)}`;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -29,19 +32,23 @@ export default async function StorefrontOrdersPage({
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">Order lookup</div>
           <h1 className="mt-2 text-3xl font-display font-bold text-ink">Find your {storefront.name} orders</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-black/60">
-            Enter the phone number you used at checkout to view recent orders and jump back into live payment tracking.
+            Sign in with the phone number you used at checkout to view recent orders and jump back into live payment tracking.
           </p>
         </div>
 
-        <OrderLookupClient slug={params.slug} initialPhone={trimmedPhone} />
-
         <div className="mt-6 space-y-4">
-          {!trimmedPhone ? (
-            <div className="rounded-2xl border border-dashed border-black/10 bg-white px-6 py-10 text-center text-sm text-black/55">
-              Enter your phone number above to find the latest orders for this store.
+          {!customer ? (
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white px-6 py-10 text-center">
+              <div className="text-sm font-semibold text-ink">Secure sign-in required</div>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-black/55">
+                We use a one-time code before showing order links, so someone cannot open your order history just by knowing your phone number.
+              </p>
+              <Link href={loginHref} className="btn-primary mt-4 inline-flex">
+                Sign in to view orders
+              </Link>
             </div>
-          ) : results && results.orders.length > 0 ? (
-            results.orders.map((order) => (
+          ) : orders.length > 0 ? (
+            orders.map((order) => (
               <div key={order.id} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -52,7 +59,7 @@ export default async function StorefrontOrdersPage({
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-black/55">
-                      {formatDate(new Date(order.createdAt))} · {order.customerName}
+                      {formatDate(new Date(order.createdAt))}
                     </div>
                     <div className="mt-3 text-sm text-black/65">
                       {order.lines.map((line) => `${line.productName} × ${line.qtyInUnit} ${line.unitName}`).join(', ')}
@@ -76,7 +83,7 @@ export default async function StorefrontOrdersPage({
             <div className="rounded-2xl border border-dashed border-black/10 bg-white px-6 py-10 text-center">
               <div className="text-sm font-semibold text-ink">No matching orders found</div>
               <div className="mt-1 text-xs text-black/50">
-                Try the same number you used during checkout, in either 024… or 233… format.
+                Orders placed with {customer.phone} will appear here after checkout.
               </div>
             </div>
           )}
