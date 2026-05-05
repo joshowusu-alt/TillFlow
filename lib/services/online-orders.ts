@@ -415,6 +415,10 @@ async function getBusinessCategoryMappings(businessId: string) {
   return data;
 }
 
+function hasCustomCategoryMappings(mappingLookup: ReturnType<typeof buildCategoryMappingLookup>) {
+  return mappingLookup.size > 0;
+}
+
 function productMatchesPublicCategory(product: { category: { name: string } | null }, categoryId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>) {
   if (!categoryId || categoryId === '__all__') return true;
   const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
@@ -494,6 +498,57 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
       { barcode: { contains: normalized.search } },
       { category: { name: { contains: normalized.search } } },
     ];
+  }
+
+  const canUseDatabasePagination =
+    !hasCustomCategoryMappings(mappingLookup) &&
+    (!normalized.categoryId || normalized.categoryId === '__all__');
+
+  if (canUseDatabasePagination) {
+    const [rows, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy: [{ category: { name: 'asc' } }, { imageUrl: { sort: 'asc', nulls: 'last' } }, { name: 'asc' }],
+        skip: normalized.offset,
+        take: normalized.limit,
+        select: {
+          id: true,
+          name: true,
+          barcode: true,
+          sellingPriceBasePence: true,
+          vatRateBps: true,
+          promoBuyQty: true,
+          promoGetQty: true,
+          categoryId: true,
+          storefrontDescription: true,
+          imageUrl: true,
+          category: { select: { name: true } },
+          productUnits: {
+            orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
+            select: {
+              unitId: true,
+              isBaseUnit: true,
+              conversionToBase: true,
+              sellingPricePence: true,
+              defaultCostPence: true,
+              unit: { select: { id: true, name: true, pluralName: true } },
+            },
+          },
+          inventoryBalances: {
+            where: { storeId: { in: storeIds } },
+            select: { storeId: true, qtyOnHandBase: true },
+          },
+        },
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    return {
+      products: rows.map((product) => formatStorefrontCatalogProduct(product, mappingLookup)),
+      total,
+      offset: normalized.offset,
+      limit: normalized.limit,
+    };
   }
 
   const rows = await prisma.product.findMany({
@@ -752,7 +807,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
 }
 
 export async function recordStorefrontEvent(input: {
-  businessId: string;
+  businessId?: string | null;
   storeSlug: string;
   eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'order_placed';
   productId?: string | null;
@@ -761,12 +816,34 @@ export async function recordStorefrontEvent(input: {
 }) {
   const sessionId = input.sessionId.trim().slice(0, 120);
   if (!sessionId) return;
+  const storeSlug = normalizeStorefrontSlug(input.storeSlug);
+  if (!storeSlug) return;
+
+  const business = await prisma.business.findFirst({
+    where: {
+      storefrontSlug: storeSlug,
+      storefrontEnabled: true,
+      ...(input.businessId ? { id: input.businessId } : {}),
+    },
+    select: { id: true },
+  });
+  if (!business) return;
+
+  let productId = input.productId ?? null;
+  if (productId) {
+    const product = await prisma.product.findFirst({
+      where: { id: productId, businessId: business.id, active: true, storefrontPublished: true },
+      select: { id: true },
+    });
+    productId = product?.id ?? null;
+  }
+
   await prisma.storefrontEvent.create({
     data: {
-      businessId: input.businessId,
-      storeSlug: normalizeStorefrontSlug(input.storeSlug),
+      businessId: business.id,
+      storeSlug,
       eventType: input.eventType,
-      productId: input.productId ?? null,
+      productId,
       sessionId,
       metadata: input.metadata ? JSON.stringify(input.metadata).slice(0, 2000) : null,
     },
