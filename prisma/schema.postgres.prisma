@@ -142,6 +142,7 @@ model Business {
   storefrontEvents       StorefrontEvent[]
   messageOutbox          MessageOutbox[]
   controlProfile         ControlBusinessProfile?
+  businessSequences      BusinessSequence[]
 
   @@index([whatsappEnabled, isDemo])
 }
@@ -1561,4 +1562,15 @@ model MessageOutbox {
   @@unique([onlineOrderId, eventType])
   @@index([status, nextAttemptAt, createdAt])
   @@index([businessId, status, sentAt])
+}
+
+/// Atomic per-business integer sequences. Used for collision-free invoice numbering
+/// without table-scan COUNT(*). Increment is done with a single SQL upsert+returning.
+model BusinessSequence {
+  businessId   String
+  sequenceName String
+  nextVal      Int      @default(1)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, sequenceName])
 }

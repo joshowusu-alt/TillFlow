@@ -5,7 +5,7 @@ export type WhatsAppDeliveryStatus =
   | 'FAILED'
   | 'REVIEW_REQUIRED';
 
-export type WhatsAppProviderKey = 'META_WHATSAPP' | 'WHATSAPP_DEEPLINK';
+export type WhatsAppProviderKey = 'META_WHATSAPP' | 'ARKESEL_WHATSAPP' | 'WHATSAPP_DEEPLINK';
 
 export type SendWhatsAppMessageInput = {
   recipient: string;

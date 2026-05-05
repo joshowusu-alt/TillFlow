@@ -18,10 +18,13 @@ describe('buildWhatsAppDeepLink', () => {
 });
 
 describe('sendWhatsAppMessage', () => {
-  it('falls back to manual review when Meta is not configured', async () => {
+  it('falls back to manual review when neither Meta nor Arkesel is configured', async () => {
     delete process.env.META_WHATSAPP_MOCK;
     delete process.env.META_WHATSAPP_ACCESS_TOKEN;
     delete process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+    delete process.env.ARKESEL_WHATSAPP_MOCK;
+    delete process.env.ARKESEL_WHATSAPP_TOKEN;
+    delete process.env.ARKESEL_WHATSAPP_TEMPLATE_ID;
 
     await expect(
       sendWhatsAppMessage({
@@ -40,6 +43,9 @@ describe('sendWhatsAppMessage', () => {
   it('falls back to manual review when Meta returns a failure', async () => {
     process.env.META_WHATSAPP_ACCESS_TOKEN = 'token';
     process.env.META_WHATSAPP_PHONE_NUMBER_ID = '123456789';
+    delete process.env.ARKESEL_WHATSAPP_MOCK;
+    delete process.env.ARKESEL_WHATSAPP_TOKEN;
+    delete process.env.ARKESEL_WHATSAPP_TEMPLATE_ID;
 
     vi.stubGlobal(
       'fetch',
@@ -80,6 +86,26 @@ describe('sendWhatsAppMessage', () => {
       ok: true,
       status: 'ACCEPTED',
       provider: 'META_WHATSAPP',
+      providerStatus: 'MOCK_ACCEPTED',
+    });
+  });
+
+  it('uses Arkesel when Meta is not configured but Arkesel is', async () => {
+    delete process.env.META_WHATSAPP_MOCK;
+    delete process.env.META_WHATSAPP_ACCESS_TOKEN;
+    delete process.env.META_WHATSAPP_PHONE_NUMBER_ID;
+    process.env.ARKESEL_WHATSAPP_MOCK = 'true';
+
+    await expect(
+      sendWhatsAppMessage({
+        recipient: '233241234567',
+        text: 'Daily summary',
+        messageType: 'EOD_SUMMARY',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      status: 'ACCEPTED',
+      provider: 'ARKESEL_WHATSAPP',
       providerStatus: 'MOCK_ACCEPTED',
     });
   });

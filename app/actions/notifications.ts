@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { formatMoney } from '@/lib/format';
 import { audit } from '@/lib/audit';
-import { buildWhatsAppDeepLink, getWhatsAppProvider, sendWhatsAppMessage } from '@/lib/notifications/providers';
+import { buildWhatsAppDeepLink, resolveWhatsAppProvider, sendWhatsAppMessage } from '@/lib/notifications/providers';
 import {
   COMMON_AFRICAN_TIMEZONE_VALUES,
   DEFAULT_BUSINESS_TIMEZONE,
@@ -492,16 +492,16 @@ export async function retryNotificationAction(messageLogId: string) {
     };
   }
 
-  const metaProvider = getWhatsAppProvider('META_WHATSAPP');
+  const fallbackDeepLink = messageLog.deepLink ?? buildWhatsAppDeepLink(messageLog.recipient, messageLog.payload);
+  const provider = resolveWhatsAppProvider();
 
-  if (!metaProvider.isConfigured()) {
+  if (!provider) {
     await prisma.messageLog.update({
       where: { id: messageLog.id },
       data: {
-        provider: 'META_WHATSAPP',
         status: 'FAILED',
-        providerStatus: 'META_NOT_CONFIGURED',
-        errorMessage: 'Meta WhatsApp delivery is not configured for retries.',
+        providerStatus: 'NO_PROVIDER_CONFIGURED',
+        errorMessage: 'No WhatsApp provider is configured (Meta or Arkesel).',
         sentAt: new Date(),
       } as any,
     });
@@ -511,12 +511,11 @@ export async function retryNotificationAction(messageLogId: string) {
     return {
       ok: false,
       status: 'FAILED',
-      error: 'Meta WhatsApp delivery is not configured for retries.',
+      error: 'No WhatsApp provider is configured (Meta or Arkesel).',
     };
   }
 
-  const fallbackDeepLink = messageLog.deepLink ?? buildWhatsAppDeepLink(messageLog.recipient, messageLog.payload);
-  const delivery = await metaProvider.sendMessage({
+  const delivery = await provider.sendMessage({
     recipient: messageLog.recipient,
     text: messageLog.payload,
     messageType: messageLog.messageType,
@@ -527,7 +526,7 @@ export async function retryNotificationAction(messageLogId: string) {
   await prisma.messageLog.update({
     where: { id: messageLog.id },
     data: {
-      provider: 'META_WHATSAPP',
+      provider: provider.key,
       status: nextStatus,
       providerStatus: delivery.providerStatus,
       providerMessageId: delivery.providerMessageId ?? null,
@@ -543,7 +542,7 @@ export async function retryNotificationAction(messageLogId: string) {
   return {
     ok: delivery.ok,
     status: nextStatus,
-    provider: 'META_WHATSAPP',
+    provider: provider.key,
     deepLink: delivery.deepLink ?? fallbackDeepLink,
     error: delivery.errorMessage ?? null,
   };

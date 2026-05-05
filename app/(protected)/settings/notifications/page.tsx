@@ -8,6 +8,7 @@ import { requireBusiness } from '@/lib/auth';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
 import { getMetaWhatsAppDiagnostics } from '@/lib/notifications/providers/meta-whatsapp';
+import { getArkeselWhatsAppDiagnostics } from '@/lib/notifications/providers/arkesel-whatsapp';
 import { prisma } from '@/lib/prisma';
 import MessageLogActions from './MessageLogActions';
 import NotificationsSettingsForm from './NotificationsSettingsForm';
@@ -59,6 +60,7 @@ export default async function NotificationsSettingsPage({
     );
   }
   const diagnostics = getMetaWhatsAppDiagnostics();
+  const arkeselDiagnostics = getArkeselWhatsAppDiagnostics();
   const businessTimezone = (business as any).timezone as string | null | undefined;
   const requestedPage = Number(searchParams?.page ?? '1');
   const currentPage = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
@@ -155,15 +157,21 @@ export default async function NotificationsSettingsPage({
           <div>
             <h2 className="text-base font-semibold">Delivery Diagnostics</h2>
             <p className="mt-1 text-sm text-black/55">
-              See whether this pilot is in automated Meta mode or manual-review fallback mode before the next EOD run fires.
+              See whether this pilot is in automated mode (Meta or Arkesel) or manual-review fallback before the next EOD run fires.
             </p>
           </div>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
             diagnostics.deliveryMode === 'AUTOMATED_META'
               ? 'bg-emerald-100 text-emerald-700'
+              : arkeselDiagnostics.arkeselConfigured
+              ? 'bg-teal-100 text-teal-700'
               : 'bg-amber-100 text-amber-700'
           }`}>
-            {diagnostics.deliveryMode === 'AUTOMATED_META' ? 'Meta automated mode' : 'Manual review fallback'}
+            {diagnostics.deliveryMode === 'AUTOMATED_META'
+              ? 'Meta automated mode'
+              : arkeselDiagnostics.arkeselConfigured
+              ? 'Arkesel automated mode'
+              : 'Manual review fallback'}
           </span>
         </div>
 
@@ -173,16 +181,25 @@ export default async function NotificationsSettingsPage({
               label: 'Meta credentials',
               value: diagnostics.metaConfigured ? 'Configured' : 'Missing',
               ok: diagnostics.metaConfigured,
+              note: diagnostics.metaMockMode ? 'Mock mode is enabled for safe local testing.' : null,
             },
             {
               label: 'Webhook delivery updates',
               value: diagnostics.webhookConfigured ? 'Ready' : 'Missing verify token/app secret',
               ok: diagnostics.webhookConfigured,
+              note: null,
             },
             {
-              label: 'Template mode',
+              label: 'Meta template mode',
               value: diagnostics.templateConfigured ? 'Configured' : 'Freeform text fallback',
               ok: diagnostics.templateConfigured,
+              note: null,
+            },
+            {
+              label: 'Arkesel WhatsApp',
+              value: arkeselDiagnostics.arkeselConfigured ? 'Configured' : 'Not configured',
+              ok: arkeselDiagnostics.arkeselConfigured,
+              note: arkeselDiagnostics.arkeselMockMode ? 'Mock mode — no real messages sent.' : null,
             },
           ].map((item) => (
             <div key={item.label} className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
@@ -190,18 +207,21 @@ export default async function NotificationsSettingsPage({
               <div className={`mt-2 text-sm font-semibold ${item.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
                 {item.value}
               </div>
-              {item.label === 'Meta credentials' && diagnostics.metaMockMode ? (
-                <div className="mt-1 text-xs text-black/45">Mock mode is enabled for safe local testing.</div>
+              {item.note ? (
+                <div className="mt-1 text-xs text-black/45">{item.note}</div>
               ) : null}
             </div>
           ))}
         </div>
 
-        {diagnostics.issues.length > 0 ? (
+        {[...diagnostics.issues, ...arkeselDiagnostics.issues].length > 0 && !diagnostics.metaConfigured && !arkeselDiagnostics.arkeselConfigured ? (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             <div className="font-semibold">Needs attention before fully unattended delivery</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
               {diagnostics.issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+              {!diagnostics.metaConfigured && arkeselDiagnostics.issues.map((issue) => (
                 <li key={issue}>{issue}</li>
               ))}
             </ul>

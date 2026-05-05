@@ -66,9 +66,20 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const BATCH_SIZE = 20;
   const results: Record<string, unknown> = {};
-  for (const biz of eligibleBusinesses) {
-    results[biz.id] = await _sendEodSummaryForBusiness(biz.id, 'CRON');
+  for (let i = 0; i < eligibleBusinesses.length; i += BATCH_SIZE) {
+    const batch = eligibleBusinesses.slice(i, i + BATCH_SIZE);
+    const settled = await Promise.allSettled(
+      batch.map((biz) => _sendEodSummaryForBusiness(biz.id, 'CRON'))
+    );
+    settled.forEach((outcome, idx) => {
+      const bizId = batch[idx].id;
+      results[bizId] =
+        outcome.status === 'fulfilled'
+          ? outcome.value
+          : { error: String(outcome.reason) };
+    });
   }
 
   return NextResponse.json({

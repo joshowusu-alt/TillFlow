@@ -1,8 +1,10 @@
+import { arkeselWhatsAppProvider } from './arkesel-whatsapp';
 import { metaWhatsAppProvider } from './meta-whatsapp';
 import type { SendWhatsAppMessageInput, SendWhatsAppMessageResult, WhatsAppProvider } from './types';
 
 const PROVIDERS: Record<string, WhatsAppProvider> = {
   [metaWhatsAppProvider.key]: metaWhatsAppProvider,
+  [arkeselWhatsAppProvider.key]: arkeselWhatsAppProvider,
 };
 
 export function buildWhatsAppDeepLink(recipient: string, text: string) {
@@ -24,6 +26,9 @@ export function resolveWhatsAppProvider(): WhatsAppProvider | null {
   if (metaWhatsAppProvider.isConfigured()) {
     return metaWhatsAppProvider;
   }
+  if (arkeselWhatsAppProvider.isConfigured()) {
+    return arkeselWhatsAppProvider;
+  }
   return null;
 }
 
@@ -41,7 +46,7 @@ export async function sendWhatsAppMessage(
       providerStatus: 'MANUAL_REVIEW_REQUIRED',
       deepLink,
       errorMessage:
-        'Meta WhatsApp delivery is not configured yet, so this summary is queued for manual review via WhatsApp deep link.',
+        'No WhatsApp provider is configured (Meta or Arkesel), so this summary is queued for manual review via WhatsApp deep link.',
     };
   }
 
@@ -57,7 +62,7 @@ export async function sendWhatsAppMessage(
       provider: 'WHATSAPP_DEEPLINK',
       providerStatus: 'FALLBACK_MANUAL_REVIEW',
       deepLink,
-      errorMessage: result.errorMessage ?? 'Meta WhatsApp delivery failed; manual review is required.',
+      errorMessage: result.errorMessage ?? 'WhatsApp delivery failed; manual review is required.',
       attemptedProvider: provider.key,
       rawPayload: result.rawPayload,
     };
@@ -68,7 +73,7 @@ export async function sendWhatsAppMessage(
       provider: 'WHATSAPP_DEEPLINK',
       providerStatus: 'FALLBACK_MANUAL_REVIEW',
       deepLink,
-      errorMessage: error?.message ?? 'Meta WhatsApp delivery failed; manual review is required.',
+      errorMessage: error?.message ?? 'WhatsApp delivery failed; manual review is required.',
       attemptedProvider: provider.key,
     };
   }

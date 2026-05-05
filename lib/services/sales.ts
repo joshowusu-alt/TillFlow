@@ -218,7 +218,7 @@ export async function createSale(input: CreateSaleInput) {
   // ── SINGLE BATCH: fire ALL lookups in parallel (was 5 sequential batches) ──
   const [
     business, store, productUnits, till, branchId, openShift,
-    accounts, inventoryMap, momoResult, customerResult, existingInvoiceCount,
+    accounts, inventoryMap, momoResult, customerResult,
   ] = await Promise.all([
     prisma.business.findUnique({ where: { id: input.businessId } }),
     prisma.store.findFirst({
@@ -260,7 +260,6 @@ export async function createSale(input: CreateSaleInput) {
     fetchInventoryMap(input.storeId, productIds),
     momoLookup,
     customerLookup,
-    prisma.salesInvoice.count({ where: { businessId: input.businessId } }),
   ]);
 
   if (!business) throw new Error('Business not found');
@@ -487,7 +486,13 @@ export async function createSale(input: CreateSaleInput) {
       }
     }
 
-    const transactionNumber = `INV-${String(existingInvoiceCount + 1).padStart(6, '0')}`;
+    const seqResult = await tx.$queryRaw<Array<{ nextVal: bigint | number }>>`
+      INSERT INTO "BusinessSequence" ("businessId", "sequenceName", "nextVal")
+      VALUES (${input.businessId}, 'invoice', 1)
+      ON CONFLICT ("businessId", "sequenceName")
+      DO UPDATE SET "nextVal" = "BusinessSequence"."nextVal" + 1
+      RETURNING "nextVal"`;
+    const transactionNumber = `INV-${String(Number(seqResult[0].nextVal)).padStart(6, '0')}`;
 
     const created = await tx.salesInvoice.create({
       data: {
