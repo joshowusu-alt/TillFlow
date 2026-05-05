@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
@@ -91,6 +92,97 @@ function buildLinePricing(
       conversionToBase: productUnit.conversionToBase,
     };
   });
+}
+
+function parseInvoiceSequenceValue(transactionNumber: string | null | undefined): number | null {
+  if (!transactionNumber) return null;
+  const match = transactionNumber.match(/^INV-(\d+)$/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function isPrismaUniqueConstraintOn(error: unknown, fields: string[]): boolean {
+  if (
+    !error ||
+    typeof error !== 'object' ||
+    !('code' in error) ||
+    (error as { code?: unknown }).code !== 'P2002'
+  ) {
+    return false;
+  }
+
+  const target = (error as { meta?: { target?: unknown } }).meta?.target;
+  if (Array.isArray(target)) {
+    const targetFields = target.map((item) => String(item));
+    return fields.every((field) => targetFields.includes(field));
+  }
+
+  if (typeof target === 'string') {
+    return fields.every((field) => target.includes(field));
+  }
+
+  return false;
+}
+
+async function reserveNextInvoiceNumber(
+  tx: Prisma.TransactionClient,
+  businessId: string
+): Promise<number> {
+  const sequenceWhere = {
+    businessId_sequenceName: {
+      businessId,
+      sequenceName: 'invoice',
+    },
+  };
+
+  const existingSequence = await tx.businessSequence.findUnique({
+    where: sequenceWhere,
+    select: { nextVal: true },
+  });
+
+  if (existingSequence) {
+    const updatedSequence = await tx.businessSequence.update({
+      where: sequenceWhere,
+      data: { nextVal: { increment: 1 } },
+      select: { nextVal: true },
+    });
+    return updatedSequence.nextVal;
+  }
+
+  const latestInvoice = await tx.salesInvoice.findFirst({
+    where: {
+      businessId,
+      transactionNumber: { startsWith: 'INV-' },
+    },
+    orderBy: { transactionNumber: 'desc' },
+    select: { transactionNumber: true },
+  });
+  const initialNextVal =
+    (parseInvoiceSequenceValue(latestInvoice?.transactionNumber) ?? 0) + 1;
+
+  try {
+    const createdSequence = await tx.businessSequence.create({
+      data: {
+        businessId,
+        sequenceName: 'invoice',
+        nextVal: initialNextVal,
+      },
+      select: { nextVal: true },
+    });
+    return createdSequence.nextVal;
+  } catch (error) {
+    if (!isPrismaUniqueConstraintOn(error, ['businessId', 'sequenceName'])) {
+      throw error;
+    }
+
+    const updatedSequence = await tx.businessSequence.update({
+      where: sequenceWhere,
+      data: { nextVal: { increment: 1 } },
+      select: { nextVal: true },
+    });
+    return updatedSequence.nextVal;
+  }
 }
 
 type SaleCostProduct = {
@@ -486,67 +578,79 @@ export async function createSale(input: CreateSaleInput) {
       }
     }
 
-    const seq = await tx.businessSequence.upsert({
-      where: { businessId_sequenceName: { businessId: input.businessId, sequenceName: 'invoice' } },
-      create: { businessId: input.businessId, sequenceName: 'invoice', nextVal: 1 },
-      update: { nextVal: { increment: 1 } },
-      select: { nextVal: true },
-    });
-    const transactionNumber = `INV-${String(seq.nextVal).padStart(6, '0')}`;
+    const invoiceCreateData = {
+      businessId: input.businessId,
+      storeId: store.id,
+      branchId,
+      tillId: till.id,
+      shiftId: openShift?.id ?? null,
+      cashierUserId: input.cashierUserId,
+      customerId: input.customerId || null,
+      paymentStatus: finalStatus,
+      dueDate: input.dueDate || null,
+      subtotalPence: subtotal,
+      vatPence: vatTotal,
+      totalPence: total,
+      discountPence: orderDiscount,
+      discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
+      discountOverrideReason: input.discountOverrideReason ?? null,
+      discountApprovedByUserId,
+      grossMarginPence: grossMarginEstimate,
+      externalRef: input.externalRef ?? null,
+      createdAt: input.createdAt ?? undefined,
+      lines: {
+        create: lineDetails.map((line) => ({
+          productId: line.productId,
+          unitId: line.unitId,
+          qtyInUnit: line.qtyInUnit,
+          conversionToBase: line.productUnit.conversionToBase,
+          qtyBase: line.qtyBase,
+          unitPricePence: line.unitPricePence,
+          lineDiscountPence: line.lineDiscount,
+          promoDiscountPence: line.promoDiscount,
+          lineSubtotalPence: line.lineSubtotal,
+          lineVatPence: line.lineVat,
+          lineTotalPence: line.lineTotal,
+          lineCostPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
+        }))
+      },
+      payments: {
+        create: payments.map((payment) => ({
+          method: payment.method,
+          amountPence: payment.amountPence,
+          branchId,
+          reference: payment.reference ?? input.externalRef ?? null,
+          network: payment.network ?? null,
+          payerMsisdn: payment.payerMsisdn ?? null,
+          provider: payment.provider ?? null,
+          status: payment.status ?? 'CONFIRMED',
+          collectionId: payment.collectionId ?? null,
+        }))
+      }
+    };
 
-    const created = await tx.salesInvoice.create({
-      data: {
-        businessId: input.businessId,
-        storeId: store.id,
-        branchId,
-        tillId: till.id,
-        shiftId: openShift?.id ?? null,
-        cashierUserId: input.cashierUserId,
-        customerId: input.customerId || null,
-        paymentStatus: finalStatus,
-        dueDate: input.dueDate || null,
-        transactionNumber,
-        subtotalPence: subtotal,
-        vatPence: vatTotal,
-        totalPence: total,
-        discountPence: orderDiscount,
-        discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
-        discountOverrideReason: input.discountOverrideReason ?? null,
-        discountApprovedByUserId,
-        grossMarginPence: grossMarginEstimate,
-        externalRef: input.externalRef ?? null,
-        createdAt: input.createdAt ?? undefined,
-        lines: {
-          create: lineDetails.map((line) => ({
-            productId: line.productId,
-            unitId: line.unitId,
-            qtyInUnit: line.qtyInUnit,
-            conversionToBase: line.productUnit.conversionToBase,
-            qtyBase: line.qtyBase,
-            unitPricePence: line.unitPricePence,
-            lineDiscountPence: line.lineDiscount,
-            promoDiscountPence: line.promoDiscount,
-            lineSubtotalPence: line.lineSubtotal,
-            lineVatPence: line.lineVat,
-            lineTotalPence: line.lineTotal,
-            lineCostPence: (costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence) * line.qtyBase,
-          }))
-        },
-        payments: {
-          create: payments.map((payment) => ({
-            method: payment.method,
-            amountPence: payment.amountPence,
-            branchId,
-            reference: payment.reference ?? input.externalRef ?? null,
-            network: payment.network ?? null,
-            payerMsisdn: payment.payerMsisdn ?? null,
-            provider: payment.provider ?? null,
-            status: payment.status ?? 'CONFIRMED',
-            collectionId: payment.collectionId ?? null,
-          }))
+    const created = await (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const transactionNumber = `INV-${String(
+          await reserveNextInvoiceNumber(tx, input.businessId)
+        ).padStart(6, '0')}`;
+
+        try {
+          return await tx.salesInvoice.create({
+            data: {
+              ...invoiceCreateData,
+              transactionNumber,
+            }
+          });
+        } catch (error) {
+          if (!isPrismaUniqueConstraintOn(error, ['businessId', 'transactionNumber'])) {
+            throw error;
+          }
         }
       }
-    });
+
+      throw new Error('Failed to allocate a unique invoice number for this sale.');
+    })();
 
     // Parallelise: MoMo, cash-drawer, inventory updates and stock movements
     const txPromises: Promise<any>[] = [];
