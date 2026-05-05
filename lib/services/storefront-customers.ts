@@ -228,10 +228,14 @@ export async function verifyStorefrontOtp(input: VerifyOtpInput): Promise<Verify
   // Claim any anonymous orders that match this phone — so "Buy again"
   // works on the customer's first session even for orders placed before
   // they had an account.
+  // We also match the legacy MSISDN format (233XXXXXXXXX without the leading +)
+  // for orders placed before the E.164 normalization fix.
+  const phoneVariants = [phone];
+  if (phone.startsWith('+')) phoneVariants.push(phone.slice(1));
   const claimResult = await prisma.onlineOrder.updateMany({
     where: {
       businessId: business.id,
-      customerPhone: phone,
+      customerPhone: { in: phoneVariants },
       customerId: null,
     },
     data: { customerId: customer.id },
@@ -328,36 +332,64 @@ export async function destroyStorefrontSession(slug: string) {
   clearStorefrontSessionCookie(slug);
 }
 
-export async function getCustomerOrderHistory(customerId: string, limit = 20) {
-  return prisma.onlineOrder.findMany({
-    where: { customerId },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    select: {
-      id: true,
-      orderNumber: true,
-      status: true,
-      paymentStatus: true,
-      fulfillmentStatus: true,
-      totalPence: true,
-      currency: true,
-      createdAt: true,
-      paidAt: true,
-      publicToken: true,
-      storeId: true,
-      lines: {
-        select: {
-          id: true,
-          productId: true,
-          unitId: true,
-          productName: true,
-          unitName: true,
-          imageUrl: true,
-          qtyInUnit: true,
-          unitPricePence: true,
-          lineTotalPence: true,
-        },
+export async function getCustomerOrderHistory(customerId: string, phone: string, limit = 20) {
+  // Also fetch unclaimed legacy orders by phone variants so that customers
+  // with orders placed before the E.164 fix still see their history.
+  const phoneVariants: string[] = [];
+  if (phone) {
+    phoneVariants.push(phone);
+    if (phone.startsWith('+')) phoneVariants.push(phone.slice(1));
+    else if (!phone.startsWith('+')) phoneVariants.push(`+${phone}`);
+  }
+  const orderSelect = {
+    id: true,
+    orderNumber: true,
+    status: true,
+    paymentStatus: true,
+    fulfillmentStatus: true,
+    totalPence: true,
+    currency: true,
+    createdAt: true,
+    paidAt: true,
+    publicToken: true,
+    storeId: true,
+    lines: {
+      select: {
+        id: true,
+        productId: true,
+        unitId: true,
+        productName: true,
+        unitName: true,
+        imageUrl: true,
+        qtyInUnit: true,
+        unitPricePence: true,
+        lineTotalPence: true,
       },
     },
+  };
+  const [claimed, unclaimed] = await Promise.all([
+    prisma.onlineOrder.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: orderSelect,
+    }),
+    phoneVariants.length > 0
+      ? prisma.onlineOrder.findMany({
+          where: { customerId: null, customerPhone: { in: phoneVariants } },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          select: orderSelect,
+        })
+      : Promise.resolve([]),
+  ]);
+  // Merge, deduplicate, sort and cap
+  const seen = new Set<string>();
+  const all = [...claimed, ...unclaimed].filter((o) => {
+    if (seen.has(o.id)) return false;
+    seen.add(o.id);
+    return true;
   });
+  all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return all.slice(0, limit);
 }

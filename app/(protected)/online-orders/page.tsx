@@ -2,7 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
-import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, formatOnlineOrderStatus, toTitleCase } from '@/lib/format';
+import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 
@@ -19,6 +19,28 @@ const STATUS_TABS = [
 ] as const;
 
 type StatusKey = typeof STATUS_TABS[number]['key'];
+
+function formatMerchantOrderStatus(status: string): string {
+  switch (status) {
+    case 'AWAITING_PAYMENT':
+      return 'Awaiting payment';
+    case 'PAID':
+      return 'Payment confirmed';
+    case 'PROCESSING':
+    case 'PREPARING':
+      return 'Being prepared';
+    case 'READY_FOR_PICKUP':
+      return 'Ready for pickup';
+    case 'COMPLETED':
+      return 'Collected';
+    case 'CANCELLED':
+      return 'Cancelled';
+    case 'PAYMENT_FAILED':
+      return 'Payment failed';
+    default:
+      return toTitleCase(status.replace(/_/g, ' ').toLowerCase());
+  }
+}
 
 function isValidStatus(val: unknown): val is Exclude<StatusKey, 'all'> {
   return typeof val === 'string' && STATUS_TABS.some((t) => t.key !== 'all' && t.key === val);
@@ -235,7 +257,10 @@ export default async function OnlineOrdersPage({
       </div>
 
       {/* Filter tabs */}
-      <nav aria-label="Filter orders by status">
+      <nav aria-label="Filter orders by status" className="space-y-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">
+          Filter by status
+        </div>
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap">
           {STATUS_TABS.map((tab) => {
             const tabCount =
@@ -447,22 +472,22 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
           </div>
 
           {order.customerPhone ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
-              <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
-              <a
-                href={`tel:${order.customerPhone}`}
-                className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white px-2 py-0.5 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
-              >
-                Call
-              </a>
-              <a
-                href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
-              >
-                WhatsApp
-              </a>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
+                <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
+                <a
+                  href={`tel:${order.customerPhone}`}
+                  className="inline-flex min-h-9 items-center gap-1 rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-semibold text-ink transition hover:border-accent/30 hover:text-accent"
+                >
+                  Call
+                </a>
+                <a
+                  href={`https://wa.me/${order.customerPhone.replace(/[^\d]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-9 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                >
+                  WhatsApp
+                </a>
             </div>
           ) : null}
 
@@ -533,7 +558,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const label = formatOnlineOrderStatus(status);
+  const label = formatMerchantOrderStatus(status);
   const cls = {
     AWAITING_PAYMENT: 'bg-amber-100 text-amber-800',
     PAID:             'bg-blue-100 text-blue-800',

@@ -5,6 +5,7 @@ import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
 import { buildQtyByProductMap, resolveEffectiveSellingPricePence, resolveProductUnitBaseValuePence } from '@/lib/services/shared';
 import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCode } from '@/lib/services/mobile-money';
+import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
 import { normalizePaymentMode, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
@@ -684,7 +685,16 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
     throw new UserError('Add at least one item to your cart.');
   }
 
-  const customerPhone = normalizeAfricanMsisdn(rawCustomerPhone, currencyToDialCode(business.currency));
+  // Normalize to E.164 (+233XXXXXXXXX) for identity consistency with StorefrontCustomer.phone.
+  // normalizeGhanaPhone is the canonical Ghana normalizer; fall back to normalizeAfricanMsisdn
+  // for non-Ghana currencies and ensure the result always starts with +.
+  const rawNormalized =
+    normalizeGhanaPhone(rawCustomerPhone) ??
+    (() => {
+      const msisdn = normalizeAfricanMsisdn(rawCustomerPhone, currencyToDialCode(business.currency));
+      return msisdn ? (msisdn.startsWith('+') ? msisdn : `+${msisdn}`) : null;
+    })();
+  const customerPhone = rawNormalized ?? '';
   if (!customerPhone || customerPhone.length < 10) {
     throw new UserError('Enter a valid phone number (e.g. 024 123 4567).');
   }
