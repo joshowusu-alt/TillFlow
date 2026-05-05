@@ -25,7 +25,7 @@ const {
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
-    businessSequence: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    businessSequence: { create: vi.fn(), update: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -231,9 +231,8 @@ beforeEach(() => {
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
   prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
-  prismaMock.businessSequence.findUnique.mockResolvedValue(null);
   prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 1 });
-  prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 2 });
+  prismaMock.businessSequence.update.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
@@ -913,6 +912,9 @@ describe('createSale — payments split & AR posting', () => {
   });
 
   it('initializes a missing invoice sequence from the latest existing invoice number', async () => {
+    prismaMock.businessSequence.update.mockRejectedValueOnce(
+      Object.assign(new Error('missing sequence'), { code: 'P2025' })
+    );
     prismaMock.salesInvoice.findFirst.mockResolvedValue({ transactionNumber: 'INV-000123' });
     prismaMock.businessSequence.create.mockResolvedValue({ nextVal: 124 });
 
@@ -932,7 +934,6 @@ describe('createSale — payments split & AR posting', () => {
   });
 
   it('retries with a fresh invoice number when the current sequence is behind', async () => {
-    prismaMock.businessSequence.findUnique.mockResolvedValue({ nextVal: 124 });
     prismaMock.businessSequence.update
       .mockResolvedValueOnce({ nextVal: 125 })
       .mockResolvedValueOnce({ nextVal: 126 });
@@ -955,6 +956,15 @@ describe('createSale — payments split & AR posting', () => {
     expect(prismaMock.salesInvoice.create).toHaveBeenCalledTimes(2);
     expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.transactionNumber).toBe('INV-000125');
     expect(prismaMock.salesInvoice.create.mock.calls[1][0].data.transactionNumber).toBe('INV-000126');
+  });
+
+  it('uses a single sequence update on the normal hot path', async () => {
+    await createSale(makeBaseInput());
+
+    expect(prismaMock.businessSequence.update).toHaveBeenCalledTimes(1);
+    expect(prismaMock.salesInvoice.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.businessSequence.create).not.toHaveBeenCalled();
+    expect(prismaMock.salesInvoice.create.mock.calls[0][0].data.transactionNumber).toBe('INV-000001');
   });
 
   it('rejects overpayment that a non-cash refund cannot absorb', async () => {

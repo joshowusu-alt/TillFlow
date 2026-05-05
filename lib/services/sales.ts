@@ -102,13 +102,17 @@ function parseInvoiceSequenceValue(transactionNumber: string | null | undefined)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function hasPrismaErrorCode(error: unknown, code: string): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
 function isPrismaUniqueConstraintOn(error: unknown, fields: string[]): boolean {
-  if (
-    !error ||
-    typeof error !== 'object' ||
-    !('code' in error) ||
-    (error as { code?: unknown }).code !== 'P2002'
-  ) {
+  if (!hasPrismaErrorCode(error, 'P2002')) {
     return false;
   }
 
@@ -136,18 +140,17 @@ async function reserveNextInvoiceNumber(
     },
   };
 
-  const existingSequence = await tx.businessSequence.findUnique({
-    where: sequenceWhere,
-    select: { nextVal: true },
-  });
-
-  if (existingSequence) {
+  try {
     const updatedSequence = await tx.businessSequence.update({
       where: sequenceWhere,
       data: { nextVal: { increment: 1 } },
       select: { nextVal: true },
     });
     return updatedSequence.nextVal;
+  } catch (error) {
+    if (!hasPrismaErrorCode(error, 'P2025')) {
+      throw error;
+    }
   }
 
   const latestInvoice = await tx.salesInvoice.findFirst({
