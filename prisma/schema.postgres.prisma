@@ -142,6 +142,8 @@ model Business {
   storefrontEvents       StorefrontEvent[]
   messageOutbox          MessageOutbox[]
   controlProfile         ControlBusinessProfile?
+
+  @@index([whatsappEnabled, isDemo])
 }
 
 model ControlStaff {
@@ -529,7 +531,9 @@ model Product {
 
   @@unique([businessId, name])
   @@index([businessId, active, createdAt])
+  @@index([businessId, active, storefrontPublished])
   @@index([categoryId])
+  @@index([preferredSupplierId])
 }
 
 model Unit {
@@ -756,6 +760,7 @@ model StockMovement {
 
   @@index([productId])
   @@index([storeId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model StockAdjustment {
@@ -836,6 +841,9 @@ model SalesInvoice {
   @@index([branchId, createdAt])
   @@index([customerId, paymentStatus])
   @@index([businessId, createdAt])
+  @@index([tillId])
+  @@index([shiftId])
+  @@index([discountApprovedByUserId])
 }
 
 model SalesReturn {
@@ -1046,6 +1054,7 @@ model Expense {
   @@index([businessId, paymentStatus, createdAt])
   @@index([storeId, createdAt])
   @@index([accountId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model ExpensePayment {

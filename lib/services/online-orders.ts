@@ -15,6 +15,15 @@ import {
   slugifyPublicCategory,
   type PublicCategory,
 } from '@/lib/storefront-taxonomy';
+import { Redis } from '@upstash/redis';
+
+// Redis client for short-lived storefront read caching (60 s TTL).
+// Falls back gracefully to Postgres on any Redis error or missing env vars.
+const storefrontRedis =
+  Boolean(process.env.UPSTASH_REDIS_REST_URL) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN)
+    ? Redis.fromEnv()
+    : null;
+const STOREFRONT_CACHE_TTL = 60; // seconds
 
 export type StorefrontCatalogProduct = {
   id: string;
@@ -305,7 +314,7 @@ function buildCheckoutLines(
 }
 
 async function getStorefrontBusinessBySlug(slug: string) {
-  return prisma.business.findFirst({
+  const fetchFromDb = () => prisma.business.findFirst({
     where: { storefrontSlug: slug },
     select: {
       id: true,
@@ -351,6 +360,20 @@ async function getStorefrontBusinessBySlug(slug: string) {
       },
     },
   });
+
+  const cacheKey = `sf:biz:${slug}`;
+  if (storefrontRedis) {
+    try {
+      const hit = await storefrontRedis.get<NonNullable<Awaited<ReturnType<typeof fetchFromDb>>>>(cacheKey);
+      if (hit) return hit;
+    } catch { /* fall through to DB on Redis error */ }
+  }
+
+  const data = await fetchFromDb();
+  if (storefrontRedis && data) {
+    storefrontRedis.set(cacheKey, data, { ex: STOREFRONT_CACHE_TTL }).catch(() => null);
+  }
+  return data;
 }
 
 const STOREFRONT_INITIAL_PRODUCT_LIMIT = 48;
@@ -366,7 +389,7 @@ function normalizeCatalogQuery(query: StorefrontCatalogQuery = {}) {
 }
 
 async function getBusinessCategoryMappings(businessId: string) {
-  return prisma.storefrontCategoryMapping.findMany({
+  const fetchFromDb = () => prisma.storefrontCategoryMapping.findMany({
     where: { businessId },
     orderBy: [{ priority: 'asc' }, { publicCategoryName: 'asc' }],
     select: {
@@ -376,6 +399,20 @@ async function getBusinessCategoryMappings(businessId: string) {
       hidden: true,
     },
   });
+
+  const cacheKey = `sf:catmap:${businessId}`;
+  if (storefrontRedis) {
+    try {
+      const hit = await storefrontRedis.get<Awaited<ReturnType<typeof fetchFromDb>>>(cacheKey);
+      if (hit) return hit;
+    } catch { /* fall through to DB on Redis error */ }
+  }
+
+  const data = await fetchFromDb();
+  if (storefrontRedis) {
+    storefrontRedis.set(cacheKey, data, { ex: STOREFRONT_CACHE_TTL }).catch(() => null);
+  }
+  return data;
 }
 
 function productMatchesPublicCategory(product: { category: { name: string } | null }, categoryId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>) {
@@ -515,6 +552,88 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
   };
 }
 
+// Single DB fetch for initial storefront page load (no search/category filter).
+// Replaces the previous Promise.all([getStorefrontProductRows, getPublicCategoriesForBusiness])
+// which hit the same Product table twice on every storefront home page visit.
+async function getStorefrontInitialData(
+  businessId: string,
+  storeIds: string[],
+  mappingLookup: ReturnType<typeof buildCategoryMappingLookup>,
+) {
+  const rows = await prisma.product.findMany({
+    where: { businessId, active: true, storefrontPublished: true },
+    orderBy: [{ name: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      barcode: true,
+      sellingPriceBasePence: true,
+      vatRateBps: true,
+      promoBuyQty: true,
+      promoGetQty: true,
+      categoryId: true,
+      storefrontDescription: true,
+      imageUrl: true,
+      category: { select: { name: true } },
+      productUnits: {
+        orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
+        select: {
+          unitId: true,
+          isBaseUnit: true,
+          conversionToBase: true,
+          sellingPricePence: true,
+          defaultCostPence: true,
+          unit: { select: { id: true, name: true, pluralName: true } },
+        },
+      },
+      inventoryBalances: {
+        where: { storeId: { in: storeIds } },
+        select: { storeId: true, qtyOnHandBase: true },
+      },
+    },
+  });
+
+  // Derive category counts from the full result set before pagination
+  const categoryMap = new Map<string, PublicCategory>();
+  for (const product of rows) {
+    const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
+    if (publicCategory.hidden) continue;
+    const existing = categoryMap.get(publicCategory.id);
+    categoryMap.set(publicCategory.id, {
+      id: publicCategory.id,
+      name: publicCategory.name,
+      priority: publicCategory.priority,
+      count: (existing?.count ?? 0) + 1,
+    });
+  }
+  const categories = Array.from(categoryMap.values()).sort(
+    (a, b) => a.priority - b.priority || a.name.localeCompare(b.name),
+  );
+
+  // Derive the first page using the same filter/sort logic as getStorefrontProductRows
+  const visibleRows = rows.filter(
+    (product) => !resolvePublicCategory(product.category?.name ?? null, mappingLookup).hidden,
+  );
+  const sortedRows = visibleRows.sort((a, b) => {
+    const aCategory = resolvePublicCategory(a.category?.name ?? null, mappingLookup);
+    const bCategory = resolvePublicCategory(b.category?.name ?? null, mappingLookup);
+    if (aCategory.priority !== bCategory.priority) return aCategory.priority - bCategory.priority;
+    const aHasImage = a.imageUrl ? 0 : 1;
+    const bHasImage = b.imageUrl ? 0 : 1;
+    if (aHasImage !== bHasImage) return aHasImage - bHasImage;
+    return a.name.localeCompare(b.name);
+  });
+  const pageRows = sortedRows.slice(0, STOREFRONT_INITIAL_PRODUCT_LIMIT);
+  const catalogPage = {
+    products: pageRows.map((product) => formatStorefrontCatalogProduct(product, mappingLookup)),
+    total: sortedRows.length,
+    offset: 0,
+    limit: STOREFRONT_INITIAL_PRODUCT_LIMIT,
+  };
+
+  return { catalogPage, categories };
+}
+
 async function getPublicCategoriesForBusiness(businessId: string, mappingLookup: ReturnType<typeof buildCategoryMappingLookup>): Promise<PublicCategory[]> {
   const rawCategories = await prisma.product.findMany({
     where: { businessId, active: true, storefrontPublished: true },
@@ -580,10 +699,7 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
   const storeIds = business.stores.map((store) => store.id);
   const mappings = await getBusinessCategoryMappings(business.id);
   const mappingLookup = buildCategoryMappingLookup(mappings);
-  const [catalogPage, categories] = await Promise.all([
-    getStorefrontProductRows(business.id, storeIds, { limit: STOREFRONT_INITIAL_PRODUCT_LIMIT }, mappingLookup),
-    getPublicCategoriesForBusiness(business.id, mappingLookup),
-  ]);
+  const { catalogPage, categories } = await getStorefrontInitialData(business.id, storeIds, mappingLookup);
 
   const weeklyHours = parseWeeklyHours((business as any).storefrontHoursJson ?? null);
   const openStatus = getOpenStatus({
