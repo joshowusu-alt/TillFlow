@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     storefront.description ??
     `Browse and order from ${storefront.name} online. Fast pickup available.`;
   const url = `${SHOP_BASE_URL}/shop/${params.slug}`;
-  const ogImage = storefront.branding.logoUrl ?? '/og-default-store.png';
+  const ogImage = storefront.branding.logoUrl ?? `${SHOP_BASE_URL}/og-default-store`;
 
   return {
     title,
