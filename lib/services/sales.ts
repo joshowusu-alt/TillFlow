@@ -486,13 +486,13 @@ export async function createSale(input: CreateSaleInput) {
       }
     }
 
-    const seqResult = await tx.$queryRaw<Array<{ nextVal: bigint | number }>>`
-      INSERT INTO "BusinessSequence" ("businessId", "sequenceName", "nextVal")
-      VALUES (${input.businessId}, 'invoice', 1)
-      ON CONFLICT ("businessId", "sequenceName")
-      DO UPDATE SET "nextVal" = "BusinessSequence"."nextVal" + 1
-      RETURNING "nextVal"`;
-    const transactionNumber = `INV-${String(Number(seqResult[0].nextVal)).padStart(6, '0')}`;
+    const seq = await tx.businessSequence.upsert({
+      where: { businessId_sequenceName: { businessId: input.businessId, sequenceName: 'invoice' } },
+      create: { businessId: input.businessId, sequenceName: 'invoice', nextVal: 1 },
+      update: { nextVal: { increment: 1 } },
+      select: { nextVal: true },
+    });
+    const transactionNumber = `INV-${String(seq.nextVal).padStart(6, '0')}`;
 
     const created = await tx.salesInvoice.create({
       data: {

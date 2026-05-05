@@ -25,9 +25,9 @@ const {
     user: { findFirst: vi.fn() },
     mobileMoneyCollection: { findFirst: vi.fn() },
     salesInvoice: { create: vi.fn(), aggregate: vi.fn(), findMany: vi.fn() },
+    businessSequence: { upsert: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
-    $queryRaw: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
@@ -230,7 +230,7 @@ beforeEach(() => {
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
   prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
-  prismaMock.$queryRaw.mockResolvedValue([{ nextVal: 1n }]);
+  prismaMock.businessSequence.upsert.mockResolvedValue({ nextVal: 1 });
   prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { totalPence: 0 } });
   prismaMock.salesInvoice.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (cb: any) => cb(prismaMock));
