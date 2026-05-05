@@ -6,7 +6,7 @@
 >
 > This repository and the TillFlow software are proprietary to Tish Group.
 
-![TillFlow Logo](./public/icon.svg)
+![TillFlow Logo](./public/brand-icon.svg)
 
 ## 🚀 How to Install
 

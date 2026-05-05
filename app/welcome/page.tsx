@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
+import { Logo } from '@/components/Logo';
 import { PLAN_MONTHLY_PRICES, ADDON_ONLINE_STOREFRONT_MONTHLY } from '@/lib/plan-pricing';
 
 const features = [
@@ -155,7 +156,7 @@ export default function WelcomePage() {
       <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <img src="/icon.svg" alt="" className="h-9 w-9 rounded-xl" />
+            <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl" ariaHidden />
             <span className="text-xl font-bold font-display">
               <span className="text-accent">Till</span>
               <span className="text-gray-800">Flow</span>
@@ -486,7 +487,7 @@ export default function WelcomePage() {
       <footer className="border-t border-black/5 px-6 py-8">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <img src="/icon.svg" alt="" className="h-6 w-6 rounded-lg" />
+            <Logo variant="mark" size={24} className="h-6 w-6 rounded-lg" ariaHidden />
             <div>
               <span className="text-sm font-semibold font-display">
                 <span className="text-accent">Till</span>

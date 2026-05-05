@@ -8,6 +8,7 @@ import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@
 import { formatMoney } from '@/lib/format';
 import { NAV_GROUPS } from '@/lib/navigation-config';
 import InstallButton from './InstallButton';
+import { Logo } from './Logo';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
@@ -108,7 +109,7 @@ export default function TopNav({
         <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
             <a href="/pos" className="flex min-w-0 items-center gap-3" aria-label="TillFlow — go to POS">
-              <img src="/icon.svg" alt="" width="36" height="36" className="h-9 w-9 rounded-xl shadow-sm" aria-hidden="true" />
+              <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl shadow-sm" ariaHidden />
               <div className="min-w-0">
                 <div className="text-lg font-display font-bold leading-none">
                   <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>

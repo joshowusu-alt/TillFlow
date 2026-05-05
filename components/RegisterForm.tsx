@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { register } from '@/app/actions/register';
 import SubmitButton from '@/components/SubmitButton';
 import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
+import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import type { BusinessPlan } from '@/lib/features';
 
@@ -66,7 +67,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <img src="/icon.svg" alt="TillFlow" className="mx-auto h-14 w-14 rounded-2xl shadow-lg mb-3" />
+        <Logo variant="mark" size={56} className="mx-auto h-14 w-14 rounded-2xl shadow-lg mb-3" alt="TillFlow" />
         <h1 className="text-2xl font-bold font-display">
           <span className="text-accent">Till</span>
           <span className="text-gray-800">Flow</span>

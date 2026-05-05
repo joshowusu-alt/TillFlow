@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v11';
+const CACHE_NAME = 'pos-cache-v12';
 const OFFLINE_URL = '/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
 
@@ -9,7 +9,6 @@ const PRECACHE_ASSETS = [
   '/offline',
   '/offline/sales',
   '/manifest.json',
-  '/icon.svg',
   '/api/icon?size=192',
   '/api/icon?size=512'
 ];

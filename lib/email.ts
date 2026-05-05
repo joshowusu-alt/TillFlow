@@ -28,7 +28,7 @@ export async function sendPasswordResetEmail(
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
         <div style="text-align: center; margin-bottom: 24px;">
           <h1 style="font-size: 24px; font-weight: 700; margin: 0;">
-            <span style="color: #6366f1;">Till</span><span style="color: #1f2937;">Flow</span>
+            <span style="color: #1E40AF;">Till</span><span style="color: #1f2937;">Flow</span>
           </h1>
         </div>
         <div style="background: #f9fafb; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
@@ -37,7 +37,7 @@ export async function sendPasswordResetEmail(
             Someone requested a password reset for your TillFlow account. Click the button below to choose a new password.
           </p>
           <div style="text-align: center; margin: 24px 0;">
-            <a href="${resetUrl}" style="display: inline-block; background: #6366f1; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+            <a href="${resetUrl}" style="display: inline-block; background: #1E40AF; color: #fff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
               Reset Password
             </a>
           </div>

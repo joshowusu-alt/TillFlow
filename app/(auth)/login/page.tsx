@@ -1,6 +1,7 @@
 ﻿import { login } from '@/app/actions/auth';
 import { getUser } from '@/lib/auth';
 import SubmitButton from '@/components/SubmitButton';
+import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
@@ -14,7 +15,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <img src="/icon.svg" alt="TillFlow" className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" />
+        <Logo variant="mark" size={64} className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" alt="TillFlow" />
         <h1 className="text-3xl font-bold font-display">
           <span className="text-accent">Till</span>
           <span className="text-gray-800">Flow</span>
