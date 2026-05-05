@@ -1,8 +1,9 @@
 import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
+import Link from 'next/link';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
-import { toggleStorefrontProductAction, updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction, hideOutOfStockStorefrontProductsAction } from '@/app/actions/online-storefront';
+import { updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction, hideOutOfStockStorefrontProductsAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
@@ -43,7 +44,17 @@ export default async function OnlineStoreSettingsPage({
   }
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const [storefrontBusiness, products, categoryMappings, eventCounts] = await Promise.all([
+  const [
+    storefrontBusiness,
+    categoryMappings,
+    eventCounts,
+    totalProducts,
+    totalPublished,
+    publishedInventoryTotals,
+    categories,
+    activeProductCounts,
+    publishedProductCounts,
+  ] = await Promise.all([
     prisma.business.findUnique({
       where: { id: business.id },
       select: {
@@ -73,20 +84,6 @@ export default async function OnlineStoreSettingsPage({
         smsSenderId: true,
       },
     }),
-    prisma.product.findMany({
-      where: { businessId: business.id, active: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        imageUrl: true,
-        storefrontPublished: true,
-        sellingPriceBasePence: true,
-        categoryId: true,
-        category: { select: { name: true } },
-        inventoryBalances: { select: { qtyOnHandBase: true } },
-      },
-    }),
     prisma.storefrontCategoryMapping.findMany({
       where: { businessId: business.id },
       orderBy: [{ priority: 'asc' }, { publicCategoryName: 'asc' }],
@@ -102,6 +99,38 @@ export default async function OnlineStoreSettingsPage({
       where: { businessId: business.id, timestamp: { gte: since } },
       _count: { _all: true },
     }),
+    prisma.product.count({
+      where: { businessId: business.id, active: true },
+    }),
+    prisma.product.count({
+      where: { businessId: business.id, active: true, storefrontPublished: true },
+    }),
+    prisma.inventoryBalance.groupBy({
+      by: ['productId'],
+      where: {
+        product: {
+          businessId: business.id,
+          active: true,
+          storefrontPublished: true,
+        },
+      },
+      _sum: { qtyOnHandBase: true },
+    }),
+    prisma.category.findMany({
+      where: { businessId: business.id },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+    prisma.product.groupBy({
+      by: ['categoryId'],
+      where: { businessId: business.id, active: true },
+      _count: { _all: true },
+    }),
+    prisma.product.groupBy({
+      by: ['categoryId'],
+      where: { businessId: business.id, active: true, storefrontPublished: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const mappingByRaw = new Map(categoryMappings.map((mapping) => [mapping.rawCategoryName.toLowerCase(), mapping]));
@@ -111,26 +140,37 @@ export default async function OnlineStoreSettingsPage({
   const checkoutStarts = analytics.get('checkout_start') ?? 0;
   const ordersPlaced = analytics.get('order_placed') ?? 0;
   const conversionRate = visits > 0 ? Math.round((ordersPlaced / visits) * 1000) / 10 : 0;
-
-  const categoryStats = (() => {
-    const map = new Map<string, { id: string; name: string; total: number; published: number }>();
-    for (const product of products) {
-      const id = product.categoryId ?? '__uncategorised__';
-      const name = product.category?.name ?? 'Uncategorised';
-      const entry = map.get(id) ?? { id, name, total: 0, published: 0 };
-      entry.total += 1;
-      if (product.storefrontPublished) entry.published += 1;
-      map.set(id, entry);
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  })();
-  const totalProducts = products.length;
-  const totalPublished = products.filter((p) => p.storefrontPublished).length;
-  const publishedOutOfStock = products.filter(
-    (product) =>
-      product.storefrontPublished &&
-      product.inventoryBalances.reduce((sum, balance) => sum + balance.qtyOnHandBase, 0) <= 0,
-  ).length;
+  const activeCountByCategoryId = new Map(
+    activeProductCounts.map((entry) => [entry.categoryId ?? '__uncategorised__', entry._count._all]),
+  );
+  const publishedCountByCategoryId = new Map(
+    publishedProductCounts.map((entry) => [entry.categoryId ?? '__uncategorised__', entry._count._all]),
+  );
+  const categorySummaries = categories
+    .map((category) => ({
+      id: category.id,
+      name: category.name,
+      total: activeCountByCategoryId.get(category.id) ?? 0,
+      published: publishedCountByCategoryId.get(category.id) ?? 0,
+    }))
+    .filter((category) => category.total > 0);
+  const uncategorisedTotal = activeCountByCategoryId.get('__uncategorised__') ?? 0;
+  const uncategorisedPublished = publishedCountByCategoryId.get('__uncategorised__') ?? 0;
+  const categoryPublishSummaries =
+    uncategorisedTotal > 0
+      ? [
+          ...categorySummaries,
+          {
+            id: '__uncategorised__',
+            name: 'Uncategorised',
+            total: uncategorisedTotal,
+            published: uncategorisedPublished,
+          },
+        ]
+      : categorySummaries;
+  const publishedOutOfStock =
+    totalPublished -
+    publishedInventoryTotals.filter((entry) => (entry._sum.qtyOnHandBase ?? 0) > 0).length;
 
   const plan = getBusinessPlan(
     ((business as any).plan ?? (business.mode as any)) as any,
@@ -185,6 +225,11 @@ export default async function OnlineStoreSettingsPage({
       {searchParams?.saved === 'stock' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Out-of-stock products hidden from the storefront.
+        </div>
+      ) : null}
+      {searchParams?.saved === 'categories' ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          Public category mappings saved.
         </div>
       ) : null}
 
@@ -521,25 +566,28 @@ export default async function OnlineStoreSettingsPage({
           <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950">
             These labels only affect the public storefront. Your internal product categories stay unchanged.
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {suggestedPublicCategoryOptions().slice(0, 10).map((option) => (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {suggestedPublicCategoryOptions().map((option) => (
               <span key={option.name} className="rounded-2xl border border-black/5 bg-white px-3 py-2 text-xs font-semibold text-black/55">
                 {option.name}
               </span>
             ))}
           </div>
           <div className="divide-y divide-black/5 overflow-hidden rounded-2xl border border-black/5 bg-white">
-            {categoryStats.map((category) => {
+            {categorySummaries.map((category) => {
               const existing = mappingByRaw.get(category.name.toLowerCase());
               const suggested = normalizePublicCategoryName(category.name);
               const publicName = existing?.publicCategoryName ?? suggested.name;
               const priority = existing?.priority ?? suggested.priority;
               return (
-                <div key={category.id} className="grid gap-3 px-3 py-3 sm:grid-cols-[1fr_1fr_5rem_auto] sm:items-center">
+                <div key={category.id} className="grid gap-3 px-3 py-3 sm:grid-cols-[1.15fr_1fr_5rem_auto] sm:items-center">
                   <input type="hidden" name="rawCategoryName" value={category.name} />
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-ink">{category.name}</div>
                     <div className="text-xs text-black/45">{category.total} products, {category.published} live</div>
+                    <div className="mt-1 text-[11px] text-black/55">
+                      Public storefront label: <span className="font-semibold text-ink">{publicName}</span>
+                    </div>
                   </div>
                   <div>
                     <label className="label sm:hidden">Public category</label>
@@ -549,6 +597,9 @@ export default async function OnlineStoreSettingsPage({
                       defaultValue={publicName}
                       list="storefront-public-category-options"
                     />
+                    <div className="mt-1 text-[10px] text-black/40">
+                      Pick a suggestion or type a custom shopper-friendly name.
+                    </div>
                   </div>
                   <div>
                     <label className="label sm:hidden">Order</label>
@@ -605,11 +656,11 @@ export default async function OnlineStoreSettingsPage({
               ? `${publishedOutOfStock} published product${publishedOutOfStock === 1 ? '' : 's'} currently show as out of stock. Hide them now to keep the storefront cleaner for customers.`
               : 'No published products are currently out of stock.'}
           </div>
-        {categoryStats.length > 1 ? (
+        {categoryPublishSummaries.length > 1 ? (
           <div className="mt-4 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/55">Publish by category</div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {categoryStats.map((category) => {
+              {categoryPublishSummaries.map((category) => {
                 const allPublished = category.published === category.total;
                 const nonePublished = category.published === 0;
                 return (
@@ -667,15 +718,7 @@ export default async function OnlineStoreSettingsPage({
         </div>
 
         <div className="mt-5">
-          <CatalogueVisibilityFilter
-            products={products.map((p) => ({
-              id: p.id,
-              name: p.name,
-              imageUrl: p.imageUrl,
-              storefrontPublished: p.storefrontPublished,
-              categoryName: p.category?.name ?? null,
-            }))}
-          />
+          <CatalogueVisibilityFilter initialTotal={totalProducts} />
         </div>
         </div>
       </SettingsSection>
@@ -705,6 +748,14 @@ export default async function OnlineStoreSettingsPage({
             <p className="mt-2 text-sm leading-6 text-black/55">
               If visits are healthy but add-to-cart is low, improve product photos and category names. If checkout starts are healthy but orders are low, review payment instructions and pickup confidence.
             </p>
+            <div className="pt-1">
+              <Link
+                href="/settings/online-store/analytics"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                View full analytics →
+              </Link>
+            </div>
           </div>
         </div>
       </SettingsSection>
