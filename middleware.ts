@@ -12,6 +12,7 @@ const PUBLIC_PATHS = [
   '/welcome',
   '/demo',
   '/shop',
+  '/robots.txt',
   '/icon',
   '/apple-icon',
   '/og-default-store',
