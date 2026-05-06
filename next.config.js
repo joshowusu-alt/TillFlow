@@ -21,7 +21,7 @@ const nextConfig = {
     ignoreDuringBuilds: false,
   },
   experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3'],
+    serverComponentsExternalPackages: ['better-sqlite3', 'pg'],
     // Large imports (1000+ products) produce ~2-3 MB in the server-action request body.
     // Next.js 14.1+ supports bodySizeLimit via the nested serverActions object.
     serverActions: {

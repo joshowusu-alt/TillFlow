@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client, type Notification } from 'pg';
+import type { Client, Notification } from 'pg';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import { getPublicOnlineOrder } from '@/lib/services/online-orders';
 import {
@@ -47,6 +47,10 @@ async function createListenerClient() {
     throw new Error('No Postgres listener database URL configured.');
   }
 
+  // Lazy dynamic import so pg is never loaded at module-evaluation time.
+  // A static top-level import causes the build worker to hang on Windows
+  // (and any environment where pg's module initialisation blocks the event loop).
+  const { Client } = await import('pg');
   const client = new Client({ connectionString });
   await client.connect();
   await client.query(`LISTEN ${ONLINE_ORDER_STATUS_CHANNEL}`);
@@ -57,6 +61,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // Next.js 14 invokes force-dynamic Route Handlers once during the production
+  // build to collect response metadata. Return immediately so the build worker
+  // never opens a database connection or a long-lived stream.
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return NextResponse.json({ error: 'Not available during build.' }, { status: 503 });
+  }
+
   const accept = request.headers.get('accept') ?? '';
   if (!accept.includes('text/event-stream')) {
     return NextResponse.json({ error: 'This endpoint requires EventSource.' }, { status: 426 });
