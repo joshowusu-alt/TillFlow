@@ -33,6 +33,23 @@ model Business {
   // Canonical merchant logo. Cascades to storefront and receipts unless a
   // surface-specific override (storefrontLogoUrl, receiptLogoUrl) is set.
   logoUrl                              String?
+  // Optional compact and square brand assets for small TillFlow surfaces.
+  brandCompactLogoUrl                  String?
+  brandSquareLogoUrl                   String?
+  // Overrideable fallback initials used when compact surfaces should not render
+  // the uploaded logo directly.
+  brandInitials                        String?
+  // Canonical merchant colour used for premium initials tiles and shared
+  // merchant-identity surfaces across admin and storefront.
+  brandPrimaryColor                    String?
+  // AUTO = prefer compact/square logo else initials in tight spaces.
+  // INITIALS = always use initials for compact surfaces.
+  // LOGO = allow the uploaded logo to render in compact surfaces.
+  brandCompactMode                     String   @default("AUTO")
+  // AUTO = TillFlow decides when to place logos on a neutral badge.
+  // NEUTRAL = always use a light badge behind uploaded logos.
+  // TRANSPARENT = keep logos on transparent surfaces where possible.
+  brandLogoBackground                  String   @default("AUTO")
   // Receipt customization fields
   receiptLogoUrl                       String?
   receiptHeader                        String?

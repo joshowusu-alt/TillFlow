@@ -56,6 +56,12 @@ const AUTH_BILLING_SELECT = {
   lastPaymentAt: true,
   nextPaymentDueAt: true,
   billingNotes: true,
+  brandCompactLogoUrl: true,
+  brandSquareLogoUrl: true,
+  brandInitials: true,
+  brandPrimaryColor: true,
+  brandCompactMode: true,
+  brandLogoBackground: true,
 } as const;
 
 const COMMERCIAL_LEGACY_SELECT = {
@@ -81,7 +87,22 @@ export function isBillingSchemaError(error: unknown) {
   const message = error.message;
   return (
     (message.includes('Unknown field') || message.includes('does not exist in the current database')) &&
-    ['plan', 'planStatus', 'trialEndsAt', 'planSetAt', 'planChangedByUserId', 'lastPaymentAt', 'nextPaymentDueAt', 'billingNotes'].some(
+    [
+      'plan',
+      'planStatus',
+      'trialEndsAt',
+      'planSetAt',
+      'planChangedByUserId',
+      'lastPaymentAt',
+      'nextPaymentDueAt',
+      'billingNotes',
+      'brandCompactLogoUrl',
+      'brandSquareLogoUrl',
+      'brandInitials',
+      'brandPrimaryColor',
+      'brandCompactMode',
+      'brandLogoBackground',
+    ].some(
       (field) => message.includes(field)
     )
   );

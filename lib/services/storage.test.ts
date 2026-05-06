@@ -20,6 +20,7 @@ vi.mock('@vercel/blob', () => ({
 }));
 
 import {
+  saveBusinessBrandImageFile,
   saveExpenseAttachment,
   saveBusinessLogoFile,
   saveProductImageFile,
@@ -140,7 +141,7 @@ describe('saveBusinessLogoFile', () => {
   it('writes accepted logos to local storage when blob is not configured', async () => {
     const result = await saveBusinessLogoFile(makeFile({ name: 'My Logo!.png', type: 'image/png' }));
 
-    expect(result).toMatch(/^\/uploads\/business-logos\/\d+-My_Logo_\.png$/);
+    expect(result).toMatch(/^\/uploads\/business-logos\/\d+-primary-My_Logo_\.png$/);
     expect(mkdirMock).toHaveBeenCalledWith(
       expect.stringMatching(/public[\\/]uploads[\\/]business-logos$/),
       { recursive: true },
@@ -156,11 +157,28 @@ describe('saveBusinessLogoFile', () => {
 
     expect(result).toBe('https://blob.example/business-logos/abc.webp');
     expect(putMock).toHaveBeenCalledWith(
-      expect.stringMatching(/^business-logos\/\d+-brand\.webp$/),
+      expect.stringMatching(/^business-logos\/\d+-primary-brand\.webp$/),
       expect.anything(),
       { access: 'public' },
     );
     expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('stores compact brand assets in their own namespace', async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = 'token';
+    putMock.mockResolvedValue({ url: 'https://blob.example/business-branding/compact/abc.webp' });
+
+    const result = await saveBusinessBrandImageFile(
+      makeFile({ name: 'compact.webp', type: 'image/webp' }),
+      'compact',
+    );
+
+    expect(result).toBe('https://blob.example/business-branding/compact/abc.webp');
+    expect(putMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^business-branding\/compact\/\d+-compact-compact\.webp$/),
+      expect.anything(),
+      { access: 'public' },
+    );
   });
 
   it('returns a clear error on Vercel when blob storage is not configured', async () => {

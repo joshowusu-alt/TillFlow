@@ -47,6 +47,12 @@ export function getContrastForeground(hex: string | null | undefined): string {
 
 export type StorefrontBranding = {
   logoUrl: string | null;
+  compactLogoUrl?: string | null;
+  squareLogoUrl?: string | null;
+  initials?: string | null;
+  brandPrimaryColor?: string | null;
+  compactMode?: string | null;
+  logoBackground?: string | null;
   primaryColor: string | null;
   accentColor: string | null;
   tagline: string | null;
