@@ -29,6 +29,11 @@ type PublicOrder = {
   createdAt: string | Date;
   paidAt: string | Date | null;
   fulfilledAt: string | Date | null;
+  paymentConfirmedAt?: string | Date | null;
+  preparingAt?: string | Date | null;
+  readyAt?: string | Date | null;
+  collectedAt?: string | Date | null;
+  cancelledAt?: string | Date | null;
   paymentCollectionId: string | null;
   storefrontSlug: string;
   storefrontName: string;
@@ -70,6 +75,29 @@ type PublicOrder = {
     storefrontSlug: string | null;
   };
 };
+
+type OrderStatusStreamPayload = Partial<
+  Pick<
+    PublicOrder,
+    | 'status'
+    | 'paymentStatus'
+    | 'fulfillmentStatus'
+    | 'paidAt'
+    | 'fulfilledAt'
+    | 'paymentConfirmedAt'
+    | 'preparingAt'
+    | 'readyAt'
+    | 'collectedAt'
+    | 'cancelledAt'
+  >
+> & {
+  id?: string;
+  orderId?: string;
+};
+
+function isTerminalStatus(status: string) {
+  return status === 'COMPLETED' || status === 'CANCELLED';
+}
 
 function statusTone(status: string) {
   if (status === 'PAID' || status === 'READY_FOR_PICKUP' || status === 'COMPLETED') {
@@ -242,6 +270,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const [order, setOrder] = useState(initialOrder);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const terminal = isTerminalStatus(order.status);
 
   const refreshStatus = useCallback(async () => {
     setRefreshing(true);
@@ -273,19 +302,100 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   }, [order.id, order.storefrontSlug]);
 
   useEffect(() => {
-    if (order.paymentStatus !== 'PENDING') {
+    if (terminal) {
       return;
     }
 
-    // Poll every 20s while awaiting manual payment confirmation. The merchant
-    // marks payment received in TillFlow, which flips paymentStatus to PAID
-    // — at which point this effect tears down.
-    const timer = window.setInterval(() => {
-      void refreshStatus();
-    }, 20_000);
+    let eventSource: EventSource | null = null;
+    let pollingTimer: number | null = null;
+    let fallbackTimer: number | null = null;
+    let fallbackStarted = false;
+    let hasConnected = false;
 
-    return () => window.clearInterval(timer);
-  }, [order.paymentStatus, refreshStatus]);
+    const clearFallbackTimer = () => {
+      if (fallbackTimer) {
+        window.clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
+    const startPollingFallback = () => {
+      if (fallbackStarted) {
+        return;
+      }
+
+      fallbackStarted = true;
+      clearFallbackTimer();
+      eventSource?.close();
+      void refreshStatus();
+      pollingTimer = window.setInterval(() => {
+        void refreshStatus();
+      }, 20_000);
+    };
+
+    const token = new URLSearchParams(window.location.search).get('token') ?? '';
+
+    if (typeof EventSource === 'undefined') {
+      startPollingFallback();
+      return () => {
+        if (pollingTimer) {
+          window.clearInterval(pollingTimer);
+        }
+      };
+    }
+
+    const streamUrl = `/api/storefront/orders/${encodeURIComponent(order.id)}/stream?slug=${encodeURIComponent(order.storefrontSlug)}&token=${encodeURIComponent(token)}`;
+    eventSource = new EventSource(streamUrl);
+
+    eventSource.onopen = () => {
+      hasConnected = true;
+      clearFallbackTimer();
+    };
+
+    eventSource.addEventListener('status', (event) => {
+      try {
+        const payload = JSON.parse(event.data) as OrderStatusStreamPayload;
+        const payloadOrderId = payload.orderId ?? payload.id;
+        if (payloadOrderId && payloadOrderId !== order.id) {
+          return;
+        }
+
+        setRefreshError(null);
+        clearFallbackTimer();
+        setOrder((current) => ({
+          ...current,
+          ...payload,
+          id: current.id,
+        }));
+      } catch {
+        eventSource?.close();
+        startPollingFallback();
+      }
+    });
+
+    eventSource.addEventListener('done', () => {
+      eventSource?.close();
+    });
+
+    eventSource.onerror = () => {
+      if (!hasConnected) {
+        startPollingFallback();
+        return;
+      }
+
+      if (!fallbackTimer) {
+        fallbackTimer = window.setTimeout(startPollingFallback, 10_000);
+      }
+    };
+
+    return () => {
+      eventSource?.close();
+      clearFallbackTimer();
+      if (pollingTimer) {
+        window.clearInterval(pollingTimer);
+      }
+    };
+  }, [order.id, order.storefrontSlug, refreshStatus, terminal]);
 
   const paid = isPaidStatus(order.status);
   const awaitingPayment = !paid && order.status !== 'CANCELLED';
