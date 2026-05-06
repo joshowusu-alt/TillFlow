@@ -120,7 +120,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
         businessName={business.name}
-        businessLogoUrl={business.logoUrl ?? null}
+        merchantBranding={{
+          businessName: business.name,
+          logoUrl: business.logoUrl ?? null,
+          brandCompactLogoUrl: (business as any).brandCompactLogoUrl ?? null,
+          brandSquareLogoUrl: (business as any).brandSquareLogoUrl ?? null,
+          brandInitials: (business as any).brandInitials ?? null,
+          brandPrimaryColor: (business as any).brandPrimaryColor ?? null,
+          brandCompactMode: (business as any).brandCompactMode ?? 'AUTO',
+          brandLogoBackground: (business as any).brandLogoBackground ?? 'AUTO',
+        }}
         momoEnabled={!!business.momoEnabled}
         todaySales={todaySales}
         onlineOrdersCount={onlineOrdersCount}

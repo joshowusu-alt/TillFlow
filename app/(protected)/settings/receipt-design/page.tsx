@@ -3,6 +3,7 @@ import SubmitButton from '@/components/SubmitButton';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateReceiptDesignAction } from '@/app/actions/receipt-design';
+import MerchantBrandBadge from '@/components/MerchantBrandBadge';
 
 import { formatMoney } from '@/lib/format';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
@@ -26,6 +27,18 @@ export default async function ReceiptDesignPage() {
     const storefrontUrl = buildStorefrontUrl(storefrontSlug, requestOrigin);
     const showStorefrontQr = Boolean(businessAny.receiptShowStorefrontQr);
     const storefrontPrimaryColor = resolvePrimaryBrandColor(businessAny.storefrontPrimaryColor);
+    const merchantBranding = {
+        businessName: business.name,
+        logoUrl: business.logoUrl ?? null,
+        brandCompactLogoUrl: businessAny.brandCompactLogoUrl ?? null,
+        brandSquareLogoUrl: businessAny.brandSquareLogoUrl ?? null,
+        brandInitials: businessAny.brandInitials ?? null,
+        brandPrimaryColor: businessAny.brandPrimaryColor ?? null,
+        brandCompactMode: businessAny.brandCompactMode ?? 'AUTO',
+        brandLogoBackground: businessAny.brandLogoBackground ?? 'AUTO',
+        receiptLogoUrl: business.receiptLogoUrl ?? null,
+        storefrontPrimaryColor: businessAny.storefrontPrimaryColor ?? null,
+    };
     const storefrontQrPreview =
         storefrontEnabled && storefrontUrl
             ? await QRCode.toDataURL(storefrontUrl, {
@@ -177,21 +190,7 @@ export default async function ReceiptDesignPage() {
                     <h2 className="text-lg font-display font-semibold">Preview</h2>
                     <div className="mt-4 rounded-xl border-2 border-dashed border-black/10 bg-white p-6">
                         <div className="mx-auto max-w-64 space-y-3 text-center text-sm">
-                            {/* Receipt-specific override wins; fall back to the canonical Business.logoUrl. */}
-                            {business.receiptLogoUrl || business.logoUrl ? (
-                                <div className="mx-auto flex h-16 w-28 items-center justify-center overflow-hidden rounded-xl bg-white p-2">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={business.receiptLogoUrl ?? business.logoUrl ?? ''}
-                                        alt="Logo"
-                                        className="h-full w-full object-contain"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-black/5 text-black/30">
-                                    Logo
-                                </div>
-                            )}
+                            <MerchantBrandBadge branding={merchantBranding} surface="receipt" className="mx-auto" />
 
                             {/* Business Name */}
                             <div className="text-lg font-bold">{business.name}</div>

@@ -7,8 +7,10 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { NAV_GROUPS } from '@/lib/navigation-config';
+import type { MerchantBrandProfile } from '@/lib/merchant-branding';
 import InstallButton from './InstallButton';
 import { Logo } from './Logo';
+import MerchantBrandBadge from './MerchantBrandBadge';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
@@ -24,7 +26,7 @@ export default function TopNav({
   storeMode,
   storeName,
   businessName,
-  businessLogoUrl,
+  merchantBranding,
   momoEnabled,
   todaySales,
   onlineOrdersCount = 0,
@@ -34,7 +36,7 @@ export default function TopNav({
   storeMode?: StoreMode;
   storeName?: string;
   businessName?: string;
-  businessLogoUrl?: string | null;
+  merchantBranding?: MerchantBrandProfile;
   momoEnabled?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
@@ -127,16 +129,11 @@ export default function TopNav({
 
             <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
-                {businessLogoUrl ? (
-                  <span className="flex h-6 w-10 items-center justify-center overflow-hidden rounded-md bg-white px-1 ring-1 ring-black/5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={businessLogoUrl}
-                      alt=""
-                      aria-hidden="true"
-                      className="h-full w-full object-contain"
-                    />
-                  </span>
+                {merchantBranding ? (
+                  <MerchantBrandBadge
+                    branding={merchantBranding}
+                    surface="admin-shell"
+                  />
                 ) : (
                   <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
                 )}

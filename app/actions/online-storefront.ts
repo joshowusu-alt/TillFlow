@@ -7,7 +7,11 @@ import { formAction, withBusinessContext } from '@/lib/action-utils';
 import { getFeatures } from '@/lib/features';
 import { formOptionalString, formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
-import { normalizeStorefrontSlug, restoreOnlineOrderInventoryReservation } from '@/lib/services/online-orders';
+import {
+  invalidateStorefrontBusinessCache,
+  normalizeStorefrontSlug,
+  restoreOnlineOrderInventoryReservation,
+} from '@/lib/services/online-orders';
 import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { createSalesReturn } from '@/lib/services/returns';
 import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
@@ -192,6 +196,7 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
 
     revalidatePath('/settings/online-store');
     if (storefrontSlug) {
+      await invalidateStorefrontBusinessCache(storefrontSlug);
       revalidatePath(`/shop/${storefrontSlug}`);
     }
     redirect('/settings/online-store?saved=1');

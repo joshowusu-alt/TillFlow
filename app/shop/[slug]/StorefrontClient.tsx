@@ -8,6 +8,7 @@ import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct,
 import { resolveBrandStyles } from '@/lib/storefront-branding';
 import { getPaymentInstructionDetails } from '@/lib/storefront-payments';
 import type { PublicStorefront } from '@/lib/services/online-orders';
+import MerchantBrandBadge from '@/components/MerchantBrandBadge';
 
 const ALL_CATEGORIES = '__all__';
 const CATALOG_PAGE_SIZE = 48;
@@ -754,12 +755,19 @@ export default function StorefrontClient({
   }
 
   const storefrontTitle = storefront.headline || storefront.name;
-  const storefrontInitials = (storefront.name || 'TF')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? '')
-    .join('') || 'TF';
+  const storefrontBranding = {
+    businessName: storefront.name,
+    logoUrl: storefront.branding.logoUrl,
+    brandCompactLogoUrl: storefront.branding.compactLogoUrl,
+    brandSquareLogoUrl: storefront.branding.squareLogoUrl,
+    brandInitials: storefront.branding.initials,
+    brandPrimaryColor: storefront.branding.brandPrimaryColor ?? storefront.branding.primaryColor,
+    brandCompactMode: storefront.branding.compactMode,
+    brandLogoBackground: storefront.branding.logoBackground,
+    storefrontLogoUrl: storefront.branding.logoUrl,
+    storefrontPrimaryColor: storefront.branding.primaryColor,
+    storefrontTagline: storefront.branding.tagline,
+  } as const;
   const cartItemCount = cartDetails.length;
   const cartUnitCount = cart.reduce((sum, line) => sum + line.qtyInUnit, 0);
   const paymentDetails = useMemo(
@@ -806,23 +814,8 @@ export default function StorefrontClient({
       {/* ── STORE HERO ─────────────────────────────────────── */}
       <header className="relative overflow-hidden pt-[env(safe-area-inset-top)]" style={heroStyle}>
         <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-4 sm:px-6 sm:py-6">
-          <div className="flex items-start gap-3 sm:gap-4">
-            {storefront.branding.logoUrl ? (
-              <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-2 shadow-lg ring-1 ring-white/30 sm:h-20 sm:w-28">
-                <Image
-                  src={storefront.branding.logoUrl}
-                  alt={storefront.name}
-                  width={128}
-                  height={96}
-                  className="h-full w-full object-contain"
-                />
-              </div>
-            ) : (
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 shadow-lg text-lg font-bold sm:h-16 sm:w-16 sm:text-xl" style={{ color: 'var(--brand-primary-foreground)' }}>
-                {storefrontInitials}
-              </div>
-            )}
-
+          <div className="flex items-start gap-4 sm:gap-5">
+            <MerchantBrandBadge branding={storefrontBranding} surface="storefront-hero" />
             <div className="min-w-0 flex-1">
               <div className="mb-1 inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.82 }}>
                 TillFlow online store

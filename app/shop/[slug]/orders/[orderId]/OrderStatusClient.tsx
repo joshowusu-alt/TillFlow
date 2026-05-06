@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { formatDateTime, formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
+import MerchantBrandBadge from '@/components/MerchantBrandBadge';
 import {
   buildPaymentShareMessage,
   getPaymentInstructionDetails,
@@ -73,6 +74,18 @@ type PublicOrder = {
     name: string;
     storefrontPickupInstructions: string | null;
     storefrontSlug: string | null;
+  };
+  branding: {
+    logoUrl: string | null;
+    compactLogoUrl: string | null;
+    squareLogoUrl: string | null;
+    initials: string | null;
+    brandPrimaryColor: string | null;
+    compactMode: string | null;
+    logoBackground: string | null;
+    primaryColor: string | null;
+    accentColor: string | null;
+    tagline: string | null;
   };
 };
 
@@ -408,6 +421,19 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const storefrontDisplayName = toTitleCase(order.storefrontName);
   const customerPhoneDisplay = formatGhanaPhoneForDisplay(order.customerPhone);
   const storefrontPhoneDisplay = formatGhanaPhoneForDisplay(order.storefrontPhone);
+  const orderBranding = {
+    businessName: order.storefrontName,
+    logoUrl: order.branding.logoUrl,
+    brandCompactLogoUrl: order.branding.compactLogoUrl,
+    brandSquareLogoUrl: order.branding.squareLogoUrl,
+    brandInitials: order.branding.initials,
+    brandPrimaryColor: order.branding.brandPrimaryColor ?? order.branding.primaryColor,
+    brandCompactMode: order.branding.compactMode,
+    brandLogoBackground: order.branding.logoBackground,
+    storefrontLogoUrl: order.branding.logoUrl,
+    storefrontPrimaryColor: order.branding.primaryColor,
+    storefrontTagline: order.branding.tagline,
+  } as const;
   const statusConfig = getStatusConfig(order.status);
   const activeStep = isCancelled ? -1 : getActiveStep(order.status);
   const heroMessage: string | null = statusConfig.message ?? (
@@ -423,15 +449,18 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
       <div className="mx-auto max-w-lg px-4 py-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:py-10">
 
         {/* Store nav + order number */}
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-5 flex items-center justify-between gap-3">
           <Link
             href={`/shop/${order.storefrontSlug}`}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-black/55 transition hover:text-ink"
+            className="inline-flex min-w-0 items-center gap-3 text-sm font-semibold text-black/55 transition hover:text-ink"
           >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-            {storefrontDisplayName}
+            <MerchantBrandBadge branding={orderBranding} surface="compact-chip" />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-ink">{storefrontDisplayName}</span>
+              <span className="block text-[11px] font-medium uppercase tracking-[0.16em] text-black/40">
+                Back to storefront
+              </span>
+            </span>
           </Link>
           <div className="font-mono text-xs font-semibold text-black/35">{order.orderNumber}</div>
         </div>

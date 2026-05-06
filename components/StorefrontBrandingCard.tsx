@@ -43,7 +43,7 @@ export default function StorefrontBrandingCard({
       ) : (
         <div className="mt-4 grid gap-4">
           <div>
-            <label className="label">Storefront logo override</label>
+            <label className="label">Storefront hero override (advanced)</label>
             <input
               className="input"
               type="url"
@@ -53,12 +53,12 @@ export default function StorefrontBrandingCard({
               disabled={!basicBrandingEnabled}
             />
             <div className="mt-1 text-xs text-black/55">
-              Optional. Leave blank to use the business logo from{' '}
+              Optional. Leave blank to use the brand assets from{' '}
               <a href="/settings/organization" className="font-medium text-accent underline-offset-4 hover:underline">
-                Organization settings
+                Brand identity settings
               </a>
-              . Use this only if you want different artwork on the storefront. Falls back to your business
-              initials when no logo is set anywhere.
+              . Use this only if you want a different hero asset on the storefront. Compact TillFlow surfaces
+              still use the smart brand rules from your brand identity kit.
             </div>
           </div>
 
@@ -83,7 +83,7 @@ export default function StorefrontBrandingCard({
                   disabled={!basicBrandingEnabled}
                 />
               </div>
-              <div className="mt-1 text-xs text-black/55">Used for the hero accent, monogram tile, and primary CTA.</div>
+              <div className="mt-1 text-xs text-black/55">Used for the hero accent, merchant monogram tile, and primary CTA.</div>
             </div>
 
             <div>

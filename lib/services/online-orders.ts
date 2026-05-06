@@ -25,6 +25,13 @@ const storefrontRedis =
     : null;
 const STOREFRONT_CACHE_TTL = 60; // seconds
 
+export async function invalidateStorefrontBusinessCache(slug: string | null | undefined) {
+  if (!storefrontRedis || !slug) return;
+  const normalizedSlug = normalizeStorefrontSlug(slug);
+  if (!normalizedSlug) return;
+  storefrontRedis.del(`sf:biz:v2:${normalizedSlug}`).catch(() => null);
+}
+
 export type StorefrontCatalogProduct = {
   id: string;
   name: string;
@@ -61,6 +68,12 @@ export type StorefrontPickupStore = {
 
 export type StorefrontBrandingData = {
   logoUrl: string | null;
+  compactLogoUrl: string | null;
+  squareLogoUrl: string | null;
+  initials: string | null;
+  brandPrimaryColor: string | null;
+  compactMode: string | null;
+  logoBackground: string | null;
   primaryColor: string | null;
   accentColor: string | null;
   tagline: string | null;
@@ -344,6 +357,12 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontDescription: true,
       storefrontPickupInstructions: true,
       logoUrl: true,
+      brandCompactLogoUrl: true,
+      brandSquareLogoUrl: true,
+      brandInitials: true,
+      brandPrimaryColor: true,
+      brandCompactMode: true,
+      brandLogoBackground: true,
       storefrontLogoUrl: true,
       storefrontPrimaryColor: true,
       storefrontAccentColor: true,
@@ -797,6 +816,12 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
         (business as any).storefrontLogoUrl ??
         (business as any).logoUrl ??
         null,
+      compactLogoUrl: (business as any).brandCompactLogoUrl ?? null,
+      squareLogoUrl: (business as any).brandSquareLogoUrl ?? null,
+      initials: (business as any).brandInitials ?? null,
+      brandPrimaryColor: (business as any).brandPrimaryColor ?? null,
+      compactMode: (business as any).brandCompactMode ?? 'AUTO',
+      logoBackground: (business as any).brandLogoBackground ?? 'AUTO',
       primaryColor: (business as any).storefrontPrimaryColor ?? null,
       accentColor: (business as any).storefrontAccentColor ?? null,
       tagline: (business as any).storefrontTagline ?? null,
@@ -1113,6 +1138,17 @@ export async function getPublicOnlineOrder(input: {
           phone: true,
           storefrontPickupInstructions: true,
           storefrontSlug: true,
+          logoUrl: true,
+          brandCompactLogoUrl: true,
+          brandSquareLogoUrl: true,
+          brandInitials: true,
+          brandPrimaryColor: true,
+          brandCompactMode: true,
+          brandLogoBackground: true,
+          storefrontLogoUrl: true,
+          receiptLogoUrl: true,
+          storefrontPrimaryColor: true,
+          storefrontTagline: true,
           storefrontMomoNumber: true,
           storefrontMomoNetwork: true,
           storefrontPaymentMode: true,
@@ -1168,6 +1204,18 @@ export async function getPublicOnlineOrder(input: {
     storefrontName: order.business.name,
     storefrontPhone: order.business.phone,
     pickupInstructions: order.business.storefrontPickupInstructions,
+    branding: {
+      logoUrl: order.business.storefrontLogoUrl ?? order.business.logoUrl ?? null,
+      compactLogoUrl: order.business.brandCompactLogoUrl ?? null,
+      squareLogoUrl: order.business.brandSquareLogoUrl ?? null,
+      initials: order.business.brandInitials ?? null,
+      brandPrimaryColor: order.business.brandPrimaryColor ?? null,
+      compactMode: order.business.brandCompactMode ?? 'AUTO',
+      logoBackground: order.business.brandLogoBackground ?? 'AUTO',
+      primaryColor: order.business.storefrontPrimaryColor ?? null,
+      accentColor: null,
+      tagline: order.business.storefrontTagline ?? null,
+    },
     momoPayoutNumber: order.business.storefrontMomoNumber,
     momoPayoutNetwork: order.business.storefrontMomoNetwork,
     paymentMode: order.business.storefrontPaymentMode ?? 'MOMO_NUMBER',
