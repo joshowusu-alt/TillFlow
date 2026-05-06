@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hasValidCronSecret } from '@/lib/cron-auth';
 import { restoreOnlineOrderInventoryReservation } from '@/lib/services/online-orders';
+import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 
 const DEFAULT_EXPIRY_HOURS = 2;
@@ -63,6 +64,27 @@ export async function GET(req: NextRequest) {
           lines: order.lines,
           tx,
         });
+
+        const updated = await tx.onlineOrder.findUnique({
+          where: { id: order.id },
+          select: {
+            id: true,
+            status: true,
+            paymentStatus: true,
+            fulfillmentStatus: true,
+            paidAt: true,
+            fulfilledAt: true,
+            paymentConfirmedAt: true,
+            preparingAt: true,
+            readyAt: true,
+            collectedAt: true,
+            cancelledAt: true,
+          },
+        });
+
+        if (updated) {
+          await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
+        }
 
         return true;
       });

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { getMobileMoneyProvider, resolveBusinessProvider } from '@/lib/payments/providers';
+import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import type {
   CheckStatusResult,
   CollectionNetwork,
@@ -135,7 +136,14 @@ async function syncOnlineOrderPaymentStatus(collectionId: string, status: string
       id: true,
       status: true,
       paymentStatus: true,
+      fulfillmentStatus: true,
       paidAt: true,
+      fulfilledAt: true,
+      paymentConfirmedAt: true,
+      preparingAt: true,
+      readyAt: true,
+      collectedAt: true,
+      cancelledAt: true,
       salesInvoiceId: true,
     },
   });
@@ -145,16 +153,34 @@ async function syncOnlineOrderPaymentStatus(collectionId: string, status: string
   }
 
   if (status === 'CONFIRMED') {
-    await prisma.onlineOrder.update({
-      where: { id: order.id },
-      data: {
-        status:
-          order.status === 'AWAITING_PAYMENT' || order.status === 'PAYMENT_FAILED'
-            ? 'PAID'
-            : order.status,
-        paymentStatus: 'PAID',
-        paidAt: order.paidAt ?? observedAt,
-      },
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.onlineOrder.update({
+        where: { id: order.id },
+        data: {
+          status:
+            order.status === 'AWAITING_PAYMENT' || order.status === 'PAYMENT_FAILED'
+              ? 'PAID'
+              : order.status,
+          paymentStatus: 'PAID',
+          paidAt: order.paidAt ?? observedAt,
+          paymentConfirmedAt: order.paymentConfirmedAt ?? observedAt,
+        },
+        select: {
+          id: true,
+          status: true,
+          paymentStatus: true,
+          fulfillmentStatus: true,
+          paidAt: true,
+          fulfilledAt: true,
+          paymentConfirmedAt: true,
+          preparingAt: true,
+          readyAt: true,
+          collectedAt: true,
+          cancelledAt: true,
+        },
+      });
+
+      await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
     });
 
     // Commit the order to a SalesInvoice + decrement inventory. Imported here
@@ -171,12 +197,29 @@ async function syncOnlineOrderPaymentStatus(collectionId: string, status: string
   }
 
   if (status === 'FAILED' || status === 'TIMEOUT') {
-    await prisma.onlineOrder.update({
-      where: { id: order.id },
-      data: {
-        status: order.status === 'AWAITING_PAYMENT' ? 'PAYMENT_FAILED' : order.status,
-        paymentStatus: 'FAILED',
-      },
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.onlineOrder.update({
+        where: { id: order.id },
+        data: {
+          status: order.status === 'AWAITING_PAYMENT' ? 'PAYMENT_FAILED' : order.status,
+          paymentStatus: 'FAILED',
+        },
+        select: {
+          id: true,
+          status: true,
+          paymentStatus: true,
+          fulfillmentStatus: true,
+          paidAt: true,
+          fulfilledAt: true,
+          paymentConfirmedAt: true,
+          preparingAt: true,
+          readyAt: true,
+          collectedAt: true,
+          cancelledAt: true,
+        },
+      });
+
+      await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
     });
   }
 }
