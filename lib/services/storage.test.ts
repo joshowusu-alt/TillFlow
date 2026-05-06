@@ -173,7 +173,7 @@ describe('saveBusinessLogoFile', () => {
       'compact',
     );
 
-    expect(result).toBe('https://blob.example/business-branding/compact/abc.webp');
+    expect(result).toMatchObject({ url: 'https://blob.example/business-branding/compact/abc.webp' });
     expect(putMock).toHaveBeenCalledWith(
       expect.stringMatching(/^business-branding\/compact\/\d+-compact-compact\.webp$/),
       expect.anything(),
