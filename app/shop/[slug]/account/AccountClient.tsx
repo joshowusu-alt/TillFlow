@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import ResponsiveModal from '@/components/ResponsiveModal';
 import { formatMoney, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { resolveBrandStyles, type StorefrontBranding } from '@/lib/storefront-branding';
 
@@ -77,6 +78,15 @@ function formatDate(value: string): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function reorderLineKey(line: Pick<ReorderLine, 'productId' | 'unitId'>): string {
+  return `${line.productId}:${line.unitId}`;
+}
+
+function getUnavailableOrderLines(order: OrderView): OrderView['lines'] {
+  const reorderableKeys = new Set(order.reorderableLines.map(reorderLineKey));
+  return order.lines.filter((line) => !reorderableKeys.has(reorderLineKey(line)));
+}
+
 export default function AccountClient({
   slug,
   storefrontName,
@@ -89,7 +99,9 @@ export default function AccountClient({
   const brand = resolveBrandStyles(branding);
   const [signingOut, setSigningOut] = useState(false);
   const [reorderingId, setReorderingId] = useState<string | null>(null);
+  const [pendingReorder, setPendingReorder] = useState<OrderView | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const pendingUnavailableLines = pendingReorder ? getUnavailableOrderLines(pendingReorder) : [];
 
   function showToast(message: string) {
     setToast(message);
@@ -111,12 +123,16 @@ export default function AccountClient({
     }
   }
 
-  function handleReorder(order: OrderView) {
+  function confirmReorder(order: OrderView) {
+    setPendingReorder(null);
+    setReorderingId(order.id);
+    const availableCount = order.reorderableLines.length;
+    const droppedCount = order.lines.length - availableCount;
     if (order.reorderableLines.length === 0) {
       showToast('None of those products are available right now.');
+      setReorderingId(null);
       return;
     }
-    setReorderingId(order.id);
     try {
       const cartKey = `tillflow_cart_${slug}`;
       const lines = order.reorderableLines.map((line) => ({
@@ -126,7 +142,6 @@ export default function AccountClient({
         qtyInUnit: line.qtyInUnit,
       }));
       localStorage.setItem(cartKey, JSON.stringify(lines));
-      const droppedCount = order.lines.length - order.reorderableLines.length;
       if (droppedCount > 0) {
         showToast(`Cart filled. ${droppedCount} item${droppedCount === 1 ? '' : 's'} no longer available.`);
       } else {
@@ -140,6 +155,18 @@ export default function AccountClient({
     } finally {
       setReorderingId(null);
     }
+  }
+
+  function handleReorder(order: OrderView) {
+    if (order.reorderableLines.length === 0) {
+      showToast('None of those products are available right now.');
+      return;
+    }
+    if (order.reorderableLines.length === order.lines.length) {
+      confirmReorder(order);
+      return;
+    }
+    setPendingReorder(order);
   }
 
   return (
@@ -160,7 +187,7 @@ export default function AccountClient({
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <main id="shop-main" className="mx-auto max-w-3xl px-4 py-6">
         <section className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Your account</h1>
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
@@ -257,6 +284,88 @@ export default function AccountClient({
           )}
         </section>
       </main>
+
+      <ResponsiveModal
+        open={pendingReorder !== null}
+        onClose={() => {
+          if (!reorderingId) setPendingReorder(null);
+        }}
+        ariaLabel="Confirm reorder"
+        maxWidthClassName="max-w-lg"
+        footer={
+          pendingReorder ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setPendingReorder(null)}
+                disabled={reorderingId === pendingReorder.id}
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-autofocus="true"
+                onClick={() => confirmReorder(pendingReorder)}
+                disabled={reorderingId === pendingReorder.id}
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-[var(--brand-primary)] px-4 text-sm font-semibold text-[var(--brand-primary-foreground)] transition hover:opacity-90 disabled:opacity-60"
+              >
+                {reorderingId === pendingReorder.id
+                  ? 'Adding…'
+                  : `Add available items (${pendingReorder.reorderableLines.length})`}
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {pendingReorder ? (
+          <div className="px-5 py-5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Review before adding
+            </div>
+            <h2 className="mt-1 text-lg font-semibold text-slate-900">Some items are no longer available</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              We can refill your cart with the items still available from order {pendingReorder.orderNumber}.
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+              <div className="text-sm font-semibold text-emerald-950">
+                Available now ({pendingReorder.reorderableLines.length})
+              </div>
+              <ul className="mt-3 space-y-2 text-sm text-emerald-950">
+                {pendingReorder.lines
+                  .filter((line) => pendingReorder.reorderableLines.some((candidate) => reorderLineKey(candidate) === reorderLineKey(line)))
+                  .map((line) => (
+                    <li key={line.id} className="flex items-start gap-2">
+                      <span aria-hidden="true" className="mt-0.5 text-emerald-600">✓</span>
+                      <span>
+                        <span className="font-medium">{line.productName}</span>
+                        <span className="text-emerald-900/75"> · {line.qtyInUnit} {line.unitName}</span>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+              <div className="text-sm font-semibold text-amber-950">
+                No longer available ({pendingUnavailableLines.length})
+              </div>
+              <ul className="mt-3 space-y-2 text-sm text-amber-950">
+                {pendingUnavailableLines.map((line) => (
+                  <li key={line.id} className="flex items-start gap-2">
+                    <span aria-hidden="true" className="mt-0.5 text-amber-600">•</span>
+                    <span>
+                      <span className="font-medium">{line.productName}</span>
+                      <span className="text-amber-900/75"> · {line.qtyInUnit} {line.unitName}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
+      </ResponsiveModal>
 
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">

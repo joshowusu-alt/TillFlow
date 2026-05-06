@@ -31,10 +31,14 @@ export default async function StorefrontAccountPage({ params }: AccountPageProps
   }
 
   const orders = await getCustomerOrderHistory(customer.id, customer.phone, 30, customer.businessId);
-  const publishedProductIds = new Set(storefront.products.map((p) => p.id));
+  const publishedUnitPairs = new Set(
+    storefront.products.flatMap((product) => product.units.map((unit) => `${product.id}:${unit.id}`)),
+  );
 
   const orderViews = orders.map((order) => {
-    const reorderableLines = order.lines.filter((line) => publishedProductIds.has(line.productId));
+    const reorderableLines = order.lines.filter((line) =>
+      publishedUnitPairs.has(`${line.productId}:${line.unitId}`),
+    );
     return {
       id: order.id,
       orderNumber: order.orderNumber,
