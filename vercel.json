@@ -17,6 +17,7 @@
   ],
   "functions": {
     "app/api/cron/**": { "maxDuration": 60 },
+    "app/api/storefront/orders/[id]/stream/route.ts": { "maxDuration": 60 },
     "app/api/seed-once/**": { "maxDuration": 60 },
     "app/api/import-stock/**": { "maxDuration": 300 },
     "app/api/reset-purchase-data/**": { "maxDuration": 30 },

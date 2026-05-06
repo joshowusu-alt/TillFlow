@@ -46,7 +46,7 @@ In the Vercel project settings (or during import), add these env vars:
 | Name | Value | Environment |
 |---|---|---|
 | `POSTGRES_PRISMA_URL` | your Neon **pooled** URL | Production, Preview |
-| `POSTGRES_URL_NON_POOLING` | your Neon **direct** URL | Production, Preview |
+| `POSTGRES_URL_NON_POOLING` | your Neon **direct** URL. Required for migrations and live order status streams. | Production, Preview |
 | `NEXTAUTH_SECRET` | run `openssl rand -base64 32` to generate | Production, Preview |
 | `NEXTAUTH_URL` | `https://your-project.vercel.app` | Production |
 | `UPSTASH_REDIS_REST_URL` | your Upstash Redis REST URL | Production, Preview |
@@ -67,6 +67,8 @@ To set them:
 4. Click **Save**.
 
 > If you rotate `CRON_SECRET` or change any Meta WhatsApp env var, redeploy the latest build so the running server picks up the new values.
+
+> Live storefront order status uses Postgres `LISTEN/NOTIFY`, which does not work through Neon pooled/PgBouncer URLs. If `POSTGRES_URL_NON_POOLING` is missing, `/api/storefront/orders/[id]/stream` returns `503` and the browser falls back to the existing polling path.
 
 ---
 
