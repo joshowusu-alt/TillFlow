@@ -34,9 +34,17 @@ model Business {
   // Canonical merchant logo. Cascades to storefront and receipts unless a
   // surface-specific override (storefrontLogoUrl, receiptLogoUrl) is set.
   logoUrl                              String?
+  // Stored pixel dimensions of the primary logo — used by the brand engine
+  // to apply aspect-ratio suitability gates without a client round-trip.
+  logoWidth                            Int?
+  logoHeight                           Int?
   // Optional compact and square brand assets for small TillFlow surfaces.
   brandCompactLogoUrl                  String?
+  brandCompactLogoWidth                Int?
+  brandCompactLogoHeight               Int?
   brandSquareLogoUrl                   String?
+  brandSquareLogoWidth                 Int?
+  brandSquareLogoHeight                Int?
   // Overrideable fallback initials used when compact surfaces should not render
   // the uploaded logo directly.
   brandInitials                        String?
