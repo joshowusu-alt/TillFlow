@@ -12,6 +12,22 @@ import {
   type StorefrontPaymentMode,
 } from '@/lib/storefront-payments';
 
+function OrderLineImage({ imageUrl, productName }: { imageUrl: string; productName: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt={toTitleCase(productName)}
+        className="h-full w-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
 type PublicOrder = {
   id: string;
   orderNumber: string;
@@ -77,8 +93,14 @@ type PublicOrder = {
   };
   branding: {
     logoUrl: string | null;
+    logoWidth: number | null;
+    logoHeight: number | null;
     compactLogoUrl: string | null;
+    compactLogoWidth: number | null;
+    compactLogoHeight: number | null;
     squareLogoUrl: string | null;
+    squareLogoWidth: number | null;
+    squareLogoHeight: number | null;
     initials: string | null;
     brandPrimaryColor: string | null;
     compactMode: string | null;
@@ -424,8 +446,14 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
   const orderBranding = {
     businessName: order.storefrontName,
     logoUrl: order.branding.logoUrl,
+    logoWidth: order.branding.logoWidth,
+    logoHeight: order.branding.logoHeight,
     brandCompactLogoUrl: order.branding.compactLogoUrl,
+    brandCompactLogoWidth: order.branding.compactLogoWidth,
+    brandCompactLogoHeight: order.branding.compactLogoHeight,
     brandSquareLogoUrl: order.branding.squareLogoUrl,
+    brandSquareLogoWidth: order.branding.squareLogoWidth,
+    brandSquareLogoHeight: order.branding.squareLogoHeight,
     brandInitials: order.branding.initials,
     brandPrimaryColor: order.branding.brandPrimaryColor ?? order.branding.primaryColor,
     brandCompactMode: order.branding.compactMode,
@@ -711,9 +739,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
             {order.lines.map((line) => (
               <div key={line.id} className="flex items-center gap-4 px-5 py-3.5">
                 {line.imageUrl ? (
-                  <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                    <img src={line.imageUrl} alt={toTitleCase(line.productName)} className="h-full w-full object-cover" />
-                  </div>
+                  <OrderLineImage imageUrl={line.imageUrl} productName={line.productName} />
                 ) : null}
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-ink">{toTitleCase(line.productName)}</div>

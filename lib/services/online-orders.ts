@@ -68,8 +68,14 @@ export type StorefrontPickupStore = {
 
 export type StorefrontBrandingData = {
   logoUrl: string | null;
+  logoWidth: number | null;
+  logoHeight: number | null;
   compactLogoUrl: string | null;
+  compactLogoWidth: number | null;
+  compactLogoHeight: number | null;
   squareLogoUrl: string | null;
+  squareLogoWidth: number | null;
+  squareLogoHeight: number | null;
   initials: string | null;
   brandPrimaryColor: string | null;
   compactMode: string | null;
@@ -357,8 +363,14 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontDescription: true,
       storefrontPickupInstructions: true,
       logoUrl: true,
+      logoWidth: true,
+      logoHeight: true,
       brandCompactLogoUrl: true,
+      brandCompactLogoWidth: true,
+      brandCompactLogoHeight: true,
       brandSquareLogoUrl: true,
+      brandSquareLogoWidth: true,
+      brandSquareLogoHeight: true,
       brandInitials: true,
       brandPrimaryColor: true,
       brandCompactMode: true,
@@ -816,8 +828,14 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
         (business as any).storefrontLogoUrl ??
         (business as any).logoUrl ??
         null,
+      logoWidth: (business as any).logoWidth ?? null,
+      logoHeight: (business as any).logoHeight ?? null,
       compactLogoUrl: (business as any).brandCompactLogoUrl ?? null,
+      compactLogoWidth: (business as any).brandCompactLogoWidth ?? null,
+      compactLogoHeight: (business as any).brandCompactLogoHeight ?? null,
       squareLogoUrl: (business as any).brandSquareLogoUrl ?? null,
+      squareLogoWidth: (business as any).brandSquareLogoWidth ?? null,
+      squareLogoHeight: (business as any).brandSquareLogoHeight ?? null,
       initials: (business as any).brandInitials ?? null,
       brandPrimaryColor: (business as any).brandPrimaryColor ?? null,
       compactMode: (business as any).brandCompactMode ?? 'AUTO',
@@ -1139,8 +1157,14 @@ export async function getPublicOnlineOrder(input: {
           storefrontPickupInstructions: true,
           storefrontSlug: true,
           logoUrl: true,
+          logoWidth: true,
+          logoHeight: true,
           brandCompactLogoUrl: true,
+          brandCompactLogoWidth: true,
+          brandCompactLogoHeight: true,
           brandSquareLogoUrl: true,
+          brandSquareLogoWidth: true,
+          brandSquareLogoHeight: true,
           brandInitials: true,
           brandPrimaryColor: true,
           brandCompactMode: true,
@@ -1206,8 +1230,14 @@ export async function getPublicOnlineOrder(input: {
     pickupInstructions: order.business.storefrontPickupInstructions,
     branding: {
       logoUrl: order.business.storefrontLogoUrl ?? order.business.logoUrl ?? null,
+      logoWidth: (order.business as any).logoWidth ?? null,
+      logoHeight: (order.business as any).logoHeight ?? null,
       compactLogoUrl: order.business.brandCompactLogoUrl ?? null,
+      compactLogoWidth: (order.business as any).brandCompactLogoWidth ?? null,
+      compactLogoHeight: (order.business as any).brandCompactLogoHeight ?? null,
       squareLogoUrl: order.business.brandSquareLogoUrl ?? null,
+      squareLogoWidth: (order.business as any).brandSquareLogoWidth ?? null,
+      squareLogoHeight: (order.business as any).brandSquareLogoHeight ?? null,
       initials: order.business.brandInitials ?? null,
       brandPrimaryColor: order.business.brandPrimaryColor ?? null,
       compactMode: order.business.brandCompactMode ?? 'AUTO',

@@ -758,8 +758,14 @@ export default function StorefrontClient({
   const storefrontBranding = {
     businessName: storefront.name,
     logoUrl: storefront.branding.logoUrl,
+    logoWidth: storefront.branding.logoWidth,
+    logoHeight: storefront.branding.logoHeight,
     brandCompactLogoUrl: storefront.branding.compactLogoUrl,
+    brandCompactLogoWidth: storefront.branding.compactLogoWidth,
+    brandCompactLogoHeight: storefront.branding.compactLogoHeight,
     brandSquareLogoUrl: storefront.branding.squareLogoUrl,
+    brandSquareLogoWidth: storefront.branding.squareLogoWidth,
+    brandSquareLogoHeight: storefront.branding.squareLogoHeight,
     brandInitials: storefront.branding.initials,
     brandPrimaryColor: storefront.branding.brandPrimaryColor ?? storefront.branding.primaryColor,
     brandCompactMode: storefront.branding.compactMode,
@@ -813,22 +819,22 @@ export default function StorefrontClient({
     >
       {/* ── STORE HERO ─────────────────────────────────────── */}
       <header className="relative overflow-hidden pt-[env(safe-area-inset-top)]" style={heroStyle}>
-        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-4 sm:px-6 sm:py-6">
-          <div className="flex items-start gap-4 sm:gap-5">
+        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-3 sm:px-6 sm:py-5">
+          <div className="flex items-start gap-3 sm:gap-5">
             <MerchantBrandBadge branding={storefrontBranding} surface="storefront-hero" />
             <div className="min-w-0 flex-1">
-              <div className="mb-1 inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.82 }}>
+              <div className="mb-0.5 inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.82 }}>
                 TillFlow online store
               </div>
-              <h1 className="break-words hyphens-auto text-lg font-bold leading-tight sm:text-2xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
+              <h1 className="break-words hyphens-auto text-base font-bold leading-tight sm:text-xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
                 {storefrontTitle}
               </h1>
               {storefront.branding.tagline && (
-                <p className="mt-0.5 line-clamp-2 text-xs sm:text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.76 }}>
+                <p className="mt-0.5 line-clamp-1 text-[11px] sm:text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.76 }}>
                   {storefront.branding.tagline}
                 </p>
               )}
-              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] sm:text-xs">
+              <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] sm:mt-2 sm:gap-1.5 sm:text-xs">
                 {storefront.openStatus ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 font-semibold" style={{ color: 'var(--brand-primary-foreground)' }}>
                     <span className={`h-1.5 w-1.5 rounded-full ${storefront.openStatus.isOpen ? 'bg-emerald-400' : 'bg-amber-400'}`} />
@@ -874,21 +880,21 @@ export default function StorefrontClient({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex shrink-0 flex-col items-end gap-1">
               {customer ? (
                 <a
                   href={`/shop/${storefront.slug}/account`}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3 text-xs font-semibold transition hover:bg-white/25"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 px-2.5 text-[11px] font-semibold transition hover:bg-white/25 sm:h-9 sm:px-3 sm:text-xs"
                   style={{ color: 'var(--brand-primary-foreground)' }}
                 >
-                  <span className="max-w-[8rem] truncate">
+                  <span className="max-w-[6rem] truncate sm:max-w-[8rem]">
                     {customer.name?.split(' ')[0] ?? 'Account'}
                   </span>
                 </a>
               ) : (
                 <a
                   href={`/shop/${storefront.slug}/login`}
-                  className="inline-flex h-9 items-center rounded-full bg-white/15 px-3 text-xs font-semibold transition hover:bg-white/25"
+                  className="inline-flex h-8 items-center rounded-full bg-white/15 px-2.5 text-[11px] font-semibold transition hover:bg-white/25 sm:h-9 sm:px-3 sm:text-xs"
                   style={{ color: 'var(--brand-primary-foreground)' }}
                 >
                   Sign in
@@ -897,7 +903,7 @@ export default function StorefrontClient({
               <button
                 type="button"
                 onClick={handleShareStore}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:h-10 sm:w-10"
                 aria-label="Share store link"
                 style={{ color: 'var(--brand-primary-foreground)' }}
               >
@@ -1243,101 +1249,116 @@ export default function StorefrontClient({
                           ) : null}
                         </button>
 
-                        {/* Card body */}
-                        <div className="flex flex-1 flex-col p-2.5 sm:p-3">
-                          {displayCategory && (
-                            <div className="text-[8px] font-semibold uppercase tracking-[0.18em] text-black/35 sm:text-[9px]">
-                              {displayCategory}
-                            </div>
-                          )}
-                          <h2 className="mt-0.5 line-clamp-2 text-xs font-semibold leading-snug text-ink sm:text-sm">
-                            {displayName}
-                          </h2>
+                  {/* Card body */}
+                  <div className="flex flex-1 flex-col p-2.5 sm:p-3">
+                    {displayCategory && (
+                      <div className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30 sm:text-[9px]">
+                        {displayCategory}
+                      </div>
+                    )}
+                    <h2 className="mt-0.5 line-clamp-2 text-xs font-semibold leading-snug text-ink sm:text-sm">
+                      {displayName}
+                    </h2>
 
-                          <div className="mt-auto pt-2">
-                            <div className="flex items-end justify-between gap-2">
-                              <div className="text-lg font-black leading-none text-ink sm:text-xl">{unitPrice}</div>
-                              {inStock ? <span className="text-[9px] font-medium text-emerald-600">Available</span> : null}
-                            </div>
-
-                            {product.units.length > 1 ? (
-                              <select
-                                className="mt-2 w-full rounded-xl border border-black/10 bg-slate-50 px-2 py-2 text-[11px] font-medium text-black/65 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:text-xs"
-                                value={selected?.unitId ?? ''}
-                                disabled={!inStock}
-                                onChange={(event) =>
-                                  setSelectionState((prev) => ({
-                                    ...prev,
-                                    [product.id]: {
-                                      ...(prev[product.id] ?? { qtyInUnit: 1 }),
-                                      unitId: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                {product.units.map((unit) => (
-                                  <option key={unit.id} value={unit.id}>
-                                    {toTitleCase(unit.name)}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : product.units[0] ? (
-                              <div className="mt-1 text-[10px] font-medium text-black/40">{toTitleCase(product.units[0].name)}</div>
-                            ) : null}
-
-                            {inStock ? (
-                                <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-1.5">
-                                  <div className="flex h-11 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
-                                    <button
-                                      type="button"
-                                       aria-label={`Decrease quantity of ${displayName}`}
-                                      className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
-                                    disabled={(selected?.qtyInUnit ?? 1) <= 1}
-                                    onClick={() =>
-                                      setSelectionState((prev) => ({
-                                        ...prev,
-                                        [product.id]: {
-                                          ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                          qtyInUnit: Math.max(1, (prev[product.id]?.qtyInUnit ?? 1) - 1),
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    −
-                                  </button>
-                                    <span className="w-9 text-center text-xs font-bold text-ink">
-                                      {selected?.qtyInUnit ?? 1}
-                                    </span>
-                                    <button
-                                      type="button"
-                                       aria-label={`Increase quantity of ${displayName}`}
-                                      className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
-                                    onClick={() =>
-                                      setSelectionState((prev) => ({
-                                        ...prev,
-                                        [product.id]: {
-                                          ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                          qtyInUnit: (prev[product.id]?.qtyInUnit ?? 1) + 1,
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                                    <button
-                                      type="button"
-                                      className="flex h-11 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
-                                  style={primaryStyle}
-                                  onClick={() => addToCart(product.id)}
-                                >
-                                  Add
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
+                    <div className="mt-auto pt-2">
+                      <div className="flex items-end justify-between gap-1.5">
+                        <div>
+                          <div className="text-base font-black leading-none text-ink sm:text-lg">{unitPrice}</div>
+                          {inStock ? (
+                            <div className="mt-0.5 text-[9px] font-medium text-emerald-600">Available</div>
+                          ) : null}
                         </div>
-                      </article>
+                        {!inStock ? null : (
+                          <button
+                            type="button"
+                            className="h-8 min-w-[2.5rem] rounded-xl px-2.5 text-xs font-black text-white shadow-sm sm:h-9 sm:px-3"
+                            style={primaryStyle}
+                            onClick={() => addToCart(product.id)}
+                            aria-label={`Add ${displayName} to cart`}
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+
+                      {product.units.length > 1 ? (
+                        <select
+                          className="mt-2 w-full rounded-xl border border-black/10 bg-slate-50 px-2 py-2 text-[11px] font-medium text-black/65 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:text-xs"
+                          value={selected?.unitId ?? ''}
+                          disabled={!inStock}
+                          onChange={(event) =>
+                            setSelectionState((prev) => ({
+                              ...prev,
+                              [product.id]: {
+                                ...(prev[product.id] ?? { qtyInUnit: 1 }),
+                                unitId: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          {product.units.map((unit) => (
+                            <option key={unit.id} value={unit.id}>
+                              {toTitleCase(unit.name)}
+                            </option>
+                          ))}
+                        </select>
+                      ) : product.units[0] ? (
+                        <div className="mt-0.5 text-[10px] font-medium text-black/35">{toTitleCase(product.units[0].name)}</div>
+                      ) : null}
+
+                      {inStock ? (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <div className="flex h-10 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
+                            <button
+                              type="button"
+                              aria-label={`Decrease quantity of ${displayName}`}
+                              className="flex h-10 w-10 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
+                              disabled={(selected?.qtyInUnit ?? 1) <= 1}
+                              onClick={() =>
+                                setSelectionState((prev) => ({
+                                  ...prev,
+                                  [product.id]: {
+                                    ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                    qtyInUnit: Math.max(1, (prev[product.id]?.qtyInUnit ?? 1) - 1),
+                                  },
+                                }))
+                              }
+                            >
+                              −
+                            </button>
+                            <span className="w-8 text-center text-xs font-bold text-ink">
+                              {selected?.qtyInUnit ?? 1}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Increase quantity of ${displayName}`}
+                              className="flex h-10 w-10 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
+                              onClick={() =>
+                                setSelectionState((prev) => ({
+                                  ...prev,
+                                  [product.id]: {
+                                    ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                    qtyInUnit: (prev[product.id]?.qtyInUnit ?? 1) + 1,
+                                  },
+                                }))
+                              }
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
+                            style={primaryStyle}
+                            onClick={() => addToCart(product.id)}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
                     );
                   })}
                 </div>
