@@ -22,6 +22,7 @@ export default async function ProductDetailPage({
 }) {
   const { user, business, store } = await requireBusinessStore();
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
+  const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
 
   const [product, units, categories] = await Promise.all([
     prisma.product.findFirst({
@@ -152,7 +153,7 @@ export default async function ProductDetailPage({
             </div>
             <div>
               <div className="label">Product image</div>
-              <ProductImageInput defaultUrl={product.imageUrl} />
+              <ProductImageInput defaultUrl={product.imageUrl} fileUploadEnabled={fileUploadEnabled} />
             </div>
             <div>
               <label className="label">Category</label>

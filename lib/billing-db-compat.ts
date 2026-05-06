@@ -14,6 +14,7 @@ const AUTH_LEGACY_SELECT = {
   labelPrintMode: true,
   labelPrinterName: true,
   labelSize: true,
+  logoUrl: true,
   receiptLogoUrl: true,
   receiptHeader: true,
   receiptFooter: true,

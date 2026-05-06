@@ -30,6 +30,9 @@ model Business {
   labelPrintMode                       String   @default("BROWSER_PDF")
   labelPrinterName                     String?
   labelSize                            String   @default("SHELF_TAG")
+  // Canonical merchant logo. Cascades to storefront and receipts unless a
+  // surface-specific override (storefrontLogoUrl, receiptLogoUrl) is set.
+  logoUrl                              String?
   // Receipt customization fields
   receiptLogoUrl                       String?
   receiptHeader                        String?

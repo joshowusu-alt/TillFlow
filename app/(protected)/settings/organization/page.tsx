@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
+import BusinessLogoUploader from '@/components/BusinessLogoUploader';
 import { requireBusiness } from '@/lib/auth';
 import { ensureOrganizationAndBranches } from '@/lib/services/branches';
 import { registerDeviceAction, syncOrganizationModelAction } from '@/app/actions/branches';
@@ -29,6 +30,11 @@ export default async function OrganizationSettingsPage({
       />
 
       <FormError error={searchParams?.error} />
+
+      <BusinessLogoUploader
+        initialLogoUrl={business.logoUrl ?? null}
+        businessName={business.name}
+      />
 
       <div className="card p-6 space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

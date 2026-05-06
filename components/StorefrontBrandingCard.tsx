@@ -43,7 +43,7 @@ export default function StorefrontBrandingCard({
       ) : (
         <div className="mt-4 grid gap-4">
           <div>
-            <label className="label">Logo URL</label>
+            <label className="label">Storefront logo override</label>
             <input
               className="input"
               type="url"
@@ -53,7 +53,12 @@ export default function StorefrontBrandingCard({
               disabled={!basicBrandingEnabled}
             />
             <div className="mt-1 text-xs text-black/55">
-              Square or wide logo at 256px+ works best. Falls back to your business initials when blank.
+              Optional. Leave blank to use the business logo from{' '}
+              <a href="/settings/organization" className="font-medium text-accent underline-offset-4 hover:underline">
+                Organization settings
+              </a>
+              . Use this only if you want different artwork on the storefront. Falls back to your business
+              initials when no logo is set anywhere.
             </div>
           </div>
 

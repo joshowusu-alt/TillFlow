@@ -119,6 +119,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         plan={getBusinessPlan((business as any).plan ?? (business?.mode as any), ((business as any).storeMode as any) ?? 'SINGLE_STORE')}
         storeMode={((business as any).storeMode as any) ?? 'SINGLE_STORE'}
         storeName={store?.name}
+        businessName={business.name}
+        businessLogoUrl={business.logoUrl ?? null}
         momoEnabled={!!business.momoEnabled}
         todaySales={todaySales}
         onlineOrdersCount={onlineOrdersCount}

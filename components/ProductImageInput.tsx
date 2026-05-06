@@ -7,9 +7,10 @@ type PreviewState = 'idle' | 'loading' | 'ok' | 'error';
 
 type Props = {
   defaultUrl?: string | null;
+  fileUploadEnabled?: boolean;
 };
 
-export default function ProductImageInput({ defaultUrl }: Props) {
+export default function ProductImageInput({ defaultUrl, fileUploadEnabled = true }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState(defaultUrl ?? '');
   const [urlValue, setUrlValue] = useState(defaultUrl ?? '');
@@ -104,12 +105,18 @@ export default function ProductImageInput({ defaultUrl }: Props) {
             <label className="label">Upload image</label>
             <input
               ref={fileInputRef}
-              className="input"
+              className="input disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-black/45"
               name="imageFile"
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              disabled={!fileUploadEnabled}
               onChange={handleFileChange}
             />
+            {!fileUploadEnabled ? (
+              <p className="mt-1 text-xs text-amber-700">
+                File upload is not configured on this deployment yet. Paste a direct image URL below instead.
+              </p>
+            ) : null}
           </div>
           <div>
             <label className="label">Or image URL</label>
@@ -145,7 +152,9 @@ export default function ProductImageInput({ defaultUrl }: Props) {
       </div>
 
       <div className="text-xs text-black/50">
-        Uploading a file is the most reliable option. If using a URL, it must be a direct image link ending in .jpg, .png, or .webp — not a product page.
+        {fileUploadEnabled
+          ? 'Uploading a file is the most reliable option. If using a URL, it must be a direct image link ending in .jpg, .png, or .webp — not a product page.'
+          : 'Use a direct image link ending in .jpg, .png, or .webp — not a product page.'}
       </div>
     </div>
   );

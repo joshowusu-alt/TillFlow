@@ -21,6 +21,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
+  const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -140,7 +141,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                 </div>
                 <div>
                   <div className="label">Product image</div>
-                  <ProductImageInput />
+                  <ProductImageInput fileUploadEnabled={fileUploadEnabled} />
                 </div>
                 <div>
                   <label className="label">Category</label>

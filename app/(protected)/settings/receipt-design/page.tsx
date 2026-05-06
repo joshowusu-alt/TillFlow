@@ -95,9 +95,9 @@ export default async function ReceiptDesignPage() {
                             <div className="mt-1 text-xs text-black/50">Custom message at the bottom of receipts</div>
                         </div>
 
-                        {/* Logo URL */}
+                        {/* Logo URL — override the canonical Business.logoUrl just for receipts */}
                         <div>
-                            <label className="label">Logo URL</label>
+                            <label className="label">Receipt logo override</label>
                             <input
                                 type="url"
                                 name="receiptLogoUrl"
@@ -105,7 +105,13 @@ export default async function ReceiptDesignPage() {
                                 placeholder="https://example.com/logo.png"
                                 defaultValue={business.receiptLogoUrl ?? ''}
                             />
-                            <div className="mt-1 text-xs text-black/50">URL to your business logo (optional)</div>
+                            <div className="mt-1 text-xs text-black/50">
+                                Optional. Leave blank to use the business logo from{' '}
+                                <a href="/settings/organization" className="font-medium text-accent underline-offset-4 hover:underline">
+                                    Organization settings
+                                </a>
+                                . Use this only if you want a different logo on printed receipts (e.g. a black-and-white version).
+                            </div>
                         </div>
 
                         {/* Social Media */}
@@ -171,10 +177,11 @@ export default async function ReceiptDesignPage() {
                     <h2 className="text-lg font-display font-semibold">Preview</h2>
                     <div className="mt-4 rounded-xl border-2 border-dashed border-black/10 bg-white p-6">
                         <div className="mx-auto max-w-64 space-y-3 text-center text-sm">
-                            {/* Logo placeholder */}
-                            {business.receiptLogoUrl ? (
+                            {/* Receipt-specific override wins; fall back to the canonical Business.logoUrl. */}
+                            {business.receiptLogoUrl || business.logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                    src={business.receiptLogoUrl}
+                                    src={business.receiptLogoUrl ?? business.logoUrl ?? ''}
                                     alt="Logo"
                                     className="mx-auto h-12 object-contain"
                                 />

@@ -343,6 +343,7 @@ async function getStorefrontBusinessBySlug(slug: string) {
       storefrontHeadline: true,
       storefrontDescription: true,
       storefrontPickupInstructions: true,
+      logoUrl: true,
       storefrontLogoUrl: true,
       storefrontPrimaryColor: true,
       storefrontAccentColor: true,
@@ -361,7 +362,7 @@ async function getStorefrontBusinessBySlug(slug: string) {
     },
   });
 
-  const cacheKey = `sf:biz:${slug}`;
+  const cacheKey = `sf:biz:v2:${slug}`;
   if (storefrontRedis) {
     try {
       const hit = await storefrontRedis.get<NonNullable<Awaited<ReturnType<typeof fetchFromDb>>>>(cacheKey);
@@ -791,7 +792,11 @@ export async function getPublicStorefrontBySlug(rawSlug: string): Promise<Public
     phone: business.phone,
     address: business.address,
     branding: {
-      logoUrl: (business as any).storefrontLogoUrl ?? null,
+      // Per-surface storefrontLogoUrl wins; fall back to the canonical Business.logoUrl.
+      logoUrl:
+        (business as any).storefrontLogoUrl ??
+        (business as any).logoUrl ??
+        null,
       primaryColor: (business as any).storefrontPrimaryColor ?? null,
       accentColor: (business as any).storefrontAccentColor ?? null,
       tagline: (business as any).storefrontTagline ?? null,

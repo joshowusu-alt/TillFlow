@@ -108,7 +108,8 @@
       "Bash(cat \"C:\\\\\\\\Users\\\\\\\\josho\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\claude\\\\\\\\c--Users-josho-OneDrive-Desktop-supermarket-pos\\\\\\\\4c945898-d894-4dcc-9d82-ef73e593726c\\\\\\\\tasks\\\\\\\\b4hx5ulnn.output\")",
       "Bash(git -C \"c:/Users/josho/OneDrive/Desktop/supermarket-pos\" log --oneline -15 -- tishgroup-control/components/bulk-roster-client.tsx tishgroup-control/app/businesses/page.tsx)",
       "Bash(git -C \"c:/Users/josho/OneDrive/Desktop/supermarket-pos\" status)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(npx next *)"
     ]
   }
 }

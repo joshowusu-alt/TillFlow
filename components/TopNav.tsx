@@ -23,6 +23,8 @@ export default function TopNav({
   plan,
   storeMode,
   storeName,
+  businessName,
+  businessLogoUrl,
   momoEnabled,
   todaySales,
   onlineOrdersCount = 0,
@@ -31,6 +33,8 @@ export default function TopNav({
   plan?: BusinessPlan;
   storeMode?: StoreMode;
   storeName?: string;
+  businessName?: string;
+  businessLogoUrl?: string | null;
   momoEnabled?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
@@ -123,8 +127,20 @@ export default function TopNav({
 
             <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
-                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                {storeName || 'Main branch'}
+                {businessLogoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={businessLogoUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-5 w-5 rounded-md object-cover ring-1 ring-black/5"
+                  />
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+                )}
+                <span className="truncate max-w-[14rem]">
+                  {businessName ? `${businessName} · ` : ''}{storeName || 'Main branch'}
+                </span>
               </span>
               <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
                 {isOnline ? 'Sync ready' : 'Offline mode'}

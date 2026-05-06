@@ -5,9 +5,36 @@ const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_PRODUCT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_BUSINESS_LOGO_SIZE = 2 * 1024 * 1024; // 2 MB — logos are small artwork
+// SVG is intentionally excluded: SVG can carry <script> and event handlers.
+const ALLOWED_BUSINESS_LOGO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export type AttachmentResult = { error: string } | string | null;
 export type ProductImageResult = { error: string } | string | null;
+export type BusinessLogoResult = { error: string } | string | null;
+
+function isVercelRuntime(env: NodeJS.ProcessEnv = process.env) {
+  return env.VERCEL === '1' || env.VERCEL === 'true';
+}
+
+function getMissingStorageError(kind: 'attachment' | 'product-image' | 'business-logo') {
+  switch (kind) {
+    case 'product-image':
+      return 'Image uploads are not configured for this deployment yet. Paste a direct image URL instead.';
+    case 'business-logo':
+      return 'Logo uploads are not configured for this deployment yet. Enable Blob storage before uploading files here.';
+    case 'attachment':
+    default:
+      return 'File uploads are not configured for this deployment yet. Enable Blob storage before uploading attachments.';
+  }
+}
+
+async function saveFileLocally(file: File, folderParts: string[], safeName: string) {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', ...folderParts);
+  await mkdir(uploadsDir, { recursive: true });
+  await writeFile(path.join(uploadsDir, safeName), buffer);
+}
 
 function sanitizeFilename(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -52,11 +79,12 @@ export async function saveExpenseAttachment(formData: FormData): Promise<Attachm
     return blob.url;
   }
 
+  if (isVercelRuntime()) {
+    return { error: getMissingStorageError('attachment') };
+  }
+
   // Local dev fallback — write to public/uploads/expenses/ (served by Next.js static handler).
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'expenses');
-  await mkdir(uploadsDir, { recursive: true });
-  await writeFile(path.join(uploadsDir, safeName), buffer);
+  await saveFileLocally(file, ['expenses'], safeName);
   return `/uploads/expenses/${safeName}`;
 }
 
@@ -80,11 +108,40 @@ export async function saveProductImageFile(file: FormDataEntryValue | null): Pro
     return blob.url;
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'products');
-  await mkdir(uploadsDir, { recursive: true });
-  await writeFile(path.join(uploadsDir, safeName), buffer);
+  if (isVercelRuntime()) {
+    return { error: getMissingStorageError('product-image') };
+  }
+
+  await saveFileLocally(file, ['products'], safeName);
   return `/uploads/products/${safeName}`;
+}
+
+export async function saveBusinessLogoFile(file: FormDataEntryValue | null): Promise<BusinessLogoResult> {
+  if (!isFileLike(file)) return null;
+
+  if (file.size > MAX_BUSINESS_LOGO_SIZE) {
+    return { error: 'Logo must not exceed 2 MB.' };
+  }
+
+  if (!ALLOWED_BUSINESS_LOGO_TYPES.includes(file.type)) {
+    return { error: 'Only JPEG, PNG and WebP logos are allowed.' };
+  }
+
+  const originalName = sanitizeFilename(file.name || `logo.${extensionForImageType(file.type)}`);
+  const safeName = `${Date.now()}-${originalName}`;
+
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    const { put } = await import('@vercel/blob');
+    const blob = await put(`business-logos/${safeName}`, file, { access: 'public' });
+    return blob.url;
+  }
+
+  if (isVercelRuntime()) {
+    return { error: getMissingStorageError('business-logo') };
+  }
+
+  await saveFileLocally(file, ['business-logos'], safeName);
+  return `/uploads/business-logos/${safeName}`;
 }
 
 export async function validateExternalProductImageUrl(rawUrl: string | null | undefined): Promise<ProductImageResult> {

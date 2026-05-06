@@ -19,7 +19,12 @@ vi.mock('@vercel/blob', () => ({
   put: putMock,
 }));
 
-import { saveProductImageFile, validateExternalProductImageUrl } from './storage';
+import {
+  saveExpenseAttachment,
+  saveBusinessLogoFile,
+  saveProductImageFile,
+  validateExternalProductImageUrl,
+} from './storage';
 
 function makeFile(overrides: Partial<{ name: string; type: string; size: number }> = {}) {
   return {
@@ -35,6 +40,7 @@ describe('product image storage helpers', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.VERCEL;
   });
 
   it('stores accepted product images locally when blob storage is not configured', async () => {
@@ -57,6 +63,18 @@ describe('product image storage helpers', () => {
     expect(putMock).toHaveBeenCalledWith(expect.stringMatching(/^products\/\d+-milk\.webp$/), expect.anything(), {
       access: 'public',
     });
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a clear error on Vercel when blob storage is not configured', async () => {
+    process.env.VERCEL = '1';
+
+    const result = await saveProductImageFile(makeFile({ name: 'milk.webp', type: 'image/webp' }));
+
+    expect(result).toEqual({
+      error: 'Image uploads are not configured for this deployment yet. Paste a direct image URL instead.',
+    });
+    expect(mkdirMock).not.toHaveBeenCalled();
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
@@ -89,5 +107,93 @@ describe('product image storage helpers', () => {
     await expect(validateExternalProductImageUrl('https://example.com/product-page')).resolves.toEqual({
       error: 'Product image URL must point directly to a JPEG, PNG or WebP image file.',
     });
+  });
+});
+
+describe('saveBusinessLogoFile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.VERCEL;
+  });
+
+  it('returns null when no file is provided', async () => {
+    expect(await saveBusinessLogoFile(null)).toBeNull();
+  });
+
+  it('rejects logos larger than 2 MB', async () => {
+    await expect(saveBusinessLogoFile(makeFile({ size: 3 * 1024 * 1024 }))).resolves.toEqual({
+      error: 'Logo must not exceed 2 MB.',
+    });
+  });
+
+  it('rejects SVG and other non-raster types', async () => {
+    await expect(
+      saveBusinessLogoFile(makeFile({ name: 'logo.svg', type: 'image/svg+xml', size: 8 * 1024 })),
+    ).resolves.toEqual({ error: 'Only JPEG, PNG and WebP logos are allowed.' });
+
+    await expect(
+      saveBusinessLogoFile(makeFile({ name: 'logo.gif', type: 'image/gif', size: 8 * 1024 })),
+    ).resolves.toEqual({ error: 'Only JPEG, PNG and WebP logos are allowed.' });
+  });
+
+  it('writes accepted logos to local storage when blob is not configured', async () => {
+    const result = await saveBusinessLogoFile(makeFile({ name: 'My Logo!.png', type: 'image/png' }));
+
+    expect(result).toMatch(/^\/uploads\/business-logos\/\d+-My_Logo_\.png$/);
+    expect(mkdirMock).toHaveBeenCalledWith(
+      expect.stringMatching(/public[\\/]uploads[\\/]business-logos$/),
+      { recursive: true },
+    );
+    expect(writeFileMock).toHaveBeenCalledWith(expect.stringContaining('My_Logo_.png'), expect.any(Buffer));
+  });
+
+  it('uploads to Vercel Blob when configured', async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = 'token';
+    putMock.mockResolvedValue({ url: 'https://blob.example/business-logos/abc.webp' });
+
+    const result = await saveBusinessLogoFile(makeFile({ name: 'brand.webp', type: 'image/webp' }));
+
+    expect(result).toBe('https://blob.example/business-logos/abc.webp');
+    expect(putMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^business-logos\/\d+-brand\.webp$/),
+      expect.anything(),
+      { access: 'public' },
+    );
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+
+  it('returns a clear error on Vercel when blob storage is not configured', async () => {
+    process.env.VERCEL = '1';
+
+    const result = await saveBusinessLogoFile(makeFile({ name: 'brand.webp', type: 'image/webp' }));
+
+    expect(result).toEqual({
+      error: 'Logo uploads are not configured for this deployment yet. Enable Blob storage before uploading files here.',
+    });
+    expect(mkdirMock).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveExpenseAttachment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.VERCEL;
+  });
+
+  it('returns a clear error on Vercel when blob storage is not configured', async () => {
+    process.env.VERCEL = '1';
+    const formData = new FormData();
+    formData.set('attachment', new File([new Uint8Array([1, 2, 3])], 'invoice.png', { type: 'image/png' }));
+
+    const result = await saveExpenseAttachment(formData);
+
+    expect(result).toEqual({
+      error: 'File uploads are not configured for this deployment yet. Enable Blob storage before uploading attachments.',
+    });
+    expect(mkdirMock).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
   });
 });
