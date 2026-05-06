@@ -13,6 +13,13 @@ const ASSET_FIELD_MAP = {
   SQUARE: 'brandSquareLogoUrl',
 } as const;
 
+/** Dimension column pairs keyed by asset slot. */
+const DIMENSION_FIELD_MAP = {
+  PRIMARY: { w: 'logoWidth', h: 'logoHeight' },
+  COMPACT: { w: 'brandCompactLogoWidth', h: 'brandCompactLogoHeight' },
+  SQUARE:  { w: 'brandSquareLogoWidth',  h: 'brandSquareLogoHeight' },
+} as const;
+
 type AssetKey = keyof typeof ASSET_FIELD_MAP;
 
 function normalizeAssetKey(rawValue: string | null | undefined): AssetKey | null {
@@ -63,9 +70,14 @@ export async function POST(request: Request) {
     }
 
     const field = ASSET_FIELD_MAP[assetKey];
+    const dimFields = DIMENSION_FIELD_MAP[assetKey];
     await prisma.business.update({
       where: { id: business.id },
-      data: { [field]: result },
+      data: {
+        [field]: result.url,
+        [dimFields.w]: result.dimensions?.width  ?? null,
+        [dimFields.h]: result.dimensions?.height ?? null,
+      },
     });
     const storefront = await prisma.business.findUnique({
       where: { id: business.id },
@@ -85,13 +97,14 @@ export async function POST(request: Request) {
         source: 'brand-asset-upload',
         field,
         assetKey,
-        value: result,
+        value: result.url,
+        dimensions: result.dimensions,
       },
     }).catch((error) => console.error('[audit]', error));
 
     await invalidateStorefrontBusinessCache(storefrontSlug);
     revalidateAffected(storefrontSlug);
-    return NextResponse.json({ logoUrl: result });
+    return NextResponse.json({ logoUrl: result.url });
   } catch (error) {
     if (isRedirectError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -115,9 +128,10 @@ export async function DELETE(request: Request) {
     }
 
     const field = ASSET_FIELD_MAP[assetKey];
+    const dimFields = DIMENSION_FIELD_MAP[assetKey];
     await prisma.business.update({
       where: { id: business.id },
-      data: { [field]: null },
+      data: { [field]: null, [dimFields.w]: null, [dimFields.h]: null },
     });
     const storefront = await prisma.business.findUnique({
       where: { id: business.id },
