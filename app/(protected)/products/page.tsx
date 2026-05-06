@@ -1,5 +1,6 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
+import { AdminProductImage } from '@/components/AdminProductImage';
 import SubmitButton from '@/components/SubmitButton';
 import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
@@ -257,10 +258,12 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                       title={
                         <div className="flex items-center gap-3">
                           {product.imageUrl ? (
-                            <img
+                            <AdminProductImage
                               src={product.imageUrl}
                               alt={product.name}
+                              fallbackChar={product.name.charAt(0)}
                               className="h-10 w-10 rounded-xl object-cover"
+                              fallbackClassName="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent"
                             />
                           ) : (
                             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accentSoft text-sm font-bold text-accent">
@@ -339,10 +342,12 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                       <tr key={product.id} className="rounded-xl bg-white">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">
                           {product.imageUrl ? (
-                            <img
+                            <AdminProductImage
                               src={product.imageUrl}
                               alt={product.name}
+                              fallbackChar={product.name.charAt(0)}
                               className="w-8 h-8 rounded-md object-cover"
+                              fallbackClassName="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent"
                             />
                           ) : (
                             <div className="w-8 h-8 rounded-md bg-accentSoft flex items-center justify-center text-xs font-bold text-accent">
@@ -415,7 +420,14 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             {categories.map((cat) => (
               <div key={cat.id} className="card p-5 flex gap-4">
                 {cat.imageUrl ? (
-                  <img src={cat.imageUrl} alt={cat.name} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+                  <AdminProductImage
+                    src={cat.imageUrl}
+                    alt={cat.name}
+                    fallbackChar={cat.name.charAt(0)}
+                    className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                    fallbackClassName="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0"
+                    fallbackStyle={{ backgroundColor: cat.colour }}
+                  />
                 ) : (
                   <div
                     className="w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white flex-shrink-0"

@@ -47,8 +47,14 @@ export default async function OrganizationSettingsPage({
         action={updateBrandIdentityAction}
         initialBranding={{
           logoUrl: business.logoUrl ?? null,
+          logoWidth: (business as any).logoWidth ?? null,
+          logoHeight: (business as any).logoHeight ?? null,
           brandCompactLogoUrl: (business as any).brandCompactLogoUrl ?? null,
+          brandCompactLogoWidth: (business as any).brandCompactLogoWidth ?? null,
+          brandCompactLogoHeight: (business as any).brandCompactLogoHeight ?? null,
           brandSquareLogoUrl: (business as any).brandSquareLogoUrl ?? null,
+          brandSquareLogoWidth: (business as any).brandSquareLogoWidth ?? null,
+          brandSquareLogoHeight: (business as any).brandSquareLogoHeight ?? null,
           brandInitials: (business as any).brandInitials ?? null,
           brandPrimaryColor: (business as any).brandPrimaryColor ?? '#2563eb',
           brandCompactMode: (business as any).brandCompactMode ?? 'AUTO',
