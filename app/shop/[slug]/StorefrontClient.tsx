@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
@@ -12,6 +12,7 @@ import type { PublicStorefront } from '@/lib/services/online-orders';
 const ALL_CATEGORIES = '__all__';
 const CATALOG_PAGE_SIZE = 48;
 const SEARCH_DEBOUNCE_MS = 300;
+const CATALOG_SECTION_ID = 'shop-catalog';
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -269,6 +270,7 @@ export default function StorefrontClient({
   const [isMounted, setIsMounted] = useState(false);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [storefrontSessionId, setStorefrontSessionId] = useState('');
+  const catalogAbortRef = useRef<AbortController | null>(null);
 
   function trackEvent(eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start', productId?: string | null, metadata?: Record<string, unknown>) {
     if (!storefrontSessionId) return;
@@ -321,36 +323,48 @@ export default function StorefrontClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storefrontSessionId]);
 
-  useEffect(() => {
+  const loadCatalog = useCallback(async ({ query, categoryId }: { query: string; categoryId: string }) => {
+    catalogAbortRef.current?.abort();
     const controller = new AbortController();
-    const query = debouncedSearchQuery.trim();
+    catalogAbortRef.current = controller;
+
+    const trimmedQuery = query.trim();
     const params = new URLSearchParams({
       slug: storefront.slug,
       offset: '0',
       limit: String(CATALOG_PAGE_SIZE),
     });
-    if (query) params.set('q', query);
-    if (selectedCategoryId !== ALL_CATEGORIES) params.set('category', selectedCategoryId);
+    if (trimmedQuery) params.set('q', trimmedQuery);
+    if (categoryId !== ALL_CATEGORIES) params.set('category', categoryId);
 
     setCatalogLoading(true);
     setCatalogError(null);
-    fetch(`/api/storefront/catalog?${params.toString()}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Could not load products.');
-        return response.json() as Promise<CatalogResponse>;
-      })
-      .then((payload) => {
-        setCatalogProducts(payload.products);
-        setCatalogTotal(payload.total);
-      })
-      .catch((loadError) => {
-        if (loadError?.name === 'AbortError') return;
-        setCatalogError('Products could not refresh. Check your connection and try again.');
-      })
-      .finally(() => setCatalogLoading(false));
+    try {
+      const response = await fetch(`/api/storefront/catalog?${params.toString()}`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error('Could not load products.');
+      const payload = await response.json() as CatalogResponse;
+      setCatalogProducts(payload.products);
+      setCatalogTotal(payload.total);
+    } catch (loadError) {
+      if ((loadError as { name?: string } | null)?.name === 'AbortError') return;
+      setCatalogError('Products could not refresh. Check your connection and try again.');
+    } finally {
+      if (catalogAbortRef.current === controller) {
+        catalogAbortRef.current = null;
+        setCatalogLoading(false);
+      }
+    }
+  }, [storefront.slug]);
 
-    return () => controller.abort();
-  }, [debouncedSearchQuery, selectedCategoryId, storefront.slug]);
+  useEffect(() => {
+    void loadCatalog({ query: debouncedSearchQuery, categoryId: selectedCategoryId });
+  }, [debouncedSearchQuery, loadCatalog, selectedCategoryId]);
+
+  useEffect(() => () => {
+    catalogAbortRef.current?.abort();
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -392,6 +406,7 @@ export default function StorefrontClient({
   );
 
   const categories = useMemo(() => storefront.categories ?? [], [storefront.categories]);
+  const categorySuggestions = useMemo(() => categories.slice(0, 3), [categories]);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === selectedCategoryId) ?? null,
@@ -427,6 +442,23 @@ export default function StorefrontClient({
 
   function handleCategoryChange(nextId: string) {
     setSelectedCategoryId(nextId);
+  }
+
+  function scrollCatalogToTop() {
+    if (typeof document === 'undefined') return;
+    const catalogSection = document.getElementById(CATALOG_SECTION_ID);
+    if (catalogSection) {
+      catalogSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function handleBrowseProducts() {
+    setMobileStep('browse');
+    window.setTimeout(() => scrollCatalogToTop(), 0);
   }
 
   async function loadMoreProducts() {
@@ -766,7 +798,8 @@ export default function StorefrontClient({
   })();
 
   return (
-    <div
+    <main
+      id="shop-main"
       className="min-h-screen bg-slate-50"
       style={brandStyles.cssVars as React.CSSProperties}
     >
@@ -929,7 +962,7 @@ export default function StorefrontClient({
         <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 lg:pt-8">
 
           {/* ── LEFT: search + chips + product grid ──────── */}
-          <section className="min-w-0">
+          <section id={CATALOG_SECTION_ID} className="min-w-0">
             {/* Sticky search + category chips */}
             <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:backdrop-blur-none">
               <form
@@ -970,11 +1003,11 @@ export default function StorefrontClient({
                   aria-label="Product categories"
                   className="-mx-1 mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-pressed={selectedCategoryId === ALL_CATEGORIES}
-                    aria-label="Show all categories"
+                   <button
+                     type="button"
+                     role="tab"
+                     aria-selected={selectedCategoryId === ALL_CATEGORIES}
+                     aria-label="Show all categories"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
                     className={selectedCategoryId === ALL_CATEGORIES
                       ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
@@ -987,12 +1020,12 @@ export default function StorefrontClient({
                   {categories.map((category) => {
                     const active = category.id === selectedCategoryId;
                     return (
-                      <button
-                        key={category.id}
-                        type="button"
-                        role="tab"
-                        aria-pressed={active}
-                        aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
+                       <button
+                         key={category.id}
+                         type="button"
+                         role="tab"
+                         aria-selected={active}
+                         aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
                           ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
@@ -1074,7 +1107,14 @@ export default function StorefrontClient({
 
             {catalogError ? (
               <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                {catalogError}
+                <div>{catalogError}</div>
+                <button
+                  type="button"
+                  onClick={() => void loadCatalog({ query: debouncedSearchQuery, categoryId: selectedCategoryId })}
+                  className="mt-2 inline-flex h-9 items-center justify-center rounded-full border border-amber-300 bg-white/80 px-3.5 text-xs font-semibold text-amber-900 transition hover:bg-white"
+                >
+                  Try again
+                </button>
               </div>
             ) : null}
 
@@ -1112,13 +1152,42 @@ export default function StorefrontClient({
                       : 'Check back soon — this store is getting ready.'}
                   </div>
                   {(searchQuery || selectedCategoryId !== ALL_CATEGORIES) && (
-                    <button
-                      type="button"
-                      onClick={() => { handleSearch(''); handleCategoryChange(ALL_CATEGORIES); }}
-                      className="mt-3 text-xs font-semibold text-accent hover:underline"
-                    >
-                      Browse all products
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSearch('');
+                          handleCategoryChange(ALL_CATEGORIES);
+                          scrollCatalogToTop();
+                        }}
+                        className="mt-3 text-xs font-semibold text-accent hover:underline"
+                      >
+                        Browse all products
+                      </button>
+                      {categorySuggestions.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/35">
+                            Try
+                          </div>
+                          <div className="mt-2 flex flex-wrap justify-center gap-2">
+                            {categorySuggestions.map((category) => (
+                              <button
+                                key={category.id}
+                                type="button"
+                                onClick={() => {
+                                  handleSearch('');
+                                  handleCategoryChange(category.id);
+                                  scrollCatalogToTop();
+                                }}
+                                className="rounded-full border border-black/10 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-black/65 transition hover:border-black/20 hover:bg-white hover:text-ink"
+                              >
+                                {toTitleCase(category.name)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
                   )}
                 </div>
               )
@@ -1226,7 +1295,7 @@ export default function StorefrontClient({
                                   <div className="flex h-11 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
                                     <button
                                       type="button"
-                                      aria-label="Decrease quantity"
+                                       aria-label={`Decrease quantity of ${displayName}`}
                                       className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
                                     disabled={(selected?.qtyInUnit ?? 1) <= 1}
                                     onClick={() =>
@@ -1246,7 +1315,7 @@ export default function StorefrontClient({
                                     </span>
                                     <button
                                       type="button"
-                                      aria-label="Increase quantity"
+                                       aria-label={`Increase quantity of ${displayName}`}
                                       className="flex h-11 w-11 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
                                     onClick={() =>
                                       setSelectionState((prev) => ({
@@ -1386,6 +1455,13 @@ export default function StorefrontClient({
                 <div className="mt-4 rounded-2xl border border-dashed border-black/10 bg-slate-50 px-4 py-8 text-center">
                   <div className="text-sm font-medium text-ink">Cart is empty</div>
                   <div className="mt-1 text-xs text-black/50">Tap "Add" on a product to get started.</div>
+                  <button
+                    type="button"
+                    onClick={scrollCatalogToTop}
+                    className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-4 text-sm font-semibold text-ink transition hover:border-black/20 hover:bg-slate-50"
+                  >
+                    Browse products
+                  </button>
                 </div>
               ) : (
                 <div className="mt-4 space-y-2.5">
@@ -1612,6 +1688,13 @@ export default function StorefrontClient({
             <div className={`text-center ${!paymentReady && cart.length > 0 ? 'pt-6 pb-12' : 'py-12'}`}>
               <div className="text-sm font-medium text-ink">Cart is empty</div>
               <div className="mt-1 text-xs text-black/50">Add products to continue.</div>
+              <button
+                type="button"
+                onClick={handleBrowseProducts}
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-4 text-sm font-semibold text-ink transition hover:border-black/20 hover:bg-slate-50"
+              >
+                Browse products
+              </button>
             </div>
           ) : (
             <div className={`space-y-2.5 ${!paymentReady ? 'mt-4' : ''}`}>
@@ -1897,6 +1980,6 @@ export default function StorefrontClient({
           </button>
         </div>
       ) : null}
-    </div>
+    </main>
   );
 }
