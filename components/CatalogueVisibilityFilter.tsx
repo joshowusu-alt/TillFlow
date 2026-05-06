@@ -87,6 +87,7 @@ export default function CatalogueVisibilityFilter({
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const [uploadErrorProductId, setUploadErrorProductId] = useState<string | null>(null);
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(new Set());
   const [countsByStatus, setCountsByStatus] = useState<Partial<Record<StatusFilter, number>>>(
     initialTotal === undefined ? {} : { all: initialTotal },
   );
@@ -337,11 +338,19 @@ export default function CatalogueVisibilityFilter({
             className="flex items-center gap-3 px-3 py-2.5 first:rounded-t-2xl last:rounded-b-2xl"
           >
             <div className="flex shrink-0 items-center gap-2">
-              {product.imageUrl ? (
+              {product.imageUrl && !failedImages.has(product.id) ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={product.imageUrl}
                   alt={product.name}
                   className="h-8 w-8 shrink-0 rounded-lg object-cover"
+                  onError={() =>
+                    setFailedImages((prev) => {
+                      const next = new Set(prev);
+                      next.add(product.id);
+                      return next;
+                    })
+                  }
                 />
               ) : (
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accentSoft text-xs font-bold text-accent">

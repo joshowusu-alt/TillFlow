@@ -19,10 +19,12 @@ type Props = {
 function PreviewCard({
   title,
   subtitle,
+  renderingNote,
   children,
 }: {
   title: string;
   subtitle: string;
+  renderingNote?: { text: string; wasFallback: boolean } | null;
   children: React.ReactNode;
 }) {
   return (
@@ -30,6 +32,22 @@ function PreviewCard({
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/45">{title}</div>
       <div className="mt-1 text-sm text-black/55">{subtitle}</div>
       <div className="mt-4">{children}</div>
+      {renderingNote && (
+        <div
+          className={`mt-3 flex items-start gap-2 rounded-xl px-3 py-2.5 text-xs ${
+            renderingNote.wasFallback ? 'bg-amber-50 text-amber-800' : 'bg-slate-50 text-slate-600'
+          }`}
+        >
+          <span
+            className={`mt-px shrink-0 font-bold uppercase tracking-widest text-[9px] ${
+              renderingNote.wasFallback ? 'text-amber-500' : 'text-slate-400'
+            }`}
+          >
+            {renderingNote.wasFallback ? 'Smart fallback' : 'Render choice'}
+          </span>
+          <span>{renderingNote.text}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -75,7 +93,16 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
   );
 
   const compactGuidance = getMerchantCompactBrandGuidance(branding);
-  const compactPresentation = resolveMerchantBrandPresentation(branding, 'admin-shell');
+
+  const presentations = useMemo(
+    () => ({
+      adminShell: resolveMerchantBrandPresentation(branding, 'admin-shell'),
+      storefrontHero: resolveMerchantBrandPresentation(branding, 'storefront-hero'),
+      receipt: resolveMerchantBrandPresentation(branding, 'receipt'),
+      compactChip: resolveMerchantBrandPresentation(branding, 'compact-chip'),
+    }),
+    [branding],
+  );
 
   return (
     <div className="space-y-6 rounded-[28px] border border-black/5 bg-gradient-to-br from-white to-slate-50/80 p-6 shadow-sm">
@@ -100,8 +127,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
         <BrandAssetUploaderCard
           assetKey="PRIMARY"
           title="Primary logo"
-          description="Your main business logo for larger, trust-building surfaces like the storefront hero."
-          recommendation="Best for wide or full logos. TillFlow keeps this for larger surfaces unless you explicitly allow compact use."
+          description="Your main business logo. Used for storefront hero, large preview cards, and trust-building moments. TillFlow reserves this for surfaces with space to show it well."
+          recommendation="Best for wide or full-width logos. TillFlow will not use this in compact headers or chips unless you explicitly allow it."
           currentUrl={logoUrl}
           businessName={businessName}
           onChange={setLogoUrl}
@@ -109,8 +136,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
         <BrandAssetUploaderCard
           assetKey="COMPACT"
           title="Compact logo / mark"
-          description="Optional simplified mark for compact app chips, identity badges, and smaller branded surfaces."
-          recommendation="Best for short wordmarks or symbol-plus-initial designs with little or no tiny text."
+          description="Optional simplified mark for compact app chips, identity badges, and navigation areas. Should be a short wordmark or symbol only — no fine text."
+          recommendation="Best for short wordmarks or symbol-plus-initial designs. TillFlow will prefer this over the primary logo on compact surfaces."
           currentUrl={brandCompactLogoUrl}
           businessName={businessName}
           onChange={setBrandCompactLogoUrl}
@@ -118,8 +145,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
         <BrandAssetUploaderCard
           assetKey="SQUARE"
           title="Square logo / icon"
-          description="Optional square badge or icon for the smallest TillFlow surfaces where clarity matters most."
-          recommendation="Best for square marks, app-style symbols, or clean initials-in-shape artwork."
+          description="Optional square badge or icon for the smallest TillFlow surfaces — admin header chip, compact identity, mobile nav. Square or near-square only."
+          recommendation="Best for app-style marks, square badges, or clean icon artwork. TillFlow will prefer this over compact and primary logos on chip-sized surfaces."
           currentUrl={brandSquareLogoUrl}
           businessName={businessName}
           previewTone="square"
@@ -146,7 +173,7 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
                 maxLength={3}
               />
               <div className="mt-1 text-xs text-black/50">
-                Optional. Leave blank and TillFlow will derive initials from your business name.
+                Optional. Leave blank and TillFlow derives initials from your business name automatically.
               </div>
             </div>
 
@@ -168,7 +195,7 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
                 />
               </div>
               <div className="mt-1 text-xs text-black/50">
-                Used for premium initials tiles and merchant identity moments across TillFlow.
+                Used for initials tiles, compact identity chips, and brand-coloured surfaces across TillFlow. Will not affect the storefront primary colour unless they are the same setting.
               </div>
             </div>
           </div>
@@ -181,12 +208,12 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
               value={brandCompactMode}
               onChange={(event) => setBrandCompactMode(event.target.value)}
             >
-              <option value="AUTO">Smart fallback (Recommended)</option>
+              <option value="AUTO">Smart — use dedicated compact assets, fall back to initials (Recommended)</option>
               <option value="INITIALS">Always use initials in compact views</option>
-              <option value="LOGO">Use uploaded logo where possible</option>
+              <option value="LOGO">Allow primary logo in compact views (may not look best)</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Smart fallback protects tiny headers and chips from text-heavy or cramped logos.
+              Smart mode uses your square or compact logo in tight spaces and falls back to a premium initials tile if neither is uploaded. This protects the TillFlow admin shell and navigation areas from text-heavy or oversized logos.
             </div>
           </div>
 
@@ -198,12 +225,15 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
               value={brandLogoBackground}
               onChange={(event) => setBrandLogoBackground(event.target.value)}
             >
-              <option value="AUTO">Auto (Recommended)</option>
-              <option value="NEUTRAL">Always use a neutral light badge</option>
-              <option value="TRANSPARENT">Keep transparent where possible</option>
+              <option value="AUTO">Auto — TillFlow chooses the clearest frame (Recommended)</option>
+              <option value="NEUTRAL">White tile — clean badge on any surface</option>
+              <option value="SOFT_TILE">Soft tile — subtle neutral frame</option>
+              <option value="TINTED_TILE">Tinted tile — brand-colour tinted frame</option>
+              <option value="OUTLINE_TILE">Outline tile — white badge with brand border</option>
+              <option value="TRANSPARENT">No background (transparent)</option>
             </select>
             <div className="mt-1 text-xs text-black/50">
-              Auto keeps logos legible on dark, branded, and compact surfaces without feeling pasted on.
+              Auto selects the clearest frame per surface — neutral for compact shells, appropriate for hero and receipt contexts.
             </div>
           </div>
 
@@ -215,7 +245,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
         <div className="space-y-4">
           <PreviewCard
             title="Admin header"
-            subtitle="Compact surfaces prioritise clarity and trust over literal logo fidelity."
+            subtitle="Compact surfaces protect TillFlow brand quality — primary logos are withheld unless a compact asset is uploaded."
+            renderingNote={{ text: presentations.adminShell.reason, wasFallback: presentations.adminShell.wasFallbackUsed }}
           >
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-4">
@@ -244,7 +275,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
 
           <PreviewCard
             title="Storefront hero"
-            subtitle="Large public-facing surfaces can use your primary logo when it looks strong."
+            subtitle="Large public-facing surfaces use your primary logo when available. Initials are used when no suitable logo is uploaded."
+            renderingNote={{ text: presentations.storefrontHero.reason, wasFallback: presentations.storefrontHero.wasFallbackUsed }}
           >
             <div
               className="overflow-hidden rounded-[24px] p-4 text-white shadow-sm"
@@ -271,7 +303,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
           <div className="grid gap-4 md:grid-cols-2">
             <PreviewCard
               title="Receipt header"
-              subtitle="Receipts pick the most readable version available."
+              subtitle="Receipts use the most readable version available, prioritising compact marks over wide logos."
+              renderingNote={{ text: presentations.receipt.reason, wasFallback: presentations.receipt.wasFallbackUsed }}
             >
               <div className="rounded-2xl border border-black/10 bg-white p-4 text-center shadow-sm">
                 <MerchantBrandBadge branding={branding} surface="receipt" className="mx-auto" />
@@ -282,7 +315,8 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
 
             <PreviewCard
               title="Compact chip"
-              subtitle="If the logo is unsuitable, TillFlow falls back to a premium monogram tile."
+              subtitle="Admin shell and identity chips always use the most compact-safe asset. Premium initials tile used when no suitable compact logo exists."
+              renderingNote={{ text: presentations.compactChip.reason, wasFallback: presentations.compactChip.wasFallbackUsed }}
             >
               <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
                 <div className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-slate-50 px-3 py-2">
@@ -290,7 +324,7 @@ export default function MerchantBrandManager({ businessName, initialBranding, ac
                   <div className="text-left">
                     <div className="text-xs font-semibold text-ink">{businessName}</div>
                     <div className="text-[11px] text-black/45">
-                      {compactPresentation.source === 'initials' ? 'TillFlow smart fallback' : 'Compact merchant asset'}
+                      {presentations.compactChip.source === 'initials' ? 'TillFlow smart fallback' : 'Compact merchant asset'}
                     </div>
                   </div>
                 </div>

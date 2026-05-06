@@ -148,16 +148,34 @@ export default function BrandAssetUploaderCard({
       ? 'h-24 w-24 rounded-2xl'
       : 'h-24 w-36 rounded-2xl sm:w-40';
   const hasPendingPreview = Boolean(pendingFile && pendingPreviewUrl);
+  const [previewImgFailed, setPreviewImgFailed] = useState(false);
+
+  // Reset img-failed flag when the displayed URL changes
+  useEffect(() => {
+    setPreviewImgFailed(false);
+  }, [displayUrl]);
 
   return (
     <div className="rounded-2xl border border-black/5 bg-white p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className={joinClasses('flex shrink-0 items-center justify-center overflow-hidden border border-black/10 bg-white p-2', previewClasses)}>
-          {displayUrl ? (
+        <div className={joinClasses('flex shrink-0 items-center justify-center overflow-hidden border border-black/10 bg-white p-2 transition', previewClasses)}>
+          {displayUrl && !previewImgFailed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={displayUrl} alt={`${businessName} ${title.toLowerCase()}`} className="h-full w-full object-contain" />
+            <img
+              src={displayUrl}
+              alt={`${businessName} ${title.toLowerCase()}`}
+              className="h-full w-full object-contain"
+              onError={() => setPreviewImgFailed(true)}
+            />
+          ) : previewImgFailed ? (
+            <div className="flex flex-col items-center gap-1.5 px-2 text-center">
+              <svg className="h-4 w-4 text-rose-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-rose-500">Load error</span>
+            </div>
           ) : (
-            <span className="px-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-black/35">
+            <span className="px-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-black/25">
               {title}
             </span>
           )}
