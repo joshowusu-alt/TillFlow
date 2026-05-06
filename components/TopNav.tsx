@@ -128,13 +128,15 @@ export default function TopNav({
             <div className="hidden xl:flex items-center gap-2">
               <span className="metric-chip">
                 {businessLogoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={businessLogoUrl}
-                    alt=""
-                    aria-hidden="true"
-                    className="h-5 w-5 rounded-md object-cover ring-1 ring-black/5"
-                  />
+                  <span className="flex h-6 w-10 items-center justify-center overflow-hidden rounded-md bg-white px-1 ring-1 ring-black/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={businessLogoUrl}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-full w-full object-contain"
+                    />
+                  </span>
                 ) : (
                   <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
                 )}

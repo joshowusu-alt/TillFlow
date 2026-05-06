@@ -808,13 +808,15 @@ export default function StorefrontClient({
         <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-4 sm:px-6 sm:py-6">
           <div className="flex items-start gap-3 sm:gap-4">
             {storefront.branding.logoUrl ? (
-              <Image
-                src={storefront.branding.logoUrl}
-                alt={storefront.name}
-                width={80}
-                height={80}
-                className="h-14 w-14 shrink-0 rounded-2xl object-cover bg-white/20 ring-1 ring-white/30 shadow-lg sm:h-16 sm:w-16"
-              />
+              <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-2 shadow-lg ring-1 ring-white/30 sm:h-20 sm:w-28">
+                <Image
+                  src={storefront.branding.logoUrl}
+                  alt={storefront.name}
+                  width={128}
+                  height={96}
+                  className="h-full w-full object-contain"
+                />
+              </div>
             ) : (
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30 shadow-lg text-lg font-bold sm:h-16 sm:w-16 sm:text-xl" style={{ color: 'var(--brand-primary-foreground)' }}>
                 {storefrontInitials}

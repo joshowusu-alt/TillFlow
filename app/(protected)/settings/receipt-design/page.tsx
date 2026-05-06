@@ -179,12 +179,14 @@ export default async function ReceiptDesignPage() {
                         <div className="mx-auto max-w-64 space-y-3 text-center text-sm">
                             {/* Receipt-specific override wins; fall back to the canonical Business.logoUrl. */}
                             {business.receiptLogoUrl || business.logoUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={business.receiptLogoUrl ?? business.logoUrl ?? ''}
-                                    alt="Logo"
-                                    className="mx-auto h-12 object-contain"
-                                />
+                                <div className="mx-auto flex h-16 w-28 items-center justify-center overflow-hidden rounded-xl bg-white p-2">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={business.receiptLogoUrl ?? business.logoUrl ?? ''}
+                                        alt="Logo"
+                                        className="h-full w-full object-contain"
+                                    />
+                                </div>
                             ) : (
                                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-black/5 text-black/30">
                                     Logo
