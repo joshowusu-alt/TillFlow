@@ -17,5 +17,15 @@ export const viewport: Viewport = {
 };
 
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <a
+        href="#shop-main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
+      >
+        Skip to content
+      </a>
+      {children}
+    </>
+  );
 }

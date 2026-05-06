@@ -146,7 +146,7 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
         </div>
       </header>
 
-      <main className="mx-auto max-w-md px-4 py-6 sm:py-10">
+      <main id="shop-main" className="mx-auto max-w-md px-4 py-6 sm:py-10">
         <div className="overflow-hidden rounded-3xl border border-black/5 bg-white shadow-sm">
           <div className="border-b border-black/5 bg-slate-50 px-6 py-5 sm:px-8">
             <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-black/40">Customer account</div>
