@@ -42,6 +42,24 @@ export type StorefrontPaymentConfig = {
   paymentNote: string | null;
 };
 
+function hasConfiguredValue(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+export function paymentConfigIsReady(config: StorefrontPaymentConfig): boolean {
+  switch (config.mode) {
+    case 'MERCHANT_SHORTCODE':
+      return hasConfiguredValue(config.merchantShortcode);
+    case 'BANK_TRANSFER':
+      return hasConfiguredValue(config.bankAccountNumber) && hasConfiguredValue(config.bankName);
+    case 'MANUAL_CONFIRMATION':
+      return true;
+    case 'MOMO_NUMBER':
+    default:
+      return hasConfiguredValue(config.momoNumber);
+  }
+}
+
 /**
  * Produce a short customer-facing instruction line ("Send GH₵X to ...") tailored
  * to the configured payment mode. Returns `null` when the merchant has not yet
@@ -85,6 +103,7 @@ export function getPaymentInstructionLine(
  * details are missing.
  */
 export function getPaymentInstructionDetails(config: StorefrontPaymentConfig) {
+  const ready = paymentConfigIsReady(config);
   switch (config.mode) {
     case 'MERCHANT_SHORTCODE':
       return {
@@ -92,7 +111,7 @@ export function getPaymentInstructionDetails(config: StorefrontPaymentConfig) {
         recipient: config.merchantShortcode,
         recipientCaption: config.momoNetwork ?? null,
         manual: false,
-        ready: Boolean(config.merchantShortcode),
+        ready,
       };
     case 'BANK_TRANSFER':
       return {
@@ -100,7 +119,7 @@ export function getPaymentInstructionDetails(config: StorefrontPaymentConfig) {
         recipient: config.bankAccountNumber,
         recipientCaption: [config.bankName, config.bankAccountName, config.bankBranch].filter(Boolean).join(' · ') || null,
         manual: false,
-        ready: Boolean(config.bankAccountNumber && config.bankName),
+        ready,
       };
     case 'MANUAL_CONFIRMATION':
       return {
@@ -108,7 +127,7 @@ export function getPaymentInstructionDetails(config: StorefrontPaymentConfig) {
         recipient: null,
         recipientCaption: 'The store will reach out with payment instructions shortly.',
         manual: true,
-        ready: true,
+        ready,
       };
     case 'MOMO_NUMBER':
     default:
@@ -117,7 +136,7 @@ export function getPaymentInstructionDetails(config: StorefrontPaymentConfig) {
         recipient: config.momoNumber,
         recipientCaption: config.momoNetwork,
         manual: false,
-        ready: Boolean(config.momoNumber),
+        ready,
       };
   }
 }

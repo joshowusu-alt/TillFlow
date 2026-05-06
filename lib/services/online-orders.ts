@@ -8,7 +8,7 @@ import { initiateMobileMoneyCollection, normalizeAfricanMsisdn, currencyToDialCo
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
 import { getOpenStatus, parseWeeklyHours, type OpenStatus } from '@/lib/business-hours';
-import { normalizePaymentMode, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
+import { normalizePaymentMode, paymentConfigIsReady, type StorefrontPaymentConfig } from '@/lib/storefront-payments';
 import {
   buildCategoryMappingLookup,
   resolvePublicCategory,
@@ -374,6 +374,22 @@ async function getStorefrontBusinessBySlug(slug: string) {
     storefrontRedis.set(cacheKey, data, { ex: STOREFRONT_CACHE_TTL }).catch(() => null);
   }
   return data;
+}
+
+type StorefrontBusiness = NonNullable<Awaited<ReturnType<typeof getStorefrontBusinessBySlug>>>;
+
+function buildStorefrontPaymentConfig(business: StorefrontBusiness): StorefrontPaymentConfig {
+  return {
+    mode: normalizePaymentMode(business.storefrontPaymentMode),
+    momoNumber: business.storefrontMomoNumber ?? null,
+    momoNetwork: business.storefrontMomoNetwork ?? null,
+    merchantShortcode: business.storefrontMerchantShortcode ?? null,
+    bankName: business.storefrontBankName ?? null,
+    bankAccountName: business.storefrontBankAccountName ?? null,
+    bankAccountNumber: business.storefrontBankAccountNumber ?? null,
+    bankBranch: business.storefrontBankBranch ?? null,
+    paymentNote: business.storefrontPaymentNote ?? null,
+  };
 }
 
 const STOREFRONT_INITIAL_PRODUCT_LIMIT = 48;
@@ -862,6 +878,10 @@ export async function createOnlineCheckout(input: CreateOnlineCheckoutInput) {
   }
 
   assertOnlineStorefrontAvailable(business);
+
+  if (!paymentConfigIsReady(buildStorefrontPaymentConfig(business))) {
+    throw new UserError('This shop is updating its payment details — please check back soon.');
+  }
 
   const customerName = input.customerName.trim();
   const rawCustomerPhone = input.customerPhone.trim();

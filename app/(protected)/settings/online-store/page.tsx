@@ -13,7 +13,7 @@ import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
 import SettingsSection from '@/components/SettingsSection';
-import { normalizePaymentMode } from '@/lib/storefront-payments';
+import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { resolvePrimaryBrandColor } from '@/lib/storefront-branding';
@@ -22,7 +22,7 @@ import { normalizePublicCategoryName, suggestedPublicCategoryOptions } from '@/l
 export default async function OnlineStoreSettingsPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; saved?: string };
+  searchParams?: { error?: string; saved?: string; field?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   const addonOnlineStorefront = (business as any).addonOnlineStorefront ?? false;
@@ -192,6 +192,28 @@ export default async function OnlineStoreSettingsPage({
   const requestOrigin = requestHost ? `${requestProtocol}://${requestHost}` : null;
   const absoluteStorefrontUrl = buildStorefrontUrl(storefrontBusiness.storefrontSlug, requestOrigin);
   const storefrontPrimaryColor = resolvePrimaryBrandColor(storefrontBusiness.storefrontPrimaryColor);
+  const paymentConfigError =
+    searchParams?.field === 'paymentConfig' ? searchParams.error : undefined;
+  const paymentConfigErrorMessage = (() => {
+    if (!paymentConfigError) return undefined;
+    try {
+      return decodeURIComponent(paymentConfigError);
+    } catch {
+      return paymentConfigError;
+    }
+  })();
+  const pageError = searchParams?.field === 'paymentConfig' ? undefined : searchParams?.error;
+  const currentPaymentConfigReady = paymentConfigIsReady({
+    mode: normalizePaymentMode(storefrontBusiness.storefrontPaymentMode),
+    momoNumber: storefrontBusiness.storefrontMomoNumber ?? null,
+    momoNetwork: storefrontBusiness.storefrontMomoNetwork ?? null,
+    merchantShortcode: storefrontBusiness.storefrontMerchantShortcode ?? null,
+    bankName: storefrontBusiness.storefrontBankName ?? null,
+    bankAccountName: storefrontBusiness.storefrontBankAccountName ?? null,
+    bankAccountNumber: storefrontBusiness.storefrontBankAccountNumber ?? null,
+    bankBranch: storefrontBusiness.storefrontBankBranch ?? null,
+    paymentNote: storefrontBusiness.storefrontPaymentNote ?? null,
+  });
 
   return (
     <div className="space-y-4">
@@ -215,7 +237,7 @@ export default async function OnlineStoreSettingsPage({
         </div>
       </div>
 
-      <FormError error={searchParams?.error} />
+      <FormError error={pageError} />
 
       {searchParams?.saved === '1' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
@@ -271,10 +293,25 @@ export default async function OnlineStoreSettingsPage({
                 type="checkbox"
                 className="h-4 w-4"
                 defaultChecked={storefrontBusiness.storefrontEnabled}
+                aria-describedby={paymentConfigError ? 'storefront-payment-config-error' : undefined}
               />
-              <label htmlFor="storefrontEnabled" className="text-sm font-medium text-ink">
-                Enable public storefront and online checkout
-              </label>
+              <div className="space-y-1">
+                <label htmlFor="storefrontEnabled" className="text-sm font-medium text-ink">
+                  Enable public storefront and online checkout
+                </label>
+                {paymentConfigErrorMessage ? (
+                  <div
+                    id="storefront-payment-config-error"
+                    className="text-xs font-medium text-rose-700"
+                  >
+                    {paymentConfigErrorMessage}
+                  </div>
+                ) : storefrontBusiness.storefrontEnabled && !currentPaymentConfigReady ? (
+                  <div className="text-xs font-medium text-amber-700">
+                    Checkout is live, but payment details still need to be completed for the current payment method.
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div>

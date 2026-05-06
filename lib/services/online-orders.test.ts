@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createOnlineCheckout,
   createOnlineOrderNumber,
   getStorefrontCatalogPage,
   getOnlineOrderStateForCollectionStatus,
@@ -43,6 +44,58 @@ describe('normalizeStorefrontSlug', () => {
 describe('createOnlineOrderNumber', () => {
   it('creates a stable web order number shape', () => {
     expect(createOnlineOrderNumber(new Date('2026-04-27T12:00:00Z'), 27)).toBe('WEB-20260427-0027');
+  });
+});
+
+describe('createOnlineCheckout', () => {
+  it('blocks checkout when payment details are missing', async () => {
+    prismaMock.business.findFirst.mockResolvedValue({
+      id: 'biz-1',
+      name: 'Test Shop',
+      currency: 'GHS',
+      vatEnabled: false,
+      momoEnabled: true,
+      mode: 'ADVANCED',
+      plan: 'PRO',
+      storeMode: 'MULTI_STORE',
+      addonOnlineStorefront: false,
+      timezone: 'Africa/Accra',
+      storefrontEnabled: true,
+      storefrontSlug: 'test-shop',
+      storefrontHoursJson: null,
+      storefrontPickupPrepMinutes: null,
+      storefrontPaymentMode: null,
+      storefrontMomoNumber: null,
+      storefrontMomoNetwork: null,
+      storefrontMerchantShortcode: null,
+      storefrontBankName: null,
+      storefrontBankAccountName: null,
+      storefrontBankAccountNumber: null,
+      storefrontBankBranch: null,
+      storefrontPaymentNote: null,
+      storefrontHeadline: null,
+      storefrontDescription: null,
+      storefrontPickupInstructions: null,
+      storefrontLogoUrl: null,
+      storefrontPrimaryColor: null,
+      storefrontAccentColor: null,
+      storefrontTagline: null,
+      phone: null,
+      address: null,
+      stores: [{ id: 'store-1', name: 'Main', address: null, phone: null }],
+    });
+
+    await expect(
+      createOnlineCheckout({
+        slug: 'test-shop',
+        storeId: 'store-1',
+        customerName: 'Ama Mensah',
+        customerPhone: '0241234567',
+        items: [{ productId: 'prod-1', unitId: 'unit-1', qtyInUnit: 1 }],
+      }),
+    ).rejects.toThrow('This shop is updating its payment details');
+
+    expect(prismaMock.product.findMany).not.toHaveBeenCalled();
   });
 });
 

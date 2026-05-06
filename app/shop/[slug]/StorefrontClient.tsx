@@ -29,6 +29,8 @@ type CatalogResponse = {
   limit: number;
 };
 
+type PaymentInstructionDetails = ReturnType<typeof getPaymentInstructionDetails>;
+
 function PackageIcon({ className = 'h-10 w-10' }: { className?: string }) {
   return (
     <svg
@@ -122,12 +124,14 @@ function ShareIcon({ className = 'h-4 w-4' }: { className?: string }) {
 function PaymentPreviewCard({
   paymentConfig,
   currency,
+  paymentDetails,
 }: {
   paymentConfig: import('@/lib/storefront-payments').StorefrontPaymentConfig;
   currency: string;
+  paymentDetails?: PaymentInstructionDetails;
 }) {
   void currency;
-  const details = getPaymentInstructionDetails(paymentConfig);
+  const details = paymentDetails ?? getPaymentInstructionDetails(paymentConfig);
   if (details.manual) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm">
@@ -161,6 +165,14 @@ function PaymentPreviewCard({
       <div className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-sky-900">
         Use the unique order reference after checkout so the merchant can confirm quickly.
       </div>
+    </div>
+  );
+}
+
+function CheckoutUnavailableBanner() {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+      This shop is updating its payment details — please check back soon.
     </div>
   );
 }
@@ -657,6 +669,11 @@ export default function StorefrontClient({
   }
 
   async function submitCheckout() {
+    if (!paymentReady) {
+      setError('This shop is updating its payment details — please check back soon.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -713,7 +730,16 @@ export default function StorefrontClient({
     .join('') || 'TF';
   const cartItemCount = cartDetails.length;
   const cartUnitCount = cart.reduce((sum, line) => sum + line.qtyInUnit, 0);
-  const checkoutReady = cart.length > 0 && customerName.trim().length > 0 && customerPhone.trim().length > 0;
+  const paymentDetails = useMemo(
+    () => getPaymentInstructionDetails(storefront.paymentConfig),
+    [storefront.paymentConfig],
+  );
+  const paymentReady = paymentDetails.ready;
+  const checkoutReady =
+    paymentReady &&
+    cart.length > 0 &&
+    customerName.trim().length > 0 &&
+    customerPhone.trim().length > 0;
   const brandStyles = resolveBrandStyles(storefront.branding);
   const primaryStyle: React.CSSProperties = {
     backgroundColor: 'var(--store-primary)',
@@ -1468,6 +1494,7 @@ export default function StorefrontClient({
                 </span>
               </div>
               <div className="mt-4 space-y-4">
+                {!paymentReady && cart.length > 0 ? <CheckoutUnavailableBanner /> : null}
                 {storefront.pickupInstructions ? (
                   <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
                     <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
@@ -1513,8 +1540,12 @@ export default function StorefrontClient({
                   <label htmlFor="checkout-notes-desktop" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
                   <textarea id="checkout-notes-desktop" name="notes" className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
                 </div>
-                <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
-                {!checkoutReady && cart.length > 0 ? (
+                <PaymentPreviewCard
+                  paymentConfig={storefront.paymentConfig}
+                  currency={storefront.currency}
+                  paymentDetails={paymentDetails}
+                />
+                {paymentReady && !checkoutReady && cart.length > 0 ? (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
                     Add your name and phone number so the store can confirm pickup.
                   </div>
@@ -1525,11 +1556,17 @@ export default function StorefrontClient({
                 <button
                   type="button"
                   className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
-                  style={cart.length > 0 ? primaryStyle : undefined}
+                  style={checkoutReady ? primaryStyle : undefined}
                   disabled={submitting || !checkoutReady}
                   onClick={submitCheckout}
                 >
-                  {submitting ? 'Placing order…' : cartUnitCount > 0 ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})` : 'Place order'}
+                  {!paymentReady
+                    ? 'Checkout temporarily unavailable'
+                    : submitting
+                      ? 'Placing order…'
+                      : cartUnitCount > 0
+                        ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
+                        : 'Place order'}
                 </button>
                 <div className="text-center text-[11px] text-black/40">
                   After placing your order, you&apos;ll receive payment instructions and a unique reference code.
@@ -1570,13 +1607,14 @@ export default function StorefrontClient({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          {!paymentReady && cart.length > 0 ? <CheckoutUnavailableBanner /> : null}
           {cartDetails.length === 0 ? (
-            <div className="py-12 text-center">
+            <div className={`text-center ${!paymentReady && cart.length > 0 ? 'pt-6 pb-12' : 'py-12'}`}>
               <div className="text-sm font-medium text-ink">Cart is empty</div>
               <div className="mt-1 text-xs text-black/50">Add products to continue.</div>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className={`space-y-2.5 ${!paymentReady ? 'mt-4' : ''}`}>
               {cartDetails.map((line) => (
                 <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -1674,11 +1712,16 @@ export default function StorefrontClient({
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70"
-            style={cart.length > 0 ? primaryStyle : undefined}
-            disabled={cart.length === 0}
-            onClick={() => setMobileStep('checkout')}
+            style={cart.length > 0 && paymentReady ? primaryStyle : undefined}
+            disabled={cart.length === 0 || !paymentReady}
+            onClick={() => {
+              if (!paymentReady) return;
+              setMobileStep('checkout');
+            }}
           >
-            Proceed to checkout — {formatMoney(orderTotal, storefront.currency)}
+            {paymentReady
+              ? `Proceed to checkout — ${formatMoney(orderTotal, storefront.currency)}`
+              : 'Checkout temporarily unavailable'}
           </button>
         </div>
       </div>
@@ -1708,6 +1751,11 @@ export default function StorefrontClient({
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 keyboard-safe-bottom">
+          {!paymentReady && cart.length > 0 ? (
+            <div className="mb-4">
+              <CheckoutUnavailableBanner />
+            </div>
+          ) : null}
           {storefront.pickupInstructions ? (
             <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
               <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-sky-700">Pickup instructions</div>
@@ -1733,7 +1781,11 @@ export default function StorefrontClient({
                 <span>{formatMoney(orderTotal, storefront.currency)}</span>
               </div>
             </div>
-            <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
+            <PaymentPreviewCard
+              paymentConfig={storefront.paymentConfig}
+              currency={storefront.currency}
+              paymentDetails={paymentDetails}
+            />
           </div>
 
           <div className="rounded-2xl border border-black/5 bg-white p-4">
@@ -1781,7 +1833,7 @@ export default function StorefrontClient({
               <label htmlFor="checkout-notes-mobile" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
               <textarea id="checkout-notes-mobile" name="notes" className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
             </div>
-            {!checkoutReady && cart.length > 0 ? (
+            {paymentReady && !checkoutReady && cart.length > 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                 Name and phone number are required before placing the order.
               </div>
@@ -1797,11 +1849,17 @@ export default function StorefrontClient({
           <button
             type="button"
             className="w-full rounded-2xl px-4 py-4 text-base font-bold text-white shadow-md transition hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-black/15 disabled:text-white/70 disabled:shadow-none"
-            style={cart.length > 0 ? primaryStyle : undefined}
+            style={checkoutReady ? primaryStyle : undefined}
             disabled={submitting || !checkoutReady}
             onClick={submitCheckout}
           >
-            {submitting ? 'Placing order…' : cartUnitCount > 0 ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})` : 'Place order'}
+            {!paymentReady
+              ? 'Checkout temporarily unavailable'
+              : submitting
+                ? 'Placing order…'
+                : cartUnitCount > 0
+                  ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
+                  : 'Place order'}
           </button>
           <div className="mt-3 text-center text-[11px] text-black/40">
             After placing your order, you&apos;ll receive payment instructions and a unique reference code.

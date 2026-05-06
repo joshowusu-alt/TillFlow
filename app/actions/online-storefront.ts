@@ -8,10 +8,11 @@ import { getFeatures } from '@/lib/features';
 import { formOptionalString, formString } from '@/lib/form-helpers';
 import { prisma } from '@/lib/prisma';
 import { normalizeStorefrontSlug, restoreOnlineOrderInventoryReservation } from '@/lib/services/online-orders';
+import { buildOnlineOrderStatusSnapshot, notifyOrderStatusChange } from '@/lib/services/online-order-status-stream';
 import { createSalesReturn } from '@/lib/services/returns';
 import { checkMobileMoneyCollectionStatus } from '@/lib/services/mobile-money';
 import { DAY_KEYS, makeDefaultWeeklyHours, serializeWeeklyHours, type WeeklyHours } from '@/lib/business-hours';
-import { normalizePaymentMode } from '@/lib/storefront-payments';
+import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
 import { hasPlanAccess, getBusinessPlan } from '@/lib/features';
 import { normalizeBrandColor, resolvePrimaryBrandColor } from '@/lib/storefront-branding';
 import { enqueueOrderNotificationSafe } from '@/lib/services/storefront-notifications';
@@ -87,6 +88,17 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
     const storefrontBankAccountNumber = storefrontBankAccountNumberRaw?.trim() || null;
     const storefrontBankBranch = storefrontBankBranchRaw?.trim() || null;
     const storefrontPaymentNote = storefrontPaymentNoteRaw?.trim() || null;
+    const paymentConfig = {
+      mode: storefrontPaymentMode,
+      momoNumber: storefrontMomoNumber,
+      momoNetwork: storefrontMomoNetwork,
+      merchantShortcode: storefrontMerchantShortcode,
+      bankName: storefrontBankName,
+      bankAccountName: storefrontBankAccountName,
+      bankAccountNumber: storefrontBankAccountNumber,
+      bankBranch: storefrontBankBranch,
+      paymentNote: storefrontPaymentNote,
+    };
 
     // Branding fields are plan-gated so a Starter merchant can't bypass the
     // limit by hand-crafting a POST.
@@ -126,6 +138,12 @@ export async function updateStorefrontSettingsAction(formData: FormData): Promis
       });
       if (existing) {
         throw new Error('That storefront link is already in use by another business.');
+      }
+
+      if (!paymentConfigIsReady(paymentConfig)) {
+        redirect(
+          `/settings/online-store?error=${encodeURIComponent('Payment details required to enable storefront.')}&field=paymentConfig`,
+        );
       }
     }
 
@@ -595,17 +613,35 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
         throw new Error('Unsupported online order status change.');
     }
 
-    await prisma.onlineOrder.update({
-      where: { id: order.id },
-      data,
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const updated = await tx.onlineOrder.update({
+        where: { id: order.id },
+        data,
+        select: {
+          id: true,
+          status: true,
+          paymentStatus: true,
+          fulfillmentStatus: true,
+          paidAt: true,
+          fulfilledAt: true,
+          paymentConfirmedAt: true,
+          preparingAt: true,
+          readyAt: true,
+          collectedAt: true,
+          cancelledAt: true,
+        },
+      });
+
+      await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
+      return updated;
     });
 
     // Enqueue SMS notifications for significant status transitions
-    if (data.status === 'PAID') {
+    if (updatedOrder.status === 'PAID') {
       await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'PAYMENT_CONFIRMED' });
-    } else if (data.status === 'READY_FOR_PICKUP') {
+    } else if (updatedOrder.status === 'READY_FOR_PICKUP') {
       await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'READY_FOR_PICKUP' });
-    } else if (data.status === 'CANCELLED') {
+    } else if (updatedOrder.status === 'CANCELLED') {
       await enqueueOrderNotificationSafe({ orderId: order.id, eventType: 'CANCELLED' });
     }
 
@@ -630,7 +666,7 @@ export async function updateOnlineOrderStatusAction(formData: FormData): Promise
       entityId: order.id,
       details: {
         source: 'online-order-status',
-        nextStatus: data.status,
+        nextStatus: updatedOrder.status,
       },
     }).catch((error) => console.error('[audit]', error));
 
@@ -688,9 +724,34 @@ export async function batchMarkPreparingAction(formData: FormData): Promise<void
     });
     if (!store) throw new Error('Not authorized');
 
-    await prisma.onlineOrder.updateMany({
-      where: { storeId, status: 'PAID', paymentStatus: 'PAID' },
-      data: { status: 'PROCESSING', preparingAt: new Date() },
+    await prisma.$transaction(async (tx) => {
+      const candidates = await tx.onlineOrder.findMany({
+        where: { storeId, status: 'PAID', paymentStatus: 'PAID' },
+        select: { id: true },
+      });
+
+      const preparingAt = new Date();
+      for (const candidate of candidates) {
+        const updated = await tx.onlineOrder.update({
+          where: { id: candidate.id },
+          data: { status: 'PROCESSING', fulfillmentStatus: 'PROCESSING', preparingAt },
+          select: {
+            id: true,
+            status: true,
+            paymentStatus: true,
+            fulfillmentStatus: true,
+            paidAt: true,
+            fulfilledAt: true,
+            paymentConfirmedAt: true,
+            preparingAt: true,
+            readyAt: true,
+            collectedAt: true,
+            cancelledAt: true,
+          },
+        });
+
+        await notifyOrderStatusChange(tx, buildOnlineOrderStatusSnapshot(updated));
+      }
     });
     revalidatePath('/online-orders');
     redirect('/online-orders');
