@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatMoney, toTitleCase, formatGhanaPhoneForDisplay } from '@/lib/format';
 import { buildCartDetails, buildProductMap, formatAvailable, getUnitFromProduct, sumCartTotals, type PosCartLine } from '@/lib/payments/pos-cart';
 import { resolveBrandStyles } from '@/lib/storefront-branding';
@@ -11,6 +11,16 @@ import type { PublicStorefront } from '@/lib/services/online-orders';
 
 const ALL_CATEGORIES = '__all__';
 const CATALOG_PAGE_SIZE = 48;
+const SEARCH_DEBOUNCE_MS = 300;
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(handle);
+  }, [value, delay]);
+  return debounced;
+}
 
 type CatalogResponse = {
   products: PublicStorefront['products'];
@@ -39,12 +49,15 @@ function ProductImage({
   alt,
   inStock,
   categoryName,
+  priority = false,
 }: {
   src: string | null;
   alt: string;
   inStock: boolean;
   categoryName?: string | null;
+  priority?: boolean;
 }) {
+  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const fallbackLabel = (() => {
     const source = (alt || categoryName || 'Item').trim();
@@ -68,14 +81,22 @@ function ProductImage({
   }
 
   return (
-    <Image
-      src={src}
-      alt={alt}
-      fill
-      className={`object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'}`}
-      onError={() => setFailed(true)}
-      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-    />
+    <>
+      {!loaded ? (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100" aria-hidden="true" />
+      ) : null}
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        loading={priority ? 'eager' : 'lazy'}
+        priority={priority}
+        className={`object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        onError={() => setFailed(true)}
+        onLoad={() => setLoaded(true)}
+        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+      />
+    </>
   );
 }
 
@@ -198,6 +219,9 @@ export default function StorefrontClient({
   customer?: StorefrontCustomerProp | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialSearchQuery = searchParams?.get('q') ?? '';
+  const initialCategoryId = searchParams?.get('category') ?? ALL_CATEGORIES;
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
   const [cart, setCart] = useState<PosCartLine[]>(() => {
@@ -225,8 +249,9 @@ export default function StorefrontClient({
   const [network, setNetwork] = useState<'MTN' | 'TELECEL' | 'AIRTELTIGO'>('MTN');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(ALL_CATEGORIES);
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(initialCategoryId);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, SEARCH_DEBOUNCE_MS);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [mobileStep, setMobileStep] = useState<'browse' | 'cart' | 'checkout'>('browse');
   const [isMounted, setIsMounted] = useState(false);
@@ -286,7 +311,7 @@ export default function StorefrontClient({
 
   useEffect(() => {
     const controller = new AbortController();
-    const query = searchQuery.trim();
+    const query = debouncedSearchQuery.trim();
     const params = new URLSearchParams({
       slug: storefront.slug,
       offset: '0',
@@ -313,7 +338,20 @@ export default function StorefrontClient({
       .finally(() => setCatalogLoading(false));
 
     return () => controller.abort();
-  }, [searchQuery, selectedCategoryId, storefront.slug]);
+  }, [debouncedSearchQuery, selectedCategoryId, storefront.slug]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams();
+    const query = debouncedSearchQuery.trim();
+    if (query) params.set('q', query);
+    if (selectedCategoryId !== ALL_CATEGORIES) params.set('category', selectedCategoryId);
+    const queryString = params.toString();
+    const nextUrl = window.location.pathname + (queryString ? `?${queryString}` : '');
+    if (nextUrl !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }, [debouncedSearchQuery, selectedCategoryId]);
 
   useEffect(() => {
     setSelectionState((prev) => {
@@ -868,30 +906,49 @@ export default function StorefrontClient({
           <section className="min-w-0">
             {/* Sticky search + category chips */}
             <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:backdrop-blur-none">
-              <div className="flex items-center gap-3">
+              <form
+                role="search"
+                aria-label="Product search"
+                className="flex items-center gap-3"
+                onSubmit={(e) => e.preventDefault()}
+              >
+                <label htmlFor="storefront-search" className="sr-only">
+                  Search products
+                </label>
                 <div className="relative flex-1">
-                  <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                   </svg>
                   <input
+                    id="storefront-search"
+                    name="q"
+                    type="search"
                     className="input h-11 rounded-2xl border-black/8 bg-white pl-9 shadow-sm"
                     placeholder="Search products…"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
                     inputMode="search"
+                    autoComplete="off"
                   />
                 </div>
                 {searchQuery && (
-                  <button type="button" className="rounded-full px-2 text-sm font-semibold text-black/50 hover:bg-black/5 hover:text-ink" onClick={() => handleSearch('')}>
+                  <button type="button" aria-label="Clear search" className="rounded-full px-2 text-sm font-semibold text-black/50 hover:bg-black/5 hover:text-ink" onClick={() => handleSearch('')}>
                     Clear
                   </button>
                 )}
-              </div>
+              </form>
 
               {categories.length > 0 && (
-                <div className="-mx-1 mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div
+                  role="tablist"
+                  aria-label="Product categories"
+                  className="-mx-1 mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                >
                   <button
                     type="button"
+                    role="tab"
+                    aria-pressed={selectedCategoryId === ALL_CATEGORIES}
+                    aria-label="Show all categories"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
                     className={selectedCategoryId === ALL_CATEGORIES
                       ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
@@ -907,6 +964,9 @@ export default function StorefrontClient({
                       <button
                         key={category.id}
                         type="button"
+                        role="tab"
+                        aria-pressed={active}
+                        aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
                           ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
@@ -915,7 +975,7 @@ export default function StorefrontClient({
                         style={active ? primaryStyle : undefined}
                       >
                         {toTitleCase(category.name)}
-                        <span className="ml-1.5 opacity-60">{category.count}</span>
+                        <span className="ml-1.5 opacity-60" aria-hidden="true">{category.count}</span>
                       </button>
                     );
                   })}
@@ -947,7 +1007,7 @@ export default function StorefrontClient({
                   </span>
                 </div>
                 <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  {featuredProducts.map((product) => {
+                  {featuredProducts.map((product, featuredIndex) => {
                     const firstUnit = product.units[0];
                     const price = formatMoney(
                       firstUnit?.sellingPricePence ?? product.sellingPriceBasePence * (firstUnit?.conversionToBase ?? 1),
@@ -965,7 +1025,7 @@ export default function StorefrontClient({
                           }}
                           aria-label={`View ${toTitleCase(product.name)}`}
                         >
-                          <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                          <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
                         </button>
                         <div className="p-2">
                           <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
@@ -1039,7 +1099,7 @@ export default function StorefrontClient({
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
-                  {pagedProducts.map((product) => {
+                  {pagedProducts.map((product, index) => {
                     const selected = selectionState[product.id];
                     const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
                     const unitPrice = selectedUnit
@@ -1067,7 +1127,7 @@ export default function StorefrontClient({
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
-                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} />
+                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority={index < 6} />
                           {hasPromo && inStock ? (
                             <div
                               className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
@@ -1415,12 +1475,14 @@ export default function StorefrontClient({
                   </div>
                 ) : null}
                 <div>
-                  <label className="block text-sm font-medium text-black/70">Full name</label>
-                  <input className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" />
+                  <label htmlFor="checkout-name-desktop" className="block text-sm font-medium text-black/70">Full name</label>
+                  <input id="checkout-name-desktop" name="name" className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" required />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
+                  <label htmlFor="checkout-phone-desktop" className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
                   <input
+                    id="checkout-phone-desktop"
+                    name="phone"
                     className="input mt-1.5"
                     placeholder="024 123 4567 or +233 24 123 4567"
                     type="tel"
@@ -1428,13 +1490,15 @@ export default function StorefrontClient({
                     autoComplete="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
+                    required
+                    aria-describedby="checkout-phone-desktop-hint"
                   />
-                  <p className="mt-1 text-[11px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
+                  <p id="checkout-phone-desktop-hint" className="mt-1 text-[11px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
                 </div>
                 {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
                   <div>
-                    <label className="block text-sm font-medium text-black/70">MoMo network</label>
-                    <select className="input mt-1.5" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
+                    <label htmlFor="checkout-network-desktop" className="block text-sm font-medium text-black/70">MoMo network</label>
+                    <select id="checkout-network-desktop" name="network" className="input mt-1.5" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
                       <option value="MTN">MTN</option>
                       <option value="TELECEL">Telecel</option>
                       <option value="AIRTELTIGO">AirtelTigo</option>
@@ -1442,12 +1506,12 @@ export default function StorefrontClient({
                   </div>
                 ) : null}
                 <div>
-                  <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
-                  <input className="input mt-1.5" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+                  <label htmlFor="checkout-email-desktop" className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
+                  <input id="checkout-email-desktop" name="email" className="input mt-1.5" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
-                  <textarea className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
+                  <label htmlFor="checkout-notes-desktop" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
+                  <textarea id="checkout-notes-desktop" name="notes" className="input mt-1.5 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
                 </div>
                 <PaymentPreviewCard paymentConfig={storefront.paymentConfig} currency={storefront.currency} />
                 {!checkoutReady && cart.length > 0 ? (
@@ -1679,12 +1743,14 @@ export default function StorefrontClient({
             </div>
             <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-black/70">Full name</label>
-              <input className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+              <label htmlFor="checkout-name-mobile" className="block text-sm font-medium text-black/70">Full name</label>
+              <input id="checkout-name-mobile" name="name" className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
+              <label htmlFor="checkout-phone-mobile" className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
               <input
+                id="checkout-phone-mobile"
+                name="phone"
                 className="input mt-1"
                 placeholder="024 123 4567 or +233 24 123 4567"
                 type="tel"
@@ -1692,13 +1758,15 @@ export default function StorefrontClient({
                 autoComplete="tel"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
+                required
+                aria-describedby="checkout-phone-mobile-hint"
               />
-              <p className="mt-1 text-[10px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
+              <p id="checkout-phone-mobile-hint" className="mt-1 text-[10px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
             </div>
             {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
               <div>
-                <label className="block text-sm font-medium text-black/70">MoMo network</label>
-                <select className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
+                <label htmlFor="checkout-network-mobile" className="block text-sm font-medium text-black/70">MoMo network</label>
+                <select id="checkout-network-mobile" name="network" className="input mt-1" value={network} onChange={(e) => setNetwork(e.target.value as 'MTN' | 'TELECEL' | 'AIRTELTIGO')}>
                   <option value="MTN">MTN</option>
                   <option value="TELECEL">Telecel</option>
                   <option value="AIRTELTIGO">AirtelTigo</option>
@@ -1706,12 +1774,12 @@ export default function StorefrontClient({
               </div>
             ) : null}
             <div>
-              <label className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
-              <input className="input mt-1" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
+              <label htmlFor="checkout-email-mobile" className="block text-sm font-medium text-black/70">Email <span className="text-black/35 font-normal">(optional)</span></label>
+              <input id="checkout-email-mobile" name="email" className="input mt-1" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
-              <textarea className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
+              <label htmlFor="checkout-notes-mobile" className="block text-sm font-medium text-black/70">Pickup note <span className="text-black/35 font-normal">(optional)</span></label>
+              <textarea id="checkout-notes-mobile" name="notes" className="input mt-1 min-h-[80px]" placeholder="Anything the store should know" value={customerNotes} onChange={(e) => setCustomerNotes(e.target.value)} />
             </div>
             {!checkoutReady && cart.length > 0 ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
