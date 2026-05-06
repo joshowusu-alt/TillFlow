@@ -1,13 +1,14 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
-import BusinessLogoUploader from '@/components/BusinessLogoUploader';
+import MerchantBrandManager from '@/components/MerchantBrandManager';
 import { requireBusiness } from '@/lib/auth';
 import { ensureOrganizationAndBranches } from '@/lib/services/branches';
 import { registerDeviceAction, syncOrganizationModelAction } from '@/app/actions/branches';
-import { updateOrganizationSettingsAction } from '@/app/actions/settings';
+import { updateBrandIdentityAction, updateOrganizationSettingsAction } from '@/app/actions/settings';
 import { getFeatures, getPlanSummary } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
+import { prisma } from '@/lib/prisma';
 
 export default async function OrganizationSettingsPage({
   searchParams,
@@ -15,10 +16,20 @@ export default async function OrganizationSettingsPage({
   searchParams?: { error?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  const organization = await ensureOrganizationAndBranches({
-    businessId: business.id,
-    businessName: business.name,
-  });
+  const [organization, brandingSnapshot] = await Promise.all([
+    ensureOrganizationAndBranches({
+      businessId: business.id,
+      businessName: business.name,
+    }),
+    prisma.business.findUnique({
+      where: { id: business.id },
+      select: {
+        storefrontLogoUrl: true,
+        storefrontPrimaryColor: true,
+        storefrontTagline: true,
+      },
+    }),
+  ]);
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   const planSummary = getPlanSummary(features.plan);
 
@@ -31,9 +42,22 @@ export default async function OrganizationSettingsPage({
 
       <FormError error={searchParams?.error} />
 
-      <BusinessLogoUploader
-        initialLogoUrl={business.logoUrl ?? null}
+      <MerchantBrandManager
         businessName={business.name}
+        action={updateBrandIdentityAction}
+        initialBranding={{
+          logoUrl: business.logoUrl ?? null,
+          brandCompactLogoUrl: (business as any).brandCompactLogoUrl ?? null,
+          brandSquareLogoUrl: (business as any).brandSquareLogoUrl ?? null,
+          brandInitials: (business as any).brandInitials ?? null,
+          brandPrimaryColor: (business as any).brandPrimaryColor ?? '#2563eb',
+          brandCompactMode: (business as any).brandCompactMode ?? 'AUTO',
+          brandLogoBackground: (business as any).brandLogoBackground ?? 'AUTO',
+          storefrontLogoUrl: brandingSnapshot?.storefrontLogoUrl ?? null,
+          receiptLogoUrl: business.receiptLogoUrl ?? null,
+          storefrontPrimaryColor: brandingSnapshot?.storefrontPrimaryColor ?? null,
+          storefrontTagline: brandingSnapshot?.storefrontTagline ?? null,
+        }}
       />
 
       <div className="card p-6 space-y-5">

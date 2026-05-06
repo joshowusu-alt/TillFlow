@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -8,6 +9,13 @@ import { withBusinessContext, withBusinessStoreContext, formAction, type ActionR
 import { audit } from '@/lib/audit';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { getBusinessPlan, hasPlanAccess, type BusinessPlan } from '@/lib/features';
+import {
+  normalizeBrandCompactMode,
+  normalizeBrandLogoBackground,
+  normalizeMerchantBrandInitials,
+  normalizeMerchantBrandPrimaryColor,
+} from '@/lib/merchant-branding';
+import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
 
 function parseOptionalDate(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -155,6 +163,59 @@ export async function updateOrganizationSettingsAction(formData: FormData): Prom
       details: { customerScope, storeMode, requestedStoreMode, source: 'organization-settings' },
     }).catch((e) => console.error('[audit]', e));
 
+    redirect('/settings/organization');
+  }, '/settings/organization');
+}
+
+export async function updateBrandIdentityAction(formData: FormData): Promise<void> {
+  return formAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const brandInitials = normalizeMerchantBrandInitials(formOptionalString(formData, 'brandInitials'));
+    const brandPrimaryColor = normalizeMerchantBrandPrimaryColor(
+      formOptionalString(formData, 'brandPrimaryColor'),
+    );
+    const brandCompactMode = normalizeBrandCompactMode(formOptionalString(formData, 'brandCompactMode'));
+    const brandLogoBackground = normalizeBrandLogoBackground(
+      formOptionalString(formData, 'brandLogoBackground'),
+    );
+
+    const business = await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        brandInitials,
+        brandPrimaryColor,
+        brandCompactMode,
+        brandLogoBackground,
+      } as any,
+      select: {
+        storefrontSlug: true,
+      },
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'SETTINGS_UPDATE',
+      entity: 'Business',
+      entityId: businessId,
+      details: {
+        source: 'brand-identity-settings',
+        brandInitials,
+        brandPrimaryColor,
+        brandCompactMode,
+        brandLogoBackground,
+      },
+    }).catch((e) => console.error('[audit]', e));
+
+    revalidatePath('/settings/organization');
+    revalidatePath('/settings/receipt-design');
+    if (business.storefrontSlug) {
+      await invalidateStorefrontBusinessCache(business.storefrontSlug);
+      revalidatePath(`/shop/${business.storefrontSlug}`);
+    }
     redirect('/settings/organization');
   }, '/settings/organization');
 }
