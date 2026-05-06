@@ -1,5 +1,6 @@
-const CACHE_NAME = 'pos-cache-v12';
+const CACHE_NAME = 'pos-cache-v13';
 const OFFLINE_URL = '/offline';
+const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
 
 // Assets to cache immediately on install. Do not precache authenticated app
@@ -8,6 +9,7 @@ const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
 const PRECACHE_ASSETS = [
   '/offline',
   '/offline/sales',
+  '/shop/offline',
   '/manifest.json',
   '/api/icon?size=192',
   '/api/icon?size=512'
@@ -16,6 +18,13 @@ const PRECACHE_ASSETS = [
 // API routes that should be cached for offline access
 const CACHEABLE_API_ROUTES = [
   '/api/offline/cache-data'
+];
+
+// Public storefront API routes that benefit from stale-while-revalidate.
+// These are unauthenticated, can be served from cache while a fresh copy
+// is fetched in the background.
+const STOREFRONT_SWR_ROUTES = [
+  '/api/storefront/catalog'
 ];
 
 /** Trim cache to MAX_CACHE_ITEMS using LRU eviction (oldest first). */
@@ -103,6 +112,37 @@ self.addEventListener('fetch', (event) => {
       return;
     }
 
+    // Public storefront catalog: stale-while-revalidate so customers get
+    // instant product loads after the first visit and can keep browsing
+    // when the network is flaky.
+    const isStorefrontSwr = STOREFRONT_SWR_ROUTES.some(
+      (route) => url.pathname.startsWith(route)
+    );
+    if (isStorefrontSwr) {
+      event.respondWith((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(request);
+        const network = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              cache.put(request, response.clone());
+              trimCache(CACHE_NAME, MAX_CACHE_ITEMS);
+            }
+            return response;
+          })
+          .catch(() => null);
+        if (cached) return cached;
+        const fresh = await network;
+        if (fresh) return fresh;
+        return new Response(JSON.stringify({ error: 'Offline' }), {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })());
+      return;
+    }
+
     // Non-cacheable API routes - network only
     return;
   }
@@ -120,7 +160,7 @@ self.addEventListener('fetch', (event) => {
             if (url.pathname.startsWith('/_next/static')) {
               cache.put(request, responseClone);
             }
-            if (url.pathname === OFFLINE_URL || url.pathname === '/offline/sales') {
+            if (url.pathname === OFFLINE_URL || url.pathname === '/offline/sales' || url.pathname === SHOP_OFFLINE_URL) {
               cache.put(request, responseClone);
             }
             trimCache(CACHE_NAME, MAX_CACHE_ITEMS);
@@ -137,7 +177,11 @@ self.addEventListener('fetch', (event) => {
 
         // For navigation requests, show offline page
         if (request.mode === 'navigate') {
-          const offlineResponse = await caches.match(OFFLINE_URL);
+          // Storefront pages get a customer-facing offline page so
+          // shoppers don't see the admin/POS offline shell.
+          const isStorefront = url.pathname.startsWith('/shop');
+          const offlineKey = isStorefront ? SHOP_OFFLINE_URL : OFFLINE_URL;
+          const offlineResponse = await caches.match(offlineKey);
           if (offlineResponse) {
             return offlineResponse;
           }
