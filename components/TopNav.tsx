@@ -113,41 +113,23 @@ export default function TopNav({
           Skip to content
         </a>
         <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-6">
-            <a href="/pos" className="flex min-w-0 items-center gap-3" aria-label="TillFlow — go to POS">
-              <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl shadow-sm" ariaHidden />
-              <div className="min-w-0">
-                <div className="text-lg font-display font-bold leading-none">
-                  <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
-                  <span className="text-gray-800">Flow</span>
-                </div>
-                <div className="hidden text-[11px] font-medium uppercase tracking-[0.24em] text-muted sm:block">
-                  Executive retail operations
-                </div>
-              </div>
-            </a>
-
-            <div className="hidden xl:flex items-center gap-2">
-              <span className="metric-chip">
-                {merchantBranding ? (
-                  <MerchantBrandBadge
-                    branding={merchantBranding}
-                    surface="admin-shell"
-                  />
-                ) : (
-                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                )}
-                <span className="truncate max-w-[14rem]">
-                  {businessName ? `${businessName} · ` : ''}{storeName || 'Main branch'}
-                </span>
-              </span>
-              <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
-                {isOnline ? 'Sync ready' : 'Offline mode'}
-              </span>
+          <a
+            href="/pos"
+            className="flex shrink-0 items-center gap-2.5"
+            aria-label="TillFlow — go to POS"
+          >
+            <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl shadow-sm" ariaHidden />
+            <div className="hidden text-lg font-display font-bold leading-none sm:block">
+              <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
+              <span className="text-gray-800">Flow</span>
             </div>
-          </div>
+          </a>
 
-          <nav ref={navRef} aria-label="Main navigation" className="hidden items-center gap-2 lg:flex">
+          <nav
+            ref={navRef}
+            aria-label="Main navigation"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex xl:gap-2"
+          >
             {visibleGroups.map((group) => {
               const isActive = group.items.some(
                 (item) => pathname === item.href || pathname.startsWith(item.href + '/')
@@ -210,7 +192,31 @@ export default function TopNav({
             })}
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span
+              className={`hidden xl:inline-flex ${isOnline ? 'status-badge-online' : 'status-badge-offline'}`}
+            >
+              {isOnline ? 'Sync ready' : 'Offline mode'}
+            </span>
+            {(merchantBranding || storeName) ? (
+              <span
+                className="hidden items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
+                title={businessName ? `${businessName} · ${storeName ?? 'Main branch'}` : storeName}
+              >
+                {merchantBranding ? (
+                  <MerchantBrandBadge
+                    branding={merchantBranding}
+                    surface="admin-shell"
+                    className="!h-6 !w-6 !rounded-md"
+                  />
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+                )}
+                <span className="max-w-[10rem] truncate">
+                  {storeName || 'Main branch'}
+                </span>
+              </span>
+            ) : null}
             <InstallButton />
             <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
             <button
