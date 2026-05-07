@@ -7,7 +7,7 @@ import SearchFilter from '@/components/SearchFilter';
 import { requireBusiness } from '@/lib/auth';
 import { Suspense } from 'react';
 import { createCustomerAction } from '@/app/actions/customers';
-import { formatMoney } from '@/lib/format';
+import { formatMoney, formatRelativeDate } from '@/lib/format';
 import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
@@ -140,8 +140,10 @@ export default async function CustomersPage({
                   aside={balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
                 />
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(customer.creditLimitPence, business.currency)}</span>} />
+                  <DataCardField label="Lifetime spend" value={<span className="font-semibold text-ink">{formatMoney(customer.lifetimeSpentPence, business.currency)}</span>} />
+                  <DataCardField label="Last visit" value={<span className="text-black/65">{customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}</span>} />
                   <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
+                  <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(customer.creditLimitPence, business.currency)}</span>} />
                   <DataCardField label="Email" value={<span className="text-black/65">{customer.email ?? '-'}</span>} className="col-span-2" />
                   {business.customerScope === 'BRANCH' ? (
                     <DataCardField label="Branch" value={<span className="text-black/65">{branchName}</span>} className="col-span-2" />
@@ -164,15 +166,16 @@ export default async function CustomersPage({
                 <th>Name</th>
                 <th>Phone</th>
                 <th className="hidden sm:table-cell">Email</th>
-                <th className="hidden lg:table-cell">Branch</th>
-                <th>Credit Limit</th>
+                <th className="hidden xl:table-cell">Branch</th>
+                <th className="hidden lg:table-cell">Lifetime spend</th>
+                <th className="hidden lg:table-cell">Last visit</th>
                 <th>Balance</th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-12 text-center">
+                  <td colSpan={7} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <div className="rounded-full bg-black/5 p-3 mb-2">
                         <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -200,9 +203,14 @@ export default async function CustomersPage({
                     </td>
                     <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
                     <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
-                    <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
-                    <td className="px-3 py-3 text-sm">{formatMoney(customer.creditLimitPence, business.currency)}</td>
-                    <td className="px-3 py-3 text-sm font-semibold">
+                    <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm font-semibold tabular-nums text-ink">
+                      {formatMoney(customer.lifetimeSpentPence, business.currency)}
+                    </td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
+                      {customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
                       {formatMoney(balance, business.currency)}
                     </td>
                   </tr>

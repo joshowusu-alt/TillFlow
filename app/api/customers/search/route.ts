@@ -5,8 +5,6 @@ import { Prisma } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
-const isPostgres = process.env.POSTGRES_PRISMA_URL !== undefined;
-
 export async function GET(request: NextRequest) {
     const user = await getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,13 +15,11 @@ export async function GET(request: NextRequest) {
     const where: Prisma.CustomerWhereInput = { businessId: user.businessId };
 
     if (q.length > 0) {
-        // mode:'insensitive' is only supported on PostgreSQL; omit on SQLite
-        const nameFilter: Prisma.StringFilter = {
-            contains: q,
-            ...(isPostgres ? { mode: 'insensitive' as const } : {}),
-        };
+        // mode:'insensitive' maps to ILIKE on Postgres and is silently ignored
+        // by SQLite (whose contains is already case-insensitive). Same pattern
+        // as the rest of the app's name searches — keeps POS/storefront parity.
         where.OR = [
-            { name: nameFilter },
+            { name: { contains: q, mode: 'insensitive' as const } },
             { phone: { contains: q } },
         ];
     }

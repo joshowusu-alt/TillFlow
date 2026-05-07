@@ -78,7 +78,7 @@ const getCachedCustomers = unstable_cache(
   (businessId: string) =>
     prisma.customer.findMany({
       where: { businessId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, creditLimitPence: true },
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
@@ -169,7 +169,11 @@ export default async function PosPage() {
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       openShiftTillIds={openShifts.map((shift) => shift.tillId)}
       products={productDtos}
-      customers={customers.map((customer) => ({ id: customer.id, name: customer.name }))}
+      customers={customers.map((customer) => ({
+        id: customer.id,
+        name: customer.name,
+        creditLimitPence: customer.creditLimitPence,
+      }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
     />

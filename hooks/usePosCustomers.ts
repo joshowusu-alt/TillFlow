@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 export type PosCustomerOption = {
   id: string;
   name: string;
+  /** Optional. When present, drives the at-checkout credit-limit warning. */
+  creditLimitPence?: number;
 };
 
 function dedupeCustomers(customers: PosCustomerOption[]) {

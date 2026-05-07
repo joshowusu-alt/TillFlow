@@ -3,7 +3,13 @@
 import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
-import { createCustomer, updateCustomer, quickCreateCustomer, deleteCustomer } from '@/lib/services/customers';
+import {
+  createCustomer,
+  updateCustomer,
+  quickCreateCustomer,
+  deleteCustomer,
+  findCustomerByPhone,
+} from '@/lib/services/customers';
 import { audit } from '@/lib/audit';
 
 export async function createCustomerAction(formData: FormData): Promise<void> {
@@ -17,6 +23,15 @@ export async function createCustomerAction(formData: FormData): Promise<void> {
     const storeId = formOptionalString(formData, 'storeId');
 
     if (!name) return err('Please enter the customer name.');
+
+    if (phone) {
+      const existing = await findCustomerByPhone(businessId, phone);
+      if (existing) {
+        return err(
+          `A customer with this phone number already exists: ${existing.name}. Open their profile to edit instead.`,
+        );
+      }
+    }
 
     await createCustomer(businessId, { name, phone, email, creditLimitPence, storeId });
 
@@ -35,6 +50,15 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
+
+    if (phone) {
+      const existing = await findCustomerByPhone(businessId, phone, id);
+      if (existing) {
+        return err(
+          `${existing.name} already uses this phone number. Pick a different number or merge the records.`,
+        );
+      }
+    }
 
     const updated = await updateCustomer(id, businessId, { name, phone, email, creditLimitPence });
     if (!updated) return err('Customer not found. It may have been removed.');
@@ -69,6 +93,16 @@ export async function quickCreateCustomerAction(data: {
     const { businessId } = await withBusinessContext();
 
     if (!data.name?.trim()) return err('Customer name is required.');
+
+    if (data.phone) {
+      const existing = await findCustomerByPhone(businessId, data.phone);
+      if (existing) {
+        // POS quick-add returns the existing record so the cashier can keep
+        // moving — this is the right call for an in-flight sale and avoids
+        // creating duplicates by accident.
+        return ok({ id: existing.id, name: existing.name });
+      }
+    }
 
     const customer = await quickCreateCustomer(businessId, data);
     return ok(customer);

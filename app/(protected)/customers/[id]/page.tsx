@@ -4,7 +4,7 @@ import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
-import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
+import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
@@ -56,6 +56,22 @@ export default async function CustomerDetailPage({
   if (!customer) {
     return <div className="card p-6">Customer not found.</div>;
   }
+
+  // Lifetime stats are computed independent of the date filter so the summary
+  // tiles always reflect the customer's total relationship with the business,
+  // not whatever date range happens to be applied to the invoice ledger.
+  const lifetimeStats = await prisma.salesInvoice.aggregate({
+    where: {
+      customerId: customer.id,
+      paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+    },
+    _sum: { totalPence: true },
+    _max: { createdAt: true },
+    _count: { _all: true },
+  });
+  const lifetimeSpentPence = lifetimeStats._sum.totalPence ?? 0;
+  const lifetimeSaleCount = lifetimeStats._count._all;
+  const lastSaleAt = lifetimeStats._max.createdAt;
 
   const invoices = customer.salesInvoices.map((invoice) => {
     const balance = computeOutstandingBalance(invoice);
@@ -116,7 +132,7 @@ export default async function CustomerDetailPage({
     <div className="space-y-6">
       <PageHeader title={customer.name} subtitle="Customer profile and transaction history." />
 
-      <div className="card grid gap-4 p-6 md:grid-cols-3">
+      <div className="card grid gap-4 p-6 md:grid-cols-4">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
           <div>Phone: {customer.phone ?? '-'}</div>
@@ -133,14 +149,20 @@ export default async function CustomerDetailPage({
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Balance</div>
-          <div className="text-2xl font-semibold">{formatMoney(outstanding, business.currency)}</div>
-          <div className="text-black/50">{invoices.length} invoices</div>
+          <div className="text-2xl font-semibold tabular-nums">{formatMoney(outstanding, business.currency)}</div>
+          <div className="text-black/50">{invoices.length} invoice{invoices.length === 1 ? '' : 's'} in range</div>
         </div>
         <div className="space-y-2 text-sm">
-          <div className="text-xs uppercase tracking-wide text-black/40">Last Sale</div>
-          <div>
-            {invoices[0]?.createdAt ? formatDateTime(invoices[0].createdAt) : 'No sales yet'}
+          <div className="text-xs uppercase tracking-wide text-black/40">Lifetime spend</div>
+          <div className="text-2xl font-semibold tabular-nums">{formatMoney(lifetimeSpentPence, business.currency)}</div>
+          <div className="text-black/50">{lifetimeSaleCount} visit{lifetimeSaleCount === 1 ? '' : 's'}</div>
+        </div>
+        <div className="space-y-2 text-sm">
+          <div className="text-xs uppercase tracking-wide text-black/40">Last visit</div>
+          <div className="text-base font-semibold text-ink">
+            {lastSaleAt ? formatRelativeDate(lastSaleAt) : 'No sales yet'}
           </div>
+          {lastSaleAt ? <div className="text-xs text-black/50">{formatDateTime(lastSaleAt)}</div> : null}
         </div>
       </div>
 

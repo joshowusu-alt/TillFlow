@@ -43,6 +43,7 @@ import ParkModal from './components/ParkModal';
 import QuickAddCustomer from './components/QuickAddCustomer';
 import CameraScanner from './components/CameraScanner';
 import CustomerSelector from './components/CustomerSelector';
+import CustomerCreditWarning from './components/CustomerCreditWarning';
 
 function formatRelativeTime(timestamp: string) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -1591,6 +1592,11 @@ export default function PosClient({
               onCustomerSearchChange={setCustomerSearch}
               onCustomerChange={setCustomerId}
               onQuickAdd={() => setShowQuickCustomer(true)}
+            />
+            <CustomerCreditWarning
+              customerId={customerId}
+              totalDuePence={totalDue}
+              currency={business.currency}
             />
 
             {/* Order discount */}

@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 
 // ---------------------------------------------------------------------------
 // Shared input / output types
@@ -19,6 +20,57 @@ export type CustomerWriteData = {
   email?: string | null;
   creditLimitPence?: number;
 };
+
+// ---------------------------------------------------------------------------
+// Phone normalisation
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical phone form for Customer.phone.
+ *
+ * For Ghana shapes we store the full E.164 (+233XXXXXXXXX) so that
+ * "0244 123 456" and "+233244123456" collide on a single record. For other
+ * markets we strip whitespace/dashes and keep the digits (preserving any
+ * leading +) so duplicates differ only in formatting also collapse.
+ *
+ * Returns null for empty/whitespace input. Never throws.
+ */
+export function normalizeCustomerPhone(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const trimmed = String(input).trim();
+  if (!trimmed) return null;
+
+  const ghana = normalizeGhanaPhone(trimmed);
+  if (ghana) return ghana;
+
+  const digits = trimmed.replace(/[^\d]/g, '');
+  if (!digits) return null;
+  return trimmed.startsWith('+') ? `+${digits}` : digits;
+}
+
+/**
+ * Look up an existing customer in the same business with a phone that
+ * normalises to the same canonical form. Used by create/update actions to
+ * surface duplicates before they happen rather than after.
+ */
+export async function findCustomerByPhone(
+  businessId: string,
+  phone: string | null | undefined,
+  excludeId?: string,
+): Promise<{ id: string; name: string; phone: string | null } | null> {
+  const canonical = normalizeCustomerPhone(phone);
+  if (!canonical) return null;
+
+  const existing = await prisma.customer.findFirst({
+    where: {
+      businessId,
+      phone: canonical,
+      ...(excludeId ? { NOT: { id: excludeId } } : {}),
+    },
+    select: { id: true, name: true, phone: true },
+  });
+  return existing;
+}
 
 export type CustomerListOptions = {
   search?: string;
@@ -69,19 +121,42 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
   // Batch-load unpaid/part-paid invoices for every customer on this page in a
   // single round-trip, then compute the per-customer balance in JS.
   const customerIds = customers.map((c) => c.id);
-  const arInvoices = customerIds.length
-    ? await prisma.salesInvoice.findMany({
-        where: {
-          customerId: { in: customerIds },
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        },
-        select: {
-          customerId: true,
-          totalPence: true,
-          payments: { select: { amountPence: true } },
-        },
-      })
-    : [];
+  const [arInvoices, lifetimeStats] = await Promise.all([
+    customerIds.length
+      ? prisma.salesInvoice.findMany({
+          where: {
+            customerId: { in: customerIds },
+            paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+          },
+          select: {
+            customerId: true,
+            totalPence: true,
+            payments: { select: { amountPence: true } },
+          },
+        })
+      : Promise.resolve([] as Array<{
+          customerId: string | null;
+          totalPence: number;
+          payments: { amountPence: number }[];
+        }>),
+    customerIds.length
+      ? prisma.salesInvoice.groupBy({
+          by: ['customerId'],
+          where: {
+            customerId: { in: customerIds },
+            paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+          },
+          _sum: { totalPence: true },
+          _max: { createdAt: true },
+          _count: { _all: true },
+        })
+      : Promise.resolve([] as Array<{
+          customerId: string | null;
+          _sum: { totalPence: number | null };
+          _max: { createdAt: Date | null };
+          _count: { _all: number };
+        }>),
+  ]);
 
   const balanceMap = new Map<string, number>();
   for (const inv of arInvoices) {
@@ -93,10 +168,26 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     );
   }
 
-  const customersWithBalance = customers.map((c) => ({
-    ...c,
-    outstandingBalancePence: balanceMap.get(c.id) ?? 0,
-  }));
+  const lifetimeMap = new Map<string, { spentPence: number; lastSaleAt: Date | null; saleCount: number }>();
+  for (const row of lifetimeStats) {
+    if (!row.customerId) continue;
+    lifetimeMap.set(row.customerId, {
+      spentPence: row._sum.totalPence ?? 0,
+      lastSaleAt: row._max.createdAt ?? null,
+      saleCount: row._count._all,
+    });
+  }
+
+  const customersWithBalance = customers.map((c) => {
+    const lifetime = lifetimeMap.get(c.id);
+    return {
+      ...c,
+      outstandingBalancePence: balanceMap.get(c.id) ?? 0,
+      lifetimeSpentPence: lifetime?.spentPence ?? 0,
+      lastSaleAt: lifetime?.lastSaleAt ?? null,
+      saleCount: lifetime?.saleCount ?? 0,
+    };
+  });
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   return { customers: customersWithBalance, totalCount, totalPages };
@@ -172,7 +263,7 @@ export async function createCustomer(
       businessId,
       storeId: resolvedStoreId,
       name: data.name,
-      phone: data.phone ?? null,
+      phone: normalizeCustomerPhone(data.phone),
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
     },
@@ -212,7 +303,7 @@ export async function quickCreateCustomer(
       businessId,
       storeId,
       name: data.name.trim(),
-      phone: data.phone?.trim() || null,
+      phone: normalizeCustomerPhone(data.phone),
       email: data.email?.trim() || null,
       creditLimitPence: Math.max(0, data.creditLimitPence ?? 0),
     },
@@ -241,7 +332,7 @@ export async function updateCustomer(
     where: { id: existing.id },
     data: {
       name: data.name,
-      phone: data.phone ?? null,
+      phone: normalizeCustomerPhone(data.phone),
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
     },
