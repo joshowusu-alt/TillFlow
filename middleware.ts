@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/api/icon',
   '/api/storefront',
+  '/api/uploads',
   '/api/payments/momo/webhook/mtn',
   '/api/notifications/webhook/meta',
 ];

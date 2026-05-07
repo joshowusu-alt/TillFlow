@@ -165,7 +165,10 @@ export async function saveExpenseAttachment(formData: FormData): Promise<Attachm
   // On Vercel (or any env with BLOB_READ_WRITE_TOKEN) use Vercel Blob for durable storage.
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import('@vercel/blob');
-    const blob = await put(`expenses/${safeName}`, file, { access: 'public' });
+    const blob = await put(`expenses/${safeName}`, file, {
+      access: 'public',
+      contentType: file.type || undefined,
+    });
     return blob.url;
   }
 
@@ -173,9 +176,11 @@ export async function saveExpenseAttachment(formData: FormData): Promise<Attachm
     return { error: getMissingStorageError('attachment') };
   }
 
-  // Local dev fallback — write to public/uploads/expenses/ (served by Next.js static handler).
+  // Local dev fallback — write to public/uploads/expenses/. Serve via the
+  // /api/uploads streaming route so runtime-written files load reliably
+  // even outside the Next.js dev static handler (e.g. self-hosted prod).
   await saveFileLocally(file, ['expenses'], safeName);
-  return `/uploads/expenses/${safeName}`;
+  return `/api/uploads/expenses/${safeName}`;
 }
 
 export async function saveProductImageFile(file: FormDataEntryValue | null): Promise<ProductImageResult> {
@@ -194,7 +199,10 @@ export async function saveProductImageFile(file: FormDataEntryValue | null): Pro
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import('@vercel/blob');
-    const blob = await put(`products/${safeName}`, file, { access: 'public' });
+    const blob = await put(`products/${safeName}`, file, {
+      access: 'public',
+      contentType: file.type || undefined,
+    });
     return blob.url;
   }
 
@@ -203,7 +211,7 @@ export async function saveProductImageFile(file: FormDataEntryValue | null): Pro
   }
 
   await saveFileLocally(file, ['products'], safeName);
-  return `/uploads/products/${safeName}`;
+  return `/api/uploads/products/${safeName}`;
 }
 
 export type BusinessBrandImageUploadResult =
@@ -243,7 +251,13 @@ export async function saveBusinessBrandImageFile(
 
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const { put } = await import('@vercel/blob');
-    const blob = await put(`${folder}/${safeName}`, new Blob([buffer], { type: file.type }), { access: 'public' });
+    // Pass contentType explicitly so the served Blob has the correct
+    // image/* response header, otherwise some clients refuse to render
+    // it (or strip it as a download).
+    const blob = await put(`${folder}/${safeName}`, new Blob([buffer], { type: file.type }), {
+      access: 'public',
+      contentType: file.type || undefined,
+    });
     return { url: blob.url, dimensions };
   }
 
@@ -254,7 +268,9 @@ export async function saveBusinessBrandImageFile(
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads', ...localFolder);
   await mkdir(uploadsDir, { recursive: true });
   await writeFile(path.join(uploadsDir, safeName), Buffer.from(buffer));
-  const url = `/${['uploads', ...localFolder, safeName].join('/')}`;
+  // Route through /api/uploads so runtime-written files are served
+  // reliably regardless of static-handler quirks.
+  const url = `/${['api', 'uploads', ...localFolder, safeName].join('/')}`;
   return { url, dimensions };
 }
 

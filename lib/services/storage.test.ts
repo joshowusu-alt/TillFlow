@@ -47,7 +47,7 @@ describe('product image storage helpers', () => {
   it('stores accepted product images locally when blob storage is not configured', async () => {
     const result = await saveProductImageFile(makeFile({ name: 'fresh milk.png', type: 'image/png' }));
 
-    expect(result).toMatch(/^\/uploads\/products\/\d+-fresh_milk\.png$/);
+    expect(result).toMatch(/^\/api\/uploads\/products\/\d+-fresh_milk\.png$/);
     expect(mkdirMock).toHaveBeenCalledWith(expect.stringMatching(/public[\\/]uploads[\\/]products$/), {
       recursive: true,
     });
@@ -63,6 +63,7 @@ describe('product image storage helpers', () => {
     expect(result).toBe('https://blob.example/products/milk.webp');
     expect(putMock).toHaveBeenCalledWith(expect.stringMatching(/^products\/\d+-milk\.webp$/), expect.anything(), {
       access: 'public',
+      contentType: 'image/webp',
     });
     expect(writeFileMock).not.toHaveBeenCalled();
   });
@@ -141,7 +142,7 @@ describe('saveBusinessLogoFile', () => {
   it('writes accepted logos to local storage when blob is not configured', async () => {
     const result = await saveBusinessLogoFile(makeFile({ name: 'My Logo!.png', type: 'image/png' }));
 
-    expect(result).toMatch(/^\/uploads\/business-logos\/\d+-primary-My_Logo_\.png$/);
+    expect(result).toMatch(/^\/api\/uploads\/business-logos\/\d+-primary-My_Logo_\.png$/);
     expect(mkdirMock).toHaveBeenCalledWith(
       expect.stringMatching(/public[\\/]uploads[\\/]business-logos$/),
       { recursive: true },
@@ -159,7 +160,7 @@ describe('saveBusinessLogoFile', () => {
     expect(putMock).toHaveBeenCalledWith(
       expect.stringMatching(/^business-logos\/\d+-primary-brand\.webp$/),
       expect.anything(),
-      { access: 'public' },
+      { access: 'public', contentType: 'image/webp' },
     );
     expect(writeFileMock).not.toHaveBeenCalled();
   });
@@ -177,7 +178,7 @@ describe('saveBusinessLogoFile', () => {
     expect(putMock).toHaveBeenCalledWith(
       expect.stringMatching(/^business-branding\/compact\/\d+-compact-compact\.webp$/),
       expect.anything(),
-      { access: 'public' },
+      { access: 'public', contentType: 'image/webp' },
     );
   });
 
