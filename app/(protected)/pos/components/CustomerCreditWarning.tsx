@@ -70,16 +70,31 @@ export default function CustomerCreditWarning({ customerId, totalDuePence, curre
   return (
     <div
       role="status"
-      className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900"
+      className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900"
     >
-      <div className="font-semibold">Credit limit will be exceeded</div>
-      <div className="mt-0.5 text-amber-800">
-        Outstanding {formatMoney(balance.outstandingBalancePence, currency)} + this sale{' '}
-        {formatMoney(totalDuePence, currency)} ={' '}
-        <span className="font-semibold">{formatMoney(projected, currency)}</span>, which is{' '}
-        <span className="font-semibold">{formatMoney(overshoot, currency)}</span> over their{' '}
-        {formatMoney(balance.creditLimitPence, currency)} limit.
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-semibold">Credit limit will be exceeded</span>
+        <span className="shrink-0 font-semibold tabular-nums">
+          {formatMoney(overshoot, currency)} over
+        </span>
       </div>
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-amber-800 sm:grid-cols-3">
+        <div className="flex flex-col">
+          <dt className="text-[10px] uppercase tracking-wide opacity-70">Outstanding</dt>
+          <dd className="tabular-nums">{formatMoney(balance.outstandingBalancePence, currency)}</dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-[10px] uppercase tracking-wide opacity-70">This sale</dt>
+          <dd className="tabular-nums">{formatMoney(totalDuePence, currency)}</dd>
+        </div>
+        <div className="flex flex-col col-span-2 sm:col-span-1">
+          <dt className="text-[10px] uppercase tracking-wide opacity-70">Limit</dt>
+          <dd className="tabular-nums">
+            {formatMoney(projected, currency)}{' '}
+            <span className="opacity-70">/ {formatMoney(balance.creditLimitPence, currency)}</span>
+          </dd>
+        </div>
+      </dl>
     </div>
   );
 }

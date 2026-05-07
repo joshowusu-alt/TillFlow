@@ -132,7 +132,7 @@ export default async function CustomerDetailPage({
     <div className="space-y-6">
       <PageHeader title={customer.name} subtitle="Customer profile and transaction history." />
 
-      <div className="card grid gap-4 p-6 md:grid-cols-4">
+      <div className="card grid gap-4 p-5 sm:p-6 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
           <div>Phone: {customer.phone ?? '-'}</div>
