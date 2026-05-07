@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v13';
+const CACHE_NAME = 'pos-cache-v14';
 const OFFLINE_URL = '/offline';
 const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
@@ -70,6 +70,13 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests
   if (request.method !== 'GET') return;
+
+  // Skip cross-origin requests entirely. <img> requests are mode:'no-cors'
+  // by default, so if we re-fetch and respond with the result the browser
+  // gets an opaque response and refuses to render it. Common cross-origin
+  // sources here are Vercel Blob (merchant logos, product images), Sentry,
+  // and Google Fonts. Letting them go straight to the network is correct.
+  if (url.origin !== self.location.origin) return;
 
   // Skip Next.js internal routes (but not all of _next, we want static assets)
   if (url.pathname.startsWith('/_next/webpack') ||
