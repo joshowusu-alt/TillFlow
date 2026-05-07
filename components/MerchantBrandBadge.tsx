@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { resolveMerchantBrandPresentation, type MerchantBrandProfile, type MerchantBrandSurface } from '@/lib/merchant-branding';
 
 type Props = {
@@ -61,10 +61,14 @@ function joinClasses(...values: Array<string | undefined | false | null>) {
 }
 
 export default function MerchantBrandBadge({ branding, surface, className, label }: Props) {
-  const resolved = resolveMerchantBrandPresentation(branding, surface);
+  const resolved = useMemo(
+    () => resolveMerchantBrandPresentation(branding, surface),
+    [branding, surface],
+  );
   const surfaceClasses = SURFACE_CLASSES[surface];
   // If the image fails to load, flip to initials immediately — never show a broken-image box.
-  const [imgFailed, setImgFailed] = useState(false);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imgFailed = Boolean(resolved.imageUrl && failedImageUrl === resolved.imageUrl);
 
   // If image failed, treat as 'initials' for frame tone computation
   const effectiveFrameTone = imgFailed ? 'brand' : resolved.frameTone;
@@ -108,14 +112,14 @@ export default function MerchantBrandBadge({ branding, surface, className, label
       {resolved.kind === 'image' && resolved.imageUrl && !imgFailed ? (
         <div className={joinClasses('flex h-full w-full items-center justify-center', surfaceClasses.imagePad)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={resolved.imageUrl}
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-contain"
-            onError={() => setImgFailed(true)}
-          />
-        </div>
+            <img
+              src={resolved.imageUrl}
+              alt=""
+              aria-hidden="true"
+              className="h-full w-full object-contain"
+              onError={() => setFailedImageUrl(resolved.imageUrl)}
+            />
+          </div>
       ) : (
         <span className={joinClasses('font-black uppercase leading-none', surfaceClasses.initials)}>
           {resolved.initials}
