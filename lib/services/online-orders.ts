@@ -541,10 +541,15 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
     storefrontPublished: true,
   };
   if (normalized.search) {
+    // Postgres `contains` is case-sensitive by default. Without mode:'insensitive'
+    // a customer search for "pride" would not match a product named "Pride", which
+    // is exactly the parity gap merchants notice between POS (client-side
+    // toLowerCase().includes) and the storefront. Same pattern as the rest of the
+    // app (products, inventory, sales, customers searches).
     where.OR = [
-      { name: { contains: normalized.search } },
-      { barcode: { contains: normalized.search } },
-      { category: { name: { contains: normalized.search } } },
+      { name: { contains: normalized.search, mode: 'insensitive' as const } },
+      { barcode: { contains: normalized.search, mode: 'insensitive' as const } },
+      { category: { name: { contains: normalized.search, mode: 'insensitive' as const } } },
     ];
   }
 
