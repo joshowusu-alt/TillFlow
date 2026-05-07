@@ -119,7 +119,7 @@ export default function TopNav({
             aria-label="TillFlow — go to POS"
           >
             <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl shadow-sm" ariaHidden />
-            <div className="hidden text-lg font-display font-bold leading-none sm:block">
+            <div className="text-lg font-display font-bold leading-none">
               <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
               <span className="text-gray-800">Flow</span>
             </div>
