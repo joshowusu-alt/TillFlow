@@ -47,17 +47,19 @@ export default async function SupplierAgingPage({
   const currency = business.currency;
   const exportHref = `/payments/supplier-aging/export?asOf=${asOfStr}`;
 
-  // Summary tile data
+  const hasData = report.rows.length > 0;
+
+  // Summary tile data. Total tile stays neutral; only 90+ carries the urgency
+  // cue when its bucket is non-zero. Plan calls for tiles to be hidden when
+  // there is no outstanding activity at all so the empty state stays calm.
   const tiles: { label: string; pence: number; accent?: boolean }[] = [
-    { label: 'Total Outstanding', pence: report.totals.totalPence, accent: true },
+    { label: 'Total Outstanding', pence: report.totals.totalPence },
     ...AGING_BUCKETS.map((b) => ({
       label: AGING_BUCKET_LABELS[b],
       pence: report.totals.buckets[b],
       accent: b === 'D90_PLUS' && report.totals.buckets[b] > 0,
     })),
   ];
-
-  const hasData = report.rows.length > 0;
 
   return (
     <div className="page-shell">
@@ -86,22 +88,24 @@ export default async function SupplierAgingPage({
         </DownloadLink>
       </form>
 
-      {/* ── Summary tiles ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        {tiles.map((tile) => (
-          <div
-            key={tile.label}
-            className={`card p-4 flex flex-col gap-1 ${tile.accent ? 'ring-1 ring-rose-300' : ''}`}
-          >
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wide leading-tight">
-              {tile.label}
-            </span>
-            <span className={`text-lg font-semibold ${tile.accent ? 'text-rose-700' : 'text-slate-900'}`}>
-              {formatMoney(tile.pence, currency)}
-            </span>
-          </div>
-        ))}
-      </div>
+      {/* ── Summary tiles (only when there is something to summarise) ── */}
+      {hasData ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+          {tiles.map((tile) => (
+            <div
+              key={tile.label}
+              className={`card p-4 flex flex-col gap-1 ${tile.accent ? 'ring-1 ring-rose-300' : ''}`}
+            >
+              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide leading-tight">
+                {tile.label}
+              </span>
+              <span className={`text-lg font-semibold ${tile.accent ? 'text-rose-700' : 'text-slate-900'}`}>
+                {formatMoney(tile.pence, currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {!hasData ? (
         <div className="card p-10 text-center text-slate-500">
