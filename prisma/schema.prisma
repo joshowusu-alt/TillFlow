@@ -13,11 +13,26 @@ model Business {
   currency                             String   @default("GHS")
   plan                                 String   @default("STARTER")
   planStatus                           String   @default("ACTIVE")
+  selectedPlan                         String   @default("STARTER")
+  trialStartedAt                       DateTime?
   trialEndsAt                          DateTime?
+  subscriptionStatus                   String   @default("TRIAL_ACTIVE")
+  firstPaymentAt                       DateTime?
+  currentPeriodStartedAt               DateTime?
+  currentPeriodEndsAt                  DateTime?
+  nextBillingDate                      DateTime?
   planSetAt                            DateTime @default(now())
   planChangedByUserId                  String?
   lastPaymentAt                        DateTime?
   nextPaymentDueAt                     DateTime?
+  paymentGraceEndsAt                   DateTime?
+  suspendedAt                          DateTime?
+  cancelledAt                          DateTime?
+  billingAmount                        Int      @default(0)
+  billingCurrency                      String   @default("GHS")
+  billingInterval                      String   @default("MONTHLY")
+  paymentProvider                      String?
+  paymentProviderStatus                String?
   billingNotes                         String?
   // Legacy top-level VAT switch kept for backward compatibility.
   vatEnabled                           Boolean  @default(false)
@@ -731,13 +746,14 @@ model MessageOutbox {
   id            String    @id @default(cuid())
   businessId    String
   onlineOrderId String?
-  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED
+  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED | SUBSCRIPTION_*
   eventType     String
+  idempotencyKey String?   @unique
   /// One of: SMS
   channel       String    @default("SMS")
   recipient     String
   body          String
-  /// One of: PENDING | SENT | FAILED
+  /// One of: PENDING | SENT | FAILED | CANCELLED
   status        String    @default("PENDING")
   attempts      Int       @default(0)
   lastError     String?

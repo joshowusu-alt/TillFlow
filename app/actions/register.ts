@@ -9,6 +9,8 @@ import { prisma } from '@/lib/prisma';
 import { checkRegisterRateLimit } from '@/lib/security/register-throttle';
 import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName } from '@/lib/business-scope';
 import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstrap';
+import { createTrialSubscription } from '@/lib/subscription-lifecycle';
+import { enqueueSubscriptionReminder } from '@/lib/subscription-reminders';
 
 /**
  * Self-service registration: creates a new Business, Store, Till, and OWNER user.
@@ -57,8 +59,7 @@ export async function register(formData: FormData) {
       data: {
         name: businessName,
         currency,
-        plan: plan,
-        planStatus: 'ACTIVE',
+        ...createTrialSubscription(plan),
         vatEnabled: false,
         mode: 'SIMPLE',
       },
@@ -96,10 +97,28 @@ export async function register(formData: FormData) {
     ownerName,
     ownerEmail: result.owner.email,
     plan: result.business.plan,
-    status: result.business.planStatus,
+    status: result.business.subscriptionStatus ?? result.business.planStatus,
     supportStatus: 'UNREVIEWED',
     notes: 'Awaiting first Tishgroup commercial review after signup.',
     startedAt: result.business.planSetAt,
+  });
+
+  await enqueueSubscriptionReminder(
+    {
+      id: result.business.id,
+      name: result.business.name,
+      phone: null,
+      plan: result.business.plan,
+      selectedPlan: result.business.selectedPlan,
+      planStatus: result.business.planStatus,
+      subscriptionStatus: result.business.subscriptionStatus,
+      trialStartedAt: result.business.trialStartedAt,
+      trialEndsAt: result.business.trialEndsAt,
+      billingInterval: result.business.billingInterval,
+    },
+    'SUBSCRIPTION_TRIAL_STARTED',
+  ).catch((error) => {
+    console.warn('[register] subscription trial SMS enqueue skipped', error);
   });
 
   // Seed demo data only in demo mode; fresh mode gets a clean business

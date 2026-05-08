@@ -7,7 +7,6 @@ import { toInt, formString, formInt, formDate } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { parseDiscountValue } from '@/lib/format';
 import { withBusinessContext, formAction, safeAction, UserError, type ActionResult } from '@/lib/action-utils';
-import { requireUser } from '@/lib/auth';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
@@ -166,9 +165,7 @@ export async function completeSaleAction(data: {
   discountReason?: string;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number; transactionNumber: string | null }>> {
   return safeAction(async () => {
-    // Skip the redundant business lookup — createSale validates it already
-    const user = await requireUser();
-    const businessId = user.businessId;
+    const { user, businessId } = await withBusinessContext();
 
     const paymentStatus = (data.paymentStatus || 'PAID') as PaymentStatus;
     const completePsValidation = PaymentStatusEnum.safeParse(paymentStatus);

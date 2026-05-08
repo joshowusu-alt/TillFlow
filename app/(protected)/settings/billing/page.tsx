@@ -6,6 +6,7 @@ import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures, getPlanSummary, hasPlanAccess, type BusinessPlan } from '@/lib/features';
 import { PLAN_MONTHLY_PRICES, getAnnualPlanPrice, getAnnualPlanSavings } from '@/lib/plan-pricing';
+import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 
 const PLAN_ORDER: BusinessPlan[] = ['STARTER', 'GROWTH', 'PRO'];
 
@@ -152,7 +153,11 @@ export default async function BillingPage({
   const subscriptionStartAt = ((business as any).controlPlanStartDate as Date | null | undefined) ?? planSetAt;
   const billingNotes = (business as any).billingNotes as string | null | undefined;
   const nextPaymentDueAt = (business as any).nextPaymentDueAt as Date | null | undefined;
+  const nextBillingDate = ((business as any).nextBillingDate as Date | null | undefined) ?? nextPaymentDueAt;
   const lastPaymentAt = (business as any).lastPaymentAt as Date | null | undefined;
+  const firstPaymentAt = (business as any).firstPaymentAt as Date | null | undefined;
+  const currentPeriodStartedAt = (business as any).currentPeriodStartedAt as Date | null | undefined;
+  const currentPeriodEndsAt = (business as any).currentPeriodEndsAt as Date | null | undefined;
   const graceEndsAt = (business as any).billingGraceEndsAt as Date | null | undefined;
   const starterFallbackEndsAt = (business as any).billingStarterFallbackEndsAt as Date | null | undefined;
   const readOnlyAt = (business as any).billingReadOnlyAt as Date | null | undefined;
@@ -168,6 +173,10 @@ export default async function BillingPage({
     ? (desiredPlanValue as BusinessPlan)
     : undefined;
   const upgradeOptions = PLAN_ORDER.filter((plan) => !hasPlanAccess(purchasedPlan, plan));
+  const daysLeftInTrial = (business as any).billingDaysLeftInTrial as number | null | undefined;
+  const daysUntilBilling = (business as any).billingDaysUntilBilling as number | null | undefined;
+  const billingAmountPence = ((business as any).billingAmount as number | null | undefined) ?? ((business as any).billingAmountPence as number | null | undefined) ?? PLAN_MONTHLY_PRICES[purchasedPlan] * 100;
+  const subscriptionMessage = getMerchantSubscriptionMessage(business as any);
   const accessNarrative = getAccessNarrative({
     accessState,
     purchasedPlan,
@@ -208,13 +217,19 @@ export default async function BillingPage({
 
       {accessState === 'READ_ONLY' ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-          This business is currently read-only. Historical data is still visible, but new write activity is blocked until payment is recorded.
+          Full usage is restricted until payment is confirmed. Billing, support, account settings, and read-only dashboard access remain available.
         </div>
       ) : null}
 
       {accessState === 'GRACE' ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-          Payment is overdue. Full {PLAN_DETAILS[purchasedPlan].name} access remains available until {formatDateLabel(graceEndsAt)}.
+          {subscriptionMessage}
+        </div>
+      ) : null}
+
+      {accessState === 'TRIAL' ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
+          {subscriptionMessage}
         </div>
       ) : null}
 
@@ -400,11 +415,35 @@ export default async function BillingPage({
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Next payment due</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(nextPaymentDueAt, 'Not scheduled')}</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(nextBillingDate, 'Not scheduled')}</div>
+            </div>
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Monthly amount due</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatCedi(Math.round(billingAmountPence / 100))}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last payment recorded</div>
               <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(lastPaymentAt, 'Not recorded')}</div>
+            </div>
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">First payment</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(firstPaymentAt, 'Not yet')}</div>
+            </div>
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Current period</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(currentPeriodStartedAt, 'Not started')} - {formatDateLabel(currentPeriodEndsAt, 'Not set')}</div>
+            </div>
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Countdown</div>
+              <div className="mt-1 text-base font-semibold text-ink">
+                {accessState === 'TRIAL'
+                  ? `${daysLeftInTrial ?? 0} day${daysLeftInTrial === 1 ? '' : 's'} left`
+                  : daysUntilBilling == null
+                    ? 'Not scheduled'
+                    : daysUntilBilling === 0
+                      ? 'Due today'
+                      : `${Math.abs(daysUntilBilling)} day${Math.abs(daysUntilBilling) === 1 ? '' : 's'} ${daysUntilBilling > 0 ? 'until billing' : 'overdue'}`}
+              </div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Grace ends</div>
@@ -434,19 +473,19 @@ export default async function BillingPage({
 
         <div className="space-y-4">
           <div className="card space-y-4 p-6">
-            <h2 className="text-lg font-display font-semibold">How plan changes work</h2>
+            <h2 className="text-lg font-display font-semibold">Payment instructions</h2>
             <div className="space-y-3 text-sm text-black/60">
               <p>
-                TillFlow provisions plan changes outside the normal business settings screens so branch teams do not accidentally change commercial access.
+                New businesses receive a 7-day free trial on the selected plan. After the trial, payment must be confirmed by Tishgroup before full usage continues beyond the grace window.
               </p>
               <p>
-                Tish Group sets the sold plan, subscription start date, and whether the business is monthly or annual inside Tish Group Control. This Billing page reflects that commercial setup for the tenant.
+                Pay the monthly amount due and contact Tishgroup with your business name, phone number, amount, and payment reference. Once confirmed, your monthly billing cycle starts from the payment date.
               </p>
               <p>
-                Non-payment now follows a staged access policy: Starter gets 7 grace days then read-only, Growth gets 7 days of Growth grace then 7 days of Starter fallback then read-only, and Pro gets 14 days of Pro grace then 7 days of Starter fallback then read-only.
+                While restricted, billing, support, account settings, and read-only dashboard access remain available. New sales, purchases, stock adjustments, online store publishing, exports, advanced reports, staff expansion, and premium features are paused.
               </p>
               <p>
-                Tishgroup Control is now the commercial source of truth. Tillflow shows the current billing state, but payment recording, due-date edits, and direct subscription changes are handled internally by Tishgroup staff.
+                Plan upgrades and downgrades are handled by Tishgroup Control. A self-service change flow will appear here once it is ready.
               </p>
             </div>
 

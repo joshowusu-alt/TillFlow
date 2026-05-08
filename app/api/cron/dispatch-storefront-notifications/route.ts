@@ -55,6 +55,7 @@ function backoffFor(nextAttempts: number): Date | null {
 type LockedRow = {
   id: string;
   businessId: string;
+  eventType: string;
   recipient: string;
   body: string;
   attempts: number;
@@ -104,6 +105,7 @@ async function lockBatch(now: Date, runId: string): Promise<LockedRow[]> {
     select: {
       id: true,
       businessId: true,
+      eventType: true,
       recipient: true,
       body: true,
       attempts: true,
@@ -165,6 +167,10 @@ async function markSent(rowId: string, providerStatus: string, now: Date) {
   });
 }
 
+function isSubscriptionReminder(eventType: string) {
+  return eventType.startsWith('SUBSCRIPTION_');
+}
+
 async function markFailureOrRetry(
   rowId: string,
   error: string,
@@ -223,13 +229,13 @@ export async function GET(req: NextRequest) {
   let warnings = 0;
 
   for (const row of batch) {
-    if (!row.business?.smsNotificationsEnabled) {
+    if (!isSubscriptionReminder(row.eventType) && !row.business?.smsNotificationsEnabled) {
       // Merchant disabled SMS between enqueue and dispatch — fail without
       // burning attempts so the row stays auditable.
       await prisma.messageOutbox.update({
         where: { id: row.id },
         data: {
-          status: 'FAILED',
+          status: 'CANCELLED',
           lockedAt: null,
           lastError: 'NOTIFICATIONS_DISABLED',
         },

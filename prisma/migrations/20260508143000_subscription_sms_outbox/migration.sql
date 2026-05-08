@@ -1,0 +1,38 @@
+ALTER TABLE "MessageOutbox" ADD COLUMN "idempotencyKey" TEXT;
+
+CREATE UNIQUE INDEX "MessageOutbox_idempotencyKey_key"
+  ON "MessageOutbox"("idempotencyKey");
+
+ALTER TABLE "MessageOutbox" DROP CONSTRAINT IF EXISTS "MessageOutbox_eventType_check";
+ALTER TABLE "MessageOutbox"
+ADD CONSTRAINT "MessageOutbox_eventType_check"
+CHECK (
+  "eventType" IN (
+    'ORDER_RECEIVED',
+    'PAYMENT_CONFIRMED',
+    'READY_FOR_PICKUP',
+    'CANCELLED',
+    'SUBSCRIPTION_TRIAL_STARTED',
+    'SUBSCRIPTION_TRIAL_ENDS_3_DAYS',
+    'SUBSCRIPTION_TRIAL_ENDS_TOMORROW',
+    'SUBSCRIPTION_TRIAL_ENDS_TODAY',
+    'SUBSCRIPTION_TRIAL_EXPIRED',
+    'SUBSCRIPTION_RENEWS_30_DAYS',
+    'SUBSCRIPTION_RENEWS_14_DAYS',
+    'SUBSCRIPTION_RENEWS_7_DAYS',
+    'SUBSCRIPTION_RENEWS_3_DAYS',
+    'SUBSCRIPTION_RENEWS_TOMORROW',
+    'SUBSCRIPTION_RENEWAL_DUE_TODAY',
+    'SUBSCRIPTION_OVERDUE',
+    'SUBSCRIPTION_SUSPENSION_WARNING',
+    'SUBSCRIPTION_PAYMENT_CONFIRMED'
+  )
+);
+
+ALTER TABLE "MessageOutbox" DROP CONSTRAINT IF EXISTS "MessageOutbox_status_check";
+ALTER TABLE "MessageOutbox"
+ADD CONSTRAINT "MessageOutbox_status_check"
+CHECK ("status" IN ('PENDING', 'SENT', 'FAILED', 'CANCELLED'));
+
+CREATE INDEX "MessageOutbox_businessId_eventType_createdAt_idx"
+  ON "MessageOutbox"("businessId", "eventType", "createdAt");
