@@ -31,12 +31,17 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         </div>
 
         {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
-          <div className="hidden rounded-xl border border-slate-200/75 bg-white/86 px-3 py-2 text-right shadow-sm 2xl:block">
+          <div
+            className="hidden h-10 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm 2xl:flex"
+            aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
+            title={`Today's sales: ${formatMoney(todaySales.totalPence, todaySales.currency)} · ${todaySales.txCount} transaction${todaySales.txCount !== 1 ? 's' : ''}`}
+          >
             <div className="text-sm font-semibold tabular-nums leading-none text-ink">
               {formatMoney(todaySales.totalPence, todaySales.currency)}
             </div>
-            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-              {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+            <div className="h-5 w-px bg-slate-200" aria-hidden="true" />
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''}
             </div>
           </div>
         ) : null}
