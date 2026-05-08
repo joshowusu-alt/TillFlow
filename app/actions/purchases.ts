@@ -134,3 +134,47 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
     return ok();
   });
 }
+
+/**
+ * Retroactively set or clear the due date on a purchase invoice.
+ */
+export async function setPurchaseDueDateAction(
+  invoiceId: string,
+  dueDateStr: string | null
+): Promise<ActionResult> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: invoiceId, businessId },
+      select: { id: true, paymentStatus: true },
+    });
+
+    if (!invoice) return err('Invoice not found.');
+    if (['RETURNED', 'VOID'].includes(invoice.paymentStatus)) {
+      return err('Cannot change the due date on a closed invoice.');
+    }
+
+    const dueDate = dueDateStr ? new Date(dueDateStr + 'T00:00:00Z') : null;
+
+    await prisma.purchaseInvoice.update({
+      where: { id: invoiceId },
+      data: { dueDate },
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PURCHASE_SET_DUE_DATE',
+      entity: 'PurchaseInvoice',
+      entityId: invoiceId,
+      details: { dueDate: dueDate?.toISOString() ?? null },
+    }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('reports');
+
+    return ok();
+  });
+}

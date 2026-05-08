@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
+import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -63,17 +64,25 @@ export default async function PurchaseInvoicePage({
         </div>
         <div className="space-y-1">
           <div className="text-xs uppercase tracking-wider text-black/40">Due Date</div>
-          {invoice.dueDate ? (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              isOverdue
-                ? 'bg-red-100 text-red-700'
-                : isDueSoon
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-black/5 text-black/60'
-            }`}>
-              {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
-            </span>
-          ) : <div className="text-sm text-black/40">No due date</div>}
+          <div className="flex items-center gap-1">
+            {invoice.dueDate ? (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                isOverdue
+                  ? 'bg-red-100 text-red-700'
+                  : isDueSoon
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-black/5 text-black/60'
+              }`}>
+                {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
+              </span>
+            ) : <span className="text-sm text-black/40">No due date</span>}
+            {!isClosed && (
+              <SetPurchaseDueDateButton
+                invoiceId={invoice.id}
+                currentDueDate={invoice.dueDate}
+              />
+            )}
+          </div>
         </div>
         <div className="space-y-1">
           <div className="text-xs uppercase tracking-wider text-black/40">Status</div>

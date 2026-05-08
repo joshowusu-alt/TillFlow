@@ -109,7 +109,9 @@
       "Bash(git -C \"c:/Users/josho/OneDrive/Desktop/supermarket-pos\" log --oneline -15 -- tishgroup-control/components/bulk-roster-client.tsx tishgroup-control/app/businesses/page.tsx)",
       "Bash(git -C \"c:/Users/josho/OneDrive/Desktop/supermarket-pos\" status)",
       "Bash(xargs grep *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(PORT=6219 npm run dev)",
+      "Read(//tmp/**)"
     ]
   }
 }

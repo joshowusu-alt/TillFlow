@@ -8,6 +8,7 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
+import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -98,17 +99,23 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                           {formatDate(invoice.createdAt)}
                         </td>
                         <td className="px-3 py-3 text-sm">
-                          {invoice.dueDate ? (
-                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                              isOverdue
-                                ? 'bg-red-100 text-red-700'
-                                : isDueSoon
-                                  ? 'bg-amber-100 text-amber-700'
-                                  : 'bg-black/5 text-black/60'
-                            }`}>
-                              {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
-                            </span>
-                          ) : <span className="text-black/30">—</span>}
+                          <div className="flex items-center gap-1">
+                            {invoice.dueDate ? (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                isOverdue
+                                  ? 'bg-red-100 text-red-700'
+                                  : isDueSoon
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-black/5 text-black/60'
+                              }`}>
+                                {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
+                              </span>
+                            ) : <span className="text-black/30">—</span>}
+                            <SetPurchaseDueDateButton
+                              invoiceId={invoice.id}
+                              currentDueDate={invoice.dueDate}
+                            />
+                          </div>
                         </td>
                         <td className="px-3 py-3 text-sm font-semibold">
                           {formatMoney(invoice.outstanding, business.currency)}
