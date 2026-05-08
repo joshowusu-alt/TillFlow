@@ -10,6 +10,8 @@ import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
+import DueDateBadge from '@/components/DueDateBadge';
+import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 
 export default async function SupplierDetailPage({
   params,
@@ -242,8 +244,6 @@ export default async function SupplierDetailPage({
           <tbody>
             {invoices.map((invoice) => {
               const now = new Date();
-              const isOverdue = !invoice.isClosed && invoice.dueDate && invoice.dueDate < now;
-              const isDueSoon = !isOverdue && !invoice.isClosed && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
               return (
                 <Fragment key={invoice.id}>
                   <tr className="rounded-xl bg-white">
@@ -254,17 +254,12 @@ export default async function SupplierDetailPage({
                     </td>
                     <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(invoice.createdAt)}</td>
                     <td className="px-3 py-3 text-sm">
-                      {invoice.dueDate ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          isOverdue
-                            ? 'bg-red-100 text-red-700'
-                            : isDueSoon
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-black/5 text-black/60'
-                        }`}>
-                          {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
-                        </span>
-                      ) : <span className="text-black/30">—</span>}
+                      <div className="flex items-center gap-1">
+                        <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
+                        {!invoice.isClosed && (
+                          <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-3">
                       <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>

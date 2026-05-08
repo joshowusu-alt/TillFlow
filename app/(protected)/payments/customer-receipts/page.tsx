@@ -6,6 +6,7 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
+import DueDateBadge from '@/components/DueDateBadge';
 
 export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -50,24 +51,12 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
             <tbody>
               {outstandingInvoices.map((invoice) => {
                 const now = new Date();
-                const isOverdue = invoice.dueDate && invoice.dueDate < now;
-                const isDueSoon = !isOverdue && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
                 return (
                   <tr key={invoice.id} className="rounded-xl bg-white align-top">
                     <td className="px-3 py-3 text-sm">{invoice.id.slice(0, 8)}</td>
                     <td className="px-3 py-3 text-sm">{invoice.customer?.name ?? 'Walk-in'}</td>
                     <td className="px-3 py-3 text-sm">
-                      {invoice.dueDate ? (
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          isOverdue
-                            ? 'bg-red-100 text-red-700'
-                            : isDueSoon
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-black/5 text-black/60'
-                        }`}>
-                          {isOverdue ? 'Overdue - ' : ''}{formatDate(invoice.dueDate)}
-                        </span>
-                      ) : <span className="text-black/30">-</span>}
+                      <DueDateBadge dueDate={invoice.dueDate} now={now} noneLabel="-" />
                     </td>
                     <td className="px-3 py-3 text-sm font-semibold">
                       {formatMoney(invoice.outstanding, business.currency)}

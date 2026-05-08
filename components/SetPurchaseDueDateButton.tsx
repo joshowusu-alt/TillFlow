@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import ResponsiveModal from '@/components/ResponsiveModal';
 import { setPurchaseDueDateAction } from '@/app/actions/purchases';
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, onDone }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +39,7 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
       }
       setOpen(false);
       onDone?.();
-      // Trigger a soft reload so server component re-fetches
-      window.location.reload();
+      router.refresh();
     });
   }
 

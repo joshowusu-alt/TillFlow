@@ -9,6 +9,7 @@ import { formatMoney, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
+import DueDateBadge from '@/components/DueDateBadge';
 
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -62,6 +63,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       <PageHeader title="Supplier Payments" subtitle="Settle outstanding payables." />
       <FormError error={searchParams?.error} />
       <ResponsiveDataTable
+        mode="cards"
         desktop={
           <div className="card p-6">
             <div className="responsive-table-shell">
@@ -78,10 +80,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                 </thead>
                 <tbody>
                   {outstandingInvoices.map((invoice) => {
-                    const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
                     const now = new Date();
-                    const isOverdue = invoice.dueDate && invoice.dueDate < now;
-                    const isDueSoon = !isOverdue && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
                     return (
                       <tr key={invoice.id} className="rounded-xl bg-white align-top">
                         <td className="px-3 py-3 text-sm">
@@ -100,17 +99,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                         </td>
                         <td className="px-3 py-3 text-sm">
                           <div className="flex items-center gap-1">
-                            {invoice.dueDate ? (
-                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                                isOverdue
-                                  ? 'bg-red-100 text-red-700'
-                                  : isDueSoon
-                                    ? 'bg-amber-100 text-amber-700'
-                                    : 'bg-black/5 text-black/60'
-                              }`}>
-                                {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
-                              </span>
-                            ) : <span className="text-black/30">—</span>}
+                            <DueDateBadge dueDate={invoice.dueDate} now={now} />
                             <SetPurchaseDueDateButton
                               invoiceId={invoice.id}
                               currentDueDate={invoice.dueDate}
@@ -187,10 +176,85 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
             </div>
           </div>
         }
+        mobile={
+          outstandingInvoices.length === 0 ? (
+            <div className="card p-6 text-sm text-black/50">No outstanding invoices.</div>
+          ) : (
+            outstandingInvoices.map((invoice) => {
+              const now = new Date();
+              return (
+                <div key={invoice.id} className="card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                        {invoice.id.slice(0, 8)}
+                      </Link>
+                      <div className="mt-1 text-sm font-medium">
+                        {invoice.supplier
+                          ? <Link href={`/suppliers/${invoice.supplier.id}`} className="hover:underline">{invoice.supplier.name}</Link>
+                          : <span className="text-black/40">No supplier</span>
+                        }
+                      </div>
+                      <div className="text-xs text-black/50">Purchased {formatDate(invoice.createdAt)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-black/50">Outstanding</div>
+                      <div className="text-sm font-semibold">{formatMoney(invoice.outstanding, business.currency)}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <DueDateBadge dueDate={invoice.dueDate} now={now} />
+                    <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
+                  </div>
+
+                  <form action={recordSupplierPaymentAction} className="grid gap-2">
+                    <input type="hidden" name="invoiceId" value={invoice.id} />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-black/50">Method</div>
+                        <select className="input" name="paymentMethod" defaultValue="CASH">
+                          <option value="CASH">Cash</option>
+                          <option value="CARD">Card</option>
+                          <option value="TRANSFER">Transfer</option>
+                          <option value="MOBILE_MONEY">Mobile Money</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-black/50">Amount</div>
+                        <input
+                          className="input"
+                          name="amount"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-black/50">Payment date</div>
+                        <input className="input" name="paidAt" type="date" defaultValue={today} />
+                      </div>
+                      <div>
+                        <div className="text-xs text-black/50">Notes (optional)</div>
+                        <input className="input" name="notes" type="text" placeholder="e.g. cheque #1234" />
+                      </div>
+                    </div>
+                    <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
+                  </form>
+                </div>
+              );
+            })
+          )
+        }
       />
 
       {recentPayments.length > 0 ? (
         <ResponsiveDataTable
+          mode="cards"
           desktop={
             <div className="card p-6">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-black/40">Recent Payments</h2>
@@ -231,6 +295,22 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                 </table>
               </div>
             </div>
+          }
+          mobile={
+            recentPayments.map((payment) => (
+              <div key={payment.id} className="card p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-black/50">{formatDate(payment.paidAt)}</div>
+                    <div className="text-sm font-medium">{payment.purchaseInvoice.supplier?.name ?? 'Supplier not set'}</div>
+                    <div className="text-xs text-black/50">{payment.method}</div>
+                  </div>
+                  <div className="text-sm font-semibold">{formatMoney(payment.amountPence, business.currency)}</div>
+                </div>
+                <div className="mt-2 text-xs text-black/50">Notes: {payment.notes ?? '—'}</div>
+                <div className="text-xs text-black/40">Recorded by: {payment.recordedBy?.name ?? '—'}</div>
+              </div>
+            ))
           }
         />
       ) : null}

@@ -195,4 +195,25 @@ describe('getSupplierAgingReport', () => {
     expect(report.rows[0].buckets.D90_PLUS).toBe(7_000);
     expect(report.totals.buckets.D90_PLUS).toBe(7_000);
   });
+
+  it('re-categorizes when dueDate is changed later on an existing invoice', async () => {
+    // First fetch: invoice has no due date (historical credit purchase) -> CURRENT
+    prismaMock.purchaseInvoice.findMany.mockResolvedValueOnce([
+      makeInvoice({ id: 'retro-1', dueDate: null, totalPence: 9_000 }),
+    ]);
+
+    const beforeEdit = await getSupplierAgingReport(BIZ, now);
+    expect(beforeEdit.rows[0].buckets.CURRENT).toBe(9_000);
+    expect(beforeEdit.rows[0].buckets.D31_60).toBe(0);
+
+    // Second fetch: user later amends dueDate to 45 days ago -> D31_60
+    const d45 = new Date(now.getTime() - 45 * 86_400_000).toISOString().slice(0, 10);
+    prismaMock.purchaseInvoice.findMany.mockResolvedValueOnce([
+      makeInvoice({ id: 'retro-1', dueDate: d45, totalPence: 9_000 }),
+    ]);
+
+    const afterEdit = await getSupplierAgingReport(BIZ, now);
+    expect(afterEdit.rows[0].buckets.CURRENT).toBe(0);
+    expect(afterEdit.rows[0].buckets.D31_60).toBe(9_000);
+  });
 });

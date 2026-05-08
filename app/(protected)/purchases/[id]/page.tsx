@@ -7,6 +7,7 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
+import DueDateBadge from '@/components/DueDateBadge';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -43,8 +44,6 @@ export default async function PurchaseInvoicePage({
   const outstanding = Math.max(invoice.totalPence - totalPaid, 0);
   const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
   const now = new Date();
-  const isOverdue = !isClosed && invoice.dueDate && invoice.dueDate < now;
-  const isDueSoon = !isOverdue && !isClosed && invoice.dueDate && (invoice.dueDate.getTime() - now.getTime()) < 3 * 86400000;
   const today = now.toISOString().slice(0, 10);
 
   return (
@@ -65,17 +64,7 @@ export default async function PurchaseInvoicePage({
         <div className="space-y-1">
           <div className="text-xs uppercase tracking-wider text-black/40">Due Date</div>
           <div className="flex items-center gap-1">
-            {invoice.dueDate ? (
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                isOverdue
-                  ? 'bg-red-100 text-red-700'
-                  : isDueSoon
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-black/5 text-black/60'
-              }`}>
-                {isOverdue ? 'Overdue · ' : ''}{formatDate(invoice.dueDate)}
-              </span>
-            ) : <span className="text-sm text-black/40">No due date</span>}
+            <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={isClosed} noneLabel="No due date" />
             {!isClosed && (
               <SetPurchaseDueDateButton
                 invoiceId={invoice.id}
