@@ -2,7 +2,6 @@ import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
-import StatCard from '@/components/StatCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import { DataCard, DataCardHeader } from '@/components/DataCard';
 import {
@@ -29,13 +28,27 @@ const BUCKET_CHIP_CLASSES: Record<AgingBucket, string> = {
   D90_PLUS: 'border border-rose-200    bg-rose-50    text-rose-800',
 };
 
-// StatCard tone per bucket
-const BUCKET_STAT_TONE: Record<AgingBucket, 'success' | 'default' | 'warn' | 'danger'> = {
-  CURRENT:  'success',
-  D1_30:    'default',
-  D31_60:   'warn',
-  D61_90:   'warn',
-  D90_PLUS: 'danger',
+// Compact stat tile styles per bucket
+const BUCKET_TILE_STRIP: Record<AgingBucket, string> = {
+  CURRENT:  'bg-emerald-500',
+  D1_30:    'bg-slate-300',
+  D31_60:   'bg-amber-400',
+  D61_90:   'bg-amber-500',
+  D90_PLUS: 'bg-rose-500',
+};
+const BUCKET_TILE_BG: Record<AgingBucket, string> = {
+  CURRENT:  'border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/60',
+  D1_30:    'border-slate-200/80 bg-white/95',
+  D31_60:   'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/60',
+  D61_90:   'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/60',
+  D90_PLUS: 'border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/60',
+};
+const BUCKET_TILE_VALUE: Record<AgingBucket, string> = {
+  CURRENT:  'text-emerald-700',
+  D1_30:    'text-ink',
+  D31_60:   'text-amber-700',
+  D61_90:   'text-amber-800',
+  D90_PLUS: 'text-rose-600',
 };
 
 // ─── Page ──────────────────────────────────────────────────────────────────
@@ -117,22 +130,58 @@ export default async function SupplierAgingPage({
         <p className="mt-3 text-xs text-blue-700">Paid, voided, and returned invoices are excluded. Invoices without a linked supplier are excluded.</p>
       </details>
 
-      {/* ── Summary stat cards ── */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard
-          label="Total Outstanding"
-          value={formatMoney(report.totals.totalPence, currency)}
-          tone={report.totals.buckets.D90_PLUS > 0 ? 'danger' : report.totals.totalPence > 0 ? 'accent' : 'default'}
-          helper={`${report.totals.supplierCount} supplier${report.totals.supplierCount !== 1 ? 's' : ''} · ${report.totals.invoiceCount} inv.`}
-        />
-        {AGING_BUCKETS.map((b) => (
-          <StatCard
-            key={b}
-            label={AGING_BUCKET_LABELS[b]}
-            value={formatMoney(report.totals.buckets[b], currency)}
-            tone={report.totals.buckets[b] > 0 ? BUCKET_STAT_TONE[b] : 'default'}
-          />
-        ))}
+      {/* ── Summary tiles ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {/* Total tile */}
+        <div
+          className={`relative overflow-hidden rounded-[1.25rem] border p-3.5 sm:p-4 ${
+            report.totals.buckets.D90_PLUS > 0
+              ? 'border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/60'
+              : report.totals.totalPence > 0
+              ? 'border-blue-100/90 bg-gradient-to-br from-blue-50 via-white to-blue-50/70'
+              : 'border-slate-200/80 bg-white/95'
+          }`}
+          style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05),0 10px 30px rgba(15,23,42,0.06)' }}
+        >
+          <div className={`absolute inset-x-0 top-0 h-1 ${
+            report.totals.buckets.D90_PLUS > 0 ? 'bg-rose-500' : report.totals.totalPence > 0 ? 'bg-blue-500' : 'bg-slate-300'
+          }`} />
+          <div className="relative min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Total Outstanding</p>
+            <p className={`mt-2 text-base font-bold tabular-nums tracking-tight break-all sm:text-lg ${
+              report.totals.buckets.D90_PLUS > 0 ? 'text-rose-600' : report.totals.totalPence > 0 ? 'text-accent' : 'text-ink'
+            }`}>
+              {formatMoney(report.totals.totalPence, currency)}
+            </p>
+            <p className="mt-1 text-[11px] text-muted">
+              {report.totals.supplierCount} supplier{report.totals.supplierCount !== 1 ? 's' : ''} · {report.totals.invoiceCount} inv.
+            </p>
+          </div>
+        </div>
+
+        {/* Per-bucket tiles */}
+        {AGING_BUCKETS.map((b) => {
+          const active = report.totals.buckets[b] > 0;
+          return (
+            <div
+              key={b}
+              className={`relative overflow-hidden rounded-[1.25rem] border p-3.5 sm:p-4 ${
+                active ? BUCKET_TILE_BG[b] : 'border-slate-200/80 bg-white/95'
+              }`}
+              style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05),0 10px 30px rgba(15,23,42,0.06)' }}
+            >
+              <div className={`absolute inset-x-0 top-0 h-1 ${active ? BUCKET_TILE_STRIP[b] : 'bg-slate-200'}`} />
+              <div className="relative min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">{AGING_BUCKET_LABELS[b]}</p>
+                <p className={`mt-2 text-base font-bold tabular-nums tracking-tight break-all sm:text-lg ${
+                  active ? BUCKET_TILE_VALUE[b] : 'text-ink'
+                }`}>
+                  {formatMoney(report.totals.buckets[b], currency)}
+                </p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Main content ── */}
@@ -220,23 +269,6 @@ export default async function SupplierAgingPage({
 
           {/* ── Mobile cards ── */}
           <div className="lg:hidden space-y-3">
-            {/* Totals summary card */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
-                {report.totals.supplierCount} Supplier{report.totals.supplierCount !== 1 ? 's' : ''} · {report.totals.invoiceCount} Invoice{report.totals.invoiceCount !== 1 ? 's' : ''}
-              </p>
-              <p className="text-xl font-bold text-ink mb-2">
-                {formatMoney(report.totals.totalPence, currency)}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {AGING_BUCKETS.filter((b) => report.totals.buckets[b] > 0).map((b) => (
-                  <span key={b} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}>
-                    {AGING_BUCKET_LABELS[b]}: {formatMoney(report.totals.buckets[b], currency)}
-                  </span>
-                ))}
-              </div>
-            </div>
-
             {report.rows.map((row) => (
               <DataCard key={row.supplierId}>
                 <DataCardHeader
