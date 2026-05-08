@@ -48,10 +48,11 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
       <button
         type="button"
         onClick={handleOpen}
-        className="ml-1.5 inline-flex items-center rounded px-1.5 py-0.5 text-xs text-black/40 hover:bg-black/5 hover:text-black/70 transition-colors"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-black/40 transition-colors hover:bg-black/5 hover:text-black/70 focus:outline-none focus:ring-2 focus:ring-accent/30"
+        aria-label="Edit due date"
         title="Edit due date"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
           <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.207 8.207-3.536.707.707-3.535 8.208-8.207z" />
         </svg>
       </button>
@@ -62,12 +63,12 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
         ariaLabel="Set due date"
         maxWidthClassName="max-w-sm"
         footer={
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               disabled={isPending}
               onClick={() => handleSave(false)}
-              className="btn-primary flex-1"
+              className="btn-primary w-full justify-center"
             >
               {isPending ? 'Saving…' : 'Save'}
             </button>
@@ -76,7 +77,7 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
                 type="button"
                 disabled={isPending}
                 onClick={() => handleSave(true)}
-                className="btn-secondary flex-1"
+                className="btn-secondary w-full justify-center"
               >
                 Clear date
               </button>
@@ -84,7 +85,7 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="btn-ghost flex-1"
+              className="btn-ghost w-full justify-center"
             >
               Cancel
             </button>
@@ -105,7 +106,7 @@ export default function SetPurchaseDueDateButton({ invoiceId, currentDueDate, on
               onChange={(e) => setDateVal(e.target.value)}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
         </div>
       </ResponsiveModal>
     </>

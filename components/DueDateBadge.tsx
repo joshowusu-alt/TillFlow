@@ -30,7 +30,7 @@ export default function DueDateBadge({
       : 'bg-black/5 text-black/60';
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${classes}`}>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${classes}`}>
       {status.state === 'OVERDUE' && showOverduePrefix ? 'Overdue · ' : ''}
       {formatDate(dueDate)}
     </span>

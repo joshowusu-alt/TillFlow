@@ -3,7 +3,7 @@
 import { createPurchase } from '@/lib/services/purchases';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
@@ -147,7 +147,7 @@ export async function setPurchaseDueDateAction(
 
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: invoiceId, businessId },
-      select: { id: true, paymentStatus: true },
+      select: { id: true, paymentStatus: true, supplierId: true },
     });
 
     if (!invoice) return err('Invoice not found.');
@@ -155,7 +155,17 @@ export async function setPurchaseDueDateAction(
       return err('Cannot change the due date on a closed invoice.');
     }
 
-    const dueDate = dueDateStr ? new Date(dueDateStr + 'T00:00:00Z') : null;
+    let dueDate: Date | null = null;
+    if (dueDateStr) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDateStr)) {
+        return err('Enter a valid due date.');
+      }
+
+      dueDate = new Date(`${dueDateStr}T00:00:00Z`);
+      if (Number.isNaN(dueDate.getTime()) || dueDate.toISOString().slice(0, 10) !== dueDateStr) {
+        return err('Enter a valid due date.');
+      }
+    }
 
     await prisma.purchaseInvoice.update({
       where: { id: invoiceId },
@@ -174,6 +184,13 @@ export async function setPurchaseDueDateAction(
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('reports');
+    revalidatePath('/payments/supplier-aging');
+    revalidatePath('/payments/supplier-payments');
+    revalidatePath('/purchases');
+    revalidatePath(`/purchases/${invoiceId}`);
+    if (invoice.supplierId) {
+      revalidatePath(`/suppliers/${invoice.supplierId}`);
+    }
 
     return ok();
   });

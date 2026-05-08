@@ -228,7 +228,73 @@ export default async function SupplierDetailPage({
             Balance: {formatMoney(outstanding, business.currency)}
           </div>
         </div>
-        <div className="overflow-x-auto">
+
+        <div className="mt-4 space-y-3 lg:hidden">
+          {invoices.length === 0 ? (
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-black/50">
+              No purchase history for this supplier yet.
+            </div>
+          ) : (
+            invoices.map((invoice) => {
+              const now = new Date();
+              return (
+                <div key={invoice.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                        {invoice.id.slice(0, 8)}
+                      </Link>
+                      <div className="mt-1 text-xs text-black/50">{formatDateTime(invoice.createdAt)}</div>
+                    </div>
+                    <span className="pill shrink-0 bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-black/40">Total</div>
+                      <div className="font-semibold">{formatMoney(invoice.totalPence, business.currency)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs uppercase tracking-wide text-black/40">Balance</div>
+                      <div className="font-semibold">{formatMoney(invoice.balance, business.currency)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
+                    {!invoice.isClosed && (
+                      <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
+                    )}
+                  </div>
+
+                  {invoice.payments.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
+                      <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
+                      <div className="space-y-1">
+                        {invoice.payments.map((payment) => (
+                          <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
+                            <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
+                            <span>{payment.method}</span>
+                            <span className="text-black/40">{formatDate(payment.paidAt)}</span>
+                            {payment.notes && <span className="text-black/40">{payment.notes}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!invoice.isClosed && invoice.balance > 0 && (
+                    <Link href="/payments/supplier-payments" className="btn-ghost mt-3 w-full justify-center text-xs">
+                      Pay
+                    </Link>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto lg:block">
         <table className="table mt-4 w-full border-separate border-spacing-y-2">
           <thead>
             <tr>
