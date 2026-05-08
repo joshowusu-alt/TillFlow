@@ -52,6 +52,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
       { href: '/expenses', label: 'Expenses', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/customer-receipts', label: 'Customer Receipts', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/supplier-payments', label: 'Supplier Payments', roles: ['MANAGER', 'OWNER'] },
+      { href: '/payments/supplier-aging', label: 'Supplier Aging', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/reconciliation', label: 'MoMo Reconciliation', roles: ['MANAGER', 'OWNER'] },
       { href: '/payments/reconciliation/card-transfer', label: 'Card/Transfer Reconciliation', roles: ['MANAGER', 'OWNER'] },
     ],
