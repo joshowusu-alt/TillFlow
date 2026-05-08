@@ -112,13 +112,13 @@ export default function TopNav({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7">
           <a
             href="/pos"
             className="flex shrink-0 items-center gap-2.5"
             aria-label="TillFlow — go to POS"
           >
-            <Logo variant="mark" size={36} className="h-9 w-9 rounded-xl shadow-sm" ariaHidden />
+            <Logo variant="mark" size={34} className="h-[34px] w-[34px] rounded-xl shadow-sm" ariaHidden />
             <div className="text-lg font-display font-bold leading-none">
               <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
               <span className="text-gray-800">Flow</span>
@@ -128,7 +128,7 @@ export default function TopNav({
           <nav
             ref={navRef}
             aria-label="Main navigation"
-            className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex xl:gap-2"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
           >
             {visibleGroups.map((group) => {
               const isActive = group.items.some(
@@ -194,13 +194,13 @@ export default function TopNav({
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span
-              className={`hidden xl:inline-flex ${isOnline ? 'status-badge-online' : 'status-badge-offline'}`}
+              className={`hidden 2xl:inline-flex ${isOnline ? 'status-badge-online' : 'status-badge-offline'}`}
             >
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
             {(merchantBranding || storeName) ? (
               <span
-                className="hidden items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
+                className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-2.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
                 title={businessName ? `${businessName} · ${storeName ?? 'Main branch'}` : storeName}
               >
                 {merchantBranding ? (

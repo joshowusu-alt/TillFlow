@@ -14,43 +14,35 @@ interface NavTrustPanelProps {
 export default function NavTrustPanel({ user, storeName, isOnline, todaySales }: NavTrustPanelProps) {
   return (
     <>
-      <div className="hidden items-center gap-3 xl:flex">
+      <div className="hidden items-center gap-2 xl:flex">
         <div className="shell-context-card">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span
               className={isOnline ? 'status-dot-online' : 'status-dot-offline'}
               title={isOnline ? 'Online' : 'Offline — sales will sync when reconnected'}
             />
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-ink">{user.name}</div>
-              <div className="truncate text-[11px] uppercase tracking-[0.2em] text-muted">
+              <div className="max-w-[10rem] truncate text-sm font-semibold text-ink 2xl:max-w-[13rem]">{user.name}</div>
+              <div className="truncate text-[10px] uppercase tracking-[0.18em] text-muted">
                 {user.role}{storeName ? ` · ${storeName}` : ''}
               </div>
             </div>
           </div>
-
-          <div className="h-10 w-px bg-slate-200" aria-hidden="true" />
-
-          <div className="text-right">
-            <div className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" aria-hidden="true" />
-              {isOnline ? 'Online' : 'Offline'}
-            </div>
-            {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
-              <div className="mt-1 text-sm font-semibold tabular-nums text-ink">
-                {formatMoney(todaySales.totalPence, todaySales.currency)}
-                <span className="ml-2 text-xs font-medium text-muted">
-                  {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
-                </span>
-              </div>
-            ) : (
-              <div className="mt-1 text-xs text-muted">Sales saved locally when connection drops</div>
-            )}
-          </div>
         </div>
 
+        {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+          <div className="hidden rounded-xl border border-slate-200/75 bg-white/86 px-3 py-2 text-right shadow-sm 2xl:block">
+            <div className="text-sm font-semibold tabular-nums leading-none text-ink">
+              {formatMoney(todaySales.totalPence, todaySales.currency)}
+            </div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+              {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
+            </div>
+          </div>
+        ) : null}
+
         <form action={logout}>
-          <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
+          <button type="submit" className="inline-flex h-10 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
             Sign out
           </button>
         </form>
