@@ -94,7 +94,7 @@ export default async function BusinessesPage({
   const hasPreviousPage = roster.page > 1;
   const hasNextPage = roster.page < roster.totalPages;
   const clearSearchHref = buildBusinessesHref({ filter, search: '', pageSize: roster.pageSize });
-  const atRiskOnPage = pageBusinesses.filter((business) => ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).length;
+  const atRiskOnPage = pageBusinesses.filter((business) => ['GRACE', 'GRACE_PERIOD', 'OVERDUE', 'SUSPENDED', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).length;
   const headerStats = [
     {
       label: 'In this view',

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
+import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, resendSubscriptionReminderAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
 import BillingScheduleFields from '@/components/BillingScheduleFields';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
@@ -111,6 +111,12 @@ export default async function BusinessDetailPage({
       {updated === 'note' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
           Internal note saved to the control plane and appended to the Tillflow commercial record.
+        </div>
+      ) : null}
+
+      {updated === 'reminder' ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          Subscription SMS reminder queued for resend. The SMS dispatcher will pick it up from the outbox.
         </div>
       ) : null}
 
@@ -631,6 +637,65 @@ export default async function BusinessDetailPage({
             description="Use this editor for commercial changes after the first review, including moving a business from Starter to Growth or Pro. Tillflow follows these records."
           />
           <div className="mt-5 space-y-4">
+            <div className="rounded-2xl border border-black/8 bg-white/80 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-control-ink">Subscription SMS reminders</h3>
+                  <p className="mt-1 text-sm text-black/60">
+                    Last sent: {business.lastReminderAt ?? 'None yet'}{business.lastReminderStatus ? ` (${business.lastReminderStatus})` : ''}. Next scheduled: {business.nextReminderAt ?? 'None queued'}.
+                  </p>
+                  {business.failedReminderCount && business.failedReminderCount > 0 ? (
+                    <p className="mt-2 text-sm font-semibold text-rose-700">{business.failedReminderCount} failed reminder{business.failedReminderCount === 1 ? '' : 's'} need attention.</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Reminder</th>
+                      <th>Status</th>
+                      <th>Recipient</th>
+                      <th>Attempts</th>
+                      <th>Sent / next</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {business.recentReminders.length > 0 ? business.recentReminders.map((reminder) => (
+                      <tr key={reminder.id}>
+                        <td>
+                          <div className="font-medium text-control-ink">{reminder.eventType.replace(/_/g, ' ')}</div>
+                          {reminder.lastError ? <div className="mt-1 text-xs text-rose-700">{reminder.lastError}</div> : null}
+                        </td>
+                        <td>{reminder.status}</td>
+                        <td>{reminder.recipient}</td>
+                        <td>{reminder.attempts}</td>
+                        <td>
+                          <div className="text-sm text-black/66">Sent: {reminder.sentAt ?? 'Not sent'}</div>
+                          <div className="mt-1 text-xs text-black/50">Next: {reminder.nextAttemptAt ?? 'Not scheduled'}</div>
+                        </td>
+                        <td>
+                          <form action={resendSubscriptionReminderAction}>
+                            <input type="hidden" name="businessId" value={business.id} />
+                            <input type="hidden" name="reminderId" value={reminder.id} />
+                            <button className="inline-flex rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                              Resend
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan={6} className="text-sm text-black/58">No subscription SMS reminders recorded yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {canEditSubscription ? (
               <form action={updateControlSubscriptionAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
                 <input type="hidden" name="businessId" value={business.id} />

@@ -22,6 +22,18 @@ export type ManagedBusinessNote = {
   createdBy: string;
 };
 
+export type ManagedBusinessReminder = {
+  id: string;
+  eventType: string;
+  status: string;
+  recipient: string;
+  attempts: number;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+};
+
 export type ManagedBusinessDetail = ManagedBusiness & {
   commercialSource: 'CONTROL_PLANE' | 'TILLFLOW_DERIVED';
   subscriptionStatus: string;
@@ -32,6 +44,7 @@ export type ManagedBusinessDetail = ManagedBusiness & {
   reviewedBy: string | null;
   recentPayments: ManagedBusinessPayment[];
   recentNotes: ManagedBusinessNote[];
+  recentReminders: ManagedBusinessReminder[];
   addonOnlineStorefront: boolean;
 };
 
@@ -71,9 +84,9 @@ function isMissingControlPlaneError(error: unknown) {
 }
 
 function inferHealth(state: ManagedBusiness['state']): BusinessHealth {
-  if (state === 'INACTIVE') return 'HEALTHY';
-  if (state === 'READ_ONLY' || state === 'STARTER_FALLBACK') return 'AT_RISK';
-  if (state === 'GRACE' || state === 'DUE_SOON') return 'WATCH';
+  if (state === 'INACTIVE' || state === 'CANCELLED') return 'HEALTHY';
+  if (state === 'READ_ONLY' || state === 'STARTER_FALLBACK' || state === 'SUSPENDED' || state === 'OVERDUE') return 'AT_RISK';
+  if (state === 'GRACE' || state === 'GRACE_PERIOD' || state === 'DUE_SOON' || state === 'DUE_TODAY' || state === 'TRIAL_EXPIRING_SOON' || state === 'PAYMENT_PENDING' || state === 'TRIAL_ENDED') return 'WATCH';
   return 'HEALTHY';
 }
 
@@ -109,9 +122,17 @@ function normalizeManagedState(value?: string | null): ManagedState | null {
     case 'INACTIVE':
     case 'DEACTIVATED':
     case 'CANCELLED':
-      return 'INACTIVE';
+      return 'CANCELLED';
     case 'ACTIVE':
     case 'DUE_SOON':
+    case 'DUE_TODAY':
+    case 'OVERDUE':
+    case 'PAYMENT_PENDING':
+    case 'TRIAL_ENDED':
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_EXPIRING_SOON':
+    case 'GRACE_PERIOD':
+    case 'SUSPENDED':
     case 'GRACE':
     case 'STARTER_FALLBACK':
     case 'READ_ONLY':
@@ -131,10 +152,10 @@ function resolveEffectivePlan(state: ManagedState, plan: ManagedPlan, override?:
   if (override === 'PRO' || override === 'GROWTH' || override === 'STARTER') {
     return override;
   }
-  if (state === 'INACTIVE') {
+  if (state === 'INACTIVE' || state === 'CANCELLED') {
     return plan;
   }
-  if (state === 'STARTER_FALLBACK' || state === 'READ_ONLY') {
+  if (state === 'STARTER_FALLBACK' || state === 'READ_ONLY' || state === 'SUSPENDED') {
     return 'STARTER';
   }
   return plan;
@@ -198,7 +219,16 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         phone: true,
         plan: true,
         planStatus: true,
+        selectedPlan: true,
+        trialStartedAt: true,
         trialEndsAt: true,
+        subscriptionStatus: true,
+        firstPaymentAt: true,
+        currentPeriodEndsAt: true,
+        nextBillingDate: true,
+        paymentGraceEndsAt: true,
+        suspendedAt: true,
+        cancelledAt: true,
         planSetAt: true,
         lastPaymentAt: true,
         nextPaymentDueAt: true,
@@ -217,6 +247,17 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
           take: 1,
           select: { createdAt: true },
         },
+        messageOutbox: {
+          where: { eventType: { startsWith: 'SUBSCRIPTION_' } },
+          orderBy: { createdAt: 'desc' },
+          take: 6,
+          select: {
+            status: true,
+            sentAt: true,
+            nextAttemptAt: true,
+            createdAt: true,
+          },
+        },
       },
       }),
       getControlProfilesByBusinessId(),
@@ -229,13 +270,21 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
     return businesses.map((business) => {
       const profile = controlProfiles.get(business.id);
       const subscription = profile?.subscription;
-      const plan = normalizePlan(subscription?.purchasedPlan ?? business.plan);
+      const plan = normalizePlan(subscription?.purchasedPlan ?? business.selectedPlan ?? business.plan);
       const directState = normalizeManagedState(subscription?.status);
       const derived = deriveManagedState({
         plan,
-        planStatus: directState ?? subscription?.status ?? business.planStatus,
+        planStatus: subscription?.status ?? business.planStatus,
+        subscriptionStatus: business.subscriptionStatus,
+        trialStartedAt: business.trialStartedAt,
         trialEndsAt: business.trialEndsAt,
+        firstPaymentAt: business.firstPaymentAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt,
+        currentPeriodEndsAt: business.currentPeriodEndsAt,
+        nextBillingDate: business.nextBillingDate,
         nextPaymentDueAt: subscription?.nextDueDate ?? business.nextPaymentDueAt,
+        paymentGraceEndsAt: business.paymentGraceEndsAt,
+        suspendedAt: business.suspendedAt,
+        cancelledAt: business.cancelledAt,
       });
       const state = directState ?? derived.state;
       const effectivePlan = resolveEffectivePlan(state, plan, subscription?.effectivePlanOverride);
@@ -247,6 +296,9 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
           ?? (['DUE_SOON', 'GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(state) ? monthlyValue : 0);
       const lastPaymentAt = profile?.payments[0]?.paidAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt;
       const latestNote = profile?.notesEntries[0]?.note;
+      const latestReminder = business.messageOutbox[0];
+      const nextReminder = business.messageOutbox.find((row) => row.status === 'PENDING');
+      const failedReminderCount = business.messageOutbox.filter((row) => row.status === 'FAILED').length;
       const needsReview = !profile || String(profile.supportStatus ?? '').toUpperCase() === 'UNREVIEWED';
 
       return {
@@ -263,6 +315,9 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         subscriptionStartAt: formatDate(subscription?.startDate ?? business.planSetAt ?? business.createdAt),
         signedUpAt: formatDate(business.createdAt) ?? 'Not recorded',
         planSetAt: formatDate(business.planSetAt) ?? formatDate(business.createdAt) ?? 'Not recorded',
+        trialStartAt: formatDate(business.trialStartedAt),
+        trialEndAt: formatDate(business.trialEndsAt),
+        daysLeft: derived.daysLeft ?? null,
         nextDueAt: formatDate(subscription?.nextDueDate ?? business.nextPaymentDueAt) ?? 'Not scheduled',
         lastPaymentAt: formatDate(lastPaymentAt),
         monthlyValue,
@@ -274,6 +329,10 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         lastActivityAt: formatDateTime(profile?.lastActivityAt ?? business.salesInvoices[0]?.createdAt ?? business.createdAt),
         branches: business.stores.length,
         notes: latestNote ?? profile?.notes ?? business.billingNotes ?? 'No internal control-plane note recorded yet.',
+        lastReminderAt: formatIsoDateTime(latestReminder?.sentAt ?? latestReminder?.createdAt),
+        lastReminderStatus: latestReminder?.status ?? null,
+        nextReminderAt: formatIsoDateTime(nextReminder?.nextAttemptAt ?? null),
+        failedReminderCount,
       } satisfies ManagedBusiness;
     });
   } catch (error) {
@@ -377,6 +436,22 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         planStatus: true,
         trialEndsAt: true,
         addonOnlineStorefront: true,
+        messageOutbox: {
+          where: { eventType: { startsWith: 'SUBSCRIPTION_' } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            eventType: true,
+            status: true,
+            recipient: true,
+            attempts: true,
+            lastError: true,
+            nextAttemptAt: true,
+            sentAt: true,
+            createdAt: true,
+          },
+        },
       },
     }),
   ]);
@@ -426,6 +501,17 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         reviewedBy: null,
         recentPayments: [],
         recentNotes: [],
+        recentReminders: rawBusiness.messageOutbox.map((row) => ({
+          id: row.id,
+          eventType: row.eventType,
+          status: row.status,
+          recipient: row.recipient,
+          attempts: row.attempts,
+          lastError: row.lastError,
+          nextAttemptAt: formatIsoDateTime(row.nextAttemptAt),
+          sentAt: formatIsoDateTime(row.sentAt),
+          createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
+        })),
         addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
       };
     }
@@ -455,6 +541,17 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         createdAt: formatIsoDateTime(note.createdAt) ?? 'Not recorded',
         createdBy: note.createdByStaff?.name ?? 'Unknown staff',
       })),
+      recentReminders: rawBusiness.messageOutbox.map((row) => ({
+        id: row.id,
+        eventType: row.eventType,
+        status: row.status,
+        recipient: row.recipient,
+        attempts: row.attempts,
+        lastError: row.lastError,
+        nextAttemptAt: formatIsoDateTime(row.nextAttemptAt),
+        sentAt: formatIsoDateTime(row.sentAt),
+        createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
+      })),
       addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
     };
   } catch (error) {
@@ -473,6 +570,17 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
       reviewedBy: null,
       recentPayments: [],
       recentNotes: [],
+      recentReminders: rawBusiness.messageOutbox.map((row) => ({
+        id: row.id,
+        eventType: row.eventType,
+        status: row.status,
+        recipient: row.recipient,
+        attempts: row.attempts,
+        lastError: row.lastError,
+        nextAttemptAt: formatIsoDateTime(row.nextAttemptAt),
+        sentAt: formatIsoDateTime(row.sentAt),
+        createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
+      })),
       addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
     };
   }

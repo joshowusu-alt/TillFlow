@@ -10,6 +10,7 @@ import PullToRefresh from '@/components/PullToRefresh';
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
+import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -77,6 +78,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
   const billingAccessState = String((business as any).billingAccessState ?? 'ACTIVE');
+  const subscriptionStatus = String((business as any).subscriptionStatus ?? 'ACTIVE');
+  const subscriptionMessage = getMerchantSubscriptionMessage(business as any);
   const billingGraceEndsAt = formatDateLabel((business as any).billingGraceEndsAt as Date | null | undefined);
   const billingStarterFallbackEndsAt = formatDateLabel(
     (business as any).billingStarterFallbackEndsAt as Date | null | undefined
@@ -184,6 +187,21 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             </p>
             <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
               Update payment
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {billingAccessState === 'TRIAL' && !pathname.includes('/settings/billing') && (
+        <div className={`border-b px-4 py-3 text-sm sm:px-6 ${
+          subscriptionStatus === 'TRIAL_EXPIRING_SOON'
+            ? 'border-amber-200 bg-amber-50/90 text-amber-900'
+            : 'border-blue-200 bg-blue-50/90 text-blue-900'
+        }`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>{subscriptionMessage}</p>
+            <Link href="/settings/billing" className="font-semibold underline underline-offset-4">
+              View billing
             </Link>
           </div>
         </div>

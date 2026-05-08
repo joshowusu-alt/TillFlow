@@ -14,10 +14,25 @@ model Business {
   phone            String?
   plan             String                 @default("STARTER")
   planStatus       String                 @default("ACTIVE")
+  selectedPlan     String                 @default("STARTER")
+  trialStartedAt   DateTime?
   trialEndsAt      DateTime?
+  subscriptionStatus String               @default("TRIAL_ACTIVE")
+  firstPaymentAt   DateTime?
+  currentPeriodStartedAt DateTime?
+  currentPeriodEndsAt DateTime?
+  nextBillingDate  DateTime?
   planSetAt        DateTime               @default(now())
   lastPaymentAt    DateTime?
   nextPaymentDueAt DateTime?
+  paymentGraceEndsAt DateTime?
+  suspendedAt      DateTime?
+  cancelledAt      DateTime?
+  billingAmount    Int                    @default(0)
+  billingCurrency  String                 @default("GHS")
+  billingInterval  String                 @default("MONTHLY")
+  paymentProvider  String?
+  paymentProviderStatus String?
   billingNotes     String?
   isDemo           Boolean                @default(false)
   addonOnlineStorefront Boolean           @default(false)
@@ -27,6 +42,34 @@ model Business {
   stores           Store[]
   salesInvoices    SalesInvoice[]
   controlProfile   ControlBusinessProfile?
+  messageOutbox    MessageOutbox[]
+}
+
+model MessageOutbox {
+  id             String    @id @default(cuid())
+  businessId     String
+  onlineOrderId  String?
+  eventType      String
+  idempotencyKey String?   @unique
+  channel        String    @default("SMS")
+  recipient      String
+  body           String
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  lastError      String?
+  lockedAt       DateTime?
+  nextAttemptAt  DateTime?
+  sentAt         DateTime?
+  payloadJson    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([onlineOrderId, eventType])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([businessId, status, sentAt])
+  @@index([businessId, eventType, createdAt])
 }
 
 model User {

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         // by SQLite (whose contains is already case-insensitive). Same pattern
         // as the rest of the app's name searches — keeps POS/storefront parity.
         where.OR = [
-            { name: { contains: q, mode: 'insensitive' as const } },
+            { name: { contains: q, mode: 'insensitive' } } as any,
             { phone: { contains: q } },
         ];
     }

@@ -13,19 +13,19 @@ export function getPortfolioSummary() {
 }
 
 export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
-  const activeBusinesses = businesses.filter((business) => business.state !== 'INACTIVE');
+  const activeBusinesses = businesses.filter((business) => business.state !== 'INACTIVE' && business.state !== 'CANCELLED');
   const totalBusinesses = businesses.length;
   const mrr = sum(activeBusinesses.map((business) => business.monthlyValue));
   const expectedCollections = sum(
     activeBusinesses
-      .filter((business) => business.state === 'DUE_SOON' || business.state === 'GRACE' || business.state === 'STARTER_FALLBACK' || business.state === 'READ_ONLY')
+      .filter((business) => ['DUE_SOON', 'DUE_TODAY', 'OVERDUE', 'GRACE', 'GRACE_PERIOD', 'STARTER_FALLBACK', 'READ_ONLY', 'SUSPENDED'].includes(business.state))
       .map((business) => business.outstandingAmount)
   );
   const activePaid = activeBusinesses.filter((business) => business.state === 'ACTIVE').length;
   const dueSoon = activeBusinesses.filter((business) => business.state === 'DUE_SOON').length;
-  const grace = activeBusinesses.filter((business) => business.state === 'GRACE').length;
+  const grace = activeBusinesses.filter((business) => business.state === 'GRACE' || business.state === 'GRACE_PERIOD' || business.state === 'OVERDUE').length;
   const fallback = activeBusinesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
-  const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY').length;
+  const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY' || business.state === 'SUSPENDED').length;
 
   return {
     totalBusinesses,
@@ -46,7 +46,7 @@ export function getRevenueByPlan() {
 
 export function getRevenueByPlanFor(businesses: ManagedBusiness[]) {
   return (Object.keys(planRates) as Array<keyof typeof planRates>).map((plan) => {
-    const matchingBusinesses = businesses.filter((business) => business.plan === plan && business.state !== 'INACTIVE');
+    const matchingBusinesses = businesses.filter((business) => business.plan === plan && business.state !== 'INACTIVE' && business.state !== 'CANCELLED');
     const revenue = sum(matchingBusinesses.map((business) => business.monthlyValue));
 
     return {
@@ -63,10 +63,10 @@ export function getCollectionQueues() {
 
 export function getCollectionQueuesFor(businesses: ManagedBusiness[]) {
   return {
-    healthy: businesses.filter((business) => business.state === 'ACTIVE' || business.state === 'TRIAL'),
-    dueSoon: businesses.filter((business) => business.state === 'DUE_SOON'),
-    overdue: businesses.filter((business) => business.state === 'GRACE' || business.state === 'STARTER_FALLBACK'),
-    locked: businesses.filter((business) => business.state === 'READ_ONLY'),
+    healthy: businesses.filter((business) => business.state === 'ACTIVE' || business.state === 'TRIAL' || business.state === 'TRIAL_ACTIVE'),
+    dueSoon: businesses.filter((business) => business.state === 'DUE_SOON' || business.state === 'DUE_TODAY' || business.state === 'TRIAL_EXPIRING_SOON'),
+    overdue: businesses.filter((business) => business.state === 'GRACE' || business.state === 'GRACE_PERIOD' || business.state === 'OVERDUE' || business.state === 'STARTER_FALLBACK'),
+    locked: businesses.filter((business) => business.state === 'READ_ONLY' || business.state === 'SUSPENDED'),
   };
 }
 
@@ -75,11 +75,11 @@ export function getBusinessById(businessId: string) {
 }
 
 export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
-  const active = businesses.filter((b) => b.state !== 'INACTIVE');
-  const approachingList = active.filter((b) => b.state === 'DUE_SOON');
-  const overdueList = active.filter((b) => b.state === 'GRACE' || b.state === 'STARTER_FALLBACK');
-  const lockedList = active.filter((b) => b.state === 'READ_ONLY');
-  const currentList = active.filter((b) => b.state === 'ACTIVE' || b.state === 'TRIAL');
+  const active = businesses.filter((b) => b.state !== 'INACTIVE' && b.state !== 'CANCELLED');
+  const approachingList = active.filter((b) => b.state === 'DUE_SOON' || b.state === 'DUE_TODAY' || b.state === 'TRIAL_EXPIRING_SOON');
+  const overdueList = active.filter((b) => b.state === 'GRACE' || b.state === 'GRACE_PERIOD' || b.state === 'OVERDUE' || b.state === 'STARTER_FALLBACK');
+  const lockedList = active.filter((b) => b.state === 'READ_ONLY' || b.state === 'SUSPENDED');
+  const currentList = active.filter((b) => b.state === 'ACTIVE' || b.state === 'TRIAL' || b.state === 'TRIAL_ACTIVE');
 
   return {
     current: {
@@ -116,16 +116,23 @@ export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
 export function getActionChecklist(business: ManagedBusiness) {
   switch (business.state) {
     case 'DUE_SOON':
+    case 'DUE_TODAY':
       return ['Send reminder now', 'Confirm payment method', 'Verify owner contact is current'];
     case 'GRACE':
+    case 'GRACE_PERIOD':
+    case 'OVERDUE':
       return ['Call owner today', 'Record promised payment date', 'Escalate if no proof by close of day'];
     case 'STARTER_FALLBACK':
       return ['Escalate to account manager', 'Warn owner of read-only date', 'Prepare same-day restoration if payment lands'];
     case 'READ_ONLY':
+    case 'SUSPENDED':
       return ['Confirm payment status', 'Record payment and restore access if settled', 'Log root cause for churn risk'];
     case 'TRIAL':
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_EXPIRING_SOON':
       return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
     case 'INACTIVE':
+    case 'CANCELLED':
       return ['Keep the account archived', 'Do not include in active billing follow-up', 'Reactivate only if the business returns to service'];
     case 'ACTIVE':
     default:

@@ -16,15 +16,23 @@ function stateTone(state: ManagedState): PillTone {
     case 'ACTIVE':
       return 'moss';
     case 'INACTIVE':
+    case 'CANCELLED':
       return 'slate';
+    case 'TRIAL_ACTIVE':
     case 'TRIAL':
       return 'teal';
+    case 'TRIAL_EXPIRING_SOON':
     case 'DUE_SOON':
+    case 'DUE_TODAY':
       return 'gold';
+    case 'PAYMENT_PENDING':
+    case 'TRIAL_ENDED':
+    case 'OVERDUE':
+    case 'GRACE_PERIOD':
     case 'GRACE':
-      return 'ember';
     case 'STARTER_FALLBACK':
       return 'ember';
+    case 'SUSPENDED':
     case 'READ_ONLY':
       return 'red';
     default:
@@ -46,7 +54,7 @@ function healthTone(health: BusinessHealth): PillTone {
 }
 
 export function StatePill({ state }: { state: ManagedState }) {
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${tones[stateTone(state)]}`}>{state.replace('_', ' ')}</span>;
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${tones[stateTone(state)]}`}>{state.replace(/_/g, ' ')}</span>;
 }
 
 export function PlanPill({ plan }: { plan: ManagedPlan }) {

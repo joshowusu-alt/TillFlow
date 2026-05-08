@@ -7,6 +7,7 @@ import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNote
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import { recordAudit } from '@/lib/audit';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
+import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '../../../lib/subscription-lifecycle';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
 type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'SUSPENDED' | 'READ_ONLY' | 'INACTIVE';
@@ -97,6 +98,69 @@ function appendBillingEntry(existing: string | null | undefined, heading: string
   const timestamp = new Date().toISOString();
   const entry = [`[${timestamp}] ${heading}`, ...lines.filter(Boolean)].join('\n');
   return [existing?.trim(), entry].filter(Boolean).join('\n\n');
+}
+
+function normalizeGhanaPhone(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const digits = String(input).replace(/[^\d]/g, '');
+  let national: string | null = null;
+  if (digits.startsWith('00233') && digits.length === 14) national = digits.slice(5);
+  else if (digits.startsWith('233') && digits.length === 12) national = digits.slice(3);
+  else if (digits.startsWith('0') && digits.length === 10) national = digits.slice(1);
+  else if (digits.length === 9) national = digits;
+  return national && national.length === 9 ? `+233${national}` : null;
+}
+
+async function enqueuePaymentConfirmedReminder(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      currentPeriodStartedAt: true,
+      nextBillingDate: true,
+      nextPaymentDueAt: true,
+      subscriptionStatus: true,
+      planStatus: true,
+    },
+  });
+  if (!business) return;
+  if (['CANCELLED', 'INACTIVE', 'DEACTIVATED'].includes(String(business.subscriptionStatus ?? business.planStatus).toUpperCase())) return;
+
+  const recipient = normalizeGhanaPhone(business.phone);
+  if (!recipient) return;
+
+  const activeUntil = business.nextBillingDate ?? business.nextPaymentDueAt;
+  const periodKey = business.currentPeriodStartedAt?.toISOString().slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `${business.id}:SUBSCRIPTION_PAYMENT_CONFIRMED:paid:${periodKey}`;
+  const body = `Payment confirmed. Your TillFlow subscription is active until ${activeUntil?.toLocaleDateString('en-GB') ?? 'your renewal date'}. Thank you.`;
+
+  try {
+    await prisma.messageOutbox.create({
+      data: {
+        businessId: business.id,
+        eventType: 'SUBSCRIPTION_PAYMENT_CONFIRMED',
+        idempotencyKey,
+        channel: 'SMS',
+        recipient,
+        body,
+        status: 'PENDING',
+        nextAttemptAt: new Date(),
+        payloadJson: JSON.stringify({
+          source: 'SUBSCRIPTION_LIFECYCLE',
+          businessId: business.id,
+          businessName: business.name,
+          reminderType: 'SUBSCRIPTION_PAYMENT_CONFIRMED',
+          periodKey,
+          nextBillingDate: activeUntil?.toISOString() ?? null,
+        }),
+      },
+    });
+  } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && (error as { code?: string }).code === 'P2002') return;
+    throw error;
+  }
 }
 
 function businessStatusFromSubscription(status: SubscriptionStatus) {
@@ -190,6 +254,7 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
       plan: true,
       planSetAt: true,
       nextPaymentDueAt: true,
+      firstPaymentAt: true,
       phone: true,
       billingNotes: true,
       users: {
@@ -395,7 +460,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
   const paidAt = parseOptionalDate(readOptional(formData, 'paidAt')) ?? new Date();
   const billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
   const explicitNextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
-  const nextDueDate = explicitNextDueDate ?? new Date(paidAt.getTime() + (billingCadence === 'ANNUAL' ? 365 : 30) * 24 * 60 * 60 * 1000);
+  const nextDueDate = explicitNextDueDate ?? calculateNextBillingDate(paidAt, billingCadence);
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -403,6 +468,15 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       const existingSubscription = await tx.controlSubscription.findUnique({
         where: { controlBusinessId: profile.id },
         select: { purchasedPlan: true, startDate: true },
+      });
+      const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
+      const activation = activateSubscriptionAfterPayment({
+        selectedPlan: purchasedPlan,
+        plan: purchasedPlan,
+        firstPaymentAt: (business as any).firstPaymentAt,
+        billingInterval: billingCadence,
+        paymentDate: paidAt,
+        amountPence,
       });
 
       await tx.controlPayment.create({
@@ -420,25 +494,25 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       await tx.controlSubscription.upsert({
         where: { controlBusinessId: profile.id },
         update: {
-          purchasedPlan: normalizePlan(existingSubscription?.purchasedPlan ?? business.plan),
+          purchasedPlan,
           status: 'ACTIVE',
           billingCadence,
           nextDueDate,
           lastPaymentDate: paidAt,
           readOnlyAt: null,
-          monthlyValuePence: planRates[normalizePlan(existingSubscription?.purchasedPlan ?? business.plan)],
+          monthlyValuePence: planRates[purchasedPlan],
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },
         create: {
           controlBusinessId: profile.id,
-          purchasedPlan: normalizePlan(business.plan),
+          purchasedPlan,
           status: 'ACTIVE',
           billingCadence,
           startDate: existingSubscription?.startDate ?? paidAt,
           nextDueDate,
           lastPaymentDate: paidAt,
-          monthlyValuePence: planRates[normalizePlan(business.plan)],
+          monthlyValuePence: planRates[purchasedPlan],
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },
@@ -454,10 +528,21 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       await tx.business.update({
         where: { id: businessId },
         data: {
-          planStatus: 'ACTIVE',
+          planStatus: activation.planStatus,
+          subscriptionStatus: activation.subscriptionStatus,
           trialEndsAt: null,
-          lastPaymentAt: paidAt,
+          firstPaymentAt: activation.firstPaymentAt,
+          currentPeriodStartedAt: activation.currentPeriodStartedAt,
+          currentPeriodEndsAt: nextDueDate,
+          nextBillingDate: nextDueDate,
+          lastPaymentAt: activation.lastPaymentAt,
           nextPaymentDueAt: nextDueDate,
+          paymentGraceEndsAt: null,
+          suspendedAt: null,
+          cancelledAt: null,
+          billingAmount: activation.billingAmount,
+          billingCurrency: activation.billingCurrency,
+          billingInterval: activation.billingInterval,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control payment recorded', [
             `Recorded by: ${staff.name} (${staff.role})`,
             `Amount: GHc ${amountPence.toLocaleString('en-GH')}`,
@@ -488,6 +573,12 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
     amountPence,
     method,
     recordedBy: { name: staff.name, email: staff.email },
+  });
+  await enqueuePaymentConfirmedReminder(businessId).catch((error) => {
+    console.warn('[control-businesses] payment confirmation SMS enqueue skipped', {
+      businessId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   });
 
   revalidateControlViews(businessId);
@@ -549,6 +640,54 @@ export async function addControlNoteAction(formData: FormData): Promise<void> {
 
   revalidateControlViews(businessId);
   redirect(`/businesses/${businessId}?updated=note`);
+}
+
+export async function resendSubscriptionReminderAction(formData: FormData): Promise<void> {
+  const staff = await requireControlStaff();
+  const businessId = readRequired(formData, 'businessId');
+  const reminderId = readRequired(formData, 'reminderId');
+  ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot resend subscription reminders.', businessId);
+
+  try {
+    const reminder = await prisma.messageOutbox.findFirst({
+      where: {
+        id: reminderId,
+        businessId,
+        eventType: { startsWith: 'SUBSCRIPTION_' },
+        channel: 'SMS',
+      },
+      select: { id: true, eventType: true, status: true },
+    });
+
+    if (!reminder) {
+      throw new Error('Subscription reminder not found.');
+    }
+
+    await prisma.messageOutbox.update({
+      where: { id: reminder.id },
+      data: {
+        status: 'PENDING',
+        attempts: 0,
+        lastError: null,
+        lockedAt: null,
+        nextAttemptAt: new Date(),
+        sentAt: null,
+      },
+    });
+
+    await recordAudit({
+      staff,
+      action: 'SUBSCRIPTION_REMINDER_RESENT',
+      businessId,
+      summary: `Subscription SMS reminder queued for resend: ${reminder.eventType}`,
+      metadata: { reminderId, previousStatus: reminder.status },
+    });
+  } catch (error) {
+    redirect(`/businesses/${businessId}?tab=billing&error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to queue reminder resend.')}`);
+  }
+
+  revalidateControlViews(businessId);
+  redirect(`/businesses/${businessId}?tab=billing&updated=reminder`);
 }
 
 export async function reviewControlBusinessAction(formData: FormData): Promise<void> {

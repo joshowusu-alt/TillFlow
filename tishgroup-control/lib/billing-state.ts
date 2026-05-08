@@ -1,4 +1,5 @@
 import type { ManagedPlan, ManagedState } from '@/lib/control-data';
+import { getSubscriptionSnapshot } from '../../lib/subscription-lifecycle';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,85 +20,40 @@ function resolveGraceDays(plan: ManagedPlan) {
 export function deriveManagedState(input: {
   plan: ManagedPlan;
   planStatus?: string | null;
+  subscriptionStatus?: string | null;
+  trialStartedAt?: Date | string | null;
   trialEndsAt?: Date | string | null;
+  firstPaymentAt?: Date | string | null;
+  currentPeriodEndsAt?: Date | string | null;
+  nextBillingDate?: Date | string | null;
+  paymentGraceEndsAt?: Date | string | null;
+  suspendedAt?: Date | string | null;
+  cancelledAt?: Date | string | null;
   nextPaymentDueAt?: Date | string | null;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
-  const nextDueAt = toDate(input.nextPaymentDueAt);
-  const trialEndsAt = toDate(input.trialEndsAt);
-  const planStatus = String(input.planStatus ?? 'ACTIVE').toUpperCase();
-
-  if (planStatus === 'INACTIVE' || planStatus === 'DEACTIVATED' || planStatus === 'CANCELLED') {
-    return {
-      state: 'INACTIVE' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: null,
-    };
-  }
-
-  if ((planStatus === 'TRIAL' || planStatus === 'TRIALING') && trialEndsAt && trialEndsAt >= now) {
-    return {
-      state: 'TRIAL' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: null,
-    };
-  }
-
-  if (!nextDueAt) {
-    return {
-      state: 'ACTIVE' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: null,
-    };
-  }
-
-  const diffMs = nextDueAt.getTime() - now.getTime();
-  if (diffMs >= 0 && diffMs <= 7 * DAY_MS) {
-    return {
-      state: 'DUE_SOON' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: null,
-    };
-  }
-
-  if (nextDueAt >= now) {
-    return {
-      state: 'ACTIVE' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: null,
-    };
-  }
-
-  const graceEndsAt = addDays(nextDueAt, resolveGraceDays(input.plan));
-  if (input.plan === 'STARTER') {
-    return {
-      state: now <= graceEndsAt ? ('GRACE' as ManagedState) : ('READ_ONLY' as ManagedState),
-      effectivePlan: 'STARTER' as ManagedPlan,
-      readOnlyAt: graceEndsAt,
-    };
-  }
-
-  if (now <= graceEndsAt) {
-    return {
-      state: 'GRACE' as ManagedState,
-      effectivePlan: input.plan,
-      readOnlyAt: addDays(graceEndsAt, 7),
-    };
-  }
-
-  const fallbackEndsAt = addDays(graceEndsAt, 7);
-  if (now <= fallbackEndsAt) {
-    return {
-      state: 'STARTER_FALLBACK' as ManagedState,
-      effectivePlan: 'STARTER' as ManagedPlan,
-      readOnlyAt: fallbackEndsAt,
-    };
-  }
+  const snapshot = getSubscriptionSnapshot({
+    selectedPlan: input.plan,
+    plan: input.plan,
+    planStatus: input.planStatus,
+    subscriptionStatus: input.subscriptionStatus,
+    trialStartedAt: input.trialStartedAt,
+    trialEndsAt: input.trialEndsAt,
+    firstPaymentAt: input.firstPaymentAt,
+    currentPeriodEndsAt: input.currentPeriodEndsAt,
+    nextBillingDate: input.nextBillingDate,
+    nextPaymentDueAt: input.nextPaymentDueAt,
+    paymentGraceEndsAt: input.paymentGraceEndsAt,
+    suspendedAt: input.suspendedAt,
+    cancelledAt: input.cancelledAt,
+  }, now);
 
   return {
-    state: 'READ_ONLY' as ManagedState,
-    effectivePlan: 'STARTER' as ManagedPlan,
-    readOnlyAt: fallbackEndsAt,
+    state: snapshot.status as ManagedState,
+    effectivePlan: snapshot.isRestricted ? ('STARTER' as ManagedPlan) : input.plan,
+    readOnlyAt: snapshot.suspendedAt ?? snapshot.paymentGraceEndsAt,
+    daysLeft: snapshot.daysLeftInTrial ?? snapshot.daysUntilBilling,
   };
+
 }

@@ -547,9 +547,9 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
     // toLowerCase().includes) and the storefront. Same pattern as the rest of the
     // app (products, inventory, sales, customers searches).
     where.OR = [
-      { name: { contains: normalized.search, mode: 'insensitive' as const } },
-      { barcode: { contains: normalized.search, mode: 'insensitive' as const } },
-      { category: { name: { contains: normalized.search, mode: 'insensitive' as const } } },
+      { name: { contains: normalized.search, mode: 'insensitive' } } as any,
+      { barcode: { contains: normalized.search, mode: 'insensitive' } } as any,
+      { category: { name: { contains: normalized.search, mode: 'insensitive' } } } as any,
     ];
   }
 

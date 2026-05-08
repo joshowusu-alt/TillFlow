@@ -22,6 +22,7 @@ function getNavCount(href: string, navCounts?: { urgent: number; collections: nu
 const navigation = [
   { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
   { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
+  { href: '/subscriptions', label: 'Subscriptions', shortLabel: 'Subs', icon: 'pulse' },
   { href: '/collections', label: 'Collections', shortLabel: 'Collections', icon: 'pulse' },
   { href: '/revenue', label: 'Receivables', shortLabel: 'Receive', icon: 'chart' },
   { href: '/playbooks', label: 'Playbooks', shortLabel: 'Playbooks', icon: 'book' },

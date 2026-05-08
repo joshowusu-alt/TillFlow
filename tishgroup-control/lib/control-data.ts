@@ -1,6 +1,22 @@
 export type ManagedPlan = 'STARTER' | 'GROWTH' | 'PRO';
 
-export type ManagedState = 'ACTIVE' | 'DUE_SOON' | 'GRACE' | 'STARTER_FALLBACK' | 'READ_ONLY' | 'TRIAL' | 'INACTIVE';
+export type ManagedState =
+  | 'TRIAL_ACTIVE'
+  | 'TRIAL_EXPIRING_SOON'
+  | 'TRIAL_ENDED'
+  | 'PAYMENT_PENDING'
+  | 'ACTIVE'
+  | 'DUE_SOON'
+  | 'DUE_TODAY'
+  | 'OVERDUE'
+  | 'GRACE_PERIOD'
+  | 'SUSPENDED'
+  | 'CANCELLED'
+  | 'TRIAL'
+  | 'GRACE'
+  | 'STARTER_FALLBACK'
+  | 'READ_ONLY'
+  | 'INACTIVE';
 
 export type BusinessHealth = 'HEALTHY' | 'WATCH' | 'AT_RISK';
 
@@ -18,6 +34,9 @@ export type ManagedBusiness = {
   subscriptionStartAt?: string | null;
   signedUpAt: string;
   planSetAt: string;
+  trialStartAt?: string | null;
+  trialEndAt?: string | null;
+  daysLeft?: number | null;
   nextDueAt: string;
   lastPaymentAt: string | null;
   monthlyValue: number;
@@ -29,6 +48,10 @@ export type ManagedBusiness = {
   lastActivityAt: string;
   branches: number;
   notes: string;
+  lastReminderAt?: string | null;
+  lastReminderStatus?: string | null;
+  nextReminderAt?: string | null;
+  failedReminderCount?: number;
 };
 
 export const managedBusinesses: ManagedBusiness[] = [
