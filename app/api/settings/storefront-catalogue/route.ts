@@ -3,6 +3,8 @@ import { isRedirectError } from 'next/dist/client/components/redirect';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 type StatusFilter = 'all' | 'published' | 'hidden';
 
 function parsePositiveInt(value: string | null, fallback: number) {

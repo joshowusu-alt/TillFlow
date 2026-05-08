@@ -32,6 +32,17 @@ const nextConfig = {
       bodySizeLimit: '4mb',
     },
   },
+  webpack(config) {
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      {
+        module: /node_modules[\\/](@opentelemetry[\\/]instrumentation|@fastify[\\/]otel|@prisma[\\/]instrumentation|require-in-the-middle)/,
+        message: /Critical dependency: (the request of a dependency is an expression|require function is used in a way in which dependencies cannot be statically extracted)/,
+      },
+    ];
+
+    return config;
+  },
   async rewrites() {
     return [
       {
