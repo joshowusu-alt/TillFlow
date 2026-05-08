@@ -179,6 +179,21 @@ function businessStatusFromSubscription(status: SubscriptionStatus) {
   }
 }
 
+function billingStatusFromSubscription(status: SubscriptionStatus) {
+  switch (status) {
+    case 'TRIAL':
+      return 'TRIAL_ACTIVE';
+    case 'INACTIVE':
+      return 'CANCELLED';
+    case 'SUSPENDED':
+    case 'READ_ONLY':
+      return 'SUSPENDED';
+    case 'ACTIVE':
+    default:
+      return 'ACTIVE';
+  }
+}
+
 async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>, args: {
   profileId: string;
   businessId: string;
@@ -239,8 +254,13 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     where: { id: args.businessId },
     data: {
       plan: args.purchasedPlan,
+      planStatus: businessStatusFromSubscription(status),
+      subscriptionStatus: billingStatusFromSubscription(status),
       planSetAt: startDate,
-      nextPaymentDueAt: nextDueDate,
+      currentPeriodStartedAt: status === 'INACTIVE' || status === 'TRIAL' ? null : startDate,
+      nextPaymentDueAt: status === 'INACTIVE' ? null : nextDueDate,
+      nextBillingDate: status === 'INACTIVE' ? null : nextDueDate,
+      currentPeriodEndsAt: status === 'INACTIVE' ? null : nextDueDate,
     },
   });
 }
@@ -253,6 +273,8 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
       name: true,
       plan: true,
       planSetAt: true,
+      currentPeriodEndsAt: true,
+      nextBillingDate: true,
       nextPaymentDueAt: true,
       firstPaymentAt: true,
       phone: true,
@@ -296,6 +318,7 @@ function revalidateControlViews(businessId: string) {
   revalidatePath('/staff');
   revalidatePath('/collections');
   revalidatePath('/revenue');
+  revalidatePath('/subscriptions');
 }
 
 async function resolveAssignedManagerId(rawValue: string | null, fallbackStaffId: string) {
@@ -351,7 +374,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         startDate: requestedStartDate,
         nextDueDate,
         fallbackStartDate: existingSubscription?.startDate ?? business.planSetAt,
-        fallbackNextDueDate: existingSubscription?.nextDueDate ?? business.nextPaymentDueAt,
+        fallbackNextDueDate: existingSubscription?.nextDueDate ?? business.nextBillingDate ?? business.nextPaymentDueAt ?? business.currentPeriodEndsAt,
       });
 
       await tx.controlSubscription.upsert({
@@ -394,9 +417,13 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         data: {
           plan: purchasedPlan,
           planStatus: businessStatusFromSubscription(status),
+          subscriptionStatus: billingStatusFromSubscription(status),
           trialEndsAt: status === 'TRIAL' ? trialEndsAt : null,
           planSetAt: startDate,
+          currentPeriodStartedAt: status === 'INACTIVE' || status === 'TRIAL' ? null : startDate,
           nextPaymentDueAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
+          nextBillingDate: status === 'INACTIVE' ? null : resolvedNextDueDate,
+          currentPeriodEndsAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
           addonOnlineStorefront,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,

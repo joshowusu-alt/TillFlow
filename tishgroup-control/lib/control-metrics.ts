@@ -4,6 +4,29 @@ function sum(values: number[]) {
   return values.reduce((total, value) => total + value, 0);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDate(value?: string | null) {
+  if (!value || value === 'Not scheduled') return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysUntil(value?: string | null) {
+  const date = parseDate(value);
+  if (!date) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / DAY_MS);
+}
+
+function isDueThisWeek(business: ManagedBusiness) {
+  if (business.state === 'DUE_SOON' || business.state === 'DUE_TODAY') return true;
+  const days = daysUntil(business.nextDueAt);
+  return days != null && days >= 0 && days <= 7;
+}
+
 export function formatCedi(value: number) {
   return `GHc ${value.toLocaleString('en-GH')}`;
 }
@@ -22,7 +45,7 @@ export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
       .map((business) => business.outstandingAmount)
   );
   const activePaid = activeBusinesses.filter((business) => business.state === 'ACTIVE').length;
-  const dueSoon = activeBusinesses.filter((business) => business.state === 'DUE_SOON').length;
+  const dueSoon = activeBusinesses.filter(isDueThisWeek).length;
   const grace = activeBusinesses.filter((business) => business.state === 'GRACE' || business.state === 'GRACE_PERIOD' || business.state === 'OVERDUE').length;
   const fallback = activeBusinesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
   const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY' || business.state === 'SUSPENDED').length;

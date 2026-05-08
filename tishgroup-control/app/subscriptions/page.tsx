@@ -42,6 +42,10 @@ function daysUntil(value?: string | null) {
   return Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
 }
 
+function isBillableBusiness(business: ManagedBusiness) {
+  return business.state !== 'CANCELLED' && business.state !== 'INACTIVE';
+}
+
 function matchesFilter(business: ManagedBusiness, filter: FilterKey) {
   const daysToDue = daysUntil(business.nextDueAt);
   switch (filter) {
@@ -108,20 +112,21 @@ export default async function SubscriptionsPage({
   const sort = (readParam(resolvedSearchParams.sort) ?? 'nearest-due') as SortKey;
   const businesses = await listManagedBusinesses();
   const filtered = sortBusinesses(businesses.filter((business) => matchesFilter(business, filter)), sort);
-  const dueThisWeek = businesses.filter((business) => {
+  const billableBusinesses = businesses.filter(isBillableBusiness);
+  const dueThisWeek = billableBusinesses.filter((business) => {
     const days = daysUntil(business.nextDueAt);
-    return days != null && days >= 0 && days <= 7;
+    return business.state === 'DUE_SOON' || business.state === 'DUE_TODAY' || (days != null && days >= 0 && days <= 7);
   });
 
   const summary = {
-    active: businesses.filter((business) => business.state === 'ACTIVE').length,
-    trials: businesses.filter((business) => ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
-    trialsEnding3: businesses.filter((business) => business.daysLeft != null && business.daysLeft >= 0 && business.daysLeft <= 3 && ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
-    dueToday: businesses.filter((business) => business.state === 'DUE_TODAY' || daysUntil(business.nextDueAt) === 0).length,
-    overdue: businesses.filter((business) => business.state === 'OVERDUE' || (daysUntil(business.nextDueAt) ?? 0) < 0).length,
-    suspended: businesses.filter((business) => ['SUSPENDED', 'READ_ONLY'].includes(business.state)).length,
-    mrr: businesses.filter((business) => business.state === 'ACTIVE').reduce((sum, business) => sum + business.monthlyValue, 0),
-    weekCollections: dueThisWeek.reduce((sum, business) => sum + business.monthlyValue, 0),
+    active: billableBusinesses.filter((business) => business.state === 'ACTIVE').length,
+    trials: billableBusinesses.filter((business) => ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
+    trialsEnding3: billableBusinesses.filter((business) => business.daysLeft != null && business.daysLeft >= 0 && business.daysLeft <= 3 && ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
+    dueToday: billableBusinesses.filter((business) => business.state === 'DUE_TODAY' || daysUntil(business.nextDueAt) === 0).length,
+    overdue: billableBusinesses.filter((business) => business.state === 'OVERDUE' || (daysUntil(business.nextDueAt) ?? 0) < 0).length,
+    suspended: billableBusinesses.filter((business) => ['SUSPENDED', 'READ_ONLY'].includes(business.state)).length,
+    mrr: billableBusinesses.filter((business) => business.state === 'ACTIVE').reduce((sum, business) => sum + business.monthlyValue, 0),
+    weekCollections: dueThisWeek.reduce((sum, business) => sum + (business.outstandingAmount || business.monthlyValue), 0),
   };
 
   const filterOptions: Array<{ key: FilterKey; label: string }> = [

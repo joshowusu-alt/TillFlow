@@ -117,35 +117,34 @@ function normalizeCadence(value?: string | null): ManagedBusiness['billingCadenc
   return String(value ?? '').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
 }
 
-function normalizeManagedState(value?: string | null): ManagedState | null {
+function normalizeManualManagedState(value?: string | null): ManagedState | null {
   switch (String(value ?? '').toUpperCase()) {
     case 'INACTIVE':
     case 'DEACTIVATED':
     case 'CANCELLED':
       return 'CANCELLED';
-    case 'ACTIVE':
-    case 'DUE_SOON':
-    case 'DUE_TODAY':
-    case 'OVERDUE':
-    case 'PAYMENT_PENDING':
-    case 'TRIAL_ENDED':
-    case 'TRIAL_ACTIVE':
-    case 'TRIAL_EXPIRING_SOON':
-    case 'GRACE_PERIOD':
     case 'SUSPENDED':
-    case 'GRACE':
-    case 'STARTER_FALLBACK':
     case 'READ_ONLY':
-    case 'TRIAL':
+    case 'STARTER_FALLBACK':
       return String(value).toUpperCase() as ManagedState;
-    case 'TRIALING':
-      return 'TRIAL';
-    case 'SUSPENDED':
-    case 'CANCELLED':
-      return 'READ_ONLY';
     default:
       return null;
   }
+}
+
+function requiresCollection(state: ManagedState) {
+  return [
+    'DUE_SOON',
+    'DUE_TODAY',
+    'OVERDUE',
+    'GRACE',
+    'GRACE_PERIOD',
+    'PAYMENT_PENDING',
+    'TRIAL_ENDED',
+    'STARTER_FALLBACK',
+    'READ_ONLY',
+    'SUSPENDED',
+  ].includes(state);
 }
 
 function resolveEffectivePlan(state: ManagedState, plan: ManagedPlan, override?: string | null): ManagedPlan {
@@ -271,29 +270,36 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
       const profile = controlProfiles.get(business.id);
       const subscription = profile?.subscription;
       const plan = normalizePlan(subscription?.purchasedPlan ?? business.selectedPlan ?? business.plan);
-      const directState = normalizeManagedState(subscription?.status);
+      const manualState = normalizeManualManagedState(subscription?.status);
       const derived = deriveManagedState({
         plan,
         planStatus: subscription?.status ?? business.planStatus,
         subscriptionStatus: business.subscriptionStatus,
         trialStartedAt: business.trialStartedAt,
         trialEndsAt: business.trialEndsAt,
-        firstPaymentAt: business.firstPaymentAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt,
+        firstPaymentAt: business.firstPaymentAt
+          ?? subscription?.lastPaymentDate
+          ?? business.lastPaymentAt
+          ?? (String(subscription?.status ?? '').toUpperCase() === 'ACTIVE' ? subscription?.startDate : null),
         currentPeriodEndsAt: business.currentPeriodEndsAt,
-        nextBillingDate: business.nextBillingDate,
-        nextPaymentDueAt: subscription?.nextDueDate ?? business.nextPaymentDueAt,
+        nextBillingDate: subscription?.nextDueDate ?? business.nextBillingDate,
+        nextPaymentDueAt: business.nextPaymentDueAt,
         paymentGraceEndsAt: business.paymentGraceEndsAt,
         suspendedAt: business.suspendedAt,
         cancelledAt: business.cancelledAt,
       });
-      const state = directState ?? derived.state;
+      const state = manualState ?? derived.state;
       const effectivePlan = resolveEffectivePlan(state, plan, subscription?.effectivePlanOverride);
       const owner = business.users[0];
       const monthlyValue = subscription?.monthlyValuePence ?? planRates[plan];
-      const outstandingAmount = state === 'INACTIVE'
+      const storedOutstandingAmount = subscription?.outstandingAmountPence ?? null;
+      const outstandingAmount = state === 'INACTIVE' || state === 'CANCELLED'
         ? 0
-        : subscription?.outstandingAmountPence
-          ?? (['DUE_SOON', 'GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(state) ? monthlyValue : 0);
+        : storedOutstandingAmount && storedOutstandingAmount > 0
+          ? storedOutstandingAmount
+          : requiresCollection(state)
+            ? monthlyValue
+            : 0;
       const lastPaymentAt = profile?.payments[0]?.paidAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt;
       const latestNote = profile?.notesEntries[0]?.note;
       const latestReminder = business.messageOutbox[0];
@@ -318,7 +324,7 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         trialStartAt: formatDate(business.trialStartedAt),
         trialEndAt: formatDate(business.trialEndsAt),
         daysLeft: derived.daysLeft ?? null,
-        nextDueAt: formatDate(subscription?.nextDueDate ?? business.nextPaymentDueAt) ?? 'Not scheduled',
+        nextDueAt: formatDate(subscription?.nextDueDate ?? business.nextBillingDate ?? business.nextPaymentDueAt ?? business.currentPeriodEndsAt) ?? 'Not scheduled',
         lastPaymentAt: formatDate(lastPaymentAt),
         monthlyValue,
         outstandingAmount,
