@@ -12,6 +12,17 @@ import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
 import { getFeatures } from '@/lib/features';
 
+type OnlineOrderHistoryRow = {
+  id: string;
+  orderNumber: string;
+  createdAt: Date;
+  status: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  totalPence: number;
+  publicToken: string;
+};
+
 export default async function CustomerDetailPage({
   params,
   searchParams
@@ -26,6 +37,7 @@ export default async function CustomerDetailPage({
     (business as any).plan ?? (business.mode as any),
     (business as any).storeMode as any
   );
+  const storefrontSlug = ((business as any).storefrontSlug as string | null) ?? null;
   const loyaltyEnabled = features.loyaltyPoints && (business as any).loyaltyEnabled;
 
   const start = searchParams?.from ? new Date(searchParams.from) : undefined;
@@ -62,21 +74,70 @@ export default async function CustomerDetailPage({
   const customerTags = parseTags((customer as any).tagsJson ?? null);
   const customerNotes = ((customer as any).notes as string | null) ?? '';
 
-  // Lifetime stats are computed independent of the date filter so the summary
-  // tiles always reflect the customer's total relationship with the business,
-  // not whatever date range happens to be applied to the invoice ledger.
-  const lifetimeStats = await prisma.salesInvoice.aggregate({
-    where: {
-      customerId: customer.id,
-      paymentStatus: { notIn: ['VOID', 'RETURNED'] },
-    },
-    _sum: { totalPence: true },
-    _max: { createdAt: true },
-    _count: { _all: true },
-  });
-  const lifetimeSpentPence = lifetimeStats._sum.totalPence ?? 0;
-  const lifetimeSaleCount = lifetimeStats._count._all;
-  const lastSaleAt = lifetimeStats._max.createdAt;
+  const [lifetimeStats, linkedStorefrontCustomers] = await Promise.all([
+    prisma.salesInvoice.aggregate({
+      where: {
+        customerId: customer.id,
+        paymentStatus: { notIn: ['VOID', 'RETURNED'] },
+      },
+      _sum: { totalPence: true },
+      _max: { createdAt: true },
+      _count: { _all: true },
+    }),
+    prisma.storefrontCustomer.findMany({
+      where: { businessId: business.id, posCustomerId: customer.id },
+      select: { id: true },
+    }),
+  ]);
+
+  const onlineOrders: OnlineOrderHistoryRow[] = linkedStorefrontCustomers.length
+    ? await prisma.onlineOrder.findMany({
+        where: {
+          customerId: { in: linkedStorefrontCustomers.map((s) => s.id) },
+          status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
+          ...(start ? { createdAt: { gte: start } } : {}),
+          ...(end ? { createdAt: { lte: end } } : {}),
+        },
+        select: {
+          id: true,
+          orderNumber: true,
+          createdAt: true,
+          status: true,
+          paymentStatus: true,
+          fulfillmentStatus: true,
+          totalPence: true,
+          publicToken: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      })
+    : [];
+
+  const onlineLifetimeStats = linkedStorefrontCustomers.length
+    ? await prisma.onlineOrder.aggregate({
+        where: {
+          customerId: { in: linkedStorefrontCustomers.map((s) => s.id) },
+          status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
+        },
+        _sum: { totalPence: true },
+        _max: { createdAt: true },
+        _count: { _all: true },
+      })
+    : {
+        _sum: { totalPence: 0 },
+        _max: { createdAt: null },
+        _count: { _all: 0 },
+      };
+
+  const inStoreSpentPence = lifetimeStats._sum.totalPence ?? 0;
+  const onlineSpentPence = onlineLifetimeStats._sum.totalPence ?? 0;
+  const lifetimeSpentPence = inStoreSpentPence + onlineSpentPence;
+  const inStoreVisitCount = lifetimeStats._count._all;
+  const onlineOrderCount = onlineLifetimeStats._count._all;
+  const lifetimeSaleCount = inStoreVisitCount + onlineOrderCount;
+  const lastSaleAt = [lifetimeStats._max.createdAt, onlineLifetimeStats._max.createdAt]
+    .filter((value): value is Date => Boolean(value))
+    .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
 
   const invoices = customer.salesInvoices.map((invoice) => {
     const balance = computeOutstandingBalance(invoice);
@@ -164,7 +225,14 @@ export default async function CustomerDetailPage({
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Lifetime spend</div>
           <div className="text-2xl font-semibold tabular-nums">{formatMoney(lifetimeSpentPence, business.currency)}</div>
-          <div className="text-black/50">{lifetimeSaleCount} visit{lifetimeSaleCount === 1 ? '' : 's'}</div>
+          {onlineOrderCount > 0 ? (
+            <div className="text-black/50">
+              {formatMoney(inStoreSpentPence, business.currency)} in-store · {formatMoney(onlineSpentPence, business.currency)} online
+            </div>
+          ) : null}
+          <div className="text-black/50">
+            {lifetimeSaleCount} {onlineOrderCount > 0 ? 'total interaction' : 'visit'}{lifetimeSaleCount === 1 ? '' : 's'}
+          </div>
         </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Last visit</div>
@@ -172,6 +240,11 @@ export default async function CustomerDetailPage({
             {lastSaleAt ? formatRelativeDate(lastSaleAt) : 'No sales yet'}
           </div>
           {lastSaleAt ? <div className="text-xs text-black/50">{formatDateTime(lastSaleAt)}</div> : null}
+          {onlineOrderCount > 0 ? (
+            <div className="text-black/50">
+              {inStoreVisitCount} visit{inStoreVisitCount === 1 ? '' : 's'} · {onlineOrderCount} online order{onlineOrderCount === 1 ? '' : 's'}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -350,6 +423,59 @@ export default async function CustomerDetailPage({
           </table>
         </div>
       </div>
+
+      {onlineOrderCount > 0 ? (
+        <div className="card p-6">
+          <h2 className="text-lg font-display font-semibold">Online orders</h2>
+          <p className="mt-1 text-sm text-black/50">Storefront orders linked to this customer profile.</p>
+          <div className="responsive-table-shell mt-4">
+            <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Payment</th>
+                  <th>Fulfillment</th>
+                  <th>Total</th>
+                  <th>Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                {onlineOrders.map((order) => (
+                  <tr key={order.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 text-sm font-semibold">{order.orderNumber}</td>
+                    <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(order.createdAt)}</td>
+                    <td className="px-3 py-3 text-sm"><span className="pill bg-black/5 text-black/70">{order.status}</span></td>
+                    <td className="px-3 py-3 text-sm"><span className="pill bg-black/5 text-black/70">{order.paymentStatus}</span></td>
+                    <td className="px-3 py-3 text-sm"><span className="pill bg-black/5 text-black/70">{order.fulfillmentStatus}</span></td>
+                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">{formatMoney(order.totalPence, business.currency)}</td>
+                    <td className="px-3 py-3 text-sm">
+                      {storefrontSlug ? (
+                        <Link
+                          className="btn-ghost text-xs"
+                          href={`/shop/${storefrontSlug}/orders/${order.id}?token=${order.publicToken}`}
+                        >
+                          View
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-black/40">Unavailable</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {onlineOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
+                      No online orders in this date range.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

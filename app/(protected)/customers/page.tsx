@@ -147,7 +147,14 @@ export default async function CustomersPage({
                 <DataCardHeader
                   title={<Link href={`/customers/${customer.id}`} className="hover:underline">{customer.name}</Link>}
                   subtitle={customer.phone ?? 'No phone number'}
-                  aside={balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
+                  aside={
+                    <div className="flex items-center gap-2">
+                      {customer.channelBreakdown.onlineOrderCount > 0 ? (
+                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">Online + in-store</span>
+                      ) : null}
+                      {balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
+                    </div>
+                  }
                 />
                 {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={4} className="mt-2" /> : null}
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -209,9 +216,14 @@ export default async function CustomersPage({
                   <tr key={customer.id} className="rounded-xl bg-white">
                     <td className="px-3 py-3 font-semibold">
                       <div className="flex flex-col gap-1">
-                        <Link href={`/customers/${customer.id}`} className="hover:underline">
-                          {customer.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link href={`/customers/${customer.id}`} className="hover:underline">
+                            {customer.name}
+                          </Link>
+                          {customer.channelBreakdown.onlineOrderCount > 0 ? (
+                            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">Online + in-store</span>
+                          ) : null}
+                        </div>
                         {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={3} /> : null}
                       </div>
                     </td>
