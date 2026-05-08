@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { deliverStorefrontOtp, type OtpDeliveryResult } from '@/lib/services/storefront-otp-delivery';
+import { linkStorefrontCustomerToPos } from '@/lib/services/customer-linking';
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 10;
@@ -239,6 +240,10 @@ export async function verifyStorefrontOtp(input: VerifyOtpInput): Promise<Verify
       customerId: null,
     },
     data: { customerId: customer.id },
+  });
+
+  void linkStorefrontCustomerToPos(customer.id, prisma).catch((err) => {
+    console.error('[customer-link]', err);
   });
 
   const sessionToken = randomBytes(32).toString('base64url');

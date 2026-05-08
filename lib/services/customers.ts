@@ -10,6 +10,7 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
 import { parseTags, serializeTags } from '@/lib/contact-tags';
+import { linkPosCustomerToStorefront } from '@/lib/services/customer-linking';
 
 // ---------------------------------------------------------------------------
 // Shared input / output types
@@ -125,7 +126,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
   // Batch-load unpaid/part-paid invoices for every customer on this page in a
   // single round-trip, then compute the per-customer balance in JS.
   const customerIds = customers.map((c) => c.id);
-  const [arInvoices, lifetimeStats] = await Promise.all([
+  const [arInvoices, lifetimeStats, linkedStorefrontProfiles] = await Promise.all([
     customerIds.length
       ? prisma.salesInvoice.findMany({
           where: {
@@ -160,7 +161,53 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
           _max: { createdAt: Date | null };
           _count: { _all: number };
         }>),
+    customerIds.length
+      ? prisma.storefrontCustomer.findMany({
+          where: {
+            businessId,
+            posCustomerId: { in: customerIds },
+          },
+          select: { id: true, posCustomerId: true },
+        })
+      : Promise.resolve([] as Array<{ id: string; posCustomerId: string | null }>),
   ]);
+
+  const storefrontIdsByPosCustomer = new Map<string, string[]>();
+  for (const profile of linkedStorefrontProfiles) {
+    if (!profile.posCustomerId) continue;
+    const existing = storefrontIdsByPosCustomer.get(profile.posCustomerId) ?? [];
+    existing.push(profile.id);
+    storefrontIdsByPosCustomer.set(profile.posCustomerId, existing);
+  }
+
+  const storefrontCustomerIds = linkedStorefrontProfiles.map((p) => p.id);
+  const onlineStats = storefrontCustomerIds.length
+    ? await prisma.onlineOrder.groupBy({
+        by: ['customerId'],
+        where: {
+          customerId: { in: storefrontCustomerIds },
+          status: { notIn: ['CANCELLED', 'PAYMENT_FAILED'] },
+        },
+        _sum: { totalPence: true },
+        _max: { createdAt: true },
+        _count: { _all: true },
+      })
+    : ([] as Array<{
+        customerId: string | null;
+        _sum: { totalPence: number | null };
+        _max: { createdAt: Date | null };
+        _count: { _all: number };
+      }>);
+
+  const onlineStatsByStorefrontId = new Map<string, { spentPence: number; lastSaleAt: Date | null; saleCount: number }>();
+  for (const row of onlineStats) {
+    if (!row.customerId) continue;
+    onlineStatsByStorefrontId.set(row.customerId, {
+      spentPence: row._sum.totalPence ?? 0,
+      lastSaleAt: row._max.createdAt ?? null,
+      saleCount: row._count._all,
+    });
+  }
 
   const balanceMap = new Map<string, number>();
   for (const inv of arInvoices) {
@@ -184,14 +231,41 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
 
   const customersWithBalance = customers.map((c) => {
     const lifetime = lifetimeMap.get(c.id);
+    const linkedStorefrontIds = storefrontIdsByPosCustomer.get(c.id) ?? [];
+    const onlineAggregate = linkedStorefrontIds.reduce(
+      (acc, storefrontId) => {
+        const stat = onlineStatsByStorefrontId.get(storefrontId);
+        if (!stat) return acc;
+        acc.spentPence += stat.spentPence;
+        acc.saleCount += stat.saleCount;
+        if (!acc.lastSaleAt || (stat.lastSaleAt && stat.lastSaleAt > acc.lastSaleAt)) {
+          acc.lastSaleAt = stat.lastSaleAt;
+        }
+        return acc;
+      },
+      { spentPence: 0, saleCount: 0, lastSaleAt: null as Date | null },
+    );
+    const inStoreSpentPence = lifetime?.spentPence ?? 0;
+    const inStoreSaleCount = lifetime?.saleCount ?? 0;
+    const onlineSpentPence = onlineAggregate.spentPence;
+    const onlineOrderCount = onlineAggregate.saleCount;
+    const lastSaleAt = [lifetime?.lastSaleAt ?? null, onlineAggregate.lastSaleAt]
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
     const { tagsJson, ...rest } = c;
     return {
       ...rest,
       tags: parseTags(tagsJson),
       outstandingBalancePence: balanceMap.get(c.id) ?? 0,
-      lifetimeSpentPence: lifetime?.spentPence ?? 0,
-      lastSaleAt: lifetime?.lastSaleAt ?? null,
-      saleCount: lifetime?.saleCount ?? 0,
+      lifetimeSpentPence: inStoreSpentPence + onlineSpentPence,
+      lastSaleAt,
+      saleCount: inStoreSaleCount + onlineOrderCount,
+      channelBreakdown: {
+        inStoreSpentPence,
+        inStoreSaleCount,
+        onlineSpentPence,
+        onlineOrderCount,
+      },
     };
   });
 
@@ -264,7 +338,7 @@ export async function createCustomer(
     resolvedStoreId = store.id;
   }
 
-  return prisma.customer.create({
+  const created = await prisma.customer.create({
     data: {
       businessId,
       storeId: resolvedStoreId,
@@ -276,6 +350,12 @@ export async function createCustomer(
       tagsJson: serializeTags(data.tags ?? null),
     },
   });
+
+  void linkPosCustomerToStorefront(created.id).catch((err) => {
+    console.error('[customer-link]', err);
+  });
+
+  return created;
 }
 
 /**
@@ -306,7 +386,7 @@ export async function quickCreateCustomer(
     storeId = business.stores[0]?.id ?? null;
   }
 
-  return prisma.customer.create({
+  const created = await prisma.customer.create({
     data: {
       businessId,
       storeId,
@@ -319,6 +399,12 @@ export async function quickCreateCustomer(
     },
     select: { id: true, name: true },
   });
+
+  void linkPosCustomerToStorefront(created.id).catch((err) => {
+    console.error('[customer-link]', err);
+  });
+
+  return created;
 }
 
 /**
@@ -338,7 +424,7 @@ export async function updateCustomer(
   });
   if (!existing) return null;
 
-  return prisma.customer.update({
+  const updated = await prisma.customer.update({
     where: { id: existing.id },
     data: {
       name: data.name,
@@ -350,6 +436,12 @@ export async function updateCustomer(
     },
     select: { id: true },
   });
+
+  void linkPosCustomerToStorefront(existing.id).catch((err) => {
+    console.error('[customer-link]', err);
+  });
+
+  return updated;
 }
 
 /**
