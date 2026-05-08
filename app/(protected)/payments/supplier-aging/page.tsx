@@ -1,9 +1,10 @@
-import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
-import { DataCard, DataCardHeader, DataCardField } from '@/components/DataCard';
+import StatCard from '@/components/StatCard';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import { DataCard, DataCardHeader } from '@/components/DataCard';
 import {
   getSupplierAgingReport,
   AGING_BUCKETS,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/services/supplier-aging';
 
 export const metadata = { title: 'Supplier Aging Report' };
+export const dynamic = 'force-dynamic';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -20,11 +22,20 @@ function utcStartOfDay(date: Date): Date {
 }
 
 const BUCKET_CHIP_CLASSES: Record<AgingBucket, string> = {
-  CURRENT: 'border border-slate-200 bg-slate-50 text-slate-700',
-  D1_30: 'border border-sky-200 bg-sky-50 text-sky-800',
-  D31_60: 'border border-yellow-200 bg-yellow-50 text-yellow-800',
-  D61_90: 'border border-amber-200 bg-amber-50 text-amber-800',
-  D90_PLUS: 'border border-rose-200 bg-rose-50 text-rose-800',
+  CURRENT:  'border border-emerald-200 bg-emerald-50 text-emerald-800',
+  D1_30:    'border border-slate-200   bg-slate-50   text-slate-700',
+  D31_60:   'border border-yellow-200  bg-yellow-50  text-yellow-800',
+  D61_90:   'border border-amber-200   bg-amber-50   text-amber-800',
+  D90_PLUS: 'border border-rose-200    bg-rose-50    text-rose-800',
+};
+
+// StatCard tone per bucket
+const BUCKET_STAT_TONE: Record<AgingBucket, 'success' | 'default' | 'warn' | 'danger'> = {
+  CURRENT:  'success',
+  D1_30:    'default',
+  D31_60:   'warn',
+  D61_90:   'warn',
+  D90_PLUS: 'danger',
 };
 
 // ─── Page ──────────────────────────────────────────────────────────────────
@@ -39,141 +50,167 @@ export default async function SupplierAgingPage({
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const rawAsOf = searchParams?.asOf;
-  const asOfStr =
-    rawAsOf && rawAsOf <= todayStr ? rawAsOf : todayStr;
+  const asOfStr = rawAsOf && rawAsOf <= todayStr ? rawAsOf : todayStr;
   const asOf = utcStartOfDay(new Date(asOfStr + 'T00:00:00Z'));
 
   const report = await getSupplierAgingReport(business.id, asOf);
   const currency = business.currency;
   const exportHref = `/payments/supplier-aging/export?asOf=${asOfStr}`;
-
   const hasData = report.rows.length > 0;
 
-  // Summary tile data. Total tile stays neutral; only 90+ carries the urgency
-  // cue when its bucket is non-zero. Plan calls for tiles to be hidden when
-  // there is no outstanding activity at all so the empty state stays calm.
-  const tiles: { label: string; pence: number; accent?: boolean }[] = [
-    { label: 'Total Outstanding', pence: report.totals.totalPence },
-    ...AGING_BUCKETS.map((b) => ({
-      label: AGING_BUCKET_LABELS[b],
-      pence: report.totals.buckets[b],
-      accent: b === 'D90_PLUS' && report.totals.buckets[b] > 0,
-    })),
-  ];
-
   return (
-    <div className="page-shell">
-      <PageHeader title="Supplier Aging" subtitle="Outstanding balances by age of invoice" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Supplier Aging"
+        subtitle="Outstanding supplier balances grouped by how overdue they are."
+        actions={
+          <DownloadLink
+            href={exportHref}
+            fallbackFilename={`supplier-aging-${asOfStr}.csv`}
+            className="btn-secondary text-sm"
+          >
+            Export CSV
+          </DownloadLink>
+        }
+      />
 
-      {/* ── Filter bar ── */}
-      <form method="GET" className="flex flex-wrap items-end gap-3 mb-6">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="asOf" className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-            As of date
-          </label>
+      {/* ── Filter ── */}
+      <ReportFilterCard
+        columnsClassName="sm:grid-cols-3"
+        submitLabel="Apply filter"
+        actions={
+          <a href="/payments/supplier-aging" className="btn-secondary w-full justify-center sm:w-auto text-sm">
+            Reset
+          </a>
+        }
+      >
+        <div>
+          <label className="label">As of date</label>
           <input
             type="date"
-            id="asOf"
             name="asOf"
             max={todayStr}
             defaultValue={asOfStr}
-            className="input text-sm"
+            className="input"
           />
         </div>
-        <button type="submit" className="btn-secondary text-sm">
-          Apply
-        </button>
-        <DownloadLink href={exportHref} fallbackFilename={`supplier-aging-${asOfStr}.csv`} className="btn-secondary text-sm">
-          Export CSV
-        </DownloadLink>
-      </form>
+      </ReportFilterCard>
 
-      {/* ── Summary tiles (only when there is something to summarise) ── */}
-      {hasData ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          {tiles.map((tile) => (
-            <div
-              key={tile.label}
-              className={`card p-4 flex flex-col gap-1 ${tile.accent ? 'ring-1 ring-rose-300' : ''}`}
-            >
-              <span className="text-xs font-medium text-slate-500 uppercase tracking-wide leading-tight">
-                {tile.label}
-              </span>
-              <span className={`text-lg font-semibold ${tile.accent ? 'text-rose-700' : 'text-slate-900'}`}>
-                {formatMoney(tile.pence, currency)}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {/* ── What does this mean? ── */}
+      <details className="group rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-blue-900">
+        <summary className="flex cursor-pointer list-none items-center gap-2 font-medium select-none">
+          <svg className="h-4 w-4 flex-shrink-0 text-blue-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fillRule="evenodd" d="M18 10A8 8 0 1 1 2 10a8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.75.75 0 0 1 .75.75v2.25h-.253a.75.75 0 0 0 0 1.5H11a.75.75 0 0 0 0-1.5h-.247V11.25A2.25 2.25 0 0 0 8.5 9H9Z" clipRule="evenodd" />
+          </svg>
+          How are invoices grouped?
+          <svg className="ml-auto h-4 w-4 text-blue-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <ul className="mt-3 space-y-1.5 text-blue-800 text-xs leading-relaxed">
+          <li><strong>Current</strong> — Invoice is not yet due, or has no due date set. No action needed today.</li>
+          <li><strong>1–30 days</strong> — Overdue by up to 30 days. Follow up soon to stay on good terms with the supplier.</li>
+          <li><strong>31–60 days</strong> — Overdue 31–60 days. Escalate with your accounts team or negotiate a payment plan.</li>
+          <li><strong>61–90 days</strong> — Overdue 61–90 days. Risk of supplier stopping credit. Prioritise payment.</li>
+          <li><strong>90+ days</strong> — Critically overdue. May affect supply chain and supplier relationships.</li>
+        </ul>
+        <p className="mt-3 text-xs text-blue-700">Paid, voided, and returned invoices are excluded. Invoices without a linked supplier are excluded.</p>
+      </details>
 
+      {/* ── Summary stat cards ── */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard
+          label="Total Outstanding"
+          value={formatMoney(report.totals.totalPence, currency)}
+          tone={report.totals.buckets.D90_PLUS > 0 ? 'danger' : report.totals.totalPence > 0 ? 'accent' : 'default'}
+          helper={`${report.totals.supplierCount} supplier${report.totals.supplierCount !== 1 ? 's' : ''} · ${report.totals.invoiceCount} inv.`}
+        />
+        {AGING_BUCKETS.map((b) => (
+          <StatCard
+            key={b}
+            label={AGING_BUCKET_LABELS[b]}
+            value={formatMoney(report.totals.buckets[b], currency)}
+            tone={report.totals.buckets[b] > 0 ? BUCKET_STAT_TONE[b] : 'default'}
+          />
+        ))}
+      </div>
+
+      {/* ── Main content ── */}
       {!hasData ? (
-        <div className="card p-10 text-center text-slate-500">
-          No outstanding supplier invoices as of {formatDate(asOf)}.
+        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+          <p className="text-sm text-muted">No outstanding supplier invoices as of {formatDate(asOf)}.</p>
         </div>
       ) : (
         <>
           {/* ── Desktop table ── */}
-          <div className="hidden lg:block responsive-table-shell">
-            <div className="card overflow-x-auto">
-              <table className="responsive-table">
+          <div className="hidden lg:block">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th className="text-left">Supplier</th>
-                    <th className="text-right"># Inv.</th>
-                    <th className="text-right">Total</th>
-                    {AGING_BUCKETS.map((b) => (
-                      <th key={b} className="text-right">
-                        {AGING_BUCKET_LABELS[b]}
-                      </th>
-                    ))}
-                    <th className="text-right">Oldest Due</th>
+                  <tr className="border-b border-slate-100 bg-slate-50/80">
+                    <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted">Supplier</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted"># Inv.</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted">Total</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-emerald-700">Current</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted">1–30 days</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-amber-700">31–60 days</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-amber-700">61–90 days</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-rose-700">90+ days</th>
+                    <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted">Oldest Due</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100">
                   {report.rows.map((row) => (
-                    <tr key={row.supplierId}>
-                      <td className="font-medium">{row.supplierName}</td>
-                      <td className="text-right text-slate-500">{row.invoiceCount}</td>
-                      <td className="text-right font-semibold">
+                    <tr key={row.supplierId} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-5 py-3.5 font-medium text-ink">{row.supplierName}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-muted">{row.invoiceCount}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-ink">
                         {formatMoney(row.totalPence, currency)}
                       </td>
-                      {AGING_BUCKETS.map((b) => (
-                        <td
-                          key={b}
-                          className={`text-right ${
-                            b === 'D90_PLUS' && row.buckets[b] > 0
-                              ? 'text-rose-700 font-semibold'
-                              : 'text-slate-700'
-                          }`}
-                        >
-                          {row.buckets[b] > 0 ? formatMoney(row.buckets[b], currency) : '—'}
-                        </td>
-                      ))}
-                      <td className="text-right text-slate-500">
-                        {row.oldestDueDate ? formatDate(row.oldestDueDate) : '—'}
+                      <td className="px-4 py-3.5 text-right tabular-nums text-emerald-700">
+                        {row.buckets.CURRENT > 0 ? formatMoney(row.buckets.CURRENT, currency) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">
+                        {row.buckets.D1_30 > 0 ? formatMoney(row.buckets.D1_30, currency) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-amber-700">
+                        {row.buckets.D31_60 > 0 ? formatMoney(row.buckets.D31_60, currency) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-amber-700">
+                        {row.buckets.D61_90 > 0 ? formatMoney(row.buckets.D61_90, currency) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className={`px-4 py-3.5 text-right tabular-nums ${row.buckets.D90_PLUS > 0 ? 'text-rose-600 font-semibold' : ''}`}>
+                        {row.buckets.D90_PLUS > 0 ? formatMoney(row.buckets.D90_PLUS, currency) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-muted">
+                        {row.oldestDueDate ? formatDate(row.oldestDueDate) : <span className="text-slate-300">—</span>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="font-semibold bg-slate-50">
-                    <td colSpan={2}>Total ({report.totals.supplierCount} suppliers)</td>
-                    <td className="text-right">{formatMoney(report.totals.totalPence, currency)}</td>
-                    {AGING_BUCKETS.map((b) => (
-                      <td
-                        key={b}
-                        className={`text-right ${
-                          b === 'D90_PLUS' && report.totals.buckets[b] > 0
-                            ? 'text-rose-700'
-                            : ''
-                        }`}
-                      >
-                        {report.totals.buckets[b] > 0
-                          ? formatMoney(report.totals.buckets[b], currency)
-                          : '—'}
-                      </td>
-                    ))}
+                  <tr className="border-t-2 border-slate-200 bg-slate-50">
+                    <td className="px-5 py-3.5 font-semibold text-ink" colSpan={2}>
+                      Total — {report.totals.supplierCount} supplier{report.totals.supplierCount !== 1 ? 's' : ''}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-bold text-ink">
+                      {formatMoney(report.totals.totalPence, currency)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-emerald-700">
+                      {report.totals.buckets.CURRENT > 0 ? formatMoney(report.totals.buckets.CURRENT, currency) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-slate-700">
+                      {report.totals.buckets.D1_30 > 0 ? formatMoney(report.totals.buckets.D1_30, currency) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-amber-700">
+                      {report.totals.buckets.D31_60 > 0 ? formatMoney(report.totals.buckets.D31_60, currency) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-amber-700">
+                      {report.totals.buckets.D61_90 > 0 ? formatMoney(report.totals.buckets.D61_90, currency) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className={`px-4 py-3.5 text-right tabular-nums font-semibold ${report.totals.buckets.D90_PLUS > 0 ? 'text-rose-600' : 'text-slate-300'}`}>
+                      {report.totals.buckets.D90_PLUS > 0 ? formatMoney(report.totals.buckets.D90_PLUS, currency) : '—'}
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
@@ -184,24 +221,17 @@ export default async function SupplierAgingPage({
           {/* ── Mobile cards ── */}
           <div className="lg:hidden space-y-3">
             {/* Totals summary card */}
-            <div className="card p-4 bg-slate-50">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-                Totals — {report.totals.supplierCount} Supplier
-                {report.totals.supplierCount !== 1 ? 's' : ''}
-              </div>
-              <div className="flex flex-wrap gap-2 mb-2">
-                <span className="text-lg font-bold text-slate-900">
-                  {formatMoney(report.totals.totalPence, currency)}
-                </span>
-              </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-3">
+                {report.totals.supplierCount} Supplier{report.totals.supplierCount !== 1 ? 's' : ''} · {report.totals.invoiceCount} Invoice{report.totals.invoiceCount !== 1 ? 's' : ''}
+              </p>
+              <p className="text-xl font-bold text-ink mb-2">
+                {formatMoney(report.totals.totalPence, currency)}
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 {AGING_BUCKETS.filter((b) => report.totals.buckets[b] > 0).map((b) => (
-                  <span
-                    key={b}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}
-                  >
-                    {AGING_BUCKET_LABELS[b]}:{' '}
-                    {formatMoney(report.totals.buckets[b], currency)}
+                  <span key={b} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}>
+                    {AGING_BUCKET_LABELS[b]}: {formatMoney(report.totals.buckets[b], currency)}
                   </span>
                 ))}
               </div>
@@ -211,39 +241,25 @@ export default async function SupplierAgingPage({
               <DataCard key={row.supplierId}>
                 <DataCardHeader
                   title={row.supplierName}
-                  subtitle={`${row.invoiceCount} invoice${row.invoiceCount !== 1 ? 's' : ''}`}
+                  subtitle={`${row.invoiceCount} invoice${row.invoiceCount !== 1 ? 's' : ''}${row.oldestDueDate ? ` · Oldest due ${formatDate(row.oldestDueDate)}` : ''}`}
                   aside={
-                    <span className="font-semibold text-slate-900">
+                    <span className="font-semibold text-ink">
                       {formatMoney(row.totalPence, currency)}
                     </span>
                   }
                 />
-                <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                <div className="flex flex-wrap gap-1.5 px-4 pb-4">
                   {AGING_BUCKETS.filter((b) => row.buckets[b] > 0).map((b) => (
-                    <span
-                      key={b}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}
-                    >
-                      {AGING_BUCKET_LABELS[b]}:{' '}
-                      {formatMoney(row.buckets[b], currency)}
+                    <span key={b} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}>
+                      {AGING_BUCKET_LABELS[b]}: {formatMoney(row.buckets[b], currency)}
                     </span>
                   ))}
                 </div>
-                {row.oldestDueDate && (
-                  <div className="px-4 pb-3 text-xs text-slate-500">
-                    Oldest due: {formatDate(row.oldestDueDate)}
-                  </div>
-                )}
               </DataCard>
             ))}
           </div>
         </>
       )}
-
-      <p className="mt-6 text-xs text-slate-400">
-        Report generated as of {asOfStr}. Paid, voided, and returned invoices are excluded.
-        Invoices without a linked supplier are also excluded.
-      </p>
     </div>
   );
 }
