@@ -6,7 +6,7 @@
     "dev": "node scripts/start-local-dev.mjs",
     "dev:prepare": "npm run db:generate:local && npm run db:setup",
     "build": "cross-env NODE_ENV=production next build",
-    "build:vercel": "prisma generate --schema=prisma/schema.postgres.prisma && prisma migrate deploy --schema=prisma/schema.postgres.prisma && cross-env NODE_ENV=production next build",
+    "build:vercel": "prisma generate --schema=prisma/schema.postgres.prisma && cross-env PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 prisma migrate deploy --schema=prisma/schema.postgres.prisma && cross-env NODE_ENV=production next build",
     "db:migrate:create": "prisma migrate dev --schema=prisma/schema.postgres.prisma --create-only",
     "db:migrate:deploy": "prisma migrate deploy --schema=prisma/schema.postgres.prisma",
     "postinstall": "prisma generate --schema=prisma/schema.postgres.prisma",
