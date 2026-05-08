@@ -15,6 +15,22 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
   return (
     <>
       <div className="hidden items-center gap-2 xl:flex">
+        {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+          <div
+            className="hidden h-10 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm xl:flex"
+            aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
+            title={`Today's sales: ${formatMoney(todaySales.totalPence, todaySales.currency)} · ${todaySales.txCount} transaction${todaySales.txCount !== 1 ? 's' : ''}`}
+          >
+            <div className="text-sm font-semibold tabular-nums leading-none text-ink">
+              {formatMoney(todaySales.totalPence, todaySales.currency)}
+            </div>
+            <div className="h-5 w-px bg-slate-200" aria-hidden="true" />
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''}
+            </div>
+          </div>
+        ) : null}
+
         <div className="shell-context-card">
           <div className="flex min-w-0 items-center gap-2.5">
             <span
@@ -29,22 +45,6 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
             </div>
           </div>
         </div>
-
-        {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
-          <div
-            className="hidden h-10 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm 2xl:flex"
-            aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
-            title={`Today's sales: ${formatMoney(todaySales.totalPence, todaySales.currency)} · ${todaySales.txCount} transaction${todaySales.txCount !== 1 ? 's' : ''}`}
-          >
-            <div className="text-sm font-semibold tabular-nums leading-none text-ink">
-              {formatMoney(todaySales.totalPence, todaySales.currency)}
-            </div>
-            <div className="h-5 w-px bg-slate-200" aria-hidden="true" />
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-              {todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''}
-            </div>
-          </div>
-        ) : null}
 
         <form action={logout}>
           <button type="submit" className="inline-flex h-10 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
