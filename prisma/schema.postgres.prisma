@@ -450,6 +450,12 @@ model Customer {
   accountType      String   @default("RETAIL")
   paymentTermsDays Int      @default(0)
   creditLimitPence Int      @default(0)
+  // Free-form merchant notes ("prefers WhatsApp", "always pays late", etc.).
+  notes            String?
+  // JSON array of normalised tag strings, e.g. ["VIP","Wholesale","Net 30"].
+  // Stored as JSON text rather than a String[] so the SQLite dev schema can
+  // share the same shape. Parsed via lib/customer-tags.
+  tagsJson         String?
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())
@@ -469,6 +475,10 @@ model Supplier {
   phone            String?
   email            String?
   creditLimitPence Int      @default(0)
+  // Free-form merchant notes (account contact, delivery quirks, etc.).
+  notes            String?
+  // JSON array of normalised tag strings; same shape/encoding as Customer.tagsJson.
+  tagsJson         String?
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())

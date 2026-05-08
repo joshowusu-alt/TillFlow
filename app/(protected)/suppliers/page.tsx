@@ -5,11 +5,13 @@ import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
+import TagChips from '@/components/TagChips';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { createSupplierAction } from '@/app/actions/suppliers';
 import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
+import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
@@ -35,6 +37,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         phone: true,
         email: true,
         creditLimitPence: true,
+        tagsJson: true,
         purchaseInvoices: {
           where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
           select: {
@@ -55,7 +58,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
   return (
     <div className="space-y-6">
       <PageHeader title="Suppliers" subtitle="Vendors and payables." />
-      <div className="card p-6">
+      <div className="card p-5 sm:p-6">
         <h2 className="text-lg font-display font-semibold">Add supplier</h2>
         <FormError error={searchParams?.error} />
         <form action={createSupplierAction} className="mt-4 grid gap-4 md:grid-cols-3">
@@ -63,6 +66,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
           <input className="input" name="phone" placeholder="Phone" />
           <input className="input" name="email" placeholder="Email" />
           <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
+          <div className="md:col-span-2">
+            <input className="input" name="tags" placeholder="Tags — e.g. Wholesale, Local, Net 30" />
+          </div>
+          <div className="md:col-span-3">
+            <textarea className="input min-h-16" name="notes" placeholder="Notes — delivery quirks, account contact, payment preferences." />
+          </div>
           <div className="md:col-span-3">
             <SubmitButton className="btn-primary" loadingText="Adding…">Add supplier</SubmitButton>
           </div>
@@ -93,6 +102,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
                   (sum, invoice) => sum + computeOutstandingBalance(invoice),
                   0
                 );
+                const supplierTags = parseTags(supplier.tagsJson);
 
                 return (
                   <DataCard key={supplier.id}>
@@ -101,6 +111,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
                       subtitle={supplier.phone ?? 'No phone saved'}
                       aside={<span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{formatMoney(balance, business.currency)}</span>}
                     />
+                    {supplierTags.length > 0 ? <TagChips tags={supplierTags} max={4} className="mt-2" /> : null}
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(supplier.creditLimitPence, business.currency)}</span>} />
                       <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
@@ -147,12 +158,16 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
                       (sum, invoice) => sum + computeOutstandingBalance(invoice),
                       0
                     );
+                    const supplierTags = parseTags(supplier.tagsJson);
                     return (
                       <tr key={supplier.id} className="rounded-xl bg-white">
                         <td className="px-3 py-3 font-semibold">
-                          <Link href={`/suppliers/${supplier.id}`} className="hover:underline">
-                            {supplier.name}
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link href={`/suppliers/${supplier.id}`} className="hover:underline">
+                              {supplier.name}
+                            </Link>
+                            {supplierTags.length > 0 ? <TagChips tags={supplierTags} max={3} /> : null}
+                          </div>
                         </td>
                         <td className="px-3 py-3 text-sm text-black/60">{supplier.phone ?? '-'}</td>
                         <td className="px-3 py-3 text-sm text-black/60">{supplier.email ?? '-'}</td>

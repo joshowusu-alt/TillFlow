@@ -2,10 +2,12 @@ import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import TagChips from '@/components/TagChips';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate, formatRelativeDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
+import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { updateCustomerAction } from '@/app/actions/customers';
 import { getFeatures } from '@/lib/features';
@@ -56,6 +58,9 @@ export default async function CustomerDetailPage({
   if (!customer) {
     return <div className="card p-6">Customer not found.</div>;
   }
+
+  const customerTags = parseTags((customer as any).tagsJson ?? null);
+  const customerNotes = ((customer as any).notes as string | null) ?? '';
 
   // Lifetime stats are computed independent of the date filter so the summary
   // tiles always reflect the customer's total relationship with the business,
@@ -132,6 +137,10 @@ export default async function CustomerDetailPage({
     <div className="space-y-6">
       <PageHeader title={customer.name} subtitle="Customer profile and transaction history." />
 
+      {customerTags.length > 0 ? (
+        <TagChips tags={customerTags} className="-mt-2" />
+      ) : null}
+
       <div className="card grid gap-4 p-5 sm:p-6 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
@@ -166,19 +175,52 @@ export default async function CustomerDetailPage({
         </div>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-5 sm:p-6">
         <h2 className="text-lg font-display font-semibold">Edit customer</h2>
         <form action={updateCustomerAction} className="mt-4 grid gap-4 md:grid-cols-3">
           <input type="hidden" name="id" value={customer.id} />
-          <input className="input" name="name" defaultValue={customer.name} required />
-          <input className="input" name="phone" defaultValue={customer.phone ?? ''} placeholder="Phone" />
-          <input className="input" name="email" defaultValue={customer.email ?? ''} placeholder="Email" />
-          <input
-            className="input"
-            name="creditLimit"
-            defaultValue={(customer.creditLimitPence / 100).toFixed(2)}
-            placeholder="Credit limit"
-          />
+          <div>
+            <label className="label">Name</label>
+            <input className="input" name="name" defaultValue={customer.name} required />
+          </div>
+          <div>
+            <label className="label">Phone</label>
+            <input className="input" name="phone" defaultValue={customer.phone ?? ''} placeholder="Phone" />
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input className="input" name="email" defaultValue={customer.email ?? ''} placeholder="Email" />
+          </div>
+          <div>
+            <label className="label">Credit limit</label>
+            <input
+              className="input"
+              name="creditLimit"
+              defaultValue={(customer.creditLimitPence / 100).toFixed(2)}
+              placeholder="Credit limit"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">Tags</label>
+            <input
+              className="input"
+              name="tags"
+              defaultValue={customerTags.join(', ')}
+              placeholder="VIP, Wholesale, Net 30"
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Comma-separated. Use tags to group customers (e.g. VIP, Wholesale, Late payers).
+            </div>
+          </div>
+          <div className="md:col-span-3">
+            <label className="label">Notes</label>
+            <textarea
+              className="input min-h-20"
+              name="notes"
+              defaultValue={customerNotes}
+              placeholder="Anything you want to remember about this customer."
+            />
+          </div>
           <div className="md:col-span-3">
             <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
           </div>

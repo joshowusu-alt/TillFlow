@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { normalizeGhanaPhone } from '@/lib/storefront-phone';
+import { parseTags, serializeTags } from '@/lib/contact-tags';
 
 // ---------------------------------------------------------------------------
 // Shared input / output types
@@ -19,6 +20,8 @@ export type CustomerWriteData = {
   phone?: string | null;
   email?: string | null;
   creditLimitPence?: number;
+  notes?: string | null;
+  tags?: string[] | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -109,6 +112,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
         email: true,
         creditLimitPence: true,
         storeId: true,
+        tagsJson: true,
         // salesInvoices intentionally omitted — balance loaded in a single
         // batch query below to eliminate the previous N+1.
       },
@@ -180,8 +184,10 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
 
   const customersWithBalance = customers.map((c) => {
     const lifetime = lifetimeMap.get(c.id);
+    const { tagsJson, ...rest } = c;
     return {
-      ...c,
+      ...rest,
+      tags: parseTags(tagsJson),
       outstandingBalancePence: balanceMap.get(c.id) ?? 0,
       lifetimeSpentPence: lifetime?.spentPence ?? 0,
       lastSaleAt: lifetime?.lastSaleAt ?? null,
@@ -266,6 +272,8 @@ export async function createCustomer(
       phone: normalizeCustomerPhone(data.phone),
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
+      notes: data.notes?.trim() || null,
+      tagsJson: serializeTags(data.tags ?? null),
     },
   });
 }
@@ -306,6 +314,8 @@ export async function quickCreateCustomer(
       phone: normalizeCustomerPhone(data.phone),
       email: data.email?.trim() || null,
       creditLimitPence: Math.max(0, data.creditLimitPence ?? 0),
+      notes: data.notes?.trim() || null,
+      tagsJson: serializeTags(data.tags ?? null),
     },
     select: { id: true, name: true },
   });
@@ -335,6 +345,8 @@ export async function updateCustomer(
       phone: normalizeCustomerPhone(data.phone),
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
+      ...(data.notes !== undefined ? { notes: data.notes?.trim() || null } : {}),
+      ...(data.tags !== undefined ? { tagsJson: serializeTags(data.tags) } : {}),
     },
     select: { id: true },
   });

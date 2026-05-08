@@ -455,6 +455,8 @@ model Customer {
   paymentTermsDays Int      @default(0)
   creditLimitPence Int      @default(0)
   loyaltyPointsBalance Int  @default(0)
+  notes            String?
+  tagsJson         String?
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())
@@ -474,6 +476,8 @@ model Supplier {
   phone            String?
   email            String?
   creditLimitPence Int      @default(0)
+  notes            String?
+  tagsJson         String?
   qaTag            String?
   qaRunId          String?
   createdAt        DateTime @default(now())

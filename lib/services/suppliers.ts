@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { DEFAULT_PAGE_SIZE } from '@/lib/format';
+import { parseTags, serializeTags } from '@/lib/contact-tags';
 
 // ---------------------------------------------------------------------------
 // Shared input / output types
@@ -18,6 +19,8 @@ export type SupplierWriteData = {
   phone?: string | null;
   email?: string | null;
   creditLimitPence?: number;
+  notes?: string | null;
+  tags?: string[] | null;
 };
 
 export type SupplierListOptions = {
@@ -53,6 +56,7 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
         phone: true,
         email: true,
         creditLimitPence: true,
+        tagsJson: true,
         purchaseInvoices: {
           where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
           select: {
@@ -68,8 +72,13 @@ export async function getSuppliers(businessId: string, opts: SupplierListOptions
     }),
   ]);
 
+  const suppliersWithTags = suppliers.map((s) => {
+    const { tagsJson, ...rest } = s;
+    return { ...rest, tags: parseTags(tagsJson) };
+  });
+
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  return { suppliers, totalCount, totalPages };
+  return { suppliers: suppliersWithTags, totalCount, totalPages };
 }
 
 /**
@@ -113,6 +122,8 @@ export async function createSupplier(businessId: string, data: SupplierWriteData
       phone: data.phone ?? null,
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
+      notes: data.notes?.trim() || null,
+      tagsJson: serializeTags(data.tags ?? null),
     },
   });
 }
@@ -141,6 +152,8 @@ export async function updateSupplier(
       phone: data.phone ?? null,
       email: data.email ?? null,
       creditLimitPence: data.creditLimitPence ?? 0,
+      ...(data.notes !== undefined ? { notes: data.notes?.trim() || null } : {}),
+      ...(data.tags !== undefined ? { tagsJson: serializeTags(data.tags) } : {}),
     },
     select: { id: true },
   });

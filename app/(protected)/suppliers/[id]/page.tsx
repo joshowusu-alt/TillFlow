@@ -1,12 +1,14 @@
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
+import TagChips from '@/components/TagChips';
 import Link from 'next/link';
 import { Fragment } from 'react';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { computeOutstandingBalance } from '@/lib/accounting';
+import { parseTags } from '@/lib/contact-tags';
 import { updateSupplierAction } from '@/app/actions/suppliers';
 
 export default async function SupplierDetailPage({
@@ -50,6 +52,9 @@ export default async function SupplierDetailPage({
   if (!supplier) {
     return <div className="card p-6">Supplier not found.</div>;
   }
+
+  const supplierTags = parseTags((supplier as any).tagsJson ?? null);
+  const supplierNotes = ((supplier as any).notes as string | null) ?? '';
 
   const invoices = supplier.purchaseInvoices.map((invoice) => {
     const paid = invoice.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
@@ -110,7 +115,9 @@ export default async function SupplierDetailPage({
     <div className="space-y-6">
       <PageHeader title={supplier.name} subtitle="Supplier profile and payable history." />
 
-      <div className="card grid gap-4 p-6 md:grid-cols-3">
+      {supplierTags.length > 0 ? <TagChips tags={supplierTags} className="-mt-2" /> : null}
+
+      <div className="card grid gap-4 p-5 sm:p-6 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
           <div>Phone: {supplier.phone ?? '-'}</div>
@@ -130,19 +137,52 @@ export default async function SupplierDetailPage({
         </div>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-5 sm:p-6">
         <h2 className="text-lg font-display font-semibold">Edit supplier</h2>
         <form action={updateSupplierAction} className="mt-4 grid gap-4 md:grid-cols-3">
           <input type="hidden" name="id" value={supplier.id} />
-          <input className="input" name="name" defaultValue={supplier.name} required />
-          <input className="input" name="phone" defaultValue={supplier.phone ?? ''} placeholder="Phone" />
-          <input className="input" name="email" defaultValue={supplier.email ?? ''} placeholder="Email" />
-          <input
-            className="input"
-            name="creditLimit"
-            defaultValue={(supplier.creditLimitPence / 100).toFixed(2)}
-            placeholder="Credit limit"
-          />
+          <div>
+            <label className="label">Name</label>
+            <input className="input" name="name" defaultValue={supplier.name} required />
+          </div>
+          <div>
+            <label className="label">Phone</label>
+            <input className="input" name="phone" defaultValue={supplier.phone ?? ''} placeholder="Phone" />
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input className="input" name="email" defaultValue={supplier.email ?? ''} placeholder="Email" />
+          </div>
+          <div>
+            <label className="label">Credit limit</label>
+            <input
+              className="input"
+              name="creditLimit"
+              defaultValue={(supplier.creditLimitPence / 100).toFixed(2)}
+              placeholder="Credit limit"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">Tags</label>
+            <input
+              className="input"
+              name="tags"
+              defaultValue={supplierTags.join(', ')}
+              placeholder="Wholesale, Local, Net 30"
+            />
+            <div className="mt-1 text-xs text-black/50">
+              Comma-separated. Use tags to group suppliers (e.g. Wholesale, Local, Imported).
+            </div>
+          </div>
+          <div className="md:col-span-3">
+            <label className="label">Notes</label>
+            <textarea
+              className="input min-h-20"
+              name="notes"
+              defaultValue={supplierNotes}
+              placeholder="Delivery quirks, account contact, payment preferences."
+            />
+          </div>
           <div className="md:col-span-3">
             <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
           </div>

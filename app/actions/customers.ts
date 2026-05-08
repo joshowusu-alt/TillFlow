@@ -10,6 +10,7 @@ import {
   deleteCustomer,
   findCustomerByPhone,
 } from '@/lib/services/customers';
+import { normalizeTagInput } from '@/lib/contact-tags';
 import { audit } from '@/lib/audit';
 
 export async function createCustomerAction(formData: FormData): Promise<void> {
@@ -21,6 +22,8 @@ export async function createCustomerAction(formData: FormData): Promise<void> {
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
     const storeId = formOptionalString(formData, 'storeId');
+    const notes = formOptionalString(formData, 'notes');
+    const tags = normalizeTagInput(formOptionalString(formData, 'tags'));
 
     if (!name) return err('Please enter the customer name.');
 
@@ -33,7 +36,7 @@ export async function createCustomerAction(formData: FormData): Promise<void> {
       }
     }
 
-    await createCustomer(businessId, { name, phone, email, creditLimitPence, storeId });
+    await createCustomer(businessId, { name, phone, email, creditLimitPence, storeId, notes, tags });
 
     redirect('/customers');
   }, '/customers');
@@ -50,6 +53,8 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
+    const notes = formOptionalString(formData, 'notes');
+    const tags = normalizeTagInput(formOptionalString(formData, 'tags'));
 
     if (phone) {
       const existing = await findCustomerByPhone(businessId, phone, id);
@@ -60,7 +65,14 @@ export async function updateCustomerAction(formData: FormData): Promise<void> {
       }
     }
 
-    const updated = await updateCustomer(id, businessId, { name, phone, email, creditLimitPence });
+    const updated = await updateCustomer(id, businessId, {
+      name,
+      phone,
+      email,
+      creditLimitPence,
+      notes,
+      tags,
+    });
     if (!updated) return err('Customer not found. It may have been removed.');
 
     redirect(`/customers/${updated.id}`);

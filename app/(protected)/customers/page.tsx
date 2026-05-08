@@ -11,6 +11,7 @@ import { formatMoney, formatRelativeDate } from '@/lib/format';
 import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
+import TagChips from '@/components/TagChips';
 
 export default async function CustomersPage({
   searchParams,
@@ -105,6 +106,15 @@ export default async function CustomersPage({
                 </select>
               </div>
             ) : null}
+            <div className="md:col-span-2">
+              <label className="label">Tags</label>
+              <input className="input" name="tags" placeholder="VIP, Wholesale, Net 30" />
+              <div className="mt-1 text-xs text-black/50">Comma-separated. Up to 12 tags, 30 characters each.</div>
+            </div>
+            <div className="md:col-span-3">
+              <label className="label">Notes</label>
+              <textarea className="input min-h-16" name="notes" placeholder="Anything you want to remember about this customer." />
+            </div>
             <div className="flex items-end md:col-start-3 md:justify-end">
               <SubmitButton className="btn-primary w-full md:w-auto">Add customer</SubmitButton>
             </div>
@@ -139,6 +149,7 @@ export default async function CustomersPage({
                   subtitle={customer.phone ?? 'No phone number'}
                   aside={balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
                 />
+                {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={4} className="mt-2" /> : null}
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <DataCardField label="Lifetime spend" value={<span className="font-semibold text-ink">{formatMoney(customer.lifetimeSpentPence, business.currency)}</span>} />
                   <DataCardField label="Last visit" value={<span className="text-black/65">{customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}</span>} />
@@ -197,9 +208,12 @@ export default async function CustomersPage({
                 return (
                   <tr key={customer.id} className="rounded-xl bg-white">
                     <td className="px-3 py-3 font-semibold">
-                      <Link href={`/customers/${customer.id}`} className="hover:underline">
-                        {customer.name}
-                      </Link>
+                      <div className="flex flex-col gap-1">
+                        <Link href={`/customers/${customer.id}`} className="hover:underline">
+                          {customer.name}
+                        </Link>
+                        {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={3} /> : null}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
                     <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>

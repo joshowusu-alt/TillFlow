@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { formString, formOptionalString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, err } from '@/lib/action-utils';
 import { createSupplier, updateSupplier, deleteSupplier } from '@/lib/services/suppliers';
+import { normalizeTagInput } from '@/lib/contact-tags';
 import { audit } from '@/lib/audit';
 
 export async function createSupplierAction(formData: FormData): Promise<void> {
@@ -14,10 +15,12 @@ export async function createSupplierAction(formData: FormData): Promise<void> {
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
+    const notes = formOptionalString(formData, 'notes');
+    const tags = normalizeTagInput(formOptionalString(formData, 'tags'));
 
     if (!name) return err('Please enter the supplier name.');
 
-    await createSupplier(businessId, { name, phone, email, creditLimitPence });
+    await createSupplier(businessId, { name, phone, email, creditLimitPence, notes, tags });
 
     redirect('/suppliers');
   }, '/suppliers');
@@ -34,8 +37,17 @@ export async function updateSupplierAction(formData: FormData): Promise<void> {
     const phone = formOptionalString(formData, 'phone');
     const email = formOptionalString(formData, 'email');
     const creditLimitPence = formPence(formData, 'creditLimit');
+    const notes = formOptionalString(formData, 'notes');
+    const tags = normalizeTagInput(formOptionalString(formData, 'tags'));
 
-    const updated = await updateSupplier(id, businessId, { name, phone, email, creditLimitPence });
+    const updated = await updateSupplier(id, businessId, {
+      name,
+      phone,
+      email,
+      creditLimitPence,
+      notes,
+      tags,
+    });
     if (!updated) return err('Supplier not found. It may have been removed.');
 
     redirect(`/suppliers/${updated.id}`);
