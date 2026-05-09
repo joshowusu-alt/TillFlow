@@ -115,14 +115,16 @@ export default function TopNav({
         <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7">
           <a
             href="/pos"
-            className="flex shrink-0 items-center gap-2.5"
             aria-label="TillFlow — go to POS"
+            className="shrink-0"
           >
-            <Logo variant="mark" size={34} className="h-[34px] w-[34px] rounded-xl shadow-sm" ariaHidden />
-            <div className="text-lg font-display font-bold leading-none">
-              <span className="bg-gradient-to-r from-blue-800 to-blue-500 bg-clip-text text-transparent">Till</span>
-              <span className="text-gray-800">Flow</span>
-            </div>
+            <Logo
+              variant="lockup"
+              size={34}
+              className="gap-2.5"
+              wordmarkClassName="text-lg"
+              ariaHidden
+            />
           </a>
 
           <nav

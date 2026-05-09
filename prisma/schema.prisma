@@ -746,7 +746,7 @@ model MessageOutbox {
   id            String    @id @default(cuid())
   businessId    String
   onlineOrderId String?
-  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED | SUBSCRIPTION_*
+  /// One of: ORDER_RECEIVED | PAYMENT_CONFIRMED | READY_FOR_PICKUP | CANCELLED | SUBSCRIPTION_* | OWNER_DAILY_SUMMARY
   eventType     String
   idempotencyKey String?   @unique
   /// One of: SMS

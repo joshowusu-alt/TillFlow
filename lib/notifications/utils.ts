@@ -180,6 +180,16 @@ export function formatBusinessDateLabel(date: Date, timeZone?: string | null) {
   });
 }
 
+export function formatBusinessLocalDateKey(date: Date, timeZone?: string | null) {
+  const resolvedTimeZone = resolveBusinessTimeZone(timeZone);
+  const parts = getZonedDateParts(date, resolvedTimeZone);
+  return [
+    parts.year,
+    String(parts.month).padStart(2, '0'),
+    String(parts.day).padStart(2, '0'),
+  ].join('-');
+}
+
 export function getCurrentHourForTimeZone(date: Date, timeZone?: string | null) {
   return getZonedDateParts(date, resolveBusinessTimeZone(timeZone)).hour;
 }

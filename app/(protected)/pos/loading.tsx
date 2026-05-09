@@ -1,9 +1,11 @@
+import { Logo } from '@/components/Logo';
+
 export default function Loading() {
   return (
     <div className="min-h-[70vh] px-4 py-8 sm:px-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-6">
         <div className="mx-auto flex w-full max-w-md items-center gap-4 rounded-[1.75rem] border border-white/70 bg-white/90 px-4 py-4 shadow-soft backdrop-blur animate-pulse">
-          <img src="/icon" alt="TillFlow" className="h-14 w-14 rounded-2xl shadow-lg shadow-accent/15" />
+          <Logo variant="mark" size={56} className="h-14 w-14 rounded-2xl shadow-lg shadow-accent/15" alt="TillFlow" />
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-accent/70">TillFlow POS</div>
             <div className="mt-1 h-4 w-32 rounded-full bg-black/5" />

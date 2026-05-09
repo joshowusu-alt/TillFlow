@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { hasValidCronSecret } from '@/lib/cron-auth';
 import { sendStorefrontSms } from '@/lib/services/storefront-sms';
+import { OWNER_DAILY_SUMMARY_EVENT_TYPE } from '@/lib/notifications/owner-daily-summary-sms';
 import {
   STOREFRONT_SMS_DAILY_CAP,
   STOREFRONT_SMS_DAILY_CAP_WARNING_RATIO,
@@ -171,6 +172,10 @@ function isSubscriptionReminder(eventType: string) {
   return eventType.startsWith('SUBSCRIPTION_');
 }
 
+function isOperationalOwnerSms(eventType: string) {
+  return eventType === OWNER_DAILY_SUMMARY_EVENT_TYPE;
+}
+
 async function markFailureOrRetry(
   rowId: string,
   error: string,
@@ -229,7 +234,11 @@ export async function GET(req: NextRequest) {
   let warnings = 0;
 
   for (const row of batch) {
-    if (!isSubscriptionReminder(row.eventType) && !row.business?.smsNotificationsEnabled) {
+    if (
+      !isSubscriptionReminder(row.eventType) &&
+      !isOperationalOwnerSms(row.eventType) &&
+      !row.business?.smsNotificationsEnabled
+    ) {
       // Merchant disabled SMS between enqueue and dispatch — fail without
       // burning attempts so the row stays auditable.
       await prisma.messageOutbox.update({

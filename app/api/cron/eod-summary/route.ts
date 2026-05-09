@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { _sendEodSummaryForBusiness } from '@/app/actions/notifications';
 import { hasValidCronSecret } from '@/lib/cron-auth';
+import { enqueueOwnerDailySummarySms } from '@/lib/notifications/owner-daily-summary-sms';
 import {
   getCurrentHourForTimeZone,
-  parseScheduleTime,
   resolveBusinessTimeZone,
 } from '@/lib/notifications/utils';
+
+const OWNER_SUMMARY_SEND_HOUR = 20;
+const OWNER_SUMMARY_SEND_TIME = '20:00';
 
 /**
  * GET /api/cron/eod-summary
  * Protected by CRON_SECRET via Authorization: Bearer or x-cron-secret header.
  *
  * Runs on a global schedule and filters each business by its local timezone
- * and configured WhatsApp summary hour.
+ * and configured owner summary hour. The actual SMS send is handled by the
+ * durable MessageOutbox dispatcher, so this route only enqueues work.
  *
  * Query params:
  *   businessId - optional; run immediately for a single business only
@@ -29,17 +32,17 @@ export async function GET(req: NextRequest) {
   const businesses = await prisma.business.findMany({
     where: {
       ...(specificId ? { id: specificId } : {}),
-      whatsappEnabled: true,
       isDemo: false,
+      subscriptionStatus: { not: 'CANCELLED' },
     },
-    select: { id: true, name: true, timezone: true, whatsappScheduleTime: true },
+    select: { id: true, name: true, timezone: true },
   });
 
   if (businesses.length === 0) {
     return NextResponse.json({
       ok: true,
       processed: 0,
-      message: 'No whatsapp-enabled businesses found',
+      message: 'No eligible businesses found',
     });
   }
 
@@ -48,8 +51,7 @@ export async function GET(req: NextRequest) {
     ? businesses
     : businesses.filter((business) => {
         const localHour = getCurrentHourForTimeZone(now, business.timezone);
-        const scheduledHour = parseScheduleTime(business.whatsappScheduleTime).hour;
-        return localHour === scheduledHour;
+        return localHour === OWNER_SUMMARY_SEND_HOUR;
       });
 
   if (eligibleBusinesses.length === 0) {
@@ -60,9 +62,9 @@ export async function GET(req: NextRequest) {
         id: business.id,
         name: business.name,
         timezone: resolveBusinessTimeZone(business.timezone),
-        scheduledTime: parseScheduleTime(business.whatsappScheduleTime).value,
+        scheduledTime: OWNER_SUMMARY_SEND_TIME,
       })),
-      message: 'No businesses matched their local WhatsApp send hour',
+      message: 'No businesses matched their local owner summary send hour',
     });
   }
 
@@ -71,7 +73,7 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < eligibleBusinesses.length; i += BATCH_SIZE) {
     const batch = eligibleBusinesses.slice(i, i + BATCH_SIZE);
     const settled = await Promise.allSettled(
-      batch.map((biz) => _sendEodSummaryForBusiness(biz.id, 'CRON'))
+      batch.map((biz) => enqueueOwnerDailySummarySms(biz.id, { now }))
     );
     settled.forEach((outcome, idx) => {
       const bizId = batch[idx].id;

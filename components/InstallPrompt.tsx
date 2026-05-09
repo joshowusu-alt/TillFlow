@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Logo } from '@/components/Logo';
 
 interface BeforeInstallPromptEvent extends Event {
     prompt: () => Promise<void>;
@@ -86,7 +87,7 @@ export default function InstallPrompt() {
                 {/* Header gradient */}
                 <div className="bg-gradient-to-r from-accent to-accent/80 p-4">
                     <div className="flex items-center gap-3">
-                        <img src="/icon" alt="TillFlow" className="h-12 w-12 rounded-xl shadow-lg shadow-black/15" />
+                        <Logo variant="mark" size={48} className="h-12 w-12 rounded-xl shadow-lg shadow-black/15" alt="TillFlow" />
                         <div className="text-white">
                             <div className="font-bold">Install TillFlow</div>
                             <div className="text-sm text-white/80">Ready for fast checkout, even on weak network</div>
