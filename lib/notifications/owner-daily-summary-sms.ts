@@ -224,6 +224,14 @@ export async function enqueueOwnerDailySummarySms(
   const metrics = await getOwnerDailySummaryMetrics(db, summaryBusiness, now);
   const body = buildOwnerDailySummarySms(summaryBusiness, metrics);
 
+  const existing = await db.messageOutbox.findUnique({
+    where: { idempotencyKey },
+    select: { id: true },
+  });
+  if (existing) {
+    return { ok: true as const, outboxId: existing.id, deduped: true };
+  }
+
   try {
     const created = await db.messageOutbox.create({
       data: {
