@@ -51,8 +51,8 @@ async function postToSlack(payload: { text: string; blocks?: unknown }) {
 
 export async function notifyStateTransition(payload: StateTransitionPayload): Promise<void> {
   if (payload.fromState === payload.toState) return;
-  const escalating = ['GRACE', 'STARTER_FALLBACK', 'READ_ONLY'].includes(payload.toState);
-  const recovered = payload.fromState === 'READ_ONLY' && payload.toState === 'ACTIVE';
+  const escalating = ['TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(payload.toState);
+  const recovered = payload.fromState === 'READ_ONLY' && payload.toState === 'PAID_ACTIVE';
   if (!escalating && !recovered) return;
 
   const verb = recovered ? 'recovered' : 'moved to';

@@ -1,26 +1,31 @@
 import { getBusinessPlan, type BusinessMode, type BusinessPlan, type StoreMode } from './features';
 import {
+  computeBillingAccessState,
   getSubscriptionSnapshot,
   type SubscriptionInput,
-  type SubscriptionStatus,
+  type BillingAccessState,
 } from './subscription-lifecycle';
-
-export type BillingAccessState = 'ACTIVE' | 'TRIAL' | 'GRACE' | 'READ_ONLY';
 
 type BillingBusinessInput = SubscriptionInput & {
   plan?: BusinessPlan | null;
   mode?: BusinessMode | null;
   storeMode?: StoreMode | null;
+  timezone?: string | null;
 };
 
 export type BillingEntitlement = {
   purchasedPlan: BusinessPlan;
   effectivePlan: BusinessPlan;
-  subscriptionStatus: SubscriptionStatus;
+  subscriptionStatus: BillingAccessState;
   accessState: BillingAccessState;
   canWrite: boolean;
   isReadOnly: boolean;
   statusLabel: string;
+  displayStatus: string;
+  daysRemaining: number | null;
+  isTrial: boolean;
+  isPaid: boolean;
+  isOverdue: boolean;
   trialEndsAt: Date | null;
   nextPaymentDueAt: Date | null;
   lastPaymentAt: Date | null;
@@ -30,50 +35,37 @@ export type BillingEntitlement = {
   daysLeftInTrial: number | null;
   daysUntilBilling: number | null;
   billingAmountPence: number;
+  primaryBanner: string | null;
+  merchantMessage: string;
+  controlMessage: string;
+  nextActionLabel: string;
+  nextActionHref: string;
 };
 
-function accessStateFor(status: SubscriptionStatus): BillingAccessState {
-  if (status === 'TRIAL_ACTIVE' || status === 'TRIAL_EXPIRING_SOON') return 'TRIAL';
-  if (status === 'GRACE_PERIOD' || status === 'PAYMENT_PENDING' || status === 'TRIAL_ENDED' || status === 'OVERDUE') return 'GRACE';
-  if (status === 'SUSPENDED' || status === 'CANCELLED') return 'READ_ONLY';
-  return 'ACTIVE';
-}
-
-function labelFor(status: SubscriptionStatus) {
-  switch (status) {
-    case 'TRIAL_ACTIVE':
-      return 'TRIAL ACTIVE';
-    case 'TRIAL_EXPIRING_SOON':
-      return 'TRIAL EXPIRING SOON';
-    case 'TRIAL_ENDED':
-      return 'TRIAL ENDED';
-    case 'PAYMENT_PENDING':
-      return 'PAYMENT PENDING';
-    case 'DUE_SOON':
-      return 'DUE SOON';
-    case 'DUE_TODAY':
-      return 'DUE TODAY';
-    case 'GRACE_PERIOD':
-      return 'GRACE PERIOD';
-    default:
-      return status.replace(/_/g, ' ');
-  }
+function labelFor(status: BillingAccessState) {
+  return status.replace(/_/g, ' ');
 }
 
 export function getBillingEntitlement(input: BillingBusinessInput, now = new Date()): BillingEntitlement {
   const purchasedPlan = getBusinessPlan((input.selectedPlan ?? input.plan ?? input.mode) as BusinessPlan | BusinessMode | null | undefined, input.storeMode ?? 'SINGLE_STORE');
+  const computation = computeBillingAccessState({ ...input, selectedPlan: purchasedPlan }, now);
   const snapshot = getSubscriptionSnapshot({ ...input, selectedPlan: purchasedPlan }, now);
-  const accessState = accessStateFor(snapshot.status);
-  const isReadOnly = accessState === 'READ_ONLY';
+  const accessState = computation.accessState;
+  const isReadOnly = computation.isRestricted;
 
   return {
     purchasedPlan,
     effectivePlan: purchasedPlan,
-    subscriptionStatus: snapshot.status,
+    subscriptionStatus: accessState,
     accessState,
     canWrite: !isReadOnly,
     isReadOnly,
-    statusLabel: labelFor(snapshot.status),
+    statusLabel: labelFor(accessState),
+    displayStatus: computation.displayStatus,
+    daysRemaining: computation.daysRemaining,
+    isTrial: computation.isTrial,
+    isPaid: computation.isPaid,
+    isOverdue: computation.isOverdue,
     trialEndsAt: snapshot.trialEndsAt,
     nextPaymentDueAt: snapshot.nextBillingDate,
     lastPaymentAt: snapshot.lastPaymentAt,
@@ -83,5 +75,10 @@ export function getBillingEntitlement(input: BillingBusinessInput, now = new Dat
     daysLeftInTrial: snapshot.daysLeftInTrial,
     daysUntilBilling: snapshot.daysUntilBilling,
     billingAmountPence: snapshot.billingAmountPence,
+    primaryBanner: computation.primaryBanner,
+    merchantMessage: computation.merchantMessage,
+    controlMessage: computation.controlMessage,
+    nextActionLabel: computation.nextActionLabel,
+    nextActionHref: computation.nextActionHref,
   };
 }

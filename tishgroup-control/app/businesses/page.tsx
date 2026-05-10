@@ -253,8 +253,8 @@ export default async function BusinessesPage({
 
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">Subscription status</span>
-              <select name="status" defaultValue="ACTIVE" className="control-field">
-                <option value="ACTIVE">Active</option>
+              <select name="status" defaultValue="PAID_ACTIVE" className="control-field">
+                <option value="PAID_ACTIVE">Paid active</option>
                 <option value="TRIAL">Trial</option>
                 <option value="SUSPENDED">Suspended</option>
                 <option value="READ_ONLY">Read only</option>

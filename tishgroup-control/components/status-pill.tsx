@@ -13,26 +13,22 @@ const tones: Record<PillTone, string> = {
 
 function stateTone(state: ManagedState): PillTone {
   switch (state) {
-    case 'ACTIVE':
+    case 'PAID_ACTIVE':
       return 'moss';
-    case 'INACTIVE':
     case 'CANCELLED':
       return 'slate';
     case 'TRIAL_ACTIVE':
-    case 'TRIAL':
+    case 'TRIAL_DUE_SOON':
       return 'teal';
-    case 'TRIAL_EXPIRING_SOON':
-    case 'DUE_SOON':
-    case 'DUE_TODAY':
+    case 'TRIAL_DUE_TODAY':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
       return 'gold';
-    case 'PAYMENT_PENDING':
-    case 'TRIAL_ENDED':
-    case 'OVERDUE':
-    case 'GRACE_PERIOD':
-    case 'GRACE':
-    case 'STARTER_FALLBACK':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'TRIAL_RESTRICTED':
+    case 'PAYMENT_RESTRICTED':
       return 'ember';
-    case 'SUSPENDED':
     case 'READ_ONLY':
       return 'red';
     default:

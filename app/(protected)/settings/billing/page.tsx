@@ -1,6 +1,7 @@
 import {
   requestPlanUpgradeAction,
 } from '@/app/actions/settings';
+import Link from 'next/link';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
 import { requireBusiness } from '@/lib/auth';
@@ -88,40 +89,6 @@ function formatDateLabel(value: Date | string | null | undefined, fallback = 'No
   return Number.isNaN(date.getTime()) ? fallback : date.toLocaleDateString('en-GB');
 }
 
-function getAccessNarrative({
-  accessState,
-  purchasedPlan,
-  effectivePlan,
-  nextPaymentDueAt,
-  graceEndsAt,
-  starterFallbackEndsAt,
-  readOnlyAt,
-}: {
-  accessState: string | null | undefined;
-  purchasedPlan: BusinessPlan;
-  effectivePlan: BusinessPlan;
-  nextPaymentDueAt: Date | string | null | undefined;
-  graceEndsAt: Date | string | null | undefined;
-  starterFallbackEndsAt: Date | string | null | undefined;
-  readOnlyAt: Date | string | null | undefined;
-}) {
-  switch (accessState) {
-    case 'TRIAL':
-      return `This business is currently in trial for ${PLAN_DETAILS[purchasedPlan].name}.`;
-    case 'GRACE':
-      return `Payment was due on ${formatDateLabel(nextPaymentDueAt)}. Full ${PLAN_DETAILS[purchasedPlan].name} access remains available until ${formatDateLabel(graceEndsAt)}.`;
-    case 'STARTER_FALLBACK':
-      return `Payment grace has ended. The business is now on Starter fallback access until ${formatDateLabel(starterFallbackEndsAt ?? readOnlyAt)}.`;
-    case 'READ_ONLY':
-      return 'The final fallback window has ended. Historical data remains available, but new sales, purchases, stock changes, settings updates, and other write actions are blocked until payment is recorded.';
-    case 'ACTIVE':
-    default:
-      return purchasedPlan === effectivePlan
-        ? `${PLAN_DETAILS[purchasedPlan].name} access is fully active for this business.`
-        : `${PLAN_DETAILS[purchasedPlan].name} was purchased, but access is currently running on ${PLAN_DETAILS[effectivePlan].name}.`;
-  }
-}
-
 export default async function BillingPage({
   searchParams,
 }: {
@@ -138,10 +105,18 @@ export default async function BillingPage({
   const purchasedPlan = ((business as any).purchasedPlan as BusinessPlan | undefined) ?? effectivePlan;
   const effectivePlanSummary = getPlanSummary(effectivePlan);
   const purchasedPlanSummary = getPlanSummary(purchasedPlan);
-  const planStatus = String((business as any).planStatus ?? 'ACTIVE');
   const accessState = String((business as any).billingAccessState ?? 'ACTIVE');
+  const billingDisplayStatus = String((business as any).billingDisplayStatus ?? accessState.replace(/_/g, ' '));
   const billingSchemaReady = Boolean((business as any).billingSchemaReady ?? false);
   const canWrite = Boolean((business as any).billingCanWrite ?? true);
+  const billingPrimaryBanner = (business as any).billingPrimaryBanner as string | null | undefined;
+  const billingMerchantMessage = String((business as any).billingMerchantMessage ?? getMerchantSubscriptionMessage(business as any));
+  const billingControlMessage = String((business as any).billingControlMessage ?? 'Billing access is being evaluated.');
+  const billingNextActionLabel = String((business as any).billingNextActionLabel ?? 'View billing');
+  const billingNextActionHref = String((business as any).billingNextActionHref ?? '/settings/billing');
+  const billingIsPaid = Boolean((business as any).billingIsPaid ?? false);
+  const billingIsOverdue = Boolean((business as any).billingIsOverdue ?? false);
+  const billingIsRestricted = Boolean((business as any).billingReadOnly ?? false);
   const trialEndsAt = (business as any).trialEndsAt as Date | null | undefined;
   const planSetAt = (business as any).planSetAt as Date | null | undefined;
   const controlBillingCadenceRaw = String((business as any).controlBillingCadence ?? '').toUpperCase();
@@ -173,19 +148,10 @@ export default async function BillingPage({
     ? (desiredPlanValue as BusinessPlan)
     : undefined;
   const upgradeOptions = PLAN_ORDER.filter((plan) => !hasPlanAccess(purchasedPlan, plan));
+  const daysRemaining = (business as any).billingDaysRemaining as number | null | undefined;
   const daysLeftInTrial = (business as any).billingDaysLeftInTrial as number | null | undefined;
   const daysUntilBilling = (business as any).billingDaysUntilBilling as number | null | undefined;
   const billingAmountPence = ((business as any).billingAmount as number | null | undefined) ?? ((business as any).billingAmountPence as number | null | undefined) ?? PLAN_MONTHLY_PRICES[purchasedPlan] * 100;
-  const subscriptionMessage = getMerchantSubscriptionMessage(business as any);
-  const accessNarrative = getAccessNarrative({
-    accessState,
-    purchasedPlan,
-    effectivePlan,
-    nextPaymentDueAt,
-    graceEndsAt,
-    starterFallbackEndsAt,
-    readOnlyAt,
-  });
 
   return (
     <div className="space-y-6">
@@ -215,27 +181,20 @@ export default async function BillingPage({
         </div>
       ) : null}
 
-      {accessState === 'READ_ONLY' ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-          Full usage is restricted until payment is confirmed. Billing, support, account settings, and read-only dashboard access remain available.
-        </div>
-      ) : null}
-
-      {accessState === 'GRACE' ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-          {subscriptionMessage}
-        </div>
-      ) : null}
-
-      {accessState === 'TRIAL' ? (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">
-          {subscriptionMessage}
-        </div>
-      ) : null}
-
-      {accessState === 'STARTER_FALLBACK' ? (
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-900">
-          This business is now on Starter fallback access and becomes read-only on {formatDateLabel(readOnlyAt)} unless payment is recorded first.
+      {billingPrimaryBanner ? (
+        <div className={`rounded-2xl border px-4 py-4 text-sm ${
+          billingIsRestricted
+            ? 'border-rose-200 bg-rose-50 text-rose-900'
+            : billingIsOverdue
+              ? 'border-amber-200 bg-amber-50 text-amber-900'
+              : 'border-blue-200 bg-blue-50 text-blue-900'
+        }`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>{billingPrimaryBanner}</p>
+            <Link href={billingNextActionHref} className="font-semibold underline underline-offset-4">
+              {billingNextActionLabel}
+            </Link>
+          </div>
         </div>
       ) : null}
 
@@ -243,7 +202,7 @@ export default async function BillingPage({
         {PLAN_ORDER.map((plan) => {
           const details = PLAN_DETAILS[plan];
           const isCurrent = plan === effectivePlan;
-          const isPurchased = plan === purchasedPlan;
+          const isPurchased = billingIsPaid && plan === purchasedPlan;
           const monthlyPrice = PLAN_MONTHLY_PRICES[plan];
           const annualPrice = getAnnualPlanPrice(monthlyPrice);
           const annualSavings = getAnnualPlanSavings(monthlyPrice);
@@ -383,13 +342,13 @@ export default async function BillingPage({
                 {effectivePlanSummary.name}
               </span>
               <span className="rounded-full bg-black/[0.05] px-3 py-1 text-sm font-medium text-black/60">
-                {planStatus}
+                {billingDisplayStatus}
               </span>
               {!canWrite ? (
                 <span className="rounded-full bg-rose-100 px-3 py-1 text-sm font-medium text-rose-700">Read only</span>
               ) : null}
             </div>
-            <p className="mt-3 max-w-3xl text-sm text-black/60">{accessNarrative}</p>
+            <p className="mt-3 max-w-3xl text-sm text-black/60">{billingMerchantMessage}</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -398,12 +357,12 @@ export default async function BillingPage({
               <div className="mt-1 text-base font-semibold text-ink">{business.name}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Purchased plan</div>
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Plan</div>
               <div className="mt-1 text-base font-semibold text-ink">{purchasedPlanSummary.name}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Access today</div>
-              <div className="mt-1 text-base font-semibold text-ink">{effectivePlanSummary.name}</div>
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Billing status</div>
+              <div className="mt-1 text-base font-semibold text-ink">{billingDisplayStatus}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Subscription start</div>
@@ -436,13 +395,11 @@ export default async function BillingPage({
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Countdown</div>
               <div className="mt-1 text-base font-semibold text-ink">
-                {accessState === 'TRIAL'
-                  ? `${daysLeftInTrial ?? 0} day${daysLeftInTrial === 1 ? '' : 's'} left`
-                  : daysUntilBilling == null
-                    ? 'Not scheduled'
-                    : daysUntilBilling === 0
-                      ? 'Due today'
-                      : `${Math.abs(daysUntilBilling)} day${Math.abs(daysUntilBilling) === 1 ? '' : 's'} ${daysUntilBilling > 0 ? 'until billing' : 'overdue'}`}
+                {daysRemaining == null
+                  ? 'Not scheduled'
+                  : daysRemaining === 0
+                    ? 'Due today'
+                    : `${Math.abs(daysRemaining)} day${Math.abs(daysRemaining) === 1 ? '' : 's'} ${daysRemaining > 0 ? 'left' : 'overdue'}`}
               </div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
@@ -459,20 +416,21 @@ export default async function BillingPage({
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3 sm:col-span-2 xl:col-span-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Trial end</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(trialEndsAt, 'No active trial')}</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(trialEndsAt, 'Not applicable')}</div>
             </div>
           </div>
 
-          {billingNotes ? (
-            <div className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/65">
-              <div className="text-xs uppercase tracking-[0.18em] text-black/40">Billing notes</div>
-              <p className="mt-2 whitespace-pre-line">{billingNotes}</p>
+          <details className="rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/65">
+            <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-black/40">Billing history</summary>
+            <div className="mt-3 space-y-3">
+              <p>{billingControlMessage}</p>
+              {billingNotes ? <p className="whitespace-pre-line">{billingNotes}</p> : null}
             </div>
-          ) : null}
+          </details>
         </div>
 
         <div className="space-y-4">
-          <div className="card space-y-4 p-6">
+          <div id="payment-instructions" className="card space-y-4 p-6 scroll-mt-24">
             <h2 className="text-lg font-display font-semibold">Payment instructions</h2>
             <div className="space-y-3 text-sm text-black/60">
               <p>

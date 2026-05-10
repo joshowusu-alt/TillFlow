@@ -213,7 +213,7 @@ export default async function BusinessDetailPage({
             />
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
-                <div className="eyebrow">Purchased plan</div>
+                <div className="eyebrow">Selected plan</div>
                 <div className="mt-2 text-lg font-semibold text-control-ink">{business.plan}</div>
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
@@ -262,7 +262,7 @@ export default async function BusinessDetailPage({
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Trial end</div>
-                <div className="mt-2 text-lg font-semibold text-control-ink">{business.trialEndsAt ?? 'No active trial'}</div>
+                <div className="mt-2 text-lg font-semibold text-control-ink">{business.trialEndsAt ?? 'Not in trial'}</div>
               </div>
             </div>
           </div>
@@ -491,7 +491,7 @@ export default async function BusinessDetailPage({
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Subscription status</span>
                     <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
-                      <option value="ACTIVE">Active</option>
+                      <option value="PAID_ACTIVE">Paid active</option>
                       <option value="TRIAL">Trial</option>
                       <option value="SUSPENDED">Suspended</option>
                       <option value="READ_ONLY">Read only</option>
@@ -727,7 +727,7 @@ export default async function BusinessDetailPage({
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-control-ink">Subscription status</span>
                   <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
-                    <option value="ACTIVE">Active</option>
+                    <option value="PAID_ACTIVE">Paid active</option>
                     <option value="TRIAL">Trial</option>
                     <option value="SUSPENDED">Suspended</option>
                     <option value="READ_ONLY">Read only</option>

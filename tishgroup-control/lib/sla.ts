@@ -10,7 +10,7 @@ const UNREVIEWED_AMBER_DAYS = 7;
 const UNREVIEWED_RED_DAYS = 14;
 const NO_CONTACT_AMBER_DAYS = 14;
 const NO_CONTACT_RED_DAYS = 30;
-const RISKY_STATES = new Set(['DUE_SOON', 'GRACE', 'STARTER_FALLBACK', 'READ_ONLY']);
+const RISKY_STATES = new Set(['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY']);
 
 function daysBetween(now: Date, value: string | null | undefined) {
   if (!value) return null;

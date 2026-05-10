@@ -50,21 +50,21 @@ function matchesFilter(business: ManagedBusiness, filter: FilterKey) {
   const daysToDue = daysUntil(business.nextDueAt);
   switch (filter) {
     case 'trial-active':
-      return business.state === 'TRIAL_ACTIVE' || business.state === 'TRIAL_EXPIRING_SOON' || business.state === 'TRIAL';
+      return business.state === 'TRIAL_ACTIVE' || business.state === 'TRIAL_DUE_SOON' || business.state === 'TRIAL_DUE_TODAY';
     case 'due-5-days':
       return daysToDue != null && daysToDue >= 0 && daysToDue <= 5;
     case 'due-tomorrow':
       return daysToDue === 1;
     case 'due-today':
-      return business.state === 'DUE_TODAY' || daysToDue === 0;
+      return business.state === 'TRIAL_DUE_TODAY' || business.state === 'PAYMENT_DUE_TODAY' || daysToDue === 0;
     case 'overdue':
-      return business.state === 'OVERDUE' || (daysToDue != null && daysToDue < 0);
+      return ['TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(business.state) || (daysToDue != null && daysToDue < 0);
     case 'grace-period':
-      return business.state === 'GRACE_PERIOD' || business.state === 'GRACE';
+      return business.state === 'TRIAL_EXPIRED_GRACE' || business.state === 'PAYMENT_OVERDUE_GRACE';
     case 'suspended':
-      return business.state === 'SUSPENDED' || business.state === 'READ_ONLY';
+      return business.state === 'PAYMENT_RESTRICTED' || business.state === 'READ_ONLY' || business.state === 'TRIAL_RESTRICTED';
     case 'active':
-      return business.state === 'ACTIVE';
+      return business.state === 'PAID_ACTIVE';
     case 'cancelled':
       return business.state === 'CANCELLED' || business.state === 'INACTIVE';
     case 'failed-reminders':
@@ -87,14 +87,21 @@ function sortBusinesses(items: ManagedBusiness[], sort: SortKey) {
 }
 
 function actionFor(state: ManagedState, days: number | null) {
-  if (state === 'TRIAL_ACTIVE' || state === 'TRIAL') return 'Monitor trial and prepare conversion.';
-  if (state === 'TRIAL_EXPIRING_SOON') return 'Send trial conversion reminder today.';
-  if (state === 'DUE_SOON') return 'Send pre-due payment reminder.';
-  if (state === 'DUE_TODAY' || days === 0) return 'Confirm payment today.';
-  if (state === 'OVERDUE' || state === 'GRACE_PERIOD' || state === 'GRACE') return 'Call owner and confirm payment plan.';
-  if (state === 'SUSPENDED' || state === 'READ_ONLY') return 'Restricted. Escalate or restore after payment.';
+  if (state === 'TRIAL_ACTIVE' || state === 'TRIAL_DUE_SOON') return 'Monitor trial and prepare conversion.';
+  if (state === 'TRIAL_DUE_TODAY') return 'Send trial conversion reminder today.';
+  if (state === 'RENEWAL_DUE_SOON') return 'Send pre-due payment reminder.';
+  if (state === 'PAYMENT_DUE_TODAY' || days === 0) return 'Confirm payment today.';
+  if (state === 'TRIAL_EXPIRED_GRACE' || state === 'PAYMENT_OVERDUE_GRACE' || state === 'TRIAL_RESTRICTED' || state === 'PAYMENT_RESTRICTED') return 'Call owner and confirm payment plan.';
+  if (state === 'READ_ONLY') return 'Restricted. Escalate or restore after payment.';
   if (state === 'CANCELLED' || state === 'INACTIVE') return 'No collection action unless reactivated.';
+  if (state === 'PAID_ACTIVE') return 'No immediate action.';
   return 'No immediate action.';
+}
+
+function daysBadgeLabel(daysLeft: number) {
+  if (daysLeft === 0) return 'Due today';
+  const absolute = Math.abs(daysLeft);
+  return `${absolute} day${absolute === 1 ? '' : 's'} ${daysLeft > 0 ? 'left' : 'overdue'}`;
 }
 
 export default async function SubscriptionsPage({
@@ -115,17 +122,17 @@ export default async function SubscriptionsPage({
   const billableBusinesses = businesses.filter(isBillableBusiness);
   const dueThisWeek = billableBusinesses.filter((business) => {
     const days = daysUntil(business.nextDueAt);
-    return business.state === 'DUE_SOON' || business.state === 'DUE_TODAY' || (days != null && days >= 0 && days <= 7);
+    return business.state === 'RENEWAL_DUE_SOON' || business.state === 'PAYMENT_DUE_TODAY' || business.state === 'TRIAL_DUE_SOON' || business.state === 'TRIAL_DUE_TODAY' || (days != null && days >= 0 && days <= 7);
   });
 
   const summary = {
-    active: billableBusinesses.filter((business) => business.state === 'ACTIVE').length,
-    trials: billableBusinesses.filter((business) => ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
-    trialsEnding3: billableBusinesses.filter((business) => business.daysLeft != null && business.daysLeft >= 0 && business.daysLeft <= 3 && ['TRIAL_ACTIVE', 'TRIAL_EXPIRING_SOON', 'TRIAL'].includes(business.state)).length,
-    dueToday: billableBusinesses.filter((business) => business.state === 'DUE_TODAY' || daysUntil(business.nextDueAt) === 0).length,
-    overdue: billableBusinesses.filter((business) => business.state === 'OVERDUE' || (daysUntil(business.nextDueAt) ?? 0) < 0).length,
-    suspended: billableBusinesses.filter((business) => ['SUSPENDED', 'READ_ONLY'].includes(business.state)).length,
-    mrr: billableBusinesses.filter((business) => business.state === 'ACTIVE').reduce((sum, business) => sum + business.monthlyValue, 0),
+    active: billableBusinesses.filter((business) => business.state === 'PAID_ACTIVE').length,
+    trials: billableBusinesses.filter((business) => ['TRIAL_ACTIVE', 'TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY'].includes(business.state)).length,
+    trialsEnding3: billableBusinesses.filter((business) => business.daysLeft != null && business.daysLeft >= 0 && business.daysLeft <= 3 && ['TRIAL_ACTIVE', 'TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY'].includes(business.state)).length,
+    dueToday: billableBusinesses.filter((business) => business.state === 'PAYMENT_DUE_TODAY' || business.state === 'TRIAL_DUE_TODAY' || daysUntil(business.nextDueAt) === 0).length,
+    overdue: billableBusinesses.filter((business) => ['TRIAL_EXPIRED_GRACE', 'PAYMENT_OVERDUE_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_RESTRICTED'].includes(business.state) || (daysUntil(business.nextDueAt) ?? 0) < 0).length,
+    suspended: billableBusinesses.filter((business) => business.state === 'READ_ONLY').length,
+    mrr: billableBusinesses.filter((business) => business.state === 'PAID_ACTIVE').reduce((sum, business) => sum + business.monthlyValue, 0),
     weekCollections: dueThisWeek.reduce((sum, business) => sum + (business.outstandingAmount || business.monthlyValue), 0),
   };
 
@@ -213,7 +220,7 @@ export default async function SubscriptionsPage({
                   </div>
                   <StatePill state={business.state} />
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2"><PlanPill plan={business.plan} />{business.daysLeft != null ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-800">{business.daysLeft} days left</span> : null}</div>
+                <div className="mt-3 flex flex-wrap gap-2"><PlanPill plan={business.plan} />{business.daysLeft != null ? <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-800">{daysBadgeLabel(business.daysLeft)}</span> : null}</div>
                 <div className="mobile-card-grid">
                   <div><div className="mobile-card-label">Trial end</div><div className="mobile-card-value">{business.trialEndAt ?? 'Not active'}</div></div>
                   <div><div className="mobile-card-label">Next billing</div><div className="mobile-card-value">{business.nextDueAt}</div></div>
@@ -251,7 +258,7 @@ export default async function SubscriptionsPage({
                     <td><Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">{business.name}</Link><div className="mt-1 text-xs text-black/55">Signed up {business.signedUpAt}</div></td>
                     <td><div>{business.ownerName}</div><div className="mt-1 text-xs text-black/55">{business.ownerPhone} · {business.ownerEmail}</div></td>
                     <td><PlanPill plan={business.plan} /></td>
-                    <td><div className="text-sm text-black/66">{business.trialStartAt ?? 'Not active'} - {business.trialEndAt ?? 'Not active'}</div>{business.daysLeft != null ? <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{business.daysLeft} days left</div> : null}</td>
+                    <td><div className="text-sm text-black/66">{business.trialStartAt ?? 'Not active'} - {business.trialEndAt ?? 'Not active'}</div>{business.daysLeft != null ? <div className="mt-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{daysBadgeLabel(business.daysLeft)}</div> : null}</td>
                     <td><StatePill state={business.state} /></td>
                     <td>{business.nextDueAt}</td>
                     <td className="font-semibold text-control-ink">{formatCedi(business.monthlyValue)}</td>

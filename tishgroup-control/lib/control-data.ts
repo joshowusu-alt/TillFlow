@@ -2,21 +2,23 @@ export type ManagedPlan = 'STARTER' | 'GROWTH' | 'PRO';
 
 export type ManagedState =
   | 'TRIAL_ACTIVE'
-  | 'TRIAL_EXPIRING_SOON'
-  | 'TRIAL_ENDED'
-  | 'PAYMENT_PENDING'
-  | 'ACTIVE'
-  | 'DUE_SOON'
-  | 'DUE_TODAY'
-  | 'OVERDUE'
-  | 'GRACE_PERIOD'
-  | 'SUSPENDED'
+  | 'TRIAL_DUE_SOON'
+  | 'TRIAL_DUE_TODAY'
+  | 'TRIAL_EXPIRED_GRACE'
+  | 'TRIAL_RESTRICTED'
+  | 'PAID_ACTIVE'
+  | 'RENEWAL_DUE_SOON'
+  | 'PAYMENT_DUE_TODAY'
+  | 'PAYMENT_OVERDUE_GRACE'
+  | 'PAYMENT_RESTRICTED'
   | 'CANCELLED'
+  | 'READ_ONLY'
+  | 'ACTIVE'
   | 'TRIAL'
   | 'GRACE'
   | 'STARTER_FALLBACK'
-  | 'READ_ONLY'
-  | 'INACTIVE';
+  | 'INACTIVE'
+  | 'SUSPENDED';
 
 export type BusinessHealth = 'HEALTHY' | 'WATCH' | 'AT_RISK';
 
@@ -64,7 +66,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kojo Mensah',
     plan: 'STARTER',
     effectivePlan: 'STARTER',
-    state: 'ACTIVE',
+    state: 'PAID_ACTIVE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-02-15',
     planSetAt: '2026-02-15',
@@ -89,7 +91,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Esi Quansah',
     plan: 'STARTER',
     effectivePlan: 'STARTER',
-    state: 'DUE_SOON',
+    state: 'RENEWAL_DUE_SOON',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-03-01',
     planSetAt: '2026-03-01',
@@ -114,7 +116,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kojo Mensah',
     plan: 'GROWTH',
     effectivePlan: 'GROWTH',
-    state: 'ACTIVE',
+    state: 'PAID_ACTIVE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-01-20',
     planSetAt: '2026-03-05',
@@ -139,7 +141,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Esi Quansah',
     plan: 'GROWTH',
     effectivePlan: 'GROWTH',
-    state: 'ACTIVE',
+    state: 'PAID_ACTIVE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-02-09',
     planSetAt: '2026-02-09',
@@ -164,7 +166,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kofi Ansah',
     plan: 'GROWTH',
     effectivePlan: 'GROWTH',
-    state: 'GRACE',
+    state: 'PAYMENT_OVERDUE_GRACE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-01-11',
     planSetAt: '2026-01-11',
@@ -189,7 +191,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kofi Ansah',
     plan: 'GROWTH',
     effectivePlan: 'STARTER',
-    state: 'STARTER_FALLBACK',
+    state: 'PAYMENT_RESTRICTED',
     billingCadence: 'MONTHLY',
     signedUpAt: '2025-12-18',
     planSetAt: '2026-01-04',
@@ -214,7 +216,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kojo Mensah',
     plan: 'GROWTH',
     effectivePlan: 'GROWTH',
-    state: 'TRIAL',
+    state: 'TRIAL_ACTIVE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-04-01',
     planSetAt: '2026-04-01',
@@ -239,7 +241,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Esi Quansah',
     plan: 'GROWTH',
     effectivePlan: 'GROWTH',
-    state: 'ACTIVE',
+    state: 'PAID_ACTIVE',
     billingCadence: 'ANNUAL',
     signedUpAt: '2025-11-04',
     planSetAt: '2026-01-02',
@@ -264,7 +266,7 @@ export const managedBusinesses: ManagedBusiness[] = [
     assignedManager: 'Kofi Ansah',
     plan: 'PRO',
     effectivePlan: 'PRO',
-    state: 'ACTIVE',
+    state: 'PAID_ACTIVE',
     billingCadence: 'MONTHLY',
     signedUpAt: '2026-01-08',
     planSetAt: '2026-02-12',

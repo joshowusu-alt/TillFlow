@@ -84,9 +84,9 @@ function isMissingControlPlaneError(error: unknown) {
 }
 
 function inferHealth(state: ManagedBusiness['state']): BusinessHealth {
-  if (state === 'INACTIVE' || state === 'CANCELLED') return 'HEALTHY';
-  if (state === 'READ_ONLY' || state === 'STARTER_FALLBACK' || state === 'SUSPENDED' || state === 'OVERDUE') return 'AT_RISK';
-  if (state === 'GRACE' || state === 'GRACE_PERIOD' || state === 'DUE_SOON' || state === 'DUE_TODAY' || state === 'TRIAL_EXPIRING_SOON' || state === 'PAYMENT_PENDING' || state === 'TRIAL_ENDED') return 'WATCH';
+  if (state === 'CANCELLED') return 'HEALTHY';
+  if (state === 'READ_ONLY' || state === 'TRIAL_RESTRICTED' || state === 'PAYMENT_RESTRICTED') return 'AT_RISK';
+  if (state === 'TRIAL_DUE_SOON' || state === 'TRIAL_DUE_TODAY' || state === 'TRIAL_EXPIRED_GRACE' || state === 'RENEWAL_DUE_SOON' || state === 'PAYMENT_DUE_TODAY' || state === 'PAYMENT_OVERDUE_GRACE') return 'WATCH';
   return 'HEALTHY';
 }
 
@@ -119,13 +119,20 @@ function normalizeCadence(value?: string | null): ManagedBusiness['billingCadenc
 
 function normalizeManualManagedState(value?: string | null): ManagedState | null {
   switch (String(value ?? '').toUpperCase()) {
-    case 'INACTIVE':
-    case 'DEACTIVATED':
     case 'CANCELLED':
       return 'CANCELLED';
-    case 'SUSPENDED':
     case 'READ_ONLY':
-    case 'STARTER_FALLBACK':
+      return 'READ_ONLY';
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'TRIAL_RESTRICTED':
+    case 'PAID_ACTIVE':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'PAYMENT_RESTRICTED':
       return String(value).toUpperCase() as ManagedState;
     default:
       return null;
@@ -134,16 +141,15 @@ function normalizeManualManagedState(value?: string | null): ManagedState | null
 
 function requiresCollection(state: ManagedState) {
   return [
-    'DUE_SOON',
-    'DUE_TODAY',
-    'OVERDUE',
-    'GRACE',
-    'GRACE_PERIOD',
-    'PAYMENT_PENDING',
-    'TRIAL_ENDED',
-    'STARTER_FALLBACK',
+    'TRIAL_DUE_SOON',
+    'TRIAL_DUE_TODAY',
+    'TRIAL_EXPIRED_GRACE',
+    'TRIAL_RESTRICTED',
+    'RENEWAL_DUE_SOON',
+    'PAYMENT_DUE_TODAY',
+    'PAYMENT_OVERDUE_GRACE',
+    'PAYMENT_RESTRICTED',
     'READ_ONLY',
-    'SUSPENDED',
   ].includes(state);
 }
 
@@ -151,10 +157,10 @@ function resolveEffectivePlan(state: ManagedState, plan: ManagedPlan, override?:
   if (override === 'PRO' || override === 'GROWTH' || override === 'STARTER') {
     return override;
   }
-  if (state === 'INACTIVE' || state === 'CANCELLED') {
+  if (state === 'CANCELLED') {
     return plan;
   }
-  if (state === 'STARTER_FALLBACK' || state === 'READ_ONLY' || state === 'SUSPENDED') {
+  if (state === 'TRIAL_RESTRICTED' || state === 'PAYMENT_RESTRICTED' || state === 'READ_ONLY') {
     return 'STARTER';
   }
   return plan;
@@ -280,20 +286,21 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         firstPaymentAt: business.firstPaymentAt
           ?? subscription?.lastPaymentDate
           ?? business.lastPaymentAt
-          ?? (String(subscription?.status ?? '').toUpperCase() === 'ACTIVE' ? subscription?.startDate : null),
+          ?? (String(subscription?.status ?? '').toUpperCase() === 'PAID_ACTIVE' ? subscription?.startDate : null),
         currentPeriodEndsAt: business.currentPeriodEndsAt,
         nextBillingDate: subscription?.nextDueDate ?? business.nextBillingDate,
         nextPaymentDueAt: business.nextPaymentDueAt,
         paymentGraceEndsAt: business.paymentGraceEndsAt,
         suspendedAt: business.suspendedAt,
         cancelledAt: business.cancelledAt,
+        timezone: null,
       });
       const state = manualState ?? derived.state;
       const effectivePlan = resolveEffectivePlan(state, plan, subscription?.effectivePlanOverride);
       const owner = business.users[0];
       const monthlyValue = subscription?.monthlyValuePence ?? planRates[plan];
       const storedOutstandingAmount = subscription?.outstandingAmountPence ?? null;
-      const outstandingAmount = state === 'INACTIVE' || state === 'CANCELLED'
+      const outstandingAmount = state === 'CANCELLED'
         ? 0
         : storedOutstandingAmount && storedOutstandingAmount > 0
           ? storedOutstandingAmount
@@ -499,8 +506,8 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
       return {
         ...summary,
         commercialSource: 'TILLFLOW_DERIVED',
-        subscriptionStatus: rawBusiness.planStatus,
-        trialEndsAt: formatDate(rawBusiness.trialEndsAt),
+        subscriptionStatus: summary.state,
+        trialEndsAt: summary.trialEndAt ?? null,
         supportStatus: 'UNREVIEWED',
         assignedManagerId: null,
         reviewedAt: null,
@@ -525,8 +532,8 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
     return {
       ...summary,
       commercialSource: profile.subscription ? 'CONTROL_PLANE' : 'TILLFLOW_DERIVED',
-      subscriptionStatus: profile.subscription?.status ?? rawBusiness.planStatus,
-      trialEndsAt: formatDate(rawBusiness.trialEndsAt),
+      subscriptionStatus: summary.state,
+      trialEndsAt: summary.trialEndAt ?? null,
       supportStatus: profile.supportStatus,
       assignedManagerId: profile.assignedManagerId,
       reviewedAt: formatIsoDateTime(profile.reviewedAt),
@@ -568,8 +575,8 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
     return {
       ...summary,
       commercialSource: 'TILLFLOW_DERIVED',
-      subscriptionStatus: rawBusiness.planStatus,
-      trialEndsAt: formatDate(rawBusiness.trialEndsAt),
+      subscriptionStatus: summary.state,
+      trialEndsAt: summary.trialEndAt ?? null,
       supportStatus: 'UNREVIEWED',
       assignedManagerId: null,
       reviewedAt: null,

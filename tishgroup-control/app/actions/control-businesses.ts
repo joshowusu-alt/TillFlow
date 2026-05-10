@@ -10,7 +10,7 @@ import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '../../../lib/subscription-lifecycle';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
-type SubscriptionStatus = 'ACTIVE' | 'TRIAL' | 'SUSPENDED' | 'READ_ONLY' | 'INACTIVE';
+type SubscriptionStatus = 'PAID_ACTIVE' | 'TRIAL_ACTIVE' | 'TRIAL_DUE_SOON' | 'TRIAL_DUE_TODAY' | 'TRIAL_EXPIRED_GRACE' | 'TRIAL_RESTRICTED' | 'RENEWAL_DUE_SOON' | 'PAYMENT_DUE_TODAY' | 'PAYMENT_OVERDUE_GRACE' | 'PAYMENT_RESTRICTED' | 'CANCELLED' | 'READ_ONLY';
 
 function readRequired(formData: FormData, name: string) {
   return String(formData.get(name) ?? '').trim();
@@ -43,19 +43,25 @@ function normalizeCadence(value: string): BillingCadence {
 
 function normalizeSubscriptionStatus(value: string): SubscriptionStatus {
   switch (value) {
-    case 'TRIAL':
-      return 'TRIAL';
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'TRIAL_RESTRICTED':
+    case 'PAID_ACTIVE':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'PAYMENT_RESTRICTED':
+    case 'READ_ONLY':
+      return value;
     case 'INACTIVE':
     case 'DEACTIVATED':
     case 'CANCELLED':
-      return 'INACTIVE';
-    case 'SUSPENDED':
-      return 'SUSPENDED';
-    case 'READ_ONLY':
-      return 'READ_ONLY';
+      return 'CANCELLED';
     case 'ACTIVE':
     default:
-      return 'ACTIVE';
+      return 'PAID_ACTIVE';
   }
 }
 
@@ -165,33 +171,54 @@ async function enqueuePaymentConfirmedReminder(businessId: string) {
 
 function businessStatusFromSubscription(status: SubscriptionStatus) {
   switch (status) {
-    case 'TRIAL':
-      return 'TRIAL';
-    case 'INACTIVE':
-      return 'INACTIVE';
-    case 'SUSPENDED':
-      return 'SUSPENDED';
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'TRIAL_RESTRICTED':
+      return 'TRIAL_ACTIVE';
+    case 'CANCELLED':
+      return 'CANCELLED';
     case 'READ_ONLY':
       return 'READ_ONLY';
-    case 'ACTIVE':
+    case 'PAID_ACTIVE':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'PAYMENT_RESTRICTED':
     default:
-      return 'ACTIVE';
+      return 'PAID_ACTIVE';
   }
 }
 
 function billingStatusFromSubscription(status: SubscriptionStatus) {
   switch (status) {
-    case 'TRIAL':
-      return 'TRIAL_ACTIVE';
-    case 'INACTIVE':
+    case 'TRIAL_ACTIVE':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'TRIAL_RESTRICTED':
+      return status;
+    case 'CANCELLED':
       return 'CANCELLED';
-    case 'SUSPENDED':
     case 'READ_ONLY':
-      return 'SUSPENDED';
-    case 'ACTIVE':
+      return 'READ_ONLY';
+    case 'PAID_ACTIVE':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'PAYMENT_RESTRICTED':
     default:
-      return 'ACTIVE';
+      return 'PAID_ACTIVE';
   }
+}
+
+function isTrialStatus(status: SubscriptionStatus) {
+  return status.startsWith('TRIAL_');
+}
+
+function isCancelledStatus(status: SubscriptionStatus) {
+  return status === 'CANCELLED';
 }
 
 async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>, args: {
@@ -257,10 +284,10 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       planStatus: businessStatusFromSubscription(status),
       subscriptionStatus: billingStatusFromSubscription(status),
       planSetAt: startDate,
-      currentPeriodStartedAt: status === 'INACTIVE' || status === 'TRIAL' ? null : startDate,
-      nextPaymentDueAt: status === 'INACTIVE' ? null : nextDueDate,
-      nextBillingDate: status === 'INACTIVE' ? null : nextDueDate,
-      currentPeriodEndsAt: status === 'INACTIVE' ? null : nextDueDate,
+      currentPeriodStartedAt: isCancelledStatus(status) || isTrialStatus(status) ? null : startDate,
+      nextPaymentDueAt: isCancelledStatus(status) ? null : nextDueDate,
+      nextBillingDate: isCancelledStatus(status) ? null : nextDueDate,
+      currentPeriodEndsAt: isCancelledStatus(status) ? null : nextDueDate,
     },
   });
 }
@@ -389,7 +416,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           effectivePlanOverride: null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
-          outstandingAmountPence: status === 'INACTIVE' ? 0 : outstandingAmountPence,
+          outstandingAmountPence: isCancelledStatus(status) ? 0 : outstandingAmountPence,
         },
         create: {
           controlBusinessId: profile.id,
@@ -401,7 +428,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
-          outstandingAmountPence: status === 'INACTIVE' ? 0 : outstandingAmountPence,
+          outstandingAmountPence: isCancelledStatus(status) ? 0 : outstandingAmountPence,
         },
       });
 
@@ -418,12 +445,12 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           plan: purchasedPlan,
           planStatus: businessStatusFromSubscription(status),
           subscriptionStatus: billingStatusFromSubscription(status),
-          trialEndsAt: status === 'TRIAL' ? trialEndsAt : null,
+          trialEndsAt: isTrialStatus(status) ? trialEndsAt : null,
           planSetAt: startDate,
-          currentPeriodStartedAt: status === 'INACTIVE' || status === 'TRIAL' ? null : startDate,
-          nextPaymentDueAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
-          nextBillingDate: status === 'INACTIVE' ? null : resolvedNextDueDate,
-          currentPeriodEndsAt: status === 'INACTIVE' ? null : resolvedNextDueDate,
+          currentPeriodStartedAt: isCancelledStatus(status) || isTrialStatus(status) ? null : startDate,
+          nextPaymentDueAt: isCancelledStatus(status) ? null : resolvedNextDueDate,
+          nextBillingDate: isCancelledStatus(status) ? null : resolvedNextDueDate,
+          currentPeriodEndsAt: isCancelledStatus(status) ? null : resolvedNextDueDate,
           addonOnlineStorefront,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
@@ -437,7 +464,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         },
       });
 
-      if (status === 'INACTIVE') {
+      if (isCancelledStatus(status)) {
         await tx.$executeRaw`
           DELETE FROM "Session"
           WHERE "userId" IN (
@@ -458,13 +485,13 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     metadata: { purchasedPlan, status, billingCadence, monthlyValuePence, outstandingAmountPence, addonOnlineStorefront },
   });
 
-  if (status === 'INACTIVE' || status === 'READ_ONLY') {
+  if (isCancelledStatus(status) || status === 'READ_ONLY') {
     const businessName = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }).then((b) => b?.name ?? 'Unknown');
     await notifyStateTransition({
       businessId,
       businessName,
       fromState: 'ACTIVE',
-      toState: status,
+      toState: isCancelledStatus(status) ? 'CANCELLED' : status,
       monthlyValuePence,
       outstandingPence: outstandingAmountPence,
       triggeredBy: { name: staff.name, email: staff.email, role: staff.role },
@@ -522,7 +549,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         where: { controlBusinessId: profile.id },
         update: {
           purchasedPlan,
-          status: 'ACTIVE',
+          status: 'PAID_ACTIVE',
           billingCadence,
           nextDueDate,
           lastPaymentDate: paidAt,
@@ -534,7 +561,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         create: {
           controlBusinessId: profile.id,
           purchasedPlan,
-          status: 'ACTIVE',
+          status: 'PAID_ACTIVE',
           billingCadence,
           startDate: existingSubscription?.startDate ?? paidAt,
           nextDueDate,

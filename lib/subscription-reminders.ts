@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from './prisma';
 import { normalizeGhanaPhone } from './storefront-phone';
-import { getSubscriptionSnapshot, type SubscriptionInput } from './subscription-lifecycle';
+import { computeBillingAccessState, getSubscriptionSnapshot, type SubscriptionInput } from './subscription-lifecycle';
 
 type PrismaTx = Prisma.TransactionClient | PrismaClient;
 
@@ -25,6 +25,7 @@ type ReminderBusiness = SubscriptionInput & {
   id: string;
   name: string;
   phone?: string | null;
+  timezone?: string | null;
   selectedPlan?: string | null;
   plan?: string | null;
   billingCurrency?: string | null;
@@ -45,7 +46,7 @@ function daysUntil(date: Date | null, now: Date) {
 }
 
 function dateLabel(date: Date | null) {
-  return date?.toLocaleDateString('en-GB') ?? 'your renewal date';
+  return date?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) ?? 'your due date';
 }
 
 function periodKeyFor(type: SubscriptionReminderType, business: ReminderBusiness, now: Date) {
@@ -60,7 +61,7 @@ function periodKeyFor(type: SubscriptionReminderType, business: ReminderBusiness
 }
 
 function isCancelled(business: ReminderBusiness) {
-  return ['CANCELLED', 'INACTIVE', 'DEACTIVATED'].includes(String(business.subscriptionStatus ?? business.planStatus ?? '').toUpperCase());
+  return ['CANCELLED'].includes(String(business.subscriptionStatus ?? business.planStatus ?? '').toUpperCase());
 }
 
 function reminderCopy(type: SubscriptionReminderType, business: ReminderBusiness, now: Date) {
@@ -70,33 +71,33 @@ function reminderCopy(type: SubscriptionReminderType, business: ReminderBusiness
 
   switch (type) {
     case 'SUBSCRIPTION_TRIAL_STARTED':
-      return `Welcome to TillFlow. Your 7-day trial is active until ${trialEnd}. Use this period to test sales, stock, reports and online orders.`;
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} trial runs until ${trialEnd}. Contact Tishgroup to keep access active.`;
     case 'SUBSCRIPTION_TRIAL_ENDS_3_DAYS':
-      return 'Your TillFlow trial ends in 3 days. Complete payment to continue using your POS, stock, reports and online store without interruption.';
+      return `TillFlow reminder: Your trial ends in 3 days. Contact Tishgroup to keep access active.`;
     case 'SUBSCRIPTION_TRIAL_ENDS_TOMORROW':
-      return 'Your TillFlow trial ends tomorrow. Please complete payment to keep your shop running smoothly.';
+      return 'TillFlow reminder: Your trial ends tomorrow. Contact Tishgroup to keep access active.';
     case 'SUBSCRIPTION_TRIAL_ENDS_TODAY':
-      return 'Your TillFlow trial ends today. Complete payment to continue full access.';
+      return 'TillFlow reminder: Your trial ends today. Contact Tishgroup to keep access active.';
     case 'SUBSCRIPTION_TRIAL_EXPIRED':
-      return 'Your TillFlow trial has ended. Please complete payment to continue using your shop system.';
+      return 'TillFlow reminder: Your trial has ended. Access may be restricted until payment is confirmed.';
     case 'SUBSCRIPTION_RENEWS_30_DAYS':
-      return 'Your TillFlow subscription renews in 30 days. Please prepare payment to continue without interruption.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} plan renews in 30 days. Contact Tishgroup to stay active.`;
     case 'SUBSCRIPTION_RENEWS_14_DAYS':
-      return 'Your TillFlow subscription renews in 14 days. Please prepare payment to continue without interruption.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} plan renews in 14 days. Contact Tishgroup to stay active.`;
     case 'SUBSCRIPTION_RENEWS_7_DAYS':
-      return 'Your TillFlow subscription renews in 7 days. Please prepare payment to continue without interruption.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} plan renews in 7 days. Contact Tishgroup to stay active.`;
     case 'SUBSCRIPTION_RENEWS_3_DAYS':
-      return 'Your TillFlow subscription renews in 3 days. Complete payment early to keep your shop running smoothly.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} plan renews in 3 days. Contact Tishgroup to stay active.`;
     case 'SUBSCRIPTION_RENEWS_TOMORROW':
-      return 'Your TillFlow subscription renews tomorrow.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} plan renews tomorrow. Contact Tishgroup to stay active.`;
     case 'SUBSCRIPTION_RENEWAL_DUE_TODAY':
-      return 'Your TillFlow subscription is due today. Please complete payment to continue using POS, stock, reports and online orders.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} payment is due today. Contact Tishgroup to keep access active.`;
     case 'SUBSCRIPTION_OVERDUE':
-      return 'Your TillFlow subscription is overdue. Please complete payment to avoid account restriction.';
+      return `TillFlow reminder: Your ${snapshot.selectedPlan} payment is overdue. Contact Tishgroup now.`;
     case 'SUBSCRIPTION_SUSPENSION_WARNING':
-      return 'Your TillFlow account may be restricted soon if payment is not confirmed. Please complete payment or contact Tishgroup.';
+      return 'TillFlow reminder: Payment is still pending. Contact Tishgroup to avoid restriction.';
     case 'SUBSCRIPTION_PAYMENT_CONFIRMED':
-      return `Payment confirmed. Your TillFlow subscription is active until ${activeUntil}. Thank you.`;
+      return `TillFlow reminder: Payment confirmed. Your plan is active until ${activeUntil}.`;
   }
 }
 
@@ -104,18 +105,19 @@ function reminderDueFor(business: ReminderBusiness, now: Date): SubscriptionRemi
   if (isCancelled(business)) return null;
 
   const snapshot = getSubscriptionSnapshot(business, now);
-  const trialDays = daysUntil(snapshot.trialEndsAt, now);
+  const access = computeBillingAccessState({ ...business, timezone: business.timezone ?? 'Africa/Accra' }, now);
+  const trialDays = access.daysRemaining;
 
   if (!snapshot.firstPaymentAt) {
     if (trialDays === 7) return 'SUBSCRIPTION_TRIAL_STARTED';
     if (trialDays === 3) return 'SUBSCRIPTION_TRIAL_ENDS_3_DAYS';
     if (trialDays === 1) return 'SUBSCRIPTION_TRIAL_ENDS_TOMORROW';
-    if (trialDays === 0 && snapshot.status !== 'PAYMENT_PENDING') return 'SUBSCRIPTION_TRIAL_ENDS_TODAY';
+    if (trialDays === 0 && access.accessState !== 'TRIAL_RESTRICTED') return 'SUBSCRIPTION_TRIAL_ENDS_TODAY';
     if (trialDays != null && trialDays < 0) return 'SUBSCRIPTION_TRIAL_EXPIRED';
     return null;
   }
 
-  const renewalDays = daysUntil(snapshot.nextBillingDate, now);
+  const renewalDays = access.daysRemaining;
   if (renewalDays == null) return null;
 
   const interval = String(business.billingInterval ?? 'MONTHLY').toUpperCase();
@@ -128,10 +130,9 @@ function reminderDueFor(business: ReminderBusiness, now: Date): SubscriptionRemi
   if (renewalDays === 3) return 'SUBSCRIPTION_RENEWS_3_DAYS';
   if (renewalDays === 1) return 'SUBSCRIPTION_RENEWS_TOMORROW';
   if (renewalDays === 0) return 'SUBSCRIPTION_RENEWAL_DUE_TODAY';
-  if (renewalDays < 0 && snapshot.status !== 'SUSPENDED') return 'SUBSCRIPTION_OVERDUE';
+  if (renewalDays < 0 && access.accessState !== 'PAYMENT_RESTRICTED') return 'SUBSCRIPTION_OVERDUE';
 
-  const graceDays = daysUntil(snapshot.paymentGraceEndsAt, now);
-  if (graceDays === 1 || graceDays === 0) return 'SUBSCRIPTION_SUSPENSION_WARNING';
+  if (access.accessState === 'TRIAL_EXPIRED_GRACE' || access.accessState === 'PAYMENT_OVERDUE_GRACE') return 'SUBSCRIPTION_SUSPENSION_WARNING';
   return null;
 }
 
@@ -195,6 +196,7 @@ export async function enqueueSubscriptionPaymentConfirmed(
       id: true,
       name: true,
       phone: true,
+      timezone: true,
       plan: true,
       selectedPlan: true,
       planStatus: true,
@@ -222,6 +224,7 @@ export async function enqueueDueSubscriptionReminders(now = new Date()) {
       id: true,
       name: true,
       phone: true,
+      timezone: true,
       plan: true,
       selectedPlan: true,
       planStatus: true,

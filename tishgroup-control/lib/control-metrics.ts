@@ -22,7 +22,7 @@ function daysUntil(value?: string | null) {
 }
 
 function isDueThisWeek(business: ManagedBusiness) {
-  if (business.state === 'DUE_SOON' || business.state === 'DUE_TODAY') return true;
+  if (business.state === 'RENEWAL_DUE_SOON' || business.state === 'PAYMENT_DUE_TODAY' || business.state === 'TRIAL_DUE_SOON' || business.state === 'TRIAL_DUE_TODAY') return true;
   const days = daysUntil(business.nextDueAt);
   return days != null && days >= 0 && days <= 7;
 }
@@ -41,14 +41,14 @@ export function getPortfolioSummaryFor(businesses: ManagedBusiness[]) {
   const mrr = sum(activeBusinesses.map((business) => business.monthlyValue));
   const expectedCollections = sum(
     activeBusinesses
-      .filter((business) => ['DUE_SOON', 'DUE_TODAY', 'OVERDUE', 'GRACE', 'GRACE_PERIOD', 'STARTER_FALLBACK', 'READ_ONLY', 'SUSPENDED'].includes(business.state))
+      .filter((business) => ['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(business.state))
       .map((business) => business.outstandingAmount)
   );
-  const activePaid = activeBusinesses.filter((business) => business.state === 'ACTIVE').length;
+  const activePaid = activeBusinesses.filter((business) => business.state === 'PAID_ACTIVE').length;
   const dueSoon = activeBusinesses.filter(isDueThisWeek).length;
-  const grace = activeBusinesses.filter((business) => business.state === 'GRACE' || business.state === 'GRACE_PERIOD' || business.state === 'OVERDUE').length;
-  const fallback = activeBusinesses.filter((business) => business.state === 'STARTER_FALLBACK').length;
-  const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY' || business.state === 'SUSPENDED').length;
+  const grace = activeBusinesses.filter((business) => business.state === 'TRIAL_EXPIRED_GRACE' || business.state === 'PAYMENT_OVERDUE_GRACE').length;
+  const fallback = activeBusinesses.filter((business) => business.state === 'TRIAL_RESTRICTED' || business.state === 'PAYMENT_RESTRICTED').length;
+  const readOnly = activeBusinesses.filter((business) => business.state === 'READ_ONLY').length;
 
   return {
     totalBusinesses,
@@ -86,10 +86,10 @@ export function getCollectionQueues() {
 
 export function getCollectionQueuesFor(businesses: ManagedBusiness[]) {
   return {
-    healthy: businesses.filter((business) => business.state === 'ACTIVE' || business.state === 'TRIAL' || business.state === 'TRIAL_ACTIVE'),
-    dueSoon: businesses.filter((business) => business.state === 'DUE_SOON' || business.state === 'DUE_TODAY' || business.state === 'TRIAL_EXPIRING_SOON'),
-    overdue: businesses.filter((business) => business.state === 'GRACE' || business.state === 'GRACE_PERIOD' || business.state === 'OVERDUE' || business.state === 'STARTER_FALLBACK'),
-    locked: businesses.filter((business) => business.state === 'READ_ONLY' || business.state === 'SUSPENDED'),
+    healthy: businesses.filter((business) => business.state === 'PAID_ACTIVE' || business.state === 'TRIAL_ACTIVE'),
+    dueSoon: businesses.filter((business) => business.state === 'RENEWAL_DUE_SOON' || business.state === 'PAYMENT_DUE_TODAY' || business.state === 'TRIAL_DUE_SOON' || business.state === 'TRIAL_DUE_TODAY'),
+    overdue: businesses.filter((business) => business.state === 'TRIAL_EXPIRED_GRACE' || business.state === 'PAYMENT_OVERDUE_GRACE' || business.state === 'TRIAL_RESTRICTED' || business.state === 'PAYMENT_RESTRICTED'),
+    locked: businesses.filter((business) => business.state === 'READ_ONLY'),
   };
 }
 
@@ -99,10 +99,10 @@ export function getBusinessById(businessId: string) {
 
 export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
   const active = businesses.filter((b) => b.state !== 'INACTIVE' && b.state !== 'CANCELLED');
-  const approachingList = active.filter((b) => b.state === 'DUE_SOON' || b.state === 'DUE_TODAY' || b.state === 'TRIAL_EXPIRING_SOON');
-  const overdueList = active.filter((b) => b.state === 'GRACE' || b.state === 'GRACE_PERIOD' || b.state === 'OVERDUE' || b.state === 'STARTER_FALLBACK');
-  const lockedList = active.filter((b) => b.state === 'READ_ONLY' || b.state === 'SUSPENDED');
-  const currentList = active.filter((b) => b.state === 'ACTIVE' || b.state === 'TRIAL' || b.state === 'TRIAL_ACTIVE');
+  const approachingList = active.filter((b) => b.state === 'RENEWAL_DUE_SOON' || b.state === 'PAYMENT_DUE_TODAY' || b.state === 'TRIAL_DUE_SOON' || b.state === 'TRIAL_DUE_TODAY');
+  const overdueList = active.filter((b) => b.state === 'TRIAL_EXPIRED_GRACE' || b.state === 'PAYMENT_OVERDUE_GRACE' || b.state === 'TRIAL_RESTRICTED' || b.state === 'PAYMENT_RESTRICTED');
+  const lockedList = active.filter((b) => b.state === 'READ_ONLY');
+  const currentList = active.filter((b) => b.state === 'PAID_ACTIVE' || b.state === 'TRIAL_ACTIVE');
 
   return {
     current: {
@@ -138,27 +138,25 @@ export function getAgingBucketsFor(businesses: ManagedBusiness[]) {
 
 export function getActionChecklist(business: ManagedBusiness) {
   switch (business.state) {
-    case 'DUE_SOON':
-    case 'DUE_TODAY':
+    case 'TRIAL_DUE_SOON':
+    case 'TRIAL_DUE_TODAY':
+    case 'RENEWAL_DUE_SOON':
+    case 'PAYMENT_DUE_TODAY':
       return ['Send reminder now', 'Confirm payment method', 'Verify owner contact is current'];
-    case 'GRACE':
-    case 'GRACE_PERIOD':
-    case 'OVERDUE':
+    case 'TRIAL_EXPIRED_GRACE':
+    case 'PAYMENT_OVERDUE_GRACE':
+    case 'TRIAL_RESTRICTED':
+    case 'PAYMENT_RESTRICTED':
       return ['Call owner today', 'Record promised payment date', 'Escalate if no proof by close of day'];
-    case 'STARTER_FALLBACK':
-      return ['Escalate to account manager', 'Warn owner of read-only date', 'Prepare same-day restoration if payment lands'];
     case 'READ_ONLY':
-    case 'SUSPENDED':
-      return ['Confirm payment status', 'Record payment and restore access if settled', 'Log root cause for churn risk'];
-    case 'TRIAL':
+      return ['Escalate to account manager', 'Warn owner of read-only date', 'Prepare same-day restoration if payment lands'];
     case 'TRIAL_ACTIVE':
-    case 'TRIAL_EXPIRING_SOON':
       return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
-    case 'INACTIVE':
+    case 'PAID_ACTIVE':
+      return ['Monitor usage health', 'Review upsell path', 'Keep renewal note current'];
     case 'CANCELLED':
       return ['Keep the account archived', 'Do not include in active billing follow-up', 'Reactivate only if the business returns to service'];
-    case 'ACTIVE':
     default:
-      return ['Monitor usage health', 'Review upsell path', 'Keep renewal note current'];
+      return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
   }
 }

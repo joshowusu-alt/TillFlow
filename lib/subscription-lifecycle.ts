@@ -1,23 +1,28 @@
 import { PLAN_MONTHLY_PRICES } from './plan-pricing';
 import type { BusinessPlan } from './features';
+import { formatBusinessLocalDateKey, resolveBusinessTimeZone } from './notifications/utils';
 
 export const TRIAL_DAYS = 7;
 export const DEFAULT_GRACE_HOURS = 48;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type SubscriptionStatus =
+export type BillingAccessState =
   | 'TRIAL_ACTIVE'
-  | 'TRIAL_EXPIRING_SOON'
-  | 'TRIAL_ENDED'
-  | 'PAYMENT_PENDING'
-  | 'ACTIVE'
-  | 'DUE_SOON'
-  | 'DUE_TODAY'
-  | 'OVERDUE'
-  | 'GRACE_PERIOD'
-  | 'SUSPENDED'
-  | 'CANCELLED';
+  | 'TRIAL_DUE_SOON'
+  | 'TRIAL_DUE_TODAY'
+  | 'TRIAL_EXPIRED_GRACE'
+  | 'TRIAL_RESTRICTED'
+  | 'PAID_ACTIVE'
+  | 'RENEWAL_DUE_SOON'
+  | 'PAYMENT_DUE_TODAY'
+  | 'PAYMENT_OVERDUE_GRACE'
+  | 'PAYMENT_RESTRICTED'
+  | 'CANCELLED'
+  | 'READ_ONLY';
+
+export type SubscriptionStatus =
+  | BillingAccessState;
 
 export type BillingInterval = 'MONTHLY' | 'ANNUAL';
 
@@ -36,28 +41,110 @@ export type RestrictedFeature =
   | 'premium_features'
   | 'settings_write';
 
+const ALL_FEATURES: RestrictedFeature[] = [
+  'billing',
+  'support',
+  'account_settings',
+  'dashboard_read',
+  'sales',
+  'purchases',
+  'stock_adjustments',
+  'online_store_publishing',
+  'exports',
+  'reports',
+  'staff_expansion',
+  'premium_features',
+  'settings_write',
+];
+
+const RESTRICTED_FEATURES: RestrictedFeature[] = [
+  'sales',
+  'purchases',
+  'stock_adjustments',
+  'staff_expansion',
+  'online_store_publishing',
+  'exports',
+  'reports',
+  'premium_features',
+  'settings_write',
+];
+
+const RESTRICTED_ALLOWED_FEATURES: RestrictedFeature[] = [
+  'billing',
+  'support',
+  'account_settings',
+  'dashboard_read',
+];
+
+const RESTRICTED_ACCESS_STATES = new Set<BillingAccessState>([
+  'TRIAL_RESTRICTED',
+  'PAYMENT_RESTRICTED',
+  'CANCELLED',
+  'READ_ONLY',
+]);
+
 export type SubscriptionInput = {
   selectedPlan?: string | null;
   plan?: string | null;
   planStatus?: string | null;
   subscriptionStatus?: string | null;
+  timezone?: string | null;
   trialStartedAt?: Date | string | null;
   trialEndsAt?: Date | string | null;
   firstPaymentAt?: Date | string | null;
+  firstPaymentConfirmedAt?: Date | string | null;
   currentPeriodStartedAt?: Date | string | null;
+  currentPeriodStart?: Date | string | null;
   currentPeriodEndsAt?: Date | string | null;
+  currentPeriodEnd?: Date | string | null;
   nextBillingDate?: Date | string | null;
   nextPaymentDueAt?: Date | string | null;
   lastPaymentAt?: Date | string | null;
+  lastPaymentRecordedAt?: Date | string | null;
   paymentGraceEndsAt?: Date | string | null;
+  graceEndsAt?: Date | string | null;
   suspendedAt?: Date | string | null;
   cancelledAt?: Date | string | null;
   billingInterval?: string | null;
+  billingCadence?: string | null;
+};
+
+export type BillingAccessComputation = {
+  selectedPlan: BusinessPlan;
+  accessState: BillingAccessState;
+  displayStatus: string;
+  daysRemaining: number | null;
+  isTrial: boolean;
+  isPaid: boolean;
+  isOverdue: boolean;
+  isRestricted: boolean;
+  allowedFeatures: RestrictedFeature[];
+  restrictedFeatures: RestrictedFeature[];
+  primaryBanner: string | null;
+  merchantMessage: string;
+  controlMessage: string;
+  nextActionLabel: string;
+  nextActionHref: string;
+  trialStartedAt: Date | null;
+  trialEndsAt: Date | null;
+  firstPaymentAt: Date | null;
+  currentPeriodStartedAt: Date | null;
+  currentPeriodEndsAt: Date | null;
+  nextBillingDate: Date | null;
+  lastPaymentAt: Date | null;
+  paymentGraceEndsAt: Date | null;
+  suspendedAt: Date | null;
+  cancelledAt: Date | null;
+  billingInterval: BillingInterval;
+  billingAmountPence: number;
+  billingCurrency: 'GHS';
 };
 
 export type SubscriptionSnapshot = {
   selectedPlan: BusinessPlan;
   status: SubscriptionStatus;
+  accessState: BillingAccessState;
+  displayStatus: string;
   trialStartedAt: Date | null;
   trialEndsAt: Date | null;
   firstPaymentAt: Date | null;
@@ -70,11 +157,22 @@ export type SubscriptionSnapshot = {
   cancelledAt: Date | null;
   daysLeftInTrial: number | null;
   daysUntilBilling: number | null;
+  daysRemaining: number | null;
   billingInterval: BillingInterval;
   billingAmountPence: number;
   billingCurrency: 'GHS';
   isRestricted: boolean;
   canWrite: boolean;
+  isTrial: boolean;
+  isPaid: boolean;
+  isOverdue: boolean;
+  allowedFeatures: RestrictedFeature[];
+  restrictedFeatures: RestrictedFeature[];
+  primaryBanner: string | null;
+  merchantMessage: string;
+  controlMessage: string;
+  nextActionLabel: string;
+  nextActionHref: string;
 };
 
 export function toDate(value: Date | string | null | undefined) {
@@ -97,6 +195,312 @@ function normalizePlan(value?: string | null): BusinessPlan {
 
 function normalizeInterval(value?: string | null): BillingInterval {
   return String(value ?? '').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+}
+
+function resolveBillingDate(input: SubscriptionInput, key: 'trialEndsAt' | 'paymentGraceEndsAt' | 'nextBillingDate' | 'nextPaymentDueAt' | 'currentPeriodEndsAt') {
+  switch (key) {
+    case 'trialEndsAt':
+      return toDate(input.trialEndsAt);
+    case 'paymentGraceEndsAt':
+      return toDate(input.paymentGraceEndsAt ?? input.graceEndsAt);
+    case 'nextBillingDate':
+      return toDate(input.nextBillingDate);
+    case 'nextPaymentDueAt':
+      return toDate(input.nextPaymentDueAt);
+    case 'currentPeriodEndsAt':
+      return toDate(input.currentPeriodEndsAt ?? input.currentPeriodEnd);
+  }
+}
+
+function localDayKey(date: Date, timeZone: string) {
+  return formatBusinessLocalDateKey(date, timeZone);
+}
+
+function daysBetweenLocalDates(later: Date | null, earlier: Date, timeZone: string) {
+  if (!later) return null;
+  const laterKey = localDayKey(later, timeZone);
+  const earlierKey = localDayKey(earlier, timeZone);
+  const [laterYear, laterMonth, laterDay] = laterKey.split('-').map(Number);
+  const [earlierYear, earlierMonth, earlierDay] = earlierKey.split('-').map(Number);
+  return Math.round((Date.UTC(laterYear, laterMonth - 1, laterDay) - Date.UTC(earlierYear, earlierMonth - 1, earlierDay)) / DAY_MS);
+}
+
+function displayPlanName(plan: BusinessPlan) {
+  return `${plan.slice(0, 1)}${plan.slice(1).toLowerCase()}`;
+}
+
+function formatDays(value: number | null) {
+  if (value == null) return null;
+  const absolute = Math.abs(value);
+  return `${absolute} day${absolute === 1 ? '' : 's'}`;
+}
+
+function computeTrialState(args: {
+  trialEndsAt: Date | null;
+  graceEndsAt: Date | null;
+  today: Date;
+  timeZone: string;
+}) {
+  const { trialEndsAt, graceEndsAt, today, timeZone } = args;
+  const daysRemaining = daysBetweenLocalDates(trialEndsAt, today, timeZone);
+
+  if (!trialEndsAt) {
+    return {
+      accessState: 'TRIAL_RESTRICTED' as const,
+      daysRemaining: null,
+    };
+  }
+
+  if (daysRemaining == null) {
+    return {
+      accessState: 'TRIAL_RESTRICTED' as const,
+      daysRemaining: null,
+    };
+  }
+
+  if (daysRemaining > 3) {
+    return { accessState: 'TRIAL_ACTIVE' as const, daysRemaining };
+  }
+  if (daysRemaining > 0) {
+    return { accessState: 'TRIAL_DUE_SOON' as const, daysRemaining };
+  }
+  if (daysRemaining === 0) {
+    return { accessState: 'TRIAL_DUE_TODAY' as const, daysRemaining };
+  }
+  if (graceEndsAt && daysBetweenLocalDates(graceEndsAt, today, timeZone) != null && daysBetweenLocalDates(graceEndsAt, today, timeZone)! >= 0) {
+    return { accessState: 'TRIAL_EXPIRED_GRACE' as const, daysRemaining };
+  }
+  return { accessState: 'TRIAL_RESTRICTED' as const, daysRemaining };
+}
+
+function computePaidState(args: {
+  dueDate: Date | null;
+  graceEndsAt: Date | null;
+  today: Date;
+  timeZone: string;
+  billingInterval: BillingInterval;
+}) {
+  const { dueDate, graceEndsAt, today, timeZone, billingInterval } = args;
+  const daysRemaining = daysBetweenLocalDates(dueDate, today, timeZone);
+  const renewalWindowDays = billingInterval === 'ANNUAL' ? 30 : 7;
+
+  if (!dueDate) {
+    return { accessState: 'PAID_ACTIVE' as const, daysRemaining: null };
+  }
+
+  if (daysRemaining == null) {
+    return { accessState: 'PAID_ACTIVE' as const, daysRemaining: null };
+  }
+
+  if (daysRemaining > renewalWindowDays) {
+    return { accessState: 'PAID_ACTIVE' as const, daysRemaining };
+  }
+  if (daysRemaining > 0) {
+    return { accessState: 'RENEWAL_DUE_SOON' as const, daysRemaining };
+  }
+  if (daysRemaining === 0) {
+    return { accessState: 'PAYMENT_DUE_TODAY' as const, daysRemaining };
+  }
+  if (graceEndsAt && daysBetweenLocalDates(graceEndsAt, today, timeZone) != null && daysBetweenLocalDates(graceEndsAt, today, timeZone)! >= 0) {
+    return { accessState: 'PAYMENT_OVERDUE_GRACE' as const, daysRemaining };
+  }
+  return { accessState: 'PAYMENT_RESTRICTED' as const, daysRemaining };
+}
+
+function resolveAccessCopy(accessState: BillingAccessState, selectedPlan: BusinessPlan, daysRemaining: number | null, nextBillingDate: Date | null, trialEndsAt: Date | null) {
+  const planName = displayPlanName(selectedPlan);
+  const daysLabel = formatDays(daysRemaining);
+  const dueLabel = nextBillingDate?.toLocaleDateString('en-GB') ?? 'your next billing date';
+  const trialLabel = trialEndsAt?.toLocaleDateString('en-GB') ?? 'your trial end date';
+
+  switch (accessState) {
+    case 'TRIAL_ACTIVE':
+      return {
+        displayStatus: 'Trial active',
+        primaryBanner: daysLabel ? `Your TillFlow trial has ${daysLabel} left.` : 'Your TillFlow trial is active.',
+        merchantMessage: `Your TillFlow trial is active for the ${planName} plan.`,
+        controlMessage: `Trial active for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'TRIAL_DUE_SOON':
+      return {
+        displayStatus: 'Trial due soon',
+        primaryBanner: `Your TillFlow trial has ${daysLabel} left.`,
+        merchantMessage: `Your TillFlow trial has ${daysLabel} left on the ${planName} plan.`,
+        controlMessage: `Trial ending soon for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'TRIAL_DUE_TODAY':
+      return {
+        displayStatus: 'Trial ends today',
+        primaryBanner: 'Your TillFlow trial ends today. Complete payment to continue without interruption.',
+        merchantMessage: 'Your TillFlow trial ends today. Complete payment to continue without interruption.',
+        controlMessage: `Trial expires today for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'TRIAL_EXPIRED_GRACE':
+      return {
+        displayStatus: 'Trial expired - grace',
+        primaryBanner: 'Your trial has ended. Complete payment before access is restricted.',
+        merchantMessage: 'Your trial has ended. Complete payment before access is restricted.',
+        controlMessage: `Trial expired for ${planName}; grace is still active.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'TRIAL_RESTRICTED':
+      return {
+        displayStatus: 'Trial restricted',
+        primaryBanner: 'Access restricted. Complete payment to continue using TillFlow.',
+        merchantMessage: 'Access restricted. Complete payment to continue using TillFlow.',
+        controlMessage: `Trial ended for ${planName}; access is restricted.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'RENEWAL_DUE_SOON':
+      return {
+        displayStatus: 'Renewal due soon',
+        primaryBanner: daysLabel ? `Your TillFlow plan renews in ${daysLabel}.` : null,
+        merchantMessage: daysLabel ? `Your TillFlow plan renews in ${daysLabel}.` : `Your TillFlow plan renews on ${dueLabel}.`,
+        controlMessage: daysLabel ? `Renewal due in ${daysLabel}.` : `Renewal scheduled for ${dueLabel}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'PAYMENT_DUE_TODAY':
+      return {
+        displayStatus: 'Payment due today',
+        primaryBanner: 'Your TillFlow payment is due today.',
+        merchantMessage: 'Your TillFlow payment is due today.',
+        controlMessage: `Payment due today for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'PAYMENT_OVERDUE_GRACE':
+      return {
+        displayStatus: 'Payment overdue - grace',
+        primaryBanner: 'Payment is overdue. Complete payment to avoid restricted access.',
+        merchantMessage: 'Payment is overdue. Complete payment to avoid restricted access.',
+        controlMessage: `Payment overdue for ${planName}; grace is still active.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'PAYMENT_RESTRICTED':
+      return {
+        displayStatus: 'Payment restricted',
+        primaryBanner: 'Access restricted until payment is confirmed.',
+        merchantMessage: 'Access restricted until payment is confirmed.',
+        controlMessage: `Payment overdue for ${planName}; access is restricted.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'CANCELLED':
+      return {
+        displayStatus: 'Cancelled',
+        primaryBanner: 'Subscription cancelled. Contact Tishgroup to reactivate.',
+        merchantMessage: 'Subscription cancelled. Contact Tishgroup to reactivate.',
+        controlMessage: `Subscription cancelled for ${planName}.`,
+        nextActionLabel: 'Contact Tishgroup',
+        nextActionHref: '/settings/billing',
+      };
+    case 'READ_ONLY':
+      return {
+        displayStatus: 'Read only',
+        primaryBanner: 'Access restricted until payment is confirmed.',
+        merchantMessage: 'Access restricted until payment is confirmed.',
+        controlMessage: `Read-only mode is active for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+    case 'PAID_ACTIVE':
+    default:
+      return {
+        displayStatus: 'Active',
+        primaryBanner: null,
+        merchantMessage: `Your TillFlow ${planName} plan is active until ${dueLabel}.`,
+        controlMessage: `Paid access is active for ${planName}.`,
+        nextActionLabel: 'View billing',
+        nextActionHref: '/settings/billing',
+      };
+  }
+}
+
+export function computeBillingAccessState(input: SubscriptionInput & { today?: Date; timezone?: string | null }, now = new Date()): BillingAccessComputation {
+  const selectedPlan = normalizePlan(input.selectedPlan ?? input.plan);
+  const timezone = resolveBusinessTimeZone(input.timezone);
+  const today = input.today ?? now;
+  const billingInterval = normalizeInterval(input.billingInterval ?? input.billingCadence);
+  const trialStartedAt = toDate(input.trialStartedAt);
+  const trialEndsAt = resolveBillingDate(input, 'trialEndsAt');
+  const firstPaymentAt = toDate(input.firstPaymentConfirmedAt ?? input.firstPaymentAt ?? input.lastPaymentRecordedAt ?? input.lastPaymentAt);
+  const currentPeriodStartedAt = toDate(input.currentPeriodStartedAt ?? input.currentPeriodStart);
+  const currentPeriodEndsAt = resolveBillingDate(input, 'currentPeriodEndsAt');
+  const nextBillingDate = toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? currentPeriodEndsAt;
+  const lastPaymentAt = toDate(input.lastPaymentRecordedAt ?? input.lastPaymentAt);
+  const paymentGraceEndsAt = resolveBillingDate(input, 'paymentGraceEndsAt');
+  const suspendedAt = toDate(input.suspendedAt);
+  const cancelledAt = toDate(input.cancelledAt);
+  const explicitStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
+  const billedAmount = PLAN_MONTHLY_PRICES[selectedPlan] * 100;
+
+  let accessState: BillingAccessState;
+  let daysRemaining: number | null = null;
+
+  if (cancelledAt || explicitStatus === 'CANCELLED' || explicitStatus === 'INACTIVE' || explicitStatus === 'DEACTIVATED') {
+    accessState = 'CANCELLED';
+  } else if (explicitStatus === 'READ_ONLY' || (suspendedAt && explicitStatus !== 'TRIAL_ACTIVE' && explicitStatus !== 'PAID_ACTIVE')) {
+    accessState = 'READ_ONLY';
+  } else if (explicitStatus === 'TRIAL_RESTRICTED' || explicitStatus === 'PAYMENT_RESTRICTED') {
+    accessState = explicitStatus;
+  } else if (!firstPaymentAt) {
+    const trial = computeTrialState({ trialEndsAt, graceEndsAt: paymentGraceEndsAt, today, timeZone: timezone });
+    accessState = trial.accessState;
+    daysRemaining = trial.daysRemaining;
+  } else {
+    const paid = computePaidState({ dueDate: nextBillingDate, graceEndsAt: paymentGraceEndsAt, today, timeZone: timezone, billingInterval });
+    accessState = paid.accessState;
+    daysRemaining = paid.daysRemaining;
+  }
+
+  const isTrial = accessState.startsWith('TRIAL_');
+  const isPaid = firstPaymentAt != null && !isTrial && accessState !== 'CANCELLED';
+  const isRestricted = RESTRICTED_ACCESS_STATES.has(accessState);
+  const isOverdue = ['TRIAL_EXPIRED_GRACE', 'TRIAL_RESTRICTED', 'PAYMENT_OVERDUE_GRACE', 'PAYMENT_RESTRICTED', 'READ_ONLY'].includes(accessState);
+  const allowedFeatures = isRestricted ? RESTRICTED_ALLOWED_FEATURES : ALL_FEATURES;
+  const restrictedFeatures = isRestricted ? RESTRICTED_FEATURES : [];
+  const copy = resolveAccessCopy(accessState, selectedPlan, daysRemaining, nextBillingDate, trialEndsAt);
+
+  return {
+    selectedPlan,
+    accessState,
+    displayStatus: copy.displayStatus,
+    daysRemaining,
+    isTrial,
+    isPaid,
+    isOverdue,
+    isRestricted,
+    allowedFeatures,
+    restrictedFeatures,
+    primaryBanner: copy.primaryBanner,
+    merchantMessage: copy.merchantMessage,
+    controlMessage: copy.controlMessage,
+    nextActionLabel: copy.nextActionLabel,
+    nextActionHref: copy.nextActionHref,
+    trialStartedAt,
+    trialEndsAt,
+    firstPaymentAt,
+    currentPeriodStartedAt,
+    currentPeriodEndsAt,
+    nextBillingDate,
+    lastPaymentAt,
+    paymentGraceEndsAt,
+    suspendedAt,
+    cancelledAt,
+    billingInterval,
+    billingAmountPence: billedAmount,
+    billingCurrency: 'GHS',
+  };
 }
 
 export function addDays(date: Date, days: number) {
@@ -129,82 +533,52 @@ export function getDaysUntilBilling(input: SubscriptionInput, now = new Date()) 
   return wholeDaysUntil(nextBillingDate, now);
 }
 
-function explicitTerminalStatus(input: SubscriptionInput): SubscriptionStatus | null {
-  const status = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
-  if (status === 'CANCELLED' || status === 'INACTIVE' || status === 'DEACTIVATED') return 'CANCELLED';
-  if (status === 'SUSPENDED' || status === 'READ_ONLY') return 'SUSPENDED';
-  return null;
-}
-
 export function getSubscriptionStatus(input: SubscriptionInput, now = new Date()): SubscriptionStatus {
-  const terminal = explicitTerminalStatus(input);
-  if (terminal) return terminal;
-
-  const rawStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
-  const trialEndsAt = toDate(input.trialEndsAt);
-  const firstPaymentAt = toDate(input.firstPaymentAt) ?? toDate(input.lastPaymentAt);
-  const nextBillingDate = toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? toDate(input.currentPeriodEndsAt);
-  const paymentGraceEndsAt = toDate(input.paymentGraceEndsAt);
-
-  if (!firstPaymentAt) {
-    if (trialEndsAt && now.getTime() < trialEndsAt.getTime()) {
-      const daysLeft = getTrialDaysLeft(input, now) ?? TRIAL_DAYS;
-      return daysLeft <= 3 ? 'TRIAL_EXPIRING_SOON' : 'TRIAL_ACTIVE';
-    }
-
-    if (paymentGraceEndsAt && now.getTime() <= paymentGraceEndsAt.getTime()) {
-      return 'GRACE_PERIOD';
-    }
-
-    if (rawStatus === 'PAYMENT_PENDING' || rawStatus === 'TRIAL_ENDED') return 'PAYMENT_PENDING';
-    return trialEndsAt ? 'PAYMENT_PENDING' : 'TRIAL_ACTIVE';
-  }
-
-  if (!nextBillingDate) return 'ACTIVE';
-
-  const daysUntilBilling = getDaysUntilBilling(input, now) ?? 0;
-  if (daysUntilBilling > 5) return 'ACTIVE';
-  if (daysUntilBilling > 0) return 'DUE_SOON';
-  if (daysUntilBilling === 0) return 'DUE_TODAY';
-
-  if (paymentGraceEndsAt && now.getTime() <= paymentGraceEndsAt.getTime()) return 'GRACE_PERIOD';
-  return paymentGraceEndsAt ? 'SUSPENDED' : 'OVERDUE';
+  return computeBillingAccessState(input, now).accessState;
 }
 
 export function getSubscriptionSnapshot(input: SubscriptionInput, now = new Date()): SubscriptionSnapshot {
-  const selectedPlan = normalizePlan(input.selectedPlan ?? input.plan);
-  const status = getSubscriptionStatus(input, now);
-  const billingInterval = normalizeInterval(input.billingInterval);
-  const billingAmountPence = PLAN_MONTHLY_PRICES[selectedPlan] * 100;
-  const isRestricted = status === 'SUSPENDED' || status === 'CANCELLED';
+  const computation = computeBillingAccessState(input, now);
 
   return {
-    selectedPlan,
-    status,
-    trialStartedAt: toDate(input.trialStartedAt),
-    trialEndsAt: toDate(input.trialEndsAt),
-    firstPaymentAt: toDate(input.firstPaymentAt),
-    currentPeriodStartedAt: toDate(input.currentPeriodStartedAt),
-    currentPeriodEndsAt: toDate(input.currentPeriodEndsAt),
-    nextBillingDate: toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? toDate(input.currentPeriodEndsAt),
-    lastPaymentAt: toDate(input.lastPaymentAt),
-    paymentGraceEndsAt: toDate(input.paymentGraceEndsAt),
-    suspendedAt: toDate(input.suspendedAt),
-    cancelledAt: toDate(input.cancelledAt),
+    selectedPlan: computation.selectedPlan,
+    status: computation.accessState,
+    accessState: computation.accessState,
+    displayStatus: computation.displayStatus,
+    trialStartedAt: computation.trialStartedAt,
+    trialEndsAt: computation.trialEndsAt,
+    firstPaymentAt: computation.firstPaymentAt,
+    currentPeriodStartedAt: computation.currentPeriodStartedAt,
+    currentPeriodEndsAt: computation.currentPeriodEndsAt,
+    nextBillingDate: computation.nextBillingDate,
+    lastPaymentAt: computation.lastPaymentAt,
+    paymentGraceEndsAt: computation.paymentGraceEndsAt,
+    suspendedAt: computation.suspendedAt,
+    cancelledAt: computation.cancelledAt,
     daysLeftInTrial: getTrialDaysLeft(input, now),
     daysUntilBilling: getDaysUntilBilling(input, now),
-    billingInterval,
-    billingAmountPence,
-    billingCurrency: 'GHS',
-    isRestricted,
-    canWrite: !isRestricted,
+    daysRemaining: computation.daysRemaining,
+    billingInterval: computation.billingInterval,
+    billingAmountPence: computation.billingAmountPence,
+    billingCurrency: computation.billingCurrency,
+    isRestricted: computation.isRestricted,
+    canWrite: !computation.isRestricted,
+    isTrial: computation.isTrial,
+    isPaid: computation.isPaid,
+    isOverdue: computation.isOverdue,
+    allowedFeatures: computation.allowedFeatures,
+    restrictedFeatures: computation.restrictedFeatures,
+    primaryBanner: computation.primaryBanner,
+    merchantMessage: computation.merchantMessage,
+    controlMessage: computation.controlMessage,
+    nextActionLabel: computation.nextActionLabel,
+    nextActionHref: computation.nextActionHref,
   };
 }
 
 export function canUseFeature(feature: RestrictedFeature, input: SubscriptionInput, now = new Date()) {
-  const status = getSubscriptionStatus(input, now);
-  if (status !== 'SUSPENDED' && status !== 'CANCELLED') return true;
-  return ['billing', 'support', 'account_settings', 'dashboard_read'].includes(feature);
+  const snapshot = getSubscriptionSnapshot(input, now);
+  return snapshot.allowedFeatures.includes(feature);
 }
 
 export function requireActiveSubscription(feature: RestrictedFeature, input: SubscriptionInput, now = new Date()) {
@@ -220,8 +594,8 @@ export function activateSubscriptionAfterPayment(input: SubscriptionInput & { pa
   const firstPaymentAt = toDate(input.firstPaymentAt) ?? paymentDate;
 
   return {
-    subscriptionStatus: 'ACTIVE' as const,
-    planStatus: 'ACTIVE',
+    subscriptionStatus: 'PAID_ACTIVE' as const,
+    planStatus: 'PAID_ACTIVE',
     firstPaymentAt,
     currentPeriodStartedAt: paymentDate,
     currentPeriodEndsAt: nextBillingDate,
@@ -256,41 +630,5 @@ export function createTrialSubscription(plan: BusinessPlan, now = new Date()) {
 }
 
 export function getMerchantSubscriptionMessage(input: SubscriptionInput, now = new Date()) {
-  const snapshot = getSubscriptionSnapshot(input, now);
-  const planName = `${snapshot.selectedPlan.slice(0, 1)}${snapshot.selectedPlan.slice(1).toLowerCase()}`;
-  const trialEnd = snapshot.trialEndsAt?.toLocaleDateString('en-GB');
-
-  if (snapshot.status === 'TRIAL_ACTIVE' || snapshot.status === 'TRIAL_EXPIRING_SOON') {
-    const days = snapshot.daysLeftInTrial ?? 0;
-    if (days === 1) return 'Your TillFlow trial ends tomorrow.';
-    if (days === 0) return 'Your TillFlow trial ends today. Complete payment to continue using TillFlow.';
-    if (days <= 3) return `Your TillFlow trial ends in ${days} days.`;
-    return `Trial active - ${days} days left. Your ${planName} trial ends on ${trialEnd}. Add payment to continue without interruption.`;
-  }
-
-  if (snapshot.status === 'PAYMENT_PENDING' || snapshot.status === 'TRIAL_ENDED') {
-    return 'Your trial has ended. Complete payment to continue.';
-  }
-
-  if (snapshot.status === 'GRACE_PERIOD') {
-    return 'Payment is pending. Complete payment now to keep your shop running smoothly.';
-  }
-
-  if (snapshot.status === 'SUSPENDED') {
-    return 'Full access is paused until payment is confirmed. Billing, support, account settings, and read-only dashboard access remain available.';
-  }
-
-  if (snapshot.status === 'DUE_TODAY') {
-    return 'Your TillFlow subscription is due today. Complete payment to continue without interruption.';
-  }
-
-  if (snapshot.status === 'DUE_SOON') {
-    return `Your TillFlow subscription is due in ${snapshot.daysUntilBilling} days.`;
-  }
-
-  if (snapshot.status === 'OVERDUE') {
-    return 'Your TillFlow subscription payment is overdue. Complete payment to keep full access active.';
-  }
-
-  return `Payment confirmed. Your TillFlow subscription is active until ${snapshot.nextBillingDate?.toLocaleDateString('en-GB') ?? 'your next billing date'}.`;
+  return computeBillingAccessState(input, now).merchantMessage;
 }
