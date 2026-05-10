@@ -7,17 +7,19 @@ import { useToast } from '@/components/ToastProvider';
 type Product = {
   id: string;
   name: string;
+  barcode: string | null;
   imageUrl: string | null;
   storefrontPublished: boolean;
   categoryName: string | null;
   sellingPriceBasePence: number;
 };
 
-type StatusFilter = 'all' | 'published' | 'hidden';
+type StatusFilter = 'all' | 'published' | 'hidden' | 'missing-images';
 
 type CatalogueApiProduct = {
   id: string;
   name: string;
+  barcode: string | null;
   imageUrl: string | null;
   storefrontPublished: boolean;
   sellingPriceBasePence: number;
@@ -34,10 +36,29 @@ type CatalogueResponse = {
 
 const PAGE_SIZE = 50;
 
+function buildImageSearchQueries(product: Product) {
+  const base = product.name.trim();
+  const category = product.categoryName?.trim();
+  const queries = [
+    `${base} product image`,
+    category ? `${base} ${category} Ghana product image` : `${base} Ghana product image`,
+    product.barcode ? `${product.barcode} product image` : null,
+  ].filter(Boolean) as string[];
+
+  return Array.from(new Set(queries));
+}
+
+function imageSearchUrl(provider: 'google' | 'bing', query: string) {
+  const encoded = encodeURIComponent(query);
+  if (provider === 'bing') return `https://www.bing.com/images/search?q=${encoded}`;
+  return `https://www.google.com/search?tbm=isch&q=${encoded}`;
+}
+
 function normalizeProduct(product: CatalogueApiProduct): Product {
   return {
     id: product.id,
     name: product.name,
+    barcode: product.barcode,
     imageUrl: product.imageUrl,
     storefrontPublished: product.storefrontPublished,
     categoryName: product.category?.name ?? null,
@@ -72,6 +93,7 @@ export default function CatalogueVisibilityFilter({
 }) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -87,6 +109,15 @@ export default function CatalogueVisibilityFilter({
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
   const [uploadErrorProductId, setUploadErrorProductId] = useState<string | null>(null);
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
+  const [imageAssistantProductId, setImageAssistantProductId] = useState<string | null>(null);
+  const [externalImageUrl, setExternalImageUrl] = useState('');
+  const [externalImageSavingProductId, setExternalImageSavingProductId] = useState<string | null>(null);
+  const [externalImageError, setExternalImageError] = useState<string | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{
+    updated: Array<{ productId: string; productName: string; imageUrl: string; fileName: string }>;
+    skipped: Array<{ fileName: string; reason: string }>;
+  } | null>(null);
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(new Set());
   const [countsByStatus, setCountsByStatus] = useState<Partial<Record<StatusFilter, number>>>(
     initialTotal === undefined ? {} : { all: initialTotal },
@@ -179,6 +210,7 @@ export default function CatalogueVisibilityFilter({
         { id: 'all', label: 'All' },
         { id: 'published', label: 'Published' },
         { id: 'hidden', label: 'Hidden' },
+        { id: 'missing-images', label: 'Missing images' },
       ] as const).map((tab) => ({
         ...tab,
         count: loading && statusFilter === tab.id ? null : countsByStatus[tab.id] ?? null,
@@ -245,6 +277,111 @@ export default function CatalogueVisibilityFilter({
     }
   }
 
+  function openImageAssistant(productId: string) {
+    setImageAssistantProductId((current) => (current === productId ? null : productId));
+    setExternalImageUrl('');
+    setExternalImageError(null);
+  }
+
+  async function handleBulkImageSelection(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    setBulkUploading(true);
+    setBulkResult(null);
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append('images', file));
+
+      const response = await fetch('/api/settings/storefront-product-images/bulk', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            updated?: Array<{ productId: string; productName: string; imageUrl: string; fileName: string }>;
+            skipped?: Array<{ fileName: string; reason: string }>;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload) {
+        throw new Error(payload?.error || 'Could not upload these images right now.');
+      }
+
+      const updated = payload.updated ?? [];
+      const skipped = payload.skipped ?? [];
+      const updatedByProduct = new Map(updated.map((item) => [item.productId, item.imageUrl]));
+
+      setProducts((current) =>
+        current.map((product) => {
+          const imageUrl = updatedByProduct.get(product.id);
+          return imageUrl ? { ...product, imageUrl } : product;
+        }),
+      );
+      setBulkResult({ updated, skipped });
+      toast(
+        `${updated.length} image${updated.length === 1 ? '' : 's'} matched${skipped.length ? `, ${skipped.length} skipped` : ''}.`,
+        skipped.length ? 'info' : 'success',
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not upload these images right now.';
+      toast(message, 'error');
+      setBulkResult({ updated: [], skipped: [{ fileName: 'Bulk upload', reason: message }] });
+    } finally {
+      setBulkUploading(false);
+    }
+  }
+
+  async function saveExternalImageUrl(productId: string) {
+    const imageUrl = externalImageUrl.trim();
+    if (!imageUrl) {
+      setExternalImageError('Paste a direct JPEG, PNG or WebP image URL first.');
+      return;
+    }
+
+    setExternalImageSavingProductId(productId);
+    setExternalImageError(null);
+
+    try {
+      const formData = new FormData();
+      formData.set('productId', productId);
+      formData.set('imageUrl', imageUrl);
+
+      const response = await fetch('/api/settings/storefront-product-image', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { imageUrl?: string; error?: string }
+        | null;
+
+      if (!response.ok || !payload?.imageUrl) {
+        throw new Error(payload?.error || 'Could not save this image URL.');
+      }
+
+      setProducts((current) =>
+        current.map((product) =>
+          product.id === productId ? { ...product, imageUrl: payload.imageUrl ?? null } : product,
+        ),
+      );
+      setImageAssistantProductId(null);
+      setExternalImageUrl('');
+      toast('Product image saved.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save this image URL.';
+      setExternalImageError(message);
+      toast(message, 'error');
+    } finally {
+      setExternalImageSavingProductId(null);
+    }
+  }
+
   const summaryText =
     total > 0
       ? products.length === total
@@ -261,6 +398,55 @@ export default function CatalogueVisibilityFilter({
         className="hidden"
         onChange={handleImageSelection}
       />
+      <input
+        ref={bulkFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="hidden"
+        onChange={handleBulkImageSelection}
+      />
+
+      <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-sky-950">Bulk product images</div>
+            <p className="mt-1 text-xs leading-5 text-sky-800/75">
+              Upload JPEG, PNG or WebP files named after a product or barcode, for example <span className="font-mono">milo-500g.webp</span> or <span className="font-mono">6034001234567.jpg</span>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => bulkFileInputRef.current?.click()}
+            disabled={bulkUploading}
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-sky-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {bulkUploading ? 'Matching images...' : 'Upload many'}
+          </button>
+        </div>
+        {bulkResult ? (
+          <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs text-sky-950">
+            <div className="font-semibold">
+              {bulkResult.updated.length} matched, {bulkResult.skipped.length} skipped
+            </div>
+            {bulkResult.skipped.length > 0 ? (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-sky-800">Review skipped files</summary>
+                <ul className="mt-2 space-y-1 text-sky-900/75">
+                  {bulkResult.skipped.slice(0, 12).map((item) => (
+                    <li key={`${item.fileName}-${item.reason}`}>
+                      <span className="font-medium">{item.fileName}</span>: {item.reason}
+                    </li>
+                  ))}
+                  {bulkResult.skipped.length > 12 ? (
+                    <li>+ {bulkResult.skipped.length - 12} more skipped files</li>
+                  ) : null}
+                </ul>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       <div className="mb-3 flex gap-1 rounded-xl border border-black/5 bg-black/[0.03] p-1">
         {STATUS_TABS.map((tab) => (
@@ -366,6 +552,13 @@ export default function CatalogueVisibilityFilter({
                 >
                   {uploadingProductId === product.id ? 'Uploading…' : '📷 Upload'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => openImageAssistant(product.id)}
+                  className="mt-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100"
+                >
+                  Find image
+                </button>
                 {uploadErrorProductId === product.id && uploadErrorMessage ? (
                   <span className="mt-1 max-w-[110px] text-[10px] leading-4 text-rose-600">
                     {uploadErrorMessage}
@@ -378,6 +571,62 @@ export default function CatalogueVisibilityFilter({
               <div className="truncate text-sm font-medium text-ink">{product.name}</div>
               {product.categoryName ? (
                 <div className="truncate text-[10px] text-black/40">{product.categoryName}</div>
+              ) : null}
+              {product.barcode ? (
+                <div className="truncate text-[10px] text-black/30">{product.barcode}</div>
+              ) : null}
+              {imageAssistantProductId === product.id ? (
+                <div className="mt-2 rounded-xl border border-sky-100 bg-sky-50/75 p-2">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-sky-700">
+                    Image assistant
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {buildImageSearchQueries(product).map((searchQuery) => (
+                      <span key={searchQuery} className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-medium text-sky-900 ring-1 ring-sky-100">
+                        {searchQuery}
+                        <a
+                          href={imageSearchUrl('google', searchQuery)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-bold text-sky-700 hover:underline"
+                        >
+                          Google
+                        </a>
+                        <a
+                          href={imageSearchUrl('bing', searchQuery)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-bold text-sky-700 hover:underline"
+                        >
+                          Bing
+                        </a>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="url"
+                      className="input h-10 flex-1 text-xs"
+                      placeholder="Paste direct .jpg, .png or .webp URL"
+                      value={externalImageUrl}
+                      onChange={(event) => setExternalImageUrl(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void saveExternalImageUrl(product.id)}
+                      disabled={externalImageSavingProductId === product.id}
+                      className="inline-flex h-10 items-center justify-center rounded-xl bg-sky-900 px-3 text-xs font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {externalImageSavingProductId === product.id ? 'Checking…' : 'Save URL'}
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-4 text-sky-800/70">
+                    Use a clear product photo you are allowed to use. The URL must point directly to an image file.
+                  </p>
+                  {externalImageError ? (
+                    <div className="mt-1 text-[10px] text-rose-600">{externalImageError}</div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
 
@@ -416,7 +665,9 @@ export default function CatalogueVisibilityFilter({
                   ? 'No published products yet'
                   : statusFilter === 'hidden'
                     ? 'All products are published'
-                    : 'No products found'}
+                    : statusFilter === 'missing-images'
+                      ? 'No published products are missing images'
+                      : 'No products found'}
             </div>
             {query ? (
               <button

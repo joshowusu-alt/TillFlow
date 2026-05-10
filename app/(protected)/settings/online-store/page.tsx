@@ -12,6 +12,7 @@ import { headers } from 'next/headers';
 import StorefrontPaymentModeCard from '@/components/StorefrontPaymentModeCard';
 import StorefrontAccessCard from '@/components/StorefrontAccessCard';
 import StorefrontBrandingCard from '@/components/StorefrontBrandingCard';
+import StorefrontCategoryImageManager from '@/components/StorefrontCategoryImageManager';
 import SettingsSection from '@/components/SettingsSection';
 import { normalizePaymentMode, paymentConfigIsReady } from '@/lib/storefront-payments';
 import { buildStorefrontUrl } from '@/lib/storefront-url';
@@ -54,6 +55,8 @@ export default async function OnlineStoreSettingsPage({
     categories,
     activeProductCounts,
     publishedProductCounts,
+    publishedWithOwnImage,
+    publishedWithCategoryFallback,
   ] = await Promise.all([
     prisma.business.findUnique({
       where: { id: business.id },
@@ -119,7 +122,7 @@ export default async function OnlineStoreSettingsPage({
     prisma.category.findMany({
       where: { businessId: business.id },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true },
+      select: { id: true, name: true, imageUrl: true },
     }),
     prisma.product.groupBy({
       by: ['categoryId'],
@@ -130,6 +133,23 @@ export default async function OnlineStoreSettingsPage({
       by: ['categoryId'],
       where: { businessId: business.id, active: true, storefrontPublished: true },
       _count: { _all: true },
+    }),
+    prisma.product.count({
+      where: {
+        businessId: business.id,
+        active: true,
+        storefrontPublished: true,
+        imageUrl: { not: null },
+      },
+    }),
+    prisma.product.count({
+      where: {
+        businessId: business.id,
+        active: true,
+        storefrontPublished: true,
+        imageUrl: null,
+        category: { imageUrl: { not: null } },
+      },
     }),
   ]);
 
@@ -150,6 +170,7 @@ export default async function OnlineStoreSettingsPage({
     .map((category) => ({
       id: category.id,
       name: category.name,
+      imageUrl: category.imageUrl,
       total: activeCountByCategoryId.get(category.id) ?? 0,
       published: publishedCountByCategoryId.get(category.id) ?? 0,
     }))
@@ -171,6 +192,16 @@ export default async function OnlineStoreSettingsPage({
   const publishedOutOfStock =
     totalPublished -
     publishedInventoryTotals.filter((entry) => (entry._sum.qtyOnHandBase ?? 0) > 0).length;
+  const publishedWithoutAnyImage = Math.max(
+    totalPublished - publishedWithOwnImage - publishedWithCategoryFallback,
+    0,
+  );
+  const imageReadyCount = publishedWithOwnImage + publishedWithCategoryFallback;
+  const imageReadinessPercent =
+    totalPublished > 0 ? Math.round((imageReadyCount / totalPublished) * 100) : 0;
+  const categoriesNeedingImages = categorySummaries
+    .filter((category) => category.published > 0 && !category.imageUrl)
+    .sort((a, b) => b.published - a.published);
 
   const plan = getBusinessPlan(
     ((business as any).plan ?? (business.mode as any)) as any,
@@ -659,6 +690,53 @@ export default async function OnlineStoreSettingsPage({
             Save public categories
           </button>
         </form>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Storefront image readiness"
+        description={`${imageReadinessPercent}% of live products have a product or category image`}
+        badge={`${imageReadyCount}/${totalPublished}`}
+        eyebrow="Images"
+        defaultOpen={false}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-4">
+            {[
+              ['Own images', publishedWithOwnImage],
+              ['Category fallback', publishedWithCategoryFallback],
+              ['Still missing', publishedWithoutAnyImage],
+              ['Ready', `${imageReadinessPercent}%`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">{label}</div>
+                <div className="mt-1 text-xl font-black text-ink">{value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950">
+            Add category images first to lift the storefront quickly, then use the missing-images filter below for high-value or best-selling products that deserve their own photo.
+          </div>
+
+          {categoriesNeedingImages.length > 0 ? (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <div className="text-sm font-semibold text-amber-950">Highest impact category images to add</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {categoriesNeedingImages.slice(0, 8).map((category) => (
+                  <span key={category.id} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-100">
+                    {category.name} · {category.published} live
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              All live categories have fallback images.
+            </div>
+          )}
+
+          <StorefrontCategoryImageManager categories={categorySummaries} />
+        </div>
       </SettingsSection>
 
       <SettingsSection
