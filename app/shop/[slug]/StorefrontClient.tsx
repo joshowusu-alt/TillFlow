@@ -11,7 +11,7 @@ import type { PublicStorefront } from '@/lib/services/online-orders';
 import MerchantBrandBadge from '@/components/MerchantBrandBadge';
 
 const ALL_CATEGORIES = '__all__';
-const CATALOG_PAGE_SIZE = 48;
+const CATALOG_PAGE_SIZE = 24;
 const SEARCH_DEBOUNCE_MS = 300;
 const CATALOG_SECTION_ID = 'shop-catalog';
 
@@ -66,6 +66,7 @@ function ProductImage({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const effectiveSrc = src ?? fallbackSrc ?? null;
+  const hasProductImage = Boolean(src);
   const fallbackLabel = (() => {
     const source = (alt || categoryName || 'Item').trim();
     const initials = source
@@ -79,9 +80,15 @@ function ProductImage({
 
   if (!effectiveSrc || failed) {
     return (
-      <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 ${inStock ? '' : 'opacity-60'}`}>
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/5 bg-white/80 shadow-sm">
-          <span className="text-sm font-black tracking-[0.12em]" style={{ color: 'var(--store-primary)', opacity: 0.62 }}>{fallbackLabel}</span>
+      <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.16),transparent_34%),linear-gradient(135deg,#f8fafc,#eef6ff_52%,#ecfdf5)] ${inStock ? '' : 'opacity-60'}`}>
+        <div className="absolute inset-x-3 top-3 truncate rounded-full bg-white/60 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.16em] text-black/35">
+          {categoryName ? toTitleCase(categoryName) : 'Store pick'}
+        </div>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/75 bg-white/80 text-slate-400 shadow-sm">
+          <PackageIcon className="h-8 w-8" />
+        </div>
+        <div className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-xl bg-white/75 text-[10px] font-black tracking-[0.08em] shadow-sm" style={{ color: 'var(--store-primary)' }}>
+          {fallbackLabel}
         </div>
       </div>
     );
@@ -98,7 +105,7 @@ function ProductImage({
         fill
         loading={priority ? 'eager' : 'lazy'}
         priority={priority}
-        className={`object-cover transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`${hasProductImage ? 'object-contain p-2' : 'object-cover'} bg-white transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
         onError={() => setFailed(true)}
         onLoad={() => setLoaded(true)}
         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -593,7 +600,7 @@ export default function StorefrontClient({
     const sameCategoryCandidates = productsForStore
       .filter((product) => {
         const key = getRecommendationCategoryKey(product);
-        return Boolean(key && cartCategoryKeys.has(key) && !cartProductIds.has(product.id));
+        return Boolean(key && cartCategoryKeys.has(key) && !cartProductIds.has(product.id) && product.onHandBase > 0);
       })
       .sort(sortRecommendationProducts);
 
@@ -645,7 +652,7 @@ export default function StorefrontClient({
     }
 
     const fallbackCandidates = productsForStore
-      .filter((product) => !cartProductIds.has(product.id))
+      .filter((product) => !cartProductIds.has(product.id) && product.onHandBase > 0)
       .sort(sortRecommendationProducts);
     const maxFallbackSuggestions = fallbackCandidates.length >= 4 ? 4 : 3;
 
@@ -701,6 +708,21 @@ export default function StorefrontClient({
           qtyInUnit: current.qtyInUnit,
         },
       ];
+    });
+  }
+
+  function adjustCartProduct(productId: string, delta: number) {
+    setCart((prev) => {
+      const index = prev.findIndex((line) => line.productId === productId);
+      if (index === -1) return prev;
+      const line = prev[index];
+      const nextQty = line.qtyInUnit + delta;
+      if (nextQty <= 0) {
+        return prev.filter((_, lineIndex) => lineIndex !== index);
+      }
+      return prev.map((cartLine, lineIndex) =>
+        lineIndex === index ? { ...cartLine, qtyInUnit: nextQty } : cartLine,
+      );
     });
   }
 
@@ -1002,11 +1024,12 @@ export default function StorefrontClient({
               </form>
 
               {categories.length > 0 && (
-                <div
-                  role="tablist"
-                  aria-label="Product categories"
-                  className="-mx-1 mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                >
+                <div className="relative mt-3">
+                  <div
+                    role="tablist"
+                    aria-label="Product categories"
+                    className="-mx-1 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-1 pr-8 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
                    <button
                      type="button"
                      role="tab"
@@ -1037,11 +1060,13 @@ export default function StorefrontClient({
                         }
                         style={active ? primaryStyle : undefined}
                       >
-                        {toTitleCase(category.name)}
+                        <span className="inline-block max-w-[9.5rem] truncate align-bottom">{toTitleCase(category.name)}</span>
                         <span className="ml-1.5 opacity-60" aria-hidden="true">{category.count}</span>
                       </button>
                     );
                   })}
+                  </div>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white via-white/90 to-transparent lg:from-slate-50 lg:via-slate-50/90" aria-hidden="true" />
                 </div>
               )}
 
@@ -1065,8 +1090,8 @@ export default function StorefrontClient({
                     <h2 className="text-sm font-extrabold text-ink">Popular in this shop</h2>
                     <p className="text-xs text-black/45">Fast picks customers are likely to need today.</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-black/45">
-                    {catalogTotal} live items
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                    Curated picks
                   </span>
                 </div>
                 <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1093,14 +1118,24 @@ export default function StorefrontClient({
                         <div className="p-2">
                           <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
                           <div className="mt-1 text-sm font-extrabold text-ink">{price}</div>
-                          <button
-                            type="button"
-                            className="mt-2 h-10 w-full rounded-xl text-xs font-black text-white shadow-sm"
-                            style={primaryStyle}
-                            onClick={() => addToCart(product.id)}
-                          >
-                            Add
-                          </button>
+                          {cartProductIds.has(product.id) ? (
+                            <button
+                              type="button"
+                              className="mt-2 h-10 w-full rounded-xl border border-emerald-200 bg-emerald-50 text-xs font-black text-emerald-700"
+                              onClick={() => scrollToProduct(product.id)}
+                            >
+                              In cart
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="mt-2 h-10 w-full rounded-xl text-xs font-black text-white shadow-sm"
+                              style={primaryStyle}
+                              onClick={() => addToCart(product.id)}
+                            >
+                              Add
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1211,13 +1246,15 @@ export default function StorefrontClient({
                     const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
                     const displayName = toTitleCase(product.name);
                     const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
+                    const productInCart = cartProductIds.has(product.id);
+                    const productCartQty = cartQtyByProductId[product.id] ?? 0;
 
                     return (
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex min-h-[17.5rem] flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 ${
-                          inStock ? 'shadow-[0_6px_20px_rgba(15,23,42,0.045)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-black/10' : 'opacity-60 shadow-none'
+                        className={`group flex min-h-[21rem] flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 ${
+                          inStock ? 'shadow-[0_8px_24px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-black/10' : 'opacity-70 shadow-none'
                         }`}
                       >
                         <button
@@ -1237,7 +1274,7 @@ export default function StorefrontClient({
                           ) : null}
                           {!inStock ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
-                              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+                              <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[10px] font-bold text-white shadow-sm">
                                 Sold out
                               </span>
                             </div>
@@ -1263,32 +1300,23 @@ export default function StorefrontClient({
                       {displayName}
                     </h2>
 
-                    <div className="mt-auto pt-2">
-                      <div className="flex items-end justify-between gap-1.5">
-                        <div>
+                    <div className="mt-auto pt-3">
+                      <div className="space-y-1">
+                        <div className="min-w-0">
                           <div className="text-base font-black leading-none text-ink sm:text-lg">{unitPrice}</div>
                           {inStock ? (
-                            <div className="mt-0.5 text-[9px] font-medium text-emerald-600">Available</div>
-                          ) : null}
+                            <div className="text-[10px] font-semibold text-emerald-600">Available for pickup</div>
+                          ) : (
+                            <div className="text-[10px] font-semibold text-slate-500">Currently sold out</div>
+                          )}
                         </div>
-                        {!inStock ? null : (
-                          <button
-                            type="button"
-                            className="h-8 min-w-[2.5rem] rounded-xl px-2.5 text-xs font-black text-white shadow-sm sm:h-9 sm:px-3"
-                            style={primaryStyle}
-                            onClick={() => addToCart(product.id)}
-                            aria-label={`Add ${displayName} to cart`}
-                          >
-                            Add
-                          </button>
-                        )}
                       </div>
 
                       {product.units.length > 1 ? (
                         <select
-                          className="mt-2 w-full rounded-xl border border-black/10 bg-slate-50 px-2 py-2 text-[11px] font-medium text-black/65 focus:outline-none focus:ring-1 focus:ring-accent/30 sm:text-xs"
+                          className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
                           value={selected?.unitId ?? ''}
-                          disabled={!inStock}
+                          disabled={!inStock || productInCart}
                           onChange={(event) =>
                             setSelectionState((prev) => ({
                               ...prev,
@@ -1306,16 +1334,16 @@ export default function StorefrontClient({
                           ))}
                         </select>
                       ) : product.units[0] ? (
-                        <div className="mt-0.5 text-[10px] font-medium text-black/35">{toTitleCase(product.units[0].name)}</div>
+                        <div className="mt-1 text-[10px] font-semibold text-black/35">{toTitleCase(product.units[0].name)}</div>
                       ) : null}
 
-                      {inStock ? (
-                        <div className="mt-2 flex items-center gap-1.5">
-                          <div className="flex h-10 items-center overflow-hidden rounded-xl border border-black/10 bg-slate-50">
+                      {inStock && !productInCart ? (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex h-11 w-full items-center justify-between overflow-hidden rounded-xl border border-black/10 bg-slate-50">
                             <button
                               type="button"
                               aria-label={`Decrease quantity of ${displayName}`}
-                              className="flex h-10 w-10 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
+                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
                               disabled={(selected?.qtyInUnit ?? 1) <= 1}
                               onClick={() =>
                                 setSelectionState((prev) => ({
@@ -1329,13 +1357,13 @@ export default function StorefrontClient({
                             >
                               −
                             </button>
-                            <span className="w-8 text-center text-xs font-bold text-ink">
+                            <span className="min-w-0 flex-1 text-center text-sm font-black text-ink">
                               {selected?.qtyInUnit ?? 1}
                             </span>
                             <button
                               type="button"
                               aria-label={`Increase quantity of ${displayName}`}
-                              className="flex h-10 w-10 items-center justify-center text-sm text-black/50 transition hover:bg-white hover:text-accent"
+                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
                               onClick={() =>
                                 setSelectionState((prev) => ({
                                   ...prev,
@@ -1351,12 +1379,41 @@ export default function StorefrontClient({
                           </div>
                           <button
                             type="button"
-                            className="flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-bold text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
+                            className="flex h-11 w-full items-center justify-center rounded-xl text-sm font-black text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
                             style={primaryStyle}
                             onClick={() => addToCart(product.id)}
+                            aria-label={`Add ${displayName} to cart`}
                           >
                             Add
                           </button>
+                        </div>
+                      ) : null}
+                      {inStock && productInCart ? (
+                        <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-1.5">
+                          <div className="px-1 pb-1 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">
+                            In cart
+                          </div>
+                          <div className="flex h-11 items-center overflow-hidden rounded-lg bg-white shadow-sm">
+                            <button
+                              type="button"
+                              aria-label={`Remove one ${displayName} from cart`}
+                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50"
+                              onClick={() => adjustCartProduct(product.id, -1)}
+                            >
+                              -
+                            </button>
+                            <span className="min-w-0 flex-1 text-center text-sm font-black text-ink">
+                              {productCartQty}
+                            </span>
+                            <button
+                              type="button"
+                              aria-label={`Add one more ${displayName} to cart`}
+                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50"
+                              onClick={() => adjustCartProduct(product.id, 1)}
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </div>

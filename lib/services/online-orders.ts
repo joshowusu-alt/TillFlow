@@ -425,7 +425,7 @@ function buildStorefrontPaymentConfig(business: StorefrontBusiness): StorefrontP
   };
 }
 
-const STOREFRONT_INITIAL_PRODUCT_LIMIT = 48;
+const STOREFRONT_INITIAL_PRODUCT_LIMIT = 24;
 const STOREFRONT_MAX_PAGE_SIZE = 60;
 
 function normalizeCatalogQuery(query: StorefrontCatalogQuery = {}) {
@@ -472,6 +472,10 @@ function productMatchesPublicCategory(product: { category: { name: string } | nu
   if (!categoryId || categoryId === '__all__') return true;
   const publicCategory = resolvePublicCategory(product.category?.name ?? null, mappingLookup);
   return !publicCategory.hidden && publicCategory.id === categoryId;
+}
+
+function productStockRank(product: { inventoryBalances: Array<{ qtyOnHandBase: number }> }) {
+  return product.inventoryBalances.some((balance) => balance.qtyOnHandBase > 0) ? 0 : 1;
 }
 
 function formatStorefrontCatalogProduct(
@@ -644,6 +648,8 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
     : rows.filter((product) => !resolvePublicCategory(product.category?.name ?? null, mappingLookup).hidden);
 
   const sortedRows = visibleRows.sort((a, b) => {
+    const stockRank = productStockRank(a) - productStockRank(b);
+    if (stockRank !== 0) return stockRank;
     const aCategory = resolvePublicCategory(a.category?.name ?? null, mappingLookup);
     const bCategory = resolvePublicCategory(b.category?.name ?? null, mappingLookup);
     if (aCategory.priority !== bCategory.priority) return aCategory.priority - bCategory.priority;
@@ -725,6 +731,8 @@ async function getStorefrontInitialData(
     (product) => !resolvePublicCategory(product.category?.name ?? null, mappingLookup).hidden,
   );
   const sortedRows = visibleRows.sort((a, b) => {
+    const stockRank = productStockRank(a) - productStockRank(b);
+    if (stockRank !== 0) return stockRank;
     const aCategory = resolvePublicCategory(a.category?.name ?? null, mappingLookup);
     const bCategory = resolvePublicCategory(b.category?.name ?? null, mappingLookup);
     if (aCategory.priority !== bCategory.priority) return aCategory.priority - bCategory.priority;

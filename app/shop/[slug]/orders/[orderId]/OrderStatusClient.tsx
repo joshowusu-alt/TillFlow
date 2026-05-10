@@ -12,9 +12,21 @@ import {
   type StorefrontPaymentMode,
 } from '@/lib/storefront-payments';
 
-function OrderLineImage({ imageUrl, productName }: { imageUrl: string; productName: string }) {
+function OrderLineImage({ imageUrl, productName }: { imageUrl: string | null; productName: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return null;
+  const initials = productName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+  if (!imageUrl || failed) {
+    return (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-slate-50 via-blue-50 to-emerald-50 text-[10px] font-black tracking-[0.08em] text-slate-500 ring-1 ring-black/5">
+        {initials || 'TF'}
+      </div>
+    );
+  }
   return (
     <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -738,9 +750,7 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
           <div className="divide-y divide-black/5">
             {order.lines.map((line) => (
               <div key={line.id} className="flex items-center gap-4 px-5 py-3.5">
-                {line.imageUrl ? (
-                  <OrderLineImage imageUrl={line.imageUrl} productName={line.productName} />
-                ) : null}
+                <OrderLineImage imageUrl={line.imageUrl} productName={line.productName} />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium text-ink">{toTitleCase(line.productName)}</div>
                   <div className="text-xs text-black/45">{line.qtyInUnit} × {toTitleCase(line.unitName)}</div>

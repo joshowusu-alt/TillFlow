@@ -73,13 +73,13 @@ export function getPaymentInstructionLine(
   switch (config.mode) {
     case 'MERCHANT_SHORTCODE':
       if (!config.merchantShortcode) {
-        return `Send ${amountFormatted}. Reference: ${reference}.`;
+        return `The store will contact you with payment details. Keep reference ${reference} ready for ${amountFormatted}.`;
       }
       return `Send ${amountFormatted} to merchant number ${config.merchantShortcode}. Use ${reference} as the payment reference.`;
     case 'BANK_TRANSFER': {
       const parts = [config.bankName, config.bankAccountNumber].filter(Boolean).join(' · ');
       if (!parts) {
-        return `Send ${amountFormatted} via bank transfer. Reference: ${reference}.`;
+        return `The store will contact you with bank payment details. Keep reference ${reference} ready for ${amountFormatted}.`;
       }
       return `Send ${amountFormatted} via bank transfer to ${parts}. Use ${reference} as the payment reference.`;
     }
@@ -88,7 +88,7 @@ export function getPaymentInstructionLine(
     case 'MOMO_NUMBER':
     default:
       if (!config.momoNumber) {
-        return `Send ${amountFormatted}. Reference: ${reference}.`;
+        return `The store will contact you with payment details. Keep reference ${reference} ready for ${amountFormatted}.`;
       }
       return config.momoNetwork
         ? `Send ${amountFormatted} to ${config.momoNumber} on ${config.momoNetwork}. Use ${reference} as the payment reference.`
@@ -153,7 +153,7 @@ export function buildPaymentShareMessage(args: {
   config: StorefrontPaymentConfig;
 }): string {
   const { storeName, reference, amountFormatted, config } = args;
-  const head = `Hi, I placed an order at ${storeName}. My reference is *${reference}* for ${amountFormatted}.`;
+  const head = `Hi, I placed an order at ${storeName}. My reference is ${reference} for ${amountFormatted}.`;
 
   switch (config.mode) {
     case 'MERCHANT_SHORTCODE':
@@ -183,7 +183,7 @@ export function buildPaymentShareMessage(args: {
         head,
         config.momoNumber
           ? `Please send payment to ${config.momoNumber}${config.momoNetwork ? ` on ${config.momoNetwork}` : ''} using ${reference} as the reference note.`
-          : `Please confirm the MoMo number to send the payment.`,
+          : `Please confirm the MoMo number to send payment.`,
       ].join('\n');
   }
 }
