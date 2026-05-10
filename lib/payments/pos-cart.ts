@@ -25,6 +25,7 @@ export type PosProduct = {
   promoGetQty: number;
   categoryId: string | null;
   categoryName: string | null;
+  categoryImageUrl?: string | null;
   publicCategoryId?: string;
   publicCategoryName?: string;
   publicCategoryPriority?: number;

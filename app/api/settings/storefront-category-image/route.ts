@@ -3,6 +3,7 @@ import { isRedirectError } from 'next/dist/client/components/redirect';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
+import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
 
 export async function POST(request: Request) {
   try {
@@ -12,22 +13,21 @@ export async function POST(request: Request) {
     }
 
     const formData = await request.formData();
-    const productId = String(formData.get('productId') ?? '').trim();
+    const categoryId = String(formData.get('categoryId') ?? '').trim();
+    const externalImageUrl = String(formData.get('imageUrl') ?? '').trim();
 
-    if (!productId) {
-      return NextResponse.json({ error: 'Product is required.' }, { status: 400 });
+    if (!categoryId) {
+      return NextResponse.json({ error: 'Category is required.' }, { status: 400 });
     }
 
-    const product = await prisma.product.findFirst({
-      where: { id: productId, businessId: business.id },
+    const category = await prisma.category.findFirst({
+      where: { id: categoryId, businessId: business.id },
       select: { id: true },
     });
-
-    if (!product) {
-      return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
+    if (!category) {
+      return NextResponse.json({ error: 'Category not found.' }, { status: 404 });
     }
 
-    const externalImageUrl = String(formData.get('imageUrl') ?? '').trim();
     const result = externalImageUrl
       ? await validateExternalProductImageUrl(externalImageUrl)
       : await saveProductImageFile(formData.get('imageFile'));
@@ -39,20 +39,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    await prisma.product.update({
-      where: { id: productId },
+    const updated = await prisma.category.update({
+      where: { id: category.id },
       data: { imageUrl: result },
+      select: { imageUrl: true },
     });
 
-    return NextResponse.json({ imageUrl: result });
+    const storefront = await prisma.business.findUnique({
+      where: { id: business.id },
+      select: { storefrontSlug: true },
+    });
+    await invalidateStorefrontBusinessCache(storefront?.storefrontSlug);
+
+    return NextResponse.json({ imageUrl: updated.imageUrl });
   } catch (error) {
     if (isRedirectError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.error('[storefront-product-image] failed:', error);
+    console.error('[storefront-category-image] failed:', error);
     return NextResponse.json(
-      { error: 'Could not upload the product image right now.' },
+      { error: 'Could not save the category image right now.' },
       { status: 500 },
     );
   }

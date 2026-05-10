@@ -94,7 +94,7 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
           itemOffered: {
             '@type': 'Product',
             name: product.name,
-            image: product.imageUrl ?? undefined,
+            image: product.imageUrl ?? product.categoryImageUrl ?? undefined,
             description: product.storefrontDescription ?? product.categoryName ?? undefined,
             offers: {
               '@type': 'Offer',

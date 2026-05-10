@@ -42,6 +42,7 @@ export type StorefrontCatalogProduct = {
   promoGetQty: number;
   categoryId: string | null;
   categoryName: string | null;
+  categoryImageUrl: string | null;
   publicCategoryId: string;
   publicCategoryName: string;
   publicCategoryPriority: number;
@@ -485,7 +486,7 @@ function formatStorefrontCatalogProduct(
     categoryId: string | null;
     storefrontDescription: string | null;
     imageUrl: string | null;
-    category: { name: string } | null;
+    category: { name: string; imageUrl: string | null } | null;
     productUnits: Array<{
       isBaseUnit: boolean;
       conversionToBase: number;
@@ -514,6 +515,7 @@ function formatStorefrontCatalogProduct(
     promoGetQty: product.promoGetQty,
     categoryId: product.categoryId,
     categoryName: product.category?.name ?? null,
+    categoryImageUrl: product.category?.imageUrl ?? null,
     publicCategoryId: publicCategory.id,
     publicCategoryName: publicCategory.name,
     publicCategoryPriority: publicCategory.priority,
@@ -575,7 +577,7 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
           categoryId: true,
           storefrontDescription: true,
           imageUrl: true,
-          category: { select: { name: true } },
+          category: { select: { name: true, imageUrl: true } },
           productUnits: {
             orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
             select: {
@@ -618,7 +620,7 @@ async function getStorefrontProductRows(businessId: string, storeIds: string[], 
       categoryId: true,
       storefrontDescription: true,
       imageUrl: true,
-      category: { select: { name: true } },
+      category: { select: { name: true, imageUrl: true } },
       productUnits: {
         orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
         select: {
@@ -682,7 +684,7 @@ async function getStorefrontInitialData(
       categoryId: true,
       storefrontDescription: true,
       imageUrl: true,
-      category: { select: { name: true } },
+      category: { select: { name: true, imageUrl: true } },
       productUnits: {
         orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
         select: {

@@ -50,12 +50,14 @@ function PackageIcon({ className = 'h-10 w-10' }: { className?: string }) {
 
 function ProductImage({
   src,
+  fallbackSrc,
   alt,
   inStock,
   categoryName,
   priority = false,
 }: {
   src: string | null;
+  fallbackSrc?: string | null;
   alt: string;
   inStock: boolean;
   categoryName?: string | null;
@@ -63,6 +65,7 @@ function ProductImage({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const effectiveSrc = src ?? fallbackSrc ?? null;
   const fallbackLabel = (() => {
     const source = (alt || categoryName || 'Item').trim();
     const initials = source
@@ -74,7 +77,7 @@ function ProductImage({
     return initials || source.slice(0, 2).toUpperCase();
   })();
 
-  if (!src || failed) {
+  if (!effectiveSrc || failed) {
     return (
       <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 ${inStock ? '' : 'opacity-60'}`}>
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/5 bg-white/80 shadow-sm">
@@ -90,7 +93,7 @@ function ProductImage({
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100" aria-hidden="true" />
       ) : null}
       <Image
-        src={src}
+        src={effectiveSrc}
         alt={alt}
         fill
         loading={priority ? 'eager' : 'lazy'}
@@ -1085,7 +1088,7 @@ export default function StorefrontClient({
                           }}
                           aria-label={`View ${toTitleCase(product.name)}`}
                         >
-                          <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
+                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} priority={featuredIndex < 4} />
                         </button>
                         <div className="p-2">
                           <div className="line-clamp-2 min-h-[2rem] text-xs font-bold leading-tight text-ink">{toTitleCase(product.name)}</div>
@@ -1223,7 +1226,7 @@ export default function StorefrontClient({
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
-                          <ProductImage src={product.imageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority={index < 6} />
+                          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority={index < 6} />
                           {hasPromo && inStock ? (
                             <div
                               className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm"
@@ -1405,7 +1408,7 @@ export default function StorefrontClient({
                               className="flex min-w-0 flex-1 items-center gap-3 text-left"
                             >
                               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-50">
-                                <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                                <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1485,7 +1488,7 @@ export default function StorefrontClient({
                     <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
                         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                          <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
+                          <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
@@ -1533,7 +1536,7 @@ export default function StorefrontClient({
                             onClick={() => scrollToProduct(product.id)}
                             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                           >
-                            <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                            <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                           </button>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-ink">{toTitleCase(product.name)}</div>
@@ -1718,7 +1721,7 @@ export default function StorefrontClient({
                 <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-100">
-                      <ProductImage src={line.product.imageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
+                      <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-ink">{toTitleCase(line.product.name)}</div>
@@ -1766,7 +1769,7 @@ export default function StorefrontClient({
                         onClick={() => scrollToProduct(product.id)}
                         className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-50"
                       >
-                        <ProductImage src={product.imageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
+                        <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={toTitleCase(product.name)} inStock={product.onHandBase > 0} categoryName={product.publicCategoryName} />
                       </button>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-ink">{toTitleCase(product.name)}</div>

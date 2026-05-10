@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-type StatusFilter = 'all' | 'published' | 'hidden';
+type StatusFilter = 'all' | 'published' | 'hidden' | 'missing-images';
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -32,11 +32,21 @@ export async function GET(request: Request) {
         ? { storefrontPublished: true }
         : status === 'hidden'
           ? { storefrontPublished: false }
+          : status === 'missing-images'
+            ? {
+                storefrontPublished: true,
+                imageUrl: null,
+                OR: [
+                  { category: null },
+                  { category: { imageUrl: null } },
+                ],
+              }
           : {}),
       ...(q
         ? {
             OR: [
               { name: { contains: q, mode: 'insensitive' as const } },
+              { barcode: { contains: q, mode: 'insensitive' as const } },
               { category: { name: { contains: q, mode: 'insensitive' as const } } },
             ],
           }
@@ -52,6 +62,7 @@ export async function GET(request: Request) {
         select: {
           id: true,
           name: true,
+          barcode: true,
           imageUrl: true,
           storefrontPublished: true,
           sellingPriceBasePence: true,
