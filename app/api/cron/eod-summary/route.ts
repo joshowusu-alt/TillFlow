@@ -3,12 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { hasValidCronSecret } from '@/lib/cron-auth';
 import { enqueueOwnerDailySummarySms } from '@/lib/notifications/owner-daily-summary-sms';
 import {
-  getCurrentHourForTimeZone,
   resolveBusinessTimeZone,
 } from '@/lib/notifications/utils';
 
-const OWNER_SUMMARY_SEND_HOUR = 20;
-const OWNER_SUMMARY_SEND_TIME = '20:00';
+const OWNER_SUMMARY_SEND_HOUR = 21;
+const OWNER_SUMMARY_SEND_MINUTE = 30;
+const OWNER_SUMMARY_SEND_TIME = '21:30';
 
 /**
  * GET /api/cron/eod-summary
@@ -50,8 +50,11 @@ export async function GET(req: NextRequest) {
   const eligibleBusinesses = force
     ? businesses
     : businesses.filter((business) => {
-        const localHour = getCurrentHourForTimeZone(now, business.timezone);
-        return localHour === OWNER_SUMMARY_SEND_HOUR;
+        const tz = resolveBusinessTimeZone(business.timezone);
+        const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: false, timeZone: tz }).formatToParts(now);
+        const localHour = parseInt(parts.find((p) => p.type === 'hour')?.value ?? '0', 10);
+        const localMinute = parseInt(parts.find((p) => p.type === 'minute')?.value ?? '0', 10);
+        return localHour === OWNER_SUMMARY_SEND_HOUR && localMinute >= OWNER_SUMMARY_SEND_MINUTE;
       });
 
   if (eligibleBusinesses.length === 0) {
