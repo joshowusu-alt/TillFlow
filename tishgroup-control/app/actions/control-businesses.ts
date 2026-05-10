@@ -7,7 +7,7 @@ import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNote
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import { recordAudit } from '@/lib/audit';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
-import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '../../../lib/subscription-lifecycle';
+import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '@/lib/subscription-lifecycle';
 
 type BillingCadence = 'MONTHLY' | 'ANNUAL';
 type SubscriptionStatus = 'PAID_ACTIVE' | 'TRIAL_ACTIVE' | 'TRIAL_DUE_SOON' | 'TRIAL_DUE_TODAY' | 'TRIAL_EXPIRED_GRACE' | 'TRIAL_RESTRICTED' | 'RENEWAL_DUE_SOON' | 'PAYMENT_DUE_TODAY' | 'PAYMENT_OVERDUE_GRACE' | 'PAYMENT_RESTRICTED' | 'CANCELLED' | 'READ_ONLY';

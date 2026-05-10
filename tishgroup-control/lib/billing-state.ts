@@ -1,5 +1,5 @@
 import type { ManagedPlan, ManagedState } from '@/lib/control-data';
-import { computeBillingAccessState } from '../../lib/subscription-lifecycle';
+import { computeBillingAccessState } from '@/lib/subscription-lifecycle';
 
 export function deriveManagedState(input: {
   plan: ManagedPlan;
