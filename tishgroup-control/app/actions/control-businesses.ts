@@ -634,7 +634,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           paymentGraceEndsAt: null,
           suspendedAt: null,
           cancelledAt: null,
-          billingAmount: activation.billingAmount,
+          billingAmount: activation.billingAmount * 100,
           billingCurrency: activation.billingCurrency,
           billingInterval: activation.billingInterval,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control payment recorded', [
