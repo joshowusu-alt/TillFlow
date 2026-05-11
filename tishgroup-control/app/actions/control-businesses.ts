@@ -551,7 +551,10 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
   const paidAt = parseOptionalDate(readOptional(formData, 'paidAt')) ?? new Date();
   const billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
   const explicitNextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
-  const nextDueDate = explicitNextDueDate ?? calculateNextBillingDate(paidAt, billingCadence);
+  const nextDueDate =
+    explicitNextDueDate && explicitNextDueDate.getTime() > paidAt.getTime()
+      ? explicitNextDueDate
+      : calculateNextBillingDate(paidAt, billingCadence);
 
   try {
     await prisma.$transaction(async (tx) => {

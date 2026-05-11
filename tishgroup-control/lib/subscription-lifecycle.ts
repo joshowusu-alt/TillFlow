@@ -59,6 +59,12 @@ function normalizeCadence(value?: string | null): BillingCadence {
   return String(value ?? '').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
 }
 
+function normalizePaidNextDueDate(nextDue: Date | null, lastPaymentAt: Date | null, cadence: BillingCadence, explicitStatus: string) {
+  if (!nextDue || !lastPaymentAt) return nextDue;
+  if (['READ_ONLY', 'CANCELLED', 'INACTIVE', 'DEACTIVATED'].includes(explicitStatus)) return nextDue;
+  return nextDue.getTime() <= lastPaymentAt.getTime() ? calculateNextBillingDate(lastPaymentAt, cadence) : nextDue;
+}
+
 function wholeDaysUntil(later: Date | null, now: Date) {
   if (!later) return null;
   return Math.ceil((later.getTime() - now.getTime()) / DAY_MS);
@@ -101,13 +107,19 @@ function resolveControlMessage(state: BillingAccessState, daysRemaining: number 
 export function computeBillingAccessState(input: SubscriptionInput, now = new Date()): BillingAccessSnapshot {
   const trialEndsAt = toDate(input.trialEndsAt);
   const firstPaymentAt = toDate(input.firstPaymentAt);
-  const nextDue = toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt);
+  const cadence = normalizeCadence(input.billingCadence);
+  const lastPaymentAt = toDate(input.lastPaymentAt);
+  const explicit = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
+  const nextDue = normalizePaidNextDueDate(
+    toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt),
+    lastPaymentAt,
+    cadence,
+    explicit
+  );
   const paymentGraceEndsAt = toDate(input.paymentGraceEndsAt);
   const suspendedAt = toDate(input.suspendedAt);
   const cancelledAt = toDate(input.cancelledAt);
-  const cadence = normalizeCadence(input.billingCadence);
   const renewalWindowDays = cadence === 'ANNUAL' ? 30 : 7;
-  const explicit = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
 
   let accessState: BillingAccessState;
   let daysRemaining: number | null = null;

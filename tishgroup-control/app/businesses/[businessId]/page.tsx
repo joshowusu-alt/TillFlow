@@ -572,7 +572,8 @@ export default async function BusinessDetailPage({
 
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Next due date</span>
-                    <input type="date" name="nextDueDate" defaultValue={asDateInput(business.nextDueAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                    <input type="date" name="nextDueDate" defaultValue="" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                    <p className="text-xs text-black/55">Leave blank to calculate it automatically from the payment date.</p>
                   </label>
 
                   <label className="block space-y-1 text-sm">
@@ -794,7 +795,8 @@ export default async function BusinessDetailPage({
                 </label>
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-control-ink">Next due date</span>
-                  <input type="date" name="nextDueDate" defaultValue={asDateInput(business.nextDueAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                  <input type="date" name="nextDueDate" defaultValue="" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                  <p className="text-xs text-black/55">Leave blank to calculate it automatically from the payment date.</p>
                 </label>
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-control-ink">Reference</span>
