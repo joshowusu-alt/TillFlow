@@ -108,6 +108,38 @@ describe('subscription lifecycle', () => {
     expect(active.primaryBanner).toBeNull();
   });
 
+  it('self-heals stale paid cycle dates after a newer payment is recorded', () => {
+    const active = computeBillingAccessState({
+      selectedPlan: 'PRO',
+      subscriptionStatus: 'PAID_ACTIVE',
+      firstPaymentConfirmedAt: new Date('2026-04-09T10:00:00.000Z'),
+      currentPeriodStartedAt: new Date('2026-05-10T00:00:00.000Z'),
+      currentPeriodEndsAt: new Date('2026-05-09T00:00:00.000Z'),
+      nextPaymentDueAt: new Date('2026-05-09T00:00:00.000Z'),
+      lastPaymentRecordedAt: new Date('2026-05-10T00:00:00.000Z'),
+      billingCadence: 'MONTHLY',
+      timezone: 'Africa/Accra',
+    }, new Date('2026-05-11T08:00:00.000Z'));
+
+    expect(active.accessState).toBe('PAID_ACTIVE');
+    expect(active.currentPeriodStartedAt).toEqual(new Date('2026-05-10T00:00:00.000Z'));
+    expect(active.currentPeriodEndsAt).toEqual(new Date('2026-06-10T00:00:00.000Z'));
+    expect(active.nextBillingDate).toEqual(new Date('2026-06-10T00:00:00.000Z'));
+  });
+
+  it('normalizes cedi-denominated billing amounts into pesewas for display', () => {
+    const active = computeBillingAccessState({
+      selectedPlan: 'PRO',
+      firstPaymentConfirmedAt: new Date('2026-05-10T00:00:00.000Z'),
+      nextPaymentDueAt: new Date('2026-06-10T00:00:00.000Z'),
+      billingCadence: 'MONTHLY',
+      billingAmount: 699,
+      timezone: 'Africa/Accra',
+    }, new Date('2026-05-11T08:00:00.000Z'));
+
+    expect(active.billingAmountPence).toBe(69900);
+  });
+
   it('does not trust stale active labels when payment was due yesterday', () => {
     const access = computeBillingAccessState({
       selectedPlan: 'PRO',

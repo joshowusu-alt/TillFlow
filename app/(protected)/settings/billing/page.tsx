@@ -79,6 +79,10 @@ function formatCedi(value: number) {
   return `GH₵${value.toLocaleString('en-GH')}`;
 }
 
+function formatCediFromPence(value: number) {
+  return formatCedi(Math.round(value / 100));
+}
+
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -87,6 +91,74 @@ function formatDateLabel(value: Date | string | null | undefined, fallback = 'No
   if (!value) return fallback;
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? fallback : date.toLocaleDateString('en-GB');
+}
+
+function formatDateTimeLabel(value: Date | string | null | undefined, fallback = 'Unknown date') {
+  if (!value) return fallback;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime())
+    ? fallback
+    : date.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+}
+
+function formatBillingHistoryValue(label: string, value: string) {
+  if (['Start date', 'Next due', 'Paid at'].includes(label)) {
+    return formatDateLabel(value, value);
+  }
+  if (label === 'Amount') {
+    return value.replace(/^GHc\b/i, 'GH₵');
+  }
+  return value;
+}
+
+type BillingHistoryEntry = {
+  id: string;
+  title: string;
+  occurredAt: string | null;
+  facts: Array<{ label: string; value: string }>;
+  notes: string[];
+};
+
+function parseBillingHistory(notes: string | null | undefined): BillingHistoryEntry[] {
+  if (!notes?.trim()) return [];
+
+  return notes
+    .trim()
+    .split(/\n\s*\n/)
+    .map((chunk, index) => {
+      const lines = chunk.split('\n').map((line) => line.trim()).filter(Boolean);
+      const [header = '', ...rest] = lines;
+      const match = header.match(/^\[(.+?)\]\s+(.*)$/);
+      const facts: Array<{ label: string; value: string }> = [];
+      const freeform: string[] = [];
+
+      for (const line of rest) {
+        const separatorIndex = line.indexOf(':');
+        if (separatorIndex > 0) {
+          facts.push({
+            label: line.slice(0, separatorIndex).trim(),
+            value: line.slice(separatorIndex + 1).trim(),
+          });
+        } else {
+          freeform.push(line);
+        }
+      }
+
+      return {
+        id: `${match?.[1] ?? header}-${index}`,
+        title: match?.[2] ?? header,
+        occurredAt: match?.[1] ?? null,
+        facts,
+        notes: freeform,
+      };
+    })
+    .reverse();
 }
 
 export default async function BillingPage({
@@ -151,7 +223,8 @@ export default async function BillingPage({
   const daysRemaining = (business as any).billingDaysRemaining as number | null | undefined;
   const daysLeftInTrial = (business as any).billingDaysLeftInTrial as number | null | undefined;
   const daysUntilBilling = (business as any).billingDaysUntilBilling as number | null | undefined;
-  const billingAmountPence = ((business as any).billingAmount as number | null | undefined) ?? ((business as any).billingAmountPence as number | null | undefined) ?? PLAN_MONTHLY_PRICES[purchasedPlan] * 100;
+  const billingAmountPence = ((business as any).billingAmountPence as number | null | undefined) ?? ((business as any).billingAmount as number | null | undefined) ?? PLAN_MONTHLY_PRICES[purchasedPlan] * 100;
+  const billingHistory = parseBillingHistory(billingNotes);
 
   return (
     <div className="space-y-6">
@@ -377,8 +450,8 @@ export default async function BillingPage({
               <div className="mt-1 text-base font-semibold text-ink">{formatDateLabel(nextBillingDate, 'Not scheduled')}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Monthly amount due</div>
-              <div className="mt-1 text-base font-semibold text-ink">{formatCedi(Math.round(billingAmountPence / 100))}</div>
+              <div className="text-xs uppercase tracking-[0.16em] text-black/40">Amount due this cycle</div>
+              <div className="mt-1 text-base font-semibold text-ink">{formatCediFromPence(billingAmountPence)}</div>
             </div>
             <div className="rounded-xl border border-black/10 bg-white px-4 py-3">
               <div className="text-xs uppercase tracking-[0.16em] text-black/40">Last payment recorded</div>
@@ -424,7 +497,39 @@ export default async function BillingPage({
             <summary className="cursor-pointer text-xs uppercase tracking-[0.18em] text-black/40">Billing history</summary>
             <div className="mt-3 space-y-3">
               <p>{billingControlMessage}</p>
-              {billingNotes ? <p className="whitespace-pre-line">{billingNotes}</p> : null}
+              {billingHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {billingHistory.map((entry) => (
+                    <article key={entry.id} className="rounded-xl border border-black/8 bg-white px-4 py-4">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="font-semibold text-ink">{entry.title}</div>
+                        <div className="text-xs uppercase tracking-[0.14em] text-black/45">
+                          {formatDateTimeLabel(entry.occurredAt, 'Unknown date')}
+                        </div>
+                      </div>
+                      {entry.facts.length > 0 ? (
+                        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {entry.facts.map((fact) => (
+                            <div key={`${entry.id}-${fact.label}`}>
+                              <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/40">{fact.label}</dt>
+                              <dd className="mt-1 text-sm text-black/70">{formatBillingHistoryValue(fact.label, fact.value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+                      {entry.notes.length > 0 ? (
+                        <div className="mt-3 space-y-1 text-sm text-black/60">
+                          {entry.notes.map((line, index) => (
+                            <p key={`${entry.id}-note-${index}`}>{line}</p>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-black/55">No billing history has been recorded yet.</p>
+              )}
             </div>
           </details>
         </div>

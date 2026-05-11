@@ -107,6 +107,7 @@ export type SubscriptionInput = {
   cancelledAt?: Date | string | null;
   billingInterval?: string | null;
   billingCadence?: string | null;
+  billingAmount?: number | null;
 };
 
 export type BillingAccessComputation = {
@@ -223,6 +224,37 @@ function normalizePaidNextBillingDate(
   return nextBillingDate.getTime() <= lastPaymentAt.getTime()
     ? calculateNextBillingDate(lastPaymentAt, billingInterval)
     : nextBillingDate;
+}
+
+function normalizeCurrentPeriodStartedAt(currentPeriodStartedAt: Date | null, lastPaymentAt: Date | null) {
+  if (!lastPaymentAt) return currentPeriodStartedAt;
+  if (!currentPeriodStartedAt) return lastPaymentAt;
+  return currentPeriodStartedAt.getTime() < lastPaymentAt.getTime() ? lastPaymentAt : currentPeriodStartedAt;
+}
+
+function normalizeCurrentPeriodEndsAt(
+  currentPeriodEndsAt: Date | null,
+  currentPeriodStartedAt: Date | null,
+  nextBillingDate: Date | null
+) {
+  if (currentPeriodEndsAt && (!currentPeriodStartedAt || currentPeriodEndsAt.getTime() > currentPeriodStartedAt.getTime())) {
+    return currentPeriodEndsAt;
+  }
+  return nextBillingDate;
+}
+
+function normalizeBillingAmountPence(
+  billingAmount: number | null | undefined,
+  selectedPlan: BusinessPlan,
+  billingInterval: BillingInterval
+) {
+  if (!Number.isFinite(billingAmount) || billingAmount == null || billingAmount <= 0) {
+    const baseline = PLAN_MONTHLY_PRICES[selectedPlan];
+    return (billingInterval === 'ANNUAL' ? baseline * 10 : baseline) * 100;
+  }
+
+  const baseline = PLAN_MONTHLY_PRICES[selectedPlan] * (billingInterval === 'ANNUAL' ? 10 : 1);
+  return billingAmount < baseline * 10 ? billingAmount * 100 : billingAmount;
 }
 
 function localDayKey(date: Date, timeZone: string) {
@@ -447,20 +479,28 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
   const trialStartedAt = toDate(input.trialStartedAt);
   const trialEndsAt = resolveBillingDate(input, 'trialEndsAt');
   const firstPaymentAt = toDate(input.firstPaymentConfirmedAt ?? input.firstPaymentAt ?? input.lastPaymentRecordedAt ?? input.lastPaymentAt);
-  const currentPeriodStartedAt = toDate(input.currentPeriodStartedAt ?? input.currentPeriodStart);
-  const currentPeriodEndsAt = resolveBillingDate(input, 'currentPeriodEndsAt');
   const lastPaymentAt = toDate(input.lastPaymentRecordedAt ?? input.lastPaymentAt);
   const explicitStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
+  const rawCurrentPeriodEndsAt = resolveBillingDate(input, 'currentPeriodEndsAt');
   const nextBillingDate = normalizePaidNextBillingDate(
-    toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? currentPeriodEndsAt,
+    toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? rawCurrentPeriodEndsAt,
     lastPaymentAt,
     billingInterval,
     explicitStatus
   );
+  const currentPeriodStartedAt = normalizeCurrentPeriodStartedAt(
+    toDate(input.currentPeriodStartedAt ?? input.currentPeriodStart),
+    lastPaymentAt
+  );
+  const currentPeriodEndsAt = normalizeCurrentPeriodEndsAt(
+    rawCurrentPeriodEndsAt,
+    currentPeriodStartedAt,
+    nextBillingDate
+  );
   const paymentGraceEndsAt = resolveBillingDate(input, 'paymentGraceEndsAt');
   const suspendedAt = toDate(input.suspendedAt);
   const cancelledAt = toDate(input.cancelledAt);
-  const billedAmount = PLAN_MONTHLY_PRICES[selectedPlan] * 100;
+  const billedAmount = normalizeBillingAmountPence(input.billingAmount, selectedPlan, billingInterval);
 
   let accessState: BillingAccessState;
   let daysRemaining: number | null = null;
@@ -547,7 +587,7 @@ export function getTrialDaysLeft(input: SubscriptionInput, now = new Date()) {
 }
 
 export function getDaysUntilBilling(input: SubscriptionInput, now = new Date()) {
-  const nextBillingDate = toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? toDate(input.currentPeriodEndsAt);
+  const nextBillingDate = computeBillingAccessState(input, now).nextBillingDate;
   return wholeDaysUntil(nextBillingDate, now);
 }
 

@@ -27,6 +27,8 @@ export type BillingEntitlement = {
   isPaid: boolean;
   isOverdue: boolean;
   trialEndsAt: Date | null;
+  currentPeriodStartedAt: Date | null;
+  currentPeriodEndsAt: Date | null;
   nextPaymentDueAt: Date | null;
   lastPaymentAt: Date | null;
   graceEndsAt: Date | null;
@@ -67,6 +69,8 @@ export function getBillingEntitlement(input: BillingBusinessInput, now = new Dat
     isPaid: computation.isPaid,
     isOverdue: computation.isOverdue,
     trialEndsAt: snapshot.trialEndsAt,
+    currentPeriodStartedAt: snapshot.currentPeriodStartedAt,
+    currentPeriodEndsAt: snapshot.currentPeriodEndsAt,
     nextPaymentDueAt: snapshot.nextBillingDate,
     lastPaymentAt: snapshot.lastPaymentAt,
     graceEndsAt: snapshot.paymentGraceEndsAt,
