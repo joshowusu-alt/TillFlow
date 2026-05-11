@@ -221,6 +221,16 @@ function isCancelledStatus(status: SubscriptionStatus) {
   return status === 'CANCELLED';
 }
 
+function isPaidAccessStatus(status: SubscriptionStatus) {
+  return (
+    status === 'PAID_ACTIVE' ||
+    status === 'RENEWAL_DUE_SOON' ||
+    status === 'PAYMENT_DUE_TODAY' ||
+    status === 'PAYMENT_OVERDUE_GRACE' ||
+    status === 'PAYMENT_RESTRICTED'
+  );
+}
+
 async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>, args: {
   profileId: string;
   businessId: string;
@@ -304,6 +314,7 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
       nextBillingDate: true,
       nextPaymentDueAt: true,
       firstPaymentAt: true,
+      lastPaymentAt: true,
       phone: true,
       billingNotes: true,
       users: {
@@ -403,6 +414,20 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
         fallbackStartDate: existingSubscription?.startDate ?? business.planSetAt,
         fallbackNextDueDate: existingSubscription?.nextDueDate ?? business.nextBillingDate ?? business.nextPaymentDueAt ?? business.currentPeriodEndsAt,
       });
+      const paidAccess = isPaidAccessStatus(status);
+      const paymentConfirmedAt = paidAccess
+        ? (business.firstPaymentAt ?? business.lastPaymentAt ?? requestedStartDate ?? startDate ?? now)
+        : null;
+
+      // Guard against a stale/past fallback next-due date. If a previously overdue
+      // business is reactivated as PAID_ACTIVE and no future nextDueDate was
+      // explicitly provided, resolvedNextDueDate may be in the past. TillFlow would
+      // then immediately compute PAYMENT_RESTRICTED (graceEndsAt is null + nextBillingDate
+      // already past). Advance to the next billing cycle from the confirmed payment date.
+      const effectiveNextDueDate =
+        paidAccess && resolvedNextDueDate && resolvedNextDueDate < now
+          ? calculateNextBillingDate(paymentConfirmedAt ?? now, billingCadence)
+          : resolvedNextDueDate;
 
       await tx.controlSubscription.upsert({
         where: { controlBusinessId: profile.id },
@@ -411,7 +436,8 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           status,
           billingCadence,
           startDate,
-          nextDueDate: resolvedNextDueDate,
+          nextDueDate: effectiveNextDueDate,
+          lastPaymentDate: status === 'PAID_ACTIVE' ? paymentConfirmedAt : undefined,
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           effectivePlanOverride: null,
           gracePolicyVersion: '2026-04-08',
@@ -424,7 +450,8 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           status,
           billingCadence,
           startDate,
-          nextDueDate: resolvedNextDueDate,
+          nextDueDate: effectiveNextDueDate,
+          lastPaymentDate: status === 'PAID_ACTIVE' ? paymentConfirmedAt : null,
           readOnlyAt: status === 'READ_ONLY' ? now : null,
           gracePolicyVersion: '2026-04-08',
           monthlyValuePence,
@@ -446,11 +473,16 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           planStatus: businessStatusFromSubscription(status),
           subscriptionStatus: billingStatusFromSubscription(status),
           trialEndsAt: isTrialStatus(status) ? trialEndsAt : null,
+          firstPaymentAt: paidAccess ? paymentConfirmedAt : null,
+          lastPaymentAt: status === 'PAID_ACTIVE' ? paymentConfirmedAt : business.lastPaymentAt,
           planSetAt: startDate,
           currentPeriodStartedAt: isCancelledStatus(status) || isTrialStatus(status) ? null : startDate,
-          nextPaymentDueAt: isCancelledStatus(status) ? null : resolvedNextDueDate,
-          nextBillingDate: isCancelledStatus(status) ? null : resolvedNextDueDate,
-          currentPeriodEndsAt: isCancelledStatus(status) ? null : resolvedNextDueDate,
+          nextPaymentDueAt: isCancelledStatus(status) ? null : effectiveNextDueDate,
+          nextBillingDate: isCancelledStatus(status) ? null : effectiveNextDueDate,
+          currentPeriodEndsAt: isCancelledStatus(status) ? null : effectiveNextDueDate,
+          paymentGraceEndsAt: status === 'PAID_ACTIVE' ? null : undefined,
+          suspendedAt: status === 'PAID_ACTIVE' ? null : status === 'READ_ONLY' ? now : undefined,
+          cancelledAt: isCancelledStatus(status) ? now : null,
           addonOnlineStorefront,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
@@ -458,7 +490,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
             `Status: ${status}`,
             `Cadence: ${billingCadence}`,
             `Start date: ${startDate.toISOString().slice(0, 10)}`,
-            `Next due: ${resolvedNextDueDate ? resolvedNextDueDate.toISOString().slice(0, 10) : 'Not set'}`,
+            `Next due: ${effectiveNextDueDate ? effectiveNextDueDate.toISOString().slice(0, 10) : 'Not set'}`,
             `Online storefront add-on: ${addonOnlineStorefront ? 'Enabled' : 'Disabled'}`,
           ]),
         },
