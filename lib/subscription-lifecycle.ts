@@ -212,6 +212,19 @@ function resolveBillingDate(input: SubscriptionInput, key: 'trialEndsAt' | 'paym
   }
 }
 
+function normalizePaidNextBillingDate(
+  nextBillingDate: Date | null,
+  lastPaymentAt: Date | null,
+  billingInterval: BillingInterval,
+  explicitStatus: string
+) {
+  if (!nextBillingDate || !lastPaymentAt) return nextBillingDate;
+  if (['READ_ONLY', 'CANCELLED', 'INACTIVE', 'DEACTIVATED'].includes(explicitStatus)) return nextBillingDate;
+  return nextBillingDate.getTime() <= lastPaymentAt.getTime()
+    ? calculateNextBillingDate(lastPaymentAt, billingInterval)
+    : nextBillingDate;
+}
+
 function localDayKey(date: Date, timeZone: string) {
   return formatBusinessLocalDateKey(date, timeZone);
 }
@@ -436,12 +449,17 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
   const firstPaymentAt = toDate(input.firstPaymentConfirmedAt ?? input.firstPaymentAt ?? input.lastPaymentRecordedAt ?? input.lastPaymentAt);
   const currentPeriodStartedAt = toDate(input.currentPeriodStartedAt ?? input.currentPeriodStart);
   const currentPeriodEndsAt = resolveBillingDate(input, 'currentPeriodEndsAt');
-  const nextBillingDate = toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? currentPeriodEndsAt;
   const lastPaymentAt = toDate(input.lastPaymentRecordedAt ?? input.lastPaymentAt);
+  const explicitStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
+  const nextBillingDate = normalizePaidNextBillingDate(
+    toDate(input.nextBillingDate) ?? toDate(input.nextPaymentDueAt) ?? currentPeriodEndsAt,
+    lastPaymentAt,
+    billingInterval,
+    explicitStatus
+  );
   const paymentGraceEndsAt = resolveBillingDate(input, 'paymentGraceEndsAt');
   const suspendedAt = toDate(input.suspendedAt);
   const cancelledAt = toDate(input.cancelledAt);
-  const explicitStatus = String(input.subscriptionStatus ?? input.planStatus ?? '').toUpperCase();
   const billedAmount = PLAN_MONTHLY_PRICES[selectedPlan] * 100;
 
   let accessState: BillingAccessState;
