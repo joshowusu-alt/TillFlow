@@ -436,14 +436,14 @@ export async function wipeDemoData(): Promise<{ ok: boolean; error?: string }> {
   }
 }
 
-// --- Registration-time demo product SKUs (from register.ts seedDemoData) ---
+// --- Legacy sample product SKUs that may exist in older demo-day accounts ---
 // Defined in lib/demo-data-constants.ts so it can be imported by non-server modules.
 import { DEMO_SKUS } from '@/lib/demo-data-constants';
 const DEMO_CUSTOMER_NAMES = ['Kofi Mensah', 'Ama Serwaa', 'Emmanuel Asante', 'Abena Pokua'];
 
 /**
  * Clear ALL sample/demo data from a business — both Demo Day transactions
- * (tagged DEMO_DAY) AND registration-seeded products, categories, customers,
+ * (tagged DEMO_DAY) AND legacy sample products, categories, customers,
  * and supplier. Leaves chart of accounts, Walk-in Customer, and units intact.
  */
 export async function clearSampleData(): Promise<{ ok: boolean; removed: string[]; error?: string }> {
@@ -501,7 +501,7 @@ export async function clearSampleData(): Promise<{ ok: boolean; removed: string[
         if (csaDemoExpenses.length > 0) removed.push(`${csaDemoExpenses.length} demo expenses`);
       }
 
-      // 2) Delete registration-seeded demo products by SKU — but only if they
+      // 2) Delete legacy sample products by SKU — but only if they
       //    have NO real (non-demo) sales referencing them.
       const demoProducts = await tx.product.findMany({
         where: { businessId: business.id, sku: { in: DEMO_SKUS } },
