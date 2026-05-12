@@ -165,7 +165,6 @@ export default async function SystemHealthPage() {
               { label: 'Basic Health', url: '/api/health', hint: 'DB ping' },
               { label: 'Admin Health JSON', url: '/api/admin/health', hint: 'Full metrics' },
               { label: 'EOD Cron', url: '/api/cron/eod-summary', hint: 'Needs CRON_SECRET' },
-              { label: 'Demo Reset', url: '/api/cron/demo-reset', hint: 'Needs CRON_SECRET' },
               { label: 'Offline Sync', url: '/api/offline/sync', hint: 'POST, device auth' },
             ].map((ep) => (
               <div key={ep.url} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">

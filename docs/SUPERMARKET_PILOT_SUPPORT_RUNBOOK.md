@@ -370,7 +370,7 @@ For support evidence, capture:
 
 ### Cron trigger safety
 
-For protected cron routes such as `GET /api/cron/eod-summary` and `GET /api/cron/demo-reset`:
+For protected cron routes such as `GET /api/cron/eod-summary`:
 
 - use `Authorization: Bearer <CRON_SECRET>` for production/Vercel-style verification
 - `x-cron-secret: <CRON_SECRET>` is acceptable for safe manual support testing

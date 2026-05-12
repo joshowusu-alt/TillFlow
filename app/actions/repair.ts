@@ -364,7 +364,7 @@ export async function restoreOrphanedSaleProducts(): Promise<ActionResult<{ rest
     if (!store) return ok({ restored: 0 });
     const storeId = store.id;
 
-    // Known demo product definitions (from register.ts seedDemoData)
+    // Known legacy sample product definitions.
     const demoProductDefs = [
       { sku: 'CARN-001', name: 'Carnation Milk', selling: 150, cost: 100, reorder: 24 },
       { sku: 'COCA-001', name: 'Coca-Cola 500ml', selling: 120, cost: 80, reorder: 24 },

@@ -59,7 +59,7 @@
         - generic [ref=e222]
       - generic [ref=e278]:
         - link "Try Live Demo" [ref=e279] [cursor=pointer]:
-          - /url: /register?mode=demo
+          - /url: /demo
         - link "Create My Business" [ref=e280] [cursor=pointer]:
           - /url: /register
     - contentinfo [ref=e281]:
