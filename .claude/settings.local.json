@@ -121,7 +121,9 @@
       "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\josho\\\\OneDrive\\\\Desktop\\\\supermarket-pos\\\\lib\\\\demo-fixtures\\\\__tests__\" -Force)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\josho\\\\OneDrive\\\\Desktop\\\\supermarket-pos\" -Recurse -Force)",
       "Bash(Select-Object -First 50)",
-      "Bash(Format-Table FullName)"
+      "Bash(Format-Table FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\josho\\\\OneDrive\\\\Desktop\\\\supermarket-pos\\\\app\" -Recurse -Filter \"page.tsx\")",
+      "Bash(Sort-Object FullName)"
     ]
   }
 }
