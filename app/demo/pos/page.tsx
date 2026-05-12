@@ -1,189 +1,143 @@
-import { prisma } from '@/lib/prisma';
-import { ensureDemoBusiness } from '@/app/actions/demo';
+import { buildDemoLedger } from '@/lib/demo-fixtures';
 import { getCurrencySymbol } from '@/lib/format';
-import Link from 'next/link';
+import POSCategoryFilter from './_components/POSCategoryFilter';
+import type { DemoInventoryBalance } from '@/lib/demo-fixtures';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DemoPosPage() {
-  const demo = await ensureDemoBusiness().catch(() => null);
+export default function DemoPosPage() {
+  const snapshot = buildDemoLedger();
+  const sym = getCurrencySymbol(snapshot.currency);
 
-  if (!demo) {
-    return (
-      <div className="card p-12 text-center">
-        <h2 className="text-xl font-semibold mb-2">Demo not available</h2>
-        <p className="text-black/50">Could not initialise the demo environment. Please try again shortly.</p>
-        <Link href="/demo" className="btn-primary mt-4 inline-block">Retry</Link>
-      </div>
-    );
+  // Serialise Map to plain object for client component
+  const balances: Record<string, DemoInventoryBalance> = {};
+  for (const [id, bal] of snapshot.inventoryBalances) {
+    balances[id] = bal;
   }
 
-  const store = await prisma.store.findFirst({ where: { businessId: demo.id } });
-  if (!store) {
-    return <div className="card p-8 text-center">Demo business branch not found.</div>;
-  }
-
-  const [products, categories, inventory] = await Promise.all([
-    prisma.product.findMany({
-      where: { businessId: demo.id, active: true },
-      orderBy: { name: 'asc' },
-      select: {
-        id: true, name: true, barcode: true,
-        sellingPriceBasePence: true, vatRateBps: true,
-        category: { select: { name: true, colour: true } },
-      },
-    }),
-    prisma.category.findMany({
-      where: { businessId: demo.id },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, colour: true },
-    }),
-    prisma.inventoryBalance.findMany({
-      where: { storeId: store.id },
-      select: { productId: true, qtyOnHandBase: true },
-    }),
-  ]);
-
-  // Recent "demo" sales for context
-  const recentSales = await prisma.salesInvoice.findMany({
-    where: { businessId: demo.id },
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-    select: { id: true, totalPence: true, createdAt: true },
-  });
-
-  const stockMap = new Map(inventory.map((i) => [i.productId, i.qtyOnHandBase]));
-  const currency = demo.currency ?? 'GHS';
-  const sym = getCurrencySymbol(currency);
+  const totalSKUs  = snapshot.products.length;
+  const lowStockN  = snapshot.products.filter(p => {
+    const b = snapshot.inventoryBalances.get(p.id);
+    return b ? b.endingQty <= p.reorderPoint : false;
+  }).length;
+  const totalInvValue = snapshot.totals.endingInventoryValuePence;
+  const productMap = new Map(snapshot.products.map((product) => [product.id, product]));
+  const customerMap = new Map(snapshot.customers.map((customer) => [customer.id, customer]));
+  const latestSale = [...snapshot.salesInvoices].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+  const latestSaleCustomer = latestSale?.customerId ? customerMap.get(latestSale.customerId) : null;
+  const latestSaleCogs = latestSale?.lines.reduce((sum, line) => sum + line.qty * line.costPricePence, 0) ?? 0;
+  const latestSaleMargin = latestSale ? latestSale.subtotalPence - latestSaleCogs : 0;
+  const latestSaleLineCount = latestSale?.lines.reduce((sum, line) => sum + line.qty, 0) ?? 0;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">{demo.name}</h1>
-          <p className="text-sm text-black/40">Interactive product catalogue · {products.length} items</p>
+          <h1 className="text-2xl font-bold text-ink">POS View</h1>
+          <p className="mt-0.5 text-sm text-muted">
+            Seeded checkout history plus the 100-SKU catalogue used for those sales
+            {lowStockN > 0 && <span className="ml-2 font-medium text-amber-600">· {lowStockN} low stock</span>}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <a
-            href="/register"
-            className="inline-flex min-h-11 items-center rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/80"
-          >
-            Start Free Trial →
-          </a>
+        <div className="flex gap-3 text-sm">
+          <div className="rounded-lg border bg-white px-3 py-2 text-center shadow-sm">
+            <div className="text-xs text-muted">Total SKUs</div>
+            <div className="font-bold text-ink">{totalSKUs}</div>
+          </div>
+          <div className="rounded-lg border bg-white px-3 py-2 text-center shadow-sm">
+            <div className="text-xs text-muted">Inventory Value</div>
+            <div className="font-bold text-ink">{sym}{(totalInvValue / 100).toLocaleString('en-GH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          </div>
+          <div className="rounded-lg border bg-white px-3 py-2 text-center shadow-sm">
+            <div className="text-xs text-muted">Low Stock</div>
+            <div className={`font-bold ${lowStockN > 0 ? 'text-amber-600' : 'text-success'}`}>{lowStockN}</div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Product grid */}
-        <div className="lg:col-span-2 space-y-4">
-          {categories.map((cat) => {
-            const catProducts = products.filter((p) => p.category?.name === cat.name);
-            if (!catProducts.length) return null;
-            return (
-              <div key={cat.id}>
-                <div
-                  className="mb-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white"
-                  style={{ background: cat.colour ?? '#64748b' }}
-                >
-                  {cat.name}
+      {latestSale && (
+        <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
+          <div className="card overflow-hidden">
+            <div className="border-b border-black/8 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-ink">Latest seeded checkout</h2>
+                  <p className="text-xs text-muted">
+                    {latestSale.id} · {latestSale.date.toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
+                    {latestSale.date.toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {catProducts.map((p) => {
-                    const qty = stockMap.get(p.id) ?? 0;
-                    const lowStock = qty < 20;
-                    const price = p.sellingPriceBasePence / 100;
+                <span className="rounded-full bg-accentSoft px-3 py-1 text-xs font-semibold text-accent">
+                  {latestSale.paymentMethod}
+                </span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-black/5 text-left text-muted">
+                    <th className="px-5 py-2.5 font-semibold">Item</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Qty</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Unit Price</th>
+                    <th className="px-5 py-2.5 text-right font-semibold">Line Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestSale.lines.map((line) => {
+                    const product = productMap.get(line.productId);
                     return (
-                      <div
-                        key={p.id}
-                        className="relative rounded-xl border border-black/10 bg-white p-3 shadow-sm hover:shadow transition-shadow"
-                      >
-                        {lowStock && (
-                          <span className="absolute right-2 top-2 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
-                            Low
-                          </span>
-                        )}
-                        <div className="mb-1 text-xs font-medium text-black/40 uppercase tracking-wide">
-                          {p.barcode}
-                        </div>
-                        <div className="mb-1 font-semibold text-black/80 leading-tight">{p.name}</div>
-                        <div className="text-lg font-bold text-emerald-600">
-                          {sym}{price.toFixed(2)}
-                        </div>
-                        <div className="mt-1 text-xs text-black/40">Stock: {qty}</div>
-                      </div>
+                      <tr key={line.productId} className="border-b border-black/5 last:border-0">
+                        <td className="px-5 py-2.5">
+                          <div className="font-medium text-ink">{product?.name ?? line.productId}</div>
+                          <div className="text-muted">{product?.sku}</div>
+                        </td>
+                        <td className="px-5 py-2.5 text-right tabular-nums">{line.qty}</td>
+                        <td className="px-5 py-2.5 text-right tabular-nums">{sym}{(line.unitPricePence / 100).toFixed(2)}</td>
+                        <td className="px-5 py-2.5 text-right font-semibold tabular-nums">{sym}{((line.qty * line.unitPricePence) / 100).toFixed(2)}</td>
+                      </tr>
                     );
                   })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Sidebar: stats + recent sales */}
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h3 className="mb-3 font-semibold text-sm">Demo Business Stats</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-black/50">Products</span>
-                <span className="font-medium">{products.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/50">Categories</span>
-                <span className="font-medium">{categories.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/50">Currency</span>
-                <span className="font-medium">{currency}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/50">MoMo</span>
-                <span className="font-medium text-emerald-600">Enabled</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-black/50">VAT</span>
-                <span className="font-medium text-emerald-600">Enabled</span>
-              </div>
+                </tbody>
+              </table>
             </div>
           </div>
 
           <div className="card p-5">
-            <h3 className="mb-3 font-semibold text-sm">Recent Sales</h3>
-            {recentSales.length === 0 ? (
-              <p className="text-xs text-black/40">No sales yet in demo.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentSales.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between text-sm">
-                    <div>
-                    <div className="font-medium">{sym}{(s.totalPence / 100).toFixed(2)}</div>
-                    <div className="text-xs text-black/40">Invoice</div>
-                    </div>
-                    <div className="text-xs text-black/30">
-                      {new Date(s.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
+            <div className="text-xs font-semibold uppercase tracking-widest text-muted">Receipt summary</div>
+            <div className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Customer</span>
+                <span className="font-medium text-ink">{latestSaleCustomer?.name ?? 'Walk-in Customer'}</span>
               </div>
-            )}
-          </div>
-
-          {/* CTA */}
-          <div className="rounded-2xl bg-gradient-to-br from-accent to-accent/80 p-6 text-white">
-            <h3 className="mb-2 font-bold text-lg leading-tight">Ready for your business?</h3>
-            <p className="mb-4 text-sm text-white/80">
-              Get a full instance with multi-branch, WhatsApp alerts, offline mode, and more.
+              <div className="flex justify-between">
+                <span className="text-muted">Items sold</span>
+                <span className="font-medium tabular-nums">{latestSaleLineCount}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Gross margin</span>
+                <span className="font-medium text-success tabular-nums">{sym}{(latestSaleMargin / 100).toFixed(2)}</span>
+              </div>
+              <div className="border-t border-black/10 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-semibold text-ink">Total</span>
+                  <span className="text-2xl font-bold tabular-nums text-accent">{sym}{(latestSale.subtotalPence / 100).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
+              This screen is read-only. Inventory, sales, debtors, payables, and reports are derived from the seeded two-week demo dataset.
             </p>
-            <a
-              href="/register"
-              className="flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 text-center text-sm font-semibold text-accent hover:bg-accentSoft"
-            >
-              Create Free Account
-            </a>
           </div>
         </div>
-      </div>
+      )}
+
+      <POSCategoryFilter
+        products={snapshot.products}
+        categories={snapshot.categories}
+        balances={balances}
+        sym={sym}
+      />
     </div>
   );
 }
