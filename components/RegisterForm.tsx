@@ -29,11 +29,10 @@ const CURRENCIES = [
 ];
 
 interface RegisterFormProps {
-  isDemo: boolean;
   error?: string;
 }
 
-export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
+export default function RegisterForm({ error }: RegisterFormProps) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
@@ -44,24 +43,12 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
   const canAdvanceFrom1 = businessName.trim().length > 0 && ownerName.trim().length > 0;
   const canAdvanceFrom2 = email.trim().length > 0 && password.length >= 6;
 
-  const stepLabels = isDemo ? ['Business', 'Account', 'Currency'] : ['Business', 'Account', 'Plan', 'Currency'];
-  const accentClasses = isDemo
-    ? {
-        badge: 'bg-amber-50 border-amber-200 text-amber-800',
-        ping: 'bg-amber-400',
-        dot: 'bg-amber-500',
-        infoBox: 'bg-amber-50 border-amber-200 text-amber-900',
-        progressFill: 'bg-gradient-to-r from-amber-400 to-amber-500',
-        nextBtn: 'w-full rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed',
-      }
-    : {
-        badge: 'bg-accentSoft border-accent/20 text-accent',
-        ping: 'bg-blue-400',
-        dot: 'bg-blue-500',
-        infoBox: 'bg-accentSoft border-accent/10 text-accent',
-        progressFill: 'bg-gradient-to-r from-accent to-accent/80',
-        nextBtn: 'w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed',
-      };
+  const stepLabels = ['Business', 'Account', 'Plan', 'Currency'];
+  const accentClasses = {
+    infoBox: 'bg-accentSoft border-accent/10 text-accent',
+    progressFill: 'bg-gradient-to-r from-accent to-accent/80',
+    nextBtn: 'w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed',
+  };
 
   return (
     <div className="space-y-6">
@@ -74,24 +61,9 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
         </h1>
         <p className="mt-0.5 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
 
-        {isDemo ? (
-          <div className="mt-4">
-            <div className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold mb-2 ${accentClasses.badge}`}>
-              <span className="relative flex h-2 w-2">
-                <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${accentClasses.ping}`} />
-                <span className={`relative inline-flex h-2 w-2 rounded-full ${accentClasses.dot}`} />
-              </span>
-              🎮 Demo Mode
-            </div>
-            <p className="text-sm text-black/60">
-              Explore TillFlow with a full Ghana-ready sample business — products, customers, and Mobile Money flows, ready to test instantly.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4">
-            <p className="text-sm text-black/60">Your products, your prices, your currency. Clean start — yours from day one.</p>
-          </div>
-        )}
+        <div className="mt-4">
+          <p className="text-sm text-black/60">Your products, your prices, your currency. Clean start — yours from day one.</p>
+        </div>
 
         {/* Social proof */}
         <div className="mt-3 text-xs text-black/35 font-medium">
@@ -135,7 +107,7 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
             <input
               type="text"
               className="input"
-              placeholder={isDemo ? 'e.g. Demo Supermarket' : 'e.g. El-Shaddai Supermarket'}
+              placeholder="e.g. El-Shaddai Supermarket"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               autoComplete="organization"
@@ -206,14 +178,14 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
               disabled={!canAdvanceFrom2}
               className={`flex-[2] ${accentClasses.nextBtn}`}
             >
-              {isDemo ? 'Next — Currency' : 'Next — Choose Plan'}
+              Next — Choose Plan
             </button>
           </div>
         </div>
       )}
 
       {/* Step 3 (fresh only): Plan selection */}
-      {step === 3 && !isDemo && (
+      {step === 3 && (
         <div className="space-y-4">
           <div>
             <p className="text-sm font-semibold text-black/70 mb-1">Choose your plan</p>
@@ -306,15 +278,15 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
       )}
 
       {/* Step 3 (demo) or step 4 (fresh): Currency + final submit */}
-      {((step === 3 && isDemo) || (step === 4 && !isDemo)) && (
+      {step === 4 && (
         <form action={register} className="space-y-4">
           {/* Carry forward all data as hidden fields */}
-          <input type="hidden" name="mode" value={isDemo ? 'demo' : 'fresh'} />
+          <input type="hidden" name="mode" value="fresh" />
           <input type="hidden" name="businessName" value={businessName} />
           <input type="hidden" name="ownerName" value={ownerName} />
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="password" value={password} />
-          <input type="hidden" name="plan" value={isDemo ? 'STARTER' : selectedPlan} />
+          <input type="hidden" name="plan" value={selectedPlan} />
 
           <div>
             <label className="label">Currency</label>
@@ -328,27 +300,21 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
             </div>
           </div>
 
-          {isDemo ? (
-            <div className={`rounded-xl border px-4 py-3 text-sm ${accentClasses.infoBox}`}>
-              <span className="font-semibold">Demo includes:</span> everyday supermarket products, sample customers, supplier data, and a ready-to-test Ghanaian setup.
-            </div>
-          ) : (
-            <div className={`rounded-xl border px-4 py-3 text-sm ${accentClasses.infoBox}`}>
-              <span className="font-semibold">Clean start:</span> Your business will be created empty so you can add your own products from scratch.
-            </div>
-          )}
+          <div className={`rounded-xl border px-4 py-3 text-sm ${accentClasses.infoBox}`}>
+            <span className="font-semibold">Clean start:</span> Your business will be created empty so you can add your own products from scratch.
+          </div>
 
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => setStep(isDemo ? 2 : 3)}
+              onClick={() => setStep(3)}
               className="flex-1 rounded-xl border border-black/10 py-2.5 text-sm font-semibold text-black/60 transition hover:border-black/20 hover:text-black/80"
             >
               Back
             </button>
             <div className="flex-[2]">
-              <SubmitButton loadingText={isDemo ? 'Setting up demo...' : 'Creating your business...'}>
-                {isDemo ? 'Launch Demo Business' : 'Create My Business'}
+              <SubmitButton loadingText="Creating your business...">
+                Create My Business
               </SubmitButton>
             </div>
           </div>
@@ -357,37 +323,20 @@ export default function RegisterForm({ isDemo, error }: RegisterFormProps) {
 
       {/* Footer links */}
       <div className="text-center space-y-2">
-        {isDemo ? (
+        <>
           <p className="text-sm text-black/40">
-            Want a clean start instead?{' '}
-            <Link href="/register" className="font-medium text-accent underline underline-offset-4 hover:text-accent/80">
-              Create from scratch
+            Want to explore first?{' '}
+            <Link href="/demo" className="font-medium text-accent underline underline-offset-4 hover:text-accent/80">
+              Try the demo
             </Link>
           </p>
-        ) : (
-          <>
-            <p className="text-sm text-black/40">
-              Want to explore first?{' '}
-              <Link href="/register?mode=demo" className="font-medium text-accent underline underline-offset-4 hover:text-accent/80">
-                Try the demo
-              </Link>
-            </p>
-            <p className="text-sm text-black/40">
-              Already have an account?{' '}
-              <Link href="/login" className="font-medium text-accent underline underline-offset-4 hover:text-accent/80">
-                Sign in
-              </Link>
-            </p>
-          </>
-        )}
-        {isDemo && (
           <p className="text-sm text-black/40">
             Already have an account?{' '}
             <Link href="/login" className="font-medium text-accent underline underline-offset-4 hover:text-accent/80">
               Sign in
             </Link>
           </p>
-        )}
+        </>
       </div>
     </div>
   );

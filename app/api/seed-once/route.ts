@@ -5,7 +5,7 @@ import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstr
 
 /**
  * GET /api/seed-once
- * Idempotent seed endpoint — creates the demo business, store, users, and
+ * Idempotent seed endpoint — creates a local seed business, store, users, and
  * products only if they don't already exist.  Safe to call multiple times.
  *
  * Protected by a simple token check (SEED_SECRET env var or hardcoded fallback).
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     if (!business) {
       business = await prisma.business.create({
         data: {
-          name: 'Supermarket Demo',
+          name: 'Local Seed Supermarket',
           currency: 'GHS',
           plan: 'STARTER',
           planStatus: 'ACTIVE',
@@ -147,7 +147,7 @@ export async function GET(request: Request) {
       plan: business.plan,
       status: business.planStatus,
       supportStatus: 'HEALTHY',
-      notes: 'Seeded demo business for local development and smoke checks.',
+      notes: 'Seeded local business for development and smoke checks.',
       startedAt: business.planSetAt,
     });
     results.push('Bootstrapped control-plane profile');

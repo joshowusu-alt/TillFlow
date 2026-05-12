@@ -211,7 +211,7 @@ export default function WelcomePage() {
             {/* CTAs */}
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <Link
-                href="/register?mode=demo"
+                href="/demo"
                 className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-8 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:shadow-accent/30 hover:-translate-y-0.5"
               >
                 <svg className="h-5 w-5 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -468,7 +468,7 @@ export default function WelcomePage() {
           <WelcomePricingPreview plans={planPreview} />
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link
-              href="/register?mode=demo"
+              href="/demo"
               className="rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-8 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:-translate-y-0.5"
             >
               Try Live Demo

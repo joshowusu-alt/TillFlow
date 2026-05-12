@@ -6,13 +6,13 @@ export default async function RegisterPage({ searchParams }: { searchParams: { e
   // If the user already has a valid session, send them to POS
   const user = await getUser();
   if (user) redirect('/pos');
+  if (searchParams?.mode === 'demo') redirect('/demo');
 
   const error = searchParams?.error;
-  const isDemo = searchParams?.mode === 'demo';
 
   return (
     <div>
-      <RegisterForm isDemo={isDemo} error={error} />
+      <RegisterForm error={error} />
     </div>
   );
 }

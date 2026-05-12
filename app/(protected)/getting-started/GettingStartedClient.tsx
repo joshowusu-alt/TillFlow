@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 
 interface Props {
   userName: string;
-  isDemo: boolean;
 }
 
 const CLEAN_START_STEPS = [
@@ -32,33 +31,9 @@ const CLEAN_START_STEPS = [
   },
 ];
 
-const DEMO_STEPS = [
-  {
-    number: '01',
-    title: 'Explore the POS',
-    desc: 'Your demo is loaded with Ghanaian products, customers, and pricing. Try making a sale.',
-    href: '/pos',
-    cta: 'Open POS',
-  },
-  {
-    number: '02',
-    title: 'Review the reports',
-    desc: 'Check margins, stock movements, and daily cash close — all pre-filled with demo data.',
-    href: '/',
-    cta: 'Open Dashboard',
-  },
-  {
-    number: '03',
-    title: 'Set up your real business',
-    desc: 'Ready to go live? Create a fresh account with your own products, prices, and team.',
-    href: '/register',
-    cta: 'Create Real Account',
-  },
-];
-
-export default function GettingStartedClient({ userName, isDemo }: Props) {
+export default function GettingStartedClient({ userName }: Props) {
   const [visible, setVisible] = useState(false);
-  const steps = isDemo ? DEMO_STEPS : CLEAN_START_STEPS;
+  const steps = CLEAN_START_STEPS;
   const firstName = userName?.split(' ')[0] ?? 'there';
 
   useEffect(() => {
@@ -89,20 +64,11 @@ export default function GettingStartedClient({ userName, isDemo }: Props) {
           </div>
 
           <h1 className="text-2xl font-bold font-display text-gray-900">
-            {isDemo ? `Your demo is ready, ${firstName}!` : `Your business is ready, ${firstName}!`}
+            Your business is ready, {firstName}!
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-black/55">
-            {isDemo
-              ? 'Your TillFlow demo is loaded with a full Ghana-ready supermarket setup — products, customers, MoMo flows, and sample data to explore.'
-              : 'TillFlow has set up your store, tills, and chart of accounts. Here\'s how to get started.'}
+            TillFlow has set up your store, tills, and chart of accounts. Here&apos;s how to get started.
           </p>
-
-          {isDemo && (
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-sm font-semibold text-amber-800">
-              <span>🎮</span>
-              Demo mode — explore freely
-            </div>
-          )}
         </div>
 
         {/* Steps */}
@@ -136,7 +102,7 @@ export default function GettingStartedClient({ userName, isDemo }: Props) {
             href="/onboarding"
             className="block w-full rounded-2xl bg-gradient-to-r from-accent to-accent/80 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:-translate-y-0.5"
           >
-            {isDemo ? 'See Full Setup Checklist' : 'Complete My Setup'}
+            Complete My Setup
           </Link>
           <Link
             href="/pos"
