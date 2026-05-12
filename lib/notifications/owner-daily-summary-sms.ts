@@ -179,7 +179,7 @@ export function buildOwnerDailySummarySms(
   const alertText = alerts.length > 0 ? alerts.join(', ') : 'None';
 
   return [
-    `TillFlow 8pm summary for ${business.name} (${metrics.dateLabel}, ${metrics.scopeLabel}).`,
+    `TillFlow 9:30pm summary for ${business.name} (${metrics.dateLabel}, ${metrics.scopeLabel}).`,
     `Sales ${money(metrics.totalSalesPence, currency)} from ${metrics.transactionCount} txns.`,
     `Gross profit ${money(metrics.grossProfitPence, currency)}.`,
     `Cash ${money(metrics.cashPence, currency)}, MoMo ${money(metrics.momoPence, currency)}, card ${money(metrics.cardPence, currency)}, transfer ${money(metrics.transferPence, currency)}.`,
