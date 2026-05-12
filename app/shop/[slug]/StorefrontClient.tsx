@@ -80,11 +80,11 @@ function ProductImage({
 
   if (!effectiveSrc || failed) {
     return (
-      <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.16),transparent_34%),linear-gradient(135deg,#f8fafc,#eef6ff_52%,#ecfdf5)] ${inStock ? '' : 'opacity-60'}`}>
+      <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.13),transparent_34%),linear-gradient(135deg,#fbfdff,#eef6ff_52%,#f0fdf4)] ${inStock ? '' : 'opacity-60'}`}>
         <div className="absolute inset-x-3 top-3 truncate rounded-full bg-white/60 px-2 py-1 text-center text-[8px] font-black uppercase tracking-[0.16em] text-black/35">
           {categoryName ? toTitleCase(categoryName) : 'Store pick'}
         </div>
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/75 bg-white/80 text-slate-400 shadow-sm">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-slate-400 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
           <PackageIcon className="h-8 w-8" />
         </div>
         <div className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-xl bg-white/75 text-[10px] font-black tracking-[0.08em] shadow-sm" style={{ color: 'var(--store-primary)' }}>
@@ -780,6 +780,12 @@ export default function StorefrontClient({
   }
 
   const storefrontTitle = storefront.headline || storefront.name;
+  const storefrontTitleSizeClass =
+    storefrontTitle.length > 34
+      ? 'text-[1.05rem] sm:text-xl lg:text-2xl'
+      : storefrontTitle.length > 22
+        ? 'text-lg sm:text-2xl lg:text-3xl'
+        : 'text-xl sm:text-3xl lg:text-4xl';
   const storefrontBranding = {
     businessName: storefront.name,
     logoUrl: storefront.branding.logoUrl,
@@ -817,7 +823,9 @@ export default function StorefrontClient({
     color: 'var(--store-primary-foreground)',
   };
   const heroStyle: React.CSSProperties = {
-    backgroundColor: 'var(--store-primary)',
+    backgroundColor: '#0b2f6f',
+    backgroundImage:
+      'radial-gradient(circle at 18% 0%, rgba(255,255,255,0.24), transparent 32%), radial-gradient(circle at 88% 18%, rgba(16,185,129,0.18), transparent 28%), linear-gradient(135deg, #061b45 0%, var(--store-primary) 46%, #0f4f9f 100%)',
     color: 'var(--store-primary-foreground)',
   };
   const merchProducts = productsForStore.filter((product) => product.onHandBase > 0);
@@ -844,24 +852,26 @@ export default function StorefrontClient({
     >
       {/* ── STORE HERO ─────────────────────────────────────── */}
       <header className="relative overflow-hidden pt-[env(safe-area-inset-top)]" style={heroStyle}>
-        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-3 sm:px-6 sm:py-5">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent_42%),linear-gradient(0deg,rgba(2,6,23,0.18),transparent_45%)]" aria-hidden="true" />
+        <div className="absolute -left-16 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" aria-hidden="true" />
+        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-5 sm:px-6 sm:py-7">
           <div className="flex items-start gap-3 sm:gap-5">
             <MerchantBrandBadge branding={storefrontBranding} surface="storefront-hero" />
             <div className="min-w-0 flex-1">
-              <div className="mb-0.5 inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.82 }}>
-                TillFlow online store
+              <div className="mb-1 inline-flex items-center rounded-full border border-white/15 bg-white/[0.12] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm backdrop-blur sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
+                TillFlow Online Store
               </div>
-              <h1 className="break-words hyphens-auto text-base font-bold leading-tight sm:text-xl lg:text-3xl" style={{ color: 'var(--brand-primary-foreground)' }}>
+              <h1 className={`line-clamp-2 max-w-[15rem] overflow-hidden break-words font-display font-black leading-[1.08] sm:max-w-xl ${storefrontTitleSizeClass}`} style={{ color: 'var(--brand-primary-foreground)', overflowWrap: 'break-word', hyphens: 'none' }}>
                 {storefrontTitle}
               </h1>
               {storefront.branding.tagline && (
-                <p className="mt-0.5 line-clamp-1 text-[11px] sm:text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.76 }}>
+                <p className="mt-1 line-clamp-1 text-[11px] sm:text-sm" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.76 }}>
                   {storefront.branding.tagline}
                 </p>
               )}
-              <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] sm:mt-2 sm:gap-1.5 sm:text-xs">
+              <div className="mt-3 grid grid-cols-2 gap-1.5 text-[10px] sm:flex sm:flex-wrap sm:gap-2 sm:text-xs">
                 {storefront.openStatus ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 font-semibold" style={{ color: 'var(--brand-primary-foreground)' }}>
+                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)' }}>
                     <span className={`h-1.5 w-1.5 rounded-full ${storefront.openStatus.isOpen ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     {storefront.openStatus.shortLabel}
                     {storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}
@@ -870,7 +880,7 @@ export default function StorefrontClient({
                 {(selectedStore?.phone ?? storefront.phone) ? (
                   <a
                     href={`tel:${selectedStore?.phone ?? storefront.phone ?? ''}`}
-                    className="inline-flex min-h-9 items-center gap-1 rounded-full bg-white/12 px-2.5 py-1 transition hover:bg-white/20"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur transition hover:bg-white/20"
                     style={{ color: 'var(--brand-primary-foreground)', opacity: 0.9 }}
                   >
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -880,22 +890,22 @@ export default function StorefrontClient({
                   </a>
                 ) : null}
                 {(selectedStore?.address ?? storefront.address) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.85 }}>
+                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
                     </svg>
-                    {selectedStore?.address ?? storefront.address}
+                    <span className="truncate">{selectedStore?.address ?? storefront.address}</span>
                   </span>
                 ) : null}
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.75 }}>
+                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
                   <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Pickup available
                 </span>
                 {paymentModeHint ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/12 px-2.5 py-1" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.75 }}>
+                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                     </svg>
@@ -905,30 +915,28 @@ export default function StorefrontClient({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex shrink-0 flex-col items-end gap-2">
               {customer ? (
                 <a
                   href={`/shop/${storefront.slug}/account`}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 px-2.5 text-[11px] font-semibold transition hover:bg-white/25 sm:h-9 sm:px-3 sm:text-xs"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.12] px-3 text-[11px] font-semibold shadow-sm backdrop-blur transition hover:bg-white/25 sm:h-10 sm:text-xs"
                   style={{ color: 'var(--brand-primary-foreground)' }}
                 >
-                  <span className="max-w-[6rem] truncate sm:max-w-[8rem]">
-                    {customer.name?.split(' ')[0] ?? 'Account'}
-                  </span>
+                  Account
                 </a>
               ) : (
                 <a
                   href={`/shop/${storefront.slug}/login`}
-                  className="inline-flex h-8 items-center rounded-full bg-white/15 px-2.5 text-[11px] font-semibold transition hover:bg-white/25 sm:h-9 sm:px-3 sm:text-xs"
+                  className="inline-flex h-9 items-center rounded-full border border-white/15 bg-white/[0.12] px-3 text-[11px] font-semibold shadow-sm backdrop-blur transition hover:bg-white/25 sm:h-10 sm:text-xs"
                   style={{ color: 'var(--brand-primary-foreground)' }}
                 >
-                  Sign in
+                  Guest
                 </a>
               )}
               <button
                 type="button"
                 onClick={handleShareStore}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:h-10 sm:w-10"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.12] shadow-sm backdrop-blur transition hover:bg-white/25 sm:h-10 sm:w-10"
                 aria-label="Share store link"
                 style={{ color: 'var(--brand-primary-foreground)' }}
               >
@@ -938,7 +946,7 @@ export default function StorefrontClient({
           </div>
 
           {storefront.stores.length > 1 ? (
-            <div className="mt-4 rounded-2xl bg-white/12 px-3 py-3 sm:px-4">
+            <div className="mt-4 rounded-2xl bg-white/[0.12] px-3 py-3 sm:px-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.6 }}>
                 Pick up from
               </div>
@@ -952,7 +960,7 @@ export default function StorefrontClient({
                       onClick={() => handleStoreChange(store.id)}
                       className={isSelected
                         ? 'rounded-full bg-white px-4 py-2 text-xs font-semibold shadow-sm'
-                        : 'rounded-full border border-white/25 bg-white/15 px-4 py-2 text-xs font-semibold transition hover:bg-white/25'
+                        : 'rounded-full border border-white/25 bg-white/[0.15] px-4 py-2 text-xs font-semibold transition hover:bg-white/25'
                       }
                       style={isSelected
                         ? { color: 'var(--brand-primary)' }
@@ -990,37 +998,37 @@ export default function StorefrontClient({
           {/* ── LEFT: search + chips + product grid ──────── */}
           <section id={CATALOG_SECTION_ID} className="min-w-0">
             {/* Sticky search + category chips */}
-            <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:backdrop-blur-none">
+            <div className="sticky top-0 z-20 -mx-4 border-b border-black/5 bg-white/95 px-4 pb-3 pt-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm sm:-mx-6 sm:px-6 lg:relative lg:top-auto lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none lg:backdrop-blur-none">
               <form
                 role="search"
                 aria-label="Product search"
-                className="flex items-center gap-3"
+                className="block"
                 onSubmit={(e) => e.preventDefault()}
               >
                 <label htmlFor="storefront-search" className="sr-only">
                   Search products
                 </label>
-                <div className="relative flex-1">
-                  <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <div className="relative">
+                  <svg className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                   </svg>
                   <input
                     id="storefront-search"
                     name="q"
                     type="search"
-                    className="input h-11 rounded-2xl border-black/8 bg-white pl-9 shadow-sm"
-                    placeholder="Search products…"
+                    className="h-[52px] w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-20 text-[15px] font-medium text-ink shadow-[0_10px_28px_rgba(15,23,42,0.06)] outline-none transition placeholder:text-black/35 focus:border-blue-200 focus:ring-4 focus:ring-blue-100/70"
+                    placeholder="Search products"
                     value={searchQuery}
                     onChange={(e) => handleSearch(e.target.value)}
                     inputMode="search"
                     autoComplete="off"
                   />
+                  {searchQuery && (
+                    <button type="button" aria-label="Clear search" className="absolute right-2 top-1/2 inline-flex h-9 -translate-y-1/2 items-center rounded-xl bg-slate-100 px-3 text-xs font-bold text-black/55 transition hover:bg-slate-200 hover:text-ink" onClick={() => handleSearch('')}>
+                      Clear
+                    </button>
+                  )}
                 </div>
-                {searchQuery && (
-                  <button type="button" aria-label="Clear search" className="rounded-full px-2 text-sm font-semibold text-black/50 hover:bg-black/5 hover:text-ink" onClick={() => handleSearch('')}>
-                    Clear
-                  </button>
-                )}
               </form>
 
               {categories.length > 0 && (
@@ -1037,8 +1045,8 @@ export default function StorefrontClient({
                      aria-label="Show all categories"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
                     className={selectedCategoryId === ALL_CATEGORIES
-                      ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
-                      : 'shrink-0 rounded-full border border-black/10 bg-white px-3.5 py-2 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
+                      ? 'shrink-0 rounded-full px-4 py-2.5 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
+                      : 'shrink-0 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
                     }
                     style={selectedCategoryId === ALL_CATEGORIES ? primaryStyle : undefined}
                   >
@@ -1055,8 +1063,8 @@ export default function StorefrontClient({
                          aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
-                          ? 'shrink-0 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-sm'
-                          : 'shrink-0 rounded-full border border-black/10 bg-white px-3.5 py-2 text-xs font-semibold text-black/60 transition hover:border-black/20 hover:text-ink'
+                          ? 'shrink-0 rounded-full px-4 py-2.5 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
+                          : 'shrink-0 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
                         }
                         style={active ? primaryStyle : undefined}
                       >
@@ -1074,7 +1082,7 @@ export default function StorefrontClient({
                 <span>
                 {filteredProducts.length === 0
                   ? (selectedCategory ? `No products found in ${toTitleCase(selectedCategory.name)}` : 'No products found right now')
-                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}`
+                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'} found${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}`
                 }
                 </span>
                 {cartItemCount > 0 ? (
@@ -1253,13 +1261,13 @@ export default function StorefrontClient({
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex min-h-[21rem] flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 ${
-                          inStock ? 'shadow-[0_8px_24px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-black/10' : 'opacity-70 shadow-none'
+                        className={`group flex min-h-[23rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white ring-1 ring-white ${
+                          inStock ? 'shadow-[0_14px_34px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.11)] hover:border-blue-100' : 'opacity-70 shadow-none'
                         }`}
                       >
                         <button
                           type="button"
-                          className="relative h-28 w-full overflow-hidden bg-slate-100 text-left sm:h-32 lg:h-36"
+                          className="relative m-2 mb-0 h-[7.5rem] overflow-hidden rounded-xl bg-[#f4f8fd] text-left shadow-[inset_0_0_0_1px_rgba(15,23,42,0.04),inset_0_10px_24px_rgba(15,23,42,0.035)] sm:h-32 lg:h-36"
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
@@ -1290,22 +1298,25 @@ export default function StorefrontClient({
                         </button>
 
                   {/* Card body */}
-                  <div className="flex flex-1 flex-col p-2.5 sm:p-3">
+                  <div className="flex flex-1 flex-col p-3 sm:p-3.5">
                     {displayCategory && (
-                      <div className="text-[8px] font-bold uppercase tracking-[0.2em] text-black/30 sm:text-[9px]">
+                      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/35 sm:text-[9px]">
                         {displayCategory}
                       </div>
                     )}
-                    <h2 className="mt-0.5 line-clamp-2 text-xs font-semibold leading-snug text-ink sm:text-sm">
+                    <h2 className="mt-1 line-clamp-2 min-h-[2.25rem] text-[13px] font-bold leading-snug text-ink sm:text-sm">
                       {displayName}
                     </h2>
 
                     <div className="mt-auto pt-3">
                       <div className="space-y-1">
                         <div className="min-w-0">
-                          <div className="text-base font-black leading-none text-ink sm:text-lg">{unitPrice}</div>
+                          <div className="text-lg font-black leading-none text-ink sm:text-xl">{unitPrice}</div>
                           {inStock ? (
-                            <div className="text-[10px] font-semibold text-emerald-600">Available for pickup</div>
+                            <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              Available for pickup
+                            </div>
                           ) : (
                             <div className="text-[10px] font-semibold text-slate-500">Currently sold out</div>
                           )}
@@ -1314,7 +1325,7 @@ export default function StorefrontClient({
 
                       {product.units.length > 1 ? (
                         <select
-                          className="mt-2 h-11 w-full rounded-xl border border-black/10 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                          className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
                           value={selected?.unitId ?? ''}
                           disabled={!inStock || productInCart}
                           onChange={(event) =>
@@ -1339,11 +1350,11 @@ export default function StorefrontClient({
 
                       {inStock && !productInCart ? (
                         <div className="mt-3 space-y-2">
-                          <div className="flex h-11 w-full items-center justify-between overflow-hidden rounded-xl border border-black/10 bg-slate-50">
+                          <div className="flex h-11 w-full items-center justify-between overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
                             <button
                               type="button"
                               aria-label={`Decrease quantity of ${displayName}`}
-                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
+                              className="flex h-11 w-11 items-center justify-center border-r border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:bg-slate-100 disabled:text-black/20"
                               disabled={(selected?.qtyInUnit ?? 1) <= 1}
                               onClick={() =>
                                 setSelectionState((prev) => ({
@@ -1363,7 +1374,7 @@ export default function StorefrontClient({
                             <button
                               type="button"
                               aria-label={`Increase quantity of ${displayName}`}
-                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
+                              className="flex h-11 w-11 items-center justify-center border-l border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
                               onClick={() =>
                                 setSelectionState((prev) => ({
                                   ...prev,
@@ -1379,12 +1390,11 @@ export default function StorefrontClient({
                           </div>
                           <button
                             type="button"
-                            className="flex h-11 w-full items-center justify-center rounded-xl text-sm font-black text-white shadow-sm transition active:scale-[0.97] hover:opacity-90"
-                            style={primaryStyle}
+                            className="flex h-11 w-full items-center justify-center rounded-xl bg-[linear-gradient(180deg,var(--store-primary),#0b3d91)] text-sm font-black text-white shadow-[0_12px_22px_rgba(30,64,175,0.22)] transition hover:brightness-105 active:translate-y-px active:scale-[0.99]"
                             onClick={() => addToCart(product.id)}
                             aria-label={`Add ${displayName} to cart`}
                           >
-                            Add
+                            Add to cart
                           </button>
                         </div>
                       ) : null}
@@ -2042,17 +2052,20 @@ export default function StorefrontClient({
         >
           <button
             type="button"
-            className="pointer-events-auto inline-flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-sm font-semibold text-white shadow-2xl transition active:scale-[0.98]"
-            style={primaryStyle}
+            className="pointer-events-auto inline-flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl border border-white/15 bg-[linear-gradient(180deg,var(--store-primary),#0b3d91)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_18px_44px_rgba(15,23,42,0.28)] transition active:translate-y-px active:scale-[0.99]"
             onClick={() => setMobileStep('cart')}
           >
-            <span className="flex items-center gap-2.5">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/25 text-xs font-bold">
-                {cartItemCount}
+            <span className="min-w-0">
+              <span className="block truncate font-black">
+                {cartUnitCount} item{cartUnitCount === 1 ? '' : 's'} · {formatMoney(orderTotal, storefront.currency)}
               </span>
+              <span className="mt-0.5 block text-[10px] font-semibold text-white/75">
+                Pickup order · Pay with MoMo
+              </span>
+            </span>
+            <span className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black" style={{ color: 'var(--store-primary)' }}>
               View cart
             </span>
-            <span className="font-bold">{formatMoney(orderTotal, storefront.currency)}</span>
           </button>
         </div>
       ) : null}

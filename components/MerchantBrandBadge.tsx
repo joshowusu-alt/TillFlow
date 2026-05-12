@@ -40,7 +40,7 @@ const SURFACE_CLASSES: Record<
     initials: 'text-[12px] tracking-[0.18em]',
   },
   'storefront-hero': {
-    frame: 'h-16 w-20 rounded-2xl sm:h-20 sm:w-24',
+    frame: 'h-14 w-16 rounded-2xl sm:h-[4.5rem] sm:w-20',
     imagePad: 'p-2 sm:p-2.5',
     initials: 'text-lg tracking-[0.16em] sm:text-xl',
   },
@@ -75,7 +75,9 @@ export default function MerchantBrandBadge({ branding, surface, className, label
 
   // Base frame class by tone
   const frameClasses =
-    effectiveFrameTone === 'brand'
+    surface === 'storefront-hero'
+      ? 'bg-white shadow-[0_14px_34px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.45)_inset] ring-1 ring-white/70'
+      : effectiveFrameTone === 'brand'
       ? 'shadow-sm ring-1 ring-black/5'
       : effectiveFrameTone === 'neutral'
         ? 'bg-white shadow-sm ring-1 ring-black/8'
@@ -89,7 +91,9 @@ export default function MerchantBrandBadge({ branding, surface, className, label
 
   // Inline style contribution by tone
   const frameStyle =
-    effectiveFrameTone === 'brand'
+    surface === 'storefront-hero'
+      ? { color: resolved.primaryColor }
+      : effectiveFrameTone === 'brand'
       ? { backgroundColor: resolved.primaryColor, color: resolved.foregroundColor }
       : effectiveFrameTone === 'tinted'
         ? { backgroundColor: `${resolved.primaryColor}1a` }
