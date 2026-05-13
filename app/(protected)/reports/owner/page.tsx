@@ -109,7 +109,7 @@ export default async function OwnerIntelligencePage() {
       <LayerShell
         eyebrow="Business Health Overview"
         title="Read the business in one glance"
-        description="TodayÔÇÖs trading position, gross profit discipline, till cash, debtors, supplier obligations, and shelf pressure ÔÇö tuned for supermarket operations, not vanity analytics."
+        description="Today's trading position, gross profit discipline, till cash, debtors, supplier obligations, and shelf pressure — tuned for supermarket operations, not vanity analytics."
       >
         <div className="grid items-stretch gap-4 lg:grid-cols-[1.25fr_3fr]">
           <div className="min-w-0">
@@ -488,7 +488,7 @@ function PriorityActionsPanel({ actions }: { actions: PriorityAction[] }) {
       <div className="space-y-3 overflow-y-auto px-3.5 py-3.5 sm:px-6 sm:py-5 lg:max-h-[34rem] lg:pr-4">
         {actions.length === 0 ? (
           <div className="rounded-[1rem] border border-emerald-200 bg-emerald-50/70 p-3.5 text-sm leading-relaxed text-emerald-800 sm:rounded-[1.1rem] sm:p-4">
-            No urgent owner actions are queued right now. ThatÔÇÖs the good kind of quiet.
+            No urgent owner actions are queued right now. That's the good kind of quiet.
           </div>
         ) : (
           actions.map((action) => {
