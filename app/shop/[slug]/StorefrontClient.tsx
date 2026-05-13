@@ -104,7 +104,7 @@ function ProductImage({
         fill
         loading={priority ? 'eager' : 'lazy'}
         priority={priority}
-        className={`object-contain p-2 bg-white transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.03]' : 'grayscale'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`object-contain p-3 transition-transform duration-300 ${inStock ? 'group-hover:scale-[1.025]' : 'grayscale'} ${loaded ? 'opacity-100' : 'opacity-0'}`}
         onError={() => setFailed(true)}
         onLoad={() => setLoaded(true)}
         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -853,11 +853,11 @@ export default function StorefrontClient({
       <header className="relative overflow-hidden pt-[env(safe-area-inset-top)]" style={heroStyle}>
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),transparent_42%),linear-gradient(0deg,rgba(2,6,23,0.18),transparent_45%)]" aria-hidden="true" />
         <div className="absolute -left-16 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" aria-hidden="true" />
-        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-5 sm:px-6 sm:py-7">
-          <div className="flex items-start gap-3 sm:gap-5">
+        <div className="relative z-10 mx-auto max-w-screen-lg px-4 py-4 sm:px-6 sm:py-6">
+          <div className="flex items-start gap-3 sm:gap-4">
             <MerchantBrandBadge branding={storefrontBranding} surface="storefront-hero" />
             <div className="min-w-0 flex-1">
-              <div className="mb-1 inline-flex items-center rounded-full border border-white/15 bg-white/[0.12] px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm backdrop-blur sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
+              <div className="mb-1 inline-flex items-center rounded-full border border-white/15 bg-white/[0.12] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm backdrop-blur sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
                 TillFlow Online Store
               </div>
               <h1 className={`line-clamp-2 max-w-[15rem] overflow-hidden break-normal font-display font-black leading-[1.08] sm:max-w-xl ${storefrontTitleSizeClass}`} style={{ color: 'var(--brand-primary-foreground)', overflowWrap: 'normal', wordBreak: 'normal', hyphens: 'none' }}>
@@ -868,9 +868,9 @@ export default function StorefrontClient({
                   {storefront.branding.tagline}
                 </p>
               )}
-              <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] sm:gap-2 sm:text-xs">
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] sm:gap-2 sm:text-xs">
                 {storefront.openStatus ? (
-                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)' }}>
+                  <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)' }}>
                     <span className={`h-1.5 w-1.5 rounded-full ${storefront.openStatus.isOpen ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     {storefront.openStatus.shortLabel}
                     {storefront.openStatus.detail ? ` · ${storefront.openStatus.detail}` : ''}
@@ -879,7 +879,7 @@ export default function StorefrontClient({
                 {(selectedStore?.phone ?? storefront.phone) ? (
                   <a
                     href={`tel:${selectedStore?.phone ?? storefront.phone ?? ''}`}
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur transition hover:bg-white/20"
+                    className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur transition hover:bg-white/20"
                     style={{ color: 'var(--brand-primary-foreground)', opacity: 0.9 }}
                   >
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -889,7 +889,7 @@ export default function StorefrontClient({
                   </a>
                 ) : null}
                 {(selectedStore?.address ?? storefront.address) ? (
-                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
+                  <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -897,14 +897,14 @@ export default function StorefrontClient({
                     <span className="truncate">{selectedStore?.address ?? storefront.address}</span>
                   </span>
                 ) : null}
-                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
+                <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
                   <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Pickup available
                 </span>
                 {paymentModeHint ? (
-                  <span className="inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-white/[0.12] bg-white/[0.14] px-2.5 py-1.5 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
+                  <span className="inline-flex min-h-7 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.14] px-2.5 py-1 font-semibold shadow-sm backdrop-blur" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.86 }}>
                     <svg className="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                     </svg>
@@ -934,6 +934,7 @@ export default function StorefrontClient({
                 onClick={handleShareStore}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/[0.12] shadow-sm backdrop-blur transition hover:bg-white/25 sm:h-10 sm:w-10"
                 aria-label="Share store link"
+                title="Share"
                 style={{ color: 'var(--brand-primary-foreground)' }}
               >
                 <ShareIcon className="h-4 w-4" />
@@ -988,7 +989,7 @@ export default function StorefrontClient({
       ) : null}
 
       {/* ── MAIN CONTENT ───────────────────────────────────── */}
-      <div className="mx-auto max-w-screen-lg px-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-12">
+      <div className="mx-auto max-w-screen-lg px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-12">
         <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 lg:pt-8">
 
           {/* ── LEFT: search + chips + product grid ──────── */}
@@ -1041,8 +1042,8 @@ export default function StorefrontClient({
                      aria-label="Show all categories"
                     onClick={() => handleCategoryChange(ALL_CATEGORIES)}
                     className={selectedCategoryId === ALL_CATEGORIES
-                      ? 'shrink-0 rounded-full px-4 py-2.5 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
-                      : 'shrink-0 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
+                      ? 'h-9 shrink-0 rounded-full px-4 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
+                      : 'h-9 shrink-0 rounded-full border border-slate-200 bg-white px-4 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
                     }
                     style={selectedCategoryId === ALL_CATEGORIES ? primaryStyle : undefined}
                   >
@@ -1059,8 +1060,8 @@ export default function StorefrontClient({
                          aria-label={`Filter by ${toTitleCase(category.name)} (${category.count} products)`}
                         onClick={() => handleCategoryChange(category.id)}
                         className={active
-                          ? 'shrink-0 rounded-full px-4 py-2.5 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
-                          : 'shrink-0 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
+                          ? 'h-9 shrink-0 rounded-full px-4 text-xs font-bold text-white shadow-sm ring-2 ring-blue-100'
+                          : 'h-9 shrink-0 rounded-full border border-slate-200 bg-white px-4 text-xs font-semibold text-black/60 shadow-sm transition hover:border-blue-200 hover:text-ink'
                         }
                         style={active ? primaryStyle : undefined}
                       >
@@ -1070,6 +1071,7 @@ export default function StorefrontClient({
                     );
                   })}
                   </div>
+                  <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-white via-white/80 to-transparent lg:from-slate-50 lg:via-slate-50/80" aria-hidden="true" />
                   <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white via-white/90 to-transparent lg:from-slate-50 lg:via-slate-50/90" aria-hidden="true" />
                 </div>
               )}
@@ -1257,13 +1259,13 @@ export default function StorefrontClient({
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex min-h-[23rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white ring-1 ring-white ${
+                        className={`group flex min-h-[21.75rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white ring-1 ring-white ${
                           inStock ? 'shadow-[0_14px_34px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.11)] hover:border-blue-100' : 'opacity-70 shadow-none'
                         }`}
                       >
                         <button
                           type="button"
-                          className="relative m-2 mb-0 h-[7.5rem] overflow-hidden rounded-xl bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] text-left shadow-[inset_0_0_0_1px_rgba(15,23,42,0.05),inset_0_8px_20px_rgba(15,23,42,0.03)] sm:h-32 lg:h-36"
+                          className="relative m-2 mb-0 h-28 overflow-hidden rounded-xl border border-slate-200/70 bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] text-left shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),inset_0_8px_20px_rgba(15,23,42,0.035)] sm:h-32 lg:h-36"
                           onClick={() => rememberViewedProduct(product.id)}
                           aria-label={`View ${displayName}`}
                         >
@@ -1294,17 +1296,17 @@ export default function StorefrontClient({
                         </button>
 
                   {/* Card body */}
-                  <div className="flex flex-1 flex-col p-3 sm:p-3.5">
+                  <div className="flex flex-1 flex-col p-2.5 sm:p-3">
                     {displayCategory && (
                       <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/35 sm:text-[9px]">
                         {displayCategory}
                       </div>
                     )}
-                    <h2 className="mt-1 line-clamp-2 min-h-[2.25rem] text-[13px] font-bold leading-snug text-ink sm:text-sm">
+                    <h2 className="mt-0.5 line-clamp-2 min-h-[2.15rem] text-[13px] font-bold leading-snug text-ink sm:text-sm">
                       {displayName}
                     </h2>
 
-                    <div className="mt-auto pt-3">
+                    <div className="mt-auto pt-2.5">
                       <div className="space-y-1">
                         <div className="min-w-0">
                           <div className="text-lg font-black leading-none text-ink sm:text-xl">{unitPrice}</div>
@@ -1321,7 +1323,7 @@ export default function StorefrontClient({
 
                       {product.units.length > 1 ? (
                         <select
-                          className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                          className="mt-2 h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
                           value={selected?.unitId ?? ''}
                           disabled={!inStock || productInCart}
                           onChange={(event) =>
@@ -1345,12 +1347,12 @@ export default function StorefrontClient({
                       ) : null}
 
                       {inStock && !productInCart ? (
-                        <div className="mt-3 space-y-2">
-                          <div className="flex h-11 w-full items-center justify-between overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
+                        <div className="mt-2.5 space-y-2">
+                          <div className="flex h-[42px] w-full items-center justify-between overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-inner">
                             <button
                               type="button"
                               aria-label={`Decrease quantity of ${displayName}`}
-                              className="flex h-11 w-11 items-center justify-center border-r border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:bg-slate-100 disabled:text-black/20"
+                              className="flex h-[42px] w-[42px] items-center justify-center border-r border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:bg-slate-100 disabled:text-black/20"
                               disabled={(selected?.qtyInUnit ?? 1) <= 1}
                               onClick={() =>
                                 setSelectionState((prev) => ({
@@ -1370,7 +1372,7 @@ export default function StorefrontClient({
                             <button
                               type="button"
                               aria-label={`Increase quantity of ${displayName}`}
-                              className="flex h-11 w-11 items-center justify-center border-l border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
+                              className="flex h-[42px] w-[42px] items-center justify-center border-l border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
                               onClick={() =>
                                 setSelectionState((prev) => ({
                                   ...prev,
@@ -1386,7 +1388,7 @@ export default function StorefrontClient({
                           </div>
                           <button
                             type="button"
-                            className="flex h-11 w-full items-center justify-center rounded-xl bg-[linear-gradient(175deg,var(--store-primary),#082f6e)] text-sm font-black text-white shadow-[0_10px_22px_rgba(8,47,110,0.28),0_2px_6px_rgba(8,47,110,0.14)] transition hover:brightness-105 active:translate-y-px active:scale-[0.99]"
+                            className="flex h-[42px] w-full items-center justify-center rounded-xl bg-[linear-gradient(175deg,var(--store-primary),#082f6e)] text-sm font-black text-white shadow-[0_10px_22px_rgba(8,47,110,0.28),0_2px_6px_rgba(8,47,110,0.14)] transition hover:brightness-105 active:translate-y-px active:scale-[0.99]"
                             onClick={() => addToCart(product.id)}
                             aria-label={`Add ${displayName} to cart`}
                           >
