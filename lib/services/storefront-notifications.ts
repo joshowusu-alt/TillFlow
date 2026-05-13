@@ -30,6 +30,7 @@ export type EnqueueOrderNotificationResult =
 
 const SMS_DEFAULT_DAILY_CAP = 100;
 const SMS_DAILY_CAP_WARNING_RATIO = 0.8;
+const IMMEDIATE_DISPATCH_TIMEOUT_MS = 1500;
 
 export const STOREFRONT_SMS_DAILY_CAP = SMS_DEFAULT_DAILY_CAP;
 export const STOREFRONT_SMS_DAILY_CAP_WARNING_RATIO = SMS_DAILY_CAP_WARNING_RATIO;
@@ -268,6 +269,20 @@ async function tryImmediateDispatch(outboxId: string): Promise<void> {
   }
 }
 
+async function tryImmediateDispatchWithTimeout(outboxId: string): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  try {
+    await Promise.race([
+      tryImmediateDispatch(outboxId),
+      new Promise<void>((resolve) => {
+        timeoutId = setTimeout(resolve, IMMEDIATE_DISPATCH_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Soft-fail wrapper for use in transitions where an enqueue failure should
  * never abort the user-facing action. Logs to console and continues.
@@ -289,7 +304,7 @@ export async function enqueueOrderNotificationSafe(
       return;
     }
     if (!result.deduped) {
-      await tryImmediateDispatch(result.outboxId);
+      await tryImmediateDispatchWithTimeout(result.outboxId);
     }
   } catch (error) {
     console.error('[storefront-notifications] enqueue failed', {

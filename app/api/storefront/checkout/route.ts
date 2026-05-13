@@ -4,6 +4,8 @@ import { consumeStorefrontCheckoutAttempt } from '@/lib/security/storefront-thro
 import { getStorefrontSessionCustomer } from '@/lib/services/storefront-customers';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 20;
 
 function clientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
