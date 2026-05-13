@@ -744,6 +744,7 @@ export default function StorefrontClient({
       const response = await fetch('/api/storefront/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           slug: storefront.slug,
           storeId: selectedStoreId,
@@ -761,9 +762,14 @@ export default function StorefrontClient({
         }),
       });
 
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null) as { error?: string; redirectPath?: string } | null;
       if (!response.ok) {
-        setError(payload.error ?? 'Unable to start checkout right now.');
+        setError(payload?.error ?? 'Unable to place your order right now. Please try again.');
+        return;
+      }
+
+      if (!payload?.redirectPath) {
+        setError('Your order may have been received, but we could not open the order page. Please try again or contact the store.');
         return;
       }
 
@@ -772,7 +778,13 @@ export default function StorefrontClient({
         localStorage.removeItem(CART_STORAGE_KEY);
       } catch {}
     } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : 'Unable to start checkout right now.');
+      const message = checkoutError instanceof Error ? checkoutError.message : '';
+      const isNetworkFailure = /load failed|failed to fetch|network|fetch/i.test(message);
+      setError(
+        isNetworkFailure
+          ? 'Could not reach the store checkout. Check your connection and try again.'
+          : 'Unable to place your order right now. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -2055,15 +2067,12 @@ export default function StorefrontClient({
         >
           <button
             type="button"
-            className="pointer-events-auto inline-flex w-full max-w-sm items-center justify-between gap-3 rounded-2xl border border-white/15 bg-[linear-gradient(175deg,var(--store-primary),#082f6e)] px-4 py-3.5 text-sm font-semibold text-white shadow-[0_20px_48px_rgba(6,14,44,0.32),0_4px_12px_rgba(6,14,44,0.18)] transition active:translate-y-px active:scale-[0.99]"
+            className="pointer-events-auto inline-flex min-h-16 w-full max-w-sm items-center justify-between gap-3 rounded-2xl border border-white/15 bg-[linear-gradient(175deg,var(--store-primary),#082f6e)] px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_42px_rgba(6,14,44,0.28),0_4px_10px_rgba(6,14,44,0.14)] transition active:translate-y-px active:scale-[0.99]"
             onClick={() => setMobileStep('cart')}
           >
             <span className="min-w-0">
               <span className="block truncate font-black">
                 {cartUnitCount} item{cartUnitCount === 1 ? '' : 's'} · {formatMoney(orderTotal, storefront.currency)}
-              </span>
-              <span className="mt-0.5 block text-[10px] font-semibold text-white/70">
-                Pickup order · Pay with MoMo
               </span>
             </span>
             <span className="shrink-0 rounded-xl bg-white px-3.5 py-2 text-xs font-black shadow-sm" style={{ color: 'var(--store-primary)' }}>
