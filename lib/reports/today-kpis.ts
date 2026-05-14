@@ -25,7 +25,7 @@ export type TodayKPIs = {
   productsAboveReorderPoint: number;
   paymentSplit: Record<string, number>;
   avgDailyExpensesPence: number;
-  cashOnHandEstimatePence: number; // cash (1000) + bank/MoMo (1010) combined
+  cashOnHandEstimatePence: number; // cash + bank/MoMo/card/transfer, with payment-ledger fallback
   negativeMarginProductCount: number;
   momoPendingCount: number;
   stockoutImminentCount: number;
@@ -34,6 +34,90 @@ export type TodayKPIs = {
   fourWeekAvgExpensesPence: number;
   discountOverrideCount: number;
 };
+
+async function getOperationalLiquidAssetsEstimatePence(
+  businessId: string,
+  asOf: Date,
+  storeId?: string
+) {
+  const storeFilter = storeId ? { storeId } : {};
+
+  const [
+    business,
+    openingBalances,
+    salesPayments,
+    purchasePayments,
+    expensePayments,
+  ] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: businessId },
+      select: { openingCapitalPence: true },
+    }),
+    prisma.openingBalance.findMany({
+      where: {
+        businessId,
+        accountCode: { in: [ACCOUNT_CODES.cash, ACCOUNT_CODES.bank] },
+      },
+      select: { amountPence: true },
+    }),
+    prisma.salesPayment.aggregate({
+      where: {
+        receivedAt: { lte: asOf },
+        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
+        salesInvoice: {
+          businessId,
+          ...(storeId ? { storeId } : {}),
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      _sum: { amountPence: true },
+    }),
+    prisma.purchasePayment.aggregate({
+      where: {
+        paidAt: { lte: asOf },
+        purchaseInvoice: { businessId, ...storeFilter },
+      },
+      _sum: { amountPence: true },
+    }),
+    prisma.expensePayment.aggregate({
+      where: {
+        businessId,
+        ...storeFilter,
+        paidAt: { lte: asOf },
+      },
+      _sum: { amountPence: true },
+    }),
+  ]);
+
+  const openingPence = openingBalances.length > 0
+    ? openingBalances.reduce((sum, row) => sum + row.amountPence, 0)
+    : (business?.openingCapitalPence ?? 0);
+
+  return Math.max(
+    0,
+    openingPence +
+      (salesPayments._sum.amountPence ?? 0) -
+      (purchasePayments._sum.amountPence ?? 0) -
+      (expensePayments._sum.amountPence ?? 0)
+  );
+}
+
+async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: string) {
+  const [accountingLiquidPence, operationalLiquidPence] = await Promise.all([
+    Promise.all([
+      getAccountBalance(businessId, ACCOUNT_CODES.cash, asOf),
+      getAccountBalance(businessId, ACCOUNT_CODES.bank, asOf),
+    ]).then(([cash, bank]) => cash + bank),
+    getOperationalLiquidAssetsEstimatePence(businessId, asOf, storeId),
+  ]);
+
+  // Prefer the formal accounting balance when it exists. If a business has
+  // sales/payments but historical journal repair has not been run yet, fall
+  // back to the operational payment ledger so the owner does not see GH₵0.00
+  // while real cash or MoMo has been received.
+  if (accountingLiquidPence > 0) return accountingLiquidPence;
+  return operationalLiquidPence;
+}
 
 async function getTodayKPIsSqlite(businessId: string, storeId: string | undefined, now: Date): Promise<TodayKPIs> {
   const todayStart = new Date(now);
@@ -132,10 +216,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         salesInvoice: { select: { createdAt: true, paymentStatus: true } },
       },
     }),
-    Promise.all([
-      getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
-      getAccountBalance(businessId, ACCOUNT_CODES.bank, todayEnd),
-    ]).then(([c, b]) => c + b),
+    getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
 
   const validTodaySales = salesRows.filter((row) =>
@@ -422,10 +503,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
         product: { select: { defaultCostBasePence: true } },
       },
     }),
-    Promise.all([
-      getAccountBalance(businessId, ACCOUNT_CODES.cash, todayEnd),
-      getAccountBalance(businessId, ACCOUNT_CODES.bank, todayEnd),
-    ]).then(([c, b]) => c + b),
+    getLiquidAssetsPence(businessId, todayEnd, storeId),
   ]);
 
   // Sales KPIs — already aggregated by the DB

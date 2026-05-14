@@ -362,7 +362,7 @@ function PostureStrip({ kpis, currency }: {
     {
       label: 'Liquid assets',
       value: kpis ? formatMoney(kpis.cashOnHandEstimatePence, currency) : '—',
-      sub: 'Cash + MoMo/bank balance',
+      sub: 'Cash + MoMo/card/bank received',
       tone: kpis && kpis.cashOnHandEstimatePence < 0 ? 'danger' : 'ok' as const,
     },
     {
