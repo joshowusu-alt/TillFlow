@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 20;
 
+const MAX_CART_LINES = 50;
+const MAX_QTY_PER_LINE = 999;
+
 function clientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
@@ -33,11 +36,11 @@ export async function POST(request: NextRequest) {
 
     const result = await createOnlineCheckout({
       slug,
-      storeId: String(body?.storeId ?? ''),
-      customerName: String(body?.customerName ?? ''),
-      customerPhone: String(body?.customerPhone ?? ''),
-      customerEmail: body?.customerEmail ? String(body.customerEmail) : null,
-      customerNotes: body?.customerNotes ? String(body.customerNotes) : null,
+      storeId: String(body?.storeId ?? '').slice(0, 64),
+      customerName: String(body?.customerName ?? '').trim().slice(0, 120),
+      customerPhone: String(body?.customerPhone ?? '').trim().slice(0, 30),
+      customerEmail: body?.customerEmail ? String(body.customerEmail).trim().slice(0, 254) : null,
+      customerNotes: body?.customerNotes ? String(body.customerNotes).trim().slice(0, 500) : null,
       customerId: sessionCustomer?.id ?? null,
       sessionId: body?.sessionId ? String(body.sessionId) : null,
       network:
@@ -45,12 +48,12 @@ export async function POST(request: NextRequest) {
           ? body.network
           : null,
       items: Array.isArray(body?.items)
-        ? body.items.map((item: unknown) => {
+        ? body.items.slice(0, MAX_CART_LINES).map((item: unknown) => {
             const value = item as { productId?: string; unitId?: string; qtyInUnit?: number };
             return {
               productId: String(value?.productId ?? ''),
               unitId: String(value?.unitId ?? ''),
-              qtyInUnit: Number(value?.qtyInUnit ?? 0),
+              qtyInUnit: Math.min(Math.max(Math.floor(Number(value?.qtyInUnit ?? 0)), 0), MAX_QTY_PER_LINE),
             };
           })
         : [],
