@@ -7,6 +7,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { NAV_GROUPS } from '@/lib/navigation-config';
+import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import type { MerchantBrandProfile } from '@/lib/merchant-branding';
 import InstallButton from './InstallButton';
 import { Logo } from './Logo';
@@ -45,6 +46,8 @@ export default function TopNav({
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
+  const lastSalesRefreshAtRef = useRef(0);
   const isOnline = useNetworkStatus();
   const navRef = useRef<HTMLDivElement>(null);
   const planGatedLinks = useMemo(
@@ -73,9 +76,54 @@ export default function TopNav({
   }, [user.role, features.multiStore, momoEnabled]);
 
   const showMobileSalesPulse =
-    Boolean(todaySales && (user.role === 'MANAGER' || user.role === 'OWNER')) &&
+    Boolean(liveTodaySales && (user.role === 'MANAGER' || user.role === 'OWNER')) &&
     !pathname.startsWith('/onboarding');
-  const mobileSales = showMobileSalesPulse ? todaySales : undefined;
+  const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
+
+  useEffect(() => {
+    setLiveTodaySales(todaySales);
+  }, [todaySales]);
+
+  useEffect(() => {
+    if (!(user.role === 'MANAGER' || user.role === 'OWNER')) return;
+
+    let cancelled = false;
+    const refreshSales = async (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastSalesRefreshAtRef.current < 8_000) return;
+      lastSalesRefreshAtRef.current = now;
+      try {
+        const fresh = await getNavTodaySales();
+        if (!cancelled) {
+          setLiveTodaySales({
+            totalPence: fresh.totalPence,
+            txCount: fresh.txCount,
+            currency: fresh.currency,
+          });
+        }
+      } catch {
+        // Keep the server-rendered value if the lightweight refresh cannot complete.
+      }
+    };
+
+    if (mobileOpen) {
+      void refreshSales(true);
+    }
+
+    const handleFocus = () => void refreshSales(false);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshSales(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [mobileOpen, user.role]);
 
   useEffect(() => {
     setOpenGroup(null);
@@ -220,7 +268,7 @@ export default function TopNav({
               </span>
             ) : null}
             <InstallButton />
-            <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={todaySales} />
+            <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={liveTodaySales} />
             <button
               type="button"
               className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 lg:hidden"
@@ -269,7 +317,7 @@ export default function TopNav({
         features={features}
         pathname={pathname}
         planGatedLinks={planGatedLinks}
-        todaySales={todaySales}
+        todaySales={liveTodaySales}
         onlineOrdersCount={onlineOrdersCount}
       />
     </>
