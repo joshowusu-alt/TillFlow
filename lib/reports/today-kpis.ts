@@ -26,6 +26,7 @@ export type TodayKPIs = {
   paymentSplit: Record<string, number>;
   avgDailyExpensesPence: number;
   cashOnHandEstimatePence: number; // cash + bank/MoMo/card/transfer, with payment-ledger fallback
+  todayReceiptsPence: number;
   negativeMarginProductCount: number;
   momoPendingCount: number;
   stockoutImminentCount: number;
@@ -113,8 +114,8 @@ async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: st
 
   // Prefer the formal accounting balance when it exists. If a business has
   // sales/payments but historical journal repair has not been run yet, fall
-  // back to the operational payment ledger so the owner does not see GH₵0.00
-  // while real cash or MoMo has been received.
+  // back to the operational payment ledger so deeper owner intelligence still
+  // has a practical cash-position signal.
   if (accountingLiquidPence > 0) return accountingLiquidPence;
   return operationalLiquidPence;
 }
@@ -244,6 +245,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     .forEach((row) => {
       paymentSplit[row.method] = (paymentSplit[row.method] ?? 0) + row.amountPence;
     });
+  const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   const receivables = summarizeReceivables(openSalesInvoices, now);
 
@@ -310,6 +312,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
     stockoutImminentCount: inventorySummary.stockoutImminentCount,
@@ -523,6 +526,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   for (const p of paymentsByMethod) {
     paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
+  const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   // AR — computed from open invoice balances so ageing buckets align with dashboard logic
   const receivables = summarizeReceivables(openSalesInvoices, now);
@@ -587,6 +591,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
     paymentSplit,
     avgDailyExpensesPence,
     cashOnHandEstimatePence: Math.max(0, cashOnHandEstimatePence),
+    todayReceiptsPence,
     negativeMarginProductCount,
     momoPendingCount: momoPending,
     stockoutImminentCount: inventorySummary.stockoutImminentCount,

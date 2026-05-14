@@ -89,6 +89,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         paymentSplit: {},
         avgDailyExpensesPence: 0,
         cashOnHandEstimatePence: 0,
+        todayReceiptsPence: 0,
         negativeMarginProductCount: 0,
         momoPendingCount: 0,
         stockoutImminentCount: 0,
