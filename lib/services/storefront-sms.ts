@@ -75,7 +75,7 @@ async function sendViaArkesel(args: {
 
   let response: Response;
   try {
-    response = await fetch(url, { method: 'GET' });
+    response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(10_000) });
   } catch (error) {
     return {
       ok: false,
@@ -134,6 +134,7 @@ async function sendViaHubtel(args: {
     response = await fetch(url, {
       method: 'GET',
       headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
     return {
