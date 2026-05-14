@@ -253,16 +253,20 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    let alreadySentToday = sentTodayByBusiness.get(row.businessId);
-    if (alreadySentToday === undefined) {
-      alreadySentToday = await countSentToday(row.businessId, now);
-      sentTodayByBusiness.set(row.businessId, alreadySentToday);
-    }
+    // Operational owner messages (e.g. EOD summary) bypass the storefront
+    // daily cap — they must always be delivered regardless of order volume.
+    if (!isOperationalOwnerSms(row.eventType) && !isSubscriptionReminder(row.eventType)) {
+      let alreadySentToday = sentTodayByBusiness.get(row.businessId);
+      if (alreadySentToday === undefined) {
+        alreadySentToday = await countSentToday(row.businessId, now);
+        sentTodayByBusiness.set(row.businessId, alreadySentToday);
+      }
 
-    if (alreadySentToday >= STOREFRONT_SMS_DAILY_CAP) {
-      await markPendingDueToCap(row.id, now);
-      capped += 1;
-      continue;
+      if (alreadySentToday >= STOREFRONT_SMS_DAILY_CAP) {
+        await markPendingDueToCap(row.id, now);
+        capped += 1;
+        continue;
+      }
     }
 
     const result = await sendStorefrontSms({
@@ -274,18 +278,23 @@ export async function GET(req: NextRequest) {
     if (result.ok) {
       await markSent(row.id, result.providerStatus, now);
       sent += 1;
-      sentTodayByBusiness.set(row.businessId, alreadySentToday + 1);
 
-      if (
-        alreadySentToday + 1 >=
-        Math.floor(STOREFRONT_SMS_DAILY_CAP * STOREFRONT_SMS_DAILY_CAP_WARNING_RATIO)
-      ) {
-        warnings += 1;
-        console.warn('[sms-dispatcher] business approaching daily cap', {
-          businessId: row.businessId,
-          sentToday: alreadySentToday + 1,
-          cap: STOREFRONT_SMS_DAILY_CAP,
-        });
+      // Only track storefront SMS against the daily cap counter.
+      if (!isOperationalOwnerSms(row.eventType) && !isSubscriptionReminder(row.eventType)) {
+        const prevCount = sentTodayByBusiness.get(row.businessId) ?? 0;
+        sentTodayByBusiness.set(row.businessId, prevCount + 1);
+
+        if (
+          prevCount + 1 >=
+          Math.floor(STOREFRONT_SMS_DAILY_CAP * STOREFRONT_SMS_DAILY_CAP_WARNING_RATIO)
+        ) {
+          warnings += 1;
+          console.warn('[sms-dispatcher] business approaching daily cap', {
+            businessId: row.businessId,
+            sentToday: prevCount + 1,
+            cap: STOREFRONT_SMS_DAILY_CAP,
+          });
+        }
       }
     } else {
       if (result.retryable && row.attempts + 1 < MAX_ATTEMPTS) retried += 1;
