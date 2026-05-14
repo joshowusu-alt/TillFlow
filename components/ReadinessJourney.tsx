@@ -350,7 +350,15 @@ function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shif
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function HomeActionCard({ action }: { action: HomeAction }) {
+function HomeActionCard({
+  action,
+  className = '',
+  compact = false,
+}: {
+  action: HomeAction;
+  className?: string;
+  compact?: boolean;
+}) {
   return (
     <Link
       href={action.href}
@@ -360,7 +368,7 @@ function HomeActionCard({ action }: { action: HomeAction }) {
           : action.urgent
           ? 'border border-amber-200 bg-amber-50 text-ink hover:border-amber-300'
           : 'border border-black/[0.06] bg-white text-ink hover:shadow-md'
-      } ${action.breakBefore ? 'mt-3 sm:mt-0 sm:border-t-4 sm:border-t-black/10' : ''}`}
+      } ${action.breakBefore ? 'mt-3 sm:mt-0 sm:border-t-4 sm:border-t-black/10' : ''} ${className}`}
     >
       <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition ${
         action.primary
@@ -377,7 +385,7 @@ function HomeActionCard({ action }: { action: HomeAction }) {
           {action.desc}
         </p>
       </div>
-      <svg className={`h-4 w-4 flex-shrink-0 transition group-hover:translate-x-0.5 sm:absolute sm:bottom-4 sm:right-4 ${
+      <svg className={`h-4 w-4 flex-shrink-0 transition group-hover:translate-x-0.5 ${compact ? 'lg:static' : 'sm:absolute sm:bottom-4 sm:right-4'} ${
         action.primary ? 'text-white/40' : 'text-black/20 group-hover:text-accent/50'
       }`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -496,9 +504,10 @@ function WelcomeDashboard({
     { label: 'Team', desc: 'Users and approvals', href: '/users', icon: <HomeIcon name="team" /> },
   ];
   const quickActions = [...dynamicActions, ...staticActions];
+  const attentionActions = dynamicActions;
 
   const primaryActions = quickActions.filter((action) => action.primary);
-  const secondaryActions = quickActions.filter((action) => !action.primary && !['/settings', '/users', '/purchases'].includes(action.href));
+  const secondaryActions = staticActions.filter((action) => !action.primary && !['/settings', '/users', '/purchases'].includes(action.href));
   const adminActions = quickActions.filter((action) => ['/settings', '/users', '/purchases'].includes(action.href));
 
   const previewCard = (
@@ -512,42 +521,48 @@ function WelcomeDashboard({
   );
 
   return (
-    <div className="min-h-screen" style={{ background: '#f0f2f5' }}>
-      <div className="relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}>
+    <div className="min-h-screen px-0 lg:px-6 lg:pb-10" style={{ background: '#f0f2f5' }}>
+      <div
+        className="relative overflow-hidden lg:mx-auto lg:mt-6 lg:max-w-[120rem] lg:rounded-[2rem] lg:shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}
+      >
         <div className="pointer-events-none absolute inset-0" style={{
           backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.2) 0%, transparent 40%)',
         }} />
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.3))' }} />
 
-        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:pb-16 lg:pt-14">
-          {hour < 12 && firstName ? (
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
-              {greeting}, {firstName}
-            </p>
-          ) : null}
-          <h1 className="text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-            {data.businessName}
-          </h1>
-          <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/75 underline-offset-4 hover:text-white hover:underline">
-            {smartSubtitle.text}
-          </Link>
-          <p className="mt-1 text-[11px] text-blue-200/45">{lastCloseText}</p>
+        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:max-w-7xl lg:px-10 lg:py-10 xl:px-14">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.35fr)] lg:items-end xl:grid-cols-[minmax(0,0.8fr)_minmax(38rem,1.4fr)]">
+            <div className="min-w-0">
+              {hour < 12 && firstName ? (
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
+                  {greeting}, {firstName}
+                </p>
+              ) : null}
+              <h1 className="max-w-3xl text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.65rem] xl:text-5xl">
+                {data.businessName}
+              </h1>
+              <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/75 underline-offset-4 hover:text-white hover:underline">
+                {smartSubtitle.text}
+              </Link>
+              <p className="mt-1 text-[11px] text-blue-200/45">{lastCloseText}</p>
 
-          <div className={`mt-4 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
-            <span className="relative flex h-2 w-2">
-              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusPill.dot}`} />
-              <span className={`relative inline-flex h-2 w-2 rounded-full ${statusPill.dot}`} />
-            </span>
-            {statusPill.label}
-          </div>
+              <div className={`mt-4 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
+                <span className="relative flex h-2 w-2">
+                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusPill.dot}`} />
+                  <span className={`relative inline-flex h-2 w-2 rounded-full ${statusPill.dot}`} />
+                </span>
+                {statusPill.label}
+              </div>
+            </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:gap-4">
             {heroStats.map(({ label, displayLabel, value, href, footer }) => (
               <Link
                 key={label}
                 href={href}
                 aria-label={`${label}: ${value}`}
-                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4"
+                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4 lg:min-h-[8.25rem]"
               >
                 <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
                 <span
@@ -563,32 +578,75 @@ function WelcomeDashboard({
                 )}
               </Link>
             ))}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:py-8">
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-7xl lg:px-0 lg:py-7">
         {isNewAccount ? <div className="mb-5">{previewCard}</div> : null}
 
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <div>
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
 
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {primaryActions.map((action) => (
-            <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
-          ))}
-        </div>
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {primaryActions.map((action) => (
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:col-span-3 lg:min-h-[7.5rem] lg:flex-row lg:items-center lg:p-5" />
+              ))}
+              {attentionActions.map((action) => (
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:hidden" />
+              ))}
+            </div>
 
-        <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          {secondaryActions.map((action) => (
-            <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
-          ))}
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {secondaryActions.map((action) => (
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[8.5rem]" />
+              ))}
+            </div>
+          </div>
+
+          <aside className="hidden lg:block">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Today focus</p>
+            <div className="rounded-3xl border border-black/[0.06] bg-white p-4 shadow-sm">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm font-bold text-ink">
+                  {attentionActions.length > 0 ? 'Follow up before close' : 'Business is clear'}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  {attentionActions.length > 0
+                    ? `${attentionActions.length} item${attentionActions.length === 1 ? '' : 's'} need attention today.`
+                    : 'No urgent follow-up right now. Keep selling and review the dashboard when needed.'}
+                </p>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {attentionActions.length > 0 ? attentionActions.map((action) => (
+                  <HomeActionCard
+                    key={`${action.href}-${action.label}`}
+                    action={action}
+                    compact
+                    className="lg:min-h-0 lg:flex-row lg:items-center lg:p-3"
+                  />
+                )) : (
+                  <Link
+                    href="/reports/command-center"
+                    className="flex items-center justify-between rounded-2xl border border-black/[0.06] px-4 py-3 text-sm font-bold text-ink transition hover:border-accent/20 hover:bg-accentSoft"
+                  >
+                    Open Command Center
+                    <span aria-hidden className="text-accent">&rarr;</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </aside>
         </div>
 
         <div className="mt-5">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Admin</p>
           <div className="grid gap-2.5 sm:grid-cols-3">
             {adminActions.map((action) => (
-              <HomeActionCard key={`${action.href}-${action.label}`} action={action} />
+              <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[7.25rem]" />
             ))}
           </div>
         </div>
