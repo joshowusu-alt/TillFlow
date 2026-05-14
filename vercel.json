@@ -16,7 +16,7 @@
     },
     {
       "path": "/api/cron/dispatch-storefront-notifications",
-      "schedule": "0 22 * * *"
+      "schedule": "40 21 * * *"
     }
   ],
   "functions": {
