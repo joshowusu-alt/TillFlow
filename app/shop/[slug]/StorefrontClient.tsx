@@ -14,6 +14,29 @@ const ALL_CATEGORIES = '__all__';
 const CATALOG_PAGE_SIZE = 24;
 const SEARCH_DEBOUNCE_MS = 300;
 const CATALOG_SECTION_ID = 'shop-catalog';
+const CART_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_CART_QTY = 999;
+
+/** Validate a Ghana mobile number client-side before submitting to the server. */
+function isValidGhanaPhone(value: string): boolean {
+  const digits = value.trim().replace(/[^\d]/g, '');
+  if (!digits) return false;
+  let national: string | null = null;
+  if (digits.startsWith('00233') && digits.length === 14) national = digits.slice(5);
+  else if (digits.startsWith('233') && digits.length === 12) national = digits.slice(3);
+  else if (digits.startsWith('0') && digits.length === 10) national = digits.slice(1);
+  else if (digits.length === 9) national = digits;
+  return national !== null && national.length === 9;
+}
+
+function SpinnerIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -247,7 +270,6 @@ export default function StorefrontClient({
   const initialCategoryId = searchParams?.get('category') ?? ALL_CATEGORIES;
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
-  const CART_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
   const [cart, setCart] = useState<PosCartLine[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
@@ -727,6 +749,7 @@ export default function StorefrontClient({
       if (nextQty <= 0) {
         return prev.filter((_, lineIndex) => lineIndex !== index);
       }
+      if (nextQty > MAX_CART_QTY) return prev;
       return prev.map((cartLine, lineIndex) =>
         lineIndex === index ? { ...cartLine, qtyInUnit: nextQty } : cartLine,
       );
@@ -741,6 +764,12 @@ export default function StorefrontClient({
 
     setSubmitting(true);
     setError(null);
+
+    if (!isValidGhanaPhone(customerPhone)) {
+      setError('Enter a valid Ghana mobile number (e.g. 024 123 4567 or +233 24 123 4567).');
+      setSubmitting(false);
+      return;
+    }
 
     if (!selectedStoreId) {
       setError('Choose a pickup store before checking out.');
@@ -1391,13 +1420,14 @@ export default function StorefrontClient({
                             <button
                               type="button"
                               aria-label={`Increase quantity of ${displayName}`}
-                              className="flex h-[42px] w-[42px] items-center justify-center border-l border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent"
+                              className="flex h-[42px] w-[42px] items-center justify-center border-l border-slate-200 text-base font-bold text-black/50 transition hover:bg-white hover:text-accent disabled:opacity-30"
+                              disabled={(selected?.qtyInUnit ?? 1) >= MAX_CART_QTY}
                               onClick={() =>
                                 setSelectionState((prev) => ({
                                   ...prev,
                                   [product.id]: {
                                     ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
-                                    qtyInUnit: (prev[product.id]?.qtyInUnit ?? 1) + 1,
+                                    qtyInUnit: Math.min((prev[product.id]?.qtyInUnit ?? 1) + 1, MAX_CART_QTY),
                                   },
                                 }))
                               }
@@ -1436,7 +1466,8 @@ export default function StorefrontClient({
                             <button
                               type="button"
                               aria-label={`Add one more ${displayName} to cart`}
-                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50"
+                              className="flex h-11 w-11 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-30"
+                              disabled={productCartQty >= MAX_CART_QTY}
                               onClick={() => adjustCartProduct(product.id, 1)}
                             >
                               +
@@ -1747,7 +1778,7 @@ export default function StorefrontClient({
                   {!paymentReady
                     ? 'Checkout temporarily unavailable'
                     : submitting
-                      ? 'Placing order…'
+                      ? <span className="inline-flex items-center justify-center gap-2"><SpinnerIcon className="h-4 w-4 animate-spin" />Placing order…</span>
                       : cartUnitCount > 0
                         ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
                         : 'Place order'}
@@ -2047,7 +2078,7 @@ export default function StorefrontClient({
             {!paymentReady
               ? 'Checkout temporarily unavailable'
               : submitting
-                ? 'Placing order…'
+                ? <span className="inline-flex items-center justify-center gap-2"><SpinnerIcon className="h-4 w-4 animate-spin" />Placing order…</span>
                 : cartUnitCount > 0
                   ? `Place order (${cartUnitCount} item${cartUnitCount === 1 ? '' : 's'})`
                   : 'Place order'}
