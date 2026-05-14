@@ -247,14 +247,22 @@ export default function StorefrontClient({
   const initialCategoryId = searchParams?.get('category') ?? ALL_CATEGORIES;
   const CART_STORAGE_KEY = `tillflow_cart_${storefront.slug}`;
   const RECENTLY_VIEWED_STORAGE_KEY = `tillflow_viewed_${storefront.slug}`;
+  const CART_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
   const [cart, setCart] = useState<PosCartLine[]>(() => {
     if (typeof window === 'undefined') return [];
     try {
       const raw = localStorage.getItem(`tillflow_cart_${storefront.slug}`);
       if (!raw) return [];
-      const parsed = JSON.parse(raw) as PosCartLine[];
+      const parsed = JSON.parse(raw) as { savedAt?: number; lines?: PosCartLine[] } | PosCartLine[];
+      // Support both old format (plain array) and new format ({ savedAt, lines })
+      const lines = Array.isArray(parsed) ? parsed : (parsed.lines ?? []);
+      const savedAt = Array.isArray(parsed) ? 0 : (parsed.savedAt ?? 0);
+      if (savedAt && Date.now() - savedAt > CART_TTL_MS) {
+        localStorage.removeItem(`tillflow_cart_${storefront.slug}`);
+        return [];
+      }
       const productIds = new Set(storefront.products.map((product) => product.id));
-      return parsed.filter((line) => productIds.has(line.productId));
+      return lines.filter((line) => productIds.has(line.productId));
     } catch {
       return [];
     }
@@ -303,7 +311,7 @@ export default function StorefrontClient({
 
   useEffect(() => {
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), lines: cart }));
     } catch {}
   }, [cart, CART_STORAGE_KEY]);
 
