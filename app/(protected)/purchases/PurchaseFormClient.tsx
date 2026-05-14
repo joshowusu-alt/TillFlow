@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import { createPurchaseAction } from '@/app/actions/purchases';
 import { quickCreateProductAction } from '@/app/actions/products';
 import ProductUnitPricingEditor, { type EditableProductUnitConfig } from '@/components/ProductUnitPricingEditor';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol } from '@/lib/format';
 import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
+import type { PaymentStatus } from '@/lib/services/shared';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 
@@ -59,6 +61,21 @@ type CartLine = {
   unitCostInput: string;
 };
 
+type PurchaseDraft = {
+  version: 1;
+  updatedAt: number;
+  supplierId: string;
+  cart: CartLine[];
+  paymentMethods: PaymentMethod[];
+  cashPaid: string;
+  cardPaid: string;
+  transferPaid: string;
+  paymentStatus: PaymentStatus;
+  dueDate: string;
+};
+
+const PURCHASE_DRAFT_VERSION = 1;
+
 export default function PurchaseFormClient({
   storeId,
   products,
@@ -74,6 +91,10 @@ export default function PurchaseFormClient({
   units: UnitOption[];
   vatEnabled: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const draftStorageKey = `tillflow:purchase-draft:${storeId}`;
+  const draftReadyRef = useRef(false);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
   const [supplierId, setSupplierId] = useState('');
   const [productId, setProductId] = useState(products[0]?.id ?? '');
@@ -85,6 +106,8 @@ export default function PurchaseFormClient({
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [costDrafts, setCostDrafts] = useState<Record<string, string>>({});
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('PAID');
+  const [dueDate, setDueDate] = useState('');
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
@@ -111,6 +134,117 @@ export default function PurchaseFormClient({
       (p) => p.name.toLowerCase().includes(q) || (p.barcode ?? '').toLowerCase().includes(q)
     );
   }, [productSearch, productOptions]);
+
+  useEffect(() => {
+    if (searchParams?.get('created')) {
+      try {
+        window.localStorage.removeItem(draftStorageKey);
+      } catch {}
+      draftReadyRef.current = true;
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(draftStorageKey);
+      if (!raw) {
+        draftReadyRef.current = true;
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<PurchaseDraft>;
+      if (parsed.version !== PURCHASE_DRAFT_VERSION) {
+        window.localStorage.removeItem(draftStorageKey);
+        draftReadyRef.current = true;
+        return;
+      }
+
+      const productById = new Map(productOptions.map((product) => [product.id, product]));
+      const restoredCart = Array.isArray(parsed.cart)
+        ? parsed.cart.filter((line) => {
+            const product = productById.get(line.productId);
+            return Boolean(product?.units.some((unit) => unit.id === line.unitId) && line.qtyInUnit > 0);
+          })
+        : [];
+      const restoredMethods = Array.isArray(parsed.paymentMethods)
+        ? parsed.paymentMethods.filter((method): method is PaymentMethod => ['CASH', 'CARD', 'TRANSFER'].includes(method))
+        : [];
+
+      setSupplierId(typeof parsed.supplierId === 'string' ? parsed.supplierId : '');
+      setCart(restoredCart);
+      setPaymentMethods(restoredMethods.length > 0 ? restoredMethods : ['CASH']);
+      setPaymentStatus(
+        parsed.paymentStatus && ['PAID', 'PART_PAID', 'UNPAID'].includes(parsed.paymentStatus)
+          ? parsed.paymentStatus
+          : 'PAID',
+      );
+      setDueDate(typeof parsed.dueDate === 'string' ? parsed.dueDate : '');
+      setCashPaid(typeof parsed.cashPaid === 'string' ? parsed.cashPaid : '');
+      setCardPaid(typeof parsed.cardPaid === 'string' ? parsed.cardPaid : '');
+      setTransferPaid(typeof parsed.transferPaid === 'string' ? parsed.transferPaid : '');
+      if (restoredCart.length > 0 || parsed.supplierId || parsed.cashPaid || parsed.cardPaid || parsed.transferPaid) {
+        setDraftNotice('Draft restored. You can continue this purchase after serving the customer.');
+      }
+    } catch {
+      try {
+        window.localStorage.removeItem(draftStorageKey);
+      } catch {}
+    } finally {
+      draftReadyRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+
+    const hasDraft =
+      supplierId ||
+      cart.length > 0 ||
+      cashPaid ||
+      cardPaid ||
+      transferPaid ||
+      paymentStatus !== 'PAID' ||
+      dueDate;
+
+    try {
+      if (!hasDraft) {
+        window.localStorage.removeItem(draftStorageKey);
+        return;
+      }
+      const draft: PurchaseDraft = {
+        version: PURCHASE_DRAFT_VERSION,
+        updatedAt: Date.now(),
+        supplierId,
+        cart,
+        paymentMethods,
+        cashPaid,
+        cardPaid,
+        transferPaid,
+        paymentStatus,
+        dueDate,
+      };
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    } catch {}
+  }, [cardPaid, cart, cashPaid, draftStorageKey, dueDate, paymentMethods, paymentStatus, supplierId, transferPaid]);
+
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    const hasUnsavedPurchase =
+      cart.length > 0 ||
+      supplierId ||
+      cashPaid ||
+      cardPaid ||
+      transferPaid ||
+      paymentStatus !== 'PAID' ||
+      dueDate;
+    if (!hasUnsavedPurchase) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [cardPaid, cart.length, cashPaid, dueDate, paymentStatus, supplierId, transferPaid]);
 
   // Keep productSearch display in sync when productId changes programmatically
   useEffect(() => {
@@ -383,8 +517,42 @@ export default function PurchaseFormClient({
     setPaymentMethods(next);
   };
 
+  const discardDraft = () => {
+    setSupplierId('');
+    setCart([]);
+    setQtyDrafts({});
+    setCostDrafts({});
+    setPaymentMethods(['CASH']);
+    setPaymentStatus('PAID');
+    setDueDate('');
+    setCashPaid('');
+    setCardPaid('');
+    setTransferPaid('');
+    setDraftNotice(null);
+    try {
+      window.localStorage.removeItem(draftStorageKey);
+    } catch {}
+  };
+
   return (
     <div className="mt-4 space-y-6">
+      {draftNotice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-semibold">Purchase draft restored</div>
+              <div className="mt-0.5 text-emerald-800/80">{draftNotice}</div>
+            </div>
+            <button
+              type="button"
+              className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100"
+              onClick={discardDraft}
+            >
+              Discard draft
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="rounded-xl border border-black/10 bg-white/70 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -882,7 +1050,7 @@ export default function PurchaseFormClient({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="label">Payment Status</label>
-            <select className="input" name="paymentStatus">
+            <select className="input" name="paymentStatus" value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)}>
               <option value="PAID">Paid</option>
               <option value="PART_PAID">Part Paid</option>
               <option value="UNPAID">Unpaid</option>
@@ -906,7 +1074,7 @@ export default function PurchaseFormClient({
           </div>
           <div>
             <label className="label">Due Date</label>
-            <input className="input" name="dueDate" type="date" />
+            <input className="input" name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
           </div>
           <div>
             <label className="label">Cart Total</label>
