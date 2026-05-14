@@ -11,7 +11,7 @@ const OTP_MAX_ATTEMPTS = 5;
 const OTP_REQUEST_WINDOW_MS = 15 * 60 * 1000; // 15 min
 const OTP_REQUEST_LIMIT = 4; // 4 OTPs per (business, phone) per 15 min
 
-const SESSION_TTL_DAYS = 30;
+const SESSION_TTL_DAYS = 7;
 const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000; // bump lastSeenAt at most once a day
 
