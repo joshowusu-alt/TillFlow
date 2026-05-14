@@ -112,7 +112,7 @@ export default function TopNav({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7">
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7 lg:py-2">
           <a
             href="/pos"
             aria-label="TillFlow — go to POS"
@@ -120,7 +120,7 @@ export default function TopNav({
           >
             <Logo
               variant="lockup"
-              size={34}
+              size={32}
               className="gap-2.5"
               wordmarkClassName="text-lg"
               ariaHidden
@@ -202,7 +202,7 @@ export default function TopNav({
             </span>
             {(merchantBranding || storeName) ? (
               <span
-                className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-2.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
+                className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-2.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
                 title={businessName ? `${businessName} · ${storeName ?? 'Main branch'}` : storeName}
               >
                 {merchantBranding ? (

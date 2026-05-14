@@ -49,7 +49,7 @@ export default function InstallButton() {
         <button
             onClick={handleInstall}
             aria-label="Install app"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-white transition hover:bg-accent/80 active:scale-95 2xl:w-auto 2xl:gap-2 2xl:px-4"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-white transition hover:bg-accent/80 active:scale-95 2xl:w-auto 2xl:gap-2 2xl:px-4"
         >
             <svg width="16" height="16" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

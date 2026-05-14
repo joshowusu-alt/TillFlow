@@ -17,7 +17,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
       <div className="hidden items-center gap-2 xl:flex">
         {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
           <div
-            className="hidden h-10 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm xl:flex"
+            className="hidden h-9 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm xl:flex"
             aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
             title={`Today's sales: ${formatMoney(todaySales.totalPence, todaySales.currency)} · ${todaySales.txCount} transaction${todaySales.txCount !== 1 ? 's' : ''}`}
           >
@@ -47,7 +47,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         </div>
 
         <form action={logout}>
-          <button type="submit" className="inline-flex h-10 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
+          <button type="submit" className="inline-flex h-9 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
             Sign out
           </button>
         </form>

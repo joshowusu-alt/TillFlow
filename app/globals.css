@@ -491,7 +491,7 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   }
 
   .shell-nav-trigger {
-    @apply h-10 rounded-xl px-3 py-0 text-sm font-semibold text-gray-600;
+    @apply h-9 rounded-xl px-3 py-0 text-sm font-semibold text-gray-600;
     transition: color var(--motion-fast) ease, background-color var(--motion-fast) ease, box-shadow var(--motion-base) var(--ease-executive), transform var(--motion-fast) ease;
   }
 
@@ -502,7 +502,7 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   .shell-nav-trigger-active {
     @apply text-white;
     background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%);
-    box-shadow: 0 8px 18px rgba(30, 64, 175, 0.16);
+    box-shadow: 0 7px 16px rgba(30, 64, 175, 0.16);
   }
 
   .shell-dropdown-panel {

@@ -456,9 +456,9 @@ function WelcomeDashboard({
         { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: lastCloseText },
       ];
   const getStatValueSize = (value: string) => {
-    if (value.length > 11) return 'text-xs sm:text-sm';
-    if (value.length > 8) return 'text-sm';
-    return 'text-lg';
+    if (value.length > 11) return 'text-xs sm:text-sm lg:text-base';
+    if (value.length > 8) return 'text-sm lg:text-lg';
+    return 'text-lg lg:text-2xl';
   };
 
   const dynamicActions = ([
@@ -521,9 +521,9 @@ function WelcomeDashboard({
   );
 
   return (
-    <div className="min-h-screen px-0 lg:px-6 lg:pb-10" style={{ background: '#f0f2f5' }}>
+    <div className="min-h-screen px-0 lg:px-6 lg:pb-8" style={{ background: '#f0f2f5' }}>
       <div
-        className="relative overflow-hidden lg:mx-auto lg:mt-6 lg:max-w-[120rem] lg:rounded-[2rem] lg:shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+        className="relative overflow-hidden lg:mx-auto lg:mt-4 lg:max-w-[120rem] lg:rounded-[1.75rem] lg:shadow-[0_22px_70px_rgba(15,23,42,0.16)]"
         style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}
       >
         <div className="pointer-events-none absolute inset-0" style={{
@@ -531,15 +531,15 @@ function WelcomeDashboard({
         }} />
         <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.3))' }} />
 
-        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:max-w-7xl lg:px-10 lg:py-10 xl:px-14">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(34rem,1.35fr)] lg:items-end xl:grid-cols-[minmax(0,0.8fr)_minmax(38rem,1.4fr)]">
+        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:max-w-7xl lg:px-10 lg:py-8 xl:px-14">
+          <div className="grid gap-6 lg:grid-cols-[minmax(28rem,1fr)_minmax(34rem,1.22fr)] lg:items-center xl:grid-cols-[minmax(38rem,1fr)_minmax(38rem,1.15fr)]">
             <div className="min-w-0">
               {hour < 12 && firstName ? (
                 <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
                   {greeting}, {firstName}
                 </p>
               ) : null}
-              <h1 className="max-w-3xl text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.65rem] xl:text-5xl">
+              <h1 className="max-w-4xl text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.45rem] xl:text-[2.85rem] 2xl:whitespace-nowrap">
                 {data.businessName}
               </h1>
               <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/75 underline-offset-4 hover:text-white hover:underline">
@@ -547,7 +547,7 @@ function WelcomeDashboard({
               </Link>
               <p className="mt-1 text-[11px] text-blue-200/45">{lastCloseText}</p>
 
-              <div className={`mt-4 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
+              <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
                 <span className="relative flex h-2 w-2">
                   <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusPill.dot}`} />
                   <span className={`relative inline-flex h-2 w-2 rounded-full ${statusPill.dot}`} />
@@ -562,7 +562,7 @@ function WelcomeDashboard({
                 key={label}
                 href={href}
                 aria-label={`${label}: ${value}`}
-                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4 lg:min-h-[8.25rem]"
+                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4 lg:min-h-[7.25rem] lg:px-4"
               >
                 <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
                 <span
@@ -583,16 +583,16 @@ function WelcomeDashboard({
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-7xl lg:px-0 lg:py-7">
+      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-7xl lg:px-0 lg:py-6">
         {isNewAccount ? <div className="mb-5">{previewCard}</div> : null}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_25rem]">
           <div>
             <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
 
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {primaryActions.map((action) => (
-                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:col-span-3 lg:min-h-[7.5rem] lg:flex-row lg:items-center lg:p-5" />
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:col-span-3 lg:min-h-[6.5rem] lg:flex-row lg:items-center lg:p-5" />
               ))}
               {attentionActions.map((action) => (
                 <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:hidden" />
@@ -601,14 +601,14 @@ function WelcomeDashboard({
 
             <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {secondaryActions.map((action) => (
-                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[8.5rem]" />
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[7.25rem] lg:p-4" />
               ))}
             </div>
           </div>
 
           <aside className="hidden lg:block">
             <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Today focus</p>
-            <div className="rounded-3xl border border-black/[0.06] bg-white p-4 shadow-sm">
+            <div className="rounded-3xl border border-black/[0.06] bg-white p-3 shadow-sm">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-sm font-bold text-ink">
                   {attentionActions.length > 0 ? 'Follow up before close' : 'Business is clear'}
@@ -626,7 +626,7 @@ function WelcomeDashboard({
                     key={`${action.href}-${action.label}`}
                     action={action}
                     compact
-                    className="lg:min-h-0 lg:flex-row lg:items-center lg:p-3"
+                    className="lg:min-h-0 lg:flex-row lg:items-center lg:p-3.5"
                   />
                 )) : (
                   <Link
@@ -646,7 +646,7 @@ function WelcomeDashboard({
           <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Admin</p>
           <div className="grid gap-2.5 sm:grid-cols-3">
             {adminActions.map((action) => (
-              <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[7.25rem]" />
+              <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[6.75rem] lg:p-4" />
             ))}
           </div>
         </div>
