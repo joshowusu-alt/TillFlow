@@ -105,7 +105,7 @@ export default function TopNav({
   return (
     <>
       <header
-        className="app-shell-header border-b border-slate-200/70 bg-white/88 backdrop-blur-2xl shadow-nav"
+        className="app-shell-header border-b border-slate-200/80 bg-white/96 backdrop-blur-2xl shadow-nav"
         role="banner"
         style={{ position: 'sticky', top: 0, zIndex: 30 }}
       >
