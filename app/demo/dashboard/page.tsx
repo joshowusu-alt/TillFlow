@@ -44,7 +44,7 @@ export default function DemoDashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink">{snapshot.businessName}</h1>
-          <p className="mt-0.5 text-sm text-muted">{periodLabel} · 14-day operating history</p>
+          <p className="mt-0.5 text-sm text-muted">{periodLabel} · 14-day sample trading history</p>
         </div>
         <a
           href="/register"
@@ -57,7 +57,7 @@ export default function DemoDashboardPage() {
       {/* Period KPI cards */}
       <div>
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">14-Day Performance</p>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Revenue"
             value={fmt(kpis.periodRevenuePence)}
@@ -88,7 +88,7 @@ export default function DemoDashboardPage() {
       {/* Today + balance cards */}
       <div>
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">Current Balances</p>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Cash on Hand"   value={fmt(kpis.cashPositionPence)}  tone="accent"   helper="Closing cash position" />
           <StatCard label="MoMo Collected" value={fmt(kpis.momoPositionPence)}  tone="success"  helper="Mobile money received" />
           <StatCard label="Debtor Balance" value={fmt(kpis.arBalancePence)}     tone={kpis.arBalancePence > 0 ? 'warn' : 'default'} helper="Outstanding customer credit" />
@@ -142,7 +142,7 @@ export default function DemoDashboardPage() {
                 <div key={row.label} className="space-y-1 text-xs">
                   <div className="flex justify-between">
                     <span className="font-medium">{row.label}</span>
-                    <span className="text-muted">{fmt(row.pence)} · {row.pct}%</span>
+                    <span className="whitespace-nowrap text-muted tabular-nums">{fmt(row.pence)} · {row.pct}%</span>
                   </div>
                   <MiniBar pct={row.pct} colour={row.colour} />
                 </div>
@@ -160,9 +160,9 @@ export default function DemoDashboardPage() {
                 { label: '− Expenses',     value: `(${fmt(totals.totalExpensesPence)})`, style: 'text-muted' },
                 { label: 'Net profit',     value: fmt(totals.netProfitPence),       style: 'font-bold text-ink border-t border-black/10 pt-1.5 mt-1.5' },
               ].map(r => (
-                <div key={r.label} className={`flex justify-between ${r.style}`}>
+                <div key={r.label} className={`flex justify-between gap-3 ${r.style}`}>
                   <span>{r.label}</span>
-                  <span className="tabular-nums">{r.value}</span>
+                  <span className="whitespace-nowrap tabular-nums">{r.value}</span>
                 </div>
               ))}
             </div>
@@ -225,15 +225,23 @@ export default function DemoDashboardPage() {
           <div>
             <h3 className="text-lg font-bold">This could be your business data.</h3>
             <p className="mt-1 text-sm text-white/80">
-              Get your own TillFlow with multi-branch support, WhatsApp alerts, offline mode, and real-time reports.
+              Start TillFlow and see your sales, stock, MoMo payments and reports clearly from day one.
             </p>
           </div>
-          <a
-            href="/register"
-            className="inline-flex min-h-11 items-center rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-accent hover:bg-blue-50 transition-colors shrink-0"
-          >
-            Start your real business →
-          </a>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <a
+              href="/register"
+              className="inline-flex min-h-11 items-center rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-accent transition-colors hover:bg-blue-50"
+            >
+              Start your 7-day trial
+            </a>
+            <a
+              href="/welcome"
+              className="inline-flex min-h-11 items-center rounded-xl border border-white/30 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              Learn more
+            </a>
+          </div>
         </div>
       </div>
     </div>

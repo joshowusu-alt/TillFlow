@@ -9,24 +9,23 @@ export default function DemoPosPage() {
   const snapshot = buildDemoLedger();
   const sym = getCurrencySymbol(snapshot.currency);
 
-  // Serialise Map to plain object for client component
   const balances: Record<string, DemoInventoryBalance> = {};
   for (const [id, bal] of snapshot.inventoryBalances) {
     balances[id] = bal;
   }
 
-  const totalSKUs  = snapshot.products.length;
-  const lowStockN  = snapshot.products.filter(p => {
+  const totalSKUs      = snapshot.products.length;
+  const lowStockN      = snapshot.products.filter(p => {
     const b = snapshot.inventoryBalances.get(p.id);
     return b ? b.endingQty <= p.reorderPoint : false;
   }).length;
-  const totalInvValue = snapshot.totals.endingInventoryValuePence;
-  const productMap = new Map(snapshot.products.map((product) => [product.id, product]));
-  const customerMap = new Map(snapshot.customers.map((customer) => [customer.id, customer]));
-  const latestSale = [...snapshot.salesInvoices].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
-  const latestSaleCustomer = latestSale?.customerId ? customerMap.get(latestSale.customerId) : null;
-  const latestSaleCogs = latestSale?.lines.reduce((sum, line) => sum + line.qty * line.costPricePence, 0) ?? 0;
-  const latestSaleMargin = latestSale ? latestSale.subtotalPence - latestSaleCogs : 0;
+  const totalInvValue  = snapshot.totals.endingInventoryValuePence;
+  const productMap     = new Map(snapshot.products.map((p) => [p.id, p]));
+  const customerMap    = new Map(snapshot.customers.map((c) => [c.id, c]));
+  const latestSale     = [...snapshot.salesInvoices].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+  const latestSaleCustomer  = latestSale?.customerId ? customerMap.get(latestSale.customerId) : null;
+  const latestSaleCogs      = latestSale?.lines.reduce((sum, line) => sum + line.qty * line.costPricePence, 0) ?? 0;
+  const latestSaleMargin    = latestSale ? latestSale.subtotalPence - latestSaleCogs : 0;
   const latestSaleLineCount = latestSale?.lines.reduce((sum, line) => sum + line.qty, 0) ?? 0;
 
   return (
@@ -36,11 +35,11 @@ export default function DemoPosPage() {
         <div>
           <h1 className="text-2xl font-bold text-ink">POS View</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Seeded checkout history plus the 100-SKU catalogue used for those sales
+            Try a sample sale and see how TillFlow tracks checkout, payment and stock
             {lowStockN > 0 && <span className="ml-2 font-medium text-amber-600">· {lowStockN} low stock</span>}
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="grid w-full grid-cols-3 gap-2 text-sm sm:w-auto sm:flex sm:gap-3">
           <div className="rounded-lg border bg-white px-3 py-2 text-center shadow-sm">
             <div className="text-xs text-muted">Total SKUs</div>
             <div className="font-bold text-ink">{totalSKUs}</div>
@@ -56,13 +55,51 @@ export default function DemoPosPage() {
         </div>
       </div>
 
+      {/* How a sale works */}
+      <div className="rounded-2xl border border-accent/10 bg-accentSoft/50 p-5">
+        <div className="mb-4 text-xs font-semibold uppercase tracking-widest text-accent/70">How a sale works in TillFlow</div>
+        <div className="grid gap-5 lg:grid-cols-[1fr_20rem] lg:items-start">
+          <div className="grid gap-4 sm:grid-cols-4">
+            {[
+              { step: '1', label: 'Search or scan', desc: 'Find a product by name or barcode' },
+              { step: '2', label: 'Add to cart', desc: 'Add Milo 400g or any sample item' },
+              { step: '3', label: 'Take payment', desc: 'Cash, MoMo or credit' },
+              { step: '4', label: 'Sale complete', desc: 'Receipt ready. Stock and reports update.' },
+            ].map((s) => (
+              <div key={s.step} className="flex gap-3 sm:flex-col sm:gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-white sm:h-8 sm:w-8">
+                  {s.step}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-ink">{s.label}</div>
+                  <div className="text-xs leading-relaxed text-muted">{s.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border border-white bg-white/85 p-4 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-widest text-muted">Try a sample sale</div>
+            <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-ink">Milo 400g × 2</div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-emerald-100 px-2 py-1.5 text-center text-emerald-800">Cash</span>
+              <span className="rounded-full bg-amber-100 px-2 py-1.5 text-center text-amber-800">MoMo</span>
+              <span className="rounded-full bg-blue-100 px-2 py-1.5 text-center text-blue-800">Credit</span>
+            </div>
+            <div className="mt-3 rounded-xl bg-accent px-3 py-2.5 text-center text-sm font-bold text-white">
+              Complete sale
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted">Stock reduces, receipt is ready, and the owner report updates.</p>
+          </div>
+        </div>
+      </div>
+
       {latestSale && (
         <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
           <div className="card overflow-hidden">
             <div className="border-b border-black/8 px-5 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-semibold text-ink">Latest seeded checkout</h2>
+                  <h2 className="text-sm font-semibold text-ink">Most recent sale</h2>
                   <p className="text-xs text-muted">
                     {latestSale.id} · {latestSale.date.toLocaleDateString('en-GH', { day: 'numeric', month: 'short', year: 'numeric' })}{' '}
                     {latestSale.date.toLocaleTimeString('en-GH', { hour: '2-digit', minute: '2-digit' })}
@@ -74,7 +111,25 @@ export default function DemoPosPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <div className="divide-y divide-black/5 sm:hidden">
+                {latestSale.lines.map((line) => {
+                  const product = productMap.get(line.productId);
+                  return (
+                    <div key={line.productId} className="px-5 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-ink">{product?.name ?? line.productId}</div>
+                          <div className="mt-0.5 text-xs text-muted">{product?.sku} · Qty {line.qty}</div>
+                        </div>
+                        <div className="whitespace-nowrap text-sm font-bold tabular-nums text-accent">
+                          {sym}{((line.qty * line.unitPricePence) / 100).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <table className="hidden w-full text-xs sm:table">
                 <thead>
                   <tr className="border-b border-black/5 text-left text-muted">
                     <th className="px-5 py-2.5 font-semibold">Item</th>
@@ -108,7 +163,7 @@ export default function DemoPosPage() {
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted">Customer</span>
-                <span className="font-medium text-ink">{latestSaleCustomer?.name ?? 'Walk-in Customer'}</span>
+                <span className="font-medium text-ink">{latestSaleCustomer?.name ?? 'Walk-in'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted">Items sold</span>
@@ -126,7 +181,7 @@ export default function DemoPosPage() {
               </div>
             </div>
             <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
-              This screen is read-only. Inventory, sales, debtors, payables, and reports are derived from the seeded two-week demo dataset.
+              This is a sample checkout from the 14-day sample business data. Explore inventory, sales and reports to see how TillFlow tracks everything.
             </p>
           </div>
         </div>
