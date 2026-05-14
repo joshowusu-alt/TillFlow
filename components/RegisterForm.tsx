@@ -67,7 +67,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
 
         {/* Social proof */}
         <div className="mt-3 text-xs text-black/35 font-medium">
-          Trusted by 500+ shops across Ghana, Nigeria &amp; Kenya
+          Built for product-based businesses in Ghana
         </div>
       </div>
 
