@@ -115,26 +115,26 @@ function NextStepCTA({ order }: {
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <form action={updateOnlineOrderStatusAction}>
+    <div className="flex flex-wrap gap-2 lg:justify-end">
+      <form action={updateOnlineOrderStatusAction} className="w-full sm:w-auto">
         <input type="hidden" name="orderId" value={order.id} />
         <input type="hidden" name="nextStatus" value={nextStatus} />
-        <button type="submit" className={variant === 'primary' ? 'btn-primary' : 'btn-secondary'}>
+        <button type="submit" className={`${variant === 'primary' ? 'btn-primary' : 'btn-secondary'} w-full justify-center sm:w-auto`}>
           {nextLabel}
         </button>
       </form>
       {canCancel ? (
-        <form action={updateOnlineOrderStatusAction}>
+        <form action={updateOnlineOrderStatusAction} className="w-full sm:w-auto">
           <input type="hidden" name="orderId" value={order.id} />
           <input type="hidden" name="nextStatus" value="CANCELLED" />
-          <button type="submit" className="btn-ghost text-rose-600 hover:bg-rose-50">
+          <button type="submit" className="btn-ghost w-full justify-center text-rose-600 hover:bg-rose-50 sm:w-auto">
             Cancel order
           </button>
         </form>
       ) : null}
       {order.status === 'AWAITING_PAYMENT' && order.paymentCollectionId ? (
-        <form action={recheckPaymentAction}>
-          <button type="submit" className="btn-ghost">
+        <form action={recheckPaymentAction} className="w-full sm:w-auto">
+          <button type="submit" className="btn-ghost w-full justify-center sm:w-auto">
             Re-check payment
           </button>
         </form>
@@ -224,36 +224,75 @@ export default async function OnlineOrdersPage({
   const processing = countFor('PROCESSING');
   const ready = countFor('READY_FOR_PICKUP');
   const totalActive = awaiting + paid + processing + ready;
+  const archived = countFor('COMPLETED') + countFor('CANCELLED');
+  const statusSummaries = [
+    {
+      label: 'Awaiting payment',
+      value: awaiting,
+      helper: awaiting > 0 ? 'Confirm MoMo or cash' : 'Clear',
+      activeClass: 'ring-1 ring-amber-200 bg-amber-50/70 text-amber-700',
+      valueClass: awaiting > 0 ? 'text-amber-600' : 'text-slate-300',
+    },
+    {
+      label: 'Payment confirmed',
+      value: paid,
+      helper: paid > 0 ? 'Start preparing' : 'Clear',
+      activeClass: 'ring-1 ring-blue-200 bg-blue-50/70 text-blue-700',
+      valueClass: paid > 0 ? 'text-blue-600' : 'text-slate-300',
+    },
+    {
+      label: 'Preparing',
+      value: processing,
+      helper: processing > 0 ? 'In progress' : 'Clear',
+      activeClass: 'ring-1 ring-indigo-200 bg-indigo-50/70 text-indigo-700',
+      valueClass: processing > 0 ? 'text-indigo-600' : 'text-slate-300',
+    },
+    {
+      label: 'Ready for pickup',
+      value: ready,
+      helper: ready > 0 ? 'Call customer' : 'Clear',
+      activeClass: 'ring-1 ring-emerald-200 bg-emerald-50/70 text-emerald-700',
+      valueClass: ready > 0 ? 'text-emerald-600' : 'text-slate-300',
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 lg:space-y-6">
       <PageHeader
+        eyebrow="Storefront"
         title="Online Orders"
         subtitle="Confirm payments, prepare orders, and track pickup progress."
+        actions={
+          <div className="grid w-full grid-cols-2 gap-2 text-left md:w-auto">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700/70">Active</div>
+              <div className="mt-0.5 text-lg font-display font-bold tabular-nums text-accent">{totalActive}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Archived</div>
+              <div className="mt-0.5 text-lg font-display font-bold tabular-nums text-ink">{archived}</div>
+            </div>
+          </div>
+        }
       />
 
       {/* Status summary cards */}
-      <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
-        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${awaiting > 0 ? 'ring-1 ring-amber-200 bg-amber-50/50' : ''}`}>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Awaiting payment</div>
-          <div className={`mt-1 text-2xl font-display font-bold ${awaiting > 0 ? 'text-amber-600' : 'text-black/20'}`}>{awaiting}</div>
-          {awaiting > 0 && <div className="mt-1 text-[10px] font-medium text-amber-700">Needs confirmation</div>}
-        </div>
-        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${paid > 0 ? 'ring-1 ring-blue-200 bg-blue-50/50' : ''}`}>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Payment confirmed</div>
-          <div className={`mt-1 text-2xl font-display font-bold ${paid > 0 ? 'text-blue-600' : 'text-black/20'}`}>{paid}</div>
-          {paid > 0 && <div className="mt-1 text-[10px] font-medium text-blue-700">Ready to prepare</div>}
-        </div>
-        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${processing > 0 ? 'ring-1 ring-indigo-200 bg-indigo-50/50' : ''}`}>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Preparing</div>
-          <div className={`mt-1 text-2xl font-display font-bold ${processing > 0 ? 'text-indigo-600' : 'text-black/20'}`}>{processing}</div>
-          {processing > 0 && <div className="mt-1 text-[10px] font-medium text-indigo-700">In progress</div>}
-        </div>
-        <div className={`rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ${ready > 0 ? 'ring-1 ring-emerald-200 bg-emerald-50/50' : ''}`}>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-black/40">Ready for pickup</div>
-          <div className={`mt-1 text-2xl font-display font-bold ${ready > 0 ? 'text-emerald-600' : 'text-black/20'}`}>{ready}</div>
-          {ready > 0 && <div className="mt-1 text-[10px] font-medium text-emerald-700">Awaiting customer</div>}
-        </div>
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {statusSummaries.map((item) => (
+          <div
+            key={item.label}
+            className={`rounded-2xl border border-black/5 bg-white px-3 py-3 shadow-sm transition sm:px-4 ${
+              item.value > 0 ? item.activeClass : ''
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/40">{item.label}</div>
+              {item.value > 0 ? <span className="mt-1 h-2 w-2 rounded-full bg-current" aria-hidden="true" /> : null}
+            </div>
+            <div className={`mt-1 text-2xl font-display font-bold tabular-nums ${item.valueClass}`}>{item.value}</div>
+            <div className={`mt-1 text-[10px] font-semibold ${item.value > 0 ? '' : 'text-slate-400'}`}>{item.helper}</div>
+          </div>
+        ))}
       </div>
 
       {/* Filter tabs */}
@@ -439,10 +478,10 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
   } as Record<string, string>)[order.status] ?? 'border-l-2 border-l-slate-200';
 
   return (
-    <div className={`overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm ${statusDone ? 'opacity-75' : ''}`}>
-      <div className={`flex flex-col gap-3 ${compact ? 'p-3.5' : 'p-4 sm:p-5'} lg:flex-row lg:items-start lg:justify-between ${statusBorderClass}`}>
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className={`overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:shadow-md ${statusDone ? 'opacity-80' : ''}`}>
+      <div className={`flex flex-col gap-3 ${compact ? 'p-3.5 lg:py-3' : 'p-4 sm:p-5'} lg:flex-row lg:items-start ${statusBorderClass}`}>
+        <div className="min-w-0 space-y-2 lg:flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className={`${compact ? 'text-sm' : 'text-base'} font-display font-bold text-ink`}>{order.orderNumber}</h2>
               <StatusBadge status={order.status} />
@@ -463,15 +502,17 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
                 </span>
               ) : null}
             </div>
-            <div className={`${compact ? 'text-base' : 'text-xl'} font-display font-bold text-ink`}>{formatMoney(order.totalPence, order.currency)}</div>
+            <div className={`${compact ? 'text-base' : 'text-xl'} font-display font-bold tabular-nums text-ink`}>{formatMoney(order.totalPence, order.currency)}</div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <div className="font-semibold text-sm text-ink">{order.customerName}</div>
-            <div className="text-xs text-black/45">{formatDateTime(order.createdAt)}</div>
-          </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(13rem,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="truncate font-semibold text-sm text-ink">{order.customerName}</div>
+                <div className="text-xs text-black/45">{formatDateTime(order.createdAt)}</div>
+              </div>
 
-          {order.customerPhone ? (
+              {order.customerPhone ? (
               <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
                 <span className="font-mono">{formatGhanaPhoneForDisplay(order.customerPhone) || order.customerPhone}</span>
                 <a
@@ -488,22 +529,26 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
                 >
                   WhatsApp
                 </a>
+              </div>
+              ) : null}
             </div>
-          ) : null}
 
-          <div className={`text-xs text-black/45 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
-            {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
+            <div className="min-w-0 space-y-1">
+              <div className={`text-xs text-black/50 leading-relaxed ${compact ? 'line-clamp-1' : 'line-clamp-2'}`}>
+                {order.lines.map((line) => `${line.qtyInUnit} × ${toTitleCase(line.productName)} (${toTitleCase(line.unitName)})`).join(' · ')}
+              </div>
+
+              {order.paymentCollection?.providerStatus ? (
+                <div className="text-xs text-black/40">
+                  Provider: {order.paymentCollection.providerStatus}
+                  {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
+                </div>
+              ) : null}
+              {order.paymentCollection?.failureReason ? (
+                <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
+              ) : null}
+            </div>
           </div>
-
-          {order.paymentCollection?.providerStatus ? (
-            <div className="text-xs text-black/40">
-              Provider: {order.paymentCollection.providerStatus}
-              {order.paymentCollection.providerReference ? ` · Ref ${order.paymentCollection.providerReference}` : ''}
-            </div>
-          ) : null}
-          {order.paymentCollection?.failureReason ? (
-            <div className="text-xs text-rose-600">{order.paymentCollection.failureReason}</div>
-          ) : null}
 
           {order.refundStatus === 'MANUAL_REFUND_NEEDED' ? (
             <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 space-y-2">
@@ -542,7 +587,7 @@ function OrderCard({ order, compact = false }: { order: OrderRow; compact?: bool
           ) : null}
         </div>
 
-        <div className="flex-shrink-0 lg:pl-4">
+        <div className="flex-shrink-0 lg:w-[13rem]">
           <NextStepCTA
             order={{
               id: order.id,
