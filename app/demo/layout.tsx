@@ -35,7 +35,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
       {/* Tab navigation — offsets below the banner */}
       <div
         className="sticky z-40 border-b border-black/8 bg-white shadow-sm"
-        style={{ top: 'calc(43px + max(14px, env(safe-area-inset-top, 0px)))' }}
+        style={{ top: 'calc(46px + max(14px, env(safe-area-inset-top, 0px)))' }}
       >
         <div className="mx-auto max-w-7xl">
           <DemoNavTabs />
