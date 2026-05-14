@@ -6,7 +6,7 @@ import SectionHeading from '@/components/section-heading';
 import { PlanPill, StatePill } from '@/components/status-pill';
 import SlaFlags from '@/components/sla-flags';
 import BulkRosterClient from '@/components/bulk-roster-client';
-import { listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
+import { canManageSubscriptions, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinessesPage } from '@/lib/control-service';
 import { formatCedi } from '@/lib/control-metrics';
 import { getSlaFlags } from '@/lib/sla';
@@ -71,7 +71,7 @@ export default async function BusinessesPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
 }) {
-  await requireControlStaff();
+  const staff = await requireControlStaff();
   const resolvedSearchParams = (
     searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
       ? await searchParams
@@ -94,6 +94,8 @@ export default async function BusinessesPage({
   const hasPreviousPage = roster.page > 1;
   const hasNextPage = roster.page < roster.totalPages;
   const clearSearchHref = buildBusinessesHref({ filter, search: '', pageSize: roster.pageSize });
+  const canEditSubscription = canManageSubscriptions(staff.role);
+  const canBulkReview = canWriteNotes(staff.role);
   const atRiskOnPage = pageBusinesses.filter((business) => ['GRACE', 'GRACE_PERIOD', 'OVERDUE', 'SUSPENDED', 'STARTER_FALLBACK', 'READ_ONLY'].includes(business.state)).length;
   const headerStats = [
     {
@@ -148,8 +150,8 @@ export default async function BusinessesPage({
         description="Keep the roster fast, make billing edits without scroll fatigue, and keep every business tied to a clear owner, plan, and next action."
         chips={[
           { label: 'Roster control', href: '#roster-tools' },
-          { label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' },
-          ...(filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
+          ...(canEditSubscription ? [{ label: 'Quick billing setup', href: '#billing-setup', tone: 'dark' as const }] : []),
+          ...(canBulkReview && filter === 'unreviewed' && pageBusinesses.length > 0 ? [{ label: 'Bulk review', href: '#bulk-review' }] : []),
           { label: 'Roster', href: '#business-roster' },
         ]}
         stats={headerStats}
@@ -227,7 +229,7 @@ export default async function BusinessesPage({
           description="Select a business on the current page, adjust the commercial plan, and save billing dates without opening the full record."
         />
 
-        {pageBusinesses.length > 0 ? (
+        {canEditSubscription && pageBusinesses.length > 0 ? (
           <form action={updateControlSubscriptionAction} className="mt-5 grid gap-4 sm:grid-cols-2">
             <input type="hidden" name="returnPath" value={buildBusinessesHref({ filter, search, page: roster.page, pageSize: roster.pageSize })} />
 
@@ -272,6 +274,10 @@ export default async function BusinessesPage({
               Save billing setup
             </button>
           </form>
+        ) : !canEditSubscription ? (
+          <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/60">
+            Your role can review the roster, but only Control admins and account managers can change billing setup from this page.
+          </div>
         ) : (
           <div className="mt-5 rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/60">
             Narrow the roster with search or switch pages before saving billing setup. There are no businesses in the current view yet.
@@ -297,14 +303,16 @@ export default async function BusinessesPage({
             <div key={business.id} className="mobile-card">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    name="selectedId"
-                    value={business.id}
-                    data-roster-id="businesses"
-                    aria-label={`Select ${business.name}`}
-                    className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-[#122126]"
-                  />
+                  {canBulkReview ? (
+                    <input
+                      type="checkbox"
+                      name="selectedId"
+                      value={business.id}
+                      data-roster-id="businesses"
+                      aria-label={`Select ${business.name}`}
+                      className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-[#122126]"
+                    />
+                  ) : null}
                   <div className="min-w-0">
                     <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
                       {business.name}
@@ -373,14 +381,16 @@ export default async function BusinessesPage({
               {pageBusinesses.map((business) => (
                 <tr key={business.id}>
                   <td>
-                    <input
-                      type="checkbox"
-                      name="selectedId"
-                      value={business.id}
-                      data-roster-id="businesses"
-                      aria-label={`Select ${business.name}`}
-                      className="h-4 w-4 rounded border-black/20 accent-[#122126]"
-                    />
+                    {canBulkReview ? (
+                      <input
+                        type="checkbox"
+                        name="selectedId"
+                        value={business.id}
+                        data-roster-id="businesses"
+                        aria-label={`Select ${business.name}`}
+                        className="h-4 w-4 rounded border-black/20 accent-[#122126]"
+                      />
+                    ) : null}
                   </td>
                   <td>
                     <Link href={`/businesses/${business.id}`} className="font-semibold text-control-ink underline-offset-4 hover:underline">
