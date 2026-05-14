@@ -243,7 +243,46 @@ export default function LoginClient({ slug, storefrontName, branding, redirectTo
                   maxLength={6}
                   required
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+                  onChange={(event) => {
+                    const next = event.target.value.replace(/\D/g, '');
+                    setCode(next);
+                    if (next.length === 6 && !submitting) {
+                      // Auto-submit as soon as all 6 digits are entered.
+                      void (async () => {
+                        setSubmitting(true);
+                        setError(null);
+                        try {
+                          const response = await fetch('/api/storefront/account/verify-otp', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              slug,
+                              phone,
+                              code: next,
+                              name: name || undefined,
+                              email: email || undefined,
+                            }),
+                          });
+                          const payload = await response.json();
+                          if (!response.ok) {
+                            const friendlyCodeError =
+                              typeof payload.error === 'string' &&
+                              (payload.error.toLowerCase().includes("didn't match") || payload.error.toLowerCase().includes('wrong'))
+                                ? "That code didn't match. Check your messages and try again."
+                                : payload.error;
+                            setError(friendlyCodeError ?? 'Could not verify code.');
+                            return;
+                          }
+                          router.replace(redirectTo);
+                          router.refresh();
+                        } catch {
+                          setError('Network error. Check your connection and try again.');
+                        } finally {
+                          setSubmitting(false);
+                        }
+                      })();
+                    }
+                  }}
                   placeholder="123456"
                   className="mt-1 block h-16 w-full rounded-2xl border border-slate-200 bg-white px-3 text-center font-mono text-2xl tracking-[0.35em] text-slate-900 placeholder:text-slate-300 focus:border-slate-400 focus:outline-none"
                 />
