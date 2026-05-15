@@ -298,7 +298,7 @@ function ProductDetailSheet({
     >
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl">
-        <div className="relative h-52 w-full overflow-hidden bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] sm:h-64">
+        <div className="relative h-52 w-full overflow-hidden bg-gradient-to-b from-white to-slate-50 sm:h-64">
           <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority />
           {hasPromo && inStock ? (
             <div
@@ -1227,7 +1227,7 @@ export default function StorefrontClient({
       ) : null}
 
       {/* ── MAIN CONTENT ───────────────────────────────────── */}
-      <div className="mx-auto max-w-screen-lg px-4 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-12">
+      <div className={`mx-auto max-w-screen-lg px-4 sm:px-6 lg:pb-12 ${cartItemCount > 0 && mobileStep === 'browse' ? 'pb-[calc(9.5rem+env(safe-area-inset-bottom))]' : 'pb-[calc(3.5rem+env(safe-area-inset-bottom))]'}`}>
         <div className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-8 lg:pt-8">
 
           {/* ── LEFT: search + chips + product grid ──────── */}
@@ -1316,8 +1316,12 @@ export default function StorefrontClient({
               <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-black/45">
                 <span>
                 {filteredProducts.length === 0
-                  ? (selectedCategory ? `No products found in ${toTitleCase(selectedCategory.name)}` : 'No products found right now')
-                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'} found${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}`
+                  ? searchQuery.trim()
+                    ? `No results for "${searchQuery.trim()}"`
+                    : selectedCategory
+                      ? `No products in ${toTitleCase(selectedCategory.name)} right now`
+                      : 'No products right now'
+                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'product' : 'products'}${selectedCategory ? ` in ${toTitleCase(selectedCategory.name)}` : ''}${searchQuery.trim() ? ` · "${searchQuery.trim()}"` : ''}`
                 }
                 </span>
                 {cartItemCount > 0 ? (
@@ -1496,13 +1500,13 @@ export default function StorefrontClient({
                       <article
                         key={product.id}
                         id={`product-${product.id}`}
-                        className={`group flex min-h-[21.75rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white ring-1 ring-white ${
-                          inStock ? 'shadow-[0_14px_34px_rgba(15,23,42,0.07)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_42px_rgba(15,23,42,0.11)] hover:border-blue-100' : 'opacity-70 shadow-none'
+                        className={`group flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border bg-white ${
+                          inStock ? 'border-slate-200/60 shadow-[0_2px_12px_rgba(15,23,42,0.06),0_1px_3px_rgba(15,23,42,0.04)] transition hover:-translate-y-px hover:border-blue-100/80 hover:shadow-[0_8px_28px_rgba(15,23,42,0.10)]' : 'border-slate-200/40 opacity-60'
                         }`}
                       >
                         <button
                           type="button"
-                          className="relative m-2 mb-0 h-28 overflow-hidden rounded-xl border border-slate-200/70 bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] text-left shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),inset_0_8px_20px_rgba(15,23,42,0.035)] sm:h-32 lg:h-36"
+                          className="relative m-2 mb-0 h-32 overflow-hidden rounded-xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/80 text-left lg:h-36"
                           onClick={() => { rememberViewedProduct(product.id); trackEvent('product_view', product.id); setDetailProduct(product); }}
                           aria-label={`View details for ${displayName}`}
                         >
@@ -1533,13 +1537,13 @@ export default function StorefrontClient({
                         </button>
 
                   {/* Card body */}
-                  <div className="flex flex-1 flex-col p-2.5 sm:p-3">
+                  <div className="flex flex-1 flex-col p-3">
                     {displayCategory && (
-                      <div className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/35 sm:text-[9px]">
+                      <div className="text-[9px] font-bold uppercase tracking-[0.14em] text-black/35">
                         {displayCategory}
                       </div>
                     )}
-                    <h2 className="mt-0.5 line-clamp-2 min-h-[2.15rem] text-[13px] font-bold leading-snug text-ink sm:text-sm">
+                    <h2 className="mt-0.5 line-clamp-2 min-h-[2.25rem] text-[13px] font-bold leading-snug text-ink sm:text-sm">
                       {displayName}
                     </h2>
 
@@ -1667,12 +1671,11 @@ export default function StorefrontClient({
                           </div>
                           <button
                             type="button"
-                            className="flex h-[42px] w-full items-center justify-center rounded-xl bg-[linear-gradient(175deg,var(--store-primary),#082f6e)] text-sm font-black text-white shadow-[0_10px_22px_rgba(8,47,110,0.28),0_2px_6px_rgba(8,47,110,0.14)] transition hover:brightness-105 active:translate-y-px active:scale-[0.99]"
+                            className="flex h-11 w-full items-center justify-center rounded-xl bg-[linear-gradient(170deg,var(--store-primary),#0a3580)] text-sm font-black text-white shadow-[0_4px_14px_rgba(8,47,110,0.22)] transition hover:brightness-110 active:translate-y-px active:scale-[0.99]"
                             onClick={() => addToCart(product.id)}
                             aria-label={`Add ${displayName} to cart`}
                           >
-                            <span className="sm:hidden">Add</span>
-                            <span className="hidden sm:inline">Add to cart</span>
+                            Add to cart
                           </button>
                         </div>
                       ) : null}
@@ -1776,17 +1779,17 @@ export default function StorefrontClient({
               </>
             )}
 
-            <footer className="mt-10 flex flex-col items-center gap-3 border-t border-black/5 pb-4 pt-6 text-center">
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-black/35">
+            <footer className="mt-6 flex flex-col items-center gap-2 border-t border-black/5 pb-3 pt-5 text-center">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] font-medium text-black/45">
                 <span>Secure checkout</span>
-                <span className="text-black/15" aria-hidden="true">·</span>
+                <span className="text-black/20" aria-hidden="true">·</span>
                 <span>Pickup only</span>
-                <span className="text-black/15" aria-hidden="true">·</span>
+                <span className="text-black/20" aria-hidden="true">·</span>
                 <span>GH₵ pricing</span>
               </div>
               <div className="flex flex-col items-center gap-0.5">
-                <p className="text-[11px] font-semibold text-black/28">Powered by TillFlow</p>
-                <p className="text-[10px] text-black/20">Secure pickup ordering for local businesses.</p>
+                <p className="text-[11px] font-semibold text-black/38">Powered by TillFlow</p>
+                <p className="text-[11px] text-black/28">Secure pickup ordering for local businesses.</p>
               </div>
             </footer>
           </section>
