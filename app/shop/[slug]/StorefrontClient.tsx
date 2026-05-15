@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -250,6 +251,171 @@ function sortRecommendationProducts(a: RecommendationProductLike, b: Recommendat
 
 const PRODUCTS_PER_PAGE = 24;
 
+function ProductDetailSheet({
+  product,
+  storefront,
+  onClose,
+  onAddToCart,
+  selectionState,
+  setSelectionState,
+  cartProductIds,
+  cartQtyByProductId,
+  adjustCartProduct,
+  primaryStyle,
+}: {
+  product: StorefrontProduct;
+  storefront: PublicStorefront;
+  onClose: () => void;
+  onAddToCart: (productId: string) => void;
+  selectionState: ProductSelectionState;
+  setSelectionState: React.Dispatch<React.SetStateAction<ProductSelectionState>>;
+  cartProductIds: Set<string>;
+  cartQtyByProductId: Record<string, number>;
+  adjustCartProduct: (productId: string, delta: number) => void;
+  primaryStyle: React.CSSProperties;
+}) {
+  const selected = selectionState[product.id];
+  const selectedUnit = selected ? getUnitFromProduct(product, selected.unitId) : undefined;
+  const unitPrice = selectedUnit
+    ? formatMoney(
+        selectedUnit.sellingPricePence ?? product.sellingPriceBasePence * selectedUnit.conversionToBase,
+        storefront.currency,
+      )
+    : formatMoney(product.sellingPriceBasePence, storefront.currency);
+  const inStock = product.onHandBase > 0;
+  const hasPromo = product.promoBuyQty > 0 && product.promoGetQty > 0;
+  const productInCart = cartProductIds.has(product.id);
+  const productCartQty = cartQtyByProductId[product.id] ?? 0;
+  const displayName = toTitleCase(product.name);
+  const displayCategory = product.publicCategoryName ? toTitleCase(product.publicCategoryName) : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={displayName}
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl">
+        <div className="relative h-52 w-full overflow-hidden bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] sm:h-64">
+          <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority />
+          {hasPromo && inStock ? (
+            <div
+              className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm"
+              style={primaryStyle}
+            >
+              Buy {product.promoBuyQty} get {product.promoGetQty} free
+            </div>
+          ) : null}
+          {!inStock ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-[1px]">
+              <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm">Sold out</span>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-black/50 shadow-sm transition hover:bg-white hover:text-ink"
+            aria-label="Close"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto p-4 pb-[env(safe-area-inset-bottom)]">
+          {displayCategory ? (
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">{displayCategory}</div>
+          ) : null}
+          <h2 className="mt-1 text-xl font-black text-ink">{displayName}</h2>
+          <div className="mt-1.5 text-2xl font-black text-ink">{unitPrice}</div>
+          {inStock ? (
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Available for pickup
+            </div>
+          ) : (
+            <div className="mt-1 text-xs font-semibold text-slate-400">Currently sold out</div>
+          )}
+
+          {product.storefrontDescription ? (
+            <p className="mt-3 text-sm leading-relaxed text-black/65">{product.storefrontDescription}</p>
+          ) : null}
+
+          {product.units.length > 1 ? (
+            <div className="mt-4">
+              <div className="mb-1.5 text-xs font-semibold text-black/50">Select unit</div>
+              <div className="flex flex-wrap gap-2">
+                {product.units.map((unit) => {
+                  const isSelected = selected?.unitId === unit.id;
+                  return (
+                    <button
+                      key={unit.id}
+                      type="button"
+                      disabled={!inStock}
+                      onClick={() =>
+                        setSelectionState((prev) => ({
+                          ...prev,
+                          [product.id]: { ...(prev[product.id] ?? { qtyInUnit: 1 }), unitId: unit.id },
+                        }))
+                      }
+                      className={`rounded-xl border px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${
+                        isSelected
+                          ? 'border-transparent text-white shadow-sm'
+                          : 'border-slate-200 bg-slate-50 text-black/60 hover:border-slate-300'
+                      }`}
+                      style={isSelected ? { backgroundColor: 'var(--store-primary)', color: 'var(--store-primary-foreground)' } : undefined}
+                    >
+                      {toTitleCase(unit.name)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-5">
+            {inStock && !productInCart ? (
+              <button
+                type="button"
+                className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-black text-white shadow-sm transition hover:brightness-105 active:scale-[0.99]"
+                style={primaryStyle}
+                onClick={() => { onAddToCart(product.id); onClose(); }}
+              >
+                Add to cart
+              </button>
+            ) : inStock && productInCart ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-2">
+                <div className="px-1 pb-1.5 text-center text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">In cart</div>
+                <div className="flex h-11 items-center overflow-hidden rounded-xl bg-white shadow-sm">
+                  <button
+                    type="button"
+                    className="flex h-11 w-12 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50"
+                    onClick={() => adjustCartProduct(product.id, -1)}
+                  >
+                    −
+                  </button>
+                  <span className="flex-1 text-center text-sm font-black text-ink">{productCartQty}</span>
+                  <button
+                    type="button"
+                    disabled={productCartQty >= MAX_CART_QTY}
+                    className="flex h-11 w-12 items-center justify-center text-base font-bold text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-30"
+                    onClick={() => adjustCartProduct(product.id, 1)}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export type StorefrontCustomerProp = {
   id: string;
   name: string | null;
@@ -310,7 +476,10 @@ export default function StorefrontClient({
   const [isMounted, setIsMounted] = useState(false);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [storefrontSessionId, setStorefrontSessionId] = useState('');
+  const [detailProduct, setDetailProduct] = useState<StorefrontProduct | null>(null);
+  const [qtyEditingProductId, setQtyEditingProductId] = useState<string | null>(null);
   const catalogAbortRef = useRef<AbortController | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   function trackEvent(eventType: 'view' | 'product_view' | 'add_to_cart' | 'checkout_start', productId?: string | null, metadata?: Record<string, unknown>) {
     if (!storefrontSessionId) return;
@@ -528,6 +697,23 @@ export default function StorefrontClient({
       setCatalogLoading(false);
     }
   }
+
+  const loadMoreFnRef = useRef(loadMoreProducts);
+  loadMoreFnRef.current = loadMoreProducts;
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMoreProducts) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) void loadMoreFnRef.current();
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMoreProducts]);
 
   function rememberViewedProduct(productId: string) {
     setRecentlyViewed((prev) => {
@@ -906,9 +1092,6 @@ export default function StorefrontClient({
           <div className="flex items-start gap-3 sm:gap-4">
             <MerchantBrandBadge branding={storefrontBranding} surface="storefront-hero" />
             <div className="min-w-0 flex-1">
-              <div className="mb-1 inline-flex items-center rounded-full border border-white/15 bg-white/[0.12] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] shadow-sm backdrop-blur sm:text-[10px]" style={{ color: 'var(--brand-primary-foreground)', opacity: 0.88 }}>
-                TillFlow Online Store
-              </div>
               <h1 className={`line-clamp-2 max-w-[15rem] overflow-hidden break-normal font-display font-black leading-[1.08] sm:max-w-xl ${storefrontTitleSizeClass}`} style={{ color: 'var(--brand-primary-foreground)', overflowWrap: 'normal', wordBreak: 'normal', hyphens: 'none' }}>
                 {storefrontTitle}
               </h1>
@@ -1314,8 +1497,8 @@ export default function StorefrontClient({
                         <button
                           type="button"
                           className="relative m-2 mb-0 h-28 overflow-hidden rounded-xl border border-slate-200/70 bg-[linear-gradient(135deg,#f8fbff,#f0f5fc)] text-left shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7),inset_0_8px_20px_rgba(15,23,42,0.035)] sm:h-32 lg:h-36"
-                          onClick={() => rememberViewedProduct(product.id)}
-                          aria-label={`View ${displayName}`}
+                          onClick={() => { rememberViewedProduct(product.id); trackEvent('product_view', product.id); setDetailProduct(product); }}
+                          aria-label={`View details for ${displayName}`}
                         >
                           <ProductImage src={product.imageUrl} fallbackSrc={product.categoryImageUrl} alt={displayName} inStock={inStock} categoryName={displayCategory} priority={index < 6} />
                           {hasPromo && inStock ? (
@@ -1370,26 +1553,35 @@ export default function StorefrontClient({
                       </div>
 
                       {product.units.length > 1 ? (
-                        <select
-                          className="mt-2 h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-xs font-semibold text-black/65 focus:outline-none focus:ring-2 focus:ring-accent/20"
-                          value={selected?.unitId ?? ''}
-                          disabled={!inStock || productInCart}
-                          onChange={(event) =>
-                            setSelectionState((prev) => ({
-                              ...prev,
-                              [product.id]: {
-                                ...(prev[product.id] ?? { qtyInUnit: 1 }),
-                                unitId: event.target.value,
-                              },
-                            }))
-                          }
-                        >
-                          {product.units.map((unit) => (
-                            <option key={unit.id} value={unit.id}>
-                              {toTitleCase(unit.name)}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {product.units.map((unit) => {
+                            const isSelectedUnit = selected?.unitId === unit.id;
+                            return (
+                              <button
+                                key={unit.id}
+                                type="button"
+                                disabled={!inStock || productInCart}
+                                onClick={() =>
+                                  setSelectionState((prev) => ({
+                                    ...prev,
+                                    [product.id]: {
+                                      ...(prev[product.id] ?? { qtyInUnit: 1 }),
+                                      unitId: unit.id,
+                                    },
+                                  }))
+                                }
+                                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  isSelectedUnit
+                                    ? 'border-transparent text-white shadow-sm'
+                                    : 'border-slate-200 bg-slate-50 text-black/55 hover:border-slate-300 hover:bg-white'
+                                }`}
+                                style={isSelectedUnit ? { backgroundColor: 'var(--store-primary)', color: 'var(--store-primary-foreground)' } : undefined}
+                              >
+                                {toTitleCase(unit.name)}
+                              </button>
+                            );
+                          })}
+                        </div>
                       ) : product.units[0] ? (
                         <div className="mt-1 text-[10px] font-semibold text-black/35">{toTitleCase(product.units[0].name)}</div>
                       ) : null}
@@ -1414,9 +1606,41 @@ export default function StorefrontClient({
                             >
                               −
                             </button>
-                            <span className="min-w-0 flex-1 text-center text-sm font-black text-ink">
-                              {selected?.qtyInUnit ?? 1}
-                            </span>
+                            {qtyEditingProductId === product.id ? (
+                              <input
+                                type="number"
+                                className="min-w-0 flex-1 bg-transparent text-center text-sm font-black text-ink focus:outline-none"
+                                value={selected?.qtyInUnit ?? 1}
+                                min={1}
+                                max={MAX_CART_QTY}
+                                // eslint-disable-next-line jsx-a11y/no-autofocus
+                                autoFocus
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  if (!isNaN(val) && val >= 1 && val <= MAX_CART_QTY) {
+                                    setSelectionState((prev) => ({
+                                      ...prev,
+                                      [product.id]: {
+                                        ...(prev[product.id] ?? { unitId: product.units[0]?.id ?? '' }),
+                                        qtyInUnit: val,
+                                      },
+                                    }));
+                                  }
+                                }}
+                                onBlur={() => setQtyEditingProductId(null)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') setQtyEditingProductId(null); }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="min-w-0 flex-1 text-center text-sm font-black text-ink"
+                                aria-label="Tap to edit quantity"
+                                title="Tap to type a quantity"
+                                onClick={() => setQtyEditingProductId(product.id)}
+                              >
+                                {selected?.qtyInUnit ?? 1}
+                              </button>
+                            )}
                             <button
                               type="button"
                               aria-label={`Increase quantity of ${displayName}`}
@@ -1483,15 +1707,13 @@ export default function StorefrontClient({
                 </div>
 
                 {hasMoreProducts && (
-                  <div className="mt-6 flex flex-col items-center gap-2">
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-black/10 bg-white px-6 py-3 text-sm font-semibold text-ink shadow-sm transition hover:border-black/20 hover:shadow-md active:scale-[0.98]"
-                      onClick={loadMoreProducts}
-                      disabled={catalogLoading}
-                    >
-                      {catalogLoading ? 'Loading products...' : 'Load more products'}
-                    </button>
+                  <div ref={loadMoreSentinelRef} className="mt-6 flex flex-col items-center gap-2 py-2">
+                    {catalogLoading ? (
+                      <div className="flex items-center gap-2 text-sm text-black/40">
+                        <SpinnerIcon className="h-4 w-4 animate-spin" />
+                        Loading more…
+                      </div>
+                    ) : null}
                     <span className="text-[11px] text-black/35">
                       Showing {catalogProducts.length} of {catalogTotal}
                     </span>
@@ -1550,7 +1772,7 @@ export default function StorefrontClient({
 
             <footer className="mt-10 flex flex-col items-center gap-3 border-t border-black/5 pb-4 pt-6 text-center">
               <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-black/35">
-                <span>Secure MoMo checkout</span>
+                <span>Secure checkout</span>
                 <span className="text-black/15" aria-hidden="true">·</span>
                 <span>Pickup only</span>
                 <span className="text-black/15" aria-hidden="true">·</span>
@@ -1721,7 +1943,11 @@ export default function StorefrontClient({
                   <input id="checkout-name-desktop" name="name" className="input mt-1.5" placeholder="e.g. Ama Mensah" value={customerName} onChange={(e) => setCustomerName(e.target.value)} autoComplete="name" required />
                 </div>
                 <div>
-                  <label htmlFor="checkout-phone-desktop" className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
+                  <label htmlFor="checkout-phone-desktop" className="block text-xs font-semibold text-black/60">
+                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
+                      ? 'Mobile number (MoMo / WhatsApp)'
+                      : 'Contact number'}
+                  </label>
                   <input
                     id="checkout-phone-desktop"
                     name="phone"
@@ -1735,7 +1961,11 @@ export default function StorefrontClient({
                     required
                     aria-describedby="checkout-phone-desktop-hint"
                   />
-                  <p id="checkout-phone-desktop-hint" className="mt-1 text-[11px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
+                  <p id="checkout-phone-desktop-hint" className="mt-1 text-[11px] text-black/45">
+                    {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
+                      ? 'Use the Ghana number you receive MoMo or WhatsApp updates on.'
+                      : 'Your Ghana phone number for order updates.'}
+                  </p>
                 </div>
                 {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
                   <div>
@@ -1838,28 +2068,48 @@ export default function StorefrontClient({
           ) : (
             <div className={`space-y-2.5 ${!paymentReady ? 'mt-4' : ''}`}>
               {cartDetails.map((line) => (
-                <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                <div key={line.id} className="rounded-2xl border border-black/5 bg-slate-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100">
                       <ProductImage src={line.product.imageUrl} fallbackSrc={line.product.categoryImageUrl} alt={toTitleCase(line.product.name)} inStock categoryName={line.product.publicCategoryName ?? line.product.categoryName} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-ink">{toTitleCase(line.product.name)}</div>
-                      <div className="mt-0.5 text-xs text-black/50">{line.qtyInUnit} × {toTitleCase(line.unit.name)}</div>
+                      <div className="truncate text-sm font-medium text-ink">{toTitleCase(line.product.name)}</div>
+                      <div className="text-xs text-black/45">{toTitleCase(line.unit.name)}</div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
+                      <div className="text-sm font-semibold text-ink">{formatMoney(line.total, storefront.currency)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex h-9 items-center overflow-hidden rounded-lg border border-black/10 bg-white">
                       <button
                         type="button"
-                        aria-label="Remove item"
-                        className="flex h-8 w-8 items-center justify-center rounded-full text-black/30 transition hover:bg-rose-50 hover:text-rose-600 active:bg-rose-100"
-                        onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
+                        aria-label={`Remove one ${toTitleCase(line.product.name)} from cart`}
+                        className="flex h-9 w-9 items-center justify-center text-sm font-bold text-black/50 transition hover:bg-slate-50 hover:text-rose-600"
+                        onClick={() => adjustCartProduct(line.productId, -1)}
                       >
-                        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                        </svg>
+                        −
+                      </button>
+                      <span className="min-w-[2rem] text-center text-sm font-black text-ink">{line.qtyInUnit}</span>
+                      <button
+                        type="button"
+                        aria-label={`Add one more ${toTitleCase(line.product.name)} to cart`}
+                        className="flex h-9 w-9 items-center justify-center text-sm font-bold text-black/50 transition hover:bg-slate-50 hover:text-accent disabled:opacity-30"
+                        disabled={line.qtyInUnit >= MAX_CART_QTY}
+                        onClick={() => adjustCartProduct(line.productId, 1)}
+                      >
+                        +
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${toTitleCase(line.product.name)} from cart`}
+                      className="text-[11px] font-medium text-black/35 transition hover:text-rose-600"
+                      onClick={() => setCart((prev) => prev.filter((c) => c.id !== line.id))}
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               ))}
@@ -2021,7 +2271,11 @@ export default function StorefrontClient({
               <input id="checkout-name-mobile" name="name" className="input mt-1" placeholder="Full name" autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required />
             </div>
             <div>
-              <label htmlFor="checkout-phone-mobile" className="block text-xs font-semibold text-black/60">Mobile number (MoMo / WhatsApp)</label>
+              <label htmlFor="checkout-phone-mobile" className="block text-xs font-semibold text-black/60">
+                {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
+                  ? 'Mobile number (MoMo / WhatsApp)'
+                  : 'Contact number'}
+              </label>
               <input
                 id="checkout-phone-mobile"
                 name="phone"
@@ -2035,7 +2289,11 @@ export default function StorefrontClient({
                 required
                 aria-describedby="checkout-phone-mobile-hint"
               />
-              <p id="checkout-phone-mobile-hint" className="mt-1 text-[10px] text-black/45">Use the Ghana number you receive MoMo or WhatsApp updates on.</p>
+              <p id="checkout-phone-mobile-hint" className="mt-1 text-[10px] text-black/45">
+                {storefront.paymentConfig.mode === 'MOMO_NUMBER' || storefront.paymentConfig.mode === 'MERCHANT_SHORTCODE'
+                  ? 'Use the Ghana number you receive MoMo or WhatsApp updates on.'
+                  : 'Your Ghana phone number for order updates.'}
+              </p>
             </div>
             {storefront.paymentConfig.mode === 'MOMO_NUMBER' ? (
               <div>
@@ -2088,6 +2346,22 @@ export default function StorefrontClient({
           </div>
         </div>
       </div>
+
+      {/* ── PRODUCT DETAIL SHEET ───────────────────────────── */}
+      {detailProduct ? (
+        <ProductDetailSheet
+          product={detailProduct}
+          storefront={storefront}
+          onClose={() => setDetailProduct(null)}
+          onAddToCart={addToCart}
+          selectionState={selectionState}
+          setSelectionState={setSelectionState}
+          cartProductIds={cartProductIds}
+          cartQtyByProductId={cartQtyByProductId}
+          adjustCartProduct={adjustCartProduct}
+          primaryStyle={primaryStyle}
+        />
+      ) : null}
 
       {/* ── SHARE TOAST ────────────────────────────────────── */}
       {shareToast ? (
