@@ -87,7 +87,7 @@ export default function BulkRosterClient({ rosterId, totalOnPage, children, bulk
           visible ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
-        <div className="pointer-events-auto mx-auto max-w-[1200px] rounded-[20px] border border-black/10 bg-[#122126] px-3 py-3 text-white shadow-2xl sm:px-4 sm:py-3.5">
+        <div className="pointer-events-auto mx-auto max-w-[1200px] rounded-[20px] border border-black/10 bg-control-dark px-3 py-3 text-white shadow-2xl sm:px-4 sm:py-3.5">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-white/12 px-2 text-xs font-bold tabular-nums">

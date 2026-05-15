@@ -14,9 +14,9 @@ export default async function RevenuePage() {
   const revenueByPlan = getRevenueByPlanFor(businesses);
   const buckets = getAgingBucketsFor(businesses);
   const agingCards = [
-    { key: 'current', ...buckets.current, tone: 'border-[#1f8a82]/18 bg-[#1f8a82]/6' },
-    { key: 'approaching', ...buckets.approaching, tone: 'border-[#e2a83d]/20 bg-[#e2a83d]/8' },
-    { key: 'overdue', ...buckets.overdue, tone: 'border-[#b35c2e]/20 bg-[#b35c2e]/8' },
+    { key: 'current', ...buckets.current, tone: 'border-control-teal/18 bg-control-teal/6' },
+    { key: 'approaching', ...buckets.approaching, tone: 'border-control-gold/20 bg-control-gold/8' },
+    { key: 'overdue', ...buckets.overdue, tone: 'border-control-ember/20 bg-control-ember/8' },
     { key: 'locked', ...buckets.locked, tone: 'border-black/10 bg-black/[0.03]' },
   ];
   const riskCards = [
@@ -98,6 +98,8 @@ export default async function RevenuePage() {
         )}
       />
 
+      <MrrStackedBar buckets={buckets} />
+
       <section id="aging-buckets" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {agingCards.map((card) => (
           <Link key={card.key} href={card.href} className={`rounded-[20px] border px-4 py-3 transition hover:-translate-y-[1px] hover:shadow-md ${card.tone}`}>
@@ -159,5 +161,64 @@ function PlanLabel({ plan }: { plan: string }) {
     <span className="inline-flex rounded-full border border-black/8 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-control-ink">
       {plan}
     </span>
+  );
+}
+
+type AgingBuckets = ReturnType<typeof import('@/lib/control-metrics').getAgingBucketsFor>;
+
+function MrrStackedBar({ buckets }: { buckets: AgingBuckets }) {
+  const segments = [
+    { key: 'current', label: 'Healthy', amount: buckets.current.amount, count: buckets.current.count, color: 'var(--teal)', href: '/collections#healthy' },
+    { key: 'approaching', label: 'Due now', amount: buckets.approaching.amount, count: buckets.approaching.count, color: 'var(--gold)', href: '/collections#dueSoon' },
+    { key: 'overdue', label: 'Overdue', amount: buckets.overdue.amount, count: buckets.overdue.count, color: 'var(--ember)', href: '/collections#overdue' },
+    { key: 'locked', label: 'Locked', amount: buckets.locked.amount, count: buckets.locked.count, color: 'var(--ink)', href: '/collections#locked' },
+  ];
+  const total = segments.reduce((sum, s) => sum + s.amount, 0);
+
+  if (total === 0) return null;
+
+  let xOffset = 0;
+  const barSegments = segments.map((seg) => {
+    const pct = (seg.amount / total) * 100;
+    const x = xOffset;
+    xOffset += pct;
+    return { ...seg, pct, x };
+  });
+
+  return (
+    <section className="panel p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="eyebrow">MRR exposure by health bucket</div>
+        <div className="text-sm font-semibold text-control-ink">{formatCedi(total)} total</div>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-xl" role="img" aria-label="MRR distribution across portfolio health buckets">
+        <svg viewBox="0 0 100 12" preserveAspectRatio="none" className="h-8 w-full" xmlns="http://www.w3.org/2000/svg">
+          {barSegments.map((seg) =>
+            seg.pct > 0 ? (
+              <rect
+                key={seg.key}
+                x={seg.x}
+                y={0}
+                width={seg.pct}
+                height={12}
+                fill={seg.color}
+              />
+            ) : null
+          )}
+        </svg>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+        {barSegments.map((seg) => (
+          <Link key={seg.key} href={seg.href} className="flex items-center gap-2 text-sm text-black/62 transition hover:text-control-ink">
+            <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-sm" style={{ background: seg.color }} />
+            <span className="font-medium text-control-ink">{seg.label}</span>
+            <span>{formatCedi(seg.amount)}</span>
+            <span className="text-black/40">({seg.pct.toFixed(0)}%)</span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

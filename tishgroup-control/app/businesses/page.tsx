@@ -10,10 +10,7 @@ import { canManageSubscriptions, canWriteNotes, listActiveControlStaff, requireC
 import { listManagedBusinessesPage } from '@/lib/control-service';
 import { formatCedi } from '@/lib/control-metrics';
 import { getSlaFlags } from '@/lib/sla';
-
-function readSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 function readPositiveInt(value: string | string[] | undefined, fallback: number) {
   const rawValue = readSearchParam(value);
@@ -69,14 +66,10 @@ function buildBusinessesHref({
 export default async function BusinessesPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
   const staff = await requireControlStaff();
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
   const filter = readSearchParam(resolvedSearchParams.filter) === 'unreviewed' ? 'unreviewed' : 'all';
   const search = readSearchParam(resolvedSearchParams.search)?.trim() ?? '';
   const page = readPositiveInt(resolvedSearchParams.page, 1);
@@ -172,13 +165,13 @@ export default async function BusinessesPage({
         <div className="flex flex-wrap gap-2 text-sm">
           <Link
             href={buildBusinessesHref({ filter: 'all', search, pageSize: roster.pageSize })}
-            className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${filter === 'all' ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/64'}`}
+            className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${filter === 'all' ? 'bg-control-dark text-white' : 'border border-black/10 bg-white text-black/64'}`}
           >
             All businesses ({roster.totalBusinesses})
           </Link>
           <Link
             href={buildBusinessesHref({ filter: 'unreviewed', search, pageSize: roster.pageSize })}
-            className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${filter === 'unreviewed' ? 'bg-[#1f8a82] text-white' : 'border border-black/10 bg-white text-black/64'}`}
+            className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${filter === 'unreviewed' ? 'bg-control-teal text-white' : 'border border-black/10 bg-white text-black/64'}`}
           >
             Unreviewed only ({roster.unreviewedCount})
           </Link>
@@ -207,7 +200,7 @@ export default async function BusinessesPage({
             </select>
           </label>
 
-          <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]">
+          <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-control-dark px-4 text-sm font-semibold text-white transition hover:bg-control-night">
             Apply view
           </button>
 
@@ -270,7 +263,7 @@ export default async function BusinessesPage({
               Leave the first due date blank to let TG Control calculate it from the start date and whether the business is monthly or annual.
             </p>
 
-            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:col-span-2 sm:w-fit">
+            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-control-dark px-4 text-sm font-semibold text-white transition hover:bg-control-night sm:col-span-2 sm:w-fit">
               Save billing setup
             </button>
           </form>
@@ -310,7 +303,7 @@ export default async function BusinessesPage({
                       value={business.id}
                       data-roster-id="businesses"
                       aria-label={`Select ${business.name}`}
-                      className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-[#122126]"
+                      className="mt-1 h-4 w-4 flex-shrink-0 rounded border-black/20 accent-control-dark"
                     />
                   ) : null}
                   <div className="min-w-0">
@@ -348,7 +341,7 @@ export default async function BusinessesPage({
                 </div>
               </div>
 
-              {business.needsReview ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b35c2e]">Needs review</div> : null}
+              {business.needsReview ? <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-control-ember">Needs review</div> : null}
 
               <Link href={`/businesses/${business.id}`} className="mt-3 inline-flex w-full items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
                 Open billing
@@ -388,7 +381,7 @@ export default async function BusinessesPage({
                         value={business.id}
                         data-roster-id="businesses"
                         aria-label={`Select ${business.name}`}
-                        className="h-4 w-4 rounded border-black/20 accent-[#122126]"
+                        className="h-4 w-4 rounded border-black/20 accent-control-dark"
                       />
                     ) : null}
                   </td>
@@ -397,7 +390,7 @@ export default async function BusinessesPage({
                       {business.name}
                     </Link>
                     <div className="mt-1 text-xs text-black/55">{business.ownerName} · {business.assignedManager}</div>
-                    {business.needsReview ? <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#b35c2e]">Needs review</div> : null}
+                    {business.needsReview ? <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-control-ember">Needs review</div> : null}
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-2">

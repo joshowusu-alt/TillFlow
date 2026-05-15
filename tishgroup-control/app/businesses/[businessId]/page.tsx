@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { addControlNoteAction, recordControlPaymentAction, reopenControlBusinessReviewAction, resendSubscriptionReminderAction, reviewControlBusinessAction, updateControlSubscriptionAction } from '@/app/actions/control-businesses';
+import { addControlNoteAction, reopenControlBusinessReviewAction, resendSubscriptionReminderAction, reviewControlBusinessAction } from '@/app/actions/control-businesses';
 import BillingScheduleFields from '@/components/BillingScheduleFields';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
+import PaymentForm from '@/components/payment-form';
+import SubscriptionForm from '@/components/subscription-form';
 import { PlanPill, StatePill } from '@/components/status-pill';
 import { canManageSubscriptions, canRecordPayments, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { getManagedBusinessDetail } from '@/lib/control-service';
@@ -12,10 +14,7 @@ import { listBusinessAuditTrail } from '@/lib/audit';
 import BusinessTimeline from '@/components/business-timeline';
 import SlaFlags from '@/components/sla-flags';
 import { getSlaFlags } from '@/lib/sla';
-
-function readSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 function asDateInput(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
@@ -31,7 +30,7 @@ export default async function BusinessDetailPage({
   searchParams,
 }: {
   params: { businessId: string };
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
   const staff = await requireControlStaff();
   const [business, staffOptions, auditTrail] = await Promise.all([
@@ -46,14 +45,9 @@ export default async function BusinessDetailPage({
 
   const businessId = business.id;
 
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const checklist = getActionChecklist(business);
-  const updated = readSearchParam(resolvedSearchParams.updated);
   const error = readSearchParam(resolvedSearchParams.error);
   const tab = readSearchParam(resolvedSearchParams.tab) ?? 'timeline';
   const canEditSubscription = canManageSubscriptions(staff.role);
@@ -93,42 +87,6 @@ export default async function BusinessDetailPage({
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
           {error}
-        </div>
-      ) : null}
-
-      {updated === 'subscription' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Subscription settings were saved in Tishgroup Control and mirrored back into Tillflow billing fields, including start date and billing cadence.
-        </div>
-      ) : null}
-
-      {updated === 'payment' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Payment recorded. Tillflow entitlement fields were updated, so access restoration follows immediately.
-        </div>
-      ) : null}
-
-      {updated === 'note' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Internal note saved to the control plane and appended to the Tillflow commercial record.
-        </div>
-      ) : null}
-
-      {updated === 'reminder' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Subscription SMS reminder queued for resend. The SMS dispatcher will pick it up from the outbox.
-        </div>
-      ) : null}
-
-      {updated === 'review' ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          Business review saved. The account is now out of the unreviewed queue, and any sold-plan change you selected has been applied.
-        </div>
-      ) : null}
-
-      {updated === 'reopened' ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-          This business has been returned to the review queue. It will now appear again in the unreviewed list until TG completes another review.
         </div>
       ) : null}
 
@@ -395,7 +353,7 @@ export default async function BusinessDetailPage({
 
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-control-ink">Reason for re-review</span>
-                  <textarea name="reviewNote" rows={3} placeholder="Explain why this business needs another commercial review, for example a requested move to Growth." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
+                  <textarea name="reviewNote" rows={3} placeholder="Explain why this business needs another commercial review, for example a requested move to Growth." className="control-field" />
                 </label>
 
                 <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl border border-amber-300 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-amber-100 sm:w-fit">
@@ -458,76 +416,7 @@ export default async function BusinessDetailPage({
 
             <div className="mt-5 space-y-4">
               {canEditSubscription ? (
-                <form action={updateControlSubscriptionAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
-                  <input type="hidden" name="businessId" value={business.id} />
-                  <div>
-                    <h3 className="text-sm font-semibold text-control-ink">Update subscription</h3>
-                    <p className="mt-1 text-sm text-black/60">Set the sold plan, cadence, and current subscription state from the control plane.</p>
-                  </div>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Sold plan</span>
-                    <select name="purchasedPlan" defaultValue={business.plan} className="control-field">
-                      <option value="STARTER">Starter</option>
-                      <option value="GROWTH">Growth</option>
-                      <option value="PRO">Pro</option>
-                    </select>
-                  </label>
-
-                  <div className="flex items-start gap-3 text-sm">
-                    <input
-                      type="checkbox"
-                      id="addonOnlineStorefront-overview"
-                      name="addonOnlineStorefront"
-                      className="mt-0.5 h-4 w-4"
-                      defaultChecked={business.addonOnlineStorefront ?? false}
-                    />
-                    <label htmlFor="addonOnlineStorefront-overview" className="space-y-0.5">
-                      <span className="block font-medium text-control-ink">Online storefront add-on</span>
-                      <span className="block text-black/60">Enables the Growth online store add-on (+GH₵200/mo). No effect on Pro plans — storefront is included.</span>
-                    </label>
-                  </div>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Subscription status</span>
-                    <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
-                      <option value="PAID_ACTIVE">Paid active</option>
-                      <option value="TRIAL">Trial</option>
-                      <option value="SUSPENDED">Suspended</option>
-                      <option value="READ_ONLY">Read only</option>
-                      <option value="INACTIVE">Deactivated</option>
-                    </select>
-                  </label>
-
-                  <BillingScheduleFields
-                    defaultCadence={business.billingCadence}
-                    defaultStartDate={asDateInput(business.subscriptionStartAt ?? business.planSetAt)}
-                    defaultNextDueDate={asDateInput(business.nextDueAt)}
-                  />
-
-                  <p className="text-sm text-black/60">
-                    Leave next due blank to calculate it automatically from the subscription start date and cadence.
-                  </p>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Trial end date</span>
-                    <input type="date" name="trialEndsAt" defaultValue={asDateInput(business.trialEndsAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Monthly value</span>
-                    <input type="number" min="0" name="monthlyValuePence" defaultValue={business.monthlyValue} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Outstanding amount</span>
-                    <input type="number" min="0" name="outstandingAmountPence" defaultValue={business.outstandingAmount} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:w-fit">
-                    Save subscription state
-                  </button>
-                </form>
+                <SubscriptionForm business={business} checkboxId="addonOnlineStorefront-overview" />
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                   Your role can view subscription state but cannot change it.
@@ -535,61 +424,7 @@ export default async function BusinessDetailPage({
               )}
 
               {canTakePayments ? (
-                <form action={recordControlPaymentAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
-                  <input type="hidden" name="businessId" value={business.id} />
-                  <div>
-                    <h3 className="text-sm font-semibold text-control-ink">Record payment</h3>
-                    <p className="mt-1 text-sm text-black/60">This creates a payment record and restores Tillflow entitlement state immediately.</p>
-                  </div>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Amount</span>
-                    <input type="number" min="0" name="amountPence" defaultValue={business.outstandingAmount || business.monthlyValue} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Method</span>
-                    <select name="method" defaultValue="MOMO" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                      <option value="MOMO">MoMo</option>
-                      <option value="BANK_TRANSFER">Bank transfer</option>
-                      <option value="CASH">Cash</option>
-                      <option value="INVOICE">Invoice</option>
-                    </select>
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Billing cadence</span>
-                    <select name="billingCadence" defaultValue={business.billingCadence} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                      <option value="MONTHLY">Monthly</option>
-                      <option value="ANNUAL">Annual</option>
-                    </select>
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Paid at</span>
-                    <input type="date" name="paidAt" defaultValue={new Date().toISOString().slice(0, 10)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Next due date</span>
-                    <input type="date" name="nextDueDate" defaultValue="" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                    <p className="text-xs text-black/55">Leave blank to calculate it automatically from the payment date.</p>
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Reference</span>
-                    <input type="text" name="reference" placeholder="Transaction or receipt reference" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <label className="block space-y-1 text-sm">
-                    <span className="font-medium text-control-ink">Payment note</span>
-                    <textarea name="note" rows={3} placeholder="Anything important about this payment or recovery step" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  </label>
-
-                  <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1f8a82] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#166a64] sm:w-fit">
-                    Record payment
-                  </button>
-                </form>
+                <PaymentForm business={business} />
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                   Your role can view payment history but cannot record payments.
@@ -606,7 +441,7 @@ export default async function BusinessDetailPage({
 
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Category</span>
-                    <select name="category" defaultValue="GENERAL" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
+                    <select name="category" defaultValue="GENERAL" className="control-field">
                       <option value="GENERAL">General</option>
                       <option value="COLLECTIONS">Collections</option>
                       <option value="SUPPORT">Support</option>
@@ -617,7 +452,7 @@ export default async function BusinessDetailPage({
 
                   <label className="block space-y-1 text-sm">
                     <span className="font-medium text-control-ink">Internal note</span>
-                    <textarea name="note" rows={4} placeholder="Record the relevant context, promise, blocker, or next step." className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required />
+                    <textarea name="note" rows={4} placeholder="Record the relevant context, promise, blocker, or next step." className="control-field" required />
                   </label>
 
                   <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl border border-black/12 bg-white px-4 py-3 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03] sm:w-fit">
@@ -698,118 +533,14 @@ export default async function BusinessDetailPage({
             </div>
 
             {canEditSubscription ? (
-              <form action={updateControlSubscriptionAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
-                <input type="hidden" name="businessId" value={business.id} />
-                <div>
-                  <h3 className="text-sm font-semibold text-control-ink">Update subscription</h3>
-                  <p className="mt-1 text-sm text-black/60">Set the sold plan, cadence, and current subscription state from the control plane.</p>
-                </div>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Sold plan</span>
-                  <select name="purchasedPlan" defaultValue={business.plan} className="control-field">
-                    <option value="STARTER">Starter</option>
-                    <option value="GROWTH">Growth</option>
-                    <option value="PRO">Pro</option>
-                  </select>
-                </label>
-                <div className="flex items-start gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    id="addonOnlineStorefront-billing"
-                    name="addonOnlineStorefront"
-                    className="mt-0.5 h-4 w-4"
-                    defaultChecked={business.addonOnlineStorefront ?? false}
-                  />
-                  <label htmlFor="addonOnlineStorefront-billing" className="space-y-0.5">
-                    <span className="block font-medium text-control-ink">Online storefront add-on</span>
-                    <span className="block text-black/60">Enables the Growth online store add-on (+GH₵200/mo). No effect on Pro plans — storefront is included.</span>
-                  </label>
-                </div>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Subscription status</span>
-                  <select name="status" defaultValue={business.subscriptionStatus} className="control-field">
-                    <option value="PAID_ACTIVE">Paid active</option>
-                    <option value="TRIAL">Trial</option>
-                    <option value="SUSPENDED">Suspended</option>
-                    <option value="READ_ONLY">Read only</option>
-                    <option value="INACTIVE">Deactivated</option>
-                  </select>
-                </label>
-                <BillingScheduleFields
-                  defaultCadence={business.billingCadence}
-                  defaultStartDate={asDateInput(business.subscriptionStartAt ?? business.planSetAt)}
-                  defaultNextDueDate={asDateInput(business.nextDueAt)}
-                />
-                <p className="text-sm text-black/60">Leave next due blank to calculate it automatically from the subscription start date and cadence.</p>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Trial end date</span>
-                  <input type="date" name="trialEndsAt" defaultValue={asDateInput(business.trialEndsAt)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Monthly value</span>
-                  <input type="number" min="0" name="monthlyValuePence" defaultValue={business.monthlyValue} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Outstanding amount</span>
-                  <input type="number" min="0" name="outstandingAmountPence" defaultValue={business.outstandingAmount} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:w-fit">
-                  Save subscription state
-                </button>
-              </form>
+              <SubscriptionForm business={business} checkboxId="addonOnlineStorefront-billing" />
             ) : (
               <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                 Your role can view subscription state but cannot change it.
               </div>
             )}
             {canTakePayments ? (
-              <form action={recordControlPaymentAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
-                <input type="hidden" name="businessId" value={business.id} />
-                <div>
-                  <h3 className="text-sm font-semibold text-control-ink">Record payment</h3>
-                  <p className="mt-1 text-sm text-black/60">This creates a payment record and restores Tillflow entitlement state immediately.</p>
-                </div>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Amount</span>
-                  <input type="number" min="0" name="amountPence" defaultValue={business.outstandingAmount || business.monthlyValue} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" required />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Method</span>
-                  <select name="method" defaultValue="MOMO" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                    <option value="MOMO">MoMo</option>
-                    <option value="BANK_TRANSFER">Bank transfer</option>
-                    <option value="CASH">Cash</option>
-                    <option value="INVOICE">Invoice</option>
-                  </select>
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Billing cadence</span>
-                  <select name="billingCadence" defaultValue={business.billingCadence} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]">
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="ANNUAL">Annual</option>
-                  </select>
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Paid at</span>
-                  <input type="date" name="paidAt" defaultValue={new Date().toISOString().slice(0, 10)} className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Next due date</span>
-                  <input type="date" name="nextDueDate" defaultValue="" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                  <p className="text-xs text-black/55">Leave blank to calculate it automatically from the payment date.</p>
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Reference</span>
-                  <input type="text" name="reference" placeholder="Transaction or receipt reference" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <label className="block space-y-1 text-sm">
-                  <span className="font-medium text-control-ink">Payment note</span>
-                  <textarea name="note" rows={3} placeholder="Anything important about this payment or recovery step" className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm text-control-ink outline-none transition focus:border-[#1f8a82]" />
-                </label>
-                <button type="submit" className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1f8a82] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#166a64] sm:w-fit">
-                  Record payment
-                </button>
-              </form>
+              <PaymentForm business={business} />
             ) : (
               <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                 Your role can view payment history but cannot record payments.
@@ -891,7 +622,7 @@ export default async function BusinessDetailPage({
       <div className="sticky bottom-0 z-20 flex gap-3 border-t border-black/8 bg-white/95 px-4 py-4 backdrop-blur-sm lg:hidden">
         <a
           href={toPhoneHref(business.ownerPhone)}
-          className="flex-1 inline-flex items-center justify-center rounded-2xl bg-[#122126] py-3 text-sm font-semibold text-white"
+          className="flex-1 inline-flex items-center justify-center rounded-2xl bg-control-dark py-3 text-sm font-semibold text-white"
         >
           Call owner
         </a>

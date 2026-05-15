@@ -2,39 +2,42 @@ import Link from 'next/link';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { StatePill } from '@/components/status-pill';
-import { requireControlStaff } from '@/lib/control-auth';
+import BulkRemindButton from '@/components/bulk-remind-button';
+import { bulkRemindDueSoonAction } from '@/app/actions/control-businesses';
+import { canRecordPayments, canManageSubscriptions, requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi, getCollectionQueuesFor } from '@/lib/control-metrics';
+import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
+import type { ManagedBusiness } from '@/lib/control-data';
 
 export const dynamic = 'force-dynamic';
 
-function readSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+type SortKey = 'overdue' | 'amount' | 'manager';
 
 function readPreviewSize(value: string | string[] | undefined) {
   const rawValue = readSearchParam(value);
   const parsed = Number(rawValue);
-
   if (!Number.isFinite(parsed) || parsed <= 25) return 25;
   if (parsed <= 50) return 50;
   return 100;
 }
 
-function buildCollectionsHref(view: 'preview' | 'all', preview: number) {
-  if (view === 'preview' && preview === 25) {
-    return '/collections';
-  }
+function readSort(value: string | string[] | undefined): SortKey {
+  const raw = readSearchParam(value);
+  if (raw === 'amount' || raw === 'manager') return raw;
+  return 'overdue';
+}
 
+function buildCollectionsHref(overrides: { view?: string; preview?: number; sort?: string }, current: { view: string; preview: number; sort: string }) {
   const params = new URLSearchParams();
-  if (view === 'all') {
-    params.set('view', 'all');
-  }
-  if (preview !== 25) {
-    params.set('preview', String(preview));
-  }
-
-  return `/collections?${params.toString()}`;
+  const view = overrides.view ?? current.view;
+  const preview = overrides.preview ?? current.preview;
+  const sort = overrides.sort ?? current.sort;
+  if (view === 'all') params.set('view', 'all');
+  if (preview !== 25) params.set('preview', String(preview));
+  if (sort !== 'overdue') params.set('sort', sort);
+  const qs = params.toString();
+  return qs ? `/collections?${qs}` : '/collections';
 }
 
 function toPhoneHref(phone: string) {
@@ -68,19 +71,32 @@ function getAccountMove(state: string, nextDueAt: string): string {
   }
 }
 
+function sortBusinesses(items: ManagedBusiness[], sort: SortKey): ManagedBusiness[] {
+  const sorted = [...items];
+  switch (sort) {
+    case 'amount':
+      return sorted.sort((a, b) => b.outstandingAmount - a.outstandingAmount);
+    case 'manager':
+      return sorted.sort((a, b) => a.assignedManager.localeCompare(b.assignedManager));
+    case 'overdue':
+    default:
+      return sorted.sort((a, b) => daysFromNow(a.nextDueAt) - daysFromNow(b.nextDueAt));
+  }
+}
+
 export default async function CollectionsPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
-  await requireControlStaff();
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const staff = await requireControlStaff();
+  const canRemind = canRecordPayments(staff.role) || canManageSubscriptions(staff.role);
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
   const view = readSearchParam(resolvedSearchParams.view) === 'all' ? 'all' : 'preview';
   const previewSize = readPreviewSize(resolvedSearchParams.preview);
+  const sort = readSort(resolvedSearchParams.sort);
+  const current = { view, preview: previewSize, sort };
+
   const businesses = await listManagedBusinesses();
   const queues = getCollectionQueuesFor(businesses);
   const queueEntries = [
@@ -90,7 +106,7 @@ export default async function CollectionsPage({
       description: 'No immediate collection pressure. Use these for relationship health and upsell review.',
       bestMove: 'Review relationship quality and confirm next commercial expansion move.',
       responseWindow: 'This week',
-      items: queues.healthy,
+      items: sortBusinesses(queues.healthy, sort),
     },
     {
       key: 'dueSoon',
@@ -98,7 +114,7 @@ export default async function CollectionsPage({
       description: 'Reminder queue before the account tips into overdue handling.',
       bestMove: 'Send reminder before the due date and confirm exact payment channel.',
       responseWindow: 'Within 24 hours',
-      items: queues.dueSoon,
+      items: sortBusinesses(queues.dueSoon, sort),
     },
     {
       key: 'overdue',
@@ -106,7 +122,7 @@ export default async function CollectionsPage({
       description: 'These businesses are in grace or fallback. Same-day follow-up matters here.',
       bestMove: 'Escalate same day and make the fallback or lock timeline explicit.',
       responseWindow: 'Same day',
-      items: queues.overdue,
+      items: sortBusinesses(queues.overdue, sort),
     },
     {
       key: 'locked',
@@ -114,30 +130,20 @@ export default async function CollectionsPage({
       description: 'These accounts need payment confirmation or a deliberate commercial decision.',
       bestMove: 'Verify payment fast or decide whether the account should remain restricted.',
       responseWindow: 'Immediate',
-      items: queues.locked,
+      items: sortBusinesses(queues.locked, sort),
     },
   ];
   const headerStats = [
-    {
-      label: 'Healthy accounts',
-      value: String(queues.healthy.length),
-      hint: 'No immediate collections pressure.',
-    },
-    {
-      label: 'Due soon',
-      value: String(queues.dueSoon.length),
-      hint: 'Reminder queue before overdue handling starts.',
-    },
-    {
-      label: 'Overdue',
-      value: String(queues.overdue.length),
-      hint: 'Accounts already consuming same-day collections attention.',
-    },
-    {
-      label: 'Locked',
-      value: String(queues.locked.length),
-      hint: 'Accounts needing payment confirmation or a restriction decision.',
-    },
+    { label: 'Healthy accounts', value: String(queues.healthy.length), hint: 'No immediate collections pressure.' },
+    { label: 'Due soon', value: String(queues.dueSoon.length), hint: 'Reminder queue before overdue handling starts.' },
+    { label: 'Overdue', value: String(queues.overdue.length), hint: 'Accounts already consuming same-day collections attention.' },
+    { label: 'Locked', value: String(queues.locked.length), hint: 'Accounts needing payment confirmation or a restriction decision.' },
+  ];
+
+  const sortOptions: { key: SortKey; label: string }[] = [
+    { key: 'overdue', label: 'Most overdue first' },
+    { key: 'amount', label: 'Highest amount first' },
+    { key: 'manager', label: 'By manager' },
   ];
 
   return (
@@ -178,33 +184,44 @@ export default async function CollectionsPage({
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-black/62">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={buildCollectionsHref('preview', previewSize)}
-              className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${view === 'preview' ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/64'}`}
+              href={buildCollectionsHref({ view: 'preview' }, current)}
+              className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${view === 'preview' ? 'bg-control-dark text-white' : 'border border-black/10 bg-white text-black/64'}`}
             >
               Preview mode
             </Link>
             <Link
-              href={buildCollectionsHref('all', previewSize)}
-              className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${view === 'all' ? 'bg-[#1f8a82] text-white' : 'border border-black/10 bg-white text-black/64'}`}
+              href={buildCollectionsHref({ view: 'all' }, current)}
+              className={`inline-flex rounded-full px-3 py-1.5 font-semibold ${view === 'all' ? 'bg-control-teal text-white' : 'border border-black/10 bg-white text-black/64'}`}
             >
               Show all queues
             </Link>
           </div>
 
-          <form action="/collections" className="flex flex-wrap items-center gap-2">
-            {view === 'all' ? <input type="hidden" name="view" value="all" /> : null}
-            <label className="text-sm">
-              <span className="sr-only">Cards per queue</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {sortOptions.map((option) => (
+              <Link
+                key={option.key}
+                href={buildCollectionsHref({ sort: option.key }, current)}
+                className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${sort === option.key ? 'bg-control-ink text-white' : 'border border-black/10 bg-white text-black/56'}`}
+              >
+                {option.label}
+              </Link>
+            ))}
+
+            <form action="/collections" method="get" className="flex items-center gap-2">
+              {view === 'all' ? <input type="hidden" name="view" value="all" /> : null}
+              {sort !== 'overdue' ? <input type="hidden" name="sort" value={sort} /> : null}
+              <label className="sr-only">Cards per queue</label>
               <select name="preview" defaultValue={String(previewSize)} className="control-field min-w-[150px]">
                 <option value="25">Show 25 per queue</option>
                 <option value="50">Show 50 per queue</option>
                 <option value="100">Show 100 per queue</option>
               </select>
-            </label>
-            <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
-              Update
-            </button>
-          </form>
+              <button type="submit" className="inline-flex h-[42px] items-center justify-center rounded-[18px] border border-black/10 bg-white px-4 text-sm font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                Update
+              </button>
+            </form>
+          </div>
         </div>
       </section>
 
@@ -217,8 +234,13 @@ export default async function CollectionsPage({
             <div key={queue.key} id={queue.key} className="panel p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <SectionHeading eyebrow="Queue" title={queue.title} description={queue.description} />
-                <div className="rounded-full border border-black/10 bg-black/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-black/50">
-                  {queue.items.length} account{queue.items.length === 1 ? '' : 's'}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="rounded-full border border-black/10 bg-black/[0.03] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-black/50">
+                    {queue.items.length} account{queue.items.length === 1 ? '' : 's'}
+                  </div>
+                  {queue.key === 'dueSoon' && queue.items.length > 0 && canRemind ? (
+                    <BulkRemindButton count={queue.items.length} action={bulkRemindDueSoonAction} />
+                  ) : null}
                 </div>
               </div>
               <div className="mt-4 control-inline-note">
@@ -263,11 +285,11 @@ export default async function CollectionsPage({
                 ) : null}
                 {hiddenCount > 0 ? (
                   <div className="control-inline-note">
-                    {hiddenCount} more account{hiddenCount === 1 ? '' : 's'} are hidden in preview mode. Use &ldquo;Show all queues&rdquo; to open the full board.
+                    {hiddenCount} more account{hiddenCount === 1 ? '' : 's'} hidden in preview mode.
                   </div>
                 ) : null}
                 {hiddenCount > 0 ? (
-                  <Link href={`${buildCollectionsHref('all', previewSize)}#${queue.key}`} className="inline-flex text-sm font-semibold text-control-ink underline-offset-4 hover:underline">
+                  <Link href={`${buildCollectionsHref({ view: 'all' }, current)}#${queue.key}`} className="inline-flex text-sm font-semibold text-control-ink underline-offset-4 hover:underline">
                     Show all {queue.items.length}
                   </Link>
                 ) : null}

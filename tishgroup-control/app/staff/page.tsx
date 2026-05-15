@@ -1,24 +1,18 @@
 import { createControlStaffAction, toggleControlStaffAction } from '@/app/actions/control-businesses';
+import { setStaffPasswordAction } from '@/app/actions/control-auth';
 import ControlPageHeader from '@/components/control-page-header';
 import SectionHeading from '@/components/section-heading';
 import { canManageStaff, listControlStaffDirectory, requireControlStaff } from '@/lib/control-auth';
-
-function readSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
+import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 export default async function StaffPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
   const currentStaff = await requireControlStaff();
   const staffDirectory = await listControlStaffDirectory();
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
   const error = readSearchParam(resolvedSearchParams.error);
   const updated = readSearchParam(resolvedSearchParams.updated);
   const canEditStaff = canManageStaff(currentStaff.role);
@@ -30,12 +24,6 @@ export default async function StaffPage({
     <div className="space-y-4 lg:space-y-5">
       {error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">{error}</div>
-      ) : null}
-
-      {updated ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
-          TG staff directory updated.
-        </div>
       ) : null}
 
       <ControlPageHeader
@@ -92,7 +80,7 @@ export default async function StaffPage({
                 </select>
               </label>
 
-              <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-[#122126] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d1a1e] sm:w-fit">
+              <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-control-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-control-night sm:w-fit">
                 Save staff account
               </button>
             </form>
@@ -158,6 +146,7 @@ export default async function StaffPage({
                   <th>Name</th>
                   <th>Role</th>
                   <th>Status</th>
+                  <th>Auth</th>
                   <th>Created</th>
                   <th>Action</th>
                 </tr>
@@ -175,17 +164,24 @@ export default async function StaffPage({
                         {entry.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
+                    <td>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${entry.hasPassword ? 'bg-teal-50 text-teal-800' : 'bg-amber-50 text-amber-800'}`}>
+                        {entry.hasPassword ? 'Password set' : 'Shared key'}
+                      </span>
+                    </td>
                     <td className="text-sm text-black/66">{entry.createdAt}</td>
                     <td>
-                      {canEditStaff ? (
-                        <form action={toggleControlStaffAction}>
-                          <input type="hidden" name="staffId" value={entry.id} />
-                          <input type="hidden" name="makeActive" value={entry.active ? 'false' : 'true'} />
-                          <button type="submit" className="inline-flex rounded-[18px] border border-black/12 bg-white px-3 py-2 text-xs font-semibold text-control-ink transition hover:bg-black/[0.03]">
-                            {entry.active ? 'Deactivate' : 'Reactivate'}
-                          </button>
-                        </form>
-                      ) : <span className="text-xs text-black/45">View only</span>}
+                      <div className="flex flex-wrap gap-2">
+                        {canEditStaff ? (
+                          <form action={toggleControlStaffAction}>
+                            <input type="hidden" name="staffId" value={entry.id} />
+                            <input type="hidden" name="makeActive" value={entry.active ? 'false' : 'true'} />
+                            <button type="submit" className="inline-flex rounded-[18px] border border-black/12 bg-white px-3 py-2 text-xs font-semibold text-control-ink transition hover:bg-black/[0.03]">
+                              {entry.active ? 'Deactivate' : 'Reactivate'}
+                            </button>
+                          </form>
+                        ) : <span className="text-xs text-black/45">View only</span>}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -194,6 +190,39 @@ export default async function StaffPage({
           </div>
         </div>
       </section>
+
+      {canEditStaff ? (
+        <section id="set-password" className="panel p-4 sm:p-5">
+          <SectionHeading
+            eyebrow="Per-staff auth"
+            title="Set a personal password"
+            description="Staff members using the shared access key should be migrated to individual passwords. Set a password here — the staff member uses it on their next login instead of the shared key."
+          />
+          <form action={setStaffPasswordAction} className="mt-5 space-y-4 max-w-md">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-control-ink">Staff member</span>
+              <select name="staffId" className="control-field" required>
+                <option value="">Select a staff member…</option>
+                {staffDirectory.filter((e) => e.active).map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name} · {entry.role.replace(/_/g, ' ')}{entry.hasPassword ? ' ✓' : ' (shared key)'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-control-ink">New password</span>
+              <input type="password" name="password" className="control-field" minLength={10} required placeholder="At least 10 characters" autoComplete="new-password" />
+            </label>
+            <p className="text-xs text-black/55">
+              The staff member will use this password on their next sign-in. The shared access key stops working for them immediately.
+            </p>
+            <button type="submit" className="inline-flex w-full items-center justify-center rounded-[18px] bg-control-dark px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-control-night sm:w-fit">
+              Set password
+            </button>
+          </form>
+        </section>
+      ) : null}
     </div>
   );
 }

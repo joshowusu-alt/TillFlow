@@ -6,6 +6,7 @@ import { requireControlStaff } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { formatCedi } from '@/lib/control-metrics';
 import type { ManagedBusiness, ManagedState } from '@/lib/control-data';
+import { readSearchParam as readParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 type FilterKey =
   | 'all'
@@ -22,10 +23,6 @@ type FilterKey =
   | 'due-reminders';
 
 type SortKey = 'nearest-due' | 'most-overdue' | 'newest-signup' | 'highest-value';
-
-function readParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function parseDate(value?: string | null) {
   if (!value || value === 'Not scheduled') return null;
@@ -107,14 +104,10 @@ function daysBadgeLabel(daysLeft: number) {
 export default async function SubscriptionsPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
   await requireControlStaff();
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
   const filter = (readParam(resolvedSearchParams.filter) ?? 'all') as FilterKey;
   const sort = (readParam(resolvedSearchParams.sort) ?? 'nearest-due') as SortKey;
   const businesses = await listManagedBusinesses();
@@ -186,7 +179,7 @@ export default async function SubscriptionsPage({
             <Link
               key={option.key}
               href={`/subscriptions?filter=${option.key}&sort=${sort}`}
-              className={`inline-flex rounded-full px-3 py-1.5 text-sm font-semibold ${filter === option.key ? 'bg-[#122126] text-white' : 'border border-black/10 bg-white text-black/64'}`}
+              className={`inline-flex rounded-full px-3 py-1.5 text-sm font-semibold ${filter === option.key ? 'bg-control-dark text-white' : 'border border-black/10 bg-white text-black/64'}`}
             >
               {option.label}
             </Link>
@@ -203,7 +196,7 @@ export default async function SubscriptionsPage({
               <option value="highest-value">Highest plan/value</option>
             </select>
           </label>
-          <button className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-[#122126] px-4 text-sm font-semibold text-white">Apply sort</button>
+          <button className="inline-flex h-[42px] items-center justify-center rounded-[18px] bg-control-dark px-4 text-sm font-semibold text-white">Apply sort</button>
         </form>
       </section>
 
