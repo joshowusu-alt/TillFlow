@@ -10,7 +10,10 @@ export type AuditAction =
   | 'STAFF_CREATED'
   | 'STAFF_ACTIVATED'
   | 'STAFF_DEACTIVATED'
-  | 'BULK_REVIEW';
+  | 'BULK_REVIEW'
+  | 'BULK_REMINDER_SENT'
+  | 'SYSTEM_ERROR'
+  | 'LOGIN_FAILURE';
 
 type AuditStaff = {
   id: string;

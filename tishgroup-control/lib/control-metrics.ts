@@ -157,6 +157,6 @@ export function getActionChecklist(business: ManagedBusiness) {
     case 'CANCELLED':
       return ['Keep the account archived', 'Do not include in active billing follow-up', 'Reactivate only if the business returns to service'];
     default:
-      return ['Book conversion meeting', 'Show reporting value used in trial', 'Set paid plan before trial end'];
+      return ['Unknown account state - escalate to Control Admin before taking action'];
   }
 }

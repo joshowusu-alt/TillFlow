@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import { recordAudit } from '@/lib/audit';
+import { captureError } from '@/lib/error-monitor';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
 import { activateSubscriptionAfterPayment, calculateNextBillingDate } from '@/lib/subscription-lifecycle';
 
@@ -377,9 +378,10 @@ async function resolveAssignedManagerId(rawValue: string | null, fallbackStaffId
   return manager.id;
 }
 
-function ensureRole(condition: boolean, fallbackMessage: string, businessId: string) {
+function ensureRole(condition: boolean, fallbackMessage: string, businessId: string | null) {
   if (!condition) {
-    redirect(`/businesses/${businessId}?error=${encodeURIComponent(fallbackMessage)}`);
+    const path = businessId ? `/businesses/${businessId}` : '/';
+    redirect(`${path}?error=${encodeURIComponent(fallbackMessage)}`);
   }
 }
 
@@ -511,6 +513,8 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
       }
     });
   } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    await captureError({ context: 'updateControlSubscriptionAction', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId });
     redirect(withRedirectParam(returnPath, 'error', error instanceof Error ? error.message : 'Unable to update the subscription.'));
   }
 
@@ -650,6 +654,8 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
       });
     });
   } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    await captureError({ context: 'recordControlPaymentAction', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId, metadata: { amountPence, method } });
     redirect(`/businesses/${businessId}?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to record the payment.')}`);
   }
 
@@ -669,10 +675,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
     recordedBy: { name: staff.name, email: staff.email },
   });
   await enqueuePaymentConfirmedReminder(businessId).catch((error) => {
-    console.warn('[control-businesses] payment confirmation SMS enqueue skipped', {
-      businessId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    captureError({ context: 'payment:sms_enqueue_failed', error, staffId: staff.id, staffEmail: staff.email, staffRole: staff.role, businessId });
   });
 
   revalidateControlViews(businessId);
@@ -1100,4 +1103,91 @@ export async function bulkReviewControlBusinessesAction(formData: FormData): Pro
   revalidatePath('/');
   revalidatePath('/businesses');
   redirect(withRedirectParam(returnPath, 'updated', 'bulk-review'));
+}
+
+export async function bulkRemindDueSoonAction(): Promise<void> {
+  const staff = await requireControlStaff();
+  ensureRole(canRecordPayments(staff.role) || canManageSubscriptions(staff.role), 'Your Control role cannot send subscription reminders.', null);
+
+  const DUE_SOON_STATES = ['RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY'];
+
+  try {
+    const dueSoonBusinesses = await prisma.business.findMany({
+      where: { subscriptionStatus: { in: DUE_SOON_STATES } },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        currentPeriodStartedAt: true,
+        nextBillingDate: true,
+        nextPaymentDueAt: true,
+      },
+    });
+
+    if (dueSoonBusinesses.length === 0) {
+      redirect('/collections?toast_error=No due-soon accounts found to remind.');
+    }
+
+    const queued = await Promise.all(dueSoonBusinesses.map(async (business) => {
+      const recipient = normalizeGhanaPhone(business.phone);
+      if (!recipient) return null;
+
+      const dueDate = business.nextBillingDate ?? business.nextPaymentDueAt;
+      const periodKey = dueDate?.toISOString().slice(0, 10)
+        ?? business.currentPeriodStartedAt?.toISOString().slice(0, 10)
+        ?? new Date().toISOString().slice(0, 10);
+      const idempotencyKey = `${business.id}:SUBSCRIPTION_RENEWAL_REMINDER:bulk:${periodKey}`;
+      const dueText = dueDate?.toLocaleDateString('en-GB') ?? 'your renewal date';
+
+      return prisma.messageOutbox.upsert({
+        where: { idempotencyKey },
+        update: {
+          status: 'PENDING',
+          attempts: 0,
+          lastError: null,
+          lockedAt: null,
+          nextAttemptAt: new Date(),
+          sentAt: null,
+        },
+        create: {
+          businessId: business.id,
+          eventType: 'SUBSCRIPTION_RENEWAL_REMINDER',
+          idempotencyKey,
+          channel: 'SMS',
+          recipient,
+          body: `Reminder: your TillFlow subscription payment is due on ${dueText}. Please pay to keep access active.`,
+          status: 'PENDING',
+          nextAttemptAt: new Date(),
+          payloadJson: JSON.stringify({
+            source: 'TISHGROUP_CONTROL_BULK_REMIND',
+            businessId: business.id,
+            businessName: business.name,
+            periodKey,
+            dueDate: dueDate?.toISOString() ?? null,
+          }),
+        },
+      });
+    }));
+
+    const queuedCount = queued.filter(Boolean).length;
+
+    if (queuedCount === 0) {
+      redirect('/collections?toast_error=No due-soon accounts have valid SMS recipients.');
+    }
+
+    await recordAudit({
+      staff,
+      action: 'BULK_REMINDER_SENT',
+      businessId: null,
+      summary: `Bulk SMS reminder queued for ${queuedCount} reminder${queuedCount === 1 ? '' : 's'} across ${dueSoonBusinesses.length} due-soon account${dueSoonBusinesses.length === 1 ? '' : 's'}.`,
+      metadata: { businessCount: dueSoonBusinesses.length, reminderCount: queuedCount },
+    });
+  } catch (error) {
+    if ((error as { digest?: string })?.digest?.startsWith('NEXT_REDIRECT')) throw error;
+    redirect(`/collections?toast_error=${encodeURIComponent(error instanceof Error ? error.message : 'Bulk remind failed.')}`);
+  }
+
+  revalidateTag('control-portfolio');
+  revalidatePath('/collections');
+  redirect('/collections?updated=bulk');
 }
