@@ -1,28 +1,21 @@
 import { redirect } from 'next/navigation';
 import { loginControlStaffAction } from '@/app/actions/control-auth';
 import { controlAuthConfigured, getControlStaffOptional } from '@/lib/control-auth';
+import { readSearchParam, resolveSearchParams, type ControlSearchParams } from '@/lib/search-params';
 
 export const dynamic = 'force-dynamic';
-
-function readSearchParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>> | Record<string, string | string[] | undefined>;
+  searchParams?: Promise<ControlSearchParams> | ControlSearchParams;
 }) {
   const staff = await getControlStaffOptional();
   if (staff) {
     redirect('/');
   }
 
-  const resolvedSearchParams = (
-    searchParams && typeof (searchParams as Promise<Record<string, string | string[] | undefined>>).then === 'function'
-      ? await searchParams
-      : (searchParams ?? {})
-  ) as Record<string, string | string[] | undefined>;
+  const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const error = readSearchParam(resolvedSearchParams.error);
   const authConfigured = controlAuthConfigured();
@@ -64,12 +57,12 @@ export default async function LoginPage({
           <div className="eyebrow">Staff sign-in</div>
           <h2 className="mt-2.5 text-[1.65rem] font-semibold leading-tight tracking-tight text-control-ink sm:mt-3 sm:text-2xl">Access Tish Group Control</h2>
           <p className="mt-2.5 text-sm leading-6 text-black/64 sm:mt-3">
-            Use your Control staff email plus the shared internal access key. For the first bootstrap login, set CONTROL_BOOTSTRAP_ADMIN_EMAIL to your email.
+            Use your staff email and personal password. If your password hasn't been set yet, use the shared access key — ask a Control admin to set your personal password.
           </p>
 
           {!authConfigured ? (
             <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
-              CONTROL_PLANE_ACCESS_KEY is not configured. Add it to the environment before using this app.
+              Control-plane session secret is not configured. Add CONTROL_SESSION_SECRET or CONTROL_PLANE_ACCESS_KEY before using this app.
             </div>
           ) : null}
 
@@ -93,7 +86,7 @@ export default async function LoginPage({
             </label>
 
             <label className="block space-y-1 text-sm">
-              <span className="font-medium text-control-ink">Internal access key</span>
+              <span className="font-medium text-control-ink">Password</span>
               <input
                 type="password"
                 name="accessKey"
@@ -105,7 +98,7 @@ export default async function LoginPage({
 
             <button
               type="submit"
-              className="inline-flex min-h-12 w-full items-center justify-center rounded-[18px] bg-[#122126] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0d1a1e]"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-[18px] bg-control-dark px-4 py-3 text-sm font-semibold text-white transition hover:bg-control-night"
             >
               Sign in to Control
             </button>

@@ -3,6 +3,7 @@ import { listManagedBusinesses } from '@/lib/control-service';
 import { getPortfolioSummaryFor, getCollectionQueuesFor, formatCedi } from '@/lib/control-metrics';
 import { getPortfolioSlaCounts } from '@/lib/sla';
 import { getCollectionsRhythm } from '@/lib/collections-trend';
+import { captureError } from '@/lib/error-monitor';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,9 +30,25 @@ export const dynamic = 'force-dynamic';
 const SECRET = process.env.DIGEST_CRON_SECRET?.trim() || null;
 
 export async function GET(request: Request) {
+  if (process.env.NODE_ENV === 'production' && !SECRET) {
+    await captureError({
+      context: 'digest:missing_secret',
+      error: new Error('DIGEST_CRON_SECRET is not configured'),
+      staffEmail: 'system',
+      staffRole: 'SYSTEM',
+    });
+    return NextResponse.json({ ok: false, error: 'DIGEST_CRON_SECRET is not configured' }, { status: 500 });
+  }
+
   if (SECRET) {
     const provided = request.headers.get('x-digest-secret');
     if (provided !== SECRET) {
+      await captureError({
+        context: 'digest:unauthorized',
+        error: new Error('Invalid digest secret'),
+        staffEmail: 'system',
+        staffRole: 'SYSTEM',
+      });
       return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
     }
   }

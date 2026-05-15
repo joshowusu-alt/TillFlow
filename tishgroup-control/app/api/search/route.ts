@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getControlStaffOptional } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
+import { checkRateLimit, SEARCH_RATE_LIMIT } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,12 @@ export const dynamic = 'force-dynamic';
  * the same.
  */
 export async function GET(request: Request) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const { allowed } = checkRateLimit('search', `search:${ip}`, SEARCH_RATE_LIMIT);
+  if (!allowed) {
+    return NextResponse.json({ ok: false, error: 'Rate limit exceeded' }, { status: 429 });
+  }
+
   const staff = await getControlStaffOptional();
   if (!staff) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });

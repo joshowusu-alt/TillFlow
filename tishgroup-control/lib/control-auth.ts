@@ -94,6 +94,10 @@ function decodePayload(token: string, secret: string) {
 }
 
 export function controlAuthConfigured() {
+  return Boolean(getControlSessionSecret());
+}
+
+export function controlBootstrapKeyConfigured() {
   return Boolean(process.env.CONTROL_PLANE_ACCESS_KEY?.trim());
 }
 
@@ -250,7 +254,7 @@ export async function listActiveControlStaff(): Promise<ControlStaffOption[]> {
   }
 }
 
-export async function listControlStaffDirectory(): Promise<Array<ControlStaffOption & { active: boolean; createdAt: string }>> {
+export async function listControlStaffDirectory(): Promise<Array<ControlStaffOption & { active: boolean; createdAt: string; hasPassword: boolean }>> {
   try {
     const staff = await prisma.controlStaff.findMany({
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
@@ -261,6 +265,7 @@ export async function listControlStaffDirectory(): Promise<Array<ControlStaffOpt
         role: true,
         active: true,
         createdAt: true,
+        passwordHash: true,
       },
     });
 
@@ -271,6 +276,7 @@ export async function listControlStaffDirectory(): Promise<Array<ControlStaffOpt
       role: normalizeRole(entry.role),
       active: entry.active,
       createdAt: entry.createdAt.toISOString().slice(0, 10),
+      hasPassword: Boolean(entry.passwordHash),
     }));
   } catch (error) {
     if (isMissingControlStaffSchemaError(error)) {
