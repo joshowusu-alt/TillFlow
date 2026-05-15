@@ -736,7 +736,13 @@ export default function StorefrontClient({
   async function handleShareStore() {
     if (typeof window === 'undefined') return;
     const shareUrl = window.location.href;
-    const message = `Shop at ${storefront.name} — browse and pay with MoMo: ${shareUrl}`;
+    const sharePaymentHint = (() => {
+      const mode = storefront.paymentConfig?.mode;
+      if (mode === 'MOMO_NUMBER' || mode === 'MERCHANT_SHORTCODE') return 'browse and pay with MoMo';
+      if (mode === 'BANK_TRANSFER') return 'browse and pay via bank transfer';
+      return 'browse and place your order';
+    })();
+    const message = `Shop at ${storefront.name} — ${sharePaymentHint}: ${shareUrl}`;
 
     if (typeof navigator !== 'undefined' && (navigator as Navigator & { share?: unknown }).share) {
       try {

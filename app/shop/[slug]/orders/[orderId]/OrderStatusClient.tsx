@@ -564,6 +564,16 @@ export default function OrderStatusClient({ order: initialOrder }: { order: Publ
           </div>
         )}
 
+        {/* Pickup time hint — shown while order is being prepared */}
+        {!isCancelled && activeStep < 3 && (
+          <div className="mt-3 flex items-center gap-2.5 rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm ring-1 ring-black/[0.04]">
+            <svg className="h-4 w-4 shrink-0 text-black/30" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-black/50">Orders are usually ready for pickup within <span className="font-semibold text-black/65">30–60 minutes</span> of payment being confirmed.</p>
+          </div>
+        )}
+
         {/* Reference + amount — always visible */}
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white px-4 py-3.5 shadow-sm ring-1 ring-black/5">
