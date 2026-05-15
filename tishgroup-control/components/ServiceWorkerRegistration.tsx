@@ -68,7 +68,7 @@ export default function ServiceWorkerRegistration() {
         </div>
         <button
           onClick={() => waitingWorker.postMessage('skipWaiting')}
-          className="rounded-2xl bg-[#122126] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#0d1a1e]"
+          className="rounded-2xl bg-control-dark px-3 py-2 text-xs font-semibold text-white transition hover:bg-control-night"
         >
           Update
         </button>

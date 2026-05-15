@@ -113,7 +113,7 @@ export default function GlobalSearch({
   const isDark = variant === 'dark';
   const inputClass = isDark
     ? 'w-full rounded-[16px] border border-white/12 bg-white/8 py-2.5 pl-9 pr-8 text-sm text-white placeholder-white/40 outline-none transition focus:border-white/30 focus:bg-white/14'
-    : 'w-full rounded-[16px] border border-black/10 bg-black/[0.03] py-2.5 pl-9 pr-8 text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-[#1f8a82] focus:bg-white';
+    : 'w-full rounded-[16px] border border-black/10 bg-black/[0.03] py-2.5 pl-9 pr-8 text-sm text-control-ink placeholder-black/38 outline-none transition focus:border-control-teal focus:bg-white';
   const iconClass = isDark ? 'text-white/40' : 'text-black/36';
 
   return (

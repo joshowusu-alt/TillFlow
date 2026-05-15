@@ -22,11 +22,12 @@ function getNavCount(href: string, navCounts?: { urgent: number; collections: nu
 const navigation = [
   { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
   { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
-  { href: '/subscriptions', label: 'Subscriptions', shortLabel: 'Subs', icon: 'pulse' },
+  { href: '/subscriptions', label: 'Subscriptions', shortLabel: 'Subs', icon: 'cycle' },
   { href: '/collections', label: 'Collections', shortLabel: 'Collections', icon: 'pulse' },
   { href: '/revenue', label: 'Receivables', shortLabel: 'Receive', icon: 'chart' },
   { href: '/playbooks', label: 'Playbooks', shortLabel: 'Playbooks', icon: 'book' },
   { href: '/staff', label: 'Staff', shortLabel: 'Staff', icon: 'users' },
+  { href: '/errors', label: 'Error Log', shortLabel: 'Errors', icon: 'alert', requiresAdmin: true },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -58,6 +59,13 @@ function NavigationIcon({ icon, active }: { icon: string; active: boolean }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 19V9m7 10V5m7 14v-7" />
         </svg>
       );
+    case 'cycle':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h8.5a4.5 4.5 0 0 1 0 9H13" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 4.5 7 7l2.5 2.5M16.5 19.5 19 17l-2.5-2.5" />
+        </svg>
+      );
     case 'book':
       return (
         <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -70,6 +78,12 @@ function NavigationIcon({ icon, active }: { icon: string; active: boolean }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M16 19a4 4 0 0 0-8 0" />
           <circle cx="12" cy="11" r="3" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M20 19a3.5 3.5 0 0 0-2.6-3.38M17.5 8.2A2.5 2.5 0 1 1 19 12.8" />
+        </svg>
+      );
+    case 'alert':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 3.5h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
         </svg>
       );
     case 'home':
@@ -131,10 +145,10 @@ export default function ControlShell({
           <button
             type="button"
             aria-label="Close navigation"
-            className="absolute inset-0 bg-[#122126]/45 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-control-dark/45 backdrop-blur-[2px]"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col border-l border-black/10 bg-[#122126] px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-[20rem] flex-col border-l border-black/10 bg-control-dark px-4 pb-[calc(var(--safe-bottom)+1rem)] pt-[calc(var(--safe-top)+0.85rem)] text-white shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -154,7 +168,7 @@ export default function ControlShell({
             </div>
 
             <nav className="mt-6 space-y-1.5">
-              {navigation.map((item) => {
+              {navigation.filter((item) => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').map((item) => {
                 const active = isActivePath(pathname, item.href);
                 const count = getNavCount(item.href, navCounts);
                 return (
@@ -202,7 +216,7 @@ export default function ControlShell({
         </div>
       ) : null}
 
-      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[272px] shrink-0 flex-col justify-between self-start rounded-[26px] border border-black/10 bg-[#122126] px-4 py-4 text-white shadow-dashboard lg:flex">
+      <aside className="sticky top-4 hidden max-h-[calc(100dvh-2rem)] w-[272px] shrink-0 flex-col justify-between self-start rounded-[26px] border border-black/10 bg-control-dark px-4 py-4 text-white shadow-dashboard lg:flex">
         <div className="space-y-5">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">Internal only</div>
@@ -215,7 +229,7 @@ export default function ControlShell({
           <GlobalSearch variant="dark" />
 
           <nav className="space-y-1.5">
-            {navigation.map((item) => {
+            {navigation.filter((item) => !item.requiresAdmin || staff.role === 'CONTROL_ADMIN').map((item) => {
               const active = isActivePath(pathname, item.href);
               const count = getNavCount(item.href, navCounts);
               return (
@@ -314,7 +328,7 @@ export default function ControlShell({
                       prefetch={false}
                       className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-semibold transition ${
                         active
-                          ? 'border-[#122126] bg-[#122126] text-white'
+                          ? 'border-control-dark bg-control-dark text-white'
                           : 'border-black/8 bg-black/[0.03] text-black/56'
                       }`}
                     >

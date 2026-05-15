@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans, Space_Grotesk } from 'next/font/google';
+import { Suspense } from 'react';
 import '@/app/globals.css';
 import ControlShell from '@/components/control-shell';
 import InstallPrompt from '@/components/InstallPrompt';
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
+import Toast from '@/components/toast';
 import { getControlStaffOptional } from '@/lib/control-auth';
 import { listManagedBusinesses } from '@/lib/control-service';
 import { getPortfolioSummaryFor, getCollectionQueuesFor } from '@/lib/control-metrics';
@@ -79,6 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="font-[var(--font-body)] antialiased">
         <ServiceWorkerRegistration />
         <InstallPrompt />
+        <Suspense fallback={null}><Toast /></Suspense>
         {staff ? (
           <ControlShell staff={staff} navCounts={navCounts}>{children}</ControlShell>
         ) : children}

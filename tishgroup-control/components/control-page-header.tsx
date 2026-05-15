@@ -30,7 +30,7 @@ export default function ControlPageHeader({
 }) {
   return (
     <section className="space-y-3">
-      <div className={`panel p-4 sm:p-5 lg:p-6 ${aside ? '' : ''}`}>
+      <div className="panel p-4 sm:p-5 lg:p-6">
         <div className={`grid gap-3 ${aside ? 'lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)] lg:items-start' : ''}`}>
           <div className="space-y-3">
             <div className="space-y-2">
@@ -45,7 +45,7 @@ export default function ControlPageHeader({
                 {chips.map((chip) => {
                   const className = `control-chip ${
                     chip.tone === 'dark'
-                      ? 'border-[#122126] bg-[#122126] text-white'
+                      ? 'border-control-dark bg-control-dark text-white'
                       : chip.tone === 'muted'
                         ? 'control-chip-muted'
                         : ''

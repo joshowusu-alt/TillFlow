@@ -91,7 +91,7 @@ export default function InstallPrompt() {
   return (
     <div className="fixed inset-x-4 bottom-[calc(var(--safe-bottom)+1rem)] z-50 mx-auto max-w-sm">
       <div className="overflow-hidden rounded-[28px] border border-black/10 bg-[rgba(255,255,255,0.97)] shadow-2xl backdrop-blur">
-        <div className="bg-[#122126] px-4 py-4 text-white">
+        <div className="bg-control-dark px-4 py-4 text-white">
           <div className="flex items-center gap-3">
             <img src="/api/icon?size=128" alt="Tish Group Control" className="h-12 w-12 rounded-2xl" />
             <div>
@@ -107,11 +107,11 @@ export default function InstallPrompt() {
           </p>
 
           {deferredPrompt ? (
-            <div className="rounded-2xl border border-black/8 bg-[#f7f4ef] px-3 py-3 text-[13px] leading-6 text-black/70">
+            <div className="rounded-2xl border border-black/8 bg-control-cloud px-3 py-3 text-[13px] leading-6 text-black/70">
               This browser supports direct install. Use the button below and the app will open without the browser frame once installed.
             </div>
           ) : (
-            <div className="rounded-2xl border border-black/8 bg-[#f7f4ef] px-3 py-3 text-[13px] leading-6 text-black/70">
+            <div className="rounded-2xl border border-black/8 bg-control-cloud px-3 py-3 text-[13px] leading-6 text-black/70">
               On iPhone, tap <strong>Share</strong> in Safari, then choose <strong>Add to Home Screen</strong>.
             </div>
           )}
@@ -120,7 +120,7 @@ export default function InstallPrompt() {
             {deferredPrompt ? (
               <button
                 onClick={handleInstall}
-                className="flex-1 rounded-2xl bg-[#122126] px-4 py-3 font-semibold text-white transition hover:bg-[#0d1a1e]"
+                className="flex-1 rounded-2xl bg-control-dark px-4 py-3 font-semibold text-white transition hover:bg-control-night"
               >
                 Install now
               </button>

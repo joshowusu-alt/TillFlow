@@ -121,9 +121,9 @@ textarea::placeholder {
   height: 3px;
 }
 
-.kpi-top-strip-teal  { background: #1f8a82; }
-.kpi-top-strip-gold  { background: #e2a83d; }
-.kpi-top-strip-ember { background: #b35c2e; }
+.kpi-top-strip-teal  { background: var(--teal); }
+.kpi-top-strip-gold  { background: var(--gold); }
+.kpi-top-strip-ember { background: var(--ember); }
 .kpi-top-strip-moss  { background: #2f6f56; }
 
 .control-stat-card {
@@ -290,7 +290,7 @@ textarea::placeholder {
 }
 
 .control-field {
-  @apply w-full rounded-[18px] border border-black/10 bg-white px-3.5 py-2.5 text-sm text-control-ink outline-none transition focus:border-[#1f8a82];
+  @apply w-full rounded-[18px] border border-black/10 bg-white px-3.5 py-2.5 text-sm text-control-ink outline-none transition focus:border-control-teal;
   min-height: 44px;
 }
 

@@ -6,9 +6,11 @@ const config: Config = {
     extend: {
       colors: {
         control: {
-          night: '#0d1b1e',
+          night: '#0d1a1e',
+          dark: '#122126',
           ink: '#15272b',
           teal: '#1f8a82',
+          'teal-dark': '#166a64',
           moss: '#2f6f56',
           sand: '#f2ebe2',
           ember: '#b35c2e',

@@ -20,10 +20,10 @@ const toneStrip: Record<KpiTone, string> = {
 
 const toneNumber: Record<KpiTone, string> = {
   default: 'text-control-ink',
-  teal:    'text-[#1a7370]',
-  gold:    'text-[#b8882e]',
-  ember:   'text-[#9a4a22]',
-  moss:    'text-[#255842]',
+  teal:    'text-control-teal',
+  gold:    'text-control-gold',
+  ember:   'text-control-ember',
+  moss:    'text-control-moss',
 };
 
 export default function KpiCard({

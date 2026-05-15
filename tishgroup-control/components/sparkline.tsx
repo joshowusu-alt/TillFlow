@@ -10,17 +10,17 @@ type SparklineProps = {
 };
 
 const TONE_STROKE: Record<NonNullable<SparklineProps['tone']>, string> = {
-  teal: '#1f8a82',
-  gold: '#e2a83d',
-  ember: '#b35c2e',
-  ink: '#122126',
+  teal: 'var(--teal)',
+  gold: 'var(--gold)',
+  ember: 'var(--ember)',
+  ink: 'var(--ink)',
 };
 
 const TONE_FILL: Record<NonNullable<SparklineProps['tone']>, string> = {
-  teal: 'rgba(31, 138, 130, 0.12)',
-  gold: 'rgba(226, 168, 61, 0.14)',
-  ember: 'rgba(179, 92, 46, 0.14)',
-  ink: 'rgba(18, 33, 38, 0.12)',
+  teal: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+  gold: 'color-mix(in srgb, var(--gold) 14%, transparent)',
+  ember: 'color-mix(in srgb, var(--ember) 14%, transparent)',
+  ink: 'color-mix(in srgb, var(--ink) 12%, transparent)',
 };
 
 /**

@@ -163,7 +163,7 @@ export default async function PortfolioPage() {
           hint="Same-day follow-up required."
           accent={overdueCount > 0 ? (
             <span className="flex items-center gap-1">
-              <span className="pulse-dot bg-[#b35c2e]" />
+              <span className="pulse-dot bg-control-ember" />
               Urgent
             </span>
           ) : 'Grace'}
@@ -175,7 +175,7 @@ export default async function PortfolioPage() {
           hint="Payment confirmation or commercial decision needed."
           accent={summary.readOnly > 0 ? (
             <span className="flex items-center gap-1">
-              <span className="pulse-dot bg-[#b35c2e]" />
+              <span className="pulse-dot bg-control-ember" />
               Locked
             </span>
           ) : 'Locked'}
