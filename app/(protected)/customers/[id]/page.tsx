@@ -196,7 +196,7 @@ export default async function CustomerDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={customer.name} subtitle="Customer profile and transaction history." />
+      <PageHeader title={customer.name} subtitle="Customer profile and transaction history." secondaryCta={{ label: '← Back to customers', href: '/customers' }} />
 
       {customerTags.length > 0 ? (
         <TagChips tags={customerTags} className="-mt-2" />

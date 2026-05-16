@@ -115,7 +115,7 @@ export default async function SupplierDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={supplier.name} subtitle="Supplier profile and payable history." />
+      <PageHeader title={supplier.name} subtitle="Supplier profile and payable history." secondaryCta={{ label: '← Back to suppliers', href: '/suppliers' }} />
 
       {supplierTags.length > 0 ? <TagChips tags={supplierTags} className="-mt-2" /> : null}
 

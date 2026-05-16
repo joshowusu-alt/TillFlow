@@ -78,7 +78,7 @@ export default async function ProductDetailPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={product.name} subtitle="Product detail and unit breakdown." />
+      <PageHeader title={product.name} subtitle="Product detail and unit breakdown." secondaryCta={{ label: '← Back to products', href: '/products' }} />
 
       {/* Hero row with image + summary */}
       <div className="card flex flex-col gap-6 p-6 sm:flex-row">

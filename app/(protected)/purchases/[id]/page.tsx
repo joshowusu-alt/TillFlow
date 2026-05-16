@@ -51,6 +51,7 @@ export default async function PurchaseInvoicePage({
       <PageHeader
         title={`Purchase Invoice`}
         subtitle={invoice.supplier ? `Supplier: ${invoice.supplier.name}` : 'No supplier linked'}
+        secondaryCta={{ label: '← Back to purchases', href: '/purchases' }}
       />
 
       <FormError error={searchParams?.error} />

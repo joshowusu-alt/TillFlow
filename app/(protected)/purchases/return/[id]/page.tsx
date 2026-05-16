@@ -33,7 +33,7 @@ export default async function PurchaseReturnPage({ params }: { params: { id: str
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Return Purchase" subtitle="Process a full purchase return or void an unpaid invoice." />
+      <PageHeader title="Return Purchase" subtitle="Process a full purchase return or void an unpaid invoice." secondaryCta={{ label: '← Back to purchases', href: '/purchases' }} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
