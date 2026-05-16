@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { refreshCurrentView } from '@/app/actions/refresh';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
@@ -49,6 +50,16 @@ export default function TopNav({
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
   const lastSalesRefreshAtRef = useRef(0);
   const isOnline = useNetworkStatus();
+  const router = useRouter();
+  const [isRefreshing, startRefreshTransition] = useTransition();
+
+  const handleRefresh = () => {
+    if (isRefreshing || !isOnline) return;
+    startRefreshTransition(async () => {
+      await refreshCurrentView(pathname).catch(() => null);
+      router.refresh();
+    });
+  };
   const navRef = useRef<HTMLDivElement>(null);
   const planGatedLinks = useMemo(
     () =>
@@ -243,11 +254,36 @@ export default function TopNav({
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span
-              className={`hidden 2xl:inline-flex ${isOnline ? 'status-badge-online' : 'status-badge-offline'}`}
-            >
-              {isOnline ? 'Sync ready' : 'Offline mode'}
-            </span>
+            {isOnline ? (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                title="Refresh data"
+                className="hidden 2xl:inline-flex status-badge-online cursor-pointer transition-opacity hover:opacity-75 active:opacity-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <svg
+                  aria-hidden="true"
+                  className={`-ml-0.5 h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 0 1-15.3 6.4" />
+                  <path d="M3 12a9 9 0 0 1 15.3-6.4" />
+                  <path d="M18 2v4h-4" />
+                  <path d="M6 22v-4h4" />
+                </svg>
+                {isRefreshing ? 'Refreshing…' : 'Sync ready'}
+              </button>
+            ) : (
+              <span className="hidden 2xl:inline-flex status-badge-offline">
+                Offline mode
+              </span>
+            )}
             {(merchantBranding || storeName) ? (
               <span
                 className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-2.5 text-xs font-medium text-ink shadow-sm xl:inline-flex"
