@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeMarginAnalysis } from './margin-analysis';
+import { buildCostCheck, summarizeMarginAnalysis, type MarginAnalysisRow } from './margin-analysis';
+
+function makeMarginRow(overrides: Partial<MarginAnalysisRow> = {}): MarginAnalysisRow {
+	return {
+		productId: 'product-a',
+		name: 'BEL-COLA',
+		qtySold: 10,
+		revenuePence: 2_590,
+		costPence: 6_700,
+		profitPence: -4_110,
+		marginPercent: -158.7,
+		marginDeltaPercent: -173.7,
+		effectiveThresholdBps: 1_500,
+		effectiveThresholdPercent: 15,
+		thresholdSource: 'business-default',
+		averageSellPricePence: 259,
+		averageCostPricePence: 670,
+		belowCost: true,
+		belowTargetMargin: true,
+		lastSoldAt: new Date('2026-05-16T10:00:00.000Z'),
+		...overrides,
+	};
+}
 
 describe('summarizeMarginAnalysis', () => {
 	it('groups sold lines, applies threshold overrides, and flags below-cost and below-target products', () => {
@@ -78,5 +100,54 @@ describe('summarizeMarginAnalysis', () => {
 			belowCost: false,
 			belowTargetMargin: false,
 		});
+	});
+});
+
+describe('buildCostCheck', () => {
+	it('flags likely package cost keyed as base cost before other checks', () => {
+		const check = buildCostCheck({
+			row: makeMarginRow(),
+			defaultCostBasePence: 240,
+			inventoryAvgCostBasePence: 670,
+			lastPurchaseCostBasePence: 250,
+			lastPurchaseAt: new Date('2026-05-15T10:00:00.000Z'),
+			baseUnitName: 'bottle',
+			packageUnits: [
+				{ name: 'crate', conversionToBase: 24, defaultCostPence: 670 },
+			],
+		});
+
+		expect(check.likelyIssue).toBe('package-cost-as-base');
+		expect(check.recommendedAction).toContain('repair current WAC');
+	});
+
+	it('flags stale WAC when current product cost is sane but inventory average is too high', () => {
+		const check = buildCostCheck({
+			row: makeMarginRow({ averageCostPricePence: 670 }),
+			defaultCostBasePence: 240,
+			inventoryAvgCostBasePence: 670,
+			lastPurchaseCostBasePence: 250,
+			lastPurchaseAt: new Date('2026-05-15T10:00:00.000Z'),
+			baseUnitName: 'bottle',
+			packageUnits: [],
+		});
+
+		expect(check.likelyIssue).toBe('stale-wac');
+		expect(check.recommendedAction).toContain('Repair Inventory Average Costs');
+	});
+
+	it('flags a real loss when recent purchase cost is above the sell price', () => {
+		const check = buildCostCheck({
+			row: makeMarginRow({ averageCostPricePence: 300, costPence: 3_000 }),
+			defaultCostBasePence: 300,
+			inventoryAvgCostBasePence: 300,
+			lastPurchaseCostBasePence: 310,
+			lastPurchaseAt: new Date('2026-05-15T10:00:00.000Z'),
+			baseUnitName: 'bottle',
+			packageUnits: [],
+		});
+
+		expect(check.likelyIssue).toBe('real-loss');
+		expect(check.recommendedAction).toContain('Raise selling price');
 	});
 });

@@ -72,6 +72,35 @@ function sortRowsForView(rows: MarginAnalysisRow[], view: 'all' | 'below-cost' |
   return [...rows].sort((a, b) => b.profitPence - a.profitPence);
 }
 
+function costIssueLabel(issue: NonNullable<MarginAnalysisRow['costCheck']>['likelyIssue']) {
+  switch (issue) {
+    case 'package-cost-as-base':
+      return 'Possible pack cost issue';
+    case 'stale-wac':
+      return 'Possible stale WAC';
+    case 'historical-cost':
+      return 'Historical cost differs';
+    case 'real-loss':
+      return 'Likely real loss';
+    case 'needs-review':
+      return 'Needs cost review';
+    case 'healthy':
+    default:
+      return 'Cost looks healthy';
+  }
+}
+
+function buildSaleCostCorrectionHref(row: MarginAnalysisRow, query: { period: string; from: string; to: string }) {
+  const params = new URLSearchParams({
+    q: row.name,
+    status: row.belowCost ? 'below-cost' : 'all',
+    period: query.period,
+    from: query.from,
+    to: query.to,
+  });
+  return `/settings/data-repair/sale-cost-corrections?${params.toString()}`;
+}
+
 export default async function MarginsPage({
   searchParams,
 }: {
@@ -297,37 +326,90 @@ export default async function MarginsPage({
           </tr>
         </thead>
         <tbody>
-          {pagedRows.map((row) => (
-            <tr key={row.productId} className="rounded-xl bg-white">
-              <td className="px-3 py-3">
-                <div className="flex flex-col gap-1">
-                  <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
-                    {row.name}
-                  </Link>
-                  <span className="text-xs text-black/45">
-                    Last sold {row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+          {pagedRows.map((row) => {
+            const costCheck = row.costCheck;
+            const shouldExplain = costCheck && (row.belowCost || row.belowTargetMargin);
+
+            return (
+              <tr key={row.productId} className="rounded-xl bg-white">
+                <td className="px-3 py-3">
+                  <div className="flex flex-col gap-1">
+                    <Link href={`/products/${row.productId}`} className="font-semibold text-ink hover:text-primary hover:underline">
+                      {row.name}
+                    </Link>
+                    <span className="text-xs text-black/45">
+                      Last sold {row.lastSoldAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+                    </span>
+                    {shouldExplain ? (
+                      <details className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-black/65">
+                        <summary className="cursor-pointer font-semibold text-ink">
+                          Cost check: {costIssueLabel(costCheck.likelyIssue)}
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          <p>{costCheck.explanation}</p>
+                          <div className="grid gap-1 sm:grid-cols-2">
+                            <div>Cost source: <strong>{costCheck.costUsedLabel}</strong></div>
+                            <div>Base unit: <strong>{costCheck.baseUnitName ?? 'Not set'}</strong></div>
+                            <div>Product default/base: <strong>{formatMoney(costCheck.defaultCostBasePence, business.currency)}</strong></div>
+                            <div>Inventory WAC/base: <strong>{costCheck.inventoryAvgCostBasePence != null ? formatMoney(costCheck.inventoryAvgCostBasePence, business.currency) : 'No balance'}</strong></div>
+                            <div>Last purchase/base: <strong>{costCheck.lastPurchaseCostBasePence != null ? formatMoney(costCheck.lastPurchaseCostBasePence, business.currency) : 'No purchase found'}</strong></div>
+                            <div>Last purchase: <strong>{costCheck.lastPurchaseAt ? costCheck.lastPurchaseAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'None'}</strong></div>
+                          </div>
+                          {costCheck.packageUnits.length > 0 ? (
+                            <div>
+                              <div className="font-semibold text-black/70">Configured pack/carton units</div>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {costCheck.packageUnits.map((unit) => (
+                                  <span key={`${unit.name}-${unit.conversionToBase}`} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-black/55">
+                                    {unit.name}: {unit.conversionToBase} base{unit.defaultCostPence != null ? ` · ${formatMoney(unit.defaultCostPence, business.currency)}` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-blue-900">
+                            <strong>Next step:</strong> {costCheck.recommendedAction}
+                          </div>
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            <Link href={`/products/${row.productId}`} className="btn-secondary px-3 py-1.5 text-xs">
+                              Check product setup
+                            </Link>
+                            {costCheck.likelyIssue === 'stale-wac' || costCheck.likelyIssue === 'package-cost-as-base' ? (
+                              <Link href="/settings/data-repair" className="btn-secondary px-3 py-1.5 text-xs">
+                                Repair current WAC
+                              </Link>
+                            ) : null}
+                            {costCheck.likelyIssue === 'historical-cost' || costCheck.likelyIssue === 'package-cost-as-base' ? (
+                              <Link href={buildSaleCostCorrectionHref(row, marginQuery)} className="btn-secondary px-3 py-1.5 text-xs">
+                                Review sale-cost repair
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                      </details>
+                    ) : null}
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-right text-sm">{row.qtySold}</td>
+                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageSellPricePence, business.currency)}</td>
+                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageCostPricePence, business.currency)}</td>
+                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.revenuePence, business.currency)}</td>
+                <td className="px-3 py-3 text-right text-sm">{formatMoney(row.costPence, business.currency)}</td>
+                <td className={`px-3 py-3 text-right text-sm font-semibold ${row.profitPence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                  {formatMoney(row.profitPence, business.currency)}
+                </td>
+                <td className={`px-3 py-3 text-right text-sm font-semibold ${row.belowTargetMargin ? 'text-amber-700' : 'text-emerald-700'}`}>
+                  {formatMarginPercent(row.marginPercent)}
+                </td>
+                <td className="px-3 py-3 text-right text-sm">{formatMarginPercent(row.effectiveThresholdPercent)}</td>
+                <td className="px-3 py-3 text-right text-sm">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
+                    {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
                   </span>
-                </div>
-              </td>
-              <td className="px-3 py-3 text-right text-sm">{row.qtySold}</td>
-              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageSellPricePence, business.currency)}</td>
-              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.averageCostPricePence, business.currency)}</td>
-              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.revenuePence, business.currency)}</td>
-              <td className="px-3 py-3 text-right text-sm">{formatMoney(row.costPence, business.currency)}</td>
-              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.profitPence < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-                {formatMoney(row.profitPence, business.currency)}
-              </td>
-              <td className={`px-3 py-3 text-right text-sm font-semibold ${row.belowTargetMargin ? 'text-amber-700' : 'text-emerald-700'}`}>
-                {formatMarginPercent(row.marginPercent)}
-              </td>
-              <td className="px-3 py-3 text-right text-sm">{formatMarginPercent(row.effectiveThresholdPercent)}</td>
-              <td className="px-3 py-3 text-right text-sm">
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${marginBadgeClass(row)}`}>
-                  {row.belowCost ? 'Below cost' : row.belowTargetMargin ? 'Below target' : 'Healthy'}
-                </span>
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            );
+          })}
           {pagedRows.length === 0 ? (
             <ReportTableEmptyRow
               colSpan={10}

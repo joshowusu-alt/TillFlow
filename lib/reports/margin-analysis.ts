@@ -30,6 +30,7 @@ export type MarginAnalysisRow = {
 	belowCost: boolean;
 	belowTargetMargin: boolean;
 	lastSoldAt: Date;
+	costCheck?: MarginCostCheck;
 };
 
 export type MarginAnalysisSnapshot = {
@@ -39,6 +40,23 @@ export type MarginAnalysisSnapshot = {
 	belowTargetMarginCount: number;
 	healthyCount: number;
 	businessDefaultThresholdBps: number;
+};
+
+export type MarginCostCheck = {
+	defaultCostBasePence: number;
+	inventoryAvgCostBasePence: number | null;
+	lastPurchaseCostBasePence: number | null;
+	lastPurchaseAt: Date | null;
+	baseUnitName: string | null;
+	packageUnits: Array<{
+		name: string;
+		conversionToBase: number;
+		defaultCostPence: number | null;
+	}>;
+	costUsedLabel: string;
+	likelyIssue: 'real-loss' | 'stale-wac' | 'package-cost-as-base' | 'historical-cost' | 'needs-review' | 'healthy';
+	explanation: string;
+	recommendedAction: string;
 };
 
 type MarginAnalysisQueryOptions = {
@@ -190,5 +208,178 @@ export async function getMarginAnalysisSnapshot({
 			product: line.product,
 		}));
 
-	return summarizeMarginAnalysis(lines, business?.minimumMarginThresholdBps ?? 1500);
+	const snapshot = summarizeMarginAnalysis(lines, business?.minimumMarginThresholdBps ?? 1500);
+	return enrichMarginRowsWithCostChecks(snapshot, { businessId, storeId });
+}
+
+async function enrichMarginRowsWithCostChecks(
+	snapshot: MarginAnalysisSnapshot,
+	{ businessId, storeId }: Pick<MarginAnalysisQueryOptions, 'businessId' | 'storeId'>,
+): Promise<MarginAnalysisSnapshot> {
+	if (snapshot.rows.length === 0) return snapshot;
+
+	const productIds = snapshot.rows.map((row) => row.productId);
+	const [products, purchaseLines] = await Promise.all([
+		prisma.product.findMany({
+			where: { businessId, id: { in: productIds } },
+			select: {
+				id: true,
+				defaultCostBasePence: true,
+				productUnits: {
+					select: {
+						isBaseUnit: true,
+						conversionToBase: true,
+						defaultCostPence: true,
+						unit: { select: { name: true, pluralName: true } },
+					},
+					orderBy: [{ isBaseUnit: 'desc' }, { conversionToBase: 'asc' }],
+				},
+				inventoryBalances: {
+					where: storeId ? { storeId } : undefined,
+					select: { avgCostBasePence: true, qtyOnHandBase: true },
+				},
+			},
+		}),
+		prisma.purchaseInvoiceLine.findMany({
+			where: {
+				productId: { in: productIds },
+				purchaseInvoice: {
+					businessId,
+					...(storeId ? { storeId } : {}),
+				},
+			},
+			select: {
+				productId: true,
+				unitCostPence: true,
+				conversionToBase: true,
+				purchaseInvoice: { select: { createdAt: true } },
+			},
+			orderBy: { createdAt: 'desc' },
+		}),
+	]);
+
+	const productMap = new Map(products.map((product) => [product.id, product]));
+	const lastPurchaseByProduct = new Map<string, { costBasePence: number; purchasedAt: Date }>();
+	for (const line of purchaseLines) {
+		if (lastPurchaseByProduct.has(line.productId)) continue;
+		lastPurchaseByProduct.set(line.productId, {
+			costBasePence: Math.round(line.unitCostPence / Math.max(line.conversionToBase, 1)),
+			purchasedAt: line.purchaseInvoice.createdAt,
+		});
+	}
+
+	return {
+		...snapshot,
+		rows: snapshot.rows.map((row) => {
+			const product = productMap.get(row.productId);
+			if (!product) return row;
+
+			const inventoryWithCost = product.inventoryBalances.filter((balance) => balance.avgCostBasePence > 0);
+			const inventoryAvgCostBasePence =
+				inventoryWithCost.length > 0
+					? Math.round(
+						inventoryWithCost.reduce((sum, balance) => sum + balance.avgCostBasePence * Math.max(balance.qtyOnHandBase, 0), 0)
+						/ Math.max(inventoryWithCost.reduce((sum, balance) => sum + Math.max(balance.qtyOnHandBase, 0), 0), 1),
+					)
+					: null;
+			const baseUnit = product.productUnits.find((unit) => unit.isBaseUnit || unit.conversionToBase === 1);
+			const packageUnits = product.productUnits
+				.filter((unit) => !unit.isBaseUnit && unit.conversionToBase > 1)
+				.slice(0, 4)
+				.map((unit) => ({
+					name: unit.unit.name,
+					conversionToBase: unit.conversionToBase,
+					defaultCostPence: unit.defaultCostPence,
+				}));
+			const lastPurchase = lastPurchaseByProduct.get(row.productId) ?? null;
+
+			return {
+				...row,
+				costCheck: buildCostCheck({
+					row,
+					defaultCostBasePence: product.defaultCostBasePence,
+					inventoryAvgCostBasePence,
+					lastPurchaseCostBasePence: lastPurchase?.costBasePence ?? null,
+					lastPurchaseAt: lastPurchase?.purchasedAt ?? null,
+					baseUnitName: baseUnit?.unit.name ?? null,
+					packageUnits,
+				}),
+			};
+		}),
+	};
+}
+
+export function buildCostCheck(input: {
+	row: MarginAnalysisRow;
+	defaultCostBasePence: number;
+	inventoryAvgCostBasePence: number | null;
+	lastPurchaseCostBasePence: number | null;
+	lastPurchaseAt: Date | null;
+	baseUnitName: string | null;
+	packageUnits: MarginCostCheck['packageUnits'];
+}): MarginCostCheck {
+	const {
+		row,
+		defaultCostBasePence,
+		inventoryAvgCostBasePence,
+		lastPurchaseCostBasePence,
+		lastPurchaseAt,
+		baseUnitName,
+		packageUnits,
+	} = input;
+
+	const costUsedLabel = row.costPence > 0
+		? 'Sale-line cost snapshot'
+		: 'Product default fallback';
+
+	const suspiciousPackageUnit = packageUnits.find((unit) =>
+		unit.defaultCostPence != null &&
+		Math.abs(row.averageCostPricePence - unit.defaultCostPence) <= Math.max(1, Math.round(unit.defaultCostPence * 0.03))
+	);
+
+	let likelyIssue: MarginCostCheck['likelyIssue'] = 'healthy';
+	let explanation = 'This product is meeting its configured margin target.';
+	let recommendedAction = 'No action needed.';
+
+	if (row.belowCost || row.belowTargetMargin) {
+		if (suspiciousPackageUnit) {
+			likelyIssue = 'package-cost-as-base';
+			explanation = `The cost used is close to the ${suspiciousPackageUnit.name} cost, not the base-unit cost. This often means pack/carton cost was stored as per-unit cost.`;
+			recommendedAction = 'Check product unit conversion and default costs, then repair current WAC and affected sale lines if needed.';
+		} else if (
+			inventoryAvgCostBasePence != null &&
+			defaultCostBasePence > 0 &&
+			inventoryAvgCostBasePence > row.averageSellPricePence &&
+			defaultCostBasePence <= row.averageSellPricePence
+		) {
+			likelyIssue = 'stale-wac';
+			explanation = 'The current product default cost is below the selling price, but inventory WAC is still above it. The balance may be carrying an old or bad average cost.';
+			recommendedAction = 'Confirm product setup, then run Repair Inventory Average Costs before changing prices.';
+		} else if (lastPurchaseCostBasePence != null && lastPurchaseCostBasePence > row.averageSellPricePence) {
+			likelyIssue = 'real-loss';
+			explanation = 'The latest purchase cost is above the selling price. This is likely a real loss unless that purchase entry was keyed incorrectly.';
+			recommendedAction = 'Raise selling price, negotiate buying cost, or confirm this was an intentional promotion/clearance sale.';
+		} else if (row.costPence > 0 && defaultCostBasePence > 0 && Math.abs(row.averageCostPricePence - defaultCostBasePence) > Math.max(1, Math.round(defaultCostBasePence * 0.15))) {
+			likelyIssue = 'historical-cost';
+			explanation = "The report is using historical sale-line cost, which differs meaningfully from today's product default cost.";
+			recommendedAction = 'If old sales inherited a bad cost, use Targeted Sale Cost Corrections. Otherwise treat this as true historical margin.';
+		} else {
+			likelyIssue = 'needs-review';
+			explanation = 'The cost basis is above the margin target. It may be genuine low margin, stale cost, or a unit setup issue.';
+			recommendedAction = 'Review product setup, recent purchases, and whether the sale was discounted or promotional.';
+		}
+	}
+
+	return {
+		defaultCostBasePence,
+		inventoryAvgCostBasePence,
+		lastPurchaseCostBasePence,
+		lastPurchaseAt,
+		baseUnitName,
+		packageUnits,
+		costUsedLabel,
+		likelyIssue,
+		explanation,
+		recommendedAction,
+	};
 }
