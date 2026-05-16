@@ -142,9 +142,25 @@ async function run() {
     }
     if (!saleProduct) throw new Error('Could not find POS product candidate with stock');
 
-    // Wait for the product search input to be visible and React to be hydrated
-    const productSearch = page.getByPlaceholder(/type product name/i);
-    await productSearch.waitFor({ state: 'visible', timeout: 20000 });
+    const billingRestrictionBanner = page.getByText(/Access restricted\. Complete payment to continue using TillFlow\./i);
+    const barcodeInput = page.getByPlaceholder(/scan barcode/i);
+    const productSearch = page.getByPlaceholder(/type product name|search products by name or barcode/i);
+    const posReadyState = await Promise.race([
+      productSearch.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'product-search'),
+      barcodeInput.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'barcode'),
+      billingRestrictionBanner.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'billing-lock'),
+    ]).catch(() => 'timeout');
+
+    if (posReadyState === 'billing-lock') {
+      throw new Error(`POS blocked by billing restriction. URL: ${page.url()}`);
+    }
+
+    if (posReadyState === 'timeout') {
+      await page.screenshot({ path: '.playwright-mcp/pos-not-ready.png', fullPage: true });
+      throw new Error(`POS UI did not become ready. URL: ${page.url()}`);
+    }
+
+    await productSearch.waitFor({ state: 'visible', timeout: 10000 });
 
     const searchTerm = String(saleProduct.name || '').slice(0, 6) || 'a';
     // Click first so onFocus → setProductDropdownOpen(true), then fill (which uses

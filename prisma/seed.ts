@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 
 import bcrypt from 'bcryptjs';
 import { ensureControlPlaneBusinessBootstrap } from '../lib/control-plane-bootstrap';
+import { activateSubscriptionAfterPayment } from '../lib/subscription-lifecycle';
 
 const prisma = new PrismaClient();
 
@@ -93,6 +94,15 @@ async function main() {
     process.exit(1);
   }
 
+  const seededPlan = 'STARTER' as const;
+  const seededPaymentDate = new Date();
+  seededPaymentDate.setUTCDate(seededPaymentDate.getUTCDate() - 2);
+  const seededActivation = activateSubscriptionAfterPayment({
+    selectedPlan: seededPlan,
+    billingInterval: 'MONTHLY',
+    paymentDate: seededPaymentDate,
+  });
+
   /* ---------- Business ---------- */
   let business = await prisma.business.findFirst();
   if (!business) {
@@ -100,11 +110,51 @@ async function main() {
       data: {
         name: 'Supermarket Demo',
         currency: 'GHS',
-        plan: 'STARTER',
-        planStatus: 'ACTIVE',
+        plan: seededPlan,
+        selectedPlan: seededPlan,
+        planStatus: seededActivation.planStatus,
+        subscriptionStatus: seededActivation.subscriptionStatus,
+        firstPaymentAt: seededActivation.firstPaymentAt,
+        currentPeriodStartedAt: seededActivation.currentPeriodStartedAt,
+        currentPeriodEndsAt: seededActivation.currentPeriodEndsAt,
+        nextBillingDate: seededActivation.nextBillingDate,
+        nextPaymentDueAt: seededActivation.nextPaymentDueAt,
+        lastPaymentAt: seededActivation.lastPaymentAt,
+        paymentGraceEndsAt: null,
+        suspendedAt: null,
+        cancelledAt: null,
+        billingAmount: seededActivation.billingAmount,
+        billingCurrency: seededActivation.billingCurrency,
+        billingInterval: seededActivation.billingInterval,
+        planSetAt: seededPaymentDate,
         vatEnabled: false,
         mode: 'SIMPLE',
         openingCapitalPence: 2000000,
+      },
+    });
+  } else {
+    business = await prisma.business.update({
+      where: { id: business.id },
+      data: {
+        plan: seededPlan,
+        selectedPlan: seededPlan,
+        planStatus: seededActivation.planStatus,
+        subscriptionStatus: seededActivation.subscriptionStatus,
+        trialStartedAt: null,
+        trialEndsAt: null,
+        firstPaymentAt: seededActivation.firstPaymentAt,
+        currentPeriodStartedAt: seededActivation.currentPeriodStartedAt,
+        currentPeriodEndsAt: seededActivation.currentPeriodEndsAt,
+        nextBillingDate: seededActivation.nextBillingDate,
+        nextPaymentDueAt: seededActivation.nextPaymentDueAt,
+        lastPaymentAt: seededActivation.lastPaymentAt,
+        paymentGraceEndsAt: null,
+        suspendedAt: null,
+        cancelledAt: null,
+        billingAmount: seededActivation.billingAmount,
+        billingCurrency: seededActivation.billingCurrency,
+        billingInterval: seededActivation.billingInterval,
+        planSetAt: seededPaymentDate,
       },
     });
   }
@@ -215,10 +265,12 @@ async function main() {
     ownerName: 'Owner',
     ownerEmail: 'owner@store.com',
     plan: business.plan,
-    status: business.planStatus,
+    status: business.subscriptionStatus,
     supportStatus: 'HEALTHY',
     notes: 'Seeded starter control-plane record for the local demo tenant.',
-    startedAt: business.planSetAt,
+    nextDueDate: business.nextBillingDate ?? business.nextPaymentDueAt ?? null,
+    lastPaymentDate: business.lastPaymentAt ?? null,
+    startedAt: business.currentPeriodStartedAt ?? business.planSetAt,
   });
 
   const cat = (name: string) => categoryMap.get(name);
