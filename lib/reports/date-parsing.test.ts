@@ -62,9 +62,22 @@ describe('resolveSelectableReportDateRange', () => {
     expect(result.toInputValue).toBe('2026-04-01');
   });
 
-  it('switches to a custom range when manual dates differ from the selected quick period', () => {
+  it('keeps the selected quick period even when stale date inputs are submitted with it', () => {
     const result = resolveSelectableReportDateRange(
       { period: '30d', from: '2026-02-01', to: '2026-02-28' },
+      '30d',
+      now,
+    );
+
+    expect(result.periodInputValue).toBe('30d');
+    expect(result.isCustomRange).toBe(false);
+    expect(result.fromInputValue).toBe('2026-03-03');
+    expect(result.toInputValue).toBe('2026-04-01');
+  });
+
+  it('uses manual dates when custom is explicitly selected', () => {
+    const result = resolveSelectableReportDateRange(
+      { period: 'custom', from: '2026-02-01', to: '2026-02-28' },
       '30d',
       now,
     );

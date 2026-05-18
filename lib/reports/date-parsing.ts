@@ -103,16 +103,9 @@ export function resolveSelectableReportDateRange(
 ) {
 	const preset = resolvePeriodPreset(params?.period ?? defaultPeriod, now);
 	const normalizedPeriod = (params?.period ?? '').toLowerCase();
-	const presetFromInputValue = toInputDateValue(startOfDay(preset.start));
-	const presetToInputValue = toInputDateValue(endOfDay(preset.end));
 	const submittedFrom = params?.from?.trim();
 	const submittedTo = params?.to?.trim();
-	const hasExplicitDateOverride = Boolean(
-		(submittedFrom && submittedFrom !== presetFromInputValue)
-		|| (submittedTo && submittedTo !== presetToInputValue),
-	);
 	const hasCustomRange = normalizedPeriod === 'custom'
-		|| hasExplicitDateOverride
 		|| (!normalizedPeriod && Boolean(submittedFrom || submittedTo));
 	const start = hasCustomRange
 		? startOfDay(parseReportDate(params?.from, preset.start))
