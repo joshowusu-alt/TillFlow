@@ -94,7 +94,7 @@ export default async function StockMovementsPage({
     storeId: storeFilter,
     createdAt: { gte: from, lte: to },
     ...(typeFilter ? { type: typeFilter } : {}),
-    ...(q ? { product: { name: { contains: q } } } : {}),
+    ...(q ? { product: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
   };
 
   const [totalCount, movements] = await Promise.all([
