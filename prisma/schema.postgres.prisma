@@ -143,6 +143,10 @@ model Business {
   // additional monthly fee. Pro plans get it included by default. Toggle is
   // assisted (Tish Group control plane writes; Tillflow reads).
   addonOnlineStorefront                Boolean  @default(false)
+  // Loyalty programme (GROWTH tier)
+  loyaltyEnabled                       Boolean  @default(false)
+  loyaltyPointsPerGhsPence             Int      @default(100)
+  loyaltyGhsPerHundredPoints           Int      @default(100)
   // SMS notifications: merchant opt-in + optional custom sender ID
   smsNotificationsEnabled              Boolean  @default(false)
   smsSenderId                          String?
@@ -465,6 +469,7 @@ model Customer {
   accountType      String   @default("RETAIL")
   paymentTermsDays Int      @default(0)
   creditLimitPence Int      @default(0)
+  loyaltyPointsBalance Int  @default(0)
   // Free-form merchant notes ("prefers WhatsApp", "always pays late", etc.).
   notes            String?
   // JSON array of normalised tag strings, e.g. ["VIP","Wholesale","Net 30"].
@@ -873,6 +878,9 @@ model SalesInvoice {
   grossMarginPence           Int       @default(0)
   cashReceivedPence          Int       @default(0)
   changeDuePence             Int       @default(0)
+  loyaltyPointsEarned        Int       @default(0)
+  loyaltyPointsRedeemed      Int       @default(0)
+  loyaltyPointsValuePence    Int       @default(0)
   createdAt                  DateTime  @default(now())
 
   business               Business                @relation(fields: [businessId], references: [id])

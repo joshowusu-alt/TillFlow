@@ -176,7 +176,7 @@ export default async function PosPage() {
         id: customer.id,
         name: customer.name,
         creditLimitPence: customer.creditLimitPence,
-        loyaltyPointsBalance: (customer as { loyaltyPointsBalance?: number }).loyaltyPointsBalance ?? 0,
+        loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
       }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
