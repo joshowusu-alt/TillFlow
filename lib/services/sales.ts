@@ -331,7 +331,7 @@ export async function createSale(input: CreateSaleInput) {
           storeId: true,
           creditLimitPence: true,
           loyaltyPointsBalance: true,
-        } as any,
+        },
       })
     : Promise.resolve(null);
 
