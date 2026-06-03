@@ -212,10 +212,13 @@ export async function persistActivationSnapshot(
     // Control plane tables may be missing in some dev DBs
   }
 
+  return readiness;
+}
+
+/** Safe from Server Actions / route handlers only — not during RSC render. */
+export function revalidateActivationCaches(businessId: string) {
   revalidateTag('control-portfolio');
   revalidateTag(`readiness-${businessId}`);
-
-  return readiness;
 }
 
 export type ActivationSnapshotBatchResult = {

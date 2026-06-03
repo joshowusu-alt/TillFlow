@@ -1,5 +1,5 @@
 import { unstable_cache } from 'next/cache';
-import { persistActivationSnapshot } from '@/lib/activation-snapshot';
+import { computeActivationForBusiness } from '@/lib/activation-snapshot';
 import { getSetupBannerCopy } from '@/lib/activation-display';
 import type { ActivationReadinessStatus, ActivationStuckReason } from '@/lib/activation-readiness';
 
@@ -14,7 +14,7 @@ export type OwnerSetupBannerState = {
 };
 
 async function buildOwnerSetupBannerState(businessId: string): Promise<OwnerSetupBannerState> {
-  const readiness = await persistActivationSnapshot(businessId);
+  const readiness = await computeActivationForBusiness(businessId);
   if (!readiness) {
     return {
       setupProgressPercent: 0,
