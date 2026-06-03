@@ -163,6 +163,7 @@ export async function completeSaleAction(data: {
   discountManagerPin?: string;
   discountReasonCode?: string;
   discountReason?: string;
+  loyaltyPointsToRedeem?: number;
 }): Promise<ActionResult<{ receiptId: string; totalPence: number; transactionNumber: string | null }>> {
   return safeAction(async () => {
     const { user, businessId } = await withBusinessContext();
@@ -217,6 +218,9 @@ export async function completeSaleAction(data: {
               productId: String(item.productId || ''),
               unitId: String(item.unitId || ''),
               qtyInUnit: Number(item.qtyInUnit || 0),
+              qtyBase: item.qtyBase != null ? Number(item.qtyBase) : undefined,
+              lineSubtotalPence:
+                item.lineSubtotalPence != null ? Number(item.lineSubtotalPence) : undefined,
               discountType: (item.discountType || 'NONE') as DiscountType,
               discountValue: parseDiscountValue(item.discountType, item.discountValue),
             }))
@@ -245,6 +249,7 @@ export async function completeSaleAction(data: {
       discountOverrideReason: discountReason,
       discountApprovedByUserId,
       momoCollectionId: data.momoCollectionId || null,
+      loyaltyPointsToRedeem: Math.max(0, Math.floor(data.loyaltyPointsToRedeem ?? 0)),
       payments: [
         { method: 'CASH', amountPence: data.cashPaid },
         { method: 'CARD', amountPence: data.cardPaid },
@@ -266,36 +271,6 @@ export async function completeSaleAction(data: {
       storeId: data.storeId,
       productIds: affectedProductIds,
     }).catch(() => {});
-
-    // Award loyalty points if programme is active and a customer is on the invoice
-    if (customerId && invoice.paymentStatus !== 'VOID') {
-      void (async () => {
-        try {
-          const biz = await prisma.business.findUnique({
-            where: { id: businessId },
-            select: { loyaltyEnabled: true, loyaltyPointsPerGhsPence: true } as any,
-          });
-          const bizAny = biz as any;
-          if (bizAny?.loyaltyEnabled) {
-            const pointsEarned = Math.floor(invoice.totalPence / 100) * (bizAny.loyaltyPointsPerGhsPence ?? 1);
-            if (pointsEarned > 0) {
-              await prisma.$transaction([
-                prisma.salesInvoice.update({
-                  where: { id: invoice.id },
-                  data: { loyaltyPointsEarned: pointsEarned } as any,
-                }),
-                prisma.customer.update({
-                  where: { id: customerId },
-                  data: { loyaltyPointsBalance: { increment: pointsEarned } } as any,
-                }),
-              ]);
-            }
-          }
-        } catch {
-          // Loyalty point failure must never block a sale
-        }
-      })();
-    }
 
     // Fire-and-forget: audit + cache revalidation should not block the cashier
     audit({

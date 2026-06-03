@@ -23,6 +23,7 @@ import {
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-monitor';
+import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
 
@@ -56,13 +57,22 @@ function buildLinePricing(
     if (!productUnit) {
       throw new Error('Unit not configured for product');
     }
-    const qtyBase = line.qtyInUnit * productUnit.conversionToBase;
+    const qtyBase =
+      typeof line.qtyBase === 'number' && line.qtyBase > 0
+        ? Math.round(line.qtyBase)
+        : line.qtyInUnit * productUnit.conversionToBase;
+    const lineSubtotal =
+      typeof line.lineSubtotalPence === 'number' && line.lineSubtotalPence > 0
+        ? Math.round(line.lineSubtotalPence)
+        : null;
     const unitPricePence =
-      typeof line.unitPricePence === 'number' && Number.isFinite(line.unitPricePence) && line.unitPricePence > 0
-        ? Math.round(line.unitPricePence)
-        : resolveEffectiveSellingPricePence(productUnit.product, productUnit);
-    const lineSubtotal = unitPricePence * line.qtyInUnit;
-    const lineDiscount = computeDiscount(lineSubtotal, line.discountType, line.discountValue);
+      lineSubtotal !== null
+        ? Math.max(1, Math.round(lineSubtotal / Math.max(line.qtyInUnit, 1)))
+        : typeof line.unitPricePence === 'number' && Number.isFinite(line.unitPricePence) && line.unitPricePence > 0
+          ? Math.round(line.unitPricePence)
+          : resolveEffectiveSellingPricePence(productUnit.product, productUnit);
+    const resolvedLineSubtotal = lineSubtotal ?? unitPricePence * line.qtyInUnit;
+    const lineDiscount = computeDiscount(resolvedLineSubtotal, line.discountType, line.discountValue);
     const promoBuyQty = productUnit.product.promoBuyQty ?? 0;
     const promoGetQty = productUnit.product.promoGetQty ?? 0;
     const promoGroup = promoBuyQty + promoGetQty;
@@ -72,9 +82,9 @@ function buildLinePricing(
         : 0;
     const promoDiscount = Math.min(
       resolveProductUnitBaseValuePence(unitPricePence, productUnit, promoFreeUnits),
-      Math.max(lineSubtotal - lineDiscount, 0)
+      Math.max(resolvedLineSubtotal - lineDiscount, 0)
     );
-    const lineNetSubtotal = Math.max(lineSubtotal - lineDiscount - promoDiscount, 0);
+    const lineNetSubtotal = Math.max(resolvedLineSubtotal - lineDiscount - promoDiscount, 0);
     const vatRate = vatEnabled ? productUnit.product.vatRateBps : 0;
     const lineVat = vatEnabled ? Math.round((lineNetSubtotal * vatRate) / 10000) : 0;
     const lineTotal = lineNetSubtotal + lineVat;
@@ -83,7 +93,7 @@ function buildLinePricing(
       productUnit,
       qtyBase,
       unitPricePence,
-      lineSubtotal,
+      lineSubtotal: resolvedLineSubtotal,
       lineDiscount,
       promoDiscount,
       lineNetSubtotal,
@@ -231,6 +241,10 @@ export type SaleLineInput = {
   unitId: string;
   qtyInUnit: number;
   unitPricePence?: number;
+  /** When set, used for stock movements instead of qtyInUnit × conversion. */
+  qtyBase?: number;
+  /** Fixed line subtotal (weighed items). */
+  lineSubtotalPence?: number;
   discountType?: DiscountType;
   discountValue?: number;
 };
@@ -260,12 +274,18 @@ export type CreateSaleInput = {
    * staff-initiated sales.
    */
   bypassOpenTillRequirement?: boolean;
+  /** Points to redeem at checkout (requires customerId). */
+  loyaltyPointsToRedeem?: number;
   lines: SaleLineInput[];
 };
 
 export async function createSale(input: CreateSaleInput) {
   if (!input.lines.length) {
     throw new UserError('No items in cart');
+  }
+
+  if ((input.loyaltyPointsToRedeem ?? 0) > 0 && !input.customerId) {
+    throw new UserError('Select a customer to redeem loyalty points.');
   }
 
   // Pre-compute values available from input (no DB dependency)
@@ -306,7 +326,12 @@ export async function createSale(input: CreateSaleInput) {
   const customerLookup = input.customerId
     ? prisma.customer.findFirst({
         where: { id: input.customerId, businessId: input.businessId },
-        select: { id: true, storeId: true, creditLimitPence: true },
+        select: {
+          id: true,
+          storeId: true,
+          creditLimitPence: true,
+          loyaltyPointsBalance: true,
+        } as any,
       })
     : Promise.resolve(null);
 
@@ -404,11 +429,41 @@ export async function createSale(input: CreateSaleInput) {
 
   const lineNetSubtotalTotal = lineDetails.reduce((sum, line) => sum + line.lineNetSubtotal, 0);
   const lineVatTotal = lineDetails.reduce((sum, line) => sum + line.lineVat, 0);
-  const orderDiscount = computeDiscount(
+  const manualOrderDiscount = computeDiscount(
     lineNetSubtotalTotal,
     input.orderDiscountType,
     input.orderDiscountValue
   );
+  const netAfterManualDiscount = Math.max(lineNetSubtotalTotal - manualOrderDiscount, 0);
+
+  const businessLoyalty = business as {
+    loyaltyEnabled?: boolean;
+    loyaltyPointsPerGhsPence?: number;
+    loyaltyGhsPerHundredPoints?: number;
+  };
+  let loyaltyPointsRedeemed = 0;
+  let loyaltyPointsValuePence = 0;
+  if (
+    input.customerId &&
+    customerResult &&
+    businessLoyalty.loyaltyEnabled &&
+    (input.loyaltyPointsToRedeem ?? 0) > 0
+  ) {
+    const redemption = clampLoyaltyRedemption({
+      pointsToRedeem: input.loyaltyPointsToRedeem ?? 0,
+      balance: (customerResult as { loyaltyPointsBalance?: number }).loyaltyPointsBalance ?? 0,
+      netSubtotalPence: netAfterManualDiscount,
+      settings: {
+        loyaltyEnabled: true,
+        loyaltyPointsPerGhsPence: businessLoyalty.loyaltyPointsPerGhsPence ?? 1,
+        loyaltyGhsPerHundredPoints: businessLoyalty.loyaltyGhsPerHundredPoints ?? 100,
+      },
+    });
+    loyaltyPointsRedeemed = redemption.pointsRedeemed;
+    loyaltyPointsValuePence = redemption.discountPence;
+  }
+
+  const orderDiscount = manualOrderDiscount + loyaltyPointsValuePence;
   const netAfterOrderDiscount = Math.max(lineNetSubtotalTotal - orderDiscount, 0);
   const vatRatio =
     business.vatEnabled && lineNetSubtotalTotal > 0
@@ -417,6 +472,10 @@ export async function createSale(input: CreateSaleInput) {
   const vatTotal = business.vatEnabled ? Math.round(lineVatTotal * vatRatio) : 0;
   const subtotal = netAfterOrderDiscount;
   const total = subtotal + vatTotal;
+  const loyaltyPointsEarned =
+    input.customerId && businessLoyalty.loyaltyEnabled
+      ? computePointsEarned(total, businessLoyalty.loyaltyPointsPerGhsPence ?? 1)
+      : 0;
   const grossSalesPence = lineDetails.reduce((sum, line) => sum + line.lineSubtotal, 0);
   const totalLineDiscountPence = lineDetails.reduce(
     (sum, line) => sum + line.lineDiscount + line.promoDiscount,
@@ -595,6 +654,9 @@ export async function createSale(input: CreateSaleInput) {
       vatPence: vatTotal,
       totalPence: total,
       discountPence: orderDiscount,
+      loyaltyPointsRedeemed,
+      loyaltyPointsValuePence,
+      loyaltyPointsEarned,
       discountOverrideReasonCode: input.discountOverrideReasonCode ?? null,
       discountOverrideReason: input.discountOverrideReason ?? null,
       discountApprovedByUserId,
@@ -657,6 +719,23 @@ export async function createSale(input: CreateSaleInput) {
 
     // Parallelise: MoMo, cash-drawer, inventory updates and stock movements
     const txPromises: Promise<any>[] = [];
+
+    if (
+      input.customerId &&
+      businessLoyalty.loyaltyEnabled &&
+      (loyaltyPointsEarned > 0 || loyaltyPointsRedeemed > 0)
+    ) {
+      txPromises.push(
+        tx.customer.update({
+          where: { id: input.customerId },
+          data: {
+            loyaltyPointsBalance: {
+              increment: loyaltyPointsEarned - loyaltyPointsRedeemed,
+            },
+          } as any,
+        })
+      );
+    }
 
     if (confirmedMomoCollection) {
       txPromises.push(

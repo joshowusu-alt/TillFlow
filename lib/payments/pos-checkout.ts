@@ -27,6 +27,8 @@ type CalculateCheckoutSummaryParams = {
   momoNetwork: string;
   momoPayerMsisdn: string;
   momoCollectionStatus: PosMomoCollectionState;
+  /** Loyalty redemption discount in pesewas (already capped server-side). */
+  loyaltyDiscountPence?: number;
 };
 
 function hasMethod(paymentMethods: PosPaymentMethod[], method: PosPaymentMethod) {
@@ -79,12 +81,14 @@ export function calculateCheckoutSummary({
   momoNetwork,
   momoPayerMsisdn,
   momoCollectionStatus,
+  loyaltyDiscountPence = 0,
 }: CalculateCheckoutSummaryParams) {
-  const orderDiscount = computeDiscount(
+  const manualOrderDiscount = computeDiscount(
     totals.netSubtotal,
     orderDiscountType,
     orderDiscountInput
   );
+  const orderDiscount = manualOrderDiscount + Math.max(0, loyaltyDiscountPence);
   const totalDiscountPence = totals.lineDiscount + totals.promoDiscount + orderDiscount;
   const discountBps =
     totals.subtotal > 0 ? Math.round((totalDiscountPence * 10_000) / totals.subtotal) : 0;
