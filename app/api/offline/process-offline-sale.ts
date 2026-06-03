@@ -16,6 +16,8 @@ export interface OfflineSalePayload {
         productId: string;
         unitId: string;
         qtyInUnit: number;
+        qtyBase?: number;
+        lineSubtotalPence?: number;
         discountType: string;
         discountValue: string;
     }>;
