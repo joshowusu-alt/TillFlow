@@ -7,6 +7,7 @@ export type PosCustomerOption = {
   name: string;
   /** Optional. When present, drives the at-checkout credit-limit warning. */
   creditLimitPence?: number;
+  loyaltyPointsBalance?: number;
 };
 
 function dedupeCustomers(customers: PosCustomerOption[]) {

@@ -20,7 +20,12 @@ import { usePosSaleResult } from '@/hooks/usePosSaleResult';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
 import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
-import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
+import { getProductBaseUnitId } from '@/lib/payments/pos-barcode';
+import { buildPosProductIndex } from '@/lib/pos/product-index';
+import { usePosBarcodeHandler } from '@/hooks/usePosBarcodeHandler';
+import { usePosLoyaltyRedemption } from '@/hooks/usePosLoyaltyRedemption';
+import LoyaltyRedemptionPanel from './components/LoyaltyRedemptionPanel';
+import { computeDiscount } from '@/lib/payments/pos-checkout';
 import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
@@ -94,6 +99,9 @@ type PosClientProps = {
     momoProvider?: string | null;
     requireOpenTillForSales?: boolean;
     discountApprovalThresholdBps?: number;
+    loyaltyEnabled?: boolean;
+    loyaltyPointsPerGhsPence?: number;
+    loyaltyGhsPerHundredPoints?: number;
   };
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
@@ -111,6 +119,9 @@ type CartLine = {
   qtyInUnit: number;
   discountType?: DiscountType;
   discountValue?: string;
+  lineSubtotalPence?: number;
+  qtyBase?: number;
+  weighedLabel?: string;
 };
 
 type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
@@ -312,6 +323,7 @@ export default function PosClient({
 
   // O(1) product lookup via Map — avoids O(n) find() per cart line
   const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
+  const productIndex = useMemo(() => buildPosProductIndex(productOptions), [productOptions]);
 
   const getProduct = useCallback(
     (id: string) => productMap.get(id),
@@ -421,35 +433,6 @@ export default function PosClient({
     }
   }, [tillId, tillStorageKey]);
 
-  const resetActiveSale = useCallback((options?: { resetPaymentStatus?: boolean; playSuccessTone?: boolean }) => {
-    setCart([]);
-    clearSavedCart();
-    setCustomerId('');
-    setCashTendered('');
-    setCardPaid('');
-    setTransferPaid('');
-    resetMomoPaymentFields();
-    setPaymentMethods(['CASH']);
-    orderDiscountForm.reset();
-    setQtyDrafts({});
-    clearUndoStack();
-    if (options?.resetPaymentStatus) {
-      setPaymentStatus('PAID');
-    }
-    if (options?.playSuccessTone) {
-      playBeep(true);
-    }
-  }, [
-    clearSavedCart,
-    clearUndoStack,
-    orderDiscountForm,
-    playBeep,
-    resetMomoPaymentFields,
-    setCart,
-    setCustomerId,
-    setQtyDrafts,
-  ]);
-
   const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
     setProductOptions(snapshot.productOptions);
     setCart(snapshot.cart);
@@ -476,136 +459,6 @@ export default function PosClient({
     setSaleError,
   ]);
 
-  const handleParkCurrentCart = useCallback((label: string) => {
-    const result = parkCurrentCart({ cart, customerId, label });
-    if (!result) return;
-    resetActiveSale({ playSuccessTone: true });
-  }, [cart, customerId, parkCurrentCart, resetActiveSale]);
-
-  const handleRecallParkedCart = useCallback((parkedId: string) => {
-    const result = recallParkedCart({
-      parkedId,
-      currentCart: cart,
-      currentCustomerId: customerId,
-      productExists,
-      customerExists,
-    });
-    if (!result) return;
-
-    setCart(result.restoredCart);
-    setCustomerId(result.restoredCustomerId);
-    setNextCustomerReady(false);
-    playBeep(true);
-  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart, setCart, setCustomerId, setNextCustomerReady]);
-
-  const handleCompleteSale = async () => {
-    if (!canSubmit || isCompletingSale) return;
-    beginCompletion();
-
-    const saleSnapshot = createSaleCompletionSnapshot<CartLine, ProductDto, 'PAID' | 'PART_PAID' | 'UNPAID', PaymentMethod, DiscountType, CollectionNetwork, MomoCollectionState>({
-      productOptions,
-      cart,
-      customerId,
-      cashTendered,
-      cardPaid,
-      transferPaid,
-      momoPaid,
-      momoRef,
-      momoPayerMsisdn,
-      momoNetwork,
-      momoCollectionId,
-      momoCollectionStatus,
-      momoCollectionError,
-      momoIdempotencyKey,
-      momoCollectionSignature,
-      paymentStatus,
-      paymentMethods,
-      orderDiscountType,
-      orderDiscountInput,
-      discountManagerPin,
-      discountReasonCode,
-      discountReason,
-      qtyDrafts,
-      undoStack,
-    });
-
-    // Optimistic: decrement stock in local state immediately for instant feedback
-    const stockDecrements = buildOptimisticStockDecrements(cart, productOptions);
-    setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
-
-    // Optimistic reset: clear cart + payment fields BEFORE server round-trip
-    // so the cashier can start scanning the next customer instantly (~16ms).
-    // If server fails, we restore from the saved snapshot above.
-    resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
-    // Refocus barcode input immediately — zero wait for next customer
-    barcodeRef.current?.focus();
-
-    try {
-      const result = await completeSaleAction({
-        storeId: store.id,
-        tillId,
-        cart: JSON.stringify(cart),
-        paymentStatus,
-        customerId,
-        dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
-        ...orderDiscountForm.toServicePayload(),
-        cashPaid: Math.max(0, Math.round(cashApplied)),
-        cardPaid: Math.max(0, Math.round(cardPaidValue)),
-        transferPaid: Math.max(0, Math.round(transferPaidValue)),
-        momoPaid: Math.max(0, Math.round(momoPaidValue)),
-        momoRef: momoRef.trim() || undefined,
-        momoCollectionId: momoCollectionId || undefined,
-        momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
-        momoNetwork,
-      });
-
-      if (result.success) {
-        const { receiptId, totalPence, transactionNumber } = result.data;
-        // Store receipt ID for reprinting
-        setLastReceiptId(receiptId);
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(lastReceiptStorageKey, receiptId);
-        }
-        // Inventory already updated optimistically above — no server round-trip needed.
-        showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
-      } else {
-        restoreSaleSnapshot(saleSnapshot, result.error);
-      }
-    } catch (err) {
-      // Network error — automatically queue sale offline
-      if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
-        try {
-          const offlineId = await queueOfflineSale({
-            businessId: business.id,
-            storeId: store.id,
-            tillId,
-            customerId: saleSnapshot.customerId || null,
-            paymentStatus,
-            lines: saleSnapshot.cart.map(l => ({
-              productId: l.productId,
-              unitId: l.unitId,
-              qtyInUnit: l.qtyInUnit,
-              discountType: l.discountType ?? 'NONE',
-              discountValue: l.discountValue ?? '',
-            })),
-            payments: buildOfflinePayments({ cashApplied, cardPaidValue, transferPaidValue, momoPaidValue }),
-            orderDiscountType,
-            orderDiscountValue: orderDiscountInput,
-            createdAt: new Date().toISOString(),
-          });
-          // Show success with offline indicator — cart already cleared optimistically
-          showSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' }, 4000);
-        } catch {
-          restoreSaleSnapshot(saleSnapshot, 'Offline queue failed. Please try again.');
-        }
-      } else {
-        restoreSaleSnapshot(saleSnapshot, 'Something went wrong. Please try again.');
-      }
-    } finally {
-      endCompletion();
-    }
-  };
-
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
 
   const togglePaymentMethod = (method: PaymentMethod) => {
@@ -628,8 +481,8 @@ export default function PosClient({
   };
 
   const filteredProducts = useMemo(() => {
-    return filterPosProducts(productOptions, productSearch);
-  }, [productOptions, productSearch]);
+    return filterPosProducts(productOptions, productSearch, 12, productIndex);
+  }, [productOptions, productSearch, productIndex]);
   const productSearchMatches = filteredProducts.length;
 
   // Viewport sizing for the product dropdown in compact mode is handled by
@@ -705,28 +558,26 @@ export default function PosClient({
     barcodeRef.current?.focus();
   };
 
-  const handleBarcodeScan = useCallback((code: string) => {
-    const resolution = resolveBarcodeScan(code, productOptions);
-    if (!resolution) return;
-
-    if (resolution.kind === 'matched') {
-      const { product, baseUnitId } = resolution;
-      playBeep(true);
-      addToCart({ productId: product.id, unitId: baseUnitId, qtyInUnit: 1 });
-      setProductId(product.id);
-      setUnitId(baseUnitId);
-      setQtyInUnitInput('1');
+  const { handleBarcodeScan } = usePosBarcodeHandler({
+    products: productOptions,
+    productIndex,
+    addToCart: (line) => {
+      addToCart(line);
+      setProductId(line.productId);
+      setUnitId(line.unitId);
+      setQtyInUnitInput(String(line.qtyInUnit));
       setBarcode('');
       setBarcodeAlert(null);
       setStockAlert(null);
       barcodeRef.current?.focus();
-    } else {
-      playBeep(false);
-      setBarcodeAlert(`Barcode "${resolution.code}" not found. Create the product now.`);
-      setPendingScan(resolution.code);
-      openQuickAdd(resolution.code);
-    }
-  }, [addToCart, openQuickAdd, playBeep, productOptions]);
+    },
+    playBeep,
+    onMissing: (code) => {
+      setBarcodeAlert(`Barcode "${code}" not found. Create the product now.`);
+      setPendingScan(code);
+      openQuickAdd(code);
+    },
+  });
 
   const cartDetails = useMemo(
     () => buildCartDetails(cart, productMap, business.vatEnabled),
@@ -738,10 +589,64 @@ export default function PosClient({
 
   const totals = useMemo(() => sumCartTotals(cartDetails), [cartDetails]);
 
+  const manualOrderDiscount = useMemo(
+    () => computeDiscount(totals.netSubtotal, orderDiscountType, orderDiscountInput),
+    [totals.netSubtotal, orderDiscountType, orderDiscountInput]
+  );
+
+  const selectedCustomer = useMemo(
+    () => customerOptions.find((customer) => customer.id === customerId),
+    [customerOptions, customerId]
+  );
+
+  const loyaltyRedemption = usePosLoyaltyRedemption({
+    enabled: Boolean(business.loyaltyEnabled),
+    settings: {
+      loyaltyEnabled: Boolean(business.loyaltyEnabled),
+      loyaltyPointsPerGhsPence: business.loyaltyPointsPerGhsPence ?? 1,
+      loyaltyGhsPerHundredPoints: business.loyaltyGhsPerHundredPoints ?? 100,
+    },
+    customerId,
+    pointsBalance: selectedCustomer?.loyaltyPointsBalance ?? 0,
+    netSubtotalPence: Math.max(totals.netSubtotal - manualOrderDiscount, 0),
+  });
+
+  const resetActiveSale = useCallback((options?: { resetPaymentStatus?: boolean; playSuccessTone?: boolean }) => {
+    setCart([]);
+    clearSavedCart();
+    setCustomerId('');
+    setCashTendered('');
+    setCardPaid('');
+    setTransferPaid('');
+    resetMomoPaymentFields();
+    setPaymentMethods(['CASH']);
+    orderDiscountForm.reset();
+    loyaltyRedemption.reset();
+    setQtyDrafts({});
+    clearUndoStack();
+    if (options?.resetPaymentStatus) {
+      setPaymentStatus('PAID');
+    }
+    if (options?.playSuccessTone) {
+      playBeep(true);
+    }
+  }, [
+    clearSavedCart,
+    clearUndoStack,
+    loyaltyRedemption,
+    orderDiscountForm,
+    playBeep,
+    resetMomoPaymentFields,
+    setCart,
+    setCustomerId,
+    setQtyDrafts,
+  ]);
+
   const checkoutSummary = useMemo(() => calculateCheckoutSummary({
     totals,
     orderDiscountType,
     orderDiscountInput,
+    loyaltyDiscountPence: loyaltyRedemption.loyaltyDiscountPence,
     vatEnabled: business.vatEnabled,
     discountApprovalThresholdBps: business.discountApprovalThresholdBps,
     discountManagerPin,
@@ -759,6 +664,7 @@ export default function PosClient({
     totals,
     orderDiscountType,
     orderDiscountInput,
+    loyaltyRedemption.loyaltyDiscountPence,
     business.vatEnabled,
     business.discountApprovalThresholdBps,
     discountManagerPin,
@@ -794,6 +700,131 @@ export default function PosClient({
     momoConfirmed,
     momoSignature,
   } = checkoutSummary;
+
+  const handleParkCurrentCart = useCallback((label: string) => {
+    const result = parkCurrentCart({ cart, customerId, label });
+    if (!result) return;
+    resetActiveSale({ playSuccessTone: true });
+  }, [cart, customerId, parkCurrentCart, resetActiveSale]);
+
+  const handleRecallParkedCart = useCallback((parkedId: string) => {
+    const result = recallParkedCart({
+      parkedId,
+      currentCart: cart,
+      currentCustomerId: customerId,
+      productExists,
+      customerExists,
+    });
+    if (!result) return;
+
+    setCart(result.restoredCart);
+    setCustomerId(result.restoredCustomerId);
+    setNextCustomerReady(false);
+    playBeep(true);
+  }, [cart, customerExists, customerId, playBeep, productExists, recallParkedCart, setCart, setCustomerId, setNextCustomerReady]);
+
+  const handleCompleteSale = async () => {
+    if (!canSubmit || isCompletingSale) return;
+    beginCompletion();
+
+    const saleSnapshot = createSaleCompletionSnapshot<CartLine, ProductDto, 'PAID' | 'PART_PAID' | 'UNPAID', PaymentMethod, DiscountType, CollectionNetwork, MomoCollectionState>({
+      productOptions,
+      cart,
+      customerId,
+      cashTendered,
+      cardPaid,
+      transferPaid,
+      momoPaid,
+      momoRef,
+      momoPayerMsisdn,
+      momoNetwork,
+      momoCollectionId,
+      momoCollectionStatus,
+      momoCollectionError,
+      momoIdempotencyKey,
+      momoCollectionSignature,
+      paymentStatus,
+      paymentMethods,
+      orderDiscountType,
+      orderDiscountInput,
+      discountManagerPin,
+      discountReasonCode,
+      discountReason,
+      qtyDrafts,
+      undoStack,
+    });
+
+    const stockDecrements = buildOptimisticStockDecrements(cart, productOptions);
+    setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
+
+    const loyaltyPointsToRedeem = loyaltyRedemption.pointsToRedeem;
+    resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
+    barcodeRef.current?.focus();
+
+    try {
+      const result = await completeSaleAction({
+        storeId: store.id,
+        tillId,
+        cart: JSON.stringify(saleSnapshot.cart),
+        paymentStatus,
+        customerId: saleSnapshot.customerId,
+        dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
+        ...orderDiscountForm.toServicePayload(),
+        loyaltyPointsToRedeem,
+        cashPaid: Math.max(0, Math.round(cashApplied)),
+        cardPaid: Math.max(0, Math.round(cardPaidValue)),
+        transferPaid: Math.max(0, Math.round(transferPaidValue)),
+        momoPaid: Math.max(0, Math.round(momoPaidValue)),
+        momoRef: momoRef.trim() || undefined,
+        momoCollectionId: momoCollectionId || undefined,
+        momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
+        momoNetwork,
+      });
+
+      if (result.success) {
+        const { receiptId, totalPence, transactionNumber } = result.data;
+        setLastReceiptId(receiptId);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(lastReceiptStorageKey, receiptId);
+        }
+        showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
+      } else {
+        restoreSaleSnapshot(saleSnapshot, result.error);
+      }
+    } catch (err) {
+      if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
+        try {
+          const offlineId = await queueOfflineSale({
+            businessId: business.id,
+            storeId: store.id,
+            tillId,
+            customerId: saleSnapshot.customerId || null,
+            paymentStatus,
+            lines: saleSnapshot.cart.map((l) => ({
+              productId: l.productId,
+              unitId: l.unitId,
+              qtyInUnit: l.qtyInUnit,
+              qtyBase: l.qtyBase,
+              lineSubtotalPence: l.lineSubtotalPence,
+              discountType: l.discountType ?? 'NONE',
+              discountValue: l.discountValue ?? '',
+            })),
+            payments: buildOfflinePayments({ cashApplied, cardPaidValue, transferPaidValue, momoPaidValue }),
+            orderDiscountType,
+            orderDiscountValue: orderDiscountInput,
+            createdAt: new Date().toISOString(),
+          });
+          showSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' }, 4000);
+        } catch {
+          restoreSaleSnapshot(saleSnapshot, 'Offline queue failed. Please try again.');
+        }
+      } else {
+        restoreSaleSnapshot(saleSnapshot, 'Something went wrong. Please try again.');
+      }
+    } finally {
+      endCompletion();
+    }
+  };
 
   useStalePosMomoCollectionReset({
     momoCollectionId,
@@ -1598,6 +1629,20 @@ export default function PosClient({
               totalDuePence={totalDue}
               currency={business.currency}
             />
+
+            {loyaltyRedemption.active ? (
+              <LoyaltyRedemptionPanel
+                currency={business.currency}
+                pointsBalance={selectedCustomer?.loyaltyPointsBalance ?? 0}
+                pointsInput={loyaltyRedemption.pointsInput}
+                maxPoints={loyaltyRedemption.maxPoints}
+                pointsToRedeem={loyaltyRedemption.pointsToRedeem}
+                discountPence={loyaltyRedemption.loyaltyDiscountPence}
+                pesewasPerHundredPoints={business.loyaltyGhsPerHundredPoints ?? 100}
+                onPointsInputChange={loyaltyRedemption.setPointsInput}
+                onApplyMax={loyaltyRedemption.applyMax}
+              />
+            ) : null}
 
             {/* Order discount */}
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">

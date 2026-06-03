@@ -78,7 +78,7 @@ const getCachedCustomers = unstable_cache(
   (businessId: string) =>
     prisma.customer.findMany({
       where: { businessId },
-      select: { id: true, name: true, creditLimitPence: true },
+      select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
@@ -164,6 +164,9 @@ export default async function PosPage() {
         momoProvider: (business as any).momoProvider ?? null,
         requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
         discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
+        loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
+        loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
+        loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
       }}
       store={{ id: baseStore.id, name: baseStore.name }}
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
@@ -173,6 +176,7 @@ export default async function PosPage() {
         id: customer.id,
         name: customer.name,
         creditLimitPence: customer.creditLimitPence,
+        loyaltyPointsBalance: (customer as { loyaltyPointsBalance?: number }).loyaltyPointsBalance ?? 0,
       }))}
       units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
       categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}

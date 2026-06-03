@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
             name: true,
             phone: true,
             creditLimitPence: true,
+            loyaltyPointsBalance: true,
         },
         orderBy: { name: 'asc' },
         take: limit,
