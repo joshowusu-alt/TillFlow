@@ -12,24 +12,26 @@
 
 **[👉 CLICK HERE FOR SETUP GUIDE (Simple English)](/GHANA_SETUP.md)**
 
+Production deployment (Vercel + Neon Postgres): see [DEPLOYMENT.md](./DEPLOYMENT.md) and [VERCEL_DEPLOY.md](./VERCEL_DEPLOY.md).
+
 ---
 
 ## Features
 
-✅ **Point of Sale** - Fast, intuitive checkout with barcode scanning  
+✅ **Point of Sale** - Fast checkout with barcode scanning, variable-weight (scale) barcodes, and loyalty redemption  
 ✅ **Inventory Management** - Multi-unit tracking (e.g., "1 carton + 10 pieces")  
 ✅ **Double-Entry Accounting** - Income Statement, Balance Sheet, Cashflow  
 ✅ **Offline First** - Works without internet, syncs when back online  
 ✅ **PWA Ready** - Install as an app on any device  
 ✅ **Multi-Currency** - Supports 22+ currencies including GHS, NGN, KES  
 ✅ **Receipt Customization** - Custom headers, footers, and logo  
-✅ **Advanced Analytics** - Sales trends, heatmaps, product performance
+✅ **Advanced Analytics** - Sales trends, margin reports, and storefront activity  
 
 ## Tech Stack
 
 - **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **Database:** Prisma + SQLite (portable, no server needed)
-- **PWA:** Service Worker + IndexedDB for offline support
+- **Database:** Prisma — **SQLite** for local dev, **PostgreSQL** (Neon) for production
+- **PWA:** Service Worker + IndexedDB for offline POS sales
 
 ## Quick Start
 
@@ -38,7 +40,7 @@ npm install
 npm run dev
 ```
 
-The dev server automatically sets up and seeds the database.
+The dev server automatically sets up and seeds the local SQLite database.
 
 **Local validation baseline:** use **Node.js 20 LTS** and keep the repository in a normal local folder such as `C:\dev\supermarket-pos`. Running from OneDrive or other files-on-demand synced folders can cause `UNKNOWN: unknown error, read` failures in ESLint, Vitest, and other Node-based tooling.
 
@@ -67,17 +69,22 @@ To enable Sentry in production, configure these environment variables before bui
 | `/reports/dashboard` | Business overview |
 | `/reports/analytics` | Advanced analytics with charts |
 | `/settings` | Business configuration |
+| `/settings/loyalty` | Loyalty earn & redeem rates |
 | `/settings/backup` | Data export/import |
 | `/onboarding` | Setup wizard for new users |
+
+## Weighed products (scale barcodes)
+
+Store the product’s **barcode prefix** (e.g. `200123` for item code `00123`). Scales print 13-digit EAN codes starting with `2`; TillFlow reads weight from the barcode and prices by your per-kg selling price. Track produce inventory in **grams** on the base unit for accurate stock deduction.
 
 ## Independent Installations
 
 Each TillFlow installation is completely independent:
 
-- Deploy to separate servers/computers
-- Each has its own SQLite database  
-- Zero data sharing between locations
-- Perfect for franchises or unrelated businesses
+- Deploy to separate servers or hosted tenants
+- Each business has its own database
+- Zero data sharing between unrelated operators
+- Suitable for franchises with separate legal entities
 
 ## Ownership & Licensing
 

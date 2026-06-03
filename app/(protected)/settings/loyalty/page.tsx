@@ -53,10 +53,10 @@ export default async function LoyaltySettingsPage({
 
       <div className="card p-4 sm:p-6">
         <form action={updateLoyaltySettingsAction} className="grid gap-6 sm:grid-cols-2">
-          <div className="sm:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <div className="font-semibold">Redemption at checkout is coming soon.</div>
-            <p className="mt-1 text-amber-700">
-              Customers can earn points now. The redemption settings below prepare checkout discounts for when redemption ships.
+          <div className="sm:col-span-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <div className="font-semibold">Redemption at checkout is live</div>
+            <p className="mt-1 text-emerald-800/90">
+              Cashiers can redeem points on the POS once a customer is selected. Points are earned automatically on paid sales.
             </p>
           </div>
 
