@@ -6,26 +6,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
 import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
-import { generateDemoDay, wipeDemoData, clearSampleData } from '@/app/actions/demo-day';
+import { acknowledgeTrialBilling } from '@/app/actions/activation';
+import { clearSampleData, generateDemoDay } from '@/app/actions/demo-day';
 import { formatMoney } from '@/lib/format';
-
-const OPTIONAL_STEP_KEYS = new Set(['demo', 'staff']);
-
-function getRequiredSteps(steps: ReadinessStep[]) {
-  return steps.filter((step) => !OPTIONAL_STEP_KEYS.has(step.key));
-}
-
-function getReadinessPct(steps: ReadinessStep[]) {
-  const requiredSteps = getRequiredSteps(steps);
-  if (requiredSteps.length === 0) return 100;
-
-  const doneCount = requiredSteps.filter((step) => step.done).length;
-  return Math.round((doneCount / requiredSteps.length) * 100);
-}
-
-function getNextStep(steps: ReadinessStep[]) {
-  return getRequiredSteps(steps).find((step) => !step.done) ?? null;
-}
+import BusinessCategoryPicker from '@/components/onboarding/BusinessCategoryPicker';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
@@ -65,6 +49,31 @@ const StepIcons: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
     </svg>
   ),
+  payments: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+    </svg>
+  ),
+  purchase: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0h6m5.25 0a1.5 1.5 0 01-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M8.25 18.75V7.5" />
+    </svg>
+  ),
+  billing: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192A48.424 48.424 0 0012 3.75c-2.088 0-4.131.134-6.124.392C4.745 4.288 3.75 5.245 3.75 6.392V19.5a2.25 2.25 0 002.25 2.25h9.75" />
+    </svg>
+  ),
+  report: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+  ),
+  complete: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
 };
 
 const CheckIcon = () => (
@@ -74,7 +83,7 @@ const CheckIcon = () => (
 );
 
 /* ────────────────────────────── Progress Ring ────────────────────── */
-function ReadinessRing({ pct }: { pct: number }) {
+function ReadinessRing({ pct, statusLabel }: { pct: number; statusLabel: string }) {
   const r = 54;
   const c = 2 * Math.PI * r;
   const offset = c - (pct / 100) * c;
@@ -98,8 +107,8 @@ function ReadinessRing({ pct }: { pct: number }) {
       </svg>
       <div className="absolute flex flex-col items-center">
         <span className="text-2xl font-black tabular-nums text-ink">{pct}%</span>
-        <span className="text-[9px] font-bold uppercase tracking-widest text-black/30 mt-0.5">
-          {pct === 100 ? 'Ready' : pct >= 67 ? 'Almost' : pct >= 33 ? 'In progress' : 'Getting started'}
+        <span className="text-[9px] font-bold uppercase tracking-widest text-black/30 mt-0.5 text-center leading-tight max-w-[5rem]">
+          {statusLabel}
         </span>
       </div>
     </div>
@@ -107,10 +116,23 @@ function ReadinessRing({ pct }: { pct: number }) {
 }
 
 /* ────────────────────────────── Step Card ────────────────────────── */
-function StepCard({ step, index, isOptional }: { step: ReadinessStep; index: number; isOptional?: boolean }) {
+function StepStatusChip({ statusLabel, done }: { statusLabel: string; done: boolean }) {
+  const tone = done
+    ? 'bg-success/10 text-success'
+    : statusLabel === 'In progress'
+      ? 'bg-amber-50 text-amber-800'
+      : 'bg-black/5 text-muted';
   return (
-    <Link
-      href={step.href}
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
+      {statusLabel}
+    </span>
+  );
+}
+
+function StepCard({ step, index }: { step: ReadinessStep; index: number }) {
+  const isCompleteStep = step.key === 'complete';
+  const inner = (
+    <div
       className={`group flex items-start gap-4 rounded-2xl border p-4 transition-all duration-200 ${
         step.done
           ? 'border-success/20 bg-success/5'
@@ -128,32 +150,47 @@ function StepCard({ step, index, isOptional }: { step: ReadinessStep; index: num
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className={`text-sm font-semibold ${step.done ? 'text-success line-through decoration-success/30' : 'text-ink'}`}>
+          <h3 className={`text-sm font-semibold ${step.done ? 'text-success' : 'text-ink'}`}>
             {step.title}
           </h3>
-          {isOptional && !step.done && (
-            <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-muted">
-              Optional
-            </span>
-          )}
-          {!step.done && (
-            <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-muted tabular-nums">
-              ~{step.estimatedMinutes} min
-            </span>
-          )}
+          <StepStatusChip statusLabel={step.statusLabel} done={step.done} />
         </div>
-        <p className="mt-0.5 text-xs text-muted">{step.subtitle}</p>
-        {!step.done && (
-          <p className="mt-1 text-[11px] italic text-accent/60">{step.benefit}</p>
-        )}
+        <p className="mt-0.5 text-xs text-muted">{step.explanation || step.subtitle}</p>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <a
+            href={step.helpHref}
+            target={step.helpHref.startsWith('http') ? '_blank' : undefined}
+            rel={step.helpHref.startsWith('http') ? 'noopener noreferrer' : undefined}
+            onClick={(e) => e.stopPropagation()}
+            className="text-[11px] font-medium text-accent underline-offset-2 hover:underline"
+          >
+            Need help?
+          </a>
+          <a
+            href="/help/setup"
+            onClick={(e) => e.stopPropagation()}
+            className="text-[11px] font-medium text-black/50 underline-offset-2 hover:text-accent hover:underline"
+          >
+            Setup guide
+          </a>
+        </div>
       </div>
 
-      {/* Arrow */}
-      {!step.done && (
+      {!step.done && !isCompleteStep ? (
         <svg className="mt-3 h-4 w-4 flex-shrink-0 text-black/20 transition-transform group-hover:translate-x-1 group-hover:text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
         </svg>
-      )}
+      ) : null}
+    </div>
+  );
+
+  if (isCompleteStep) {
+    return inner;
+  }
+
+  return (
+    <Link href={step.href} className="block">
+      {inner}
     </Link>
   );
 }
@@ -674,20 +711,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     try {
       const res = await generateDemoDay();
       if (res.ok && res.salesCount > 0) {
-        showToast(`${res.salesCount} demo sales generated!`, 'success');
-        // Refresh data
-        setData(prev => {
-          const steps = prev.steps.map(s => s.key === 'demo' ? { ...s, done: true, subtitle: 'Demo transactions generated' } : s);
-          const pct = getReadinessPct(steps);
-          return {
-            ...prev,
-            hasDemoData: true,
-            steps,
-            pct,
-            nextStep: getNextStep(steps),
-            onboardingComplete: prev.onboardingComplete || pct === 100,
-          };
-        });
+        showToast(`${res.salesCount} sample sales added for practice`, 'success');
       } else if (res.error) {
         showToast(res.error, 'error');
       }
@@ -702,23 +726,21 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     try {
       const res = await clearSampleData();
       if (res.ok) {
-        showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Demo data wiped — clean slate!', 'success');
-        setData(prev => {
-          const steps = prev.steps.map(s => s.key === 'demo' ? { ...s, done: false, subtitle: 'See TillFlow with a week of realistic data' } : s);
-          const pct = getReadinessPct(steps);
-          return {
-            ...prev,
-            hasDemoData: false,
-            hasSeedData: false,
-            steps,
-            pct,
-            nextStep: getNextStep(steps),
-            onboardingComplete: prev.onboardingComplete || pct === 100,
-          };
-        });
+        showToast(res.removed.length > 0 ? `Cleared: ${res.removed.join(', ')}` : 'Sample data removed', 'success');
       } else if (res.error) {
         showToast(res.error, 'error');
       }
+      router.refresh();
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleAcknowledgeTrial = async () => {
+    setIsBusy(true);
+    try {
+      await acknowledgeTrialBilling();
+      showToast('Billing date saved', 'success');
       router.refresh();
     } finally {
       setIsBusy(false);
@@ -739,7 +761,8 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     }
   };
 
-  const allDone = data.onboardingComplete || data.pct === 100;
+  const allDone = data.onboardingComplete;
+  const showBusinessTypePicker = !data.businessCategory;
 
   // ── When setup is complete, show the premium welcome experience ──
   if (allDone) {
@@ -762,40 +785,39 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
       <div className="mx-auto max-w-xl px-4 py-8 sm:py-12">
         {/* Header */}
-        <div className="animate-fade-in-up text-center mb-8">
+        <div className="animate-fade-in-up text-center mb-6">
           <div className="mb-4">
-            <ReadinessRing pct={data.pct} />
+            <ReadinessRing pct={data.pct} statusLabel={data.activationStatusLabel} />
           </div>
-          <h1 className="text-2xl font-bold text-ink">
-            {allDone ? 'TillFlow is ready' : `Set up ${data.businessName}`}
-          </h1>
+          <h1 className="text-2xl font-bold text-ink">Start properly</h1>
+          <p className="mt-1 text-sm font-semibold text-ink">
+            Business setup: {data.pct}% complete
+          </p>
           <p className="mt-1.5 text-sm text-muted max-w-sm mx-auto">
-            {allDone
-              ? 'Your core setup is in place. Keep operating and refine the remaining details as you go.'
-              : 'Start with what matters most. You can open the POS before every setting is configured.'}
+            {data.stuckMessage ?? data.ownerMessage}
           </p>
         </div>
 
-        {!allDone && (
-          <div className="animate-fade-in-up mb-6 rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm" style={{ animationDelay: '.05s' }}>
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Your launch sequence</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              {[
-                { step: '1', title: 'Load your key products', detail: 'Just your top sellers to start — the rest of the catalogue can follow.' },
-                { step: '2', title: 'Record opening stock', detail: 'The quantities on your shelf today, entered once.' },
-                { step: '3', title: 'Complete your first real sale', detail: 'One checkout and your financial reports go live.' },
-              ].map((item) => (
-                <div key={item.step} className="rounded-xl border border-black/5 bg-slate-50 px-4 py-3">
-                  <div className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-white">
-                    {item.step}
-                  </div>
-                  <div className="mt-2 text-sm font-semibold text-ink">{item.title}</div>
-                  <div className="mt-1 text-xs text-muted">{item.detail}</div>
-                </div>
-              ))}
+        <div className="animate-fade-in-up mb-6 rounded-2xl border border-accent/15 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-left">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Your status</p>
+              <p className="mt-1 text-sm font-bold text-ink">{data.activationStatusLabel}</p>
+            </div>
+            <div className="h-2 w-24 overflow-hidden rounded-full bg-accent/10">
+              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${data.pct}%` }} />
             </div>
           </div>
-        )}
+        </div>
+
+        {showBusinessTypePicker ? (
+          <div className="mb-6">
+            <BusinessCategoryPicker
+              initialCategory={data.businessCategory}
+              onSaved={() => router.refresh()}
+            />
+          </div>
+        ) : null}
 
         {/* Next Best Action — only when not complete */}
         {data.nextStep && !allDone && (
@@ -807,15 +829,22 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
               </div>
               <h2 className="text-lg font-bold text-ink">{data.nextStep.title}</h2>
               <p className="mt-0.5 text-sm text-muted">{data.nextStep.subtitle}</p>
-              <p className="mt-1 text-xs text-accent/70">{data.nextStep.benefit}</p>
-              {data.nextStep.key === 'demo' ? (
-                <button
-                  onClick={handleGenerateDemo}
-                  disabled={isBusy}
-                  className="btn-primary mt-3 w-full py-2.5 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isBusy ? 'Generating...' : 'Run Demo Day'}
-                </button>
+              {data.nextStep.key === 'trial-payment' ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  <Link href="/settings/billing" className="btn-primary w-full py-2.5 text-center text-sm">
+                    View billing
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleAcknowledgeTrial}
+                    disabled={isBusy}
+                    className="btn-ghost w-full py-2 text-sm border border-black/10 disabled:opacity-50"
+                  >
+                    I have seen my trial dates
+                  </button>
+                </div>
+              ) : data.nextStep.key === 'business-type' && showBusinessTypePicker ? (
+                <p className="mt-2 text-xs text-muted">Choose your business type above first.</p>
               ) : (
                 <Link
                   href={data.nextStep.href}
@@ -830,27 +859,10 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
         {/* Step List */}
         <div className="space-y-2.5 stagger-children mb-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35 px-1">Your setup steps</p>
           {data.steps.map((step, i) => (
-            step.key === 'demo' ? null : (
-              <StepCard
-                key={step.key}
-                step={step}
-                index={i}
-                isOptional={OPTIONAL_STEP_KEYS.has(step.key)}
-              />
-            )
+            <StepCard key={step.key} step={step} index={i} />
           ))}
-        </div>
-
-        {/* Demo Day Section */}
-        <div className="animate-fade-in-up mb-6" style={{ animationDelay: '.3s' }}>
-          <DemoDaySection
-            hasDemoData={data.hasDemoData}
-            hasSeedData={data.hasSeedData}
-            onGenerate={handleGenerateDemo}
-            onWipe={handleWipeDemo}
-            isPending={isBusy}
-          />
         </div>
 
         {/* First Win — shown when setup is complete */}
@@ -892,6 +904,16 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
         {/* CTA */}
         <div className="animate-fade-in-up text-center space-y-3" style={{ animationDelay: '.4s' }}>
+          {data.pct === 100 && !data.onboardingCompletedAt ? (
+            <button
+              type="button"
+              onClick={handleComplete}
+              disabled={isBusy}
+              className="btn-primary w-full py-3.5 text-sm disabled:opacity-50"
+            >
+              Complete setup
+            </button>
+          ) : null}
           {allDone ? (
             <button
               onClick={handleComplete}

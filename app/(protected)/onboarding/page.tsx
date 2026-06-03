@@ -11,7 +11,7 @@ export default async function OnboardingPage() {
 
     // Auto-mark onboarding done when all required steps are complete so the
     // "Complete your setup" banner stops appearing on every admin page.
-    if (readiness.onboardingComplete && !readiness.onboardingCompletedAt) {
+    if (readiness.pct === 100 && !readiness.onboardingCompletedAt) {
         await completeOnboarding();
     }
 

@@ -30,6 +30,11 @@ export async function register(formData: FormData) {
   const email = String(formData.get('email') || '').toLowerCase().trim();
   const password = String(formData.get('password') || '');
   const currency = String(formData.get('currency') || 'GHS');
+  const referralSource = String(formData.get('referralSource') || '').trim() || null;
+  const referredByName = String(formData.get('referredByName') || '').trim() || null;
+  const referredByPhone = String(formData.get('referredByPhone') || '').trim() || null;
+  const sourceChannel = String(formData.get('sourceChannel') || 'INBOUND').trim() || 'INBOUND';
+
   const rawPlan = String(formData.get('plan') || 'STARTER').toUpperCase();
   const plan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
     ? (rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
@@ -99,6 +104,11 @@ export async function register(formData: FormData) {
     supportStatus: 'UNREVIEWED',
     notes: 'Awaiting first Tishgroup commercial review after signup.',
     startedAt: result.business.planSetAt,
+    referralSource,
+    referredByName,
+    referredByPhone,
+    sourceChannel,
+    referralStatus: 'TRIAL_STARTED',
   });
 
   await enqueueSubscriptionReminder(

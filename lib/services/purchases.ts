@@ -36,6 +36,8 @@ export type CreatePurchaseInput = {
    * confirmed the cost is correct (e.g. for clearance buys or pricing errors).
    */
   acknowledgeHighCost?: boolean;
+  /** Opening stock from import/setup uses OPENING in the stock ledger. */
+  stockMovementType?: 'OPENING' | 'PURCHASE';
 };
 
 /**
@@ -362,14 +364,18 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
       }
     }
 
+    const movementType = input.stockMovementType ?? 'PURCHASE';
+    const referenceType =
+      movementType === 'OPENING' ? 'OPENING_STOCK' : 'PURCHASE_INVOICE';
+
     await (client as typeof prisma).stockMovement.createMany({
       data: lineDetails.map((line) => ({
         storeId: store.id,
         productId: line.productId,
         qtyBase: line.qtyBase,
         unitCostBasePence: line.unitCostBasePence,
-        type: 'PURCHASE',
-        referenceType: 'PURCHASE_INVOICE',
+        type: movementType,
+        referenceType,
         referenceId: invoiceId,
         userId: input.userId ?? null
       }))

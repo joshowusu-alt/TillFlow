@@ -33,9 +33,12 @@ export default function DemoPosPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">POS View</h1>
+          <h1 className="text-2xl font-bold text-ink">POS view</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Try a sample sale and see how TillFlow tracks checkout, payment and stock
+            See how checkout works — or{' '}
+            <a href="/demo/try-sale" className="font-semibold text-accent hover:underline">
+              try an interactive sample sale
+            </a>
             {lowStockN > 0 && <span className="ml-2 font-medium text-amber-600">· {lowStockN} low stock</span>}
           </p>
         </div>

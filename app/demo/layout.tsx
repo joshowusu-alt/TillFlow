@@ -1,7 +1,9 @@
 import DemoNavTabs from './_components/DemoNavTabs';
 
+import { ADOM_RETAIL_DEMO_NAME, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
+
 export const metadata = {
-  title: 'Demo – Kwame & Family Supermarket | TillFlow',
+  title: `Demo – ${ADOM_RETAIL_DEMO_NAME} | TillFlow`,
   robots: { index: false, follow: false },
 };
 
@@ -18,7 +20,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
             Demo
           </span>
           <span className="hidden font-medium sm:block">
-            Kwame &amp; Family Supermarket — 14-day sample business data
+            {ADOM_RETAIL_DEMO_NAME} — {DEMO_PERIOD_DAYS}-day sample business data
           </span>
           <span className="font-medium sm:hidden">Sample business data</span>
         </div>

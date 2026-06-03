@@ -7,6 +7,8 @@ import { createPurchase } from '@/lib/services/purchases';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
+import { suggestImportCategoryName } from '@/lib/import/category-import';
+import type { DuplicateAction } from '@/lib/import/import-validation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,30 +22,46 @@ export type ConfirmedImportRow = {
   sellingPricePence: number;
   costPricePence: number;
   quantity: number;
-  /** Resolved base unit ID (from global Unit table) */
   baseUnitId: string;
-  /** Resolved packaging unit ID — null if single-unit product */
   packUnitId: string | null;
-  /** How many base units per pack — 0 if no packaging unit */
   packSize: number;
-  /** Resolved unit ID the quantity was counted in */
   qtyInUnitId: string;
   paymentStatus: 'PAID' | 'UNPAID';
+  duplicateAction?: DuplicateAction;
+  supplierName?: string;
+  reorderPointBase?: number;
+  storefrontPublished?: boolean;
+  imageUrl?: string;
+  notes?: string;
+  confirmBelowCost?: boolean;
+};
+
+export type ImportStockMeta = {
+  fileName?: string;
+  rowsParsed?: number;
+  rowsErrors?: number;
+  rowsWarnings?: number;
+  errorReportJson?: string;
 };
 
 export type ImportStockResult = {
+  importId: string | null;
   created: number;
+  updated: number;
   skipped: number;
   skippedNames: string[];
-  /** Number of barcodes that were stripped because they conflicted with an existing product. */
   barcodesCleared: number;
   paidCount: number;
   unpaidCount: number;
   paidValuePence: number;
   unpaidValuePence: number;
-  /** Existing products for which opening stock was recorded (had quantity > 0 in the CSV). */
   stockUpdated: number;
   stockUpdatedValuePence: number;
+  openingStockUnits: number;
+  suppliersMatched: number;
+  suppliersCreated: number;
+  categoriesCreated: number;
+  warningsAcknowledged: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -51,7 +69,8 @@ export type ImportStockResult = {
 // ---------------------------------------------------------------------------
 
 export async function importStockAction(
-  rows: ConfirmedImportRow[]
+  rows: ConfirmedImportRow[],
+  meta?: ImportStockMeta
 ): Promise<ActionResult<ImportStockResult>> {
   // ── Outermost safety net ────────────────────────────────────────────────
   // This try/catch guarantees the function ALWAYS returns an ActionResult
@@ -59,7 +78,7 @@ export async function importStockAction(
   // escape unhandled. When a redirect/error escapes a Next.js 14 server action
   // the client-side await resolves to `undefined` — causing the crash.
   try {
-    return await _runImport(rows);
+    return await _runImport(rows, meta);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[importStockAction] unhandled top-level error:', e);
@@ -67,8 +86,32 @@ export async function importStockAction(
   }
 }
 
+async function resolveSupplierId(
+  businessId: string,
+  supplierName: string | undefined,
+  supplierMap: Map<string, string>,
+  stats: { matched: number; created: number }
+) {
+  const trimmed = (supplierName ?? '').trim();
+  if (!trimmed) return null;
+  const key = trimmed.toLowerCase();
+  const existing = supplierMap.get(key);
+  if (existing) {
+    stats.matched++;
+    return existing;
+  }
+  const created = await prisma.supplier.create({
+    data: { businessId, name: trimmed },
+    select: { id: true },
+  });
+  supplierMap.set(key, created.id);
+  stats.created++;
+  return created.id;
+}
+
 async function _runImport(
-  rows: ConfirmedImportRow[]
+  rows: ConfirmedImportRow[],
+  meta?: ImportStockMeta
 ): Promise<ActionResult<ImportStockResult>> {
   // Auth resolved OUTSIDE safeAction so a redirect() from withBusinessContext
   // is caught here and converted to a typed err() instead of escaping.
@@ -148,21 +191,40 @@ async function _runImport(
     const existingNameToIdMap = new Map(
       existingProductNames.map((p) => [p.name.toLowerCase(), p.id])
     );
-    const skippedNames: string[] = resolvedRows
-      .filter((r) => existingNameSet.has(r.name.toLowerCase()))
-      .map((r) => r.name);
-    // Also deduplicate within the batch — keep only the first occurrence of
-    // each name. A within-batch duplicate would pass the existingNameSet
-    // check, then hit a unique-constraint error inside the tx and roll back
-    // the entire chunk (or the whole import).
+    const skippedNames: string[] = [];
+    const rowsForCreate: ConfirmedImportRow[] = [];
+    const rowsForUpdate: Array<{ row: ConfirmedImportRow; productId: string }> = [];
     const seenNamesInBatch = new Set<string>();
-    const rowsAfterNameFilter = resolvedRows.filter((r) => {
-      const key = r.name.toLowerCase();
-      if (existingNameSet.has(key)) return false;
-      if (seenNamesInBatch.has(key)) { skippedNames.push(r.name); return false; }
+
+    for (const row of resolvedRows) {
+      const key = row.name.toLowerCase();
+      const existingId = existingNameToIdMap.get(key);
+      const action: DuplicateAction = row.duplicateAction ?? (existingId ? 'skip' : 'create');
+
+      if (seenNamesInBatch.has(key) && !existingId) {
+        skippedNames.push(row.name);
+        continue;
+      }
       seenNamesInBatch.add(key);
-      return true;
-    });
+
+      if (action === 'update' && existingId) {
+        rowsForUpdate.push({ row, productId: existingId });
+        continue;
+      }
+
+      if (existingId || action === 'skip') {
+        if (existingId && row.quantity > 0) {
+          // handled in skippedWithStock below
+        } else {
+          skippedNames.push(row.name);
+        }
+        continue;
+      }
+
+      rowsForCreate.push(row);
+    }
+
+    const rowsAfterNameFilter = rowsForCreate;
 
     // ── Pre-check for duplicate barcodes — strip conflicts rather than abort ──
     // A single duplicate barcode would otherwise throw inside the transaction
@@ -193,8 +255,23 @@ async function _runImport(
     // ── Step 1: Pre-create all missing categories outside any transaction ──
     // IDs are stable before product chunks start, so no repeated category
     // creates inside the tx loop.
+    const supplierMap = new Map(
+      (
+        await prisma.supplier.findMany({
+          where: { businessId },
+          select: { id: true, name: true },
+        })
+      ).map((s) => [s.name.toLowerCase(), s.id])
+    );
+    const supplierStats = { matched: 0, created: 0 };
+    let categoriesCreated = 0;
+
     const allCategoryNames = [
-      ...new Set(rowsToCreate.filter((r) => r.category).map((r) => r.category)),
+      ...new Set(
+        [...rowsToCreate, ...rowsForUpdate.map((u) => u.row)]
+          .filter((r) => r.category)
+          .map((r) => suggestImportCategoryName(r.category) || r.category)
+      ),
     ];
     for (const catName of allCategoryNames) {
       const key = catName.toLowerCase();
@@ -204,7 +281,53 @@ async function _runImport(
           select: { id: true },
         });
         categoryMap.set(key, newCat.id);
+        categoriesCreated++;
       }
+    }
+
+    let updatedCount = 0;
+    for (const { row, productId } of rowsForUpdate) {
+      const categoryName = row.category
+        ? suggestImportCategoryName(row.category) || row.category
+        : '';
+      const categoryId = categoryName
+        ? categoryMap.get(categoryName.toLowerCase()) ?? null
+        : null;
+      const supplierId = await resolveSupplierId(
+        businessId,
+        row.supplierName,
+        supplierMap,
+        supplierStats
+      );
+
+      let barcode = row.barcode || null;
+      if (barcode) {
+        const conflict = await prisma.product.findFirst({
+          where: { barcode, id: { not: productId } },
+          select: { id: true },
+        });
+        if (conflict) barcode = null;
+      }
+
+      await prisma.product.update({
+        where: { id: productId },
+        data: {
+          sellingPriceBasePence: row.sellingPricePence,
+          defaultCostBasePence: row.costPricePence,
+          ...(categoryId ? { categoryId } : {}),
+          ...(row.sku ? { sku: row.sku } : {}),
+          ...(barcode ? { barcode } : {}),
+          ...(row.reorderPointBase && row.reorderPointBase > 0
+            ? { reorderPointBase: row.reorderPointBase }
+            : {}),
+          ...(row.storefrontPublished != null
+            ? { storefrontPublished: row.storefrontPublished }
+            : {}),
+          ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
+          ...(supplierId ? { preferredSupplierId: supplierId } : {}),
+        },
+      });
+      updatedCount++;
     }
 
     // Helper shared by Step 2 and the result summary
@@ -230,16 +353,35 @@ async function _runImport(
     const allCreatedItems: { row: ConfirmedImportRow; productId: string }[] = [];
 
     if (rowsToCreate.length > 0) {
-      const productData = rowsToCreate.map((row) => ({
-        businessId,
-        name: row.name,
-        sku: row.sku || null,
-        barcode: row.barcode || null,
-        categoryId: row.category ? (categoryMap.get(row.category.toLowerCase()) ?? null) : null,
-        sellingPriceBasePence: row.sellingPricePence,
-        defaultCostBasePence: row.costPricePence,
-        vatRateBps: 0,
-      }));
+      const productData = await Promise.all(
+        rowsToCreate.map(async (row) => {
+          const categoryName = row.category
+            ? suggestImportCategoryName(row.category) || row.category
+            : '';
+          const supplierId = await resolveSupplierId(
+            businessId,
+            row.supplierName,
+            supplierMap,
+            supplierStats
+          );
+          return {
+            businessId,
+            name: row.name,
+            sku: row.sku || null,
+            barcode: row.barcode || null,
+            categoryId: categoryName
+              ? categoryMap.get(categoryName.toLowerCase()) ?? null
+              : null,
+            sellingPriceBasePence: row.sellingPricePence,
+            defaultCostBasePence: row.costPricePence,
+            vatRateBps: 0,
+            reorderPointBase: row.reorderPointBase && row.reorderPointBase > 0 ? row.reorderPointBase : 0,
+            storefrontPublished: row.storefrontPublished ?? false,
+            imageUrl: row.imageUrl || null,
+            preferredSupplierId: supplierId,
+          };
+        })
+      );
 
       // createMany (skipDuplicates:true) + findMany — 2 RTTs, resilient to
       // last-moment unique violations. createManyAndReturn has NO skipDuplicates
@@ -307,18 +449,23 @@ async function _runImport(
     // must use the DB's actual record to avoid "Unit not configured for product".
     // Fetch the actual base productUnit (conversionToBase = 1) for each
     // existing product and use that unit ID in the purchase lines.
-    const skippedRowsWithStock = resolvedRows.filter(
-      (r) => existingNameSet.has(r.name.toLowerCase()) && r.quantity > 0
-    );
+    const skippedRowsWithStock = resolvedRows.filter((r) => {
+      const key = r.name.toLowerCase();
+      const action = r.duplicateAction ?? 'skip';
+      return existingNameSet.has(key) && r.quantity > 0 && action !== 'update';
+    });
     // Build map: productId → actual base unitId from DB
     const existingProductBaseUnitMap = new Map<string, string>();
-    const skippedProductIds = skippedRowsWithStock
-      .map((r) => existingNameToIdMap.get(r.name.toLowerCase()))
-      .filter(Boolean) as string[];
-    if (skippedProductIds.length > 0) {
+    const stockProductIds = [
+      ...skippedRowsWithStock
+        .map((r) => existingNameToIdMap.get(r.name.toLowerCase()))
+        .filter(Boolean),
+      ...rowsForUpdate.map((u) => u.productId),
+    ] as string[];
+    if (stockProductIds.length > 0) {
       const existingUnits = await prisma.productUnit.findMany({
         where: {
-          productId: { in: [...new Set(skippedProductIds)] },
+          productId: { in: [...new Set(stockProductIds)] },
           conversionToBase: 1,
         },
         select: { productId: true, unitId: true },
@@ -345,7 +492,29 @@ async function _runImport(
     // Chunking avoids an oversized IN (...) clause in the DB driver.
     // Both newly-created and existing-with-stock items are included.
     const INVOICE_CHUNK = 500;
-    const allItems = [...createdItems, ...skippedWithStockItems];
+    const updateWithStockItems = (
+      await Promise.all(
+        rowsForUpdate
+          .filter(({ row }) => row.quantity > 0)
+          .map(async ({ row, productId }) => {
+            const actualBaseUnitId =
+              existingProductBaseUnitMap.get(productId) ??
+              (
+                await prisma.productUnit.findFirst({
+                  where: { productId, conversionToBase: 1 },
+                  select: { unitId: true },
+                })
+              )?.unitId ??
+              row.baseUnitId;
+            return {
+              row: { ...row, baseUnitId: actualBaseUnitId },
+              productId,
+            };
+          })
+      )
+    ).filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
+
+    const allItems = [...createdItems, ...skippedWithStockItems, ...updateWithStockItems];
     const paidItemsAll   = allItems.filter((c) => c.row.paymentStatus === 'PAID');
     const unpaidItemsAll = allItems.filter((c) => c.row.paymentStatus === 'UNPAID');
     const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
@@ -371,6 +540,8 @@ async function _runImport(
           businessId, storeId: store.id, supplierId: null,
           paymentStatus: 'PAID', dueDate: null, payments: [],
           lines: chunk, userId: user.id,
+          stockMovementType: 'OPENING',
+          acknowledgeHighCost: true,
         });
         paidChunkCount++;
       } catch (chunkErr: unknown) {
@@ -387,6 +558,8 @@ async function _runImport(
           businessId, storeId: store.id, supplierId: null,
           paymentStatus: 'UNPAID', dueDate: null, payments: [],
           lines: chunk, userId: user.id,
+          stockMovementType: 'OPENING',
+          acknowledgeHighCost: true,
         });
         unpaidChunkCount++;
       } catch (chunkErr: unknown) {
@@ -403,9 +576,44 @@ async function _runImport(
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
-    const stockUpdatedValuePence = skippedWithStockItems.reduce(
-      (sum, { row }) => sum + rowToBaseCost(row), 0
-    );
+    const stockUpdatedValuePence =
+      [...skippedWithStockItems, ...updateWithStockItems].reduce(
+        (sum, { row }) => sum + rowToBaseCost(row),
+        0
+      );
+    const openingStockUnits = paidLinesAll.reduce((s, l) => s + l.qtyInUnit, 0)
+      + unpaidLinesAll.reduce((s, l) => s + l.qtyInUnit, 0);
+
+    const summary = {
+      created: createdItems.length,
+      updated: updatedCount,
+      skipped: skippedNames.length,
+      stockUpdated: skippedWithStockItems.length + updateWithStockItems.length,
+      paidCount: paidLinesAll.length,
+      unpaidCount: unpaidLinesAll.length,
+      suppliersMatched: supplierStats.matched,
+      suppliersCreated: supplierStats.created,
+      categoriesCreated,
+      openingStockUnits,
+    };
+
+    const importRecord = await prisma.productImport.create({
+      data: {
+        businessId,
+        uploadedByUserId: user.id,
+        fileName: meta?.fileName ?? null,
+        status: invoiceErrors.length > 0 ? 'PARTIAL' : 'COMPLETED',
+        rowsParsed: meta?.rowsParsed ?? rows.length,
+        rowsImported: createdItems.length,
+        rowsUpdated: updatedCount,
+        rowsSkipped: skippedNames.length,
+        rowsErrors: meta?.rowsErrors ?? 0,
+        rowsWarnings: meta?.rowsWarnings ?? 0,
+        summaryJson: JSON.stringify(summary),
+        errorReportJson: meta?.errorReportJson ?? null,
+      },
+      select: { id: true },
+    });
 
     audit({
       businessId,
@@ -415,32 +623,33 @@ async function _runImport(
       action: 'PRODUCT_IMPORT',
       entity: 'Product',
       entityId: businessId,
-      details: {
-        created: createdItems.length,
-        skipped: skippedNames.length,
-        stockUpdated: skippedWithStockItems.length,
-        paidCount: paidLinesAll.length,
-        unpaidCount: unpaidLinesAll.length,
-      },
+      details: { ...summary, importId: importRecord.id },
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateTag(`readiness-${businessId}`);
+    revalidateTag('control-portfolio');
+    revalidateTag('scale-cockpit');
 
     return ok<ImportStockResult>({
+      importId: importRecord.id,
       created: createdItems.length,
+      updated: updatedCount,
       skipped: skippedNames.length,
-      // Cap the inline name list to avoid oversized action responses on large
-      // re-imports where every product already exists (e.g. full 1200-row file
-      // re-uploaded). The count is still accurate; the UI shows a truncation note.
       skippedNames: skippedNames.slice(0, 200),
       barcodesCleared,
       paidCount: paidLinesAll.length,
       unpaidCount: unpaidLinesAll.length,
       paidValuePence,
       unpaidValuePence,
-      stockUpdated: skippedWithStockItems.length,
+      stockUpdated: skippedWithStockItems.length + updateWithStockItems.length,
       stockUpdatedValuePence,
+      openingStockUnits,
+      suppliersMatched: supplierStats.matched,
+      suppliersCreated: supplierStats.created,
+      categoriesCreated,
+      warningsAcknowledged: rows.filter((r) => r.confirmBelowCost).length,
     });
   });
 }

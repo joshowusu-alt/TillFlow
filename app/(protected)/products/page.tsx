@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ProductImageInput from '@/components/ProductImageInput';
+import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -114,10 +115,10 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               </svg>
               <div className="flex-1">
                 <span className="text-sm font-semibold text-success">Product added to your catalogue.</span>
-                <span className="ml-1.5 text-sm text-ink/70">Record a purchase to set opening stock, then open the POS to start selling.</span>
+                <span className="ml-1.5 text-sm text-ink/70">Add opening stock on the product form or from Opening Stock setup before your first sale.</span>
               </div>
-              <Link href="/purchases" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
-                Receive stock &rarr;
+              <Link href="/setup/opening-stock" className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
+                Add opening stock &rarr;
               </Link>
             </div>
           )}
@@ -127,7 +128,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               <h2 className="text-lg font-display font-semibold">Add product</h2>
               <p className="mt-1 text-sm text-black/55">Start with the items you sell every day. You can add the rest of the catalogue later.</p>
               <FormError error={searchParams?.error} />
-              <form action={createProductAction} className="mt-4 grid gap-4 md:grid-cols-3">
+              <ProductCreateFormEnhancer
+                createAction={createProductAction}
+                currencySymbol={getCurrencySymbol(business.currency)}
+                units={units}
+              >
                 <div>
                   <label className="label">Name</label>
                   <input className="input" name="name" required />
@@ -196,7 +201,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                 <div className="md:col-span-3">
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create product</SubmitButton>
                 </div>
-              </form>
+              </ProductCreateFormEnhancer>
             </div>
           ) : null}
           <div className="mb-4 max-w-xs">

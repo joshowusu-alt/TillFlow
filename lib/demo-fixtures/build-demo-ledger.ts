@@ -1,3 +1,4 @@
+import { ADOM_RETAIL_DEMO_NAME, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import { DEMO_CATEGORIES, DEMO_PRODUCTS } from './products';
 import { DEMO_SUPPLIERS } from './suppliers';
 import { DEMO_CUSTOMERS } from './customers';
@@ -21,7 +22,7 @@ function getDemoWindow(): { start: Date; end: Date } {
 
   const start = new Date(end);
   start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - 13); // 14 days total (start + 13 more)
+  start.setDate(start.getDate() - (DEMO_PERIOD_DAYS - 1));
 
   return { start, end };
 }
@@ -79,6 +80,7 @@ export function buildDemoLedger(): DemoSnapshot {
   let totalCOGSPence    = 0;
   let cashSalesPence    = 0;
   let momoSalesPence    = 0;
+  let cardSalesPence    = 0;
   let creditSalesPence  = 0;
 
   for (const inv of salesInvoices) {
@@ -88,6 +90,7 @@ export function buildDemoLedger(): DemoSnapshot {
     }
     if (inv.paymentMethod === 'CASH')   cashSalesPence   += inv.subtotalPence;
     if (inv.paymentMethod === 'MOMO')   momoSalesPence   += inv.subtotalPence;
+    if (inv.paymentMethod === 'CARD')   cardSalesPence   += inv.subtotalPence;
     if (inv.paymentMethod === 'CREDIT') creditSalesPence += inv.subtotalPence;
   }
 
@@ -121,7 +124,7 @@ export function buildDemoLedger(): DemoSnapshot {
     - purchasesPaidPence
     - totalExpensesPence;
 
-  const endingMomoPence = momoSalesPence;
+  const endingMomoPence = momoSalesPence + cardSalesPence;
 
   // ── Ending inventory value ───────────────────────────────────────────────
   const endingInventoryValuePence = DEMO_PRODUCTS.reduce((s, p) => {
@@ -142,6 +145,7 @@ export function buildDemoLedger(): DemoSnapshot {
     openingCashPence,
     cashSalesPence,
     momoSalesPence,
+    cardSalesPence,
     creditSalesPence,
     creditCollectedPence,
     endingCashPence,
@@ -154,7 +158,7 @@ export function buildDemoLedger(): DemoSnapshot {
 
   cachedDateKey = dateKey;
   cachedSnapshot = {
-    businessName: 'Kwame & Family Supermarket',
+    businessName: ADOM_RETAIL_DEMO_NAME,
     currency: 'GHS',
     period: { start, end },
     categories: DEMO_CATEGORIES,

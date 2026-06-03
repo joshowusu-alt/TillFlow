@@ -216,6 +216,12 @@ export default function WelcomePage() {
                 </svg>
                 See live demo
               </Link>
+              <a
+                href="mailto:hello@tishgroup.com?subject=TillFlow%20demo%20request"
+                className="flex items-center gap-2 rounded-2xl border-2 border-accent/30 bg-white px-8 py-4 text-base font-bold text-accent shadow-lg transition-all hover:border-accent/40 hover:shadow-xl hover:-translate-y-0.5"
+              >
+                Book a demo
+              </a>
               <Link
                 href="/register"
                 className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-accent/20 hover:shadow-xl hover:-translate-y-0.5"
@@ -226,6 +232,9 @@ export default function WelcomePage() {
                 </svg>
               </Link>
             </div>
+            <p className="mt-4 max-w-lg text-center text-sm text-black/50">
+              Explore a sample business and see how TillFlow tracks sales, stock, payments and reports — no signup required.
+            </p>
 
             <div className="mt-4">
               <a
@@ -271,7 +280,7 @@ export default function WelcomePage() {
               {/* Header bar */}
               <div className="flex items-center justify-between bg-gradient-to-r from-accent to-blue-700 px-5 py-3.5 text-white">
                 <div>
-                  <div className="text-xs font-medium opacity-70">Kwame &amp; Family Supermarket</div>
+                  <div className="text-xs font-medium opacity-70">Adom Retail Demo</div>
                   <div className="mt-0.5 text-sm font-bold">Today's Overview</div>
                 </div>
                 <div className="flex items-center gap-1.5 rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">

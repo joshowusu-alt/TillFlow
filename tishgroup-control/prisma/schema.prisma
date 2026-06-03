@@ -11,6 +11,7 @@ datasource db {
 model Business {
   id               String                 @id @default(cuid())
   name             String
+  address          String?
   phone            String?
   plan             String                 @default("STARTER")
   planStatus       String                 @default("ACTIVE")
@@ -34,14 +35,32 @@ model Business {
   paymentProvider  String?
   paymentProviderStatus String?
   billingNotes     String?
+  momoEnabled      Boolean                @default(false)
+  momoNumber       String?
+  openingCapitalPence Int                 @default(0)
+  onboardingCompletedAt DateTime?
+  businessCategory String?
+  activationStatus String                 @default("GETTING_STARTED")
+  setupProgressPct Int                    @default(0)
+  ownerLastDashboardViewAt DateTime?
+  ownerLastReportViewAt DateTime?
+  trialAcknowledgedAt DateTime?
+  activationStuckReason String?
+  activationNextAction String?
+  activationSnapshotAt DateTime?
+  timezone         String                 @default("Africa/Accra")
+  storefrontEnabled Boolean               @default(false)
   isDemo           Boolean                @default(false)
   addonOnlineStorefront Boolean           @default(false)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
   users            User[]
   stores           Store[]
+  products         Product[]
+  purchaseInvoices PurchaseInvoice[]
   salesInvoices    SalesInvoice[]
   controlProfile   ControlBusinessProfile?
+  controlSupportIssues ControlSupportIssue[]
   messageOutbox    MessageOutbox[]
 }
 
@@ -73,14 +92,31 @@ model MessageOutbox {
 }
 
 model User {
-  id         String   @id @default(cuid())
-  businessId String
-  name       String
-  email      String   @unique
-  role       String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  businessId   String
+  name         String
+  email        String    @unique
+  role         String
+  lastLoginAt  DateTime?
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, role])
+}
+
+model Product {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model PurchaseInvoice {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
 }
 
 model Store {
@@ -92,10 +128,12 @@ model Store {
 }
 
 model SalesInvoice {
-  id         String   @id @default(cuid())
-  businessId String
-  createdAt  DateTime @default(now())
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  businessId    String
+  paymentStatus String   @default("PAID")
+  qaTag         String?
+  createdAt     DateTime @default(now())
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt])
 }
@@ -120,6 +158,57 @@ model ControlStaff {
   reviewedBusinesses ControlBusinessProfile[] @relation("ControlBusinessReviewedBy")
   receivedPayments   ControlPayment[]         @relation("ControlPaymentReceivedBy")
   authoredNotes      ControlNote[]            @relation("ControlNoteAuthoredBy")
+  createdSupportIssues ControlSupportIssue[] @relation("SupportIssueCreatedBy")
+  assignedSupportIssues ControlSupportIssue[] @relation("SupportIssueAssignedTo")
+  supportIssueNotes  ControlSupportIssueNote[] @relation("SupportIssueNoteAuthoredBy")
+}
+
+model ControlSupportIssue {
+  id                      String   @id @default(cuid())
+  businessId              String
+  createdByStaffId        String?
+  createdByMerchantUserId String?
+  assignedStaffId         String?
+  assignedAgentName       String?
+  issueType               String
+  priority                String   @default("NORMAL")
+  status                  String   @default("OPEN")
+  title                   String
+  description             String?
+  ownerName               String?
+  ownerPhone              String?
+  source                  String   @default("CONTROL")
+  relatedRoute            String?
+  attachmentUrl           String?
+  nextAction              String?
+  resolutionNotes         String?
+  resolvedAt              DateTime?
+  closedAt                DateTime?
+  lastUpdatedAt           DateTime @updatedAt
+  createdAt               DateTime @default(now())
+
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByStaff ControlStaff? @relation("SupportIssueCreatedBy", fields: [createdByStaffId], references: [id])
+  assignedStaff  ControlStaff? @relation("SupportIssueAssignedTo", fields: [assignedStaffId], references: [id])
+  notes          ControlSupportIssueNote[]
+
+  @@index([businessId, status])
+  @@index([status, priority])
+  @@index([assignedStaffId])
+  @@index([createdAt])
+}
+
+model ControlSupportIssueNote {
+  id               String   @id @default(cuid())
+  issueId          String
+  note             String
+  createdByStaffId String?
+  createdAt        DateTime @default(now())
+
+  issue          ControlSupportIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdByStaff ControlStaff?       @relation("SupportIssueNoteAuthoredBy", fields: [createdByStaffId], references: [id])
+
+  @@index([issueId, createdAt])
 }
 
 model ControlBusinessProfile {
@@ -134,6 +223,27 @@ model ControlBusinessProfile {
   supportStatus     String               @default("HEALTHY")
   lastActivityAt    DateTime?
   notes             String?
+  onboardingStage          String?
+  stuckReason              String?
+  activationScore          Int?
+  nextRecommendedAction    String?
+  churnRisk                Boolean              @default(false)
+  referralSource           String?
+  referredBy               String?
+  referredByName           String?
+  referredByPhone          String?
+  sourceChannel            String?
+  referralStatus           String?
+  referralNextFollowUpAt   DateTime?
+  referralNotes            String?
+  assignedAgentName        String?
+  productCountSnapshot     Int?
+  transactionCountSnapshot Int?
+  lastSaleAt               DateTime?
+  setupCallCompletedAt     DateTime?
+  firstSaleMarkedAt        DateTime?
+  paymentFollowUpNeeded    Boolean              @default(false)
+  openSupportIssueCount    Int                  @default(0)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   business          Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)

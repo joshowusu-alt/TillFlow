@@ -21,6 +21,12 @@ function getNavCount(href: string, navCounts?: { urgent: number; collections: nu
 
 const navigation = [
   { href: '/', label: 'Portfolio', shortLabel: 'Home', icon: 'home' },
+  { href: '/command/scale', label: 'Scale Cockpit', shortLabel: 'Scale', icon: 'layers' },
+  { href: '/command/digest', label: 'Digest', shortLabel: 'Digest', icon: 'pulse' },
+  { href: '/command/support', label: 'Support', shortLabel: 'Support', icon: 'lifebuoy' },
+  { href: '/command/referrals', label: 'Referrals', shortLabel: 'Referrals', icon: 'chart' },
+  { href: '/command/templates', label: 'Templates', shortLabel: 'Templates', icon: 'book' },
+  { href: '/command/guides', label: 'Guides', shortLabel: 'Guides', icon: 'book' },
   { href: '/businesses', label: 'Businesses', shortLabel: 'Businesses', icon: 'grid' },
   { href: '/subscriptions', label: 'Subscriptions', shortLabel: 'Subs', icon: 'cycle' },
   { href: '/collections', label: 'Collections', shortLabel: 'Collections', icon: 'pulse' },
@@ -51,6 +57,19 @@ function NavigationIcon({ icon, active }: { icon: string; active: boolean }) {
       return (
         <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h4l2.4-4.5L14 17l2.2-5H21" />
+        </svg>
+      );
+    case 'layers':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 3 8l9 5 9-5-9-5Zm0 7L3 15l9 5 9-5-9-5Zm0 7L3 22l9 5 9-5-9-5Z" />
+        </svg>
+      );
+    case 'lifebuoy':
+      return (
+        <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="12" r="9" />
+          <path strokeLinecap="round" d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
         </svg>
       );
     case 'chart':

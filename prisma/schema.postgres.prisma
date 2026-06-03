@@ -154,6 +154,16 @@ model Business {
   onboardingCompletedAt                DateTime?
   hasDemoData                          Boolean  @default(false)
   guidedSetup                          Boolean  @default(true)
+  // Phase 6: activation / scale readiness (computed + cached by cron)
+  businessCategory                     String?
+  activationStatus                     String   @default("GETTING_STARTED")
+  setupProgressPct                     Int      @default(0)
+  ownerLastDashboardViewAt             DateTime?
+  ownerLastReportViewAt                DateTime?
+  trialAcknowledgedAt                  DateTime?
+  activationStuckReason                String?
+  activationNextAction                 String?
+  activationSnapshotAt                 DateTime?
   createdAt                            DateTime @default(now())
   updatedAt                            DateTime @updatedAt
 
@@ -166,6 +176,7 @@ model Business {
   suppliers              Supplier[]
   categories             Category[]
   products               Product[]
+  productImports         ProductImport[]
   accounts               Account[]
   journalEntries         JournalEntry[]
   expenses               Expense[]
@@ -189,6 +200,7 @@ model Business {
   storefrontEvents       StorefrontEvent[]
   messageOutbox          MessageOutbox[]
   controlProfile         ControlBusinessProfile?
+  controlSupportIssues   ControlSupportIssue[]
   businessSequences      BusinessSequence[]
 
   @@index([whatsappEnabled, isDemo])
@@ -206,6 +218,57 @@ model ControlStaff {
   reviewedBusinesses ControlBusinessProfile[] @relation("ControlBusinessReviewedBy")
   receivedPayments   ControlPayment[]        @relation("ControlPaymentReceivedBy")
   authoredNotes      ControlNote[]           @relation("ControlNoteAuthoredBy")
+  createdSupportIssues ControlSupportIssue[] @relation("SupportIssueCreatedBy")
+  assignedSupportIssues ControlSupportIssue[] @relation("SupportIssueAssignedTo")
+  supportIssueNotes  ControlSupportIssueNote[] @relation("SupportIssueNoteAuthoredBy")
+}
+
+model ControlSupportIssue {
+  id                      String   @id @default(cuid())
+  businessId              String
+  createdByStaffId        String?
+  createdByMerchantUserId String?
+  assignedStaffId         String?
+  assignedAgentName       String?
+  issueType               String
+  priority                String   @default("NORMAL")
+  status                  String   @default("OPEN")
+  title                   String
+  description             String?
+  ownerName               String?
+  ownerPhone              String?
+  source                  String   @default("CONTROL")
+  relatedRoute            String?
+  attachmentUrl           String?
+  nextAction              String?
+  resolutionNotes         String?
+  resolvedAt              DateTime?
+  closedAt                DateTime?
+  lastUpdatedAt           DateTime @updatedAt
+  createdAt               DateTime @default(now())
+
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdByStaff   ControlStaff? @relation("SupportIssueCreatedBy", fields: [createdByStaffId], references: [id])
+  assignedStaff    ControlStaff? @relation("SupportIssueAssignedTo", fields: [assignedStaffId], references: [id])
+  notes            ControlSupportIssueNote[]
+
+  @@index([businessId, status])
+  @@index([status, priority])
+  @@index([assignedStaffId])
+  @@index([createdAt])
+}
+
+model ControlSupportIssueNote {
+  id               String   @id @default(cuid())
+  issueId          String
+  note             String
+  createdByStaffId String?
+  createdAt        DateTime @default(now())
+
+  issue          ControlSupportIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdByStaff ControlStaff?       @relation("SupportIssueNoteAuthoredBy", fields: [createdByStaffId], references: [id])
+
+  @@index([issueId, createdAt])
 }
 
 model ControlBusinessProfile {
@@ -220,6 +283,28 @@ model ControlBusinessProfile {
   supportStatus     String               @default("HEALTHY")
   lastActivityAt    DateTime?
   notes             String?
+  // Phase 6: onboarding pipeline + referral
+  onboardingStage          String?
+  stuckReason              String?
+  activationScore          Int?
+  nextRecommendedAction    String?
+  churnRisk                Boolean              @default(false)
+  referralSource           String?
+  referredBy               String?
+  referredByName           String?
+  referredByPhone          String?
+  sourceChannel            String?
+  referralStatus           String?
+  referralNextFollowUpAt   DateTime?
+  referralNotes            String?
+  assignedAgentName        String?
+  productCountSnapshot     Int?
+  transactionCountSnapshot Int?
+  lastSaleAt               DateTime?
+  setupCallCompletedAt     DateTime?
+  firstSaleMarkedAt        DateTime?
+  paymentFollowUpNeeded    Boolean              @default(false)
+  openSupportIssueCount    Int                  @default(0)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   business          Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -232,6 +317,12 @@ model ControlBusinessProfile {
   @@index([assignedManagerId])
   @@index([reviewedByStaffId])
   @@index([supportStatus])
+  @@index([onboardingStage])
+  @@index([stuckReason])
+  @@index([churnRisk])
+  @@index([referralSource])
+  @@index([referralStatus])
+  @@index([assignedAgentName])
 }
 
 model ControlSubscription {
@@ -395,6 +486,7 @@ model User {
   twoFactorEnabled    Boolean  @default(false)
   twoFactorSecret     String?
   twoFactorTempSecret String?
+  lastLoginAt         DateTime?
   createdAt           DateTime @default(now())
 
   business                   Business                @relation(fields: [businessId], references: [id])
@@ -426,6 +518,7 @@ model User {
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
+  productImports             ProductImport[]
 
   @@index([businessId, active])
 }
@@ -594,6 +687,28 @@ model Product {
   @@index([businessId, active, storefrontPublished])
   @@index([categoryId])
   @@index([preferredSupplierId])
+}
+
+model ProductImport {
+  id               String   @id @default(cuid())
+  businessId       String
+  uploadedByUserId String?
+  fileName         String?
+  status           String   @default("COMPLETED")
+  rowsParsed       Int      @default(0)
+  rowsImported     Int      @default(0)
+  rowsUpdated      Int      @default(0)
+  rowsSkipped      Int      @default(0)
+  rowsErrors       Int      @default(0)
+  rowsWarnings     Int      @default(0)
+  summaryJson      String?
+  errorReportJson  String?
+  createdAt        DateTime @default(now())
+
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploadedBy User?    @relation(fields: [uploadedByUserId], references: [id])
+
+  @@index([businessId, createdAt])
 }
 
 model Unit {

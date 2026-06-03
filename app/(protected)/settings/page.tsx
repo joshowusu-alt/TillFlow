@@ -9,6 +9,8 @@ import OpeningBalancesForm from '@/components/OpeningBalancesForm';
 import { getCurrencySymbol } from '@/lib/format';
 import { isQzSigningConfigured } from '@/lib/qz-signing.server';
 import { prisma } from '@/lib/prisma';
+import HelpRequestCard from '@/components/help/HelpRequestCard';
+import Link from 'next/link';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -98,6 +100,21 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
           <div>
             <label className="label">Business Name</label>
             <input className="input" name="name" defaultValue={business.name} />
+          </div>
+          <div>
+            <label className="label">Business type</label>
+            <select className="input" name="businessCategory" defaultValue={(business as { businessCategory?: string | null }).businessCategory ?? ''}>
+              <option value="">Select type</option>
+              <option value="SUPERMARKET">Supermarket</option>
+              <option value="PROVISION">Provision shop</option>
+              <option value="MINI_MART">Mini mart</option>
+              <option value="PHARMACY">Pharmacy</option>
+              <option value="COSMETICS">Cosmetics / beauty</option>
+              <option value="HARDWARE">Hardware</option>
+              <option value="WHOLESALE">Wholesaler</option>
+              <option value="RESTAURANT_STOCK">Food business with stock</option>
+              <option value="OTHER">Other product business</option>
+            </select>
           </div>
           <div>
             <label className="label">Currency</label>
@@ -401,6 +418,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
       </div>
       <CashDrawerSetup businessId={business.id} />
       <TillManagement tills={activeTills} />
+
+      <HelpRequestCard relatedRoute="/settings" />
+
+      <div className="card p-5 sm:p-6">
+        <h3 className="font-semibold mb-1">Guides</h3>
+        <p className="text-sm text-black/50 mb-3">Short steps for owners, cashiers, setup and units.</p>
+        <Link href="/help" className="text-sm font-semibold text-accent hover:underline">
+          Open help guides →
+        </Link>
+      </div>
 
       <div className="card p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

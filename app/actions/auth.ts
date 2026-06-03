@@ -111,15 +111,21 @@ export async function login(formData: FormData) {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
-  await prisma.session.create({
-    data: {
-      token,
-      userId: user.id,
-      ipAddress,
-      userAgent,
-      expiresAt
-    }
-  });
+  await prisma.$transaction([
+    prisma.session.create({
+      data: {
+        token,
+        userId: user.id,
+        ipAddress,
+        userAgent,
+        expiresAt,
+      },
+    }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    }),
+  ]);
 
   const staleSessions = await prisma.session.findMany({
     where: { userId: user.id },

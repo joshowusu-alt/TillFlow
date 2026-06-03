@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 // ImportStockClient (which imports xlsx). Importing it here gives RSC a
 // client reference — webpack never follows the xlsx import chain into the
 // server bundle, so the 7 MB xlsx package stays fully client-side.
+import { listProductImports } from '@/app/actions/import-catalog';
+import ImportHistoryPanel from './ImportHistoryPanel';
 import ImportStockLoader from './ImportStockLoader';
 
 // Server actions called from this route (importStockAction) can take up to
@@ -16,10 +18,13 @@ export default async function ImportStockPage() {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
-  const units = await prisma.unit.findMany({
-    select: { id: true, name: true, pluralName: true },
-    orderBy: { name: 'asc' },
-  });
+  const [units, importHistory] = await Promise.all([
+    prisma.unit.findMany({
+      select: { id: true, name: true, pluralName: true },
+      orderBy: { name: 'asc' },
+    }),
+    listProductImports(8),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -42,6 +47,9 @@ export default async function ImportStockPage() {
         </div>
       </div>
       <ImportStockLoader units={units} currency={business.currency} />
+      <ImportHistoryPanel
+        imports={importHistory.success ? importHistory.data : []}
+      />
     </div>
   );
 }

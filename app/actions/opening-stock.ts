@@ -53,6 +53,7 @@ export async function createOpeningStockAction(
           unitCostPence: l.unitCostPence,
         })),
         userId: user.id,
+        stockMovementType: 'OPENING',
       });
 
       inventoryValuePence = validLines.reduce(
@@ -85,6 +86,7 @@ export async function createOpeningStockAction(
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateTag(`readiness-${businessId}`);
 
     return ok<OpeningStockResult>({
       inventoryValuePence,

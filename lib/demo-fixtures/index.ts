@@ -1,4 +1,5 @@
 export { buildDemoLedger } from './build-demo-ledger';
+export { DEMO_ONLINE_ORDERS, type DemoOnlineOrder } from './online-orders';
 export {
   getDashboardKPIs,
   getSalesByDay,

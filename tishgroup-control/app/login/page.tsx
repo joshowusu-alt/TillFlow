@@ -18,6 +18,7 @@ export default async function LoginPage({
   const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const error = readSearchParam(resolvedSearchParams.error);
+  const next = readSearchParam(resolvedSearchParams.next);
   const authConfigured = controlAuthConfigured();
 
   return (
@@ -73,6 +74,7 @@ export default async function LoginPage({
           ) : null}
 
           <form action={loginControlStaffAction} className="mt-5 space-y-4 sm:mt-6">
+            {next ? <input type="hidden" name="next" value={next} /> : null}
             <label className="block space-y-1 text-sm">
               <span className="font-medium text-control-ink">Staff email</span>
               <input

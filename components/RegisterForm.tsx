@@ -39,6 +39,9 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
+  const [referralSource, setReferralSource] = useState('');
+  const [referredByName, setReferredByName] = useState('');
+  const [referredByPhone, setReferredByPhone] = useState('');
 
   const canAdvanceFrom1 = businessName.trim().length > 0 && ownerName.trim().length > 0;
   const canAdvanceFrom2 = email.trim().length > 0 && password.length >= 6;
@@ -287,6 +290,43 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="password" value={password} />
           <input type="hidden" name="plan" value={selectedPlan} />
+
+          <input type="hidden" name="referralSource" value={referralSource} />
+          <input type="hidden" name="referredByName" value={referredByName} />
+          <input type="hidden" name="referredByPhone" value={referredByPhone} />
+          <input type="hidden" name="sourceChannel" value="INBOUND" />
+
+          <details className="rounded-xl border border-black/8 bg-white/80 px-4 py-3 text-sm">
+            <summary className="cursor-pointer font-semibold text-black/70">How did you hear about TillFlow? (optional)</summary>
+            <div className="mt-3 space-y-3">
+              <select
+                value={referralSource}
+                onChange={(e) => setReferralSource(e.target.value)}
+                className="input w-full"
+              >
+                <option value="">Select…</option>
+                <option value="WHATSAPP_GROUP">WhatsApp group</option>
+                <option value="EXISTING_CUSTOMER">Existing customer</option>
+                <option value="FAMILY_FRIEND">Family / friend</option>
+                <option value="AGENT_REFERRAL">Agent referral</option>
+                <option value="SOCIAL_MEDIA">Social media</option>
+                <option value="WEBSITE">Website</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <input
+                className="input w-full"
+                placeholder="Referred by (name)"
+                value={referredByName}
+                onChange={(e) => setReferredByName(e.target.value)}
+              />
+              <input
+                className="input w-full"
+                placeholder="Referrer phone (optional)"
+                value={referredByPhone}
+                onChange={(e) => setReferredByPhone(e.target.value)}
+              />
+            </div>
+          </details>
 
           <div>
             <label className="label">Currency</label>

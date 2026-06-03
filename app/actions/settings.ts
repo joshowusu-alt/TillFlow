@@ -92,12 +92,19 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     // Opening Capital is entered in whole currency units by the user (e.g. 5000 = GHS 5,000)
     const openingCapitalPence = Math.max(0, toPence(formData.get('openingCapitalPence')));
     const plan = getBusinessPlan((currentBusiness as any)?.plan ?? (currentBusiness?.mode as any), (currentBusiness?.storeMode as any) ?? 'SINGLE_STORE');
+    const rawCategory = formOptionalString(formData, 'businessCategory')?.toUpperCase() ?? null;
+    const allowedCategories = new Set([
+      'SUPERMARKET', 'PROVISION', 'MINI_MART', 'PHARMACY', 'COSMETICS',
+      'HARDWARE', 'WHOLESALE', 'RESTAURANT_STOCK', 'OTHER',
+    ]);
+    const businessCategory = rawCategory && allowedCategories.has(rawCategory) ? rawCategory : undefined;
 
     await prisma.business.update({
       where: { id: businessId },
       data: {
         name,
         currency,
+        ...(businessCategory ? { businessCategory } : {}),
         vatEnabled,
         vatNumber,
         receiptTemplate,
@@ -127,6 +134,9 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     }
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, momoEnabled } }).catch((e) => console.error('[audit]', e));
+
+    const { revalidateTag } = await import('next/cache');
+    revalidateTag(`readiness-${businessId}`);
 
     redirect('/settings');
   }, '/settings');

@@ -1,70 +1,74 @@
 /**
- * Client-side file parser for the stock import feature.
- * Handles .csv files (RFC-4180 compliant) and .xlsx / .xls files (via SheetJS).
- * Returns a normalised array of ParsedImportRow — no DB calls here.
+ * Client-side file parser for stock import (.csv / .xlsx).
  */
 
 import * as XLSX from 'xlsx';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { normaliseHeaderKey } from '@/lib/import/import-columns';
+import {
+  validateImportRow,
+  type DuplicateAction,
+  type DuplicateKind,
+} from '@/lib/import/import-validation';
 
 export type PaymentStatus = 'PAID' | 'UNPAID';
 
-/**
- * One row as it comes out of the parser.
- * All money fields are already in pence.
- * Validation issues are collected in `errors` (blocking) and `warnings` (resolvable in preview).
- */
 export type ParsedImportRow = {
-  /** Unique stable key for React lists */
   _id: string;
+  rowNumber: number;
   name: string;
   sku: string;
   barcode: string;
   category: string;
+  suggestedCategory: string;
   sellingPricePence: number;
   costPricePence: number;
   quantity: number;
-  /** Name typed by the user in base_unit column */
   baseUnitName: string;
-  /** Name typed by the user in pack_unit column — empty string means no packaging */
   packUnitName: string;
-  /** How many base units per pack — 0 means not set */
   packSize: number;
-  /** The unit name the quantity was counted in (defaults to packUnitName if set, else baseUnitName) */
   qtyInName: string;
+  supplierName: string;
+  reorderPoint: number;
+  storefrontPublished: boolean;
+  imageUrl: string;
+  notes: string;
   paymentStatus: PaymentStatus;
-  /** Hard errors — row cannot be confirmed until file is re-uploaded with fixes */
+  duplicateKind: DuplicateKind;
+  duplicateAction: DuplicateAction;
+  confirmBelowCost: boolean;
   errors: string[];
-  /** Soft warnings — resolvable in the preview UI without re-uploading */
   warnings: string[];
 };
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 let _counter = 0;
 function uniqueId() {
   return `row-${++_counter}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Parse a price string like "12.00" or "12,50" into pence. */
 function parsePence(raw: string): number {
-  const n = parseFloat(raw.replace(',', '.').trim());
-  if (isNaN(n)) return -1; // sentinel for invalid
+  const n = parseFloat(raw.replace(/,/g, '').replace(/\s/g, '').trim());
+  if (Number.isNaN(n)) return -1;
   return Math.round(n * 100);
+}
+
+function parseQuantity(raw: string): number {
+  const cleaned = raw.trim().toLowerCase();
+  if (!cleaned || ['-', 'n/a', 'na', 'nil', 'none', 'oos', 'out'].includes(cleaned)) return 0;
+  const n = parseFloat(cleaned.replace(/,/g, ''));
+  return Number.isNaN(n) ? -1 : n;
 }
 
 function normalisePaymentStatus(raw: string): PaymentStatus {
   const v = raw.trim().toLowerCase();
-  if (v === 'paid') return 'PAID';
-  return 'UNPAID'; // blank, 'unpaid', or anything else → UNPAID
+  if (v === 'paid' || v === 'yes') return 'PAID';
+  return 'UNPAID';
 }
 
-/** Minimal RFC-4180-compliant CSV line splitter (handles quoted fields). */
+function parseBool(raw: string): boolean {
+  const v = raw.trim().toLowerCase();
+  return v === 'yes' || v === 'true' || v === '1' || v === 'y';
+}
+
 function splitCsvLine(line: string): string[] {
   const fields: string[] = [];
   let cur = '';
@@ -80,23 +84,20 @@ function splitCsvLine(line: string): string[] {
       } else {
         cur += ch;
       }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      fields.push(cur);
+      cur = '';
     } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        fields.push(cur);
-        cur = '';
-      } else {
-        cur += ch;
-      }
+      cur += ch;
     }
   }
   fields.push(cur);
   return fields;
 }
 
-/** Convert a raw object (keyed by header name) into a ParsedImportRow. */
-function buildRow(raw: Record<string, string>): ParsedImportRow {
+function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names: Set<string>; barcodes: Set<string> }) {
   const g = (key: string) => (raw[key] ?? '').trim();
 
   const name = g('name');
@@ -105,105 +106,179 @@ function buildRow(raw: Record<string, string>): ParsedImportRow {
   const category = g('category');
   const sellingPricePence = parsePence(g('selling_price'));
   const costPricePence = parsePence(g('cost_price'));
-  // Blank or non-numeric quantity means no opening stock — treat as 0.
-  // Spreadsheets commonly use "-", "N/A", "nil", "OOS" etc. for out-of-stock items.
-  const qtyStr = g('quantity');
-  const qtyRaw = parseFloat(qtyStr);
-  const quantity = isNaN(qtyRaw) ? 0 : qtyRaw;
+  const quantity = parseQuantity(g('quantity'));
   const baseUnitName = g('base_unit');
   const packUnitName = g('pack_unit');
   const packSizeRaw = parseInt(g('pack_size'), 10);
-  const packSize = isNaN(packSizeRaw) || packSizeRaw <= 1 ? 0 : packSizeRaw;
+  const packSize = Number.isNaN(packSizeRaw) || packSizeRaw <= 1 ? 0 : packSizeRaw;
   const qtyInRaw = g('qty_in');
-  // Default to base unit — not pack unit — so blank qty_in always means
-  // "the quantity column is already in base units" (e.g. Tins, not Cartons).
   const qtyInName = qtyInRaw || baseUnitName;
+  const supplierName = g('supplier_name');
+  const reorderRaw = parseInt(g('reorder_point'), 10);
+  const reorderPoint = Number.isNaN(reorderRaw) || reorderRaw < 0 ? 0 : reorderRaw;
+  const storefrontPublished = parseBool(g('storefront_published'));
+  const imageUrl = g('image_url');
+  const notes = g('notes');
   const paymentStatus = normalisePaymentStatus(g('payment_status'));
 
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  if (!name) errors.push('Product name is required');
-  if (sellingPricePence < 0) errors.push('selling_price must be a number');
-  if (costPricePence < 0) errors.push('cost_price must be a number');
-  if (!baseUnitName) errors.push('base_unit is required');
-
-  if (packUnitName && packSize === 0) {
-    warnings.push('pack_unit is set but pack_size is missing or ≤ 1 — enter the conversion below');
-  }
+  const validation = validateImportRow(
+    {
+      rowNumber,
+      name,
+      sku,
+      barcode,
+      category,
+      sellingPricePence,
+      costPricePence,
+      quantity: quantity < 0 ? -1 : quantity,
+      baseUnitName,
+      packUnitName,
+      packSize,
+      qtyInName,
+      supplierName,
+      reorderPoint,
+      storefrontPublished,
+      imageUrl,
+      notes,
+    },
+    null,
+    { seenNamesInFile: seen.names, seenBarcodesInFile: seen.barcodes }
+  );
 
   return {
     _id: uniqueId(),
+    rowNumber,
     name,
     sku,
     barcode,
     category,
-    sellingPricePence: Math.max(0, sellingPricePence),
-    costPricePence: Math.max(0, costPricePence),
-    quantity: Math.max(0, quantity),
+    suggestedCategory: validation.suggestedCategory || category,
+    sellingPricePence: sellingPricePence < 0 ? 0 : sellingPricePence,
+    costPricePence: costPricePence < 0 ? 0 : costPricePence,
+    quantity: quantity < 0 ? 0 : Math.max(0, quantity),
     baseUnitName,
     packUnitName,
     packSize,
     qtyInName,
+    supplierName,
+    reorderPoint,
+    storefrontPublished,
+    imageUrl,
+    notes,
     paymentStatus,
-    errors,
-    warnings,
-  };
+    duplicateKind: validation.duplicateKind,
+    duplicateAction: validation.defaultDuplicateAction,
+    confirmBelowCost: false,
+    errors: validation.errors,
+    warnings: validation.warnings,
+  } satisfies ParsedImportRow;
 }
 
-/** Parse a raw 2-D string array (header row + data rows) into ParsedImportRow[]. */
 function parseMatrix(matrix: string[][]): ParsedImportRow[] {
-  if (matrix.length < 2) return [];
+  const dataRows = matrix.filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
+  if (dataRows.length < 2) return [];
 
-  // Normalise header names: lowercase + trim
-  const headers = matrix[0].map((h) => h.toLowerCase().trim().replace(/\s+/g, '_'));
+  let headerIdx = 0;
+  while (headerIdx < dataRows.length) {
+    const first = String(dataRows[headerIdx][0] ?? '').trim();
+    if (!first.startsWith('#')) break;
+    headerIdx++;
+  }
+  if (headerIdx >= dataRows.length - 1) return [];
 
-  return matrix
-    .slice(1)
-    .filter((row) => row.some((cell) => cell.trim() !== '')) // skip blank rows
-    .map((row) => {
-      const raw: Record<string, string> = {};
-      headers.forEach((h, i) => {
-        raw[h] = row[i] ?? '';
-      });
-      return buildRow(raw);
+  const headers = dataRows[headerIdx].map((h) => normaliseHeaderKey(String(h ?? '')));
+  const seen = { names: new Set<string>(), barcodes: new Set<string>() };
+
+  return dataRows.slice(headerIdx + 1).map((row, index) => {
+    const raw: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      raw[h] = String(row[i] ?? '');
     });
+    return buildRow(raw, headerIdx + index + 2, seen);
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/** Parse a .csv File and return normalised rows. */
 async function parseCsv(file: File): Promise<ParsedImportRow[]> {
   const text = await file.text();
-  const lines = text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n');
-  const matrix = lines.map(splitCsvLine);
-  return parseMatrix(matrix);
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  return parseMatrix(lines.map(splitCsvLine));
 }
 
-/** Parse a .xlsx / .xls File and return normalised rows via SheetJS. */
 async function parseXlsx(file: File): Promise<ParsedImportRow[]> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) return [];
   const sheet = workbook.Sheets[sheetName];
-  // raw: false → all cells returned as formatted strings, consistent with the CSV path
   const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
   return parseMatrix(matrix as string[][]);
 }
 
-/**
- * Main entry point — CSV, XLSX and XLS.
- * Throws a descriptive Error if the format is unsupported.
- */
 export async function parseStockFile(file: File): Promise<ParsedImportRow[]> {
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext === 'csv') return parseCsv(file);
   if (ext === 'xlsx' || ext === 'xls') return parseXlsx(file);
-  throw new Error(`Unsupported file type ".${ext}". Please upload a .csv or .xlsx file.`);
+  throw new Error('Please upload a .csv or .xlsx file.');
+}
+
+export function enrichRowsWithCatalog(
+  rows: ParsedImportRow[],
+  catalog: {
+    productNames: string[];
+    barcodes: string[];
+    skus: string[];
+  }
+): ParsedImportRow[] {
+  const ctx = {
+    productNames: new Set(catalog.productNames.map((n) => n.toLowerCase())),
+    productNameToId: new Map<string, string>(),
+    barcodes: new Set(catalog.barcodes.filter(Boolean)),
+    barcodeToProductId: new Map<string, string>(),
+    skus: new Set(catalog.skus.filter(Boolean).map((s) => s.toLowerCase())),
+    categoryNames: new Set<string>(),
+    supplierNames: new Set<string>(),
+  };
+
+  const seen = { names: new Set<string>(), barcodes: new Set<string>() };
+
+  return rows.map((row) => {
+    const validation = validateImportRow(
+      {
+        rowNumber: row.rowNumber,
+        name: row.name,
+        sku: row.sku,
+        barcode: row.barcode,
+        category: row.category,
+        sellingPricePence: row.sellingPricePence,
+        costPricePence: row.costPricePence,
+        quantity: row.quantity,
+        baseUnitName: row.baseUnitName,
+        packUnitName: row.packUnitName,
+        packSize: row.packSize,
+        qtyInName: row.qtyInName,
+        supplierName: row.supplierName,
+        reorderPoint: row.reorderPoint,
+        storefrontPublished: row.storefrontPublished,
+        imageUrl: row.imageUrl,
+        notes: row.notes,
+        confirmBelowCost: row.confirmBelowCost,
+      },
+      ctx,
+      { seenNamesInFile: seen.names, seenBarcodesInFile: seen.barcodes }
+    );
+
+    if (row.name.trim()) seen.names.add(row.name.trim().toLowerCase());
+    if (row.barcode) seen.barcodes.add(row.barcode);
+
+    return {
+      ...row,
+      suggestedCategory: validation.suggestedCategory || row.suggestedCategory,
+      duplicateKind: validation.duplicateKind,
+      duplicateAction: row.duplicateAction === 'create' && validation.duplicateKind === 'barcode'
+        ? 'skip'
+        : validation.defaultDuplicateAction,
+      errors: [...new Set([...row.errors, ...validation.errors])],
+      warnings: [...new Set([...row.warnings, ...validation.warnings])],
+    };
+  });
 }

@@ -23,6 +23,12 @@ import {
   type QuickCreateProductInput,
 } from '@/lib/services/products';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
+import { createPurchase } from '@/lib/services/purchases';
+import { persistActivationSnapshot } from '@/lib/activation-snapshot';
+import {
+  formatProductPriceWarnings,
+  getProductPriceWarnings,
+} from '@/lib/product-price-guards';
 
 // ---------------------------------------------------------------------------
 // Private helpers (FormData parsing — stays in the action layer)
@@ -119,7 +125,55 @@ export async function createProductAction(formData: FormData): Promise<void> {
     const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const fields = await parseProductFields(formData);
 
+    const openingStockQty = Math.max(0, formInt(formData, 'openingStockQty'));
+    const openingStockUnitId = formOptionalString(formData, 'openingStockUnitId') ?? fields.baseUnitId;
+    const openingStockCostPence =
+      formPence(formData, 'openingStockCostPence') > 0
+        ? formPence(formData, 'openingStockCostPence')
+        : fields.defaultCostBasePence;
+    const confirmPriceWarning = formData.get('confirmPriceWarning') === '1';
+
+    const priceWarnings = getProductPriceWarnings({
+      sellingPricePence: fields.sellingPriceBasePence,
+      defaultCostBasePence: fields.defaultCostBasePence,
+      openingStockQty,
+    });
+    if (priceWarnings.length > 0 && !confirmPriceWarning) {
+      redirect(
+        `/products?error=${encodeURIComponent(formatProductPriceWarnings(priceWarnings))}#product-create`
+      );
+    }
+
     const product = await createProduct(businessId, fields);
+
+    if (openingStockQty > 0 && openingStockUnitId) {
+      const store = await prisma.store.findFirst({
+        where: { businessId },
+        select: { id: true },
+      });
+      if (store) {
+        await createPurchase({
+          businessId,
+          storeId: store.id,
+          supplierId: null,
+          paymentStatus: 'UNPAID',
+          dueDate: null,
+          payments: [],
+          lines: [
+            {
+              productId: product.id,
+              unitId: openingStockUnitId,
+              qtyInUnit: openingStockQty,
+              unitCostPence: openingStockCostPence,
+            },
+          ],
+          userId: user.id,
+          stockMovementType: 'OPENING',
+        });
+      }
+    }
+
+    await persistActivationSnapshot(businessId).catch(() => {});
 
     audit({
       businessId,
@@ -133,8 +187,10 @@ export async function createProductAction(formData: FormData): Promise<void> {
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidateTag(`readiness-${businessId}`);
     revalidatePath('/inventory', 'layout');
-    redirect('/products');
+    const createdQuery = openingStockQty > 0 ? 'created=1&stock=1' : 'created=1';
+    redirect(`/products?${createdQuery}`);
   }, '/products');
 }
 

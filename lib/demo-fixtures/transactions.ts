@@ -1,3 +1,4 @@
+import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import type {
   DemoProduct,
   DemoCustomer,
@@ -172,7 +173,7 @@ export function buildSalesInvoices(
   const invoices: DemoSalesInvoice[] = [];
   let invoiceNum = 1;
 
-  for (let day = 0; day < 14; day++) {
+  for (let day = 0; day < DEMO_PERIOD_DAYS; day++) {
     const dayDate = new Date(start.getTime() + day * 86_400_000);
     const dow = dayDate.getDay();
     const isWeekend = dow === 0 || dow === 6;
@@ -205,15 +206,17 @@ export function buildSalesInvoices(
 
       const subtotalPence = lines.reduce((s, l) => s + l.qty * l.unitPricePence, 0);
 
-      // Payment split: 58% cash, 30% momo, 12% credit
+      // Payment split: cash, MoMo, credit, card
       const r = rand();
       let paymentMethod: DemoSalesInvoice['paymentMethod'];
       let customerId: string | null = null;
 
-      if (r < 0.58) {
+      if (r < 0.52) {
         paymentMethod = 'CASH';
-      } else if (r < 0.88) {
+      } else if (r < 0.80) {
         paymentMethod = 'MOMO';
+      } else if (r < 0.90) {
+        paymentMethod = 'CARD';
       } else {
         paymentMethod = 'CREDIT';
         customerId = customers[Math.floor(rand() * customers.length)].id;

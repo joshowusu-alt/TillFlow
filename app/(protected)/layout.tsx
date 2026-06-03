@@ -9,8 +9,9 @@ import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
 import PullToRefresh from '@/components/PullToRefresh';
 import { headers } from 'next/headers';
 import Link from 'next/link';
-import { unstable_cache } from 'next/cache';
 import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
+import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
+import { getActivationStatusLabel } from '@/lib/activation-display';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -132,32 +133,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
     !isAllowedWhenBillingRestricted(pathname);
 
-  // Compute lightweight readiness % — cached for 5 min per business.
-  // Invalidated when products, staff, or sales change (revalidateTag in relevant actions).
-  let readinessPct = 0;
-  if (needsOnboarding) {
-    readinessPct = await unstable_cache(
-      async () => {
-        const [productCount, staffCount, saleCount, purchaseCount] = await Promise.all([
-          prisma.product.count({ where: { businessId: business.id } }),
-          prisma.user.count({ where: { businessId: business.id } }),
-          prisma.salesInvoice.count({
-            where: {
-              businessId: business.id,
-              OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
-            },
-          }),
-          prisma.purchaseInvoice.count({ where: { businessId: business.id } }),
-        ]);
-        const hasAddress = !!(business.address || business.phone);
-        const hasOpeningStock = ((business as any).openingCapitalPence ?? 0) > 0 || purchaseCount > 0;
-        const checks = [hasAddress, productCount >= 3, hasOpeningStock, staffCount > 1, saleCount > 0];
-        return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-      },
-      ['readiness', business.id],
-      { revalidate: 300, tags: [`readiness-${business.id}`] }
-    )();
-  }
+  const setupBanner = needsOnboarding
+    ? await getOwnerSetupBannerState(business.id)
+    : null;
+  const readinessPct = setupBanner?.setupProgressPercent ?? 0;
 
   return (
     <div className="min-h-screen w-full max-w-full">
@@ -205,21 +184,24 @@ export default async function ProtectedLayout({ children }: { children: React.Re
                 <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
               </div>
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">Setup guide</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
+                  {setupBanner?.title ?? 'Start properly'}
+                </div>
                 <span className="text-sm font-medium text-accent">
-                {readinessPct === 0
-                ? 'Start with business profile, core products, and one live sale to activate your reports.'
-                : readinessPct < 100
-                ? `${readinessPct < 60 ? 'A few key steps remain' : 'Almost there'} — complete your setup to trade with full confidence.`
-                : 'Final configuration steps are waiting — your system is already operational.'}
+                  {setupBanner?.detail ?? `Business setup: ${readinessPct}% complete`}
                 </span>
+                {setupBanner?.activationStatus ? (
+                  <span className="mt-0.5 block text-[11px] text-accent/70">
+                    {getActivationStatusLabel(setupBanner.activationStatus)}
+                  </span>
+                ) : null}
               </div>
             </div>
             <Link
               href="/onboarding"
               className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
             >
-              {readinessPct > 0 ? 'Continue setup' : 'Begin setup guide'} &rarr;
+              {setupBanner?.cta ?? (readinessPct > 0 ? 'Continue setup' : 'Begin setup')} &rarr;
             </Link>
           </div>
         </div>

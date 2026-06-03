@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { href: '/demo/dashboard', label: 'Dashboard' },
-  { href: '/demo/pos',       label: 'POS'       },
-  { href: '/demo/inventory', label: 'Inventory'  },
+  { href: '/demo',           label: 'Start'      },
+  { href: '/demo/dashboard', label: 'Dashboard'  },
+  { href: '/demo/try-sale',  label: 'Try sale'   },
+  { href: '/demo/inventory', label: 'Stock'      },
   { href: '/demo/sales',     label: 'Sales'      },
-  { href: '/demo/purchases', label: 'Purchases'  },
-  { href: '/demo/customers', label: 'Customers'  },
   { href: '/demo/reports',   label: 'Reports'    },
+  { href: '/demo/store',     label: 'Online'     },
+  { href: '/demo/orders',    label: 'Orders'     },
 ];
 
 export default function DemoNavTabs() {

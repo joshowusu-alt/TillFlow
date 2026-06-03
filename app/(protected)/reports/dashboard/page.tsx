@@ -8,6 +8,7 @@ import { formatMoney } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { getIncomeStatement } from '@/lib/reports/financials';
 import { requireBusiness } from '@/lib/auth';
+import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import { getBusinessStores } from '@/lib/services/stores';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
@@ -21,6 +22,9 @@ export default async function DashboardPage({
   searchParams?: { from?: string; to?: string; storeId?: string };
 }) {
   const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (user.role === 'OWNER') {
+    await Promise.all([recordOwnerDashboardView(), recordOwnerReportView()]);
+  }
   if (!business) {
     return (
       <div className="card p-6 text-center">

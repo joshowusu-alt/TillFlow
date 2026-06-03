@@ -139,8 +139,12 @@ describe('Demo fixture – gross profit reconciliation', () => {
 
 describe('Demo fixture – cash position reconciliation', () => {
   it('cash sales + momo sales + credit sales = total revenue', () => {
-    expect(s.totals.cashSalesPence + s.totals.momoSalesPence + s.totals.creditSalesPence)
-      .toBe(s.totals.totalRevenuePence);
+    expect(
+      s.totals.cashSalesPence +
+        s.totals.momoSalesPence +
+        s.totals.cardSalesPence +
+        s.totals.creditSalesPence
+    ).toBe(s.totals.totalRevenuePence);
   });
 
   it('endingCashPence = opening + cashSales + creditCollected − purchasesPaid − expenses', () => {

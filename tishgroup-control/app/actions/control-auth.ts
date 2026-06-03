@@ -104,6 +104,10 @@ export async function loginControlStaffAction(formData: FormData): Promise<void>
     redirect(`/login?error=${encodeURIComponent(error instanceof Error ? error.message : 'Unable to sign in.')}`);
   }
 
+  const nextPath = readRequiredField(formData, 'next');
+  if (nextPath.startsWith('/') && !nextPath.startsWith('//') && !nextPath.startsWith('/login')) {
+    redirect(nextPath);
+  }
   redirect('/');
 }
 

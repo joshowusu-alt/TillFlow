@@ -23,6 +23,12 @@ type BootstrapInput = {
   supportStatus?: string | null;
   notes?: string | null;
   startedAt?: Date | null;
+  referralSource?: string | null;
+  referredByName?: string | null;
+  referredByPhone?: string | null;
+  sourceChannel?: string | null;
+  referralStatus?: string | null;
+  assignedAgentName?: string | null;
 };
 
 function isMissingControlPlaneSchemaError(error: unknown) {
@@ -73,6 +79,16 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         ownerEmail: input.ownerEmail ?? undefined,
         supportStatus: input.supportStatus ?? undefined,
         notes: input.notes ?? undefined,
+        referralSource: input.referralSource ?? undefined,
+        referredByName: input.referredByName ?? undefined,
+        referredByPhone: input.referredByPhone ?? undefined,
+        sourceChannel: input.sourceChannel ?? undefined,
+        referralStatus: input.referralStatus ?? undefined,
+        assignedAgentName: input.assignedAgentName ?? undefined,
+        referredBy:
+          input.referredByName || input.referredByPhone
+            ? [input.referredByName, input.referredByPhone].filter(Boolean).join(' · ')
+            : undefined,
       },
       create: {
         businessId: input.businessId,
@@ -81,6 +97,16 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         ownerEmail: input.ownerEmail ?? null,
         supportStatus: input.supportStatus ?? 'UNREVIEWED',
         notes: input.notes ?? 'Awaiting first Tishgroup commercial review.',
+        referralSource: input.referralSource ?? null,
+        referredByName: input.referredByName ?? null,
+        referredByPhone: input.referredByPhone ?? null,
+        sourceChannel: input.sourceChannel ?? 'INBOUND',
+        referralStatus: input.referralStatus ?? 'TRIAL_STARTED',
+        assignedAgentName: input.assignedAgentName ?? null,
+        referredBy:
+          input.referredByName || input.referredByPhone
+            ? [input.referredByName, input.referredByPhone].filter(Boolean).join(' · ')
+            : null,
       },
     });
 

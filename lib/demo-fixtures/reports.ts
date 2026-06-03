@@ -1,3 +1,4 @@
+import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import type { DemoSnapshot, DemoProduct } from './types';
 
 // ── Dashboard KPIs ────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ export function getDashboardKPIs(s: DemoSnapshot) {
     return bal ? bal.endingQty <= p.reorderPoint : false;
   }).length;
 
-  const periodDays = 14;
+  const periodDays = DEMO_PERIOD_DAYS;
   const avgDailySalesPence = Math.round(totals.totalRevenuePence / periodDays);
 
   return {
@@ -252,9 +253,11 @@ export function getPaymentSplit(s: DemoSnapshot) {
   return {
     cashPct:   Math.round((s.totals.cashSalesPence   / total) * 100),
     momoPct:   Math.round((s.totals.momoSalesPence   / total) * 100),
+    cardPct:   Math.round((s.totals.cardSalesPence   / total) * 100),
     creditPct: Math.round((s.totals.creditSalesPence / total) * 100),
     cashPence:   s.totals.cashSalesPence,
     momoPence:   s.totals.momoSalesPence,
+    cardPence:   s.totals.cardSalesPence,
     creditPence: s.totals.creditSalesPence,
   };
 }

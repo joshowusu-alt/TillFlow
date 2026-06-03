@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { importStockAction, type ConfirmedImportRow } from '@/app/actions/import-stock';
+import {
+  importStockAction,
+  type ConfirmedImportRow,
+  type ImportStockMeta,
+} from '@/app/actions/import-stock';
 
-// Generous timeout for bulk imports — 1500+ products with inventory upserts.
-// vercel.json also sets maxDuration: 300 for this route.
-// Vercel Hobby caps at 60 s; Pro allows up to 300 s.
 export const maxDuration = 300;
+
+type ImportStockBody = {
+  rows: ConfirmedImportRow[];
+  meta?: ImportStockMeta;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const rows = (await req.json()) as ConfirmedImportRow[];
-    // importStockAction already has an outermost try/catch so it always returns
-    // an ActionResult — it never throws.
-    const result = await importStockAction(rows);
+    const body = (await req.json()) as ImportStockBody | ConfirmedImportRow[];
+    const rows = Array.isArray(body) ? body : body.rows;
+    const meta = Array.isArray(body) ? undefined : body.meta;
+    const result = await importStockAction(rows, meta);
     return NextResponse.json(result);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Internal server error';

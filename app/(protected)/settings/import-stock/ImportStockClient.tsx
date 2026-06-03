@@ -3,8 +3,16 @@
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
-import { downloadTemplate } from '@/lib/import/stock-template';
-import { parseStockFile, type ParsedImportRow, type PaymentStatus } from '@/lib/import/parse-stock-file';
+import { downloadTemplate, UNIT_HELPER_COPY } from '@/lib/import/stock-template';
+import {
+  parseStockFile,
+  enrichRowsWithCatalog,
+  type ParsedImportRow,
+  type PaymentStatus,
+} from '@/lib/import/parse-stock-file';
+import { downloadErrorReport, issuesToReportRows } from '@/lib/import/error-report';
+import type { DuplicateAction } from '@/lib/import/import-validation';
+import { getImportCatalogContext } from '@/app/actions/import-catalog';
 import type { ImportStockResult } from '@/app/actions/import-stock';
 import ResetPurchaseDataButton from '@/components/ResetPurchaseDataButton';
 
@@ -51,6 +59,12 @@ function rowStatus(row: PreviewRow): RowStatus {
   if (!row.resolvedBaseUnitId) return 'warning';
   if (row.packUnitName && !row.resolvedPackUnitId) return 'warning';
   if (row.packUnitName && row.resolvedPackSize <= 1) return 'warning';
+  if (
+    row.warnings.some((w) => w.includes('lower than cost')) &&
+    !row.confirmBelowCost
+  ) {
+    return 'warning';
+  }
   return 'ready';
 }
 
@@ -157,6 +171,50 @@ function UnitSelector({
   );
 }
 
+function ImportSteps({ steps, activeIndex }: { steps: readonly string[]; activeIndex: number }) {
+  return (
+    <ol className="flex flex-wrap gap-2 text-[11px] text-black/50">
+      {steps.map((label, index) => (
+        <li
+          key={label}
+          className={`rounded-full px-2.5 py-1 ${
+            index === activeIndex
+              ? 'bg-accentSoft text-accent font-semibold'
+              : index < activeIndex
+              ? 'bg-emerald-50 text-emerald-800'
+              : 'bg-black/5'
+          }`}
+        >
+          {index + 1}. {label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function DuplicateActionSelect({
+  value,
+  kind,
+  onChange,
+}: {
+  value: DuplicateAction;
+  kind: ParsedImportRow['duplicateKind'];
+  onChange: (v: DuplicateAction) => void;
+}) {
+  if (kind === 'none') return null;
+  return (
+    <select
+      className="input py-0.5 text-xs max-w-[140px]"
+      value={value}
+      onChange={(e) => onChange(e.target.value as DuplicateAction)}
+    >
+      <option value="skip">Skip</option>
+      <option value="update">Update existing</option>
+      {kind !== 'barcode' ? <option value="create">Create anyway</option> : null}
+    </select>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -176,24 +234,38 @@ export default function ImportStockClient({
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'error' | 'warning' | 'ready'>('all');
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const STEPS = ['Download template', 'Upload file', 'Review products', 'Confirm import', 'Done'] as const;
+  const stepIndex = stage === 'upload' ? 1 : stage === 'preview' ? 2 : 4;
 
   // ── File handling ────────────────────────────────────────────────────────
 
   const handleFile = useCallback(
     async (file: File) => {
       setParseError(null);
+      setFileName(file.name);
       try {
         const parsed = await parseStockFile(file);
         if (!parsed.length) {
-          setParseError('The file contained no data rows. Please check the file and try again.');
+          setParseError('The file had no product rows. Check the file and try again.');
           return;
         }
-        setPreviewRows(parsed.map((r) => autoResolve(r, units)));
+        setCatalogLoading(true);
+        const catalogRes = await getImportCatalogContext();
+        const enriched =
+          catalogRes.success
+            ? enrichRowsWithCatalog(parsed, catalogRes.data)
+            : parsed;
+        setPreviewRows(enriched.map((r) => autoResolve(r, units)));
         setStatusFilter('all');
         setStage('preview');
       } catch (e: unknown) {
-        setParseError(e instanceof Error ? e.message : 'Could not parse the file.');
+        setParseError(e instanceof Error ? e.message : 'Could not read the file.');
+      } finally {
+        setCatalogLoading(false);
       }
     },
     [units]
@@ -256,7 +328,7 @@ export default function ImportStockClient({
         name: r.name,
         sku: r.sku,
         barcode: r.barcode,
-        category: r.category,
+        category: r.suggestedCategory || r.category,
         sellingPricePence: r.sellingPricePence,
         costPricePence: r.costPricePence,
         quantity: r.quantity,
@@ -265,7 +337,23 @@ export default function ImportStockClient({
         packSize: r.resolvedPackSize,
         qtyInUnitId: effectiveQtyInUnitId(r) ?? r.resolvedBaseUnitId!,
         paymentStatus: r.resolvedPaymentStatus,
+        duplicateAction: r.duplicateAction,
+        supplierName: r.supplierName,
+        reorderPointBase: r.reorderPoint,
+        storefrontPublished: r.storefrontPublished,
+        imageUrl: r.imageUrl,
+        notes: r.notes,
+        confirmBelowCost: r.confirmBelowCost,
       }));
+
+    const errorReport = issuesToReportRows(
+      previewRows.map((r) => ({
+        rowNumber: r.rowNumber,
+        productName: r.name,
+        errors: r.errors,
+        warnings: r.warnings,
+      }))
+    );
 
     try {
       // IMPORTANT: do NOT call server actions inside startTransition in Next.js 14 /
@@ -276,7 +364,16 @@ export default function ImportStockClient({
       const httpRes = await fetch('/api/import-stock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(confirmedRows),
+        body: JSON.stringify({
+          rows: confirmedRows,
+          meta: {
+            fileName: fileName ?? undefined,
+            rowsParsed: previewRows.length,
+            rowsErrors: previewRows.filter((r) => rowStatus(r) === 'error').length,
+            rowsWarnings: previewRows.filter((r) => rowStatus(r) === 'warning').length,
+            errorReportJson: errorReport.length ? JSON.stringify(errorReport) : undefined,
+          },
+        }),
       });
       if (!httpRes.ok && httpRes.status !== 200) {
         const text = await httpRes.text().catch(() => '');
@@ -311,6 +408,10 @@ export default function ImportStockClient({
   if (stage === 'upload') {
     return (
       <div className="space-y-4">
+        <ImportSteps steps={STEPS} activeIndex={stepIndex} />
+        <p className="text-xs text-black/50 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2">
+          For large imports (50+ products), we recommend using a laptop. You can still upload from your phone for smaller lists.
+        </p>
         {/* Drop zone */}
         <div
           className={`card flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
@@ -337,8 +438,9 @@ export default function ImportStockClient({
           <input
             ref={fileInputRef}
             id="stock-file-input"
+            data-testid="import-stock-file-input"
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="sr-only"
             onChange={onFileInput}
           />
@@ -351,6 +453,9 @@ export default function ImportStockClient({
           {parseError && (
             <p className="mt-1 text-sm font-medium text-red-600">{parseError}</p>
           )}
+          {catalogLoading ? (
+            <p className="text-sm text-black/50">Checking your existing products…</p>
+          ) : null}
         </div>
 
         {/* Template download */}
@@ -407,9 +512,14 @@ export default function ImportStockClient({
               </ul>
             </div>
 
-            <p className="mt-2 text-black/50 italic">
-              Example: <code>Milo 500g, , 6001234567, Drinks, 12.00, 9.50, 60, Tin, Carton, 12, , unpaid</code>
-            </p>
+            <div className="mt-3 rounded-lg border border-teal-200 bg-teal-50/80 px-3 py-3 text-xs text-teal-900 space-y-1.5">
+              <p className="font-semibold">Unit types — keep it simple</p>
+              <p>{UNIT_HELPER_COPY.piece}</p>
+              <p>{UNIT_HELPER_COPY.pack}</p>
+              <p>{UNIT_HELPER_COPY.carton}</p>
+              <p>{UNIT_HELPER_COPY.strip}</p>
+              <p>{UNIT_HELPER_COPY.openingStock}</p>
+            </div>
           </div>
         </div>
 
@@ -425,6 +535,7 @@ export default function ImportStockClient({
   if (stage === 'result' && result) {
     return (
       <div className="card p-8 space-y-6">
+        <ImportSteps steps={STEPS} activeIndex={4} />
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-100">
             <svg className="h-7 w-7 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -439,11 +550,13 @@ export default function ImportStockClient({
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: 'Products created', value: String(result.created) },
+            { label: 'Products imported', value: String(result.created) },
+            { label: 'Products updated', value: String(result.updated) },
             {
-              label: result.stockUpdated > 0 ? 'Existing (stock recorded)' : 'Skipped (duplicates)',
+              label: result.stockUpdated > 0 ? 'Stock added (existing)' : 'Skipped',
               value: String(result.skipped),
             },
+            { label: 'Opening stock units', value: String(result.openingStockUnits) },
             {
               label: 'Paid stock',
               value: formatMoney(result.paidValuePence, currency),
@@ -516,12 +629,38 @@ export default function ImportStockClient({
           </div>
         )}
 
+        {(result.suppliersCreated > 0 || result.categoriesCreated > 0) && (
+          <p className="text-sm text-black/60">
+            {result.suppliersCreated > 0
+              ? `${result.suppliersCreated} new supplier${result.suppliersCreated === 1 ? '' : 's'} added. `
+              : ''}
+            {result.categoriesCreated > 0
+              ? `${result.categoriesCreated} new categor${result.categoriesCreated === 1 ? 'y' : 'ies'} created.`
+              : ''}
+          </p>
+        )}
+
+        <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4">
+          <p className="text-sm font-semibold text-ink">What to do next</p>
+          <ul className="mt-2 space-y-1 text-sm text-black/65">
+            <li>• Make your first sale at the till</li>
+            <li>• Review low stock alerts under Reports</li>
+            <li>• Add more products any time</li>
+          </ul>
+        </div>
+
         <div className="flex flex-wrap gap-3">
-          <Link href="/products" className="btn-primary">
-            View Products →
+          <Link href="/pos" className="btn-primary">
+            Go to POS →
           </Link>
-          <Link href="/reports/balance-sheet" className="btn-ghost border border-black/10">
-            View Balance Sheet
+          <Link href="/products" className="btn-ghost border border-black/10">
+            View products
+          </Link>
+          <Link href="/onboarding" className="btn-ghost border border-black/10">
+            Setup progress
+          </Link>
+          <Link href="/reports/stock-movements" className="btn-ghost border border-black/10">
+            Stock history
           </Link>
           <button
             type="button"
@@ -549,8 +688,15 @@ export default function ImportStockClient({
     .map((r, i) => ({ row: r, originalIdx: i }))
     .filter(({ row }) => statusFilter === 'all' || rowStatus(row) === statusFilter);
 
+  const duplicateSummary = {
+    existing: previewRows.filter((r) => r.duplicateKind !== 'none').length,
+    skip: previewRows.filter((r) => r.duplicateAction === 'skip').length,
+    update: previewRows.filter((r) => r.duplicateAction === 'update').length,
+  };
+
   return (
     <div className="space-y-4">
+      <ImportSteps steps={STEPS} activeIndex={2} />
       {/* Header controls */}
       <div className="card p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -628,10 +774,38 @@ export default function ImportStockClient({
 
         {errorCount > 0 && (
           <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-700">
-            <strong>{errorCount} row{errorCount !== 1 ? 's have' : ' has'} required fields missing.</strong>{' '}
-            Fix the file and re-upload — these rows cannot be imported as-is.
+            <strong>{errorCount} row{errorCount !== 1 ? 's have' : ' has'} problems that must be fixed.</strong>{' '}
+            Download the fix list, update your file, and upload again.
           </div>
         )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-ghost border border-black/10 text-xs"
+            onClick={() =>
+              downloadErrorReport(
+                issuesToReportRows(
+                  previewRows.map((r) => ({
+                    rowNumber: r.rowNumber,
+                    productName: r.name,
+                    errors: r.errors,
+                    warnings: r.warnings,
+                  }))
+                ),
+                'tillflow-import-fixes'
+              )
+            }
+          >
+            ↓ Download fix list
+          </button>
+          {duplicateSummary.existing > 0 ? (
+            <span className="text-xs text-black/55">
+              {duplicateSummary.existing} already in catalogue · {duplicateSummary.update} will update ·{' '}
+              {duplicateSummary.skip} will skip
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {/* Table */}
@@ -776,13 +950,14 @@ export default function ImportStockClient({
                 <th className="px-3 py-2 text-left font-medium min-w-[160px]">Unit</th>
                 <th className="px-3 py-2 text-left font-medium">Payment</th>
                 <th className="px-3 py-2 text-right font-medium">Line Total</th>
+                <th className="px-3 py-2 text-left font-medium">Duplicate</th>
                 <th className="px-3 py-2 text-left font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-black/5">
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-sm text-black/40">
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-black/40">
                     {statusFilter === 'error' ? 'No errors — all fixed! 🎉' :
                      statusFilter === 'warning' ? 'No warnings — all resolved! 🎉' :
                      statusFilter === 'ready' ? 'No ready rows yet.' : 'No rows.'}
@@ -908,6 +1083,25 @@ export default function ImportStockClient({
                       })() : <span className="text-black/30">—</span>}
                     </td>
                     <td className="px-3 py-2">
+                      <DuplicateActionSelect
+                        kind={row.duplicateKind}
+                        value={row.duplicateAction}
+                        onChange={(duplicateAction) => updateRow(row._id, { duplicateAction })}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.warnings.some((w) => w.includes('lower than cost')) ? (
+                        <label className="flex items-center gap-1 text-[10px] text-amber-800">
+                          <input
+                            type="checkbox"
+                            checked={row.confirmBelowCost}
+                            onChange={(e) =>
+                              updateRow(row._id, { confirmBelowCost: e.target.checked })
+                            }
+                          />
+                          Below cost OK
+                        </label>
+                      ) : null}
                       <StatusBadge status={status} errors={row.errors} warnings={row.warnings} />
                     </td>
                   </tr>

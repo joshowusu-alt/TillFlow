@@ -111,6 +111,7 @@ export interface DemoTotals {
   openingCashPence: number;
   cashSalesPence: number;
   momoSalesPence: number;
+  cardSalesPence: number;
   creditSalesPence: number;
   creditCollectedPence: number;
   endingCashPence: number;

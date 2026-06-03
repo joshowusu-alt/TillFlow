@@ -9,6 +9,7 @@ import {
 import { formatMoney } from '@/lib/format';
 import StatCard from '@/components/StatCard';
 import Link from 'next/link';
+import { DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +45,7 @@ export default function DemoDashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-ink">{snapshot.businessName}</h1>
-          <p className="mt-0.5 text-sm text-muted">{periodLabel} · 14-day sample trading history</p>
+          <p className="mt-0.5 text-sm text-muted">{periodLabel} · {DEMO_PERIOD_DAYS}-day sample trading history</p>
         </div>
         <a
           href="/register"
@@ -56,7 +57,7 @@ export default function DemoDashboardPage() {
 
       {/* Period KPI cards */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">14-Day Performance</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted">{DEMO_PERIOD_DAYS}-Day Performance</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Total Revenue"
@@ -137,6 +138,7 @@ export default function DemoDashboardPage() {
               {[
                 { label: 'Cash',   pct: payMix.cashPct,   pence: payMix.cashPence,   colour: '#059669' },
                 { label: 'MoMo',   pct: payMix.momoPct,   pence: payMix.momoPence,   colour: '#f59e0b' },
+                { label: 'Card',   pct: payMix.cardPct,   pence: payMix.cardPence,   colour: '#8b5cf6' },
                 { label: 'Credit', pct: payMix.creditPct, pence: payMix.creditPence, colour: '#3b82f6' },
               ].map(row => (
                 <div key={row.label} className="space-y-1 text-xs">

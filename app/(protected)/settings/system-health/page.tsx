@@ -256,7 +256,7 @@ export default async function SystemHealthPage() {
           </div>
         ) : (
           <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            No suspicious product catalog issues were found in the active supermarket dataset.
+            No suspicious product catalog issues were found in your active product list.
           </div>
         )}
       </div>

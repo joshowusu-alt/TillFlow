@@ -1077,10 +1077,16 @@ export default function PosClient({
                                 )}
                               </div>
                             </div>
-                            <div className="text-right flex-shrink-0">
-                              <div className="text-sm font-bold text-emerald-700">{formatMoney(product.sellingPriceBasePence, business.currency)}</div>
-                              <div className={`text-[11px] ${outOfStock ? 'text-red-500 font-semibold' : 'text-black/40'}`}>
-                                {outOfStock ? 'Out of stock' : `${formatAvailable(product, available)} avail.`}
+                            <div className="text-right flex-shrink-0 space-y-0.5">
+                              <div className="text-[10px] font-semibold uppercase tracking-wide text-black/40">Price</div>
+                              <div className="text-sm font-bold text-emerald-700 tabular-nums">
+                                {formatMoney(product.sellingPriceBasePence, business.currency)}
+                              </div>
+                              <div className={`text-[10px] font-semibold uppercase tracking-wide ${outOfStock ? 'text-red-500' : 'text-black/40'}`}>
+                                Stock
+                              </div>
+                              <div className={`text-[11px] tabular-nums ${outOfStock ? 'text-red-600 font-semibold' : 'text-black/55'}`}>
+                                {outOfStock ? 'None available' : formatAvailable(product, available)}
                               </div>
                             </div>
                           </div>
@@ -1572,7 +1578,11 @@ export default function PosClient({
           )}
 
           {/* ── Payment section ─────────────────────────────── */}
-          <div id="pos-payment-panel" className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] p-4 space-y-4" tabIndex={-1}>
+          <div
+            id="pos-payment-panel"
+            className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)] space-y-4 lg:pb-4"
+            tabIndex={-1}
+          >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="label">Till</label>
@@ -2014,7 +2024,7 @@ export default function PosClient({
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
-        <div className="fixed inset-x-0 z-30 lg:hidden border-t border-black/10 bg-white px-4 pt-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom hide-when-keyboard-open">
+        <div className="fixed inset-x-0 z-30 lg:hidden border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom hide-when-keyboard-open">
           <div className="space-y-3">
             <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
               {canSubmit

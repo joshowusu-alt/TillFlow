@@ -560,7 +560,7 @@ export default async function BillingPage({
           <div className="card space-y-4 p-6">
             <h2 className="text-lg font-display font-semibold">Commercial changes are handled by Tishgroup</h2>
             <p className="text-sm text-black/60">
-              This page remains the tenant-facing visibility surface, but billing writes now happen only in Tishgroup Control so subscription state, payment history, and enforcement stay aligned.
+              This page shows your plan and payment status. Billing changes are handled by Tish Group so your subscription, payment history, and access stay aligned.
             </p>
 
             <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 text-sm text-blue-900">

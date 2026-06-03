@@ -8,9 +8,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const { refreshAdomRetailDemoAction } = await import('@/app/actions/demo-sandbox');
+  const secret = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? undefined;
+  const result = await refreshAdomRetailDemoAction(secret);
+
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, error: result.error }, { status: 401 });
+  }
+
   return NextResponse.json({
     ok: true,
-    skipped: true,
-    reason: 'The public demo uses read-only fixtures and no longer needs a database reset.',
+    businessId: result.businessId,
+    note: 'Refreshed optional /shop/adom-retail-demo catalogue. Public /demo uses fixtures only.',
   });
 }
