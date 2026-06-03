@@ -100,7 +100,10 @@ export function buildOptimisticStockDecrements<
     const unit = product?.units.find((candidate) => candidate.id === line.unitId);
     if (!product || !unit) continue;
 
-    const baseQty = line.qtyInUnit * unit.conversionToBase;
+    const baseQty =
+      typeof (line as { qtyBase?: number }).qtyBase === 'number' && (line as { qtyBase?: number }).qtyBase! > 0
+        ? (line as { qtyBase: number }).qtyBase
+        : line.qtyInUnit * unit.conversionToBase;
     decrements.set(line.productId, (decrements.get(line.productId) ?? 0) + baseQty);
   }
 

@@ -9,6 +9,11 @@ type CartLineInput = {
   productId: string;
   unitId: string;
   qtyInUnit: number;
+  lineSubtotalPence?: number;
+  qtyBase?: number;
+  weighedLabel?: string;
+  /** When true, always adds a new line (weighed scans). */
+  separateLine?: boolean;
 };
 
 type UsePosCartActionsOptions<TCartLine extends PosCartLine> = {
@@ -56,8 +61,12 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
     if (!line.productId || !line.unitId || line.qtyInUnit <= 0) return;
     if (cart.length === 0) onFirstCartLine?.();
 
-    const id = `${line.productId}:${line.unitId}`;
-    const existing = cart.find((item) => item.id === id);
+    const mergeId = `${line.productId}:${line.unitId}`;
+    const id =
+      line.separateLine || line.lineSubtotalPence != null
+        ? `${mergeId}:w:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+        : mergeId;
+    const existing = line.separateLine || line.lineSubtotalPence != null ? undefined : cart.find((item) => item.id === id);
     const desiredQty = (existing?.qtyInUnit ?? 0) + line.qtyInUnit;
     const clampedQty = clampQtyInUnit(line.productId, line.unitId, desiredQty, existing?.id);
     if (clampedQty <= 0) return;
@@ -68,7 +77,17 @@ export function usePosCartActions<TCartLine extends PosCartLine>({
       }
       return [
         ...prev,
-        { id, ...line, qtyInUnit: clampedQty, discountType: 'NONE', discountValue: '' } as TCartLine,
+        {
+          id,
+          productId: line.productId,
+          unitId: line.unitId,
+          qtyInUnit: clampedQty,
+          lineSubtotalPence: line.lineSubtotalPence,
+          qtyBase: line.qtyBase,
+          weighedLabel: line.weighedLabel,
+          discountType: 'NONE',
+          discountValue: '',
+        } as TCartLine,
       ];
     });
   }, [cart, clampQtyInUnit, onFirstCartLine, setCart]);

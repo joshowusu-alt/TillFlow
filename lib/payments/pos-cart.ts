@@ -41,6 +41,11 @@ export type PosCartLine = {
   qtyInUnit: number;
   discountType?: PosDiscountType;
   discountValue?: string;
+  /** Fixed line total for weighed items (qtyInUnit should be 1). */
+  lineSubtotalPence?: number;
+  /** Stock deduction in base units (grams when inventory is tracked per kg). */
+  qtyBase?: number;
+  weighedLabel?: string;
 };
 
 export type PosCartDetail = PosCartLine & {
@@ -77,7 +82,11 @@ export function getAvailableBase(
     if (line.productId !== targetProductId || line.id === excludeLineId) return sum;
     const unit = getUnitFromProduct(product, line.unitId);
     if (!unit) return sum;
-    return sum + line.qtyInUnit * unit.conversionToBase;
+    const lineBase =
+      typeof line.qtyBase === 'number' && line.qtyBase > 0
+        ? line.qtyBase
+        : line.qtyInUnit * unit.conversionToBase;
+    return sum + lineBase;
   }, 0);
 
   return Math.max(product.onHandBase - usedBase, 0);
@@ -109,9 +118,15 @@ export function buildCartDetails(
       const unit = product ? getUnitFromProduct(product, line.unitId) : undefined;
       if (!product || !unit) return null;
 
-      const qtyBase = line.qtyInUnit * unit.conversionToBase;
+      const qtyBase =
+        typeof line.qtyBase === 'number' && line.qtyBase > 0
+          ? Math.round(line.qtyBase)
+          : line.qtyInUnit * unit.conversionToBase;
       const unitPrice = resolveEffectiveSellingPricePence(product, unit);
-      const subtotal = unitPrice * line.qtyInUnit;
+      const subtotal =
+        typeof line.lineSubtotalPence === 'number' && line.lineSubtotalPence > 0
+          ? line.lineSubtotalPence
+          : unitPrice * line.qtyInUnit;
       const lineDiscount = computeDiscount(subtotal, line.discountType, line.discountValue);
       const promoBuyQty = product.promoBuyQty ?? 0;
       const promoGetQty = product.promoGetQty ?? 0;
@@ -131,14 +146,16 @@ export function buildCartDetails(
       const packaging = getPrimaryPackagingUnit(
         product.units.map((candidate) => ({ conversionToBase: candidate.conversionToBase, unit: candidate }))
       );
-      const qtyLabel = formatMixedUnit({
-        qtyBase,
-        baseUnit: baseUnit?.name ?? 'unit',
-        baseUnitPlural: baseUnit?.pluralName,
-        packagingUnit: packaging?.unit.name,
-        packagingUnitPlural: packaging?.unit.pluralName,
-        packagingConversion: packaging?.conversionToBase,
-      });
+      const qtyLabel =
+        line.weighedLabel ??
+        formatMixedUnit({
+          qtyBase,
+          baseUnit: baseUnit?.name ?? 'unit',
+          baseUnitPlural: baseUnit?.pluralName,
+          packagingUnit: packaging?.unit.name,
+          packagingUnitPlural: packaging?.unit.pluralName,
+          packagingConversion: packaging?.conversionToBase,
+        });
 
       return {
         ...line,
@@ -167,7 +184,11 @@ export function buildAvailableBaseMap(cart: PosCartLine[], productMap: Map<strin
     const product = productMap.get(line.productId);
     const unit = product ? getUnitFromProduct(product, line.unitId) : undefined;
     if (product && unit) {
-      usedMap.set(line.productId, (usedMap.get(line.productId) ?? 0) + line.qtyInUnit * unit.conversionToBase);
+      const lineBase =
+        typeof line.qtyBase === 'number' && line.qtyBase > 0
+          ? line.qtyBase
+          : line.qtyInUnit * unit.conversionToBase;
+      usedMap.set(line.productId, (usedMap.get(line.productId) ?? 0) + lineBase);
     }
   }
 

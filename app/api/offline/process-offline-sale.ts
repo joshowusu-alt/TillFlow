@@ -103,6 +103,11 @@ export async function processOfflineSale(
                 productId: String(line.productId || ''),
                 unitId: String(line.unitId || ''),
                 qtyInUnit,
+                qtyBase: line.qtyBase != null ? Math.round(Number(line.qtyBase)) : undefined,
+                lineSubtotalPence:
+                    line.lineSubtotalPence != null
+                        ? Math.round(Number(line.lineSubtotalPence))
+                        : undefined,
                 discountType,
                 discountValue: parseDiscountValue(discountType, line.discountValue)
             };
