@@ -4,6 +4,8 @@ export type PosCompletionCartLine = {
   qtyInUnit: number;
   discountType?: string;
   discountValue?: string;
+  qtyBase?: number;
+  lineSubtotalPence?: number;
 };
 
 export type PosCompletionProduct = {
@@ -101,8 +103,8 @@ export function buildOptimisticStockDecrements<
     if (!product || !unit) continue;
 
     const baseQty =
-      typeof (line as { qtyBase?: number }).qtyBase === 'number' && (line as { qtyBase?: number }).qtyBase! > 0
-        ? (line as { qtyBase: number }).qtyBase
+      typeof line.qtyBase === 'number' && line.qtyBase > 0
+        ? line.qtyBase
         : line.qtyInUnit * unit.conversionToBase;
     decrements.set(line.productId, (decrements.get(line.productId) ?? 0) + baseQty);
   }
