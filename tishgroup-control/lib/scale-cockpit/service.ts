@@ -3,7 +3,9 @@ import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { planRates } from '@/lib/control-data';
 import { computeBillingAccessState } from '@/lib/vendor/subscription-lifecycle';
+import { mapIssueRow } from '@/lib/support-issues/service';
 import { loadSupportStatsByBusinessIds } from '@/lib/support-issues/sync';
+import { computePortfolioHealth } from '@/lib/business-health';
 import { loadBatchActivationReadiness } from './batch-activation';
 import { OPEN_SUPPORT_STATUSES, type SupportIssueRow } from '@/lib/support-issues/types';
 import {
@@ -45,7 +47,9 @@ const TRIAL_STATES = new Set([
   'TRIAL_RESTRICTED',
 ]);
 
-function resolveHealthLabel(record: Omit<ScaleBusinessRecord, 'healthLabel'>): ScaleHealthLabel {
+function resolveHealthLabel(
+  record: Omit<ScaleBusinessRecord, 'healthLabel' | 'portfolioHealth' | 'portfolioHealthReasons'>
+): ScaleHealthLabel {
   if (record.hasCriticalSupportIssue || record.highestSupportPriority === 'CRITICAL') {
     return 'Support risk';
   }
@@ -150,6 +154,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const profiles = await prisma.controlBusinessProfile.findMany({
+    where: businessIds.length > 0 ? { businessId: { in: businessIds } } : undefined,
     select: {
       businessId: true,
       ownerName: true,
@@ -183,7 +188,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
     const monthlyValue = (profile?.subscription?.monthlyValuePence ?? 0) / 100 || planRates[planKey as keyof typeof planRates];
     const outstandingAmount = (profile?.subscription?.outstandingAmountPence ?? 0) / 100;
 
-    const base: Omit<ScaleBusinessRecord, 'healthLabel'> = {
+    const base: Omit<ScaleBusinessRecord, 'healthLabel' | 'portfolioHealth' | 'portfolioHealthReasons'> = {
       businessId,
       businessName: snapshot.name,
       ownerName: profile?.ownerName ?? 'Owner not assigned',
@@ -247,7 +252,14 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       missingSteps: readiness.missingSteps,
     };
 
-    return { ...base, healthLabel: resolveHealthLabel(base) };
+    const healthLabel = resolveHealthLabel(base);
+    const portfolio = computePortfolioHealth({ ...base, healthLabel } as ScaleBusinessRecord, now);
+    return {
+      ...base,
+      healthLabel,
+      portfolioHealth: portfolio.status,
+      portfolioHealthReasons: portfolio.reasons,
+    };
   });
 
   const storeCounts = await prisma.store.groupBy({
@@ -304,6 +316,10 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
     expectedCollectionsThisWeek: records
       .filter((r) => ['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'PAYMENT_OVERDUE_GRACE', 'TRIAL_EXPIRED_GRACE'].includes(r.billingAccessState))
       .reduce((sum, r) => sum + (r.outstandingAmount > 0 ? r.outstandingAmount : r.monthlyValue), 0),
+    healthCritical: records.filter((r) => r.portfolioHealth === 'Critical').length,
+    healthAtRisk: records.filter((r) => r.portfolioHealth === 'At Risk').length,
+    healthNeedsAttention: records.filter((r) => r.portfolioHealth === 'Needs Attention').length,
+    healthHealthy: records.filter((r) => r.portfolioHealth === 'Healthy').length,
   };
 
   const openIssueRows = await prisma.controlSupportIssue.findMany({
@@ -317,26 +333,14 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
 
   const supportByBusiness: Record<string, SupportIssueRow[]> = {};
   for (const row of openIssueRows) {
-    const mapped = {
-      id: row.id,
-      businessId: row.businessId,
-      businessName: row.business.name,
-      ownerName: row.ownerName ?? '—',
-      ownerPhone: row.ownerPhone ?? '',
-      issueType: row.issueType,
-      priority: row.priority,
-      status: row.status,
-      title: row.title,
-      description: row.description,
-      source: row.source,
-      relatedRoute: row.relatedRoute,
-      nextAction: row.nextAction,
-      assignedAgentName: row.assignedAgentName ?? row.assignedStaff?.name ?? null,
-      assignedStaffId: row.assignedStaffId,
-      createdAt: row.createdAt.toISOString(),
-      lastUpdatedAt: row.lastUpdatedAt.toISOString(),
-      isStale: now.getTime() - row.lastUpdatedAt.getTime() >= 24 * 60 * 60 * 1000,
-    };
+    const mapped = mapIssueRow(
+      {
+        ...row,
+        business: row.business,
+        assignedStaff: row.assignedStaff,
+      },
+      now
+    );
     if (!supportByBusiness[row.businessId]) supportByBusiness[row.businessId] = [];
     supportByBusiness[row.businessId].push(mapped);
   }

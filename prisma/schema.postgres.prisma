@@ -204,6 +204,9 @@ model Business {
   businessSequences      BusinessSequence[]
 
   @@index([whatsappEnabled, isDemo])
+  @@index([isDemo, createdAt])
+  @@index([activationStatus])
+  @@index([subscriptionStatus])
 }
 
 model ControlStaff {
@@ -579,6 +582,7 @@ model Customer {
   storefrontProfiles StorefrontCustomer[] @relation("StorefrontCustomerPosLink")
 
   @@index([businessId, name])
+  @@index([businessId, phone])
   @@index([storeId, name])
 }
 
@@ -1021,6 +1025,7 @@ model SalesInvoice {
   @@index([transactionNumber])
   @@index([branchId, createdAt])
   @@index([customerId, paymentStatus])
+  @@index([businessId, paymentStatus])
   @@index([businessId, createdAt])
   @@index([tillId])
   @@index([shiftId])

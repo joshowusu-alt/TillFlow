@@ -56,6 +56,8 @@ function baseRecord(overrides: Partial<ScaleBusinessRecord> = {}): ScaleBusiness
     assignedAgent: 'Agent A',
     assignedManagerId: null,
     healthLabel: 'Needs setup help',
+    portfolioHealth: 'Needs Attention',
+    portfolioHealthReasons: [],
     churnRisk: false,
     isActivated: false,
     isHealthy: false,
@@ -121,6 +123,10 @@ describe('formatWhatsAppDigest', () => {
         expectedCollectionsThisWeek: 1247,
         paidThisWeek: 2,
         healthy: 5,
+        portfolioCritical: 0,
+        portfolioAtRisk: 1,
+        portfolioNeedsAttention: 2,
+        portfolioHealthy: 2,
       },
       priorities: [
         {

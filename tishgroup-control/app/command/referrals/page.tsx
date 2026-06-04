@@ -25,8 +25,8 @@ export default async function CommandReferralsPage() {
     <div className="space-y-6">
       <ControlPageHeader
         eyebrow="Commercial rollout"
-        title="Referral & source summary"
-        description="Which channels and agents are bringing businesses — simple conversion view."
+        title="Referral performance"
+        description="Leads by source and agent — demo, trial, and paid conversion at a glance."
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -88,17 +88,37 @@ export default async function CommandReferralsPage() {
       </section>
 
       <section className="card p-4">
-        <h2 className="text-sm font-bold">By assigned agent</h2>
-        <ul className="mt-3 space-y-2 text-sm">
-          {report.byAgent.map((row) => (
-            <li key={row.agent} className="flex justify-between gap-2">
-              <span>{row.agent}</span>
-              <span className="text-control-muted">
-                {row.total} businesses · {row.paid} paid
-              </span>
-            </li>
-          ))}
-        </ul>
+        <h2 className="text-sm font-bold">Agent performance</h2>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-control-muted border-b border-control-line">
+                <th className="py-2 pr-2">Agent</th>
+                <th className="py-2 pr-2">Leads</th>
+                <th className="py-2 pr-2">Demos</th>
+                <th className="py-2 pr-2">Trials</th>
+                <th className="py-2 pr-2">Paid</th>
+                <th className="py-2">Trial→paid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.byAgent.map((row) => {
+                const trialToPaid =
+                  row.trials > 0 ? `${Math.round((row.paid / row.trials) * 100)}%` : '—';
+                return (
+                  <tr key={row.agent} className="border-b border-black/5">
+                    <td className="py-2 pr-2 font-medium">{row.agent}</td>
+                    <td className="py-2 pr-2">{row.total}</td>
+                    <td className="py-2 pr-2">{row.demoBooked}</td>
+                    <td className="py-2 pr-2">{row.trials}</td>
+                    <td className="py-2 pr-2">{row.paid}</td>
+                    <td className="py-2">{trialToPaid}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <p className="text-sm">

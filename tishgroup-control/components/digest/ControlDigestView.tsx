@@ -122,6 +122,9 @@ export default function ControlDigestView({ data }: Props) {
         <StatChip label="Collections (wk)" value={`GHS ${counts.expectedCollectionsThisWeek.toLocaleString()}`} />
         <StatChip label="Paid this week" value={counts.paidThisWeek} />
         <StatChip label="Healthy" value={counts.healthy} />
+        <StatChip label="Critical health" value={counts.portfolioCritical} />
+        <StatChip label="At risk" value={counts.portfolioAtRisk} />
+        <StatChip label="Needs attention" value={counts.portfolioNeedsAttention} />
       </div>
 
       <section className="rounded-2xl border border-control-line bg-slate-50 p-4">

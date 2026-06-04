@@ -54,6 +54,8 @@ function sampleRecord(overrides: Partial<ScaleBusinessRecord> = {}): ScaleBusine
     assignedAgent: 'Unassigned',
     assignedManagerId: null,
     healthLabel: 'Needs setup help',
+    portfolioHealth: 'Needs Attention',
+    portfolioHealthReasons: [],
     churnRisk: false,
     isActivated: false,
     isHealthy: false,

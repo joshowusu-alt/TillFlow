@@ -23,6 +23,8 @@ function row(overrides: Partial<SupportIssueRow> = {}): SupportIssueRow {
     createdAt: now,
     lastUpdatedAt: now,
     isStale: false,
+    openAgeHours: 0,
+    slaLabel: null,
     ...overrides,
   };
 }

@@ -44,6 +44,10 @@ export type DigestCounts = {
   expectedCollectionsThisWeek: number;
   paidThisWeek: number;
   healthy: number;
+  portfolioCritical: number;
+  portfolioAtRisk: number;
+  portfolioNeedsAttention: number;
+  portfolioHealthy: number;
 };
 
 /** Shape designed for optional future ControlDigestSnapshot table persistence. */

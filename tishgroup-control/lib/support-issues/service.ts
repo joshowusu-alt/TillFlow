@@ -8,8 +8,26 @@ import {
 } from './types';
 
 const STALE_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
 
-function mapIssueRow(
+function resolveSlaLabel(priority: string, status: string, openAgeHours: number, isStale: boolean): string | null {
+  if (!OPEN_SUPPORT_STATUSES.includes(status as (typeof OPEN_SUPPORT_STATUSES)[number])) {
+    return null;
+  }
+  if (priority === 'CRITICAL') {
+    if (openAgeHours >= 24 || isStale) return 'SLA: critical — respond now';
+    if (openAgeHours >= 12) return 'SLA: critical — due today';
+    return 'SLA: critical — watch closely';
+  }
+  if (priority === 'HIGH' && (openAgeHours >= 48 || isStale)) {
+    return 'SLA: high — overdue follow-up';
+  }
+  if (isStale) return 'Stale — no update 24h+';
+  if (openAgeHours >= 72) return `Open ${openAgeHours}h — ageing`;
+  return null;
+}
+
+export function mapIssueRow(
   row: {
     id: string;
     businessId: string;
@@ -33,6 +51,10 @@ function mapIssueRow(
   now: Date
 ): SupportIssueRow {
   const age = now.getTime() - row.lastUpdatedAt.getTime();
+  const isOpen = OPEN_SUPPORT_STATUSES.includes(row.status as (typeof OPEN_SUPPORT_STATUSES)[number]);
+  const openAgeHours = isOpen ? Math.max(0, Math.floor(age / HOUR_MS)) : 0;
+  const isStale = isOpen && age >= STALE_MS;
+  const slaLabel = resolveSlaLabel(row.priority, row.status, openAgeHours, isStale);
   return {
     id: row.id,
     businessId: row.businessId,
@@ -51,7 +73,9 @@ function mapIssueRow(
     assignedStaffId: row.assignedStaffId,
     createdAt: row.createdAt.toISOString(),
     lastUpdatedAt: row.lastUpdatedAt.toISOString(),
-    isStale: OPEN_SUPPORT_STATUSES.includes(row.status as (typeof OPEN_SUPPORT_STATUSES)[number]) && age >= STALE_MS,
+    isStale,
+    openAgeHours,
+    slaLabel,
   };
 }
 
@@ -106,6 +130,7 @@ async function computeSupportCockpit(now = new Date()): Promise<SupportCockpitDa
       ).length,
       averageOpenAgeHours,
       businessesWithOpenIssues: new Set(open.map((i) => i.businessId)).size,
+      slaAttentionCount: open.filter((i) => Boolean(i.slaLabel)).length,
     },
     issues: mapped,
   };

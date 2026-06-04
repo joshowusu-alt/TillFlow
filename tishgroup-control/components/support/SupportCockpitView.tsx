@@ -89,6 +89,7 @@ export default function SupportCockpitView({
         <OverviewCard label="Resolved this week" value={String(overview.resolvedThisWeek)} />
         <OverviewCard label="Avg open age" value={`${overview.averageOpenAgeHours}h`} />
         <OverviewCard label="Businesses affected" value={String(overview.businessesWithOpenIssues)} />
+        <OverviewCard label="SLA attention" value={String(overview.slaAttentionCount)} hint="Stale or overdue follow-up" />
       </div>
 
       {(overview.criticalIssues > 0 || overview.highPriorityIssues > 0) && (
@@ -226,8 +227,15 @@ export default function SupportCockpitView({
                       {issue.priority}
                     </span>
                     <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium">{issue.status.replace(/_/g, ' ')}</span>
-                    {issue.isStale ? (
+                    {issue.slaLabel ? (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
+                        {issue.slaLabel}
+                      </span>
+                    ) : issue.isStale ? (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800">Stale</span>
+                    ) : null}
+                    {issue.openAgeHours > 0 ? (
+                      <span className="text-[10px] text-control-muted">{issue.openAgeHours}h open</span>
                     ) : null}
                     <button type="button" className="btn-secondary text-xs py-1" onClick={() => setSelected(issue)}>
                       Manage

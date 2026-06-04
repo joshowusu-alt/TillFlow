@@ -64,6 +64,8 @@ export type SupportIssueRow = {
   createdAt: string;
   lastUpdatedAt: string;
   isStale: boolean;
+  openAgeHours: number;
+  slaLabel: string | null;
 };
 
 export type SupportCockpitOverview = {
@@ -74,6 +76,7 @@ export type SupportCockpitOverview = {
   resolvedThisWeek: number;
   averageOpenAgeHours: number;
   businessesWithOpenIssues: number;
+  slaAttentionCount: number;
 };
 
 export type SupportCockpitData = {

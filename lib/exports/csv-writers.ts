@@ -119,7 +119,7 @@ export async function buildVatReportCsv(businessId: string, range: DateRange): P
 // ---------------------------------------------------------------------------
 export async function buildDebtorsListingCsv(businessId: string): Promise<string> {
   const debtors = await prisma.salesInvoice.findMany({
-    where: { businessId, paymentStatus: { in: ['UNPAID', 'PARTIAL'] } },
+    where: { businessId, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true, transactionNumber: true, createdAt: true, dueDate: true,

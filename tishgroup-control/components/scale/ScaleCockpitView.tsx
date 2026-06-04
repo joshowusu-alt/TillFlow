@@ -3,7 +3,12 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { ScaleBusinessRecord, ScaleCockpitData } from '@/lib/scale-cockpit/types';
-import { formatBusinessType, matchesScaleFilter, whatsappHref } from '@/lib/scale-cockpit/labels';
+import { portfolioHealthTone } from '@/lib/business-health';
+import {
+  filterScaleBusinesses,
+  paginateScaleBusinesses,
+} from '@/lib/scale-cockpit/service';
+import { formatBusinessType, whatsappHref } from '@/lib/scale-cockpit/labels';
 import { StatePill } from '@/components/status-pill';
 import type { AuditLogEntry } from '@/lib/audit';
 import type { SupportIssueRow } from '@/lib/support-issues/types';
@@ -72,7 +77,13 @@ const FILTERS: Array<{ id: string; label: string }> = [
   { id: 'referral_trial', label: 'Trial started' },
   { id: 'referral_paid', label: 'Referral paid' },
   { id: 'referral_follow_up', label: 'Follow-up due' },
+  { id: 'health_critical', label: 'Health: Critical' },
+  { id: 'health_at_risk', label: 'Health: At risk' },
+  { id: 'health_needs_attention', label: 'Health: Needs attention' },
+  { id: 'health_healthy', label: 'Health: Healthy' },
 ];
+
+const PAGE_SIZE = 25;
 
 function OverviewCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -132,14 +143,22 @@ function BusinessDetailPanel({
               <p className="text-xs text-control-muted">Billing</p>
               <p className="font-semibold">{record.billingAccessState.replace(/_/g, ' ')}</p>
             </div>
-            <div>
-              <p className="text-xs text-control-muted">Health</p>
-              <p className="font-semibold">{record.healthLabel}</p>
-              <p className="text-[11px] text-control-muted mt-0.5">
-                {record.openSupportIssueCount > 0
-                  ? `${record.openSupportIssueCount} open · ${record.highestSupportPriority ?? '—'}`
-                  : 'No open support issues'}
-              </p>
+            <div className="col-span-2">
+              <p className="text-xs text-control-muted">Portfolio health</p>
+              <span
+                className={`mt-1 inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${portfolioHealthTone(record.portfolioHealth)}`}
+              >
+                {record.portfolioHealth}
+              </span>
+              {record.portfolioHealthReasons.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-control-muted">
+                  {record.portfolioHealthReasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-control-muted mt-1">{record.healthLabel}</p>
+              )}
             </div>
             <div>
               <p className="text-xs text-control-muted">Agent</p>
@@ -438,24 +457,18 @@ export default function ScaleCockpitView({
 }: Props) {
   const [filter, setFilter] = useState(initialFilter);
   const [search, setSearch] = useState(initialSearch);
+  const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(initialBusinessId);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const now = new Date();
-    return data.businesses.filter((record) => {
-      if (filter !== 'all' && !matchesScaleFilter(record, filter, now)) return false;
-      if (!q) return true;
-      return [
-        record.businessName,
-        record.ownerName,
-        record.ownerPhone,
-        record.location ?? '',
-        record.referralSource ?? '',
-        record.assignedAgent,
-      ].some((v) => v.toLowerCase().includes(q));
-    });
-  }, [data.businesses, filter, search]);
+  const filtered = useMemo(
+    () => filterScaleBusinesses(data.businesses, { filter, search }),
+    [data.businesses, filter, search]
+  );
+
+  const paged = useMemo(
+    () => paginateScaleBusinesses(filtered, page, PAGE_SIZE),
+    [filtered, page]
+  );
 
   const selected = selectedId ? data.businesses.find((b) => b.businessId === selectedId) ?? null : null;
   const selectedSupportIssues = selectedId ? data.supportByBusiness[selectedId] ?? [] : [];
@@ -489,6 +502,10 @@ export default function ScaleCockpitView({
           label="Collections this week"
           value={`GH₵ ${overview.expectedCollectionsThisWeek.toLocaleString('en-GH')}`}
         />
+        <OverviewCard label="Critical" value={String(overview.healthCritical)} hint="Act today" />
+        <OverviewCard label="At risk" value={String(overview.healthAtRisk)} />
+        <OverviewCard label="Needs attention" value={String(overview.healthNeedsAttention)} />
+        <OverviewCard label="Healthy" value={String(overview.healthHealthy)} />
       </div>
 
       <section className="rounded-2xl border border-control-line bg-white p-4 shadow-sm">
@@ -569,16 +586,28 @@ export default function ScaleCockpitView({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-sm font-display font-bold text-control-ink">All businesses</h2>
-            <p className="text-xs text-control-muted">{filtered.length} shown</p>
+            <p className="text-xs text-control-muted">
+              {paged.total} match · showing {paged.startIndex}–{paged.endIndex}
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search name, phone, agent…"
               className="input text-sm w-full sm:w-56"
             />
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input text-sm w-full sm:w-44">
+            <select
+              value={filter}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setPage(1);
+              }}
+              className="input text-sm w-full sm:w-44"
+            >
               {FILTERS.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
@@ -593,6 +622,7 @@ export default function ScaleCockpitView({
             <thead>
               <tr className="border-b border-control-line text-control-muted">
                 <th className="py-2 pr-2">Business</th>
+                <th className="py-2 pr-2">Health</th>
                 <th className="py-2 pr-2">Owner</th>
                 <th className="py-2 pr-2">Setup</th>
                 <th className="py-2 pr-2">Billing</th>
@@ -604,11 +634,18 @@ export default function ScaleCockpitView({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((record) => (
+              {paged.items.map((record) => (
                 <tr key={record.businessId} className="border-b border-black/5 hover:bg-black/[0.02]">
                   <td className="py-3 pr-2">
                     <p className="font-semibold text-control-ink">{record.businessName}</p>
                     <p className="text-control-muted">{formatBusinessType(record.businessType)}</p>
+                  </td>
+                  <td className="py-3 pr-2">
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${portfolioHealthTone(record.portfolioHealth)}`}
+                    >
+                      {record.portfolioHealth}
+                    </span>
                   </td>
                   <td className="py-3 pr-2">
                     <p>{record.ownerName}</p>
@@ -647,11 +684,40 @@ export default function ScaleCockpitView({
           </table>
         </div>
 
+        {paged.totalPages > 1 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <button
+              type="button"
+              disabled={paged.page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="btn-secondary py-1.5 disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-control-muted">
+              Page {paged.page} of {paged.totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={paged.page >= paged.totalPages}
+              onClick={() => setPage((p) => Math.min(paged.totalPages, p + 1))}
+              className="btn-secondary py-1.5 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        ) : null}
+
         <div className="mt-4 space-y-3 lg:hidden">
-          {filtered.map((record) => (
+          {paged.items.map((record) => (
             <div key={record.businessId} className="rounded-xl border border-black/5 p-3">
               <p className="font-semibold">{record.businessName}</p>
-              <p className="text-xs text-control-muted">{record.ownerName} · {record.setupProgressPercent}% setup</p>
+              <span
+                className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${portfolioHealthTone(record.portfolioHealth)}`}
+              >
+                {record.portfolioHealth}
+              </span>
+              <p className="text-xs text-control-muted mt-1">{record.ownerName} · {record.setupProgressPercent}% setup</p>
               <p className="text-xs mt-1 line-clamp-2">{record.stuckMessage ?? record.nextAction}</p>
               <button type="button" onClick={() => setSelectedId(record.businessId)} className="btn-secondary mt-2 w-full text-xs py-2">
                 View details

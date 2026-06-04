@@ -1,3 +1,4 @@
+import type { PortfolioHealthStatus } from '@/lib/business-health';
 import type { SupportIssueRow } from '@/lib/support-issues/types';
 import type { ActivationReadinessStatus, ActivationStuckReason } from '@/lib/vendor/activation-readiness';
 import type { BillingAccessState } from '@/lib/vendor/subscription-lifecycle';
@@ -61,6 +62,8 @@ export type ScaleBusinessRecord = {
   assignedAgent: string;
   assignedManagerId: string | null;
   healthLabel: ScaleHealthLabel;
+  portfolioHealth: PortfolioHealthStatus;
+  portfolioHealthReasons: string[];
   churnRisk: boolean;
   isActivated: boolean;
   isHealthy: boolean;
@@ -107,6 +110,10 @@ export type ScaleCockpitData = {
     openSupportIssues: number;
     expectedMrr: number;
     expectedCollectionsThisWeek: number;
+    healthCritical: number;
+    healthAtRisk: number;
+    healthNeedsAttention: number;
+    healthHealthy: number;
   };
   pipeline: ScalePipelineStage[];
   actionItems: ScaleActionItem[];
@@ -138,4 +145,8 @@ export type ScaleFilter =
   | 'demo_completed'
   | 'referral_trial'
   | 'referral_paid'
-  | 'referral_follow_up';
+  | 'referral_follow_up'
+  | 'health_critical'
+  | 'health_at_risk'
+  | 'health_needs_attention'
+  | 'health_healthy';

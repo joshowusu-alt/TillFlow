@@ -56,6 +56,10 @@ export function computeDigestCounts(records: ScaleBusinessRecord[], now: Date): 
     expectedCollectionsThisWeek: 0,
     paidThisWeek: 0,
     healthy: records.filter((r) => r.isHealthy).length,
+    portfolioCritical: records.filter((r) => r.portfolioHealth === 'Critical').length,
+    portfolioAtRisk: records.filter((r) => r.portfolioHealth === 'At Risk').length,
+    portfolioNeedsAttention: records.filter((r) => r.portfolioHealth === 'Needs Attention').length,
+    portfolioHealthy: records.filter((r) => r.portfolioHealth === 'Healthy').length,
   };
 }
 

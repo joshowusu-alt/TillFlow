@@ -122,6 +122,14 @@ export function matchesScaleFilter(record: ScaleBusinessRecord, filter: string, 
         Boolean(record.referralNextFollowUpAt && today && record.referralNextFollowUpAt <= today)
       );
     }
+    case 'health_critical':
+      return record.portfolioHealth === 'Critical';
+    case 'health_at_risk':
+      return record.portfolioHealth === 'At Risk';
+    case 'health_needs_attention':
+      return record.portfolioHealth === 'Needs Attention';
+    case 'health_healthy':
+      return record.portfolioHealth === 'Healthy';
     default:
       if (filter.startsWith('source:')) {
         return (record.referralSource ?? '').toUpperCase() === filter.slice(7).toUpperCase();
