@@ -128,7 +128,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                     : 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition-all hover:border-accent/30 hover:text-accent'
                 }
               >
-                Start Free
+                Start free trial
               </Link>
             </div>
           );
