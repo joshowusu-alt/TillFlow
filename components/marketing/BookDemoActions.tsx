@@ -1,13 +1,14 @@
-import Link from 'next/link';
 import { getTillflowWhatsAppUrl } from '@/lib/marketing/whatsapp';
 
 const EMAIL_HREF = 'mailto:hello@tishgroup.com?subject=TillFlow%20demo%20request';
 
 type BookDemoActionsProps = {
   layout?: 'hero' | 'compact';
+  /** When false, only WhatsApp is shown (hero secondary CTA). */
+  showEmail?: boolean;
 };
 
-export default function BookDemoActions({ layout = 'hero' }: BookDemoActionsProps) {
+export default function BookDemoActions({ layout = 'hero', showEmail = true }: BookDemoActionsProps) {
   const whatsappUrl = getTillflowWhatsAppUrl();
   const isHero = layout === 'hero';
 
@@ -16,7 +17,7 @@ export default function BookDemoActions({ layout = 'hero' }: BookDemoActionsProp
     : 'inline-flex items-center gap-2 rounded-xl border border-accent/25 bg-white px-4 py-2.5 text-sm font-semibold text-accent transition hover:border-accent/40';
 
   const whatsappClass = isHero
-    ? 'flex items-center gap-2 rounded-2xl border-2 border-emerald-500/30 bg-emerald-50 px-8 py-4 text-base font-bold text-emerald-800 shadow-lg transition-all hover:border-emerald-500/50 hover:shadow-xl hover:-translate-y-0.5'
+    ? 'flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl border-2 border-emerald-500/30 bg-emerald-50 px-8 py-4 text-base font-bold text-emerald-800 shadow-lg transition-all hover:border-emerald-500/50 hover:shadow-xl hover:-translate-y-0.5 sm:w-auto'
     : 'inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-800 transition hover:border-emerald-500/40';
 
   return (
@@ -29,9 +30,11 @@ export default function BookDemoActions({ layout = 'hero' }: BookDemoActionsProp
           Book demo on WhatsApp
         </a>
       ) : null}
-      <a href={EMAIL_HREF} className={emailClass}>
-        {whatsappUrl ? 'Book demo by email' : 'Book a demo'}
-      </a>
+      {showEmail ? (
+        <a href={EMAIL_HREF} className={emailClass}>
+          {whatsappUrl ? 'Book demo by email' : 'Book a demo'}
+        </a>
+      ) : null}
     </>
   );
 }

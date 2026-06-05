@@ -68,7 +68,7 @@ const businessTypes = [
   'Provision shops',
   'Pharmacies',
   'Beauty supply stores',
-  'Wholesale counters',
+  'Wholesalers',
 ];
 
 const ownerOutcomes = [
@@ -118,12 +118,12 @@ const planPreview: WelcomePlanPreview[] = [
   {
     name: 'Growth',
     monthlyPrice: PLAN_MONTHLY_PRICES.GROWTH,
-    note: 'Best fit for most stores',
+    note: 'Recommended for most growing businesses',
     featured: true,
     bullets: [
       'Everything in Starter, plus stronger controls and reporting',
       'Margins, accounting visibility, reorder support, and owner insight',
-      'Best for serious supermarkets that want tighter operational discipline',
+      'Best for businesses that want reports, margins and tighter control',
     ],
     addon: {
       name: 'Add online store',
@@ -171,7 +171,7 @@ export default function WelcomePage() {
               href="/register"
               className="inline-flex items-center rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/25 transition hover:bg-accent/80 hover:shadow-accent/40 sm:px-5 sm:py-2.5"
             >
-              Start Free
+              Start free trial
             </Link>
           </div>
         </div>
@@ -188,12 +188,12 @@ export default function WelcomePage() {
         <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto max-w-3xl text-center">
             {/* Ghana-first badge */}
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accentSoft px-4 py-1.5 text-sm font-medium text-accent">
+            <div className="mb-6 inline-flex max-w-full items-center gap-2 rounded-full border border-accent/20 bg-accentSoft px-4 py-1.5 text-xs font-medium text-accent sm:text-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-500" />
               </span>
-              For supermarkets, minimarts and provision businesses in Ghana
+              For supermarkets, minimarts, provision shops, pharmacies, wholesalers and growing retail businesses in Ghana
             </div>
 
             <h1 className="text-4xl font-bold font-display tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
@@ -203,33 +203,33 @@ export default function WelcomePage() {
               </span>
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-black/60">
-              TillFlow helps product-based businesses sell, track stock, manage cash and MoMo payments, follow up
-              debtors and suppliers, and see owner reports clearly — even when the internet is unreliable.
+              TillFlow helps product-based businesses sell faster, track stock, manage cash and MoMo, follow up
+              debtors and suppliers, and see clear owner reports — even when the internet is unreliable.
             </p>
 
-            {/* CTAs */}
-            <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+            <p className="mt-4 text-sm font-medium text-black/50">
+              Cloud-based. Works on phone, tablet and desktop. Built for Ghanaian businesses.
+            </p>
+
+            {/* CTAs — primary demo, secondary WhatsApp, tertiary trial link */}
+            <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:gap-4">
               <Link
                 href="/demo"
-                className="group flex items-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-8 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:shadow-accent/30 hover:-translate-y-0.5"
+                className="group flex w-full max-w-xs items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-accent to-accent/80 px-8 py-4 text-base font-bold text-white shadow-xl shadow-accent/25 transition-all hover:shadow-2xl hover:shadow-accent/30 hover:-translate-y-0.5 sm:w-auto"
               >
                 <svg className="h-5 w-5 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
                 </svg>
                 See live demo
               </Link>
-              <BookDemoActions layout="hero" />
-              <Link
-                href="/register"
-                className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-accent/20 hover:shadow-xl hover:-translate-y-0.5"
-              >
-                Start 7-day trial
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
+              <BookDemoActions layout="hero" showEmail={false} />
             </div>
-            <p className="mt-4 max-w-lg text-center text-sm text-black/50">
+            <p className="mt-4 text-center text-sm text-black/50">
+              <Link href="/register" className="font-semibold text-accent underline-offset-4 hover:underline">
+                Start free trial
+              </Link>
+            </p>
+            <p className="mt-2 max-w-lg text-center text-sm text-black/45">
               Explore a sample business and see how TillFlow tracks sales, stock, payments and reports — no signup required.
             </p>
 
@@ -344,17 +344,17 @@ export default function WelcomePage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black/45">
-                Pilot retailer feedback
+                Live pilot feedback
               </div>
               <h2 className="mt-4 text-3xl font-bold font-display text-gray-900 sm:text-4xl">
-                Feedback from a live business using TillFlow.
+                Feedback from a live retail business using TillFlow
               </h2>
               <p className="mt-3 text-base leading-7 text-black/55">
-                From day-to-day operations — offline selling, shift closing and product profitability.
+                Retail operator, Ghana — from day-to-day use: offline selling, shift closing and product profitability.
               </p>
             </div>
             <div className="rounded-2xl border border-black/5 bg-white/80 px-4 py-3 text-left text-sm text-black/50 shadow-sm">
-              From offline selling to shift closing and product profitability, the value is showing up in day-to-day decisions.
+              What improved in live use — without naming the business, these are real operational themes from a pilot retailer.
             </div>
           </div>
 
@@ -364,7 +364,7 @@ export default function WelcomePage() {
                 key={testimonial.title}
                 className="rounded-2xl border border-black/5 bg-white/85 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/35">Pilot feedback</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/35">From day-to-day use</div>
                 <h3 className="mt-3 text-xl font-semibold font-display leading-8 text-gray-900">{testimonial.title}</h3>
                 <div className="mt-4 rounded-2xl bg-accentSoft/70 px-4 py-4 text-sm leading-7 text-black/60">
                   &ldquo;{testimonial.quote}&rdquo;
@@ -481,7 +481,7 @@ export default function WelcomePage() {
               href="/register"
               className="rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold transition-all hover:border-accent/20 hover:shadow-xl hover:-translate-y-0.5"
             >
-              Start 7-day trial
+              Start free trial
             </Link>
           </div>
         </div>

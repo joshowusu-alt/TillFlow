@@ -42,7 +42,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
             Switch between monthly and yearly billing. Yearly gives 2 months off.
           </div>
           <div className="mt-2 text-xs text-black/40">
-            Most owner-led stores will feel at home on Growth. Starter is for a lean start. Pro is for multi-branch operations and executive control — and the online store is included.
+            Most owner-led businesses will feel at home on Growth. Starter is for a lean start. Pro is for multi-branch operations and executive control — and the online store is included.
           </div>
         </div>
 
