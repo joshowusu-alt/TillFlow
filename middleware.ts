@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   '/icon',
   '/apple-icon',
   '/og-default-store',
+  '/og',
   '/api/health',
   '/api/icon',
   '/api/storefront',
