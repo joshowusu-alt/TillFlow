@@ -1,7 +1,12 @@
 import { getUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getFeatures } from '@/lib/features';
+import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
 import { redirect } from 'next/navigation';
+
+export const metadata = buildTillflowPublicMetadata({
+  canonicalPath: '/welcome',
+});
 
 export default async function Home() {
   const user = await getUser();

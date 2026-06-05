@@ -11,6 +11,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/settings/', '/reports/', '/pos/', '/stock/'],
       },
     ],
-    sitemap: `${baseUrl}/shop/sitemap.xml`,
+    sitemap: [`${baseUrl}/sitemap.xml`, `${baseUrl}/shop/sitemap.xml`],
   };
 }

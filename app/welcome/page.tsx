@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
+import BookDemoActions from '@/components/marketing/BookDemoActions';
 import { Logo } from '@/components/Logo';
 import { PLAN_MONTHLY_PRICES, ADDON_ONLINE_STOREFRONT_MONTHLY } from '@/lib/plan-pricing';
 
@@ -111,7 +112,7 @@ const planPreview: WelcomePlanPreview[] = [
     bullets: [
       'POS, products, customers, and inventory basics',
       'Offline-ready selling with receipts and simple setup',
-      'Best for shops starting with one branch and a lean team',
+      'Best for businesses starting with one branch and a lean team',
     ],
   },
   {
@@ -202,7 +203,8 @@ export default function WelcomePage() {
               </span>
             </h1>
             <p className="mt-6 text-lg leading-relaxed text-black/60">
-              TillFlow helps product-based businesses sell, track stock, manage payments and see daily reports — even when the internet is unreliable.
+              TillFlow helps product-based businesses sell, track stock, manage cash and MoMo payments, follow up
+              debtors and suppliers, and see owner reports clearly — even when the internet is unreliable.
             </p>
 
             {/* CTAs */}
@@ -216,12 +218,7 @@ export default function WelcomePage() {
                 </svg>
                 See live demo
               </Link>
-              <a
-                href="mailto:hello@tishgroup.com?subject=TillFlow%20demo%20request"
-                className="flex items-center gap-2 rounded-2xl border-2 border-accent/30 bg-white px-8 py-4 text-base font-bold text-accent shadow-lg transition-all hover:border-accent/40 hover:shadow-xl hover:-translate-y-0.5"
-              >
-                Book a demo
-              </a>
+              <BookDemoActions layout="hero" />
               <Link
                 href="/register"
                 className="flex items-center gap-2 rounded-2xl border-2 border-black/10 bg-white px-8 py-4 text-base font-bold text-gray-800 shadow-lg transition-all hover:border-accent/20 hover:shadow-xl hover:-translate-y-0.5"
@@ -347,13 +344,13 @@ export default function WelcomePage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-black/5 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-black/45">
-                Real store feedback
+                Pilot retailer feedback
               </div>
               <h2 className="mt-4 text-3xl font-bold font-display text-gray-900 sm:text-4xl">
-                What a live business is saying after switching fully to TillFlow.
+                Feedback from a live business using TillFlow.
               </h2>
               <p className="mt-3 text-base leading-7 text-black/55">
-                From a business running daily operations on TillFlow.
+                From day-to-day operations — offline selling, shift closing and product profitability.
               </p>
             </div>
             <div className="rounded-2xl border border-black/5 bg-white/80 px-4 py-3 text-left text-sm text-black/50 shadow-sm">
@@ -367,7 +364,7 @@ export default function WelcomePage() {
                 key={testimonial.title}
                 className="rounded-2xl border border-black/5 bg-white/85 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/35">Live store testimonial</div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-black/35">Pilot feedback</div>
                 <h3 className="mt-3 text-xl font-semibold font-display leading-8 text-gray-900">{testimonial.title}</h3>
                 <div className="mt-4 rounded-2xl bg-accentSoft/70 px-4 py-4 text-sm leading-7 text-black/60">
                   &ldquo;{testimonial.quote}&rdquo;
@@ -491,19 +488,32 @@ export default function WelcomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-black/5 px-6 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Logo variant="mark" size={24} className="h-6 w-6 rounded-lg" ariaHidden />
-            <div>
-              <span className="text-sm font-semibold font-display">
-                <span className="text-accent">Till</span>
-                <span className="text-gray-800">Flow</span>
-              </span>
-              <p className="text-[11px] text-black/35">© 2026 Tish Group. All rights reserved.</p>
+      <footer className="border-t border-black/5 px-6 py-10">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2">
+              <Logo variant="mark" size={24} className="mt-0.5 h-6 w-6 rounded-lg" ariaHidden />
+              <div>
+                <span className="text-sm font-semibold font-display">
+                  <span className="text-accent">Till</span>
+                  <span className="text-gray-800">Flow</span>
+                </span>
+                <p className="mt-1 text-xs leading-5 text-black/45">
+                  Cloud-based · Works on phone, tablet and desktop · Built for Ghanaian businesses
+                </p>
+                <p className="mt-2 text-[11px] text-black/35">© 2026 Tish Group. All rights reserved.</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 sm:items-end">
+              <div className="flex flex-wrap gap-2">
+                <BookDemoActions layout="compact" />
+                <Link href="/demo" className="inline-flex items-center rounded-xl border border-black/10 px-4 py-2.5 text-sm font-semibold text-black/70 transition hover:border-accent/25 hover:text-accent">
+                  See live demo
+                </Link>
+              </div>
+              <p className="text-xs text-black/35">Sales made simple.</p>
             </div>
           </div>
-          <p className="text-xs text-black/30">Sales made simple.</p>
         </div>
       </footer>
     </div>

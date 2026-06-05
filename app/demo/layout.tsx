@@ -1,11 +1,15 @@
 import DemoNavTabs from './_components/DemoNavTabs';
-
+import BookDemoActions from '@/components/marketing/BookDemoActions';
+import { buildTillflowPublicMetadata } from '@/lib/marketing/site';
 import { ADOM_RETAIL_DEMO_NAME, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 
-export const metadata = {
-  title: `Demo – ${ADOM_RETAIL_DEMO_NAME} | TillFlow`,
-  robots: { index: false, follow: false },
-};
+export const metadata = buildTillflowPublicMetadata({
+  title: `Explore ${ADOM_RETAIL_DEMO_NAME} | TillFlow`,
+  description:
+    'Explore sample business data — sales, stock, payments, debtors, suppliers and reports. No signup required.',
+  canonicalPath: '/demo',
+  noIndex: true,
+});
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,7 +28,8 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
           </span>
           <span className="font-medium sm:hidden">Sample business data</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <BookDemoActions layout="compact" />
           <a
             href="/register"
             className="inline-flex min-h-9 items-center rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-blue-50"

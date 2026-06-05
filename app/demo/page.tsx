@@ -3,11 +3,6 @@ import { buildDemoLedger } from '@/lib/demo-fixtures';
 import { ADOM_RETAIL_DEMO_NAME, ADOM_RETAIL_DEMO_SLUG, DEMO_AGENT_TALKING_POINTS, DEMO_PERIOD_DAYS } from '@/lib/demo-sandbox/constants';
 import { formatMoney } from '@/lib/format';
 
-export const metadata = {
-  title: `Explore ${ADOM_RETAIL_DEMO_NAME} | TillFlow`,
-  description: 'Explore sample business data — sales, stock, payments and reports.',
-};
-
 const STEPS = [
   { href: '/demo/dashboard', label: 'View demo dashboard', desc: 'Revenue, profit, cash and alerts' },
   { href: '/demo/try-sale', label: 'Try a sample sale', desc: 'Practice checkout without saving data' },
@@ -94,11 +89,12 @@ export default function DemoHubPage() {
 
       <section className="rounded-2xl border border-black/8 bg-white p-5 text-sm text-muted">
         <p>
-          Optional live storefront preview:{' '}
+          Live storefront preview:{' '}
           <Link href={`/shop/${ADOM_RETAIL_DEMO_SLUG}`} className="font-semibold text-accent hover:underline">
             /shop/{ADOM_RETAIL_DEMO_SLUG}
-          </Link>{' '}
-          (available after Tish Group seeds the demo business in your environment).
+          </Link>
+          . This is sample business data — your own TillFlow account will show your real sales, stock, payments and
+          reports.
         </p>
       </section>
     </div>

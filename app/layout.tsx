@@ -20,8 +20,13 @@ const bodyFont = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'TillFlow',
-  description: 'Sales made simple. Point of Sale, Inventory & Accounting.',
+  title: {
+    default: 'TillFlow — POS, Stock & Reports for Ghanaian Businesses',
+    template: '%s | TillFlow',
+  },
+  description:
+    'Sell faster, track stock, manage payments, follow up debtors, and see reports clearly — built for Ghanaian businesses.',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://www.tillflow.app'),
   manifest: '/manifest.json',
   icons: {
     icon: [
