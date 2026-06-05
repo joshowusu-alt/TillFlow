@@ -79,8 +79,9 @@ function buildOverlaySvg() {
 
   <rect x="${markX - 14}" y="${markY - 10}" width="${lockupPadW}" height="${lockupPadH}" rx="18" fill="#ffffff" fill-opacity="0.95"/>
 
-  <text x="${wordmarkX}" y="${wordmarkY}" font-family="'Segoe UI', system-ui, sans-serif" font-size="44" font-weight="700" fill="#1E40AF">Till</text>
-  <text x="${wordmarkX + 88}" y="${wordmarkY}" font-family="'Segoe UI', system-ui, sans-serif" font-size="44" font-weight="700" fill="#1F2937">Flow</text>
+  <text x="${wordmarkX}" y="${wordmarkY}" font-family="'Segoe UI', system-ui, sans-serif" font-size="44" font-weight="700" letter-spacing="-0.02em">
+    <tspan fill="#1E40AF">Till</tspan><tspan fill="#1F2937">Flow</tspan>
+  </text>
 
   <text x="${markX}" y="196" font-family="'Segoe UI', system-ui, sans-serif" font-size="50" font-weight="800" fill="#ffffff">Sell fast.</text>
   <text x="${markX}" y="254" font-family="'Segoe UI', system-ui, sans-serif" font-size="50" font-weight="800" fill="#ffffff">Track stock.</text>
