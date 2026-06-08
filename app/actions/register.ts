@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { checkRegisterRateLimit } from '@/lib/security/register-throttle';
 import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName } from '@/lib/business-scope';
 import { ensureControlPlaneBusinessBootstrap } from '@/lib/control-plane-bootstrap';
+import { resolveRegisterPlanSelection } from '@/lib/plan-pricing';
 import { createTrialSubscription } from '@/lib/subscription-lifecycle';
 import { enqueueSubscriptionReminder } from '@/lib/subscription-reminders';
 
@@ -36,9 +37,8 @@ export async function register(formData: FormData) {
   const sourceChannel = String(formData.get('sourceChannel') || 'INBOUND').trim() || 'INBOUND';
 
   const rawPlan = String(formData.get('plan') || 'STARTER').toUpperCase();
-  const plan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
-    ? (rawPlan as 'STARTER' | 'GROWTH' | 'PRO')
-    : 'STARTER';
+  const rawAddonSelected = formData.get('addonOnlineStorefront') === 'on';
+  const { plan, addonOnlineStorefront } = resolveRegisterPlanSelection(rawPlan, rawAddonSelected);
 
   // Validation
   if (!businessName || !ownerName || !email || !password) {
@@ -62,7 +62,7 @@ export async function register(formData: FormData) {
       data: {
         name: businessName,
         currency,
-        ...createTrialSubscription(plan),
+        ...createTrialSubscription(plan, { addonOnlineStorefront }),
         vatEnabled: false,
         mode: 'SIMPLE',
       },
@@ -100,6 +100,7 @@ export async function register(formData: FormData) {
     ownerName,
     ownerEmail: result.owner.email,
     plan: result.business.plan,
+    addonOnlineStorefront: result.business.addonOnlineStorefront,
     status: result.business.subscriptionStatus ?? result.business.planStatus,
     supportStatus: 'UNREVIEWED',
     notes: 'Awaiting first Tishgroup commercial review after signup.',

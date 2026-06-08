@@ -7,6 +7,7 @@ import PasswordStrengthMeter from '@/components/PasswordStrengthMeter';
 import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import type { BusinessPlan } from '@/lib/features';
+import { computeSubscriptionPricing } from '@/lib/plan-pricing';
 
 const errorMessages: Record<string, string> = {
   missing: 'Please fill in all fields.',
@@ -39,6 +40,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
+  const [addonOnlineStorefront, setAddonOnlineStorefront] = useState(false);
   const [referralSource, setReferralSource] = useState('');
   const [referredByName, setReferredByName] = useState('');
   const [referredByPhone, setReferredByPhone] = useState('');
@@ -52,6 +54,12 @@ export default function RegisterForm({ error }: RegisterFormProps) {
     progressFill: 'bg-gradient-to-r from-accent to-accent/80',
     nextBtn: 'w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed',
   };
+
+  const pricing = computeSubscriptionPricing({
+    plan: selectedPlan,
+    addonOnlineStorefront: selectedPlan === 'GROWTH' && addonOnlineStorefront,
+    billingInterval: 'MONTHLY',
+  });
 
   return (
     <div className="space-y-6">
@@ -228,7 +236,12 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               <button
                 key={plan.id}
                 type="button"
-                onClick={() => setSelectedPlan(plan.id)}
+                onClick={() => {
+                  setSelectedPlan(plan.id);
+                  if (plan.id !== 'GROWTH') {
+                    setAddonOnlineStorefront(false);
+                  }
+                }}
                 className={`w-full rounded-xl border-2 p-3 text-left transition ${
                   selectedPlan === plan.id
                     ? `border-transparent ring-2 ${plan.ring} ${plan.bg}`
@@ -261,6 +274,45 @@ export default function RegisterForm({ error }: RegisterFormProps) {
               </button>
             ))}
           </div>
+
+          {selectedPlan === 'GROWTH' ? (
+            <div className="rounded-xl border-2 border-blue-200 bg-blue-50/80 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Add Online Storefront — +GHS 200/month</p>
+                <p className="text-xs text-blue-800/80 mt-1">
+                  Let customers browse products and place pickup orders online.
+                </p>
+              </div>
+              <label className="flex items-start gap-3 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addonOnlineStorefront}
+                  onChange={(e) => setAddonOnlineStorefront(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-blue-300"
+                />
+                <span className="text-blue-900">Add online storefront to my Growth plan</span>
+              </label>
+            </div>
+          ) : null}
+
+          <div className="rounded-xl border border-black/8 bg-white/90 px-4 py-3 text-sm space-y-1">
+            {selectedPlan === 'GROWTH' ? (
+              <>
+                <p>Growth plan: GHS {pricing.basePlanMonthlyGhs}/month</p>
+                {addonOnlineStorefront ? (
+                  <p>Online Storefront: +GHS {pricing.addOnMonthlyGhs}/month</p>
+                ) : null}
+              </>
+            ) : selectedPlan === 'PRO' ? (
+              <p className="text-purple-900">Online Storefront included in Pro — no extra charge.</p>
+            ) : (
+              <p className="text-black/55">Online Storefront is available on Growth add-on or included in Pro.</p>
+            )}
+            <p className="font-semibold text-black/80 pt-1">
+              Total today: GHS {pricing.totalMonthlyGhs}/month
+            </p>
+          </div>
+
           <div className="flex gap-3">
             <button
               type="button"
@@ -290,6 +342,9 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="password" value={password} />
           <input type="hidden" name="plan" value={selectedPlan} />
+          {selectedPlan === 'GROWTH' && addonOnlineStorefront ? (
+            <input type="hidden" name="addonOnlineStorefront" value="on" />
+          ) : null}
 
           <input type="hidden" name="referralSource" value={referralSource} />
           <input type="hidden" name="referredByName" value={referredByName} />
