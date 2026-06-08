@@ -1,4 +1,4 @@
-import { PLAN_MONTHLY_PRICES } from './plan-pricing';
+import { computeSubscriptionPricing, PLAN_MONTHLY_PRICES } from './plan-pricing';
 import type { BusinessPlan } from './features';
 import { formatBusinessLocalDateKey, resolveBusinessTimeZone } from './notifications/utils';
 
@@ -108,6 +108,7 @@ export type SubscriptionInput = {
   billingInterval?: string | null;
   billingCadence?: string | null;
   billingAmount?: number | null;
+  addonOnlineStorefront?: boolean | null;
 };
 
 export type BillingAccessComputation = {
@@ -246,15 +247,22 @@ function normalizeCurrentPeriodEndsAt(
 function normalizeBillingAmountPence(
   billingAmount: number | null | undefined,
   selectedPlan: BusinessPlan,
-  billingInterval: BillingInterval
+  billingInterval: BillingInterval,
+  addonOnlineStorefront?: boolean | null
 ) {
+  const pricing = computeSubscriptionPricing({
+    plan: selectedPlan,
+    addonOnlineStorefront,
+    billingInterval,
+  });
+
   if (!Number.isFinite(billingAmount) || billingAmount == null || billingAmount <= 0) {
-    const baseline = PLAN_MONTHLY_PRICES[selectedPlan];
-    return (billingInterval === 'ANNUAL' ? baseline * 10 : baseline) * 100;
+    const amountGhs = billingInterval === 'ANNUAL' ? pricing.totalAnnualGhs : pricing.totalMonthlyGhs;
+    return amountGhs * 100;
   }
 
-  const baseline = PLAN_MONTHLY_PRICES[selectedPlan] * (billingInterval === 'ANNUAL' ? 10 : 1);
-  return billingAmount < baseline * 10 ? billingAmount * 100 : billingAmount;
+  const baselineGhs = billingInterval === 'ANNUAL' ? pricing.totalAnnualGhs : pricing.totalMonthlyGhs;
+  return billingAmount < baselineGhs * 10 ? billingAmount * 100 : billingAmount;
 }
 
 function localDayKey(date: Date, timeZone: string) {
@@ -500,7 +508,12 @@ export function computeBillingAccessState(input: SubscriptionInput & { today?: D
   const paymentGraceEndsAt = resolveBillingDate(input, 'paymentGraceEndsAt');
   const suspendedAt = toDate(input.suspendedAt);
   const cancelledAt = toDate(input.cancelledAt);
-  const billedAmount = normalizeBillingAmountPence(input.billingAmount, selectedPlan, billingInterval);
+  const billedAmount = normalizeBillingAmountPence(
+    input.billingAmount,
+    selectedPlan,
+    billingInterval,
+    input.addonOnlineStorefront
+  );
 
   let accessState: BillingAccessState;
   let daysRemaining: number | null = null;
@@ -645,11 +658,21 @@ export function requireActiveSubscription(feature: RestrictedFeature, input: Sub
   }
 }
 
-export function activateSubscriptionAfterPayment(input: SubscriptionInput & { paymentDate?: Date; amountPence?: number | null }) {
+export function activateSubscriptionAfterPayment(
+  input: SubscriptionInput & { paymentDate?: Date; amountPence?: number | null }
+) {
   const paymentDate = input.paymentDate ?? new Date();
-  const billingInterval = normalizeInterval(input.billingInterval);
+  const billingInterval = normalizeInterval(input.billingInterval ?? input.billingCadence);
   const nextBillingDate = calculateNextBillingDate(paymentDate, billingInterval);
   const firstPaymentAt = toDate(input.firstPaymentAt) ?? paymentDate;
+  const selectedPlan = normalizePlan(input.selectedPlan ?? input.plan);
+  const pricing = computeSubscriptionPricing({
+    plan: selectedPlan,
+    addonOnlineStorefront: input.addonOnlineStorefront,
+    billingInterval,
+  });
+  const defaultAmount =
+    billingInterval === 'ANNUAL' ? pricing.totalAnnualGhs * 100 : pricing.totalMonthlyBillingAmount;
 
   return {
     subscriptionStatus: 'PAID_ACTIVE' as const,
@@ -663,23 +686,35 @@ export function activateSubscriptionAfterPayment(input: SubscriptionInput & { pa
     paymentGraceEndsAt: null,
     suspendedAt: null,
     cancelledAt: null,
-    billingAmount: input.amountPence ?? PLAN_MONTHLY_PRICES[normalizePlan(input.selectedPlan ?? input.plan)] * 100,
+    billingAmount: input.amountPence ?? defaultAmount,
     billingCurrency: 'GHS',
     billingInterval,
   };
 }
 
-export function createTrialSubscription(plan: BusinessPlan, now = new Date()) {
+export function createTrialSubscription(
+  plan: BusinessPlan,
+  options?: { addonOnlineStorefront?: boolean; now?: Date }
+) {
+  const now = options?.now ?? new Date();
   const trialEndsAt = addDays(now, TRIAL_DAYS);
+  const addonOnlineStorefront = plan === 'GROWTH' && Boolean(options?.addonOnlineStorefront);
+  const pricing = computeSubscriptionPricing({
+    plan,
+    addonOnlineStorefront,
+    billingInterval: 'MONTHLY',
+  });
+
   return {
     plan,
     selectedPlan: plan,
+    addonOnlineStorefront,
     planStatus: 'TRIAL_ACTIVE',
     subscriptionStatus: 'TRIAL_ACTIVE',
     trialStartedAt: now,
     trialEndsAt,
     planSetAt: now,
-    billingAmount: PLAN_MONTHLY_PRICES[plan] * 100,
+    billingAmount: pricing.totalMonthlyBillingAmount,
     billingCurrency: 'GHS',
     billingInterval: 'MONTHLY',
     nextBillingDate: null,

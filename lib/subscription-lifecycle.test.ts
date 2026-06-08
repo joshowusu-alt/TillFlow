@@ -15,7 +15,7 @@ describe('subscription lifecycle', () => {
   const signupAt = new Date('2026-05-01T09:00:00.000Z');
 
   it('creates a 7-day trial for a new business', () => {
-    const trial = createTrialSubscription('GROWTH', signupAt);
+    const trial = createTrialSubscription('GROWTH', { now: signupAt });
 
     expect(trial.selectedPlan).toBe('GROWTH');
     expect(trial.subscriptionStatus).toBe('TRIAL_ACTIVE');
@@ -24,29 +24,47 @@ describe('subscription lifecycle', () => {
   });
 
   it('calculates trial countdown', () => {
-    const trial = createTrialSubscription('STARTER', signupAt);
+    const trial = createTrialSubscription('STARTER', { now: signupAt });
 
     expect(getTrialDaysLeft(trial, new Date('2026-05-05T08:00:00.000Z'))).toBe(3);
     expect(getSubscriptionStatus(trial, new Date('2026-05-05T08:00:00.000Z'))).toBe('TRIAL_DUE_SOON');
   });
 
   it('shows a trial as due today on the final day', () => {
-    const trial = createTrialSubscription('PRO', signupAt);
+    const trial = createTrialSubscription('PRO', { now: signupAt });
 
     expect(getSubscriptionStatus(trial, new Date('2026-05-08T08:00:00.000Z'))).toBe('TRIAL_DUE_TODAY');
     expect(getMerchantSubscriptionMessage(trial, new Date('2026-05-08T08:00:00.000Z'))).toContain('ends today');
   });
 
   it('moves expired trials into grace before restriction', () => {
-    const trial = createTrialSubscription('PRO', signupAt);
+    const trial = createTrialSubscription('PRO', { now: signupAt });
 
     expect(getSubscriptionStatus({ ...trial, paymentGraceEndsAt: new Date('2026-05-11T09:00:00.000Z') }, new Date('2026-05-09T10:00:00.000Z'))).toBe('TRIAL_EXPIRED_GRACE');
   });
 
   it('restricts expired trials once grace ends', () => {
-    const trial = createTrialSubscription('PRO', signupAt);
+    const trial = createTrialSubscription('PRO', { now: signupAt });
 
     expect(getSubscriptionStatus(trial, new Date('2026-05-09T09:00:00.000Z'))).toBe('TRIAL_RESTRICTED');
+  });
+
+  it('creates Growth trial with storefront add-on billing at GHS 549', () => {
+    const trial = createTrialSubscription('GROWTH', { now: signupAt, addonOnlineStorefront: true });
+
+    expect(trial.addonOnlineStorefront).toBe(true);
+    expect(trial.billingAmount).toBe(54900);
+  });
+
+  it('activates Growth + storefront subscription after payment at GHS 549', () => {
+    const activation = activateSubscriptionAfterPayment({
+      selectedPlan: 'GROWTH',
+      addonOnlineStorefront: true,
+      billingInterval: 'MONTHLY',
+      paymentDate: new Date('2026-05-08T10:00:00.000Z'),
+    });
+
+    expect(activation.billingAmount).toBe(54900);
   });
 
   it('activates subscription after first payment and sets next billing one month later', () => {

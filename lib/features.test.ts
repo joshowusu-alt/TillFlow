@@ -50,6 +50,20 @@ describe('getFeatures', () => {
     expect(f.multiStore).toBe(false);
     expect(f.onlineStorefront).toBe(false);
   });
+
+  it('unlocks online storefront for Growth with add-on only', () => {
+    expect(getFeatures('GROWTH', 'SINGLE_STORE', { onlineStorefront: true }).onlineStorefront).toBe(true);
+    expect(getFeatures('GROWTH', 'SINGLE_STORE', { onlineStorefront: false }).onlineStorefront).toBe(false);
+    expect(getFeatures('GROWTH', 'SINGLE_STORE').onlineStorefront).toBe(false);
+  });
+
+  it('includes online storefront on Pro without add-on flag', () => {
+    expect(getFeatures('PRO', 'SINGLE_STORE', { onlineStorefront: false }).onlineStorefront).toBe(true);
+  });
+
+  it('blocks online storefront on Starter even with add-on flag', () => {
+    expect(getFeatures('STARTER', 'SINGLE_STORE', { onlineStorefront: true }).onlineStorefront).toBe(false);
+  });
 });
 
 describe('plan helpers', () => {

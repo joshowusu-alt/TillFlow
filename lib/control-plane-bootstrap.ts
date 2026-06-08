@@ -1,5 +1,5 @@
 import type { BusinessPlan } from './features';
-import { PLAN_MONTHLY_PRICES } from './plan-pricing';
+import { computeSubscriptionPricing, controlMonthlyValueGhs } from './plan-pricing';
 
 type ControlPlaneClient = {
   controlBusinessProfile: {
@@ -29,6 +29,7 @@ type BootstrapInput = {
   sourceChannel?: string | null;
   referralStatus?: string | null;
   assignedAgentName?: string | null;
+  addonOnlineStorefront?: boolean | null;
 };
 
 function isMissingControlPlaneSchemaError(error: unknown) {
@@ -69,6 +70,12 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
   const status = normalizeSubscriptionStatus(input.status);
   const billingCadence = normalizeBillingCadence(input.billingCadence);
   const startedAt = input.startedAt ?? new Date();
+  const pricing = computeSubscriptionPricing({
+    plan: purchasedPlan,
+    addonOnlineStorefront: input.addonOnlineStorefront,
+    billingInterval: billingCadence,
+  });
+  const monthlyValueGhs = controlMonthlyValueGhs(pricing);
 
   try {
     const profile = await client.controlBusinessProfile.upsert({
@@ -118,7 +125,7 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         billingCadence,
         nextDueDate: input.nextDueDate ?? null,
         lastPaymentDate: input.lastPaymentDate ?? null,
-        monthlyValuePence: PLAN_MONTHLY_PRICES[purchasedPlan],
+        monthlyValuePence: monthlyValueGhs,
       },
       create: {
         controlBusinessId: profile.id,
@@ -128,7 +135,7 @@ export async function ensureControlPlaneBusinessBootstrap(client: ControlPlaneCl
         startDate: startedAt,
         nextDueDate: input.nextDueDate ?? null,
         lastPaymentDate: input.lastPaymentDate ?? null,
-        monthlyValuePence: PLAN_MONTHLY_PRICES[purchasedPlan],
+        monthlyValuePence: monthlyValueGhs,
       },
     });
 

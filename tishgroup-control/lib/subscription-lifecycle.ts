@@ -1,4 +1,5 @@
 import { planRates, type ManagedPlan } from '@/lib/control-data';
+import { computeSubscriptionPricing, controlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -196,6 +197,7 @@ export function activateSubscriptionAfterPayment(input: {
   graceHours?: number;
   firstPaymentAt?: Date | string | null;
   amountPence?: number;
+  addonOnlineStorefront?: boolean | null;
 }) {
   const paymentDate = input.paymentDate;
   const selectedPlan = input.selectedPlan ?? input.plan ?? 'STARTER';
@@ -203,6 +205,13 @@ export function activateSubscriptionAfterPayment(input: {
   const nextBillingDate = calculateNextBillingDate(paymentDate, billingCadence);
   const graceHours = input.graceHours ?? 48;
   const firstPaymentAt = toDate(input.firstPaymentAt) ?? paymentDate;
+  const pricing = computeSubscriptionPricing({
+    plan: selectedPlan,
+    addonOnlineStorefront: input.addonOnlineStorefront,
+    billingInterval: billingCadence,
+  });
+  const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
+  const amountGhs = input.amountPence && input.amountPence > 0 ? input.amountPence : recommendedMonthlyGhs;
 
   return {
     subscriptionStatus: 'PAID_ACTIVE' as const,
@@ -216,7 +225,7 @@ export function activateSubscriptionAfterPayment(input: {
     lastPaymentAt: paymentDate,
     suspendedAt: null,
     cancelledAt: null,
-    billingAmount: input.amountPence ?? planRates[selectedPlan],
+    billingAmount: amountGhs,
     billingCurrency: 'GHS' as const,
     billingInterval: billingCadence,
   };
