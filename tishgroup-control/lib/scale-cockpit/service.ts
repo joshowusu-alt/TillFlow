@@ -2,6 +2,8 @@ import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { planRates } from '@/lib/control-data';
+import { computeSubscriptionPricing, resolveControlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
+import type { BusinessPlan } from '@/lib/vendor/features';
 import { computeBillingAccessState } from '@/lib/vendor/subscription-lifecycle';
 import { mapIssueRow } from '@/lib/support-issues/service';
 import { loadSupportStatsByBusinessIds } from '@/lib/support-issues/sync';
@@ -185,8 +187,21 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
     const billing = computeBillingAccessState(snapshot.subscription, now);
     const plan = (snapshot.selectedPlan ?? snapshot.subscription.selectedPlan ?? 'STARTER').toString().toUpperCase();
     const planKey = plan === 'PRO' || plan === 'GROWTH' ? plan : 'STARTER';
-    const monthlyValue = (profile?.subscription?.monthlyValuePence ?? 0) / 100 || planRates[planKey as keyof typeof planRates];
-    const outstandingAmount = (profile?.subscription?.outstandingAmountPence ?? 0) / 100;
+    const addonOnlineStorefront = snapshot.addonOnlineStorefront ?? false;
+    const billingCadenceLabel = (profile?.subscription?.billingCadence ?? 'MONTHLY') as 'MONTHLY' | 'ANNUAL';
+    const pricing = computeSubscriptionPricing({
+      plan: planKey as BusinessPlan,
+      addonOnlineStorefront,
+      billingInterval: billingCadenceLabel,
+    });
+    const monthlyValue =
+      resolveControlMonthlyValueGhs({
+        plan: planKey as BusinessPlan,
+        addonOnlineStorefront,
+        billingCadence: billingCadenceLabel,
+        storedMonthlyGhs: profile?.subscription?.monthlyValuePence ?? null,
+      }) || planRates[planKey as keyof typeof planRates];
+    const outstandingAmount = profile?.subscription?.outstandingAmountPence ?? 0;
 
     const base: Omit<ScaleBusinessRecord, 'healthLabel' | 'portfolioHealth' | 'portfolioHealthReasons'> = {
       businessId,
@@ -198,7 +213,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       businessType: snapshot.businessCategory,
       branchCount: 0,
       plan: planKey,
-      billingCadence: profile?.subscription?.billingCadence ?? 'MONTHLY',
+      billingCadence: billingCadenceLabel,
       trialStartAt: formatIsoDate(snapshot.subscription.trialStartedAt),
       trialEndAt: formatIsoDate(snapshot.subscription.trialEndsAt),
       billingAccessState: billing.accessState,
@@ -245,6 +260,10 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       isActivated: readiness.isActivated,
       isHealthy: readiness.isHealthy,
       storefrontEnabled: false,
+      addonOnlineStorefront,
+      storefrontMode: pricing.storefrontMode,
+      pricingLabel: pricing.displayLabel,
+      annualEquivalentGhs: pricing.totalAnnualGhs,
       monthlyValue,
       outstandingAmount,
       signedUpAt: formatIsoDate(snapshot.createdAt) ?? '',
@@ -270,13 +289,15 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
   const storeMap = new Map(storeCounts.map((s) => [s.businessId, s._count.id]));
   const storefrontRows = await prisma.business.findMany({
     where: { id: { in: records.map((r) => r.businessId) } },
-    select: { id: true, storefrontEnabled: true },
+    select: { id: true, storefrontEnabled: true, addonOnlineStorefront: true },
   });
-  const storefrontMap = new Map(storefrontRows.map((b) => [b.id, b.storefrontEnabled]));
+  const storefrontMap = new Map(storefrontRows.map((b) => [b.id, b]));
 
   for (const record of records) {
     record.branchCount = storeMap.get(record.businessId) ?? 1;
-    record.storefrontEnabled = storefrontMap.get(record.businessId) ?? false;
+    const commercial = storefrontMap.get(record.businessId);
+    record.storefrontEnabled = commercial?.storefrontEnabled ?? false;
+    record.addonOnlineStorefront = commercial?.addonOnlineStorefront ?? record.addonOnlineStorefront;
   }
 
   const total = records.length;

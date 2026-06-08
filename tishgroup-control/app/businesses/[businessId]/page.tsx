@@ -10,6 +10,11 @@ import { PlanPill, StatePill } from '@/components/status-pill';
 import { canManageSubscriptions, canRecordPayments, canWriteNotes, listActiveControlStaff, requireControlStaff } from '@/lib/control-auth';
 import { getManagedBusinessDetail } from '@/lib/control-service';
 import { getActionChecklist, formatCedi } from '@/lib/control-metrics';
+import {
+  computeSubscriptionPricing,
+  storefrontPricingSummary,
+} from '@/lib/vendor/plan-pricing';
+import type { BusinessPlan } from '@/lib/vendor/features';
 import { listBusinessAuditTrail } from '@/lib/audit';
 import BusinessTimeline from '@/components/business-timeline';
 import SlaFlags from '@/components/sla-flags';
@@ -48,6 +53,15 @@ export default async function BusinessDetailPage({
   const resolvedSearchParams = await resolveSearchParams(searchParams);
 
   const checklist = getActionChecklist(business);
+  const billingPlan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(business.plan as BusinessPlan)
+    ? (business.plan as BusinessPlan)
+    : 'STARTER';
+  const subscriptionPricing = computeSubscriptionPricing({
+    plan: billingPlan,
+    addonOnlineStorefront: business.addonOnlineStorefront,
+    billingInterval: business.billingCadence,
+  });
+  const storefrontSummary = storefrontPricingSummary(subscriptionPricing, business.storefrontEnabled);
   const error = readSearchParam(resolvedSearchParams.error);
   const tab = readSearchParam(resolvedSearchParams.tab) ?? 'timeline';
   const canEditSubscription = canManageSubscriptions(staff.role);
@@ -181,6 +195,20 @@ export default async function BusinessDetailPage({
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Outstanding</div>
                 <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(business.outstandingAmount)}</div>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+                <div className="eyebrow">Monthly charge</div>
+                <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(business.monthlyValue)}</div>
+                <p className="mt-1 text-xs text-black/55">{storefrontSummary.monthlyLine}</p>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+                <div className="eyebrow">Online storefront</div>
+                <div className="mt-2 text-sm font-semibold text-control-ink">{storefrontSummary.storefrontLine}</div>
+                <p className="mt-1 text-xs text-black/55">{storefrontSummary.publishedLine}</p>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+                <div className="eyebrow">Annual equivalent</div>
+                <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(subscriptionPricing.totalAnnualGhs)}</div>
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Signed up</div>

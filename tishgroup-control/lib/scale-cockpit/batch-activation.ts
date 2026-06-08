@@ -62,6 +62,7 @@ export async function loadBatchActivationReadiness(now = new Date()): Promise<Ba
       activationNextAction: true,
       activationSnapshotAt: true,
       storefrontEnabled: true,
+      addonOnlineStorefront: true,
       users: {
         where: { role: 'OWNER' },
         take: 1,
@@ -168,6 +169,7 @@ export async function loadBatchActivationReadiness(now = new Date()): Promise<Ba
       phone: profile?.ownerPhone ?? business.phone,
       businessCategory: business.businessCategory,
       selectedPlan: business.selectedPlan,
+      addonOnlineStorefront: business.addonOnlineStorefront,
       momoEnabled: business.momoEnabled,
       momoNumber: business.momoNumber,
       openingCapitalPence: business.openingCapitalPence,

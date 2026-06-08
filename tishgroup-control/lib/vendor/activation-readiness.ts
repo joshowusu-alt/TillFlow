@@ -71,6 +71,7 @@ export type ActivationBusinessSnapshot = {
   phone: string | null;
   businessCategory: string | null;
   selectedPlan: string | null;
+  addonOnlineStorefront?: boolean;
   momoEnabled: boolean;
   momoNumber: string | null;
   openingCapitalPence: number;

@@ -31,10 +31,12 @@ export default function BillingScheduleFields({
   defaultCadence = 'MONTHLY',
   defaultStartDate,
   defaultNextDueDate,
+  onCadenceChange,
 }: {
   defaultCadence?: BillingCadence;
   defaultStartDate?: string | null;
   defaultNextDueDate?: string | null;
+  onCadenceChange?: (cadence: BillingCadence) => void;
 }) {
   const normalizedStartDate = normalizeDateInput(defaultStartDate);
   const normalizedNextDueDate = normalizeDateInput(defaultNextDueDate);
@@ -57,7 +59,11 @@ export default function BillingScheduleFields({
         <select
           name="billingCadence"
           value={billingCadence}
-          onChange={(event) => setBillingCadence(event.target.value === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY')}
+          onChange={(event) => {
+            const cadence = event.target.value === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+            setBillingCadence(cadence);
+            onCadenceChange?.(cadence);
+          }}
           className="control-field"
         >
           <option value="MONTHLY">Monthly</option>

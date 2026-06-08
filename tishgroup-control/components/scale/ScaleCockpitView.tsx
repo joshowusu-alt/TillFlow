@@ -205,10 +205,25 @@ function BusinessDetailPanel({
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-control-muted">Billing</p>
             <p className="mt-1">
-              {record.plan} · {record.billingCadence} · trial ends {record.trialEndAt ?? '—'}
+              Plan: {record.plan} · {record.billingCadence} · trial ends {record.trialEndAt ?? '—'}
             </p>
             <p className="text-control-muted">
-              {record.billingDaysRemaining != null ? `${record.billingDaysRemaining} days remaining` : '—'} · {record.billingAccessState.replace(/_/g, ' ')}
+              {record.pricingLabel} · GHS {record.monthlyValue}/mo
+            </p>
+            <p className="text-control-muted">
+              {record.storefrontMode === 'included'
+                ? 'Storefront: Included'
+                : record.storefrontMode === 'addon'
+                  ? 'Storefront: Add-on selected (+GHS 200/month)'
+                  : 'Storefront: Not selected'}
+              {' · '}
+              Published: {record.storefrontEnabled ? 'Yes' : 'No'}
+            </p>
+            <p className="text-control-muted">
+              Annual equivalent: GHS {record.annualEquivalentGhs.toLocaleString('en-GH')}
+              {record.billingDaysRemaining != null ? ` · ${record.billingDaysRemaining} days remaining` : ''}
+              {' · '}
+              {record.billingAccessState.replace(/_/g, ' ')}
             </p>
           </div>
 
@@ -639,6 +654,9 @@ export default function ScaleCockpitView({
                   <td className="py-3 pr-2">
                     <p className="font-semibold text-control-ink">{record.businessName}</p>
                     <p className="text-control-muted">{formatBusinessType(record.businessType)}</p>
+                    {record.storefrontMode === 'addon' ? (
+                      <p className="text-[10px] text-control-muted mt-0.5">{record.pricingLabel}</p>
+                    ) : null}
                   </td>
                   <td className="py-3 pr-2">
                     <span

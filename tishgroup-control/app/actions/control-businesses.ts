@@ -5,6 +5,11 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNotes, requireControlStaff } from '@/lib/control-auth';
 import { planRates, type ManagedPlan } from '@/lib/control-data';
+import {
+  computeSubscriptionPricing,
+  controlMonthlyValueGhs,
+  resolveAddonForPlan,
+} from '@/lib/vendor/plan-pricing';
 import { recordAudit } from '@/lib/audit';
 import { captureError } from '@/lib/error-monitor';
 import { notifyStateTransition, notifyPaymentRecorded } from '@/lib/notify';
@@ -263,6 +268,21 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     fallbackNextDueDate: existingSubscription?.nextDueDate ?? null,
   });
   const status = normalizeSubscriptionStatus(existingSubscription?.status ?? args.currentBusinessPlanStatus ?? 'ACTIVE');
+  const businessAddon = await tx.business.findUnique({
+    where: { id: args.businessId },
+    select: { addonOnlineStorefront: true },
+  });
+  const addonOnlineStorefront = resolveAddonForPlan(
+    args.purchasedPlan,
+    businessAddon?.addonOnlineStorefront ?? false,
+  );
+  const monthlyValuePence = controlMonthlyValueGhs(
+    computeSubscriptionPricing({
+      plan: args.purchasedPlan,
+      addonOnlineStorefront,
+      billingInterval: billingCadence,
+    }),
+  );
 
   await tx.controlSubscription.upsert({
     where: { controlBusinessId: args.profileId },
@@ -272,7 +292,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       billingCadence,
       startDate,
       nextDueDate,
-      monthlyValuePence: planRates[args.purchasedPlan],
+      monthlyValuePence,
     },
     create: {
       controlBusinessId: args.profileId,
@@ -283,7 +303,7 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       nextDueDate,
       lastPaymentDate: existingSubscription?.lastPaymentDate ?? null,
       outstandingAmountPence: existingSubscription?.outstandingAmountPence ?? 0,
-      monthlyValuePence: planRates[args.purchasedPlan],
+      monthlyValuePence,
       gracePolicyVersion: '2026-04-08',
     },
   });
@@ -292,6 +312,8 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     where: { id: args.businessId },
     data: {
       plan: args.purchasedPlan,
+      addonOnlineStorefront,
+      billingAmount: monthlyValuePence * 100,
       planStatus: businessStatusFromSubscription(status),
       subscriptionStatus: billingStatusFromSubscription(status),
       planSetAt: startDate,
@@ -318,6 +340,7 @@ async function ensureControlBusinessProfile(tx: Omit<typeof prisma, '$connect' |
       lastPaymentAt: true,
       phone: true,
       billingNotes: true,
+      addonOnlineStorefront: true,
       users: {
         where: { role: 'OWNER' },
         take: 1,
@@ -397,18 +420,30 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
   const requestedStartDate = parseOptionalDate(readOptional(formData, 'startDate'));
   const nextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
   const trialEndsAt = parseOptionalDate(readOptional(formData, 'trialEndsAt'));
-  const monthlyValuePence = parseOptionalInteger(readOptional(formData, 'monthlyValuePence'), planRates[purchasedPlan]);
+  const addonOnlineStorefront = resolveAddonForPlan(purchasedPlan, formData.get('addonOnlineStorefront') === 'on');
+  const pricing = computeSubscriptionPricing({
+    plan: purchasedPlan,
+    addonOnlineStorefront,
+    billingInterval: billingCadence,
+  });
+  const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
+  const submittedMonthlyGhs = parseOptionalInteger(readOptional(formData, 'monthlyValuePence'), recommendedMonthlyGhs);
   const outstandingAmountPence = parseOptionalInteger(readOptional(formData, 'outstandingAmountPence'), 0);
-  const addonOnlineStorefront = formData.get('addonOnlineStorefront') === 'on';
   const now = new Date();
+  let monthlyValuePence = recommendedMonthlyGhs;
 
   try {
     await prisma.$transaction(async (tx) => {
       const { business, profile } = await ensureControlBusinessProfile(tx, businessId);
       const existingSubscription = await tx.controlSubscription.findUnique({
         where: { controlBusinessId: profile.id },
-        select: { startDate: true, nextDueDate: true },
+        select: { startDate: true, nextDueDate: true, monthlyValuePence: true },
       });
+      const existingMonthlyGhs = existingSubscription?.monthlyValuePence ?? planRates[purchasedPlan];
+      monthlyValuePence =
+        submittedMonthlyGhs !== recommendedMonthlyGhs && submittedMonthlyGhs === existingMonthlyGhs
+          ? submittedMonthlyGhs
+          : recommendedMonthlyGhs;
       const { startDate, nextDueDate: resolvedNextDueDate } = resolveSubscriptionDates({
         billingCadence,
         startDate: requestedStartDate,
@@ -491,6 +526,7 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           suspendedAt: status === 'PAID_ACTIVE' ? null : status === 'READ_ONLY' ? now : undefined,
           cancelledAt: isCancelledStatus(status) ? now : null,
           addonOnlineStorefront,
+          billingAmount: pricing.totalMonthlyBillingAmount,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
             `Plan: ${purchasedPlan}`,
@@ -498,7 +534,12 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
             `Cadence: ${billingCadence}`,
             `Start date: ${startDate.toISOString().slice(0, 10)}`,
             `Next due: ${effectiveNextDueDate ? effectiveNextDueDate.toISOString().slice(0, 10) : 'Not set'}`,
-            `Online storefront add-on: ${addonOnlineStorefront ? 'Enabled' : 'Disabled'}`,
+            pricing.storefrontMode === 'included'
+              ? 'Online storefront: Included in Pro'
+              : pricing.storefrontMode === 'addon'
+                ? 'Online storefront add-on: Enabled (+GHS 200/month)'
+                : 'Online storefront add-on: Not selected',
+            `Monthly charge: GHS ${monthlyValuePence}`,
           ]),
         },
       });
@@ -523,7 +564,16 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     action: 'SUBSCRIPTION_UPDATED',
     businessId,
     summary: `Subscription set to ${purchasedPlan} · ${status} · ${billingCadence}`,
-    metadata: { purchasedPlan, status, billingCadence, monthlyValuePence, outstandingAmountPence, addonOnlineStorefront },
+    metadata: {
+      purchasedPlan,
+      status,
+      billingCadence,
+      monthlyValuePence,
+      outstandingAmountPence,
+      addonOnlineStorefront,
+      recommendedMonthlyGhs,
+      storefrontMode: pricing.storefrontMode,
+    },
   });
 
   if (isCancelledStatus(status) || status === 'READ_ONLY') {
@@ -568,13 +618,21 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         select: { purchasedPlan: true, startDate: true },
       });
       const purchasedPlan = normalizePlan(existingSubscription?.purchasedPlan ?? business.plan);
+      const addonOnlineStorefront = business.addonOnlineStorefront ?? false;
+      const pricing = computeSubscriptionPricing({
+        plan: purchasedPlan,
+        addonOnlineStorefront,
+        billingInterval: billingCadence,
+      });
+      const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
       const activation = activateSubscriptionAfterPayment({
         selectedPlan: purchasedPlan,
         plan: purchasedPlan,
+        addonOnlineStorefront,
         firstPaymentAt: (business as any).firstPaymentAt,
         billingInterval: billingCadence,
         paymentDate: paidAt,
-        amountPence,
+        amountPence: amountPence > 0 ? amountPence : recommendedMonthlyGhs,
       });
 
       await tx.controlPayment.create({
@@ -598,7 +656,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           nextDueDate,
           lastPaymentDate: paidAt,
           readOnlyAt: null,
-          monthlyValuePence: planRates[purchasedPlan],
+          monthlyValuePence: recommendedMonthlyGhs,
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },
@@ -610,7 +668,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           startDate: existingSubscription?.startDate ?? paidAt,
           nextDueDate,
           lastPaymentDate: paidAt,
-          monthlyValuePence: planRates[purchasedPlan],
+          monthlyValuePence: recommendedMonthlyGhs,
           outstandingAmountPence: 0,
           gracePolicyVersion: '2026-04-08',
         },
@@ -638,7 +696,9 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           paymentGraceEndsAt: null,
           suspendedAt: null,
           cancelledAt: null,
-          billingAmount: activation.billingAmount * 100,
+          billingAmount: activation.billingAmount < recommendedMonthlyGhs * 10
+            ? activation.billingAmount * 100
+            : activation.billingAmount,
           billingCurrency: activation.billingCurrency,
           billingInterval: activation.billingInterval,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control payment recorded', [

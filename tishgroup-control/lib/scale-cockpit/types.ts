@@ -68,6 +68,10 @@ export type ScaleBusinessRecord = {
   isActivated: boolean;
   isHealthy: boolean;
   storefrontEnabled: boolean;
+  addonOnlineStorefront: boolean;
+  storefrontMode: 'none' | 'addon' | 'included';
+  pricingLabel: string;
+  annualEquivalentGhs: number;
   monthlyValue: number;
   outstandingAmount: number;
   signedUpAt: string;

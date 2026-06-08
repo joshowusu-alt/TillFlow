@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { managedBusinesses, planRates, type BusinessHealth, type ManagedBusiness, type ManagedPlan, type ManagedState } from '@/lib/control-data';
 import { deriveManagedState } from '@/lib/billing-state';
+import { resolveControlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
 import { prisma } from '@/lib/prisma';
 
 export type ManagedBusinessPayment = {
@@ -46,6 +47,7 @@ export type ManagedBusinessDetail = ManagedBusiness & {
   recentNotes: ManagedBusinessNote[];
   recentReminders: ManagedBusinessReminder[];
   addonOnlineStorefront: boolean;
+  storefrontEnabled: boolean;
 };
 
 export type ManagedBusinessRosterFilter = 'all' | 'unreviewed';
@@ -238,6 +240,8 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         lastPaymentAt: true,
         nextPaymentDueAt: true,
         billingNotes: true,
+        addonOnlineStorefront: true,
+        storefrontEnabled: true,
         createdAt: true,
         users: {
           where: { role: 'OWNER' },
@@ -298,7 +302,13 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
       const state = manualState ?? derived.state;
       const effectivePlan = resolveEffectivePlan(state, plan, subscription?.effectivePlanOverride);
       const owner = business.users[0];
-      const monthlyValue = subscription?.monthlyValuePence ?? planRates[plan];
+      const billingCadence = normalizeCadence(subscription?.billingCadence);
+      const monthlyValue = resolveControlMonthlyValueGhs({
+        plan,
+        addonOnlineStorefront: business.addonOnlineStorefront,
+        billingCadence,
+        storedMonthlyGhs: subscription?.monthlyValuePence ?? null,
+      });
       const storedOutstandingAmount = subscription?.outstandingAmountPence ?? null;
       const outstandingAmount = state === 'CANCELLED'
         ? 0
@@ -449,6 +459,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         planStatus: true,
         trialEndsAt: true,
         addonOnlineStorefront: true,
+        storefrontEnabled: true,
         messageOutbox: {
           where: { eventType: { startsWith: 'SUBSCRIPTION_' } },
           orderBy: { createdAt: 'desc' },
@@ -526,6 +537,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
           createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
         })),
         addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
+        storefrontEnabled: rawBusiness.storefrontEnabled,
       };
     }
 
@@ -566,6 +578,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
       })),
       addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
+      storefrontEnabled: rawBusiness.storefrontEnabled,
     };
   } catch (error) {
     if (!isMissingControlPlaneError(error)) {
@@ -595,6 +608,7 @@ export async function getManagedBusinessDetail(businessId: string): Promise<Mana
         createdAt: formatIsoDateTime(row.createdAt) ?? 'Not recorded',
       })),
       addonOnlineStorefront: rawBusiness.addonOnlineStorefront,
+      storefrontEnabled: rawBusiness.storefrontEnabled,
     };
   }
 }
