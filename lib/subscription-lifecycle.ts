@@ -671,8 +671,7 @@ export function activateSubscriptionAfterPayment(
     addonOnlineStorefront: input.addonOnlineStorefront,
     billingInterval,
   });
-  const defaultAmount =
-    billingInterval === 'ANNUAL' ? pricing.totalAnnualGhs * 100 : pricing.totalMonthlyBillingAmount;
+  const defaultAmount = pricing.totalBillingAmount;
 
   return {
     subscriptionStatus: 'PAID_ACTIVE' as const,
@@ -694,15 +693,16 @@ export function activateSubscriptionAfterPayment(
 
 export function createTrialSubscription(
   plan: BusinessPlan,
-  options?: { addonOnlineStorefront?: boolean; now?: Date }
+  options?: { addonOnlineStorefront?: boolean; billingInterval?: string | null; now?: Date }
 ) {
   const now = options?.now ?? new Date();
   const trialEndsAt = addDays(now, TRIAL_DAYS);
   const addonOnlineStorefront = plan === 'GROWTH' && Boolean(options?.addonOnlineStorefront);
+  const billingInterval = normalizeInterval(options?.billingInterval);
   const pricing = computeSubscriptionPricing({
     plan,
     addonOnlineStorefront,
-    billingInterval: 'MONTHLY',
+    billingInterval,
   });
 
   return {
@@ -714,9 +714,9 @@ export function createTrialSubscription(
     trialStartedAt: now,
     trialEndsAt,
     planSetAt: now,
-    billingAmount: pricing.totalMonthlyBillingAmount,
+    billingAmount: pricing.totalBillingAmount,
     billingCurrency: 'GHS',
-    billingInterval: 'MONTHLY',
+    billingInterval,
     nextBillingDate: null,
     nextPaymentDueAt: trialEndsAt,
   };

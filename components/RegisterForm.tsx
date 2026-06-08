@@ -41,6 +41,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const [password, setPassword] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<BusinessPlan>('STARTER');
   const [addonOnlineStorefront, setAddonOnlineStorefront] = useState(false);
+  const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   const [referralSource, setReferralSource] = useState('');
   const [referredByName, setReferredByName] = useState('');
   const [referredByPhone, setReferredByPhone] = useState('');
@@ -58,7 +59,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
   const pricing = computeSubscriptionPricing({
     plan: selectedPlan,
     addonOnlineStorefront: selectedPlan === 'GROWTH' && addonOnlineStorefront,
-    billingInterval: 'MONTHLY',
+    billingInterval,
   });
 
   return (
@@ -295,12 +296,49 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             </div>
           ) : null}
 
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-black/70 mb-1">Choose how you want to pay</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setBillingInterval('MONTHLY')}
+                className={`rounded-xl border-2 p-3 text-left transition ${
+                  billingInterval === 'MONTHLY'
+                    ? 'border-transparent ring-2 ring-accent bg-accentSoft'
+                    : 'border-black/8 bg-white hover:border-black/15'
+                }`}
+              >
+                <p className="text-sm font-semibold text-black/80">Monthly</p>
+                <p className="text-xs text-black/55 mt-1">Pay monthly and stay flexible.</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingInterval('ANNUAL')}
+                className={`rounded-xl border-2 p-3 text-left transition ${
+                  billingInterval === 'ANNUAL'
+                    ? 'border-transparent ring-2 ring-accent bg-accentSoft'
+                    : 'border-black/8 bg-white hover:border-black/15'
+                }`}
+              >
+                <p className="text-sm font-semibold text-black/80">Annual</p>
+                <p className="text-xs text-black/55 mt-1">Pay 10 months, get 2 months free.</p>
+              </button>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-black/8 bg-white/90 px-4 py-3 text-sm space-y-1">
             {selectedPlan === 'GROWTH' ? (
               <>
                 <p>Growth plan: GHS {pricing.basePlanMonthlyGhs}/month</p>
                 {addonOnlineStorefront ? (
-                  <p>Online Storefront: +GHS {pricing.addOnMonthlyGhs}/month</p>
+                  <>
+                    <p>Online Storefront: +GHS {pricing.addOnMonthlyGhs}/month</p>
+                    {billingInterval === 'ANNUAL' ? (
+                      <p>Monthly equivalent: GHS {pricing.totalMonthlyGhs}/month</p>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : selectedPlan === 'PRO' ? (
@@ -308,9 +346,20 @@ export default function RegisterForm({ error }: RegisterFormProps) {
             ) : (
               <p className="text-black/55">Online Storefront is available on Growth add-on or included in Pro.</p>
             )}
-            <p className="font-semibold text-black/80 pt-1">
-              Total today: GHS {pricing.totalMonthlyGhs}/month
-            </p>
+            {billingInterval === 'ANNUAL' ? (
+              <>
+                <p className="font-semibold text-black/80 pt-1">
+                  Total today: GHS {pricing.totalDueGhs.toLocaleString('en-GH')}/year
+                </p>
+                <p className="text-emerald-700">
+                  You save: GHS {pricing.annualSavingsGhs.toLocaleString('en-GH')} compared with monthly payments.
+                </p>
+              </>
+            ) : (
+              <p className="font-semibold text-black/80 pt-1">
+                Total today: GHS {pricing.totalMonthlyGhs}/month
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -342,6 +391,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="email" value={email} />
           <input type="hidden" name="password" value={password} />
           <input type="hidden" name="plan" value={selectedPlan} />
+          <input type="hidden" name="billingInterval" value={billingInterval} />
           {selectedPlan === 'GROWTH' && addonOnlineStorefront ? (
             <input type="hidden" name="addonOnlineStorefront" value="on" />
           ) : null}

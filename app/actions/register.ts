@@ -38,7 +38,12 @@ export async function register(formData: FormData) {
 
   const rawPlan = String(formData.get('plan') || 'STARTER').toUpperCase();
   const rawAddonSelected = formData.get('addonOnlineStorefront') === 'on';
-  const { plan, addonOnlineStorefront } = resolveRegisterPlanSelection(rawPlan, rawAddonSelected);
+  const rawBillingInterval = String(formData.get('billingInterval') || 'MONTHLY');
+  const { plan, addonOnlineStorefront, billingInterval } = resolveRegisterPlanSelection(
+    rawPlan,
+    rawAddonSelected,
+    rawBillingInterval,
+  );
 
   // Validation
   if (!businessName || !ownerName || !email || !password) {
@@ -62,7 +67,7 @@ export async function register(formData: FormData) {
       data: {
         name: businessName,
         currency,
-        ...createTrialSubscription(plan, { addonOnlineStorefront }),
+        ...createTrialSubscription(plan, { addonOnlineStorefront, billingInterval }),
         vatEnabled: false,
         mode: 'SIMPLE',
       },
@@ -101,6 +106,7 @@ export async function register(formData: FormData) {
     ownerEmail: result.owner.email,
     plan: result.business.plan,
     addonOnlineStorefront: result.business.addonOnlineStorefront,
+    billingCadence: result.business.billingInterval,
     status: result.business.subscriptionStatus ?? result.business.planStatus,
     supportStatus: 'UNREVIEWED',
     notes: 'Awaiting first Tishgroup commercial review after signup.',

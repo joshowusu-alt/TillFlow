@@ -23,10 +23,19 @@ export type SubscriptionPricingResult = {
   addOnMonthlyGhs: number;
   totalMonthlyGhs: number;
   totalAnnualGhs: number;
+  billingInterval: BillingIntervalLabel;
+  totalDueGhs: number;
+  annualSavingsGhs: number;
+  annualComparisonGhs: number;
   storefrontMode: StorefrontPricingMode;
   displayLabel: string;
   totalMonthlyBillingAmount: number;
+  totalBillingAmount: number;
 };
+
+export function normalizeBillingInterval(value?: string | null): BillingIntervalLabel {
+  return String(value ?? 'MONTHLY').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+}
 
 export function getAnnualPlanPrice(monthlyPrice: number) {
   return monthlyPrice * 10;
@@ -40,10 +49,34 @@ export function resolveAddonForPlan(plan: BusinessPlan, requested: boolean): boo
   return plan === 'GROWTH' && requested;
 }
 
+function buildDisplayLabel(
+  plan: BusinessPlan,
+  billingInterval: BillingIntervalLabel,
+  totalMonthlyGhs: number,
+  totalDueGhs: number,
+  storefrontMode: StorefrontPricingMode,
+): string {
+  const planName = plan.charAt(0) + plan.slice(1).toLowerCase();
+  const intervalLabel = billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly';
+
+  if (storefrontMode === 'addon') {
+    return billingInterval === 'ANNUAL'
+      ? `Growth · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr · Storefront add-on`
+      : `Growth · GHS ${totalMonthlyGhs}/mo · Storefront add-on`;
+  }
+  if (storefrontMode === 'included') {
+    return billingInterval === 'ANNUAL'
+      ? `Pro · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr · Storefront included`
+      : `Pro · GHS ${totalMonthlyGhs}/mo · Storefront included`;
+  }
+  return billingInterval === 'ANNUAL'
+    ? `${planName} · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr`
+    : `${planName} · ${intervalLabel} · GHS ${totalMonthlyGhs}/mo`;
+}
+
 export function computeSubscriptionPricing(input: SubscriptionPricingInput): SubscriptionPricingResult {
   const plan = input.plan;
-  const billingInterval: BillingIntervalLabel =
-    String(input.billingInterval ?? 'MONTHLY').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+  const billingInterval = normalizeBillingInterval(input.billingInterval);
   const addonSelected = resolveAddonForPlan(plan, Boolean(input.addonOnlineStorefront));
 
   const basePlanMonthlyGhs = PLAN_MONTHLY_PRICES[plan];
@@ -59,22 +92,23 @@ export function computeSubscriptionPricing(input: SubscriptionPricingInput): Sub
 
   const totalMonthlyGhs = basePlanMonthlyGhs + addOnMonthlyGhs;
   const totalAnnualGhs = getAnnualPlanPrice(totalMonthlyGhs);
-
-  let displayLabel = `${plan.charAt(0)}${plan.slice(1).toLowerCase()} · GHS ${totalMonthlyGhs}/mo`;
-  if (storefrontMode === 'addon') {
-    displayLabel = `Growth · GHS ${totalMonthlyGhs}/mo · Storefront add-on`;
-  } else if (storefrontMode === 'included') {
-    displayLabel = `Pro · GHS ${totalMonthlyGhs}/mo · Storefront included`;
-  }
+  const annualSavingsGhs = getAnnualPlanSavings(totalMonthlyGhs);
+  const annualComparisonGhs = totalMonthlyGhs * 12;
+  const totalDueGhs = billingInterval === 'ANNUAL' ? totalAnnualGhs : totalMonthlyGhs;
 
   return {
     basePlanMonthlyGhs,
     addOnMonthlyGhs,
     totalMonthlyGhs,
     totalAnnualGhs,
+    billingInterval,
+    totalDueGhs,
+    annualSavingsGhs,
+    annualComparisonGhs,
     storefrontMode,
-    displayLabel,
+    displayLabel: buildDisplayLabel(plan, billingInterval, totalMonthlyGhs, totalDueGhs, storefrontMode),
     totalMonthlyBillingAmount: totalMonthlyGhs * 100,
+    totalBillingAmount: totalDueGhs * 100,
   };
 }
 
@@ -83,7 +117,10 @@ export function controlMonthlyValueGhs(pricing: SubscriptionPricingResult): numb
   return pricing.totalMonthlyGhs;
 }
 
-/** Resolve Control monthly charge from plan + add-on, self-healing stale Growth base-only values. */
+export function controlIntervalChargeGhs(pricing: SubscriptionPricingResult): number {
+  return pricing.totalDueGhs;
+}
+
 export function resolveControlMonthlyValueGhs(input: {
   plan: BusinessPlan;
   addonOnlineStorefront?: boolean | null;
@@ -93,7 +130,7 @@ export function resolveControlMonthlyValueGhs(input: {
   const pricing = computeSubscriptionPricing({
     plan: input.plan,
     addonOnlineStorefront: input.addonOnlineStorefront,
-    billingInterval: input.billingCadence,
+    billingInterval: 'MONTHLY',
   });
   const computed = controlMonthlyValueGhs(pricing);
   const stored = input.storedMonthlyGhs;
@@ -104,28 +141,64 @@ export function resolveControlMonthlyValueGhs(input: {
   return stored;
 }
 
+export function resolveControlCollectionAmountGhs(input: {
+  plan: BusinessPlan;
+  addonOnlineStorefront?: boolean | null;
+  billingCadence?: BillingIntervalLabel | null;
+  storedMonthlyGhs?: number | null;
+  storedOutstandingGhs?: number | null;
+}): number {
+  if (input.storedOutstandingGhs != null && input.storedOutstandingGhs > 0) {
+    return input.storedOutstandingGhs;
+  }
+  const billingInterval = normalizeBillingInterval(input.billingCadence);
+  const pricing = computeSubscriptionPricing({
+    plan: input.plan,
+    addonOnlineStorefront: input.addonOnlineStorefront,
+    billingInterval,
+  });
+  return controlIntervalChargeGhs(pricing);
+}
+
 export function storefrontPricingSummary(pricing: SubscriptionPricingResult, storefrontPublished: boolean) {
   const published = storefrontPublished ? 'Yes' : 'No';
+  const billingLine = pricing.billingInterval === 'ANNUAL' ? 'Billing: Annual' : 'Billing: Monthly';
+  const monthlyValueLine = `Monthly value: GHS ${pricing.totalMonthlyGhs}`;
+  const intervalChargeLine =
+    pricing.billingInterval === 'ANNUAL'
+      ? `Annual charge: GHS ${pricing.totalAnnualGhs.toLocaleString('en-GH')}/year`
+      : `Current charge: GHS ${pricing.totalMonthlyGhs}/month`;
+  const savingsLine =
+    pricing.billingInterval === 'ANNUAL'
+      ? `Saving: GHS ${pricing.annualSavingsGhs.toLocaleString('en-GH')}`
+      : null;
+
   if (pricing.storefrontMode === 'included') {
     return {
       storefrontLine: 'Storefront: Included',
-      monthlyLine: `Monthly charge: GHS ${pricing.totalMonthlyGhs}`,
-      annualLine: `Annual equivalent: GHS ${pricing.totalAnnualGhs}`,
+      billingLine,
+      monthlyValueLine,
+      intervalChargeLine,
+      savingsLine,
       publishedLine: `Storefront published: ${published}`,
     };
   }
   if (pricing.storefrontMode === 'addon') {
     return {
       storefrontLine: 'Storefront: Add-on selected (+GHS 200/month)',
-      monthlyLine: `Monthly charge: GHS ${pricing.totalMonthlyGhs}`,
-      annualLine: `Annual equivalent: GHS ${pricing.totalAnnualGhs}`,
+      billingLine,
+      monthlyValueLine,
+      intervalChargeLine,
+      savingsLine,
       publishedLine: `Storefront published: ${published}`,
     };
   }
   return {
     storefrontLine: 'Storefront: Not selected',
-    monthlyLine: `Monthly charge: GHS ${pricing.totalMonthlyGhs}`,
-    annualLine: `Annual equivalent: GHS ${pricing.totalAnnualGhs}`,
+    billingLine,
+    monthlyValueLine,
+    intervalChargeLine,
+    savingsLine,
     publishedLine: `Storefront published: ${published}`,
   };
 }

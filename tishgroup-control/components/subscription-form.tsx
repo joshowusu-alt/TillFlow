@@ -6,6 +6,7 @@ import BillingScheduleFields from '@/components/BillingScheduleFields';
 import ConfirmSubmitButton from '@/components/confirm-submit-button';
 import {
   computeSubscriptionPricing,
+  controlIntervalChargeGhs,
   controlMonthlyValueGhs,
   resolveAddonForPlan,
   storefrontPricingSummary,
@@ -59,6 +60,7 @@ export default function SubscriptionForm({
     [plan, addonOnlineStorefront, billingCadence],
   );
   const recommendedMonthly = controlMonthlyValueGhs(pricing);
+  const recommendedIntervalCharge = controlIntervalChargeGhs(pricing);
   const summary = storefrontPricingSummary(pricing, Boolean(business.storefrontEnabled));
   const addonDisabled = plan !== 'GROWTH';
 
@@ -119,9 +121,11 @@ export default function SubscriptionForm({
 
       <div className="rounded-xl border border-black/8 bg-black/[0.02] px-3 py-3 text-sm space-y-1">
         <p className="font-medium text-control-ink">Plan: {plan.charAt(0) + plan.slice(1).toLowerCase()}</p>
+        <p>{summary.billingLine}</p>
         <p>{summary.storefrontLine}</p>
-        <p>{summary.monthlyLine}</p>
-        <p>{summary.annualLine}</p>
+        <p>{summary.monthlyValueLine}</p>
+        <p>{summary.intervalChargeLine}</p>
+        {summary.savingsLine ? <p>{summary.savingsLine}</p> : null}
         <p>{summary.publishedLine}</p>
       </div>
 
@@ -192,13 +196,27 @@ export default function SubscriptionForm({
         />
         <span className="block text-xs text-black/55">
           Recommended: GHS {recommendedMonthly}/month
+          {billingCadence === 'ANNUAL'
+            ? ` · interval charge GHS ${recommendedIntervalCharge.toLocaleString('en-GH')}/year`
+            : ''}
           {monthlyEdited && monthlyValue !== recommendedMonthly ? ' · manual override kept on save if unchanged from current stored value' : ''}
         </span>
       </label>
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium text-control-ink">Outstanding amount</span>
-        <input type="number" min="0" name="outstandingAmountPence" defaultValue={business.outstandingAmount} className="control-field" />
+        <input
+          type="number"
+          min="0"
+          name="outstandingAmountPence"
+          key={`${billingCadence}-${plan}-${addonOnlineStorefront}`}
+          defaultValue={business.outstandingAmount || recommendedIntervalCharge}
+          className="control-field"
+        />
+        <span className="block text-xs text-black/55">
+          Recommended: GHS {recommendedIntervalCharge.toLocaleString('en-GH')}
+          {billingCadence === 'ANNUAL' ? '/year' : '/month'}
+        </span>
       </label>
 
       <ConfirmSubmitButton

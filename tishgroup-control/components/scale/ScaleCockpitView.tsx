@@ -207,8 +207,11 @@ function BusinessDetailPanel({
             <p className="mt-1">
               Plan: {record.plan} · {record.billingCadence} · trial ends {record.trialEndAt ?? '—'}
             </p>
+            <p className="text-control-muted">{record.pricingLabel}</p>
             <p className="text-control-muted">
-              {record.pricingLabel} · GHS {record.monthlyValue}/mo
+              {record.billingCadence === 'ANNUAL'
+                ? `Annual charge: GHS ${record.intervalCharge.toLocaleString('en-GH')}/year`
+                : `Current charge: GHS ${record.monthlyValue}/month`}
             </p>
             <p className="text-control-muted">
               {record.storefrontMode === 'included'

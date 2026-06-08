@@ -64,6 +64,7 @@ function sampleRecord(overrides: Partial<ScaleBusinessRecord> = {}): ScaleBusine
     storefrontMode: 'none',
     pricingLabel: 'Growth · GHS 349/mo',
     annualEquivalentGhs: 3490,
+    intervalCharge: 349,
     monthlyValue: 349,
     outstandingAmount: 0,
     signedUpAt: '2026-06-01',

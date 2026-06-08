@@ -197,18 +197,30 @@ export default async function BusinessDetailPage({
                 <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(business.outstandingAmount)}</div>
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
-                <div className="eyebrow">Monthly charge</div>
+                <div className="eyebrow">Monthly value</div>
                 <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(business.monthlyValue)}</div>
-                <p className="mt-1 text-xs text-black/55">{storefrontSummary.monthlyLine}</p>
+                <p className="mt-1 text-xs text-black/55">{storefrontSummary.monthlyValueLine}</p>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
+                <div className="eyebrow">{business.billingCadence === 'ANNUAL' ? 'Annual charge' : 'Current charge'}</div>
+                <div className="mt-2 text-lg font-semibold text-control-ink">
+                  {business.billingCadence === 'ANNUAL'
+                    ? `${formatCedi(subscriptionPricing.totalDueGhs)}/year`
+                    : `${formatCedi(subscriptionPricing.totalMonthlyGhs)}/month`}
+                </div>
+                <p className="mt-1 text-xs text-black/55">{storefrontSummary.billingLine}</p>
+                {storefrontSummary.savingsLine ? (
+                  <p className="mt-1 text-xs text-emerald-700">{storefrontSummary.savingsLine}</p>
+                ) : null}
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Online storefront</div>
                 <div className="mt-2 text-sm font-semibold text-control-ink">{storefrontSummary.storefrontLine}</div>
                 <p className="mt-1 text-xs text-black/55">{storefrontSummary.publishedLine}</p>
               </div>
-              <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
-                <div className="eyebrow">Annual equivalent</div>
-                <div className="mt-2 text-lg font-semibold text-control-ink">{formatCedi(subscriptionPricing.totalAnnualGhs)}</div>
+              <div className="rounded-2xl border border-black/8 bg-white/85 p-4 sm:col-span-2 xl:col-span-1">
+                <div className="eyebrow">Billing summary</div>
+                <p className="mt-2 text-sm font-medium text-control-ink">{subscriptionPricing.displayLabel}</p>
               </div>
               <div className="rounded-2xl border border-black/8 bg-white/85 p-4">
                 <div className="eyebrow">Signed up</div>

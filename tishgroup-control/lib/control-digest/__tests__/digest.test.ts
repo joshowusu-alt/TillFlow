@@ -66,6 +66,7 @@ function baseRecord(overrides: Partial<ScaleBusinessRecord> = {}): ScaleBusiness
     storefrontMode: 'none',
     pricingLabel: 'Starter · GHS 199/mo',
     annualEquivalentGhs: 1990,
+    intervalCharge: 99,
     monthlyValue: 99,
     outstandingAmount: 0,
     signedUpAt: '2026-06-01',

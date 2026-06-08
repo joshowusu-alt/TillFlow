@@ -72,6 +72,7 @@ export type ScaleBusinessRecord = {
   storefrontMode: 'none' | 'addon' | 'included';
   pricingLabel: string;
   annualEquivalentGhs: number;
+  intervalCharge: number;
   monthlyValue: number;
   outstandingAmount: number;
   signedUpAt: string;

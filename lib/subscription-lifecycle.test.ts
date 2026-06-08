@@ -54,6 +54,18 @@ describe('subscription lifecycle', () => {
 
     expect(trial.addonOnlineStorefront).toBe(true);
     expect(trial.billingAmount).toBe(54900);
+    expect(trial.billingInterval).toBe('MONTHLY');
+  });
+
+  it('creates annual Growth trial with interval billing amount', () => {
+    const trial = createTrialSubscription('GROWTH', {
+      now: signupAt,
+      addonOnlineStorefront: true,
+      billingInterval: 'ANNUAL',
+    });
+
+    expect(trial.billingInterval).toBe('ANNUAL');
+    expect(trial.billingAmount).toBe(549000);
   });
 
   it('activates Growth + storefront subscription after payment at GHS 549', () => {
@@ -65,6 +77,17 @@ describe('subscription lifecycle', () => {
     });
 
     expect(activation.billingAmount).toBe(54900);
+  });
+
+  it('activates annual Pro subscription at GHS 6,990', () => {
+    const activation = activateSubscriptionAfterPayment({
+      selectedPlan: 'PRO',
+      billingInterval: 'ANNUAL',
+      paymentDate: new Date('2026-05-08T10:00:00.000Z'),
+    });
+
+    expect(activation.billingAmount).toBe(699000);
+    expect(activation.billingInterval).toBe('ANNUAL');
   });
 
   it('activates subscription after first payment and sets next billing one month later', () => {

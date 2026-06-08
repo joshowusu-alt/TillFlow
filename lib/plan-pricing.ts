@@ -23,11 +23,21 @@ export type SubscriptionPricingResult = {
   addOnMonthlyGhs: number;
   totalMonthlyGhs: number;
   totalAnnualGhs: number;
+  billingInterval: BillingIntervalLabel;
+  totalDueGhs: number;
+  annualSavingsGhs: number;
+  annualComparisonGhs: number;
   storefrontMode: StorefrontPricingMode;
   displayLabel: string;
-  /** TillFlow Business.billingAmount convention (total monthly in pesewas/pence). */
+  /** Monthly amount in TillFlow pesewas convention. */
   totalMonthlyBillingAmount: number;
+  /** Interval due amount in TillFlow pesewas convention (monthly or annual). */
+  totalBillingAmount: number;
 };
+
+export function normalizeBillingInterval(value?: string | null): BillingIntervalLabel {
+  return String(value ?? 'MONTHLY').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+}
 
 export function getAnnualPlanPrice(monthlyPrice: number) {
   return monthlyPrice * 10;
@@ -42,10 +52,34 @@ export function resolveAddonForPlan(plan: BusinessPlan, requested: boolean): boo
   return plan === 'GROWTH' && requested;
 }
 
+function buildDisplayLabel(
+  plan: BusinessPlan,
+  billingInterval: BillingIntervalLabel,
+  totalMonthlyGhs: number,
+  totalDueGhs: number,
+  storefrontMode: StorefrontPricingMode,
+): string {
+  const planName = plan.charAt(0) + plan.slice(1).toLowerCase();
+  const intervalLabel = billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly';
+
+  if (storefrontMode === 'addon') {
+    return billingInterval === 'ANNUAL'
+      ? `Growth · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr · Storefront add-on`
+      : `Growth · GHS ${totalMonthlyGhs}/mo · Storefront add-on`;
+  }
+  if (storefrontMode === 'included') {
+    return billingInterval === 'ANNUAL'
+      ? `Pro · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr · Storefront included`
+      : `Pro · GHS ${totalMonthlyGhs}/mo · Storefront included`;
+  }
+  return billingInterval === 'ANNUAL'
+    ? `${planName} · ${intervalLabel} · GHS ${totalDueGhs.toLocaleString('en-GH')}/yr`
+    : `${planName} · ${intervalLabel} · GHS ${totalMonthlyGhs}/mo`;
+}
+
 export function computeSubscriptionPricing(input: SubscriptionPricingInput): SubscriptionPricingResult {
   const plan = input.plan;
-  const billingInterval: BillingIntervalLabel =
-    String(input.billingInterval ?? 'MONTHLY').toUpperCase() === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+  const billingInterval = normalizeBillingInterval(input.billingInterval);
   const addonSelected = resolveAddonForPlan(plan, Boolean(input.addonOnlineStorefront));
 
   const basePlanMonthlyGhs = PLAN_MONTHLY_PRICES[plan];
@@ -61,36 +95,44 @@ export function computeSubscriptionPricing(input: SubscriptionPricingInput): Sub
 
   const totalMonthlyGhs = basePlanMonthlyGhs + addOnMonthlyGhs;
   const totalAnnualGhs = getAnnualPlanPrice(totalMonthlyGhs);
-
-  let displayLabel = `${plan.charAt(0)}${plan.slice(1).toLowerCase()} · GHS ${totalMonthlyGhs}/mo`;
-  if (storefrontMode === 'addon') {
-    displayLabel = `Growth · GHS ${totalMonthlyGhs}/mo · Storefront add-on`;
-  } else if (storefrontMode === 'included') {
-    displayLabel = `Pro · GHS ${totalMonthlyGhs}/mo · Storefront included`;
-  }
+  const annualSavingsGhs = getAnnualPlanSavings(totalMonthlyGhs);
+  const annualComparisonGhs = totalMonthlyGhs * 12;
+  const totalDueGhs = billingInterval === 'ANNUAL' ? totalAnnualGhs : totalMonthlyGhs;
 
   return {
     basePlanMonthlyGhs,
     addOnMonthlyGhs,
     totalMonthlyGhs,
     totalAnnualGhs,
+    billingInterval,
+    totalDueGhs,
+    annualSavingsGhs,
+    annualComparisonGhs,
     storefrontMode,
-    displayLabel,
+    displayLabel: buildDisplayLabel(plan, billingInterval, totalMonthlyGhs, totalDueGhs, storefrontMode),
     totalMonthlyBillingAmount: totalMonthlyGhs * 100,
+    totalBillingAmount: totalDueGhs * 100,
   };
 }
 
-/** Server-side register plan + add-on normalization. */
+/** Server-side register plan + add-on + billing interval normalization. */
 export function resolveRegisterPlanSelection(
   rawPlan: string,
-  rawAddonSelected: boolean
-): { plan: BusinessPlan; addonOnlineStorefront: boolean; pricing: SubscriptionPricingResult } {
+  rawAddonSelected: boolean,
+  rawBillingInterval?: string | null,
+): {
+  plan: BusinessPlan;
+  addonOnlineStorefront: boolean;
+  billingInterval: BillingIntervalLabel;
+  pricing: SubscriptionPricingResult;
+} {
   const plan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(rawPlan as BusinessPlan)
     ? (rawPlan as BusinessPlan)
     : 'STARTER';
+  const billingInterval = normalizeBillingInterval(rawBillingInterval);
   const addonOnlineStorefront = resolveAddonForPlan(plan, rawAddonSelected);
-  const pricing = computeSubscriptionPricing({ plan, addonOnlineStorefront, billingInterval: 'MONTHLY' });
-  return { plan, addonOnlineStorefront, pricing };
+  const pricing = computeSubscriptionPricing({ plan, addonOnlineStorefront, billingInterval });
+  return { plan, addonOnlineStorefront, billingInterval, pricing };
 }
 
 /**
@@ -99,6 +141,10 @@ export function resolveRegisterPlanSelection(
  */
 export function controlMonthlyValueGhs(pricing: SubscriptionPricingResult): number {
   return pricing.totalMonthlyGhs;
+}
+
+export function controlIntervalChargeGhs(pricing: SubscriptionPricingResult): number {
+  return pricing.totalDueGhs;
 }
 
 /** Resolve Control monthly charge from plan + add-on, self-healing stale Growth base-only values. */
@@ -111,7 +157,7 @@ export function resolveControlMonthlyValueGhs(input: {
   const pricing = computeSubscriptionPricing({
     plan: input.plan,
     addonOnlineStorefront: input.addonOnlineStorefront,
-    billingInterval: input.billingCadence,
+    billingInterval: 'MONTHLY',
   });
   const computed = controlMonthlyValueGhs(pricing);
   const stored = input.storedMonthlyGhs;
@@ -120,4 +166,24 @@ export function resolveControlMonthlyValueGhs(input: {
     return computed;
   }
   return stored;
+}
+
+/** Collection / payment follow-up amount for the active billing interval. */
+export function resolveControlCollectionAmountGhs(input: {
+  plan: BusinessPlan;
+  addonOnlineStorefront?: boolean | null;
+  billingCadence?: BillingIntervalLabel | null;
+  storedMonthlyGhs?: number | null;
+  storedOutstandingGhs?: number | null;
+}): number {
+  if (input.storedOutstandingGhs != null && input.storedOutstandingGhs > 0) {
+    return input.storedOutstandingGhs;
+  }
+  const billingInterval = normalizeBillingInterval(input.billingCadence);
+  const pricing = computeSubscriptionPricing({
+    plan: input.plan,
+    addonOnlineStorefront: input.addonOnlineStorefront,
+    billingInterval,
+  });
+  return controlIntervalChargeGhs(pricing);
 }

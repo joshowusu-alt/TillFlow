@@ -7,6 +7,7 @@ import { canManageStaff, canManageSubscriptions, canRecordPayments, canWriteNote
 import { planRates, type ManagedPlan } from '@/lib/control-data';
 import {
   computeSubscriptionPricing,
+  controlIntervalChargeGhs,
   controlMonthlyValueGhs,
   resolveAddonForPlan,
 } from '@/lib/vendor/plan-pricing';
@@ -283,6 +284,11 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
       billingInterval: billingCadence,
     }),
   );
+  const intervalPricing = computeSubscriptionPricing({
+    plan: args.purchasedPlan,
+    addonOnlineStorefront,
+    billingInterval: billingCadence,
+  });
 
   await tx.controlSubscription.upsert({
     where: { controlBusinessId: args.profileId },
@@ -313,7 +319,8 @@ async function applySoldPlanUpdate(tx: Omit<typeof prisma, '$connect' | '$discon
     data: {
       plan: args.purchasedPlan,
       addonOnlineStorefront,
-      billingAmount: monthlyValuePence * 100,
+      billingAmount: intervalPricing.totalBillingAmount,
+      billingInterval: billingCadence,
       planStatus: businessStatusFromSubscription(status),
       subscriptionStatus: billingStatusFromSubscription(status),
       planSetAt: startDate,
@@ -427,8 +434,12 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
     billingInterval: billingCadence,
   });
   const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
+  const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
   const submittedMonthlyGhs = parseOptionalInteger(readOptional(formData, 'monthlyValuePence'), recommendedMonthlyGhs);
-  const outstandingAmountPence = parseOptionalInteger(readOptional(formData, 'outstandingAmountPence'), 0);
+  const outstandingAmountPence = parseOptionalInteger(
+    readOptional(formData, 'outstandingAmountPence'),
+    recommendedIntervalChargeGhs,
+  );
   const now = new Date();
   let monthlyValuePence = recommendedMonthlyGhs;
 
@@ -526,7 +537,8 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
           suspendedAt: status === 'PAID_ACTIVE' ? null : status === 'READ_ONLY' ? now : undefined,
           cancelledAt: isCancelledStatus(status) ? now : null,
           addonOnlineStorefront,
-          billingAmount: pricing.totalMonthlyBillingAmount,
+          billingAmount: pricing.totalBillingAmount,
+          billingInterval: billingCadence,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control subscription updated', [
             `Updated by: ${staff.name} (${staff.role})`,
             `Plan: ${purchasedPlan}`,
@@ -539,7 +551,10 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
               : pricing.storefrontMode === 'addon'
                 ? 'Online storefront add-on: Enabled (+GHS 200/month)'
                 : 'Online storefront add-on: Not selected',
-            `Monthly charge: GHS ${monthlyValuePence}`,
+            `Monthly value: GHS ${monthlyValuePence}`,
+            billingCadence === 'ANNUAL'
+              ? `Annual charge: GHS ${recommendedIntervalChargeGhs.toLocaleString('en-GH')}`
+              : `Current charge: GHS ${recommendedIntervalChargeGhs}`,
           ]),
         },
       });
@@ -572,7 +587,9 @@ export async function updateControlSubscriptionAction(formData: FormData): Promi
       outstandingAmountPence,
       addonOnlineStorefront,
       recommendedMonthlyGhs,
+      recommendedIntervalChargeGhs,
       storefrontMode: pricing.storefrontMode,
+      billingInterval: billingCadence,
     },
   });
 
@@ -625,6 +642,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         billingInterval: billingCadence,
       });
       const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
+      const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
       const activation = activateSubscriptionAfterPayment({
         selectedPlan: purchasedPlan,
         plan: purchasedPlan,
@@ -632,7 +650,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         firstPaymentAt: (business as any).firstPaymentAt,
         billingInterval: billingCadence,
         paymentDate: paidAt,
-        amountPence: amountPence > 0 ? amountPence : recommendedMonthlyGhs,
+        amountPence: amountPence > 0 ? amountPence : recommendedIntervalChargeGhs,
       });
 
       await tx.controlPayment.create({

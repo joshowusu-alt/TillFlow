@@ -59,7 +59,7 @@ async function computeWeeklySummary(now: Date, expectedCollections: number): Pro
     .filter((r) =>
       ['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY'].includes(r.billingAccessState)
     )
-    .reduce((sum, r) => sum + (r.outstandingAmount > 0 ? r.outstandingAmount : r.monthlyValue), 0);
+    .reduce((sum, r) => sum + (r.outstandingAmount > 0 ? r.outstandingAmount : r.intervalCharge), 0);
 
   return {
     onboardedThisWeek: records.filter((r) => r.signedUpAt >= weekAgoIso).length,

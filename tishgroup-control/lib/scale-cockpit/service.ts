@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { planRates } from '@/lib/control-data';
-import { computeSubscriptionPricing, resolveControlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
+import { computeSubscriptionPricing, resolveControlCollectionAmountGhs, resolveControlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
 import type { BusinessPlan } from '@/lib/vendor/features';
 import { computeBillingAccessState } from '@/lib/vendor/subscription-lifecycle';
 import { mapIssueRow } from '@/lib/support-issues/service';
@@ -201,6 +201,13 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
         billingCadence: billingCadenceLabel,
         storedMonthlyGhs: profile?.subscription?.monthlyValuePence ?? null,
       }) || planRates[planKey as keyof typeof planRates];
+    const intervalCharge = resolveControlCollectionAmountGhs({
+      plan: planKey as BusinessPlan,
+      addonOnlineStorefront,
+      billingCadence: billingCadenceLabel,
+      storedMonthlyGhs: profile?.subscription?.monthlyValuePence ?? null,
+      storedOutstandingGhs: profile?.subscription?.outstandingAmountPence ?? null,
+    });
     const outstandingAmount = profile?.subscription?.outstandingAmountPence ?? 0;
 
     const base: Omit<ScaleBusinessRecord, 'healthLabel' | 'portfolioHealth' | 'portfolioHealthReasons'> = {
@@ -264,6 +271,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       storefrontMode: pricing.storefrontMode,
       pricingLabel: pricing.displayLabel,
       annualEquivalentGhs: pricing.totalAnnualGhs,
+      intervalCharge,
       monthlyValue,
       outstandingAmount,
       signedUpAt: formatIsoDate(snapshot.createdAt) ?? '',
@@ -336,7 +344,7 @@ async function computeScaleCockpitData(now = new Date()): Promise<ScaleCockpitDa
       .reduce((sum, r) => sum + r.monthlyValue, 0),
     expectedCollectionsThisWeek: records
       .filter((r) => ['TRIAL_DUE_SOON', 'TRIAL_DUE_TODAY', 'RENEWAL_DUE_SOON', 'PAYMENT_DUE_TODAY', 'PAYMENT_OVERDUE_GRACE', 'TRIAL_EXPIRED_GRACE'].includes(r.billingAccessState))
-      .reduce((sum, r) => sum + (r.outstandingAmount > 0 ? r.outstandingAmount : r.monthlyValue), 0),
+      .reduce((sum, r) => sum + (r.outstandingAmount > 0 ? r.outstandingAmount : r.intervalCharge), 0),
     healthCritical: records.filter((r) => r.portfolioHealth === 'Critical').length,
     healthAtRisk: records.filter((r) => r.portfolioHealth === 'At Risk').length,
     healthNeedsAttention: records.filter((r) => r.portfolioHealth === 'Needs Attention').length,

@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { managedBusinesses, planRates, type BusinessHealth, type ManagedBusiness, type ManagedPlan, type ManagedState } from '@/lib/control-data';
 import { deriveManagedState } from '@/lib/billing-state';
-import { resolveControlMonthlyValueGhs } from '@/lib/vendor/plan-pricing';
+import { resolveControlMonthlyValueGhs, resolveControlCollectionAmountGhs } from '@/lib/vendor/plan-pricing';
 import { prisma } from '@/lib/prisma';
 
 export type ManagedBusinessPayment = {
@@ -310,12 +310,19 @@ async function computeLiveBusinesses(): Promise<ManagedBusiness[]> {
         storedMonthlyGhs: subscription?.monthlyValuePence ?? null,
       });
       const storedOutstandingAmount = subscription?.outstandingAmountPence ?? null;
+      const collectionAmount = resolveControlCollectionAmountGhs({
+        plan,
+        addonOnlineStorefront: business.addonOnlineStorefront,
+        billingCadence,
+        storedMonthlyGhs: subscription?.monthlyValuePence ?? null,
+        storedOutstandingGhs: storedOutstandingAmount,
+      });
       const outstandingAmount = state === 'CANCELLED'
         ? 0
         : storedOutstandingAmount && storedOutstandingAmount > 0
           ? storedOutstandingAmount
           : requiresCollection(state)
-            ? monthlyValue
+            ? collectionAmount
             : 0;
       const lastPaymentAt = profile?.payments[0]?.paidAt ?? subscription?.lastPaymentDate ?? business.lastPaymentAt;
       const latestNote = profile?.notesEntries[0]?.note;
