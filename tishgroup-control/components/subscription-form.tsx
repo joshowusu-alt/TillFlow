@@ -61,8 +61,15 @@ export default function SubscriptionForm({
   );
   const recommendedMonthly = controlMonthlyValueGhs(pricing);
   const recommendedIntervalCharge = controlIntervalChargeGhs(pricing);
-  const summary = storefrontPricingSummary(pricing, Boolean(business.storefrontEnabled));
+  const summary = storefrontPricingSummary(pricing, Boolean(business.storefrontEnabled), plan);
   const addonDisabled = plan !== 'GROWTH';
+
+  const [outstanding, setOutstanding] = useState(business.outstandingAmount);
+  // Warn (do not auto-overwrite) when the stored/entered outstanding amount no
+  // longer matches the recommended interval charge after a plan, add-on, or
+  // billing-interval change. This catches stale outstanding balances left over
+  // from a previous plan or cadence.
+  const outstandingMismatch = outstanding > 0 && outstanding !== recommendedIntervalCharge;
 
   function handlePlanChange(nextPlan: BusinessPlan) {
     setPlan(nextPlan);
@@ -209,14 +216,20 @@ export default function SubscriptionForm({
           type="number"
           min="0"
           name="outstandingAmountPence"
-          key={`${billingCadence}-${plan}-${addonOnlineStorefront}`}
-          defaultValue={business.outstandingAmount || recommendedIntervalCharge}
+          value={outstanding}
+          onChange={(e) => setOutstanding(Number(e.target.value) || 0)}
           className="control-field"
         />
         <span className="block text-xs text-black/55">
           Recommended: GHS {recommendedIntervalCharge.toLocaleString('en-GH')}
           {billingCadence === 'ANNUAL' ? '/year' : '/month'}
         </span>
+        {outstandingMismatch ? (
+          <span className="block rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-800">
+            Stored outstanding amount differs from the recommended charge for this plan and billing
+            interval. Review before saving or collecting payment.
+          </span>
+        ) : null}
       </label>
 
       <ConfirmSubmitButton

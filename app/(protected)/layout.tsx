@@ -165,6 +165,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           brandLogoBackground: (business as any).brandLogoBackground ?? 'AUTO',
         }}
         momoEnabled={!!business.momoEnabled}
+        addonOnlineStorefront={Boolean((business as any).addonOnlineStorefront)}
         todaySales={todaySales}
         onlineOrdersCount={onlineOrdersCount}
       />

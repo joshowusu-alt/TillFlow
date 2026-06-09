@@ -26,7 +26,7 @@ export type StateTransitionPayload = {
 export type PaymentRecordedPayload = {
   businessId: string;
   businessName: string;
-  amountPence: number;
+  amountGhs: number;
   method: string;
   recordedBy: { name: string; email: string };
 };
@@ -63,6 +63,6 @@ export async function notifyStateTransition(payload: StateTransitionPayload): Pr
 
 export async function notifyPaymentRecorded(payload: PaymentRecordedPayload): Promise<void> {
   await postToSlack({
-    text: `:moneybag: *${payload.businessName}* paid GHc ${(payload.amountPence / 100).toLocaleString('en-GH')} via ${payload.method}, recorded by ${payload.recordedBy.name}.`,
+    text: `:moneybag: *${payload.businessName}* paid GHc ${payload.amountGhs.toLocaleString('en-GH')} via ${payload.method}, recorded by ${payload.recordedBy.name}.`,
   });
 }

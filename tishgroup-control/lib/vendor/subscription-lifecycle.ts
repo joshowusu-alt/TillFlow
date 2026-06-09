@@ -1,4 +1,4 @@
-import { computeSubscriptionPricing, PLAN_MONTHLY_PRICES } from './plan-pricing';
+import { computeSubscriptionPricing } from './plan-pricing';
 import type { BusinessPlan } from './features';
 import { formatBusinessLocalDateKey, resolveBusinessTimeZone } from './notifications/utils';
 

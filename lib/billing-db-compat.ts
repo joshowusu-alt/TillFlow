@@ -46,7 +46,7 @@ const AUTH_LEGACY_SELECT = {
   createdAt: true,
 } as const;
 
-const AUTH_BILLING_SELECT = {
+export const AUTH_BILLING_SELECT = {
   ...AUTH_LEGACY_SELECT,
   plan: true,
   planStatus: true,
@@ -71,6 +71,9 @@ const AUTH_BILLING_SELECT = {
   paymentProvider: true,
   paymentProviderStatus: true,
   billingNotes: true,
+  // Entitlement flag merchant pages read to gate Online Storefront access.
+  // Growth businesses can buy it as an add-on; Pro includes it by default.
+  addonOnlineStorefront: true,
   brandCompactLogoUrl: true,
   logoWidth: true,
   logoHeight: true,
@@ -147,6 +150,7 @@ export function isBillingSchemaError(error: unknown) {
       'paymentProvider',
       'paymentProviderStatus',
       'billingNotes',
+      'addonOnlineStorefront',
       'brandCompactLogoUrl',
       'logoWidth',
       'logoHeight',

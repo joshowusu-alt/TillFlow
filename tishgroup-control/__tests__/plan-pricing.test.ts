@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeSubscriptionPricing,
+  controlIntervalChargeGhs,
   controlMonthlyValueGhs,
   resolveControlCollectionAmountGhs,
+  resolveControlPaymentAmounts,
   resolveControlMonthlyValueGhs,
   storefrontPricingSummary,
 } from '@/lib/vendor/plan-pricing';
@@ -72,5 +74,33 @@ describe('control plan pricing', () => {
     });
 
     expect(controlMonthlyValueGhs(pricing)).toBe(549);
+  });
+
+  it('shows Starter storefront as "Not available", Growth-no-addon as "Not selected"', () => {
+    const starter = storefrontPricingSummary(
+      computeSubscriptionPricing({ plan: 'STARTER', billingInterval: 'MONTHLY' }),
+      false,
+      'STARTER',
+    );
+    const growth = storefrontPricingSummary(
+      computeSubscriptionPricing({ plan: 'GROWTH', billingInterval: 'MONTHLY' }),
+      false,
+      'GROWTH',
+    );
+
+    expect(starter.storefrontLine).toBe('Storefront: Not available');
+    expect(growth.storefrontLine).toBe('Storefront: Not selected');
+  });
+
+  it('blank payment fallback converts whole GHS interval charge to pesewas once', () => {
+    const amounts = (plan: 'GROWTH' | 'PRO', addon: boolean, interval: 'MONTHLY' | 'ANNUAL') =>
+      resolveControlPaymentAmounts(computeSubscriptionPricing({ plan, addonOnlineStorefront: addon, billingInterval: interval }));
+
+    expect(amounts('GROWTH', true, 'ANNUAL')).toEqual({
+      recordedAmountGhs: 5490,
+      businessBillingAmountPence: 549000,
+    });
+    expect(amounts('PRO', false, 'ANNUAL').businessBillingAmountPence).toBe(699000);
+    expect(amounts('GROWTH', true, 'MONTHLY').businessBillingAmountPence).toBe(54900);
   });
 });

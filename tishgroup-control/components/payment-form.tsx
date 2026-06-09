@@ -4,11 +4,16 @@ import ConfirmSubmitButton from '@/components/confirm-submit-button';
 type PaymentFormBusiness = {
   id: string;
   billingCadence: 'MONTHLY' | 'ANNUAL';
-  monthlyValue: number;
   outstandingAmount: number;
 };
 
-export default function PaymentForm({ business }: { business: PaymentFormBusiness }) {
+export default function PaymentForm({
+  business,
+  recommendedAmount,
+}: {
+  business: PaymentFormBusiness;
+  recommendedAmount: number;
+}) {
   return (
     <form action={recordControlPaymentAction} className="space-y-3 rounded-2xl border border-black/8 bg-white/80 p-4">
       <input type="hidden" name="businessId" value={business.id} />
@@ -19,7 +24,11 @@ export default function PaymentForm({ business }: { business: PaymentFormBusines
 
       <label className="block space-y-1 text-sm">
         <span className="font-medium text-control-ink">Amount</span>
-        <input type="number" min="0" name="amountPence" defaultValue={business.outstandingAmount || business.monthlyValue} className="control-field" required />
+        <input type="number" min="0" name="amountPence" defaultValue={business.outstandingAmount || recommendedAmount} className="control-field" />
+        <span className="block text-xs text-black/55">
+          Recommended: GHS {recommendedAmount.toLocaleString('en-GH')}
+          {business.billingCadence === 'ANNUAL' ? '/year' : '/month'} · leave blank to use this amount
+        </span>
       </label>
 
       <label className="block space-y-1 text-sm">

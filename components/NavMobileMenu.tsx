@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { logout } from '@/app/actions/auth';
 import { getFeatures, hasPlanAccess, type BusinessPlan } from '@/lib/features';
+import { getFeatureLockLabel, type FeatureKey } from '@/lib/navigation-config';
 import { formatMoney } from '@/lib/format';
 import InstallButton from './InstallButton';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
@@ -23,6 +24,7 @@ interface NavMobileMenuProps {
   features: ReturnType<typeof getFeatures>;
   pathname: string;
   planGatedLinks: Map<string, BusinessPlan>;
+  featureGatedLinks?: Map<string, FeatureKey>;
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
 }
@@ -37,6 +39,7 @@ export default function NavMobileMenu({
   features,
   pathname,
   planGatedLinks,
+  featureGatedLinks,
   todaySales,
   onlineOrdersCount = 0,
 }: NavMobileMenuProps) {
@@ -161,8 +164,16 @@ export default function NavMobileMenu({
                   <div className="grid gap-1.5">
                     {group.items.map((item) => {
                       const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const requiredFeature = featureGatedLinks?.get(item.href);
+                      const featureLocked = requiredFeature ? !features[requiredFeature] : false;
                       const minimumPlan = planGatedLinks.get(item.href);
-                      const planLocked = minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                      const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                      const lockLabel =
+                        featureLocked && requiredFeature
+                          ? getFeatureLockLabel(requiredFeature, features.plan)
+                          : planLocked
+                            ? minimumPlan
+                            : null;
                       return (
                         <Link
                           key={item.href}
@@ -174,9 +185,9 @@ export default function NavMobileMenu({
                             {getNavIcon(item.href)}
                             {item.label}
                           </span>
-                          {planLocked && minimumPlan ? (
+                          {lockLabel ? (
                             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                              {minimumPlan}
+                              {lockLabel}
                             </span>
                           ) : item.href === '/online-orders' && onlineOrdersCount > 0 ? (
                             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white">

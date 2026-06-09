@@ -1,12 +1,27 @@
-import type { BusinessPlan } from './features';
+import type { BusinessPlan, getFeatures } from './features';
 
 export type AppRole = 'CASHIER' | 'MANAGER' | 'OWNER';
+
+/** Boolean feature keys exposed by getFeatures() that a nav item can gate on. */
+export type FeatureKey = {
+  [K in keyof ReturnType<typeof getFeatures>]: ReturnType<typeof getFeatures>[K] extends boolean ? K : never;
+}[keyof ReturnType<typeof getFeatures>];
+
+export function getFeatureLockLabel(feature: FeatureKey, plan: BusinessPlan) {
+  return feature === 'onlineStorefront' && plan === 'GROWTH' ? 'ADD-ON' : 'UPGRADE';
+}
 
 export type NavigationItem = {
   href: string;
   label: string;
   roles: AppRole[];
   minimumPlan?: BusinessPlan;
+  /**
+   * Gate this link on a computed feature (e.g. the Online Storefront add-on)
+   * rather than a plan rank. Feature gating is add-on aware, so Growth + add-on
+   * is treated as entitled instead of showing a misleading PRO lock.
+   */
+  requiresFeature?: FeatureKey;
 };
 
 export type NavigationGroup = {
@@ -28,7 +43,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     items: [
       { href: '/pos', label: 'POS', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
       { href: '/sales', label: 'Sales', roles: ['MANAGER', 'OWNER'] },
-      { href: '/online-orders', label: 'Online Orders', roles: ['MANAGER', 'OWNER'], minimumPlan: 'PRO' },
+      { href: '/online-orders', label: 'Online Orders', roles: ['MANAGER', 'OWNER'], requiresFeature: 'onlineStorefront' },
       { href: '/shifts', label: 'Shifts', roles: ['CASHIER', 'MANAGER', 'OWNER'] },
     ],
   },

@@ -7,7 +7,7 @@ import { refreshCurrentView } from '@/app/actions/refresh';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
-import { NAV_GROUPS } from '@/lib/navigation-config';
+import { getFeatureLockLabel, NAV_GROUPS, type FeatureKey } from '@/lib/navigation-config';
 import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import type { MerchantBrandProfile } from '@/lib/merchant-branding';
 import InstallButton from './InstallButton';
@@ -30,6 +30,7 @@ export default function TopNav({
   businessName,
   merchantBranding,
   momoEnabled,
+  addonOnlineStorefront = false,
   todaySales,
   onlineOrdersCount = 0,
 }: {
@@ -40,11 +41,12 @@ export default function TopNav({
   businessName?: string;
   merchantBranding?: MerchantBrandProfile;
   momoEnabled?: boolean;
+  addonOnlineStorefront?: boolean;
   todaySales?: { totalPence: number; txCount: number; currency: string };
   onlineOrdersCount?: number;
 }){
   const pathname = usePathname() ?? '';
-  const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE');
+  const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE', { onlineStorefront: addonOnlineStorefront });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
@@ -68,6 +70,18 @@ export default function TopNav({
           group.items
             .filter((item): item is typeof item & { minimumPlan: BusinessPlan } => Boolean(item.minimumPlan))
             .map((item) => [item.href, item.minimumPlan] as const)
+        )
+      ),
+    []
+  );
+
+  const featureGatedLinks = useMemo(
+    () =>
+      new Map(
+        NAV_GROUPS.flatMap((group) =>
+          group.items
+            .filter((item): item is typeof item & { requiresFeature: FeatureKey } => Boolean(item.requiresFeature))
+            .map((item) => [item.href, item.requiresFeature] as const)
         )
       ),
     []
@@ -223,8 +237,16 @@ export default function TopNav({
                       </div>
                       {group.items.map((item) => {
                         const active = pathname === item.href;
+                        const requiredFeature = featureGatedLinks.get(item.href);
+                        const featureLocked = requiredFeature ? !features[requiredFeature] : false;
                         const minimumPlan = planGatedLinks.get(item.href);
-                        const planLocked = minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                        const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                        const lockLabel =
+                          featureLocked && requiredFeature
+                            ? getFeatureLockLabel(requiredFeature, features.plan)
+                            : planLocked
+                              ? minimumPlan
+                              : null;
                         const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
                         return (
                           <Link
@@ -234,9 +256,9 @@ export default function TopNav({
                             onClick={() => setOpenGroup(null)}
                           >
                             <span>{item.label}</span>
-                            {planLocked && minimumPlan ? (
+                            {lockLabel ? (
                               <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                                {minimumPlan}
+                                {lockLabel}
                               </span>
                             ) : itemCount > 0 ? (
                               <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
@@ -353,6 +375,7 @@ export default function TopNav({
         features={features}
         pathname={pathname}
         planGatedLinks={planGatedLinks}
+        featureGatedLinks={featureGatedLinks}
         todaySales={liveTodaySales}
         onlineOrdersCount={onlineOrdersCount}
       />

@@ -61,7 +61,7 @@ export default async function BusinessDetailPage({
     addonOnlineStorefront: business.addonOnlineStorefront,
     billingInterval: business.billingCadence,
   });
-  const storefrontSummary = storefrontPricingSummary(subscriptionPricing, business.storefrontEnabled);
+  const storefrontSummary = storefrontPricingSummary(subscriptionPricing, business.storefrontEnabled, billingPlan);
   const error = readSearchParam(resolvedSearchParams.error);
   const tab = readSearchParam(resolvedSearchParams.tab) ?? 'timeline';
   const canEditSubscription = canManageSubscriptions(staff.role);
@@ -464,7 +464,7 @@ export default async function BusinessDetailPage({
               )}
 
               {canTakePayments ? (
-                <PaymentForm business={business} />
+                <PaymentForm business={business} recommendedAmount={subscriptionPricing.totalDueGhs} />
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                   Your role can view payment history but cannot record payments.
@@ -580,7 +580,7 @@ export default async function BusinessDetailPage({
               </div>
             )}
             {canTakePayments ? (
-              <PaymentForm business={business} />
+              <PaymentForm business={business} recommendedAmount={subscriptionPricing.totalDueGhs} />
             ) : (
               <div className="rounded-2xl border border-dashed border-black/12 bg-white/70 px-4 py-4 text-sm text-black/56">
                 Your role can view payment history but cannot record payments.

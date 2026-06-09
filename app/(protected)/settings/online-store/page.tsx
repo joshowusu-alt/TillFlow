@@ -2,7 +2,7 @@ import CatalogueVisibilityFilter from '@/components/CatalogueVisibilityFilter';
 import Link from 'next/link';
 import FormError from '@/components/FormError';
 import PageHeader from '@/components/PageHeader';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
 import { updateStorefrontSettingsAction, updateStorefrontHoursAction, bulkSetStorefrontPublishAction, updateStorefrontCategoryMappingsAction, hideOutOfStockStorefrontProductsAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
@@ -34,14 +34,7 @@ export default async function OnlineStoreSettingsPage({
   );
 
   if (!features.onlineStorefront) {
-    return (
-      <AdvancedModeNotice
-        title="Online storefront requires Pro or Growth add-on"
-        description="Publish a customer-facing shop on Pro (included) or on Growth for +GH₵200/mo. Contact your TillFlow account manager to enable the add-on."
-        featureName="Online Storefront"
-        minimumPlan="PRO"
-      />
-    );
+    return <StorefrontUpgradeNotice plan={features.plan} featureName="Online Storefront" />;
   }
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

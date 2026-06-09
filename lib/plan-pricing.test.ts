@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeSubscriptionPricing,
+  controlIntervalChargeGhs,
   resolveAddonForPlan,
   resolveControlCollectionAmountGhs,
+  resolveControlPaymentAmounts,
   resolveRegisterPlanSelection,
+  storefrontPricingSummary,
 } from './plan-pricing';
 
 describe('computeSubscriptionPricing', () => {
@@ -164,5 +167,65 @@ describe('resolveControlCollectionAmountGhs', () => {
       billingCadence: 'MONTHLY',
     });
     expect(amount).toBe(549);
+  });
+});
+
+describe('control payment blank-amount fallback (Business.billingAmount in pesewas)', () => {
+  const amounts = (
+    plan: 'STARTER' | 'GROWTH' | 'PRO',
+    addonOnlineStorefront: boolean,
+    billingInterval: 'MONTHLY' | 'ANNUAL',
+    enteredAmountGhs?: number,
+  ) =>
+    resolveControlPaymentAmounts(
+      computeSubscriptionPricing({ plan, addonOnlineStorefront, billingInterval }),
+      enteredAmountGhs,
+    );
+
+  it('annual Growth + add-on stores 549000 pesewas, not 5490', () => {
+    expect(amounts('GROWTH', true, 'ANNUAL')).toEqual({
+      recordedAmountGhs: 5490,
+      businessBillingAmountPence: 549000,
+    });
+  });
+
+  it('annual Pro stores 699000 pesewas', () => {
+    expect(amounts('PRO', false, 'ANNUAL').businessBillingAmountPence).toBe(699000);
+  });
+
+  it('monthly Growth + add-on stores 54900 pesewas', () => {
+    expect(amounts('GROWTH', true, 'MONTHLY').businessBillingAmountPence).toBe(54900);
+  });
+
+  it('records a manual payment without changing the recurring interval charge', () => {
+    expect(amounts('GROWTH', true, 'ANNUAL', 5000)).toEqual({
+      recordedAmountGhs: 5000,
+      businessBillingAmountPence: 549000,
+    });
+  });
+});
+
+describe('storefrontPricingSummary status line', () => {
+  const line = (plan: 'STARTER' | 'GROWTH' | 'PRO', addon: boolean) =>
+    storefrontPricingSummary(
+      computeSubscriptionPricing({ plan, addonOnlineStorefront: addon, billingInterval: 'MONTHLY' }),
+      false,
+      plan,
+    ).storefrontLine;
+
+  it('Starter shows "Not available"', () => {
+    expect(line('STARTER', false)).toBe('Storefront: Not available');
+  });
+
+  it('Growth without add-on shows "Not selected"', () => {
+    expect(line('GROWTH', false)).toBe('Storefront: Not selected');
+  });
+
+  it('Growth with add-on shows "Add-on selected"', () => {
+    expect(line('GROWTH', true)).toBe('Storefront: Add-on selected (+GHS 200/month)');
+  });
+
+  it('Pro shows "Included"', () => {
+    expect(line('PRO', false)).toBe('Storefront: Included');
   });
 });

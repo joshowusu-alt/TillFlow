@@ -147,6 +147,22 @@ export function controlIntervalChargeGhs(pricing: SubscriptionPricingResult): nu
   return pricing.totalDueGhs;
 }
 
+export function resolveControlPaymentAmounts(
+  pricing: SubscriptionPricingResult,
+  enteredAmountGhs?: number | null,
+) {
+  const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+  const recordedAmountGhs =
+    enteredAmountGhs != null && enteredAmountGhs > 0
+      ? enteredAmountGhs
+      : recommendedIntervalChargeGhs;
+
+  return {
+    recordedAmountGhs,
+    businessBillingAmountPence: pricing.totalBillingAmount,
+  };
+}
+
 /** Resolve Control monthly charge from plan + add-on, self-healing stale Growth base-only values. */
 export function resolveControlMonthlyValueGhs(input: {
   plan: BusinessPlan;
@@ -186,4 +202,53 @@ export function resolveControlCollectionAmountGhs(input: {
     billingInterval,
   });
   return controlIntervalChargeGhs(pricing);
+}
+
+export function storefrontPricingSummary(
+  pricing: SubscriptionPricingResult,
+  storefrontPublished: boolean,
+  plan?: BusinessPlan,
+) {
+  const published = storefrontPublished ? 'Yes' : 'No';
+  const billingLine = pricing.billingInterval === 'ANNUAL' ? 'Billing: Annual' : 'Billing: Monthly';
+  const monthlyValueLine = `Monthly value: GHS ${pricing.totalMonthlyGhs}`;
+  const intervalChargeLine =
+    pricing.billingInterval === 'ANNUAL'
+      ? `Annual charge: GHS ${pricing.totalAnnualGhs.toLocaleString('en-GH')}/year`
+      : `Current charge: GHS ${pricing.totalMonthlyGhs}/month`;
+  const savingsLine =
+    pricing.billingInterval === 'ANNUAL'
+      ? `Saving: GHS ${pricing.annualSavingsGhs.toLocaleString('en-GH')}`
+      : null;
+
+  if (pricing.storefrontMode === 'included') {
+    return {
+      storefrontLine: 'Storefront: Included',
+      billingLine,
+      monthlyValueLine,
+      intervalChargeLine,
+      savingsLine,
+      publishedLine: `Storefront published: ${published}`,
+    };
+  }
+  if (pricing.storefrontMode === 'addon') {
+    return {
+      storefrontLine: 'Storefront: Add-on selected (+GHS 200/month)',
+      billingLine,
+      monthlyValueLine,
+      intervalChargeLine,
+      savingsLine,
+      publishedLine: `Storefront published: ${published}`,
+    };
+  }
+  // storefrontMode === 'none' covers both Starter (storefront not available at
+  // all) and Growth without the add-on (available but not selected).
+  return {
+    storefrontLine: plan === 'STARTER' ? 'Storefront: Not available' : 'Storefront: Not selected',
+    billingLine,
+    monthlyValueLine,
+    intervalChargeLine,
+    savingsLine,
+    publishedLine: `Storefront published: ${published}`,
+  };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getBusinessPlan, getFeatures, hasPlanAccess, isAdvancedMode } from './features';
+import { getFeatureLockLabel } from './navigation-config';
 
 describe('getFeatures', () => {
   it('maps SIMPLE + SINGLE_STORE to Starter', () => {
@@ -63,6 +64,38 @@ describe('getFeatures', () => {
 
   it('blocks online storefront on Starter even with add-on flag', () => {
     expect(getFeatures('STARTER', 'SINGLE_STORE', { onlineStorefront: true }).onlineStorefront).toBe(false);
+  });
+});
+
+describe('merchant storefront route access matrix', () => {
+  // Mirrors the gate used by Online Store settings, Storefront analytics, and
+  // Online Orders pages: getFeatures(plan, storeMode, { onlineStorefront: addon }).
+  const access = (plan: 'STARTER' | 'GROWTH' | 'PRO', addon: boolean) =>
+    getFeatures(plan, 'SINGLE_STORE', { onlineStorefront: addon }).onlineStorefront;
+
+  it('blocks Starter regardless of a stale/manipulated add-on flag', () => {
+    expect(access('STARTER', false)).toBe(false);
+    expect(access('STARTER', true)).toBe(false);
+  });
+
+  it('blocks Growth without the add-on', () => {
+    expect(access('GROWTH', false)).toBe(false);
+  });
+
+  it('allows Growth with the add-on', () => {
+    expect(access('GROWTH', true)).toBe(true);
+  });
+
+  it('allows Pro with the add-on flag off (storefront included)', () => {
+    expect(access('PRO', false)).toBe(true);
+    expect(access('PRO', true)).toBe(true);
+  });
+});
+
+describe('storefront navigation lock labels', () => {
+  it('uses add-on language only where the add-on can actually be purchased', () => {
+    expect(getFeatureLockLabel('onlineStorefront', 'GROWTH')).toBe('ADD-ON');
+    expect(getFeatureLockLabel('onlineStorefront', 'STARTER')).toBe('UPGRADE');
   });
 });
 

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { prisma } from '@/lib/prisma';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
 import PageHeader from '@/components/PageHeader';
 
 export const metadata: Metadata = { title: 'Storefront Analytics' };
@@ -55,14 +55,7 @@ export default async function StorefrontAnalyticsPage() {
   );
 
   if (!features.onlineStorefront) {
-    return (
-      <AdvancedModeNotice
-        title="Online storefront requires Pro or Growth add-on"
-        description="Publish a customer-facing shop on Pro (included) or on Growth for +GH₵200/mo."
-        featureName="Online Storefront"
-        minimumPlan="PRO"
-      />
-    );
+    return <StorefrontUpgradeNotice plan={features.plan} featureName="Storefront analytics" />;
   }
 
   const now = Date.now();

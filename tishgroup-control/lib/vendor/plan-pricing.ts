@@ -29,7 +29,9 @@ export type SubscriptionPricingResult = {
   annualComparisonGhs: number;
   storefrontMode: StorefrontPricingMode;
   displayLabel: string;
+  /** Monthly amount in TillFlow pesewas convention. */
   totalMonthlyBillingAmount: number;
+  /** Interval due amount in TillFlow pesewas convention (monthly or annual). */
   totalBillingAmount: number;
 };
 
@@ -45,6 +47,7 @@ export function getAnnualPlanSavings(monthlyPrice: number) {
   return monthlyPrice * 2;
 }
 
+/** Only Growth may persist a paid online storefront add-on. */
 export function resolveAddonForPlan(plan: BusinessPlan, requested: boolean): boolean {
   return plan === 'GROWTH' && requested;
 }
@@ -112,7 +115,30 @@ export function computeSubscriptionPricing(input: SubscriptionPricingInput): Sub
   };
 }
 
-/** ControlSubscription.monthlyValuePence stores whole GHS amounts, not pesewas. */
+/** Server-side register plan + add-on + billing interval normalization. */
+export function resolveRegisterPlanSelection(
+  rawPlan: string,
+  rawAddonSelected: boolean,
+  rawBillingInterval?: string | null,
+): {
+  plan: BusinessPlan;
+  addonOnlineStorefront: boolean;
+  billingInterval: BillingIntervalLabel;
+  pricing: SubscriptionPricingResult;
+} {
+  const plan = (['STARTER', 'GROWTH', 'PRO'] as const).includes(rawPlan as BusinessPlan)
+    ? (rawPlan as BusinessPlan)
+    : 'STARTER';
+  const billingInterval = normalizeBillingInterval(rawBillingInterval);
+  const addonOnlineStorefront = resolveAddonForPlan(plan, rawAddonSelected);
+  const pricing = computeSubscriptionPricing({ plan, addonOnlineStorefront, billingInterval });
+  return { plan, addonOnlineStorefront, billingInterval, pricing };
+}
+
+/**
+ * ControlSubscription.monthlyValuePence stores whole GHS amounts (199, 349, 549),
+ * not pesewas — despite the field name. TillFlow Business.billingAmount uses pesewas (×100).
+ */
 export function controlMonthlyValueGhs(pricing: SubscriptionPricingResult): number {
   return pricing.totalMonthlyGhs;
 }
@@ -121,6 +147,23 @@ export function controlIntervalChargeGhs(pricing: SubscriptionPricingResult): nu
   return pricing.totalDueGhs;
 }
 
+export function resolveControlPaymentAmounts(
+  pricing: SubscriptionPricingResult,
+  enteredAmountGhs?: number | null,
+) {
+  const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+  const recordedAmountGhs =
+    enteredAmountGhs != null && enteredAmountGhs > 0
+      ? enteredAmountGhs
+      : recommendedIntervalChargeGhs;
+
+  return {
+    recordedAmountGhs,
+    businessBillingAmountPence: pricing.totalBillingAmount,
+  };
+}
+
+/** Resolve Control monthly charge from plan + add-on, self-healing stale Growth base-only values. */
 export function resolveControlMonthlyValueGhs(input: {
   plan: BusinessPlan;
   addonOnlineStorefront?: boolean | null;
@@ -141,6 +184,7 @@ export function resolveControlMonthlyValueGhs(input: {
   return stored;
 }
 
+/** Collection / payment follow-up amount for the active billing interval. */
 export function resolveControlCollectionAmountGhs(input: {
   plan: BusinessPlan;
   addonOnlineStorefront?: boolean | null;
@@ -160,7 +204,11 @@ export function resolveControlCollectionAmountGhs(input: {
   return controlIntervalChargeGhs(pricing);
 }
 
-export function storefrontPricingSummary(pricing: SubscriptionPricingResult, storefrontPublished: boolean) {
+export function storefrontPricingSummary(
+  pricing: SubscriptionPricingResult,
+  storefrontPublished: boolean,
+  plan?: BusinessPlan,
+) {
   const published = storefrontPublished ? 'Yes' : 'No';
   const billingLine = pricing.billingInterval === 'ANNUAL' ? 'Billing: Annual' : 'Billing: Monthly';
   const monthlyValueLine = `Monthly value: GHS ${pricing.totalMonthlyGhs}`;
@@ -193,8 +241,10 @@ export function storefrontPricingSummary(pricing: SubscriptionPricingResult, sto
       publishedLine: `Storefront published: ${published}`,
     };
   }
+  // storefrontMode === 'none' covers both Starter (storefront not available at
+  // all) and Growth without the add-on (available but not selected).
   return {
-    storefrontLine: 'Storefront: Not selected',
+    storefrontLine: plan === 'STARTER' ? 'Storefront: Not available' : 'Storefront: Not selected',
     billingLine,
     monthlyValueLine,
     intervalChargeLine,

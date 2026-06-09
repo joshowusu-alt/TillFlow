@@ -12,7 +12,7 @@ export type ReferralBusinessRow = {
 
 export type ReferralReport = {
   bySource: Array<{ source: string; label: string; leads: number; demoBooked: number; trials: number; paid: number }>;
-  byAgent: Array<{ agent: string; total: number; paid: number }>;
+  byAgent: Array<{ agent: string; total: number; demoBooked: number; trials: number; paid: number }>;
   conversion: {
     demoToTrialPct: number | null;
     trialToPaidPct: number | null;
@@ -27,7 +27,7 @@ export type ReferralReport = {
 
 export function buildReferralReport(rows: ReferralBusinessRow[]): ReferralReport {
   const sourceMap = new Map<string, { leads: number; demoBooked: number; trials: number; paid: number }>();
-  const agentMap = new Map<string, { total: number; paid: number }>();
+  const agentMap = new Map<string, { total: number; demoBooked: number; trials: number; paid: number }>();
 
   let demoCompleted = 0;
   let trials = 0;
@@ -53,8 +53,14 @@ export function buildReferralReport(rows: ReferralBusinessRow[]): ReferralReport
     sourceMap.set(source, bucket);
 
     const agent = row.assignedAgent || 'Unassigned';
-    const ab = agentMap.get(agent) ?? { total: 0, paid: 0 };
+    const ab = agentMap.get(agent) ?? { total: 0, demoBooked: 0, trials: 0, paid: 0 };
     ab.total += 1;
+    if (['DEMO_BOOKED', 'DEMO_COMPLETED', 'TRIAL_STARTED', 'ONBOARDED', 'PAID'].includes(row.referralStatus ?? '')) {
+      ab.demoBooked += 1;
+    }
+    if (['TRIAL_STARTED', 'ONBOARDED', 'PAID'].includes(row.referralStatus ?? '') || row.inTrial) {
+      ab.trials += 1;
+    }
     if (row.referralStatus === 'PAID' || row.isPaid) ab.paid += 1;
     agentMap.set(agent, ab);
   }

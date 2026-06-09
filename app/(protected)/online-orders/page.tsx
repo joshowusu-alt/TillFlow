@@ -1,5 +1,5 @@
 import PageHeader from '@/components/PageHeader';
-import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import StorefrontUpgradeNotice from '@/components/StorefrontUpgradeNotice';
 import { recheckOnlineOrderPaymentAction, updateOnlineOrderStatusAction, batchMarkPreparingAction, markOrderRefundedAction } from '@/app/actions/online-storefront';
 import { requireBusiness } from '@/lib/auth';
 import { formatDateTime, formatMoney, formatGhanaPhoneForDisplay, toTitleCase } from '@/lib/format';
@@ -156,14 +156,7 @@ export default async function OnlineOrdersPage({
   );
 
   if (!features.onlineStorefront) {
-    return (
-      <AdvancedModeNotice
-        title="Online orders need the storefront add-on"
-        description="Online orders are included with Pro, or available on Growth as a GH₵200/mo add-on. Speak to TillFlow to enable it."
-        featureName="Online Orders"
-        minimumPlan="PRO"
-      />
-    );
+    return <StorefrontUpgradeNotice plan={features.plan} featureName="Online Orders" />;
   }
 
   const activeTab: StatusKey = isValidStatus(searchParams?.status) ? searchParams!.status! : 'all';
@@ -437,7 +430,7 @@ export default async function OnlineOrdersPage({
     </div>
   );
 }
-
+
 type OrderRow = {
   id: string;
   orderNumber: string;

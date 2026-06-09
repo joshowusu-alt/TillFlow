@@ -9,6 +9,7 @@ import {
   computeSubscriptionPricing,
   controlIntervalChargeGhs,
   controlMonthlyValueGhs,
+  resolveControlPaymentAmounts,
   resolveAddonForPlan,
 } from '@/lib/vendor/plan-pricing';
 import { recordAudit } from '@/lib/audit';
@@ -622,6 +623,7 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
   const paidAt = parseOptionalDate(readOptional(formData, 'paidAt')) ?? new Date();
   const billingCadence = normalizeCadence(readRequired(formData, 'billingCadence').toUpperCase());
   const explicitNextDueDate = parseOptionalDate(readOptional(formData, 'nextDueDate'));
+  let recordedAmountGhs = amountPence;
   const nextDueDate =
     explicitNextDueDate && explicitNextDueDate.getTime() > paidAt.getTime()
       ? explicitNextDueDate
@@ -642,7 +644,8 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         billingInterval: billingCadence,
       });
       const recommendedMonthlyGhs = controlMonthlyValueGhs(pricing);
-      const recommendedIntervalChargeGhs = controlIntervalChargeGhs(pricing);
+      const paymentAmounts = resolveControlPaymentAmounts(pricing, amountPence);
+      recordedAmountGhs = paymentAmounts.recordedAmountGhs;
       const activation = activateSubscriptionAfterPayment({
         selectedPlan: purchasedPlan,
         plan: purchasedPlan,
@@ -650,13 +653,13 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
         firstPaymentAt: (business as any).firstPaymentAt,
         billingInterval: billingCadence,
         paymentDate: paidAt,
-        amountPence: amountPence > 0 ? amountPence : recommendedIntervalChargeGhs,
+        amountPence: recordedAmountGhs,
       });
 
       await tx.controlPayment.create({
         data: {
           controlBusinessId: profile.id,
-          amountPence,
+          amountPence: recordedAmountGhs,
           paidAt,
           method,
           reference,
@@ -714,14 +717,12 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
           paymentGraceEndsAt: null,
           suspendedAt: null,
           cancelledAt: null,
-          billingAmount: activation.billingAmount < recommendedMonthlyGhs * 10
-            ? activation.billingAmount * 100
-            : activation.billingAmount,
+          billingAmount: paymentAmounts.businessBillingAmountPence,
           billingCurrency: activation.billingCurrency,
           billingInterval: activation.billingInterval,
           billingNotes: appendBillingEntry(business.billingNotes, 'Control payment recorded', [
             `Recorded by: ${staff.name} (${staff.role})`,
-            `Amount: GHc ${amountPence.toLocaleString('en-GH')}`,
+            `Amount: GHc ${recordedAmountGhs.toLocaleString('en-GH')}`,
             `Method: ${method}`,
             reference ? `Reference: ${reference}` : null,
             `Paid at: ${paidAt.toISOString().slice(0, 10)}`,
@@ -742,13 +743,13 @@ export async function recordControlPaymentAction(formData: FormData): Promise<vo
     staff,
     action: 'PAYMENT_RECORDED',
     businessId,
-    summary: `Payment GHc ${(amountPence / 100).toLocaleString('en-GH')} via ${method}`,
-    metadata: { amountPence, method, reference, paidAt: paidAt.toISOString(), nextDueDate: nextDueDate.toISOString() },
+    summary: `Payment GHc ${recordedAmountGhs.toLocaleString('en-GH')} via ${method}`,
+    metadata: { amountGhs: recordedAmountGhs, method, reference, paidAt: paidAt.toISOString(), nextDueDate: nextDueDate.toISOString() },
   });
   await notifyPaymentRecorded({
     businessId,
     businessName,
-    amountPence,
+    amountGhs: recordedAmountGhs,
     method,
     recordedBy: { name: staff.name, email: staff.email },
   });
