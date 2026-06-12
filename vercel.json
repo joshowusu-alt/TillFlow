@@ -4,7 +4,7 @@
   "crons": [
     {
       "path": "/api/cron/eod-summary",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 20 * * *"
     },
     {
       "path": "/api/cron/expire-online-orders",
