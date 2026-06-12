@@ -117,10 +117,9 @@ describe('ReadinessJourney home stats', () => {
     const expectedCashCard = screen.getByRole('link', { name: /Expected Cash:/ });
 
     for (const label of [revenueLabel, transactionsLabel, expectedCashLabel]) {
-      expect(label).toHaveClass('text-xs');
       expect(label).toHaveClass('uppercase');
       expect(label).toHaveClass('tracking-wider');
-      expect(label).toHaveClass('opacity-70');
+      expect(label).toHaveClass('opacity-75');
       expect(label).toHaveClass('whitespace-nowrap');
     }
 
@@ -192,5 +191,16 @@ describe('ReadinessJourney home stats', () => {
     expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
+  });
+
+  it('shows quick access operational cards and admin links on the home dashboard', () => {
+    renderDashboard();
+
+    expect(screen.getByRole('link', { name: /Open POS/ })).toHaveAttribute('href', '/pos');
+    expect(screen.getByRole('link', { name: /Purchases/ })).toHaveAttribute('href', '/purchases');
+    expect(screen.getByRole('link', { name: /People/ })).toHaveAttribute('href', '/users');
+    expect(screen.getByRole('link', { name: /Billing/ })).toHaveAttribute('href', '/settings/billing');
+    expect(screen.getByRole('link', { name: /System Health/ })).toHaveAttribute('href', '/settings/system-health');
+    expect(screen.getByText('Secure. Reliable. Built for Ghanaian businesses.')).toBeInTheDocument();
   });
 });

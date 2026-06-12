@@ -364,7 +364,7 @@ type HomeAction = {
   icon: React.ReactNode;
 };
 
-function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shift' | 'alert' | 'reorder' | 'payables' | 'purchases' | 'sales' | 'inventory' | 'team' | 'setup' | 'receipt' }) {
+function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shift' | 'alert' | 'reorder' | 'payables' | 'purchases' | 'sales' | 'inventory' | 'team' | 'setup' | 'receipt' | 'billing' | 'health' }) {
   const common = { className: 'h-5 w-5', fill: 'none', viewBox: '0 0 24 24', strokeWidth: 1.8, stroke: 'currentColor' };
   const pathProps = { strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   const paths: Record<typeof name, React.ReactNode> = {
@@ -382,6 +382,8 @@ function HomeIcon({ name }: { name: 'pos' | 'chart' | 'box' | 'settings' | 'shif
     inventory: <path {...pathProps} d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0l4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0l-5.571 3-5.571-3" />,
     team: <path {...pathProps} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />,
     setup: <path {...pathProps} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    billing: <path {...pathProps} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />,
+    health: <path {...pathProps} d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />,
   };
 
   return <svg {...common}>{paths[name]}</svg>;
@@ -401,10 +403,10 @@ function HomeActionCard({
       href={action.href}
       className={`group relative flex items-center gap-4 rounded-2xl px-4 py-4 shadow-sm transition hover:-translate-y-0.5 active:scale-[0.985] sm:min-h-[9.25rem] sm:flex-col sm:items-start sm:p-5 ${
         action.primary
-          ? 'bg-accent text-white shadow-md shadow-accent/25 hover:shadow-xl hover:shadow-accent/30'
+          ? 'bg-accent text-white shadow-md shadow-accent/25 hover:shadow-xl hover:shadow-accent/30 lg:bg-gradient-to-r lg:from-accent lg:to-blue-600'
           : action.urgent
           ? 'border border-amber-200 bg-amber-50 text-ink hover:border-amber-300'
-          : 'border border-black/[0.06] bg-white text-ink hover:shadow-md'
+          : 'border border-black/[0.06] bg-white text-ink hover:border-black/10 hover:shadow-md'
       } ${action.breakBefore ? 'mt-3 sm:mt-0 sm:border-t-4 sm:border-t-black/10' : ''} ${className}`}
     >
       <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition ${
@@ -535,17 +537,20 @@ function WelcomeDashboard({
     { label: 'Products', desc: 'Manage your catalogue', href: '/products', icon: <HomeIcon name="box" /> },
     { label: 'Sales History', desc: 'Find invoices and returns', href: '/sales', icon: <HomeIcon name="sales" /> },
     { label: 'Inventory', desc: 'Review stock movements', href: '/reports/stock-movements', icon: <HomeIcon name="inventory" /> },
+    { label: 'Purchases', desc: 'Record deliveries and costs', href: '/purchases', icon: <HomeIcon name="purchases" /> },
     ...(data.lastReceiptId ? [{ label: 'Last Receipt', desc: 'Reprint the latest completed sale', href: `/receipts/${data.lastReceiptId}`, icon: <HomeIcon name="receipt" /> }] : []),
-    { label: 'Purchases', desc: 'Record deliveries and costs', href: '/purchases', breakBefore: true, icon: <HomeIcon name="purchases" /> },
-    { label: 'Settings', desc: 'Business and team config', href: '/settings', icon: <HomeIcon name="settings" /> },
-    { label: 'Team', desc: 'Users and approvals', href: '/users', icon: <HomeIcon name="team" /> },
   ];
   const quickActions = [...dynamicActions, ...staticActions];
   const attentionActions = dynamicActions;
 
   const primaryActions = quickActions.filter((action) => action.primary);
-  const secondaryActions = staticActions.filter((action) => !action.primary && !['/settings', '/users', '/purchases'].includes(action.href));
-  const adminActions = quickActions.filter((action) => ['/settings', '/users', '/purchases'].includes(action.href));
+  const secondaryActions = staticActions.filter((action) => !action.primary);
+  const adminActions: HomeAction[] = [
+    { label: 'People', desc: 'Users and approvals', href: '/users', icon: <HomeIcon name="team" /> },
+    { label: 'Settings', desc: 'Business and team config', href: '/settings', icon: <HomeIcon name="settings" /> },
+    { label: 'Billing', desc: 'Plans and invoices', href: '/settings/billing', icon: <HomeIcon name="billing" /> },
+    { label: 'System Health', desc: 'System status and logs', href: '/settings/system-health', icon: <HomeIcon name="health" /> },
+  ];
 
   const previewCard = (
     <DemoDaySection
@@ -558,137 +563,153 @@ function WelcomeDashboard({
   );
 
   return (
-    <div className="min-h-screen px-0 lg:px-6 lg:pb-8" style={{ background: '#f0f2f5' }}>
-      <div
-        className="relative overflow-hidden lg:mx-auto lg:mt-4 lg:max-w-[120rem] lg:rounded-[1.75rem] lg:shadow-[0_22px_70px_rgba(15,23,42,0.16)]"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}
-      >
-        <div className="pointer-events-none absolute inset-0" style={{
-          backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.2) 0%, transparent 40%)',
-        }} />
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.3))' }} />
+    <div className="min-h-screen bg-[#f0f2f5] px-0 lg:px-6 lg:pb-8">
+      <div className="lg:mx-auto lg:max-w-[90rem]">
+        <div
+          className="relative overflow-hidden lg:mt-4 lg:rounded-[1.25rem] lg:shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
+          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%)' }}
+        >
+          <div className="pointer-events-none absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.2) 0%, transparent 40%)',
+          }} />
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 lg:h-12" style={{ background: 'linear-gradient(to bottom, transparent, rgba(15,23,42,0.25))' }} />
 
-        <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-12 sm:pt-10 lg:max-w-7xl lg:px-10 lg:py-8 xl:px-14">
-          <div className="grid gap-6 lg:grid-cols-[minmax(28rem,1fr)_minmax(34rem,1.22fr)] lg:items-center xl:grid-cols-[minmax(38rem,1fr)_minmax(38rem,1.15fr)]">
-            <div className="min-w-0">
-              {hour < 12 && firstName ? (
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
-                  {greeting}, {firstName}
-                </p>
-              ) : null}
-              <h1 className="max-w-4xl text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.45rem] xl:text-[2.85rem] 2xl:whitespace-nowrap">
-                {data.businessName}
-              </h1>
-              <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/75 underline-offset-4 hover:text-white hover:underline">
-                {smartSubtitle.text}
-              </Link>
-              <p className="mt-1 text-[11px] text-blue-200/45">{lastCloseText}</p>
+          <div className="relative mx-auto max-w-5xl px-4 pb-8 pt-7 sm:px-6 sm:pb-10 sm:pt-10 lg:max-w-none lg:px-8 lg:py-7 xl:px-10">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(18rem,1fr)] lg:items-end xl:grid-cols-[minmax(0,1fr)_minmax(22rem,1.02fr)] xl:gap-6">
+              <div className="min-w-0">
+                {hour < 12 && firstName ? (
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-300/60">
+                    {greeting}, {firstName}
+                  </p>
+                ) : null}
+                <h1 className="max-w-4xl text-[1.75rem] font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-[2.35rem] xl:text-[2.65rem]">
+                  {data.businessName}
+                </h1>
+                <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/80 underline-offset-4 hover:text-white hover:underline">
+                  {smartSubtitle.text}
+                </Link>
+                <p className="mt-1 text-[11px] text-blue-200/50">{lastCloseText}</p>
 
-              <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
-                <span className="relative flex h-2 w-2">
-                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusPill.dot}`} />
-                  <span className={`relative inline-flex h-2 w-2 rounded-full ${statusPill.dot}`} />
-                </span>
-                {statusPill.label}
+                <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
+                  <span className="relative flex h-2 w-2">
+                    <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${statusPill.dot}`} />
+                    <span className={`relative inline-flex h-2 w-2 rounded-full ${statusPill.dot}`} />
+                  </span>
+                  {statusPill.label}
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:gap-4">
-            {heroStats.map(({ label, displayLabel, value, href, footer }) => (
-              <Link
-                key={label}
-                href={href}
-                aria-label={`${label}: ${value}`}
-                className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/15 sm:min-h-[7rem] sm:px-5 sm:py-4 lg:min-h-[7.25rem] lg:px-4"
-              >
-                <span className="pointer-events-none relative z-10 whitespace-nowrap text-xs font-medium uppercase tracking-wider text-blue-200 opacity-70">{displayLabel}</span>
-                <span
-                  className={`mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}
-                  title={value}
-                >
-                  {value}
-                </span>
-                {footer ? (
-                  <span className="pointer-events-none relative z-10 mt-auto pt-3 text-[10px] font-semibold text-blue-200/55">{footer}</span>
-                ) : (
-                  null
-                )}
-              </Link>
-            ))}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3 lg:gap-3">
+                {heroStats.map(({ label, displayLabel, value, href, footer }) => (
+                  <Link
+                    key={label}
+                    href={href}
+                    aria-label={`${label}: ${value}`}
+                    className="group relative flex min-h-[6.25rem] min-w-0 flex-col rounded-2xl border border-white/10 bg-white/8 px-3 py-3 text-left backdrop-blur-md transition hover:border-white/20 hover:bg-white/14 sm:min-h-[7rem] sm:px-4 sm:py-4 lg:min-h-[6.75rem] lg:px-4 lg:py-3.5"
+                  >
+                    <span className="pointer-events-none relative z-10 whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-blue-200 opacity-75 lg:text-xs">{displayLabel}</span>
+                    <span
+                      className={`mt-1 block max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-black leading-tight tracking-normal tabular-nums text-white ${getStatValueSize(value)}`}
+                      title={value}
+                    >
+                      {value}
+                    </span>
+                    {footer ? (
+                      <span className="pointer-events-none relative z-10 mt-auto pt-2 text-[10px] font-semibold leading-snug text-blue-200/55">{footer}</span>
+                    ) : (
+                      <span className="pointer-events-none relative z-10 mt-auto pt-2 text-[10px] font-semibold text-blue-200/45">Today</span>
+                    )}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-7xl lg:px-0 lg:py-6">
-        {isNewAccount ? <div className="mb-5">{previewCard}</div> : null}
+        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:max-w-none lg:px-8 lg:py-6">
+          {isNewAccount ? <div className="mb-5">{previewCard}</div> : null}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] xl:grid-cols-[minmax(0,1fr)_25rem]">
-          <div>
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-6">
+            <div>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Quick access</p>
 
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {primaryActions.map((action) => (
-                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:col-span-3 lg:min-h-[6.5rem] lg:flex-row lg:items-center lg:p-5" />
-              ))}
-              {attentionActions.map((action) => (
-                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:hidden" />
-              ))}
-            </div>
-
-            <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {secondaryActions.map((action) => (
-                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[7.25rem] lg:p-4" />
-              ))}
-            </div>
-          </div>
-
-          <aside className="hidden lg:block">
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Today focus</p>
-            <div className="rounded-3xl border border-black/[0.06] bg-white p-3 shadow-sm">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm font-bold text-ink">
-                  {attentionActions.length > 0 ? 'Follow up before close' : 'Business is clear'}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-muted">
-                  {attentionActions.length > 0
-                    ? `${attentionActions.length} item${attentionActions.length === 1 ? '' : 's'} need attention today.`
-                    : 'No urgent follow-up right now. Keep selling and review the dashboard when needed.'}
-                </p>
+              <div className="grid gap-2.5">
+                {primaryActions.map((action) => (
+                  <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:col-span-3 lg:min-h-[5.75rem] lg:flex-row lg:items-center lg:p-5" />
+                ))}
+                {attentionActions.map((action) => (
+                  <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:hidden" />
+                ))}
               </div>
 
-              <div className="mt-3 space-y-2">
-                {attentionActions.length > 0 ? attentionActions.map((action) => (
-                  <HomeActionCard
-                    key={`${action.href}-${action.label}`}
-                    action={action}
-                    compact
-                    className="lg:min-h-0 lg:flex-row lg:items-center lg:p-3.5"
-                  />
-                )) : (
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {secondaryActions.map((action) => (
+                  <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[6.5rem] lg:flex-row lg:items-center lg:p-4" />
+                ))}
+              </div>
+            </div>
+
+            <aside className="hidden lg:block">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Today focus</p>
+              <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm">
+                <div className="rounded-xl bg-slate-50 px-4 py-3.5">
+                  <p className="text-sm font-bold text-ink">
+                    {attentionActions.length > 0 ? 'Follow up before close' : 'Business is clear'}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted">
+                    {attentionActions.length > 0
+                      ? `${attentionActions.length} item${attentionActions.length === 1 ? '' : 's'} need attention today.`
+                      : 'No urgent follow-up right now. Keep selling and review the dashboard when needed.'}
+                  </p>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {attentionActions.length > 0 ? attentionActions.map((action) => (
+                    <HomeActionCard
+                      key={`${action.href}-${action.label}`}
+                      action={action}
+                      compact
+                      className="lg:min-h-0 lg:flex-row lg:items-center lg:p-3.5"
+                    />
+                  )) : (
+                    <Link
+                      href="/reports/command-center"
+                      className="flex items-center justify-between rounded-xl border border-black/[0.06] px-4 py-3 text-sm font-bold text-ink transition hover:border-accent/20 hover:bg-accentSoft"
+                    >
+                      Open Command Center
+                      <span aria-hidden className="text-accent">&rarr;</span>
+                    </Link>
+                  )}
+                </div>
+
+                {attentionActions.length > 0 ? (
                   <Link
                     href="/reports/command-center"
-                    className="flex items-center justify-between rounded-2xl border border-black/[0.06] px-4 py-3 text-sm font-bold text-ink transition hover:border-accent/20 hover:bg-accentSoft"
+                    className="mt-3 flex items-center justify-between rounded-xl px-2 py-2 text-xs font-semibold text-accent transition hover:bg-accentSoft"
                   >
-                    Open Command Center
-                    <span aria-hidden className="text-accent">&rarr;</span>
+                    View all tasks
+                    <span aria-hidden>&rarr;</span>
                   </Link>
-                )}
+                ) : null}
               </div>
-            </div>
-          </aside>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Admin</p>
-          <div className="grid gap-2.5 sm:grid-cols-3">
-            {adminActions.map((action) => (
-              <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[6.75rem] lg:p-4" />
-            ))}
+            </aside>
           </div>
-        </div>
 
-        {!isNewAccount && (data.hasDemoData || data.hasSeedData) ? <div className="mt-6">{previewCard}</div> : null}
+          <div className="mt-6">
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-black/35">Admin</p>
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+              {adminActions.map((action) => (
+                <HomeActionCard key={`${action.href}-${action.label}`} action={action} className="lg:min-h-[6.25rem] lg:flex-row lg:items-center lg:p-4" />
+              ))}
+            </div>
+          </div>
+
+          {!isNewAccount && (data.hasDemoData || data.hasSeedData) ? <div className="mt-6">{previewCard}</div> : null}
+
+          <p className="mt-8 pb-2 text-center text-xs text-black/40 lg:mt-10">
+            Secure. Reliable. Built for Ghanaian businesses.
+          </p>
+        </div>
       </div>
     </div>
   );
