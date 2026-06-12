@@ -62,17 +62,17 @@ export default function MessageLogActions({
                   result.ok
                     ? {
                         tone: 'success',
-                        message: `Retry sent. Current status: ${(result.status ?? 'ACCEPTED').replace(/_/g, ' ')}.`,
+                        message: 'Retry sent. Check recent delivery history for the latest status.',
                       }
                     : result.status === 'REVIEW_REQUIRED'
                       ? {
                           tone: 'warn',
-                          message: result.error ?? 'Retry needs manual review.',
+                          message: result.error ?? 'This summary needs manual follow-up in WhatsApp.',
                         }
                       : {
                           tone: 'danger',
-                          message: result.error ?? 'Retry failed.',
-                        }
+                          message: result.error ?? 'Unable to retry this summary right now.',
+                        },
                 );
                 router.refresh();
               });

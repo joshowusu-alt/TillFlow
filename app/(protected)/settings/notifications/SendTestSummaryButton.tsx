@@ -6,17 +6,19 @@ import { sendEodSummaryAction } from '@/app/actions/notifications';
 
 type SendState =
   | {
-      tone: 'success' | 'warn' | 'danger';
+      tone: 'success' | 'warn' | 'neutral';
       buttonLabel: string;
       message: string;
     }
   | null;
 
-function formatStatus(status: string | null | undefined) {
-  return (status ?? 'UNKNOWN').replace(/_/g, ' ').toLowerCase();
-}
+type SendTestSummaryButtonProps = {
+  whatsappAutomationConnected: boolean;
+};
 
-export default function SendTestSummaryButton() {
+export default function SendTestSummaryButton({
+  whatsappAutomationConnected,
+}: SendTestSummaryButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SendState>(null);
 
@@ -35,10 +37,10 @@ export default function SendTestSummaryButton() {
               if (response?.status === 'REVIEW_REQUIRED') {
                 setResult({
                   tone: 'warn',
-                  buttonLabel: '⚠ Manual review required',
+                  buttonLabel: 'Needs follow-up',
                   message:
                     response.error ??
-                    `TillFlow generated the summary, but delivery is waiting on manual review (${formatStatus(response.provider)} / ${formatStatus(response.status)}).`,
+                    'Your summary is ready. Open it in WhatsApp below or from recent delivery history to send it manually.',
                 });
                 return;
               }
@@ -46,21 +48,41 @@ export default function SendTestSummaryButton() {
               if (response?.ok) {
                 setResult({
                   tone: 'success',
-                  buttonLabel: '✓ Sent successfully',
-                  message: `Summary sent via ${formatStatus(response.provider)}. Current delivery status: ${formatStatus(response.status)}.`,
+                  buttonLabel: 'Summary sent',
+                  message: whatsappAutomationConnected
+                    ? 'Your test summary was sent.'
+                    : 'Your test summary was sent by SMS where available, or is ready for WhatsApp manual follow-up.',
+                });
+                return;
+              }
+
+              if (response?.reason === 'disabled') {
+                setResult({
+                  tone: 'neutral',
+                  buttonLabel: 'Send Test Summary',
+                  message: 'Enable Daily Owner Summary and save an owner phone number before sending a test.',
+                });
+                return;
+              }
+
+              if (response?.reason === 'missing_recipient') {
+                setResult({
+                  tone: 'neutral',
+                  buttonLabel: 'Send Test Summary',
+                  message: 'Add a valid owner phone number, save settings, then try again.',
                 });
                 return;
               }
 
               setResult({
-                tone: 'danger',
-                buttonLabel: '✗ Failed',
-                message: response?.error ?? 'Unable to send the test summary right now.',
+                tone: 'warn',
+                buttonLabel: 'Needs follow-up',
+                message: response?.error ?? 'Your summary may need manual follow-up in WhatsApp.',
               });
             } catch (error) {
               setResult({
-                tone: 'danger',
-                buttonLabel: '✗ Failed',
+                tone: 'warn',
+                buttonLabel: 'Send Test Summary',
                 message: error instanceof Error ? error.message : 'Unable to send the test summary right now.',
               });
             }
@@ -77,7 +99,7 @@ export default function SendTestSummaryButton() {
               ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
               : result.tone === 'warn'
                 ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-rose-200 bg-rose-50 text-rose-700'
+                : 'border-black/10 bg-black/[0.03] text-black/65'
           }`}
         >
           {result.message}

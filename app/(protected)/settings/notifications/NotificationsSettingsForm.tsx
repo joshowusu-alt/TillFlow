@@ -5,6 +5,7 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import { updateWhatsappSettingsAction } from '@/app/actions/notifications';
 import SendTestSummaryButton from './SendTestSummaryButton';
+import type { MerchantSummaryStatus } from '@/lib/notifications/merchant-summary-status';
 import {
   COMMON_AFRICAN_TIMEZONES,
   DEFAULT_BUSINESS_TIMEZONE,
@@ -19,6 +20,7 @@ type NotificationsSettingsFormProps = {
     whatsappBranchScope?: string | null;
     timezone?: string | null;
   };
+  summaryStatus: MerchantSummaryStatus;
 };
 
 type PreviewState = {
@@ -29,10 +31,11 @@ type PreviewState = {
 
 export default function NotificationsSettingsForm({
   error,
-  business
+  business,
+  summaryStatus,
 }: NotificationsSettingsFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [whatsappEnabled, setWhatsappEnabled] = useState(!!business.whatsappEnabled);
+  const [summaryEnabled, setSummaryEnabled] = useState(!!business.whatsappEnabled);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewPending, startPreview] = useTransition();
@@ -47,7 +50,7 @@ export default function NotificationsSettingsForm({
       try {
         const response = await fetch('/api/notifications/preview', {
           method: 'POST',
-          body: formData
+          body: formData,
         });
         const data = (await response.json()) as { text?: string; deepLink?: string; error?: string };
 
@@ -55,7 +58,7 @@ export default function NotificationsSettingsForm({
           setPreview({
             text: '',
             deepLink: '',
-            error: data.error ?? 'Unable to generate preview right now.'
+            error: data.error ?? 'Unable to generate preview right now.',
           });
           return;
         }
@@ -63,13 +66,13 @@ export default function NotificationsSettingsForm({
         setPreview({
           text: data.text ?? '',
           deepLink: data.deepLink ?? '',
-          error: null
+          error: null,
         });
       } catch {
         setPreview({
           text: '',
           deepLink: '',
-          error: 'Unable to generate preview right now.'
+          error: 'Unable to generate preview right now.',
         });
       }
     });
@@ -78,11 +81,19 @@ export default function NotificationsSettingsForm({
   return (
     <>
       <div className="card p-4 sm:p-6">
-        <h2 className="mb-4 text-base font-semibold">WhatsApp Daily Summary</h2>
+        <h2 className="mb-1 text-base font-semibold">Daily Owner Summary</h2>
+        <p className="mb-4 text-sm text-black/55">
+          Send the business owner a simple end-of-day summary of sales, transactions, cash, MoMo, debtors, and key activity.
+        </p>
         <FormError error={error} />
         <form ref={formRef} action={updateWhatsappSettingsAction} className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2 rounded-2xl border border-black/5 bg-black/[0.02] px-4 py-4 text-sm text-black/60">
-            Configure the owner&apos;s end-of-day WhatsApp summary schedule, preview the exact message, and let TillFlow try automated Meta delivery when the provider is configured.
+            Scheduled delivery uses SMS at your chosen send time. Preview the message any time, and open it in WhatsApp for manual follow-up when needed.
+            {!summaryStatus.whatsappAutomationConnected ? (
+              <span className="mt-2 block text-black/55">
+                Automated WhatsApp delivery is not fully connected yet. SMS scheduled delivery remains available.
+              </span>
+            ) : null}
           </div>
           <div className="md:col-span-2 flex items-center gap-3">
             <input
@@ -90,15 +101,15 @@ export default function NotificationsSettingsForm({
               type="checkbox"
               name="whatsappEnabled"
               id="whatsappEnabled"
-              checked={whatsappEnabled}
-              onChange={(event) => setWhatsappEnabled(event.target.checked)}
+              checked={summaryEnabled}
+              onChange={(event) => setSummaryEnabled(event.target.checked)}
             />
             <label htmlFor="whatsappEnabled" className="text-sm font-medium">
-              Enable WhatsApp EOD summary
+              Enable Daily Owner Summary
             </label>
           </div>
           <div>
-            <label className="label">Owner WhatsApp Phone</label>
+            <label className="label">Owner phone number</label>
             <input
               className="input"
               name="whatsappPhone"
@@ -107,17 +118,20 @@ export default function NotificationsSettingsForm({
               defaultValue={business.whatsappPhone ?? ''}
             />
             <p className="mt-1 text-xs text-black/40">
-              Include country code, no + symbol. e.g. 233241234567 for Ghana.
+              Use the owner&apos;s Ghana phone number with country code. Example: 233241234567.
             </p>
           </div>
           <div>
-            <label className="label">Send Time (24h local)</label>
+            <label className="label">Send time</label>
             <input
               className="input"
               name="whatsappScheduleTime"
               type="time"
               defaultValue={business.whatsappScheduleTime ?? '20:00'}
             />
+            <p className="mt-1 text-xs text-black/40">
+              SMS scheduled delivery uses this time in your business timezone.
+            </p>
           </div>
           <div>
             <label className="label">Timezone</label>
@@ -134,7 +148,7 @@ export default function NotificationsSettingsForm({
             </select>
           </div>
           <div>
-            <label className="label">Branch Scope</label>
+            <label className="label">Branch scope</label>
             <select
               className="input"
               name="whatsappBranchScope"
@@ -154,25 +168,23 @@ export default function NotificationsSettingsForm({
             >
               {previewPending ? 'Generating Preview...' : 'Preview Message'}
             </button>
-            {whatsappEnabled ? <SendTestSummaryButton /> : null}
+            <SendTestSummaryButton whatsappAutomationConnected={summaryStatus.whatsappAutomationConnected} />
           </div>
           <div className="md:col-span-2 text-xs text-black/45">
             Preview uses the current form values and does not require saving first.
           </div>
         </form>
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <strong>How it works:</strong> Set up a Vercel Cron job or call{' '}
-          <code className="rounded bg-amber-100 px-1 font-mono text-xs">/api/cron/eod-summary</code>{' '}
-          with an <code className="rounded bg-amber-100 px-1 font-mono text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>{' '}
-          or <code className="rounded bg-amber-100 px-1 font-mono text-xs">x-cron-secret</code>{' '}
-          header at the scheduled time. When Meta WhatsApp env vars are configured, TillFlow attempts automated delivery first. If Meta is unavailable or rejects the request, TillFlow records <strong>manual review required</strong> and keeps a WhatsApp deep link for follow-up instead of pretending the message was sent. Duplicate cron retries for the same business/day are now skipped automatically.
-        </div>
       </div>
 
       {(previewPending || (isPreviewOpen && preview)) && (
         <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Message Preview</h2>
+            <div>
+              <h2 className="text-base font-semibold">Message preview</h2>
+              <p className="mt-1 text-sm text-black/55">
+                Preview the daily summary message before it is sent.
+              </p>
+            </div>
             {!previewPending ? (
               <button
                 type="button"
@@ -200,17 +212,19 @@ export default function NotificationsSettingsForm({
                 {preview?.text}
               </pre>
               {preview?.deepLink ? (
-                <a
-                  href={preview.deepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary mt-4 inline-flex items-center gap-2"
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                  </svg>
-                  Open in WhatsApp
-                </a>
+                <>
+                  <p className="mt-4 text-sm text-black/55">
+                    Preview the message and open it in WhatsApp if you want to send it manually.
+                  </p>
+                  <a
+                    href={preview.deepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary mt-3 inline-flex items-center gap-2"
+                  >
+                    Open in WhatsApp
+                  </a>
+                </>
               ) : null}
             </>
           )}

@@ -3,70 +3,70 @@ import Badge from '@/components/Badge';
 import EmptyState from '@/components/EmptyState';
 import Pagination from '@/components/Pagination';
 import PlanFeatureBadge from '@/components/PlanFeatureBadge';
-import StatCard from '@/components/StatCard';
-import { requireBusiness } from '@/lib/auth';
+import { requireDailySummaryAccess } from '@/lib/notifications/daily-summary-access';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
-import { getMetaWhatsAppDiagnostics } from '@/lib/notifications/providers/meta-whatsapp';
-import { getArkeselWhatsAppDiagnostics } from '@/lib/notifications/providers/arkesel-whatsapp';
+import {
+  maskOwnerPhone,
+  resolveMerchantDeliveryChannel,
+  resolveMerchantFriendlyStatus,
+} from '@/lib/notifications/merchant-delivery-log';
+import { getMerchantDailySummaryStatus } from '@/lib/notifications/merchant-summary-status';
+import { OWNER_DAILY_SUMMARY_EVENT_TYPE } from '@/lib/notifications/owner-daily-summary-sms';
 import { prisma } from '@/lib/prisma';
 import MessageLogActions from './MessageLogActions';
 import NotificationsSettingsForm from './NotificationsSettingsForm';
 
 export const dynamic = 'force-dynamic';
 
-const MESSAGE_LOGS_PER_PAGE = 20;
+const DELIVERY_LOGS_PER_PAGE = 20;
 
-function maskPhone(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) return phone;
-  if (digits.length <= 4) return `+${digits}`;
-  return `+${digits.slice(0, 3)}****${digits.slice(-4)}`;
-}
-
-function getMessageBadgeTone(status: string, providerStatus: string | null) {
-  if (status === 'DELIVERED' || status === 'READ') return 'success' as const;
-  if (status === 'FAILED') return 'danger' as const;
-  if (status === 'REVIEW_REQUIRED' || providerStatus?.toUpperCase().includes('REVIEW')) return 'warn' as const;
-  if (status === 'ACCEPTED' || status === 'PENDING') return 'pending' as const;
-  return 'neutral' as const;
-}
-
-function formatLabel(value: string | null | undefined) {
-  return (value ?? 'Unknown').replace(/_/g, ' ');
-}
-
-function formatProviderLabel(provider: string | null | undefined) {
-  if (provider === 'WHATSAPP_DEEPLINK') return 'DEEP LINK';
-  return formatLabel(provider);
-}
+type DeliveryLogEntry = {
+  id: string;
+  sentAt: Date;
+  channel: ReturnType<typeof resolveMerchantDeliveryChannel>;
+  friendlyStatus: ReturnType<typeof resolveMerchantFriendlyStatus>;
+  recipient: string;
+  deepLink: string | null;
+  messageLogId: string | null;
+  rawStatus: string;
+  providerStatus: string | null;
+  deliveredAt: string | null;
+};
 
 export default async function NotificationsSettingsPage({
   searchParams,
 }: {
   searchParams?: { error?: string; page?: string };
 }) {
-  const { business } = await requireBusiness(['OWNER']);
+  const { business } = await requireDailySummaryAccess(['OWNER']);
   if (!business) return <div className="card p-6">Owners only.</div>;
-  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+
+  const features = getFeatures(
+    (business as any).plan ?? (business.mode as any),
+    (business as any).storeMode as any,
+  );
   if (!features.advancedOps) {
     return (
       <AdvancedModeNotice
         title="Notifications is available on Growth and Pro"
-        description="Automated WhatsApp summaries and notification controls are unlocked on businesses provisioned for Growth or Pro."
+        description="Daily Owner Summary and notification controls are unlocked on businesses provisioned for Growth or Pro."
         featureName="Notifications"
         minimumPlan="GROWTH"
       />
     );
   }
-  const diagnostics = getMetaWhatsAppDiagnostics();
-  const arkeselDiagnostics = getArkeselWhatsAppDiagnostics();
+
   const businessTimezone = (business as any).timezone as string | null | undefined;
+  const summaryStatus = getMerchantDailySummaryStatus({
+    summaryEnabled: Boolean(business.whatsappEnabled),
+    ownerPhone: business.whatsappPhone,
+  });
+
   const requestedPage = Number(searchParams?.page ?? '1');
   const currentPage = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
 
-  const messageLogWhere: any = { businessId: business.id, channel: 'WHATSAPP' };
-  const pendingReviewWhere: any = {
+  const pendingReviewWhere = {
     businessId: business.id,
     channel: 'WHATSAPP',
     OR: [
@@ -78,8 +78,7 @@ export default async function NotificationsSettingsPage({
     ],
   };
 
-  const [totalMessageLogs, pendingReviewCount, pendingReviewMessages, recentJobs] = await Promise.all([
-    prisma.messageLog.count({ where: messageLogWhere }),
+  const [pendingReviewCount, pendingReviewMessages, smsLogs, whatsappLogs] = await Promise.all([
     prisma.messageLog.count({ where: pendingReviewWhere }),
     prisma.messageLog.findMany({
       where: pendingReviewWhere,
@@ -91,141 +90,156 @@ export default async function NotificationsSettingsPage({
         status: true,
         sentAt: true,
         deepLink: true,
+        provider: true,
         providerStatus: true,
         deliveredAt: true,
       },
-    } as any) as unknown as Promise<Array<{
-      id: string;
-      recipient: string;
-      status: string;
-      sentAt: Date;
-      deepLink: string | null;
-      providerStatus: string | null;
-      deliveredAt: Date | null;
-    }>>,
-    prisma.scheduledJob.findMany({
-      where: { businessId: business.id, jobName: 'EOD_WHATSAPP_SUMMARY' },
-      orderBy: { startedAt: 'desc' },
-      take: 5,
-      select: { id: true, status: true, startedAt: true, durationMs: true, triggeredBy: true, errorMessage: true },
+    } as any) as unknown as Promise<
+      Array<{
+        id: string;
+        recipient: string;
+        status: string;
+        sentAt: Date;
+        deepLink: string | null;
+        provider: string | null;
+        providerStatus: string | null;
+        deliveredAt: Date | null;
+      }>
+    >,
+    prisma.messageOutbox.findMany({
+      where: {
+        businessId: business.id,
+        eventType: OWNER_DAILY_SUMMARY_EVENT_TYPE,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        recipient: true,
+        status: true,
+        createdAt: true,
+        sentAt: true,
+      },
     }),
+    prisma.messageLog.findMany({
+      where: {
+        businessId: business.id,
+        channel: 'WHATSAPP',
+        messageType: 'EOD_SUMMARY',
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        recipient: true,
+        status: true,
+        sentAt: true,
+        deepLink: true,
+        provider: true,
+        providerStatus: true,
+        deliveredAt: true,
+      },
+    } as any) as unknown as Promise<
+      Array<{
+        id: string;
+        recipient: string;
+        status: string;
+        sentAt: Date;
+        deepLink: string | null;
+        provider: string | null;
+        providerStatus: string | null;
+        deliveredAt: Date | null;
+      }>
+    >,
   ]);
-  const totalPages = Math.max(1, Math.ceil(totalMessageLogs / MESSAGE_LOGS_PER_PAGE));
+
+  const mergedLogs: DeliveryLogEntry[] = [
+    ...smsLogs.map((entry) => {
+      const friendlyStatus = resolveMerchantFriendlyStatus({
+        status: entry.status,
+        channel: 'SMS',
+      });
+      return {
+        id: `sms:${entry.id}`,
+        sentAt: entry.sentAt ?? entry.createdAt,
+        channel: 'SMS' as const,
+        friendlyStatus,
+        recipient: entry.recipient,
+        deepLink: null,
+        messageLogId: null,
+        rawStatus: entry.status,
+        providerStatus: null,
+        deliveredAt: entry.sentAt?.toISOString() ?? null,
+      };
+    }),
+    ...whatsappLogs.map((entry) => ({
+      id: `wa:${entry.id}`,
+      sentAt: entry.sentAt,
+      channel: resolveMerchantDeliveryChannel({
+        channel: 'WHATSAPP',
+        provider: entry.provider,
+        deepLink: entry.deepLink,
+      }),
+      friendlyStatus: resolveMerchantFriendlyStatus({
+        status: entry.status,
+        providerStatus: entry.providerStatus,
+        channel: 'WHATSAPP',
+        deepLink: entry.deepLink,
+      }),
+      recipient: entry.recipient,
+      deepLink: entry.deepLink,
+      messageLogId: entry.id,
+      rawStatus: entry.status,
+      providerStatus: entry.providerStatus,
+      deliveredAt: entry.deliveredAt?.toISOString() ?? null,
+    })),
+  ].sort((left, right) => right.sentAt.getTime() - left.sentAt.getTime());
+
+  const totalLogs = mergedLogs.length;
+  const totalPages = Math.max(1, Math.ceil(totalLogs / DELIVERY_LOGS_PER_PAGE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const recentMessages = (await prisma.messageLog.findMany({
-    where: messageLogWhere,
-    orderBy: { sentAt: 'desc' },
-    skip: (safeCurrentPage - 1) * MESSAGE_LOGS_PER_PAGE,
-    take: MESSAGE_LOGS_PER_PAGE,
-    select: {
-      id: true,
-      messageType: true,
-      recipient: true,
-      status: true,
-      sentAt: true,
-      deepLink: true,
-      provider: true,
-      providerStatus: true,
-      providerMessageId: true,
-      errorMessage: true,
-      deliveredAt: true,
-    },
-  } as any) as unknown) as Array<{
-    id: string;
-    messageType: string;
-    recipient: string;
-    status: string;
-    sentAt: Date;
-    deepLink: string | null;
-    provider: string;
-    providerStatus: string | null;
-    providerMessageId: string | null;
-    errorMessage: string | null;
-    deliveredAt: Date | null;
-  }>;
+  const recentLogs = mergedLogs.slice(
+    (safeCurrentPage - 1) * DELIVERY_LOGS_PER_PAGE,
+    safeCurrentPage * DELIVERY_LOGS_PER_PAGE,
+  );
+
+  const statusToneClass = (tone: 'success' | 'pending' | 'neutral' | 'warn') => {
+    if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+    if (tone === 'pending') return 'border-amber-200 bg-amber-50 text-amber-900';
+    if (tone === 'warn') return 'border-amber-200 bg-amber-50 text-amber-900';
+    return 'border-black/5 bg-black/[0.02] text-black/70';
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <PageHeader
         title="Notifications"
-        subtitle="Automate the daily owner summary via Meta when configured, with honest fallback logging when manual review is needed."
+        subtitle="Send the owner a daily business summary by SMS, with WhatsApp preview and manual follow-up available."
         actions={<PlanFeatureBadge plan="GROWTH" />}
       />
 
       <div className="card p-4 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Delivery Diagnostics</h2>
-            <p className="mt-1 text-sm text-black/55">
-              See whether this pilot is in automated mode (Meta or Arkesel) or manual-review fallback before the next EOD run fires.
-            </p>
+        <h2 className="text-base font-semibold">Delivery status</h2>
+        <p className="mt-1 text-sm text-black/55">
+          SMS is the scheduled delivery channel. WhatsApp preview and manual follow-up stay available when you need them.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className={`rounded-xl border px-4 py-3 text-sm ${statusToneClass(summaryStatus.smsTone)}`}>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">SMS</div>
+            <p className="mt-2 font-medium">{summaryStatus.smsLine}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            diagnostics.deliveryMode === 'AUTOMATED_META'
-              ? 'bg-emerald-100 text-emerald-700'
-              : arkeselDiagnostics.arkeselConfigured
-              ? 'bg-teal-100 text-teal-700'
-              : 'bg-amber-100 text-amber-700'
-          }`}>
-            {diagnostics.deliveryMode === 'AUTOMATED_META'
-              ? 'Meta automated mode'
-              : arkeselDiagnostics.arkeselConfigured
-              ? 'Arkesel automated mode'
-              : 'Manual review fallback'}
-          </span>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {[
-            {
-              label: 'Meta credentials',
-              value: diagnostics.metaConfigured ? 'Configured' : 'Missing',
-              ok: diagnostics.metaConfigured,
-              note: diagnostics.metaMockMode ? 'Mock mode is enabled for safe local testing.' : null,
-            },
-            {
-              label: 'Webhook delivery updates',
-              value: diagnostics.webhookConfigured ? 'Ready' : 'Missing verify token/app secret',
-              ok: diagnostics.webhookConfigured,
-              note: null,
-            },
-            {
-              label: 'Meta template mode',
-              value: diagnostics.templateConfigured ? 'Configured' : 'Freeform text fallback',
-              ok: diagnostics.templateConfigured,
-              note: null,
-            },
-            {
-              label: 'Arkesel WhatsApp',
-              value: arkeselDiagnostics.arkeselConfigured ? 'Configured' : 'Not configured',
-              ok: arkeselDiagnostics.arkeselConfigured,
-              note: arkeselDiagnostics.arkeselMockMode ? 'Mock mode — no real messages sent.' : null,
-            },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
-              <div className="text-xs uppercase tracking-[0.16em] text-black/40">{item.label}</div>
-              <div className={`mt-2 text-sm font-semibold ${item.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {item.value}
-              </div>
-              {item.note ? (
-                <div className="mt-1 text-xs text-black/45">{item.note}</div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-
-        {[...diagnostics.issues, ...arkeselDiagnostics.issues].length > 0 && !diagnostics.metaConfigured && !arkeselDiagnostics.arkeselConfigured ? (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <div className="font-semibold">Needs attention before fully unattended delivery</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
-              {diagnostics.issues.map((issue) => (
-                <li key={issue}>{issue}</li>
-              ))}
-              {!diagnostics.metaConfigured && arkeselDiagnostics.issues.map((issue) => (
-                <li key={issue}>{issue}</li>
-              ))}
-            </ul>
+          <div className={`rounded-xl border px-4 py-3 text-sm ${statusToneClass(summaryStatus.whatsappTone)}`}>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] opacity-70">WhatsApp</div>
+            <p className="mt-2 font-medium">{summaryStatus.whatsappLine}</p>
           </div>
+        </div>
+        {summaryStatus.helperLine ? (
+          <p className="mt-4 text-sm text-black/55">{summaryStatus.helperLine}</p>
+        ) : null}
+        {pendingReviewCount > 0 ? (
+          <p className="mt-3 text-sm text-amber-800">
+            Some summaries may need manual follow-up before sending.
+          </p>
         ) : null}
       </div>
 
@@ -238,105 +252,83 @@ export default async function NotificationsSettingsPage({
           whatsappBranchScope: business.whatsappBranchScope,
           timezone: businessTimezone,
         }}
+        summaryStatus={summaryStatus}
       />
 
       {pendingReviewCount > 0 ? (
         <div className="card p-4 sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h2 className="text-base font-semibold">Pending Reviews</h2>
-              <p className="mt-1 text-sm text-black/55">
-                These WhatsApp summaries still need manual follow-up or confirmation.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:min-w-[15rem] sm:grid-cols-1">
-              <StatCard
-                label="Needs attention"
-                value={String(pendingReviewCount)}
-                tone="warn"
-                helper="Retry failed sends or confirm deep-link deliveries below."
-              />
-            </div>
+          <div>
+            <h2 className="text-base font-semibold">Needs follow-up</h2>
+            <p className="mt-1 text-sm text-black/55">
+              These summaries still need manual follow-up or confirmation in WhatsApp.
+            </p>
           </div>
 
           <div className="mt-4 space-y-3">
-            {pendingReviewMessages.map((message) => (
-              <div
-                key={message.id}
-                className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={getMessageBadgeTone(message.status, message.providerStatus)}>
-                      {formatLabel(message.status)}
-                    </Badge>
-                    <span className="text-sm font-medium text-black/80">{maskPhone(message.recipient)}</span>
+            {pendingReviewMessages.map((message) => {
+              const friendlyStatus = resolveMerchantFriendlyStatus({
+                status: message.status,
+                providerStatus: message.providerStatus,
+                deepLink: message.deepLink,
+              });
+              return (
+                <div
+                  key={message.id}
+                  className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone={friendlyStatus.tone}>{friendlyStatus.label}</Badge>
+                      <span className="text-sm font-medium text-black/80">{maskOwnerPhone(message.recipient)}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-black/50">{new Date(message.sentAt).toLocaleString()}</div>
                   </div>
-                  <div className="mt-1 text-xs text-black/50">
-                    {new Date(message.sentAt).toLocaleString()}
-                    {message.providerStatus ? ` · ${formatLabel(message.providerStatus)}` : ''}
-                  </div>
-                </div>
 
-                <MessageLogActions
-                  messageLogId={message.id}
-                  status={message.status}
-                  providerStatus={message.providerStatus}
-                  deepLink={message.deepLink}
-                  deliveredAt={message.deliveredAt?.toISOString() ?? null}
-                />
-              </div>
-            ))}
+                  <MessageLogActions
+                    messageLogId={message.id}
+                    status={message.status}
+                    providerStatus={message.providerStatus}
+                    deepLink={message.deepLink}
+                    deliveredAt={message.deliveredAt?.toISOString() ?? null}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
-      {/* Recent message logs */}
-      {recentMessages.length > 0 ? (
+      {recentLogs.length > 0 ? (
         <div className="card p-4 sm:p-6">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold">Recent WhatsApp Delivery Logs</h2>
+              <h2 className="text-base font-semibold">Recent delivery history</h2>
               <p className="mt-1 text-sm text-black/55">
-                Showing {recentMessages.length} of {totalMessageLogs} delivery attempts.
+                Showing {recentLogs.length} of {totalLogs} recent summaries.
               </p>
             </div>
-            <Badge tone="info">20 per page</Badge>
           </div>
           <div className="space-y-3 text-sm">
-            {recentMessages.map((msg) => (
+            {recentLogs.map((entry) => (
               <div
-                key={msg.id}
+                key={entry.id}
                 className="flex flex-col gap-4 rounded-xl border border-black/5 bg-white px-4 py-4 lg:flex-row lg:items-start lg:justify-between"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{formatLabel(msg.messageType)}</span>
-                     <Badge tone={getMessageBadgeTone(msg.status, msg.providerStatus)}>
-                       {formatLabel(msg.status)}
-                     </Badge>
-                    <Badge tone="neutral">{formatProviderLabel(msg.provider)}</Badge>
+                    <Badge tone="neutral">{entry.channel}</Badge>
+                    <Badge tone={entry.friendlyStatus.tone}>{entry.friendlyStatus.label}</Badge>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/45">
-                    <span>{new Date(msg.sentAt).toLocaleString()}</span>
-                    <span>Recipient: {maskPhone(msg.recipient)}</span>
-                    {msg.providerStatus ? <span>Provider status: {formatLabel(msg.providerStatus)}</span> : null}
-                    {msg.providerMessageId ? <span>ID: {msg.providerMessageId}</span> : null}
+                    <span>{new Date(entry.sentAt).toLocaleString()}</span>
+                    <span>{maskOwnerPhone(entry.recipient)}</span>
                   </div>
-                  {msg.deliveredAt ? (
-                    <div className="mt-1 text-xs text-emerald-700">
-                      Confirmed {new Date(msg.deliveredAt).toLocaleString()}
-                    </div>
-                  ) : null}
-                  {msg.errorMessage ? (
-                    <div className="mt-1 text-xs text-rose-600">{msg.errorMessage}</div>
-                  ) : null}
                 </div>
 
                 <div className="flex flex-col items-start gap-2 lg:items-end">
-                  {msg.deepLink ? (
+                  {entry.deepLink ? (
                     <a
-                      href={msg.deepLink}
+                      href={entry.deepLink}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-medium text-emerald-600 hover:underline"
@@ -344,59 +336,34 @@ export default async function NotificationsSettingsPage({
                       Open in WhatsApp
                     </a>
                   ) : null}
-                  <MessageLogActions
-                    messageLogId={msg.id}
-                    status={msg.status}
-                    providerStatus={msg.providerStatus}
-                    deepLink={msg.deepLink}
-                    deliveredAt={msg.deliveredAt?.toISOString() ?? null}
-                  />
+                  {entry.messageLogId ? (
+                    <MessageLogActions
+                      messageLogId={entry.messageLogId}
+                      status={entry.rawStatus}
+                      providerStatus={entry.providerStatus}
+                      deepLink={entry.deepLink}
+                      deliveredAt={entry.deliveredAt}
+                    />
+                  ) : null}
                 </div>
               </div>
             ))}
           </div>
-          <Pagination
-            currentPage={safeCurrentPage}
-            totalPages={totalPages}
-            basePath="/settings/notifications"
-            searchParams={{ error: searchParams?.error }}
-          />
+          {totalPages > 1 ? (
+            <Pagination
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              basePath="/settings/notifications"
+              searchParams={{ error: searchParams?.error }}
+            />
+          ) : null}
         </div>
       ) : (
         <EmptyState
           icon="alert"
-          title="No WhatsApp delivery logs yet"
-          subtitle="When TillFlow sends or previews owner summaries, the latest delivery history will appear here for follow-up."
+          title="No delivery history yet"
+          subtitle="When TillFlow sends scheduled SMS summaries or you preview or test a summary, recent activity will appear here."
         />
-      )}
-
-      {/* Recent job runs */}
-      {recentJobs.length > 0 && (
-        <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-semibold">Scheduler Run History</h2>
-          <div className="space-y-2 text-sm">
-            {recentJobs.map((job) => (
-              <div key={job.id} className="flex flex-col gap-2 rounded-lg border border-black/5 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <span className={`text-xs rounded-full px-2 py-0.5 mr-2 ${
-                    job.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-700' :
-                    job.status === 'ERROR' || job.status === 'FAILED' ? 'bg-rose-100 text-rose-700' :
-                    job.status === 'SKIPPED' ? 'bg-gray-100 text-gray-600' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>
-                    {job.status}
-                  </span>
-                  <span className="text-black/60">{job.triggeredBy}</span>
-                  {job.errorMessage && <span className="ml-2 text-xs text-rose-600">{job.errorMessage}</span>}
-                </div>
-                <div className="text-xs text-black/40">
-                  {new Date(job.startedAt).toLocaleString()}
-                  {job.durationMs != null && <span className="ml-2">({job.durationMs}ms)</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
