@@ -179,7 +179,7 @@ export function buildOwnerDailySummarySms(
   const alertText = alerts.length > 0 ? alerts.join(', ') : 'None';
 
   return [
-    `TillFlow 9:30pm summary for ${business.name} (${metrics.dateLabel}, ${metrics.scopeLabel}).`,
+    `TillFlow daily summary for ${business.name} (${metrics.dateLabel}, ${metrics.scopeLabel}).`,
     `Sales ${money(metrics.totalSalesPence, currency)} from ${metrics.transactionCount} txns.`,
     `Gross profit ${money(metrics.grossProfitPence, currency)}.`,
     `Cash ${money(metrics.cashPence, currency)}, MoMo ${money(metrics.momoPence, currency)}, card ${money(metrics.cardPence, currency)}, transfer ${money(metrics.transferPence, currency)}.`,
@@ -201,6 +201,7 @@ export async function enqueueOwnerDailySummarySms(
       currency: true,
       phone: true,
       whatsappPhone: true,
+      whatsappEnabled: true,
       timezone: true,
       whatsappBranchScope: true,
       isDemo: true,
@@ -212,6 +213,9 @@ export async function enqueueOwnerDailySummarySms(
   if ((business as any).isDemo) return { ok: false as const, reason: 'DEMO_BUSINESS' as const };
   if ((business as any).subscriptionStatus === 'CANCELLED') {
     return { ok: false as const, reason: 'CANCELLED' as const };
+  }
+  if (!(business as any).whatsappEnabled) {
+    return { ok: false as const, reason: 'SUMMARY_DISABLED' as const };
   }
 
   const summaryBusiness = business as unknown as OwnerSummaryBusiness;

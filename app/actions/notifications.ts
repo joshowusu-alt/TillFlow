@@ -23,6 +23,27 @@ import {
   EOD_SUMMARY_JOB_NAME,
   shouldUseEodRunKey,
 } from '@/lib/notifications/eod';
+import { assertDailySummaryFeatureFromSnapshot } from '@/lib/notifications/daily-summary-access';
+
+async function assertDailySummaryPlanAccess(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      plan: true,
+      mode: true,
+      storeMode: true,
+    } as any,
+  });
+
+  if (!business || !assertDailySummaryFeatureFromSnapshot(business as any)) {
+    return {
+      ok: false as const,
+      error: 'Daily Owner Summary is available on Growth and Pro.',
+    };
+  }
+
+  return { ok: true as const };
+}
 
 function fmt(pence: number, currency: string) {
   return formatMoney(pence, currency);
@@ -254,7 +275,11 @@ async function _buildEodSummaryPayload(
 
 export async function buildEodSummaryPayload(): Promise<EodSummaryPayload> {
   const { withBusinessContext } = await import('@/lib/action-utils');
-  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  const { businessId } = await withBusinessContext(['OWNER']);
+  const access = await assertDailySummaryPlanAccess(businessId);
+  if (!access.ok) {
+    return { text: '', deepLink: '', recipient: null };
+  }
   return _buildEodSummaryPayload(businessId);
 }
 
@@ -457,13 +482,21 @@ export async function _sendEodSummaryForBusiness(businessId: string, triggeredBy
 
 export async function sendEodSummaryAction() {
   const { withBusinessContext } = await import('@/lib/action-utils');
-  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  const { businessId } = await withBusinessContext(['OWNER']);
+  const access = await assertDailySummaryPlanAccess(businessId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
+  }
   return _sendEodSummaryForBusiness(businessId, 'MANUAL');
 }
 
 export async function retryNotificationAction(messageLogId: string) {
   const { withBusinessContext } = await import('@/lib/action-utils');
-  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  const { businessId } = await withBusinessContext(['OWNER']);
+  const access = await assertDailySummaryPlanAccess(businessId);
+  if (!access.ok) {
+    return { ok: false, status: 'FAILED', error: access.error };
+  }
 
   const messageLog = await prisma.messageLog.findFirst({
     where: {
@@ -501,7 +534,7 @@ export async function retryNotificationAction(messageLogId: string) {
       data: {
         status: 'FAILED',
         providerStatus: 'NO_PROVIDER_CONFIGURED',
-        errorMessage: 'No WhatsApp provider is configured (Meta or Arkesel).',
+        errorMessage: 'WhatsApp delivery is not fully connected yet.',
         sentAt: new Date(),
       } as any,
     });
@@ -511,7 +544,7 @@ export async function retryNotificationAction(messageLogId: string) {
     return {
       ok: false,
       status: 'FAILED',
-      error: 'No WhatsApp provider is configured (Meta or Arkesel).',
+      error: 'WhatsApp delivery is not fully connected yet. Use Open in WhatsApp for manual follow-up.',
     };
   }
 
@@ -550,7 +583,11 @@ export async function retryNotificationAction(messageLogId: string) {
 
 export async function markNotificationSentAction(messageLogId: string) {
   const { withBusinessContext } = await import('@/lib/action-utils');
-  const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+  const { businessId } = await withBusinessContext(['OWNER']);
+  const access = await assertDailySummaryPlanAccess(businessId);
+  if (!access.ok) {
+    return { ok: false, error: access.error };
+  }
 
   const messageLog = await prisma.messageLog.findFirst({
     where: {
@@ -590,6 +627,11 @@ export async function updateWhatsappSettingsAction(formData: FormData): Promise<
   const { requireBusiness } = await import('@/lib/auth');
   const { business } = await requireBusiness(['OWNER']);
   if (!business) return;
+  if (!assertDailySummaryFeatureFromSnapshot(business as any)) {
+    redirect(
+      `/settings/notifications?error=${encodeURIComponent('Daily Owner Summary is available on Growth and Pro.')}`,
+    );
+  }
   if (!(business as any).billingCanWrite) {
     redirect('/settings/notifications?error=This business is read-only until payment is recorded in Billing %26 Plans.');
   }
@@ -604,7 +646,7 @@ export async function updateWhatsappSettingsAction(formData: FormData): Promise<
 
   if (!parsed.success) {
     redirect(
-      `/settings/notifications?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? 'Invalid WhatsApp settings')}`
+      `/settings/notifications?error=${encodeURIComponent(parsed.error.issues[0]?.message ?? 'Invalid summary settings')}`
     );
   }
 

@@ -1,15 +1,33 @@
 import { NextResponse } from 'next/server';
 import { getUser } from '@/lib/auth';
 import { buildEodSummaryPreviewForBusiness } from '@/app/actions/notifications';
+import { assertDailySummaryFeatureFromSnapshot } from '@/lib/notifications/daily-summary-access';
 import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const user = await getUser();
-  if (!user || !['MANAGER', 'OWNER'].includes(user.role)) {
+  if (!user || user.role !== 'OWNER') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: {
+      plan: true,
+      mode: true,
+      storeMode: true,
+    } as any,
+  });
+
+  if (!business || !assertDailySummaryFeatureFromSnapshot(business as any)) {
+    return NextResponse.json(
+      { error: 'Daily Owner Summary is available on Growth and Pro.' },
+      { status: 403 },
+    );
   }
 
   try {
@@ -27,7 +45,7 @@ export async function POST(request: Request) {
     if (!preview.text) {
       return NextResponse.json(
         { error: 'Unable to generate a preview for this business right now.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -36,7 +54,7 @@ export async function POST(request: Request) {
     console.error('[notifications.preview] failed:', error);
     return NextResponse.json(
       { error: 'Unable to generate a preview right now.' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
