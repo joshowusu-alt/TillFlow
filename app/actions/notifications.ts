@@ -13,11 +13,13 @@ import {
   DEFAULT_BUSINESS_TIMEZONE,
   formatBusinessDateLabel,
   getBusinessDayBounds,
-  normalizeWhatsappPhone,
   resolveBusinessTimeZone,
-  WHATSAPP_PHONE_PATTERN,
   WHATSAPP_TIME_PATTERN,
 } from '@/lib/notifications/utils';
+import {
+  resolveDailySummaryOwnerPhone,
+  resolveDailySummaryOwnerPhoneFromStored,
+} from '@/lib/notifications/owner-phone';
 import {
   buildEodCronRunKey,
   EOD_SUMMARY_JOB_NAME,
@@ -86,7 +88,7 @@ async function resolveSummaryStore(businessId: string, branchScope: string) {
 
 const WhatsAppSettingsSchema = z.object({
   whatsappEnabled: z.boolean(),
-  whatsappPhone: z.string().regex(WHATSAPP_PHONE_PATTERN, 'Invalid phone number').optional().or(z.literal('')),
+  whatsappPhone: z.string().optional().or(z.literal('')),
   whatsappScheduleTime: z.string().regex(WHATSAPP_TIME_PATTERN, 'Use HH:mm format').optional().or(z.literal('')),
   whatsappBranchScope: z.enum(['ALL', 'MAIN']).optional(),
   timezone: z.enum(COMMON_AFRICAN_TIMEZONE_VALUES).optional(),
@@ -267,7 +269,15 @@ async function _buildEodSummaryPayload(
   lines.push('', 'Sent by TillFlow POS');
 
   const text = lines.join('\n');
-  const phone = normalizeWhatsappPhone(options.phoneOverride ?? business.whatsappPhone);
+  let phone: string | null = null;
+
+  if (options.phoneOverride != null && options.phoneOverride.trim() !== '') {
+    const overrideResult = resolveDailySummaryOwnerPhone(options.phoneOverride);
+    phone = overrideResult.ok ? overrideResult.phone : null;
+  } else {
+    phone = resolveDailySummaryOwnerPhoneFromStored(business.whatsappPhone);
+  }
+
   const deepLink = buildWhatsAppDeepLink(phone ?? '', text);
 
   return { text, deepLink, recipient: phone || null };
@@ -651,12 +661,16 @@ export async function updateWhatsappSettingsAction(formData: FormData): Promise<
   }
 
   const { whatsappEnabled, whatsappPhone, whatsappScheduleTime, whatsappBranchScope, timezone } = parsed.data;
+  const ownerPhoneResult = resolveDailySummaryOwnerPhone(whatsappPhone);
+  if (!ownerPhoneResult.ok) {
+    redirect(`/settings/notifications?error=${encodeURIComponent(ownerPhoneResult.error)}`);
+  }
 
   await prisma.business.update({
     where: { id: business.id },
     data: {
       whatsappEnabled,
-      whatsappPhone: whatsappPhone || null,
+      whatsappPhone: ownerPhoneResult.phone,
       whatsappScheduleTime: whatsappScheduleTime || '20:00',
       whatsappBranchScope: whatsappBranchScope ?? 'ALL',
       timezone: timezone ?? DEFAULT_BUSINESS_TIMEZONE,

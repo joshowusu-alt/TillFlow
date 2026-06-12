@@ -51,6 +51,7 @@ describe('merchant notifications UI leakage guard', () => {
     const source = readMerchantFile('NotificationsSettingsForm.tsx');
     expect(source).toContain('Daily Owner Summary');
     expect(source).toContain('Owner phone number');
+    expect(source).toContain('0244123456 or 233244123456');
     expect(source).toContain('Preview the message and open it in WhatsApp');
   });
 });

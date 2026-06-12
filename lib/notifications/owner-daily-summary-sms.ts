@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { formatMoney } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
-import { normalizeGhanaPhone } from '@/lib/storefront-phone';
+import { resolveDailySummaryOwnerPhoneFromStored } from '@/lib/notifications/owner-phone';
 import {
   formatBusinessDateLabel,
   formatBusinessLocalDateKey,
@@ -46,7 +46,10 @@ function money(value: number, currency: string) {
 }
 
 function resolveOwnerRecipient(business: Pick<OwnerSummaryBusiness, 'phone' | 'whatsappPhone'>) {
-  return normalizeGhanaPhone(business.whatsappPhone) ?? normalizeGhanaPhone(business.phone);
+  return (
+    resolveDailySummaryOwnerPhoneFromStored(business.whatsappPhone) ??
+    resolveDailySummaryOwnerPhoneFromStored(business.phone)
+  );
 }
 
 async function resolveSummaryStore(

@@ -9,6 +9,7 @@ import {
 describe('merchant delivery log helpers', () => {
   it('masks owner phone numbers for merchant display', () => {
     expect(maskOwnerPhone('233241234567')).toBe('+233****4567');
+    expect(maskOwnerPhone('0244644502')).toBe('+233****4502');
   });
 
   it('maps SMS channel entries to friendly statuses', () => {

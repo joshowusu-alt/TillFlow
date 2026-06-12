@@ -92,7 +92,33 @@ describe('enqueueOwnerDailySummarySms', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           channel: 'SMS',
-          recipient: expect.any(String),
+          recipient: '233241234567',
+        }),
+      }),
+    );
+  });
+
+  it('normalises local Ghana numbers before SMS enqueue', async () => {
+    prismaMock.business.findUnique.mockResolvedValue({
+      id: 'biz-1',
+      name: 'Demo Shop',
+      currency: 'GHS',
+      phone: null,
+      whatsappPhone: '0244644502',
+      whatsappEnabled: true,
+      timezone: 'Africa/Accra',
+      whatsappBranchScope: 'ALL',
+      isDemo: false,
+      subscriptionStatus: 'ACTIVE',
+    });
+
+    const result = await enqueueOwnerDailySummarySms('biz-1');
+
+    expect(result.ok).toBe(true);
+    expect(prismaMock.messageOutbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipient: '233244644502',
         }),
       }),
     );

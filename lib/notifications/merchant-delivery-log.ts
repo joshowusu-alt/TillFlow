@@ -1,12 +1,12 @@
+import { maskGhanaPhone } from '@/lib/phone/ghana-phone';
+
 export type MerchantDeliveryChannel = 'SMS' | 'WhatsApp' | 'Manual follow-up';
 
 export type MerchantDeliveryBadgeTone = 'success' | 'warn' | 'danger' | 'pending' | 'neutral';
 
 export function maskOwnerPhone(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) return phone;
-  if (digits.length <= 4) return `+${digits}`;
-  return `+${digits.slice(0, 3)}****${digits.slice(-4)}`;
+  const masked = maskGhanaPhone(phone);
+  return masked || phone;
 }
 
 export function resolveMerchantDeliveryChannel(input: {

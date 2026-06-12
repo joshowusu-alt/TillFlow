@@ -7,9 +7,19 @@ import { updateWhatsappSettingsAction } from '@/app/actions/notifications';
 import SendTestSummaryButton from './SendTestSummaryButton';
 import type { MerchantSummaryStatus } from '@/lib/notifications/merchant-summary-status';
 import {
+  isValidGhanaPhone,
+  normaliseGhanaPhone,
+} from '@/lib/phone/ghana-phone';
+import {
   COMMON_AFRICAN_TIMEZONES,
   DEFAULT_BUSINESS_TIMEZONE,
 } from '@/lib/notifications/utils';
+
+function initialPhoneValue(stored?: string | null) {
+  const value = stored?.trim() ?? '';
+  if (!value) return '';
+  return normaliseGhanaPhone(value) ?? value;
+}
 
 type NotificationsSettingsFormProps = {
   error?: string;
@@ -36,6 +46,12 @@ export default function NotificationsSettingsForm({
 }: NotificationsSettingsFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [summaryEnabled, setSummaryEnabled] = useState(!!business.whatsappEnabled);
+  const [phoneValue, setPhoneValue] = useState(() => initialPhoneValue(business.whatsappPhone));
+  const [phoneHint, setPhoneHint] = useState<string | null>(() => {
+    const normalised = normaliseGhanaPhone(business.whatsappPhone);
+    return normalised ? `This will be saved as ${normalised}.` : null;
+  });
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewPending, startPreview] = useTransition();
@@ -114,12 +130,37 @@ export default function NotificationsSettingsForm({
               className="input"
               name="whatsappPhone"
               type="tel"
-              placeholder="e.g. 233241234567"
-              defaultValue={business.whatsappPhone ?? ''}
+              placeholder="e.g. 0244123456"
+              value={phoneValue}
+              onChange={(event) => {
+                setPhoneValue(event.target.value);
+                if (phoneError) setPhoneError(null);
+              }}
+              onBlur={() => {
+                const trimmed = phoneValue.trim();
+                if (!trimmed) {
+                  setPhoneHint(null);
+                  setPhoneError(null);
+                  return;
+                }
+
+                if (!isValidGhanaPhone(trimmed)) {
+                  setPhoneError('Please enter a valid Ghana phone number.');
+                  setPhoneHint(null);
+                  return;
+                }
+
+                const normalised = normaliseGhanaPhone(trimmed)!;
+                setPhoneValue(normalised);
+                setPhoneHint(`This will be saved as ${normalised}.`);
+                setPhoneError(null);
+              }}
             />
             <p className="mt-1 text-xs text-black/40">
-              Use the owner&apos;s Ghana phone number with country code. Example: 233241234567.
+              Enter the owner&apos;s Ghana phone number. You can use 0244123456 or 233244123456.
             </p>
+            {phoneHint ? <p className="mt-1 text-xs text-black/45">{phoneHint}</p> : null}
+            {phoneError ? <p className="mt-1 text-xs text-rose-600">{phoneError}</p> : null}
           </div>
           <div>
             <label className="label">Send time</label>

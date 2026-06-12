@@ -1,5 +1,6 @@
 import { getArkeselWhatsAppDiagnostics } from '@/lib/notifications/providers/arkesel-whatsapp';
 import { getMetaWhatsAppDiagnostics } from '@/lib/notifications/providers/meta-whatsapp';
+import { isValidGhanaPhone } from '@/lib/phone/ghana-phone';
 
 export type MerchantSummaryStatus = {
   smsLine: string;
@@ -19,7 +20,7 @@ export function getMerchantDailySummaryStatus(input: {
   const whatsappAutomationConnected =
     meta.deliveryMode === 'AUTOMATED_META' || arkesel.arkeselConfigured;
 
-  const hasPhone = Boolean(input.ownerPhone?.replace(/\D/g, ''));
+  const hasPhone = isValidGhanaPhone(input.ownerPhone);
 
   let smsLine = 'SMS scheduled delivery is available for daily owner summaries.';
   let smsTone: MerchantSummaryStatus['smsTone'] = 'neutral';
