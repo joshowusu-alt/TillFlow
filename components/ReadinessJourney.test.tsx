@@ -203,4 +203,17 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.getByRole('link', { name: /System Health/ })).toHaveAttribute('href', '/settings/system-health');
     expect(screen.getByText('Secure. Reliable. Built for Ghanaian businesses.')).toBeInTheDocument();
   });
+
+  it('does not present the last closed shift as current expected cash', () => {
+    renderDashboard({
+      openShiftCount: 0,
+      expectedCashPence: 0,
+      lastShiftClosedAt: new Date(2026, 5, 13, 21, 54).toISOString(),
+    });
+
+    const expectedCashCard = screen.getByRole('link', { name: /Expected Cash:/ });
+
+    expect(within(expectedCashCard).getByText('GH₵0.00')).toBeInTheDocument();
+    expect(within(expectedCashCard).getByText('No open till')).toBeInTheDocument();
+  });
 });
