@@ -103,23 +103,14 @@ const STEP_ESTIMATED_MINUTES: Record<string, number> = {
 
 export async function resolveReadinessExpectedCashPence(input: {
   openShiftExpectedCashPence: number[];
-  lastClosedShiftExpectedCashPence?: number | null;
-  openingBalanceCashPence?: number | null;
-  cashOnHandEstimatePence?: number | null;
 }) {
   if (input.openShiftExpectedCashPence.length > 0) {
     return input.openShiftExpectedCashPence.reduce((sum, value) => sum + value, 0);
   }
 
-  if (input.lastClosedShiftExpectedCashPence != null) {
-    return input.lastClosedShiftExpectedCashPence;
-  }
-
-  if (input.openingBalanceCashPence != null && input.openingBalanceCashPence > 0) {
-    return input.openingBalanceCashPence;
-  }
-
-  return input.cashOnHandEstimatePence ?? 0;
+  // Expected cash is a live drawer balance. Closed shifts and accounting
+  // balances are historical/financial figures, not cash currently in an open till.
+  return 0;
 }
 
 /**
@@ -144,7 +135,6 @@ export async function getReadiness(): Promise<ReadinessData> {
     overdueSupplierInvoiceCount,
     lastClosedShift,
     lastReceipt,
-    openingBalanceCash,
     seedProductCount,
     snapshot,
   ] = await Promise.all([
@@ -194,7 +184,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         closedAt: { not: null },
       },
       orderBy: { closedAt: 'desc' },
-      select: { closedAt: true, expectedCashPence: true },
+      select: { closedAt: true },
     }),
     prisma.salesInvoice.findFirst({
       where: {
@@ -204,13 +194,6 @@ export async function getReadiness(): Promise<ReadinessData> {
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
-    }),
-    prisma.openingBalance.findFirst({
-      where: {
-        businessId: business.id,
-        accountCode: '1000',
-      },
-      select: { amountPence: true },
     }),
     prisma.product.count({ where: { businessId: business.id, sku: { in: DEMO_SKUS } } }),
     loadActivationSnapshot(business.id, now),
@@ -313,9 +296,6 @@ export async function getReadiness(): Promise<ReadinessData> {
 
   const expectedCashPence = await resolveReadinessExpectedCashPence({
     openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),
-    lastClosedShiftExpectedCashPence: lastClosedShift?.expectedCashPence,
-    openingBalanceCashPence: openingBalanceCash?.amountPence,
-    cashOnHandEstimatePence: todayKpis?.cashOnHandEstimatePence,
   });
 
   const stuckMessage = getStuckReasonMessage(activation.stuckReason);
