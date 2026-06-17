@@ -11,15 +11,20 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 
-export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string; supplierId?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
+  const supplierId = searchParams?.supplierId?.trim() || undefined;
   const today = new Date().toISOString().slice(0, 10);
 
-  const [invoices, recentPayments] = await Promise.all([
+  const [invoices, recentPayments, linkedSupplier] = await Promise.all([
     prisma.purchaseInvoice.findMany({
-      where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      where: {
+        businessId: business.id,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        ...(supplierId ? { supplierId } : {}),
+      },
       select: {
         id: true,
         createdAt: true,
@@ -34,7 +39,12 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       ],
     }),
     prisma.purchasePayment.findMany({
-      where: { purchaseInvoice: { businessId: business.id } },
+      where: {
+        purchaseInvoice: {
+          businessId: business.id,
+          ...(supplierId ? { supplierId } : {}),
+        }
+      },
       select: {
         id: true,
         method: true,
@@ -49,6 +59,12 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
       orderBy: { paidAt: 'desc' },
       take: 20,
     }),
+    supplierId
+      ? prisma.supplier.findFirst({
+          where: { id: supplierId, businessId: business.id },
+          select: { id: true, name: true, phone: true, creditLimitPence: true }
+        })
+      : Promise.resolve(null),
   ]);
 
   const outstandingInvoices = invoices
@@ -58,10 +74,42 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
     }))
     .filter((invoice) => invoice.outstanding > 0);
 
+  const totalOutstanding = outstandingInvoices.reduce((sum, inv) => sum + inv.outstanding, 0);
+
+  // Last payment for the supplier summary header
+  const lastPaymentAt = recentPayments.length > 0 ? recentPayments[0].paidAt : null;
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Supplier Payments" subtitle="Settle outstanding payables." />
+      <PageHeader title="Record payment to supplier" subtitle="Settle outstanding payables." />
       <FormError error={searchParams?.error} />
+
+      {/* Supplier summary header when arriving from a supplier profile */}
+      {linkedSupplier ? (
+        <div className="card p-4 sm:p-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-xs uppercase tracking-wide text-black/40">Recording payment to</div>
+            <div className="text-lg font-semibold text-ink">{linkedSupplier.name}</div>
+            {linkedSupplier.phone ? <div className="text-sm text-black/60">{linkedSupplier.phone}</div> : null}
+            <div className="mt-2 text-sm">
+              <span className="text-black/50">Total outstanding: </span>
+              <span className="font-semibold text-amber-700">{formatMoney(totalOutstanding, business.currency)}</span>
+            </div>
+            {lastPaymentAt ? (
+              <div className="text-xs text-black/50">Last payment: {formatDate(lastPaymentAt)}</div>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2 text-sm">
+            <Link href={`/suppliers/${linkedSupplier.id}`} className="btn-secondary text-xs">
+              ← Back to supplier profile
+            </Link>
+            <a href="/payments/supplier-payments" className="btn-ghost text-xs text-center">
+              Show all suppliers
+            </a>
+          </div>
+        </div>
+      ) : null}
+
       <ResponsiveDataTable
         mode="cards"
         desktop={
@@ -167,7 +215,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                   {outstandingInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-3 py-8 text-center text-sm text-black/50">
-                        No outstanding invoices.
+                        {linkedSupplier ? `No outstanding invoices for ${linkedSupplier.name}.` : 'No outstanding invoices.'}
                       </td>
                     </tr>
                   ) : null}
@@ -178,7 +226,9 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         }
         mobile={
           outstandingInvoices.length === 0 ? (
-            <div className="card p-6 text-sm text-black/50">No outstanding invoices.</div>
+            <div className="card p-6 text-sm text-black/50">
+              {linkedSupplier ? `No outstanding invoices for ${linkedSupplier.name}.` : 'No outstanding invoices.'}
+            </div>
           ) : (
             outstandingInvoices.map((invoice) => {
               const now = new Date();
