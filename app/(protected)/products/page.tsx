@@ -10,7 +10,6 @@ import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } 
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
 import { createCategoryAction, updateCategoryAction, deleteCategoryAction } from '@/app/actions/categories';
-import RepairPricesButton from './RepairPricesButton';
 import BarcodeScanInput from '@/components/BarcodeScanInput';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import Link from 'next/link';
@@ -128,7 +127,6 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               </Link>
             </div>
           )}
-          {user.role === 'OWNER' && <RepairPricesButton />}
           {isManager ? (
             <div id="product-create" className="card p-4 sm:p-5">
               <h2 className="text-lg font-display font-semibold">Add product</h2>

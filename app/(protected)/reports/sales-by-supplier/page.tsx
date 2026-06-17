@@ -136,7 +136,7 @@ export default async function SalesBySupplierPage({
 
       {/* Disclaimer note */}
       <p className="text-sm text-black/50">
-        This report shows sales for products linked to each supplier via their preferred supplier setting.
+        This report shows sales for products linked to each supplier.
         It does not track the exact supplier source of each inventory unit sold.
       </p>
 
@@ -232,7 +232,7 @@ export default async function SalesBySupplierPage({
           {drilledHasNoLinkedProducts ? (
             <ReportSetupEmptyState
               title={`No products linked to ${drilledSupplier!.name}`}
-              body="Assign this supplier as the preferred supplier on the products it supplies. Those products will then appear in this report."
+              body={`Add ${drilledSupplier!.name} as the preferred supplier on products, or record a purchase from ${drilledSupplier!.name} containing those products.`}
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View supplier profile', href: `/suppliers/${supplierId}` },
@@ -318,7 +318,7 @@ export default async function SalesBySupplierPage({
           {!hasSupplierLinks ? (
             <ReportSetupEmptyState
               title="No supplier-linked products yet"
-              body="Link products to their preferred suppliers to start this report. Existing sales will then be grouped by the product's current preferred supplier setting."
+              body="Add a preferred supplier on products, or record purchases from suppliers so TillFlow can link products for this report."
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View suppliers', href: '/suppliers' },
@@ -391,7 +391,7 @@ export default async function SalesBySupplierPage({
               ) : (
                 <ReportTableEmptyRow
                   colSpan={7}
-                  message="Link products to their preferred suppliers to start this report."
+                  message="Add preferred suppliers on products or record supplier purchases to start this report."
                 />
               )}
             </tbody>

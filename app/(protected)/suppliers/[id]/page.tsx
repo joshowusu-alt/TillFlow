@@ -412,7 +412,7 @@ export default async function SupplierDetailPage({
           <div className="mt-4 rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6">
             <div className="text-sm font-semibold text-ink">No products linked yet</div>
             <p className="mt-1 max-w-2xl text-sm text-black/55">
-              Set {supplier.name} as the preferred supplier on the products it supplies to populate this section and the Sales by Linked Supplier report.
+              Set {supplier.name} as the preferred supplier on products, or record a purchase from {supplier.name} containing those products.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/products" className="btn-primary text-sm">Manage products</Link>

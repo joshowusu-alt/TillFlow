@@ -123,7 +123,7 @@ describe('sales-by-supplier page', () => {
   });
 
   it('renders disclaimer note about preferred supplier attribution', () => {
-    expect(src).toContain('preferred supplier setting');
+    expect(src).toContain('This report shows sales for products linked to each supplier');
     expect(src).toContain('does not track the exact supplier source');
   });
 
@@ -142,7 +142,7 @@ describe('sales-by-supplier page', () => {
 
   it('shows an actionable setup state when no products are linked to suppliers', () => {
     expect(src).toContain('No supplier-linked products yet');
-    expect(src).toContain('Link products to their preferred suppliers to start this report');
+    expect(src).toContain('Add a preferred supplier on products, or record purchases from suppliers');
     expect(src).toContain('Manage products');
     expect(src).toContain('View suppliers');
   });
@@ -155,7 +155,7 @@ describe('sales-by-supplier page', () => {
 
   it('shows filtered supplier setup actions for empty drill-downs', () => {
     expect(src).toContain('No products linked to');
-    expect(src).toContain('Assign this supplier as the preferred supplier');
+    expect(src).toContain('as the preferred supplier on products, or record a purchase from');
     expect(src).toContain('View linked products');
     expect(src).toContain('#products-supplied');
   });
@@ -201,6 +201,106 @@ describe('product setup — preferred supplier linking', () => {
     expect(productService).toContain('preferredSupplierId?: string | null');
     expect(productService).toContain('assertSupplierBelongsToBusiness');
     expect(productService).toContain('preferredSupplierId: normalized.preferredSupplierId');
+  });
+
+  it('does not render the old owner-facing price repair banner or button', () => {
+    expect(productsPage).not.toContain('RepairPricesButton');
+    expect(productsPage).not.toContain('Price repair:');
+    expect(productsPage).not.toContain('Repair prices');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Purchase/import-driven supplier linking
+// ---------------------------------------------------------------------------
+
+describe('purchase-driven supplier-product linking', () => {
+  const purchaseService = readFileSync(join(process.cwd(), 'lib/services/purchases.ts'), 'utf8');
+  const purchaseActions = readFileSync(join(process.cwd(), 'app/actions/purchases.ts'), 'utf8');
+  const purchaseDetailPage = readFileSync(join(process.cwd(), 'app/(protected)/purchases/[id]/page.tsx'), 'utf8');
+  const importStockAction = readFileSync(join(process.cwd(), 'app/actions/import-stock.ts'), 'utf8');
+  const importStockClient = readFileSync(
+    join(process.cwd(), 'app/(protected)/settings/import-stock/ImportStockClient.tsx'),
+    'utf8',
+  );
+  const supplierSalesSrc = readFileSync(join(process.cwd(), 'lib/reports/supplier-sales.ts'), 'utf8');
+
+  it('links purchased products only when preferredSupplierId is null', () => {
+    expect(purchaseService).toContain('linkPurchasedProductsToSupplier');
+    expect(purchaseService).toContain('preferredSupplierId: null');
+    expect(purchaseService).toContain('data: { preferredSupplierId: input.supplierId }');
+  });
+
+  it('returns a structured supplier-link summary with reviewable products left unchanged', () => {
+    expect(purchaseService).toContain('linkedCount');
+    expect(purchaseService).toContain('alreadyLinkedCount');
+    expect(purchaseService).toContain('skippedDifferentSupplierCount');
+    expect(purchaseService).toContain('skippedProducts');
+    expect(purchaseService).toContain('productName: product.name');
+    expect(purchaseService).toContain('sku: product.sku');
+    expect(purchaseService).toContain('currentSupplierName');
+    expect(purchaseService).toContain('purchaseSupplierName');
+    expect(purchaseService).toContain('product.preferredSupplierId !== input.supplierId');
+  });
+
+  it('redirects purchase creation to a detail page with supplier-link counts', () => {
+    expect(purchaseActions).toContain('const invoice = await createPurchase');
+    expect(purchaseActions).toContain("params.set('linked'");
+    expect(purchaseActions).toContain("params.set('already'");
+    expect(purchaseActions).toContain("params.set('left'");
+    expect(purchaseActions).toContain('redirect(`/purchases/${invoice.id}?${params.toString()}`)');
+  });
+
+  it('shows purchase supplier-link summary and a review table for products left unchanged', () => {
+    expect(purchaseDetailPage).toContain('Supplier links updated');
+    expect(purchaseDetailPage).toContain('for supplier sales reporting');
+    expect(purchaseDetailPage).toContain('left them unchanged');
+    expect(purchaseDetailPage).toContain('We do this to avoid changing supplier sales reports by mistake.');
+    expect(purchaseDetailPage).toContain('Review skipped products');
+    expect(purchaseDetailPage).toContain('Current linked supplier');
+    expect(purchaseDetailPage).toContain('Purchase supplier');
+    expect(purchaseDetailPage).toContain('Keep current supplier');
+    expect(purchaseDetailPage).toContain('Change to purchase supplier');
+  });
+
+  it('keeps supplier-link summary copy owner friendly', () => {
+    const start = purchaseDetailPage.indexOf('Supplier links updated');
+    const end = purchaseDetailPage.indexOf("searchParams?.supplierLinkChanged === '1'");
+    const summaryBlock = purchaseDetailPage.slice(start, end);
+    expect(summaryBlock).not.toMatch(/\berror\b|\bfailed\b|\bconflict\b|\bmismatch\b|\binvalid\b|\bforeign key\b|preferredSupplierId/i);
+  });
+
+  it('allows only managers and owners to change a product to the purchase supplier', () => {
+    expect(purchaseActions).toContain('export async function changePurchaseProductSupplierLinkAction');
+    expect(purchaseActions).toContain("withBusinessContext(['MANAGER', 'OWNER']");
+    expect(purchaseActions).toContain('purchaseInvoiceLine.findFirst');
+    expect(purchaseActions).toContain('prisma.product.updateMany');
+    expect(purchaseActions).toContain("action: 'PRODUCT_UPDATE'");
+    expect(purchaseActions).toContain('data: { preferredSupplierId: invoice.supplierId }');
+    expect(purchaseActions).toContain("revalidatePath('/reports/sales-by-supplier')");
+    expect(purchaseActions).toContain('supplierLinkChanged=1');
+  });
+
+  it('groups import-created purchase invoices by supplier so imports can auto-link products', () => {
+    expect(importStockAction).toContain('groupLinesBySupplier');
+    expect(importStockAction).toContain('supplierId: group.supplierId');
+    expect(importStockAction).not.toContain('supplierId: null,\n          paymentStatus');
+  });
+
+  it('surfaces supplier-link summary from import results', () => {
+    expect(importStockAction).toContain('supplierLinkSummary: ImportSupplierLinkSummary');
+    expect(importStockAction).toContain('mergeSupplierProductLinkSummary');
+    expect(importStockAction).toContain('supplierLinkSummary.supplierSummaries');
+    expect(importStockClient).toContain('Supplier links updated');
+    expect(importStockClient).toContain('linked to suppliers from your import');
+    expect(importStockClient).toContain('left unchanged');
+    expect(importStockClient).toContain('Review skipped products');
+    expect(importStockClient).toContain('Review product');
+  });
+
+  it('feeds the existing Sales by Linked Supplier report via Product.preferredSupplierId', () => {
+    expect(supplierSalesSrc).toContain('preferredSupplierId: { not: null }');
+    expect(supplierSalesSrc).toContain('salesInvoiceLine.findMany');
   });
 });
 
@@ -421,7 +521,7 @@ describe('supplier detail page — sales performance section', () => {
 
   it('shows an empty state when the supplier has no linked products', () => {
     expect(src).toContain('No products linked yet');
-    expect(src).toContain('Set {supplier.name} as the preferred supplier');
+    expect(src).toContain('or record a purchase from {supplier.name}');
     expect(src).toContain('Link products');
     expect(src).toContain('Manage products');
   });

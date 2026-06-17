@@ -533,6 +533,12 @@ export default function ImportStockClient({
   // Stage 3 — Result
   // ────────────────────────────────────────────────────────────────────────
   if (stage === 'result' && result) {
+    const supplierLinkSummary = result.supplierLinkSummary;
+    const supplierLinkTotal =
+      supplierLinkSummary.linkedCount +
+      supplierLinkSummary.alreadyLinkedCount +
+      supplierLinkSummary.skippedDifferentSupplierCount;
+
     return (
       <div className="card p-8 space-y-6">
         <ImportSteps steps={STEPS} activeIndex={4} />
@@ -579,6 +585,94 @@ export default function ImportStockClient({
             </div>
           ))}
         </div>
+
+        {supplierLinkTotal > 0 && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-semibold">Supplier links updated</p>
+                <div className="mt-1 space-y-0.5 text-emerald-800">
+                  {supplierLinkSummary.linkedCount > 0 && (
+                    <p>
+                      {supplierLinkSummary.linkedCount} product{supplierLinkSummary.linkedCount === 1 ? ' was' : 's were'} linked to suppliers from your import.
+                    </p>
+                  )}
+                  {supplierLinkSummary.alreadyLinkedCount > 0 && (
+                    <p>
+                      {supplierLinkSummary.alreadyLinkedCount} product{supplierLinkSummary.alreadyLinkedCount === 1 ? ' was' : 's were'} already linked to the same supplier.
+                    </p>
+                  )}
+                  {supplierLinkSummary.skippedDifferentSupplierCount > 0 && (
+                    <p>
+                      {supplierLinkSummary.skippedDifferentSupplierCount} product{supplierLinkSummary.skippedDifferentSupplierCount === 1 ? ' was' : 's were'} already linked to another supplier and left unchanged.
+                    </p>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-emerald-800/80">
+                  We do this to avoid changing supplier sales reports by mistake.
+                </p>
+              </div>
+              {supplierLinkSummary.skippedProducts.length > 0 && (
+                <a href="#import-supplier-link-review" className="text-sm font-semibold text-emerald-900 underline">
+                  Review skipped products
+                </a>
+              )}
+            </div>
+
+            {supplierLinkSummary.supplierSummaries.length > 1 && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {supplierLinkSummary.supplierSummaries.map((supplier) => (
+                  <div key={supplier.supplierId} className="rounded-lg border border-emerald-200 bg-white/70 px-3 py-2">
+                    <p className="font-medium text-emerald-950">{supplier.supplierName}</p>
+                    <p className="mt-0.5 text-xs text-emerald-800">
+                      {supplier.linkedCount} linked · {supplier.alreadyLinkedCount} already linked ·{' '}
+                      {supplier.skippedDifferentSupplierCount} left unchanged
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {supplierLinkSummary.skippedProducts.length > 0 && (
+          <div id="import-supplier-link-review" className="rounded-xl border border-black/10 bg-white p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-black/80">Review skipped products</h3>
+              <p className="mt-1 text-xs text-black/55">
+                These products were already linked to another supplier, so TillFlow left them unchanged.
+              </p>
+            </div>
+            <div className="mt-3 overflow-x-auto">
+              <table className="table w-full border-separate border-spacing-y-1 text-sm">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th>Current linked supplier</th>
+                    <th>Purchase supplier</th>
+                    <th className="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplierLinkSummary.skippedProducts.map((product) => (
+                    <tr key={`${product.productId}-${product.purchaseSupplierId}`} className="rounded-xl bg-white">
+                      <td className="px-3 py-2 font-medium">{product.productName}</td>
+                      <td className="px-3 py-2 text-black/55">{product.sku || '—'}</td>
+                      <td className="px-3 py-2 text-black/70">{product.currentSupplierName}</td>
+                      <td className="px-3 py-2 text-black/70">{product.purchaseSupplierName}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Link href={`/products/${product.productId}`} className="text-sm font-semibold text-accent hover:underline">
+                          Review product
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {result.skipped > 0 && (
           <details className="rounded-xl border border-black/10 p-4 text-sm">

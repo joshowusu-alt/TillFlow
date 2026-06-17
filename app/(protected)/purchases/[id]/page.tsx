@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
+import { changePurchaseProductSupplierLinkAction } from '@/app/actions/purchases';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 
@@ -14,7 +15,14 @@ export default async function PurchaseInvoicePage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { error?: string };
+  searchParams?: {
+    error?: string;
+    created?: string;
+    linked?: string;
+    already?: string;
+    left?: string;
+    supplierLinkChanged?: string;
+  };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -26,7 +34,15 @@ export default async function PurchaseInvoicePage({
       store: { select: { name: true } },
       lines: {
         include: {
-          product: { select: { name: true } },
+          product: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              preferredSupplierId: true,
+              preferredSupplier: { select: { id: true, name: true } },
+            },
+          },
           unit: { select: { name: true, pluralName: true } },
         },
         orderBy: { createdAt: 'asc' },
@@ -45,6 +61,28 @@ export default async function PurchaseInvoicePage({
   const isClosed = ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
+  const supplierLinkedCount = Number.parseInt(searchParams?.linked ?? '0', 10) || 0;
+  const supplierAlreadyLinkedCount = Number.parseInt(searchParams?.already ?? '0', 10) || 0;
+  const supplierLeftUnchangedCount = Number.parseInt(searchParams?.left ?? '0', 10) || 0;
+  const showSupplierLinkSummary =
+    invoice.supplier &&
+    searchParams?.created === '1' &&
+    supplierLinkedCount + supplierAlreadyLinkedCount + supplierLeftUnchangedCount > 0;
+  const productsLeftUnchanged = invoice.supplier
+    ? Array.from(
+        invoice.lines.reduce((map, line) => {
+          const product = line.product;
+          if (
+            product.preferredSupplierId &&
+            product.preferredSupplierId !== invoice.supplierId &&
+            !map.has(product.id)
+          ) {
+            map.set(product.id, product);
+          }
+          return map;
+        }, new Map<string, (typeof invoice.lines)[number]['product']>()).values(),
+      )
+    : [];
 
   return (
     <div className="space-y-6">
@@ -55,6 +93,49 @@ export default async function PurchaseInvoicePage({
       />
 
       <FormError error={searchParams?.error} />
+
+      {showSupplierLinkSummary && invoice.supplier && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-semibold">Supplier links updated</p>
+          <div className="mt-1 space-y-0.5 text-emerald-800">
+            {supplierLinkedCount > 0 && (
+              <p>
+                {supplierLinkedCount} product{supplierLinkedCount === 1 ? ' was' : 's were'} linked to{' '}
+                {invoice.supplier.name} for supplier sales reporting.
+              </p>
+            )}
+            {supplierAlreadyLinkedCount > 0 && (
+              <p>
+                {supplierAlreadyLinkedCount} product{supplierAlreadyLinkedCount === 1 ? ' was' : 's were'} already linked to{' '}
+                {invoice.supplier.name}.
+              </p>
+            )}
+            {supplierLeftUnchangedCount > 0 && (
+              <p>
+                {supplierLeftUnchangedCount} product{supplierLeftUnchangedCount === 1 ? ' was' : 's were'} already linked to another supplier,
+                so TillFlow left {supplierLeftUnchangedCount === 1 ? 'it' : 'them'} unchanged.
+              </p>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-emerald-800/80">
+            We do this to avoid changing supplier sales reports by mistake.
+          </p>
+          {productsLeftUnchanged.length > 0 && (
+            <Link href="#supplier-link-review" className="mt-3 inline-flex text-sm font-semibold text-emerald-900 underline">
+              Review skipped products
+            </Link>
+          )}
+        </div>
+      )}
+
+      {searchParams?.supplierLinkChanged === '1' && invoice.supplier && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-semibold">Supplier link changed.</p>
+          <p className="mt-1 text-emerald-800">
+            Future Sales by Linked Supplier reports will now use {invoice.supplier.name} for this product.
+          </p>
+        </div>
+      )}
 
       {/* Summary card */}
       <div className="card grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -106,6 +187,66 @@ export default async function PurchaseInvoicePage({
           </div>
         )}
       </div>
+
+      {invoice.supplier && productsLeftUnchanged.length > 0 && (
+        <div id="supplier-link-review" className="card p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Review skipped products</h2>
+              <p className="mt-1 text-sm text-black/55">
+                These products were already linked to another supplier, so TillFlow left them unchanged.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="table w-full border-separate border-spacing-y-1 text-sm">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>SKU</th>
+                  <th>Current linked supplier</th>
+                  <th>Purchase supplier</th>
+                  <th className="text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productsLeftUnchanged.map((product) => (
+                  <tr key={product.id} className="rounded-xl bg-white">
+                    <td className="px-3 py-2 font-medium">{product.name}</td>
+                    <td className="px-3 py-2 text-black/55">{product.sku || '—'}</td>
+                    <td className="px-3 py-2 text-black/70">
+                      {product.preferredSupplier ? (
+                        <Link href={`/suppliers/${product.preferredSupplier.id}`} className="hover:underline">
+                          {product.preferredSupplier.name}
+                        </Link>
+                      ) : (
+                        'Another supplier'
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-black/70">
+                      <Link href={`/suppliers/${invoice.supplier!.id}`} className="hover:underline">
+                        {invoice.supplier!.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <span className="text-xs text-black/45">Keep current supplier</span>
+                        <form action={changePurchaseProductSupplierLinkAction}>
+                          <input type="hidden" name="purchaseInvoiceId" value={invoice.id} />
+                          <input type="hidden" name="productId" value={product.id} />
+                          <SubmitButton className="btn-ghost border border-black/10 text-xs" loadingText="Saving...">
+                            Change to purchase supplier
+                          </SubmitButton>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Invoice lines */}
       <div className="card p-6">
