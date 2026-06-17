@@ -5,6 +5,7 @@ import { getFirstStore } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import RefreshIndicator from '@/components/RefreshIndicator';
+import { getTopLinkedSupplierForMonth } from '@/lib/reports/supplier-sales';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,10 @@ export default async function CommandCenterPage() {
 
   const store = await getFirstStore(business.id);
   const now = new Date();
-  const kpis = await getTodayKPIs(business.id).catch(() => null);
+  const [kpis, topSupplier] = await Promise.all([
+    getTodayKPIs(business.id).catch(() => null),
+    features.advancedReports ? getTopLinkedSupplierForMonth(business.id).catch(() => null) : Promise.resolve(null),
+  ]);
 
   const currency = business.currency;
 
@@ -211,6 +215,7 @@ export default async function CommandCenterPage() {
       { label: 'Profit Margins', desc: 'Product-level margin analysis with cost breakdown', href: '/reports/margins', plan: 'GROWTH' },
       { label: 'Risk Monitor', desc: 'Overrides, variances, and control alerts', href: '/reports/risk-monitor', plan: 'GROWTH' },
       { label: 'Reorder Queue', desc: 'Stock replenishment priorities ranked by urgency', href: '/reports/reorder-suggestions', plan: 'GROWTH' },
+      { label: 'Sales by Supplier', desc: 'Revenue and volume for products linked to each supplier', href: '/reports/sales-by-supplier', plan: 'GROWTH' },
       { label: 'Income Statement', desc: 'Revenue minus costs for any period', href: '/reports/income-statement', plan: 'GROWTH' },
       { label: 'Cashflow', desc: 'Cash movements and payment method split', href: '/reports/cashflow', plan: 'GROWTH' },
     );
@@ -250,6 +255,11 @@ export default async function CommandCenterPage() {
 
       {/* ── Layer 1: Posture ────────────────────────────────────────── */}
       <PostureStrip kpis={kpis} currency={currency} />
+
+      {/* ── Top Supplier This Month (Growth+) ───────────────────────── */}
+      {features.advancedReports ? (
+        <TopSupplierCard topSupplier={topSupplier} currency={currency} />
+      ) : null}
 
       {/* ── Layer 2: Attention Needed ───────────────────────────────── */}
       <section>
@@ -336,6 +346,50 @@ export default async function CommandCenterPage() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+/* ─── Top Supplier card ──────────────────────────────────────────────── */
+
+function TopSupplierCard({
+  topSupplier,
+  currency,
+}: {
+  topSupplier: { supplierId: string; supplierName: string; totalRevenuePence: number; totalQtyBase: number } | null;
+  currency: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-card sm:p-5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+        Top Supplier This Month
+      </p>
+      {topSupplier ? (
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="truncate text-xl font-display font-bold tracking-tight text-ink">
+              {topSupplier.supplierName}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+              <span>{formatMoney(topSupplier.totalRevenuePence, currency)} revenue</span>
+              <span>{topSupplier.totalQtyBase.toLocaleString()} items sold</span>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Based on products linked to this supplier. Does not track exact stock-batch origin.
+            </p>
+          </div>
+          <Link
+            href={`/reports/sales-by-supplier?supplierId=${topSupplier.supplierId}&period=mtd`}
+            className="btn-ghost w-full flex-shrink-0 justify-center whitespace-nowrap text-sm sm:w-auto"
+          >
+            View report →
+          </Link>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-slate-500">
+          No supplier-linked sales yet this month. Link products to suppliers to see this insight.
+        </p>
+      )}
     </div>
   );
 }
