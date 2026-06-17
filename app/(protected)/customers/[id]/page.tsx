@@ -151,13 +151,35 @@ export default async function CustomerDetailPage({
   const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
+
+  // Last payment across all invoices in the current range
+  const allPaymentsInRange = invoices.flatMap((inv) => inv.payments);
+  const lastPaymentAt = allPaymentsInRange.length > 0
+    ? allPaymentsInRange.reduce<Date | null>((latest, p) => {
+        if (!latest) return p.receivedAt;
+        return p.receivedAt > latest ? p.receivedAt : latest;
+      }, null)
+    : null;
+
+  // Available credit
+  const creditLimit = customer.creditLimitPence;
+  const availableCredit = creditLimit > 0 ? creditLimit - outstanding : null;
+
+  // Status
+  const creditStatus: 'up-to-date' | 'balance-due' | 'over-limit' =
+    outstanding === 0 ? 'up-to-date'
+    : creditLimit > 0 && outstanding > creditLimit ? 'over-limit'
+    : 'balance-due';
+
   const ledgerRows = invoices
     .flatMap((invoice) => {
       const settlementAdjustment = !invoice.isClosed && invoice.paymentStatus === 'PAID' && invoice.paid < invoice.totalPence
         ? [{
             key: `${invoice.id}-status-settled`,
             date: invoice.createdAt,
-            description: 'Marked paid without receipt row',
+            sortKey: invoice.createdAt.getTime() + 0.5,
+            type: 'adjustment' as const,
+            description: 'Balance settled',
             debitPence: 0,
             creditPence: invoice.totalPence - invoice.paid,
           }]
@@ -166,48 +188,117 @@ export default async function CustomerDetailPage({
       return [{
         key: `${invoice.id}-invoice`,
         date: invoice.createdAt,
-        description: `Sale ${invoice.id.slice(0, 8)}`,
+        sortKey: invoice.createdAt.getTime(),
+        type: 'invoice' as const,
+        description: 'Invoice',
         debitPence: invoice.isClosed ? 0 : invoice.totalPence,
         creditPence: 0,
       },
       ...invoice.payments.map((payment) => ({
         key: payment.id,
         date: payment.receivedAt,
-        description: `${payment.method} receipt${payment.reference ? ` - ${payment.reference}` : ''}`,
+        sortKey: payment.receivedAt.getTime() + 0.1,
+        type: 'payment' as const,
+        description: `Payment${payment.reference ? ` - ${payment.reference}` : ''} (${payment.method.toLowerCase().replace('_', ' ')})`,
         debitPence: 0,
         creditPence: payment.amountPence,
       })),
       ...settlementAdjustment,
       ];
     })
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .sort((a, b) => a.sortKey - b.sortKey)
     .reduce<Array<{
       key: string;
       date: Date;
+      type: 'invoice' | 'payment' | 'adjustment';
       description: string;
       debitPence: number;
       creditPence: number;
       balancePence: number;
     }>>((rows, row) => {
       const previousBalance = rows.at(-1)?.balancePence ?? 0;
-      rows.push({ ...row, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
+      const { sortKey: _sortKey, ...rest } = row;
+      rows.push({ ...rest, balancePence: Math.max(previousBalance + row.debitPence - row.creditPence, 0) });
       return rows;
     }, []);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={customer.name} subtitle="Customer profile and transaction history." secondaryCta={{ label: '← Back to customers', href: '/customers' }} />
+      <PageHeader
+        title={customer.name}
+        subtitle="Customer profile and account statement."
+        secondaryCta={{ label: '← Back to customers', href: '/customers' }}
+      />
 
-      {customerTags.length > 0 ? (
-        <TagChips tags={customerTags} className="-mt-2" />
-      ) : null}
+      {/* Tags + status badge */}
+      <div className="flex flex-wrap items-center gap-2 -mt-2">
+        {customerTags.length > 0 ? <TagChips tags={customerTags} /> : null}
+        {creditStatus === 'over-limit' && (
+          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Over limit</span>
+        )}
+        {creditStatus === 'balance-due' && (
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Balance due</span>
+        )}
+        {creditStatus === 'up-to-date' && (
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Up to date</span>
+        )}
+      </div>
 
+      {/* Action bar */}
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-sm">
+          Record payment
+        </Link>
+        <Link href="/pos" className="btn-secondary text-sm">
+          Create sale
+        </Link>
+        <DownloadLink
+          className="btn-secondary text-sm"
+          href={`/customers/${customer.id}/statement`}
+          fallbackFilename={`customer-statement-${customer.id.slice(0, 8)}.csv`}
+        >
+          View statement (CSV)
+        </DownloadLink>
+      </div>
+
+      {/* Summary cards */}
       <div className="card grid gap-4 p-5 sm:p-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1">
+          <div className="text-xs uppercase tracking-wide text-black/40">Balance due</div>
+          <div className={`text-2xl font-semibold tabular-nums ${outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+            {formatMoney(outstanding, business.currency)}
+          </div>
+          {creditLimit > 0 && (
+            <div className="text-xs text-black/50">
+              Credit limit: {formatMoney(creditLimit, business.currency)}
+              {availableCredit !== null && availableCredit < 0 && (
+                <span className="ml-1 text-red-600">({formatMoney(Math.abs(availableCredit), business.currency)} over)</span>
+              )}
+              {availableCredit !== null && availableCredit >= 0 && (
+                <span className="ml-1 text-black/40">· {formatMoney(availableCredit, business.currency)} available</span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs uppercase tracking-wide text-black/40">Lifetime spend</div>
+          <div className="text-2xl font-semibold tabular-nums">{formatMoney(lifetimeSpentPence, business.currency)}</div>
+          <div className="text-xs text-black/50">
+            {lifetimeSaleCount} {onlineOrderCount > 0 ? 'total interaction' : 'visit'}{lifetimeSaleCount === 1 ? '' : 's'}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs uppercase tracking-wide text-black/40">Last payment</div>
+          <div className="text-base font-semibold text-ink">
+            {lastPaymentAt ? formatRelativeDate(lastPaymentAt) : 'No payment yet'}
+          </div>
+          {lastPaymentAt ? <div className="text-xs text-black/50">{formatDate(lastPaymentAt)}</div> : null}
+        </div>
         <div className="space-y-2 text-sm">
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
           <div>Phone: {customer.phone ?? '-'}</div>
           <div>Email: {customer.email ?? '-'}</div>
-          <div>Credit limit: {formatMoney(customer.creditLimitPence, business.currency)}</div>
+          {lastSaleAt ? <div className="text-xs text-black/50">Last visit: {formatRelativeDate(lastSaleAt)}</div> : null}
           {loyaltyEnabled && (
             <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Loyalty points</div>
@@ -217,37 +308,9 @@ export default async function CustomerDetailPage({
             </div>
           )}
         </div>
-        <div className="space-y-2 text-sm">
-          <div className="text-xs uppercase tracking-wide text-black/40">Balance</div>
-          <div className="text-2xl font-semibold tabular-nums">{formatMoney(outstanding, business.currency)}</div>
-          <div className="text-black/50">{invoices.length} invoice{invoices.length === 1 ? '' : 's'} in range</div>
-        </div>
-        <div className="space-y-2 text-sm">
-          <div className="text-xs uppercase tracking-wide text-black/40">Lifetime spend</div>
-          <div className="text-2xl font-semibold tabular-nums">{formatMoney(lifetimeSpentPence, business.currency)}</div>
-          {onlineOrderCount > 0 ? (
-            <div className="text-black/50">
-              {formatMoney(inStoreSpentPence, business.currency)} in-store · {formatMoney(onlineSpentPence, business.currency)} online
-            </div>
-          ) : null}
-          <div className="text-black/50">
-            {lifetimeSaleCount} {onlineOrderCount > 0 ? 'total interaction' : 'visit'}{lifetimeSaleCount === 1 ? '' : 's'}
-          </div>
-        </div>
-        <div className="space-y-2 text-sm">
-          <div className="text-xs uppercase tracking-wide text-black/40">Last visit</div>
-          <div className="text-base font-semibold text-ink">
-            {lastSaleAt ? formatRelativeDate(lastSaleAt) : 'No sales yet'}
-          </div>
-          {lastSaleAt ? <div className="text-xs text-black/50">{formatDateTime(lastSaleAt)}</div> : null}
-          {onlineOrderCount > 0 ? (
-            <div className="text-black/50">
-              {inStoreVisitCount} visit{inStoreVisitCount === 1 ? '' : 's'} · {onlineOrderCount} online order{onlineOrderCount === 1 ? '' : 's'}
-            </div>
-          ) : null}
-        </div>
       </div>
 
+      {/* Edit customer */}
       <div className="card p-5 sm:p-6">
         <h2 className="text-lg font-display font-semibold">Edit customer</h2>
         <form action={updateCustomerAction} className="mt-4 grid gap-4 md:grid-cols-3">
@@ -300,8 +363,9 @@ export default async function CustomerDetailPage({
         </form>
       </div>
 
+      {/* Invoice history */}
       <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Invoice history</h2>
+        <h2 className="text-lg font-display font-semibold">Invoices</h2>
         <form className="mt-4 grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">From</label>
@@ -328,13 +392,13 @@ export default async function CustomerDetailPage({
         </form>
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Total billed: {formatMoney(totalBilled, business.currency)}
+            Total invoiced: {formatMoney(totalBilled, business.currency)}
           </div>
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
             Total paid: {formatMoney(totalPaid, business.currency)}
           </div>
           <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Balance: {formatMoney(outstanding, business.currency)}
+            Balance due: {formatMoney(outstanding, business.currency)}
           </div>
         </div>
         <ResponsiveDataTable
@@ -386,9 +450,10 @@ export default async function CustomerDetailPage({
         />
       </div>
 
+      {/* Statement */}
       <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Statement ledger</h2>
-        <p className="mt-1 text-sm text-black/50">Sales increase the customer balance; receipts reduce it.</p>
+        <h2 className="text-lg font-display font-semibold">Statement</h2>
+        <p className="mt-1 text-sm text-black/50">Invoices increase the balance; payments reduce it.</p>
         <div className="responsive-table-shell mt-4">
           <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
             <thead>
@@ -396,7 +461,7 @@ export default async function CustomerDetailPage({
                 <th>Date</th>
                 <th>Description</th>
                 <th>Invoice</th>
-                <th>Receipt</th>
+                <th>Payment</th>
                 <th>Balance</th>
               </tr>
             </thead>
@@ -404,11 +469,15 @@ export default async function CustomerDetailPage({
               {ledgerRows.slice(-80).map((row) => (
                 <tr key={row.key} className="rounded-xl bg-white">
                   <td className="px-3 py-3 text-sm text-black/60">{formatDate(row.date)}</td>
-                  <td className="px-3 py-3 text-sm">{row.description}</td>
+                  <td className="px-3 py-3 text-sm">
+                    <span className={row.type === 'payment' ? 'text-emerald-700' : row.type === 'invoice' ? 'text-ink' : 'text-black/50'}>
+                      {row.description}
+                    </span>
+                  </td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {row.debitPence > 0 ? formatMoney(row.debitPence, business.currency) : '-'}
                   </td>
-                  <td className="px-3 py-3 text-sm font-semibold">
+                  <td className="px-3 py-3 text-sm font-semibold text-emerald-700">
                     {row.creditPence > 0 ? formatMoney(row.creditPence, business.currency) : '-'}
                   </td>
                   <td className="px-3 py-3 text-sm font-semibold">{formatMoney(row.balancePence, business.currency)}</td>
@@ -416,7 +485,7 @@ export default async function CustomerDetailPage({
               ))}
               {ledgerRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-black/50">No ledger activity yet.</td>
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-black/50">No statement activity yet.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -424,6 +493,7 @@ export default async function CustomerDetailPage({
         </div>
       </div>
 
+      {/* Online orders */}
       {onlineOrderCount > 0 ? (
         <div className="card p-6">
           <h2 className="text-lg font-display font-semibold">Online orders</h2>

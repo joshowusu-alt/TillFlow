@@ -82,6 +82,8 @@ export type CustomerListOptions = {
   pageSize?: number;
   /** Filter by store — only applied when the business uses BRANCH scope. */
   storeId?: string;
+  /** When true, only return customers who have an outstanding balance. */
+  balanceDue?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -94,12 +96,15 @@ export type CustomerListOptions = {
  * round-trips.
  */
 export async function getCustomers(businessId: string, opts: CustomerListOptions = {}) {
-  const { search, page = 1, pageSize = DEFAULT_PAGE_SIZE, storeId } = opts;
+  const { search, page = 1, pageSize = DEFAULT_PAGE_SIZE, storeId, balanceDue } = opts;
 
   const where = {
     businessId,
     ...(storeId ? { storeId } : {}),
     ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
+    ...(balanceDue
+      ? { salesInvoices: { some: { paymentStatus: { in: ['UNPAID', 'PART_PAID'] as string[] } } } }
+      : {}),
   };
 
   const [totalCount, customers] = await Promise.all([
@@ -209,6 +214,30 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
     });
   }
 
+  // Batch-load the most recent payment date for each customer on this page.
+  const recentCustomerPayments = customerIds.length
+    ? await prisma.salesPayment.findMany({
+        where: {
+          salesInvoice: {
+            customerId: { in: customerIds },
+            businessId,
+          },
+        },
+        select: {
+          receivedAt: true,
+          salesInvoice: { select: { customerId: true } },
+        },
+        orderBy: { receivedAt: 'desc' },
+      })
+    : ([] as Array<{ receivedAt: Date; salesInvoice: { customerId: string | null } }>);
+
+  const lastPaymentMap = new Map<string, Date>();
+  for (const payment of recentCustomerPayments) {
+    const custId = payment.salesInvoice.customerId;
+    if (!custId || lastPaymentMap.has(custId)) continue;
+    lastPaymentMap.set(custId, payment.receivedAt);
+  }
+
   const balanceMap = new Map<string, number>();
   for (const inv of arInvoices) {
     if (!inv.customerId) continue;
@@ -259,6 +288,7 @@ export async function getCustomers(businessId: string, opts: CustomerListOptions
       outstandingBalancePence: balanceMap.get(c.id) ?? 0,
       lifetimeSpentPence: inStoreSpentPence + onlineSpentPence,
       lastSaleAt,
+      lastPaymentAt: lastPaymentMap.get(c.id) ?? null,
       saleCount: inStoreSaleCount + onlineOrderCount,
       channelBreakdown: {
         inStoreSpentPence,

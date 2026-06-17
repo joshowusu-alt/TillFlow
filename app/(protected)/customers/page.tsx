@@ -13,16 +13,27 @@ import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
 
+function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLimit: number }) {
+  if (balance === 0) {
+    return <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>;
+  }
+  if (creditLimit > 0 && balance > creditLimit) {
+    return <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">Over limit</span>;
+  }
+  return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span>;
+}
+
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; q?: string; page?: string; storeId?: string };
+  searchParams?: { error?: string; q?: string; page?: string; storeId?: string; balanceDue?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const balanceDue = searchParams?.balanceDue === '1';
   const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
   const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
 
@@ -30,6 +41,7 @@ export default async function CustomersPage({
     search: q || undefined,
     page,
     storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
+    balanceDue: balanceDue || undefined,
   });
 
   return (
@@ -40,7 +52,7 @@ export default async function CustomersPage({
         primaryCta={{ label: 'Add customer', href: '#add-customer' }}
       />
 
-      {/* Search & branch filter */}
+      {/* Search, branch filter, and debtor filter */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full max-w-sm">
           <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>
@@ -57,11 +69,31 @@ export default async function CustomersPage({
                 ))}
               </select>
             </div>
-            <button className="btn-secondary" type="submit">
-              Apply
-            </button>
+            <button className="btn-secondary" type="submit">Apply</button>
           </form>
         ) : null}
+        <div className="flex items-center gap-2">
+          {balanceDue ? (
+            <Link
+              href={`/customers?${q ? `q=${encodeURIComponent(q)}&` : ''}${business.customerScope === 'BRANCH' ? `storeId=${selectedStoreId}&` : ''}`}
+              className="btn-secondary text-sm"
+            >
+              Show all customers
+            </Link>
+          ) : (
+            <Link
+              href={`/customers?${q ? `q=${encodeURIComponent(q)}&` : ''}${business.customerScope === 'BRANCH' ? `storeId=${selectedStoreId}&` : ''}balanceDue=1`}
+              className="btn-secondary text-sm"
+            >
+              Balance due only
+            </Link>
+          )}
+          {balanceDue && (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+              Showing customers with balance due
+            </span>
+          )}
+        </div>
       </div>
 
       <details className="details-mobile" id="add-customer" open>
@@ -123,6 +155,7 @@ export default async function CustomersPage({
       </details>
 
       <div className="card p-4 sm:p-5">
+        {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {customers.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
@@ -132,8 +165,10 @@ export default async function CustomersPage({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
-                <div className="mt-1 text-xs text-black/40">Use the &lsquo;Add customer&rsquo; section above.</div>
+                <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : balanceDue ? 'No customers with a balance due' : 'No customers yet'}</div>
+                <div className="mt-1 text-xs text-black/40">
+                  {balanceDue ? 'All accounts are up to date.' : 'Use the \'Add customer\' section above.'}
+                </div>
               </div>
             </div>
           ) : customers.map((customer) => {
@@ -152,17 +187,16 @@ export default async function CustomersPage({
                       {customer.channelBreakdown.onlineOrderCount > 0 ? (
                         <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">Online + in-store</span>
                       ) : null}
-                      {balance > 0 ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span> : <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Up to date</span>}
+                      <CreditStatusBadge balance={balance} creditLimit={customer.creditLimitPence} />
                     </div>
                   }
                 />
                 {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={4} className="mt-2" /> : null}
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <DataCardField label="Lifetime spend" value={<span className="font-semibold text-ink">{formatMoney(customer.lifetimeSpentPence, business.currency)}</span>} />
-                  <DataCardField label="Last visit" value={<span className="text-black/65">{customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}</span>} />
-                  <DataCardField label="Balance" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
+                  <DataCardField label="Balance due" value={<span className="font-semibold text-ink">{formatMoney(balance, business.currency)}</span>} />
+                  <DataCardField label="Last payment" value={<span className="text-black/65">{customer.lastPaymentAt ? formatRelativeDate(customer.lastPaymentAt) : 'No payment yet'}</span>} />
                   <DataCardField label="Credit limit" value={<span className="font-semibold text-ink">{formatMoney(customer.creditLimitPence, business.currency)}</span>} />
-                  <DataCardField label="Email" value={<span className="text-black/65">{customer.email ?? '-'}</span>} className="col-span-2" />
+                  <DataCardField label="Last visit" value={<span className="text-black/65">{customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}</span>} />
                   {business.customerScope === 'BRANCH' ? (
                     <DataCardField label="Branch" value={<span className="text-black/65">{branchName}</span>} className="col-span-2" />
                   ) : null}
@@ -171,37 +205,46 @@ export default async function CustomersPage({
                   <Link href={`/customers/${customer.id}`} className="btn-ghost text-xs">
                     View customer
                   </Link>
+                  {balance > 0 ? (
+                    <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-xs">
+                      Record payment
+                    </Link>
+                  ) : null}
                 </DataCardActions>
               </DataCard>
             );
           })}
         </div>
 
+        {/* Desktop table */}
         <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Phone</th>
-                <th className="hidden sm:table-cell">Email</th>
-                <th className="hidden xl:table-cell">Branch</th>
-                <th className="hidden lg:table-cell">Lifetime spend</th>
+                <th className="hidden xl:table-cell">Lifetime spend</th>
                 <th className="hidden lg:table-cell">Last visit</th>
-                <th>Balance</th>
+                <th className="hidden lg:table-cell">Last payment</th>
+                <th>Balance due</th>
+                <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-12 text-center">
+                  <td colSpan={8} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center">
                       <div className="rounded-full bg-black/5 p-3 mb-2">
                         <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       </div>
-                      <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : 'No customers yet'}</div>
-                      <div className="text-xs text-black/40 mt-1">Use the &lsquo;Add customer&rsquo; section above.</div>
+                      <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : balanceDue ? 'No customers with a balance due' : 'No customers yet'}</div>
+                      <div className="text-xs text-black/40 mt-1">
+                        {balanceDue ? 'All accounts are up to date.' : 'Use the \'Add customer\' section above.'}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -221,23 +264,39 @@ export default async function CustomersPage({
                             {customer.name}
                           </Link>
                           {customer.channelBreakdown.onlineOrderCount > 0 ? (
-                            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">Online + in-store</span>
+                            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700">Online</span>
                           ) : null}
                         </div>
                         {customer.tags.length > 0 ? <TagChips tags={customer.tags} max={3} /> : null}
                       </div>
                     </td>
                     <td className="px-3 py-3 text-sm text-black/60">{customer.phone ?? '-'}</td>
-                    <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">{customer.email ?? '-'}</td>
-                    <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">{branchName}</td>
-                    <td className="hidden lg:table-cell px-3 py-3 text-sm font-semibold tabular-nums text-ink">
+                    <td className="hidden xl:table-cell px-3 py-3 text-sm font-semibold tabular-nums text-ink">
                       {formatMoney(customer.lifetimeSpentPence, business.currency)}
                     </td>
                     <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
                       {customer.lastSaleAt ? formatRelativeDate(customer.lastSaleAt) : 'Never'}
                     </td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
+                      {customer.lastPaymentAt ? formatRelativeDate(customer.lastPaymentAt) : 'No payment yet'}
+                    </td>
                     <td className="px-3 py-3 text-sm font-semibold tabular-nums">
                       {formatMoney(balance, business.currency)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <CreditStatusBadge balance={balance} creditLimit={customer.creditLimitPence} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/customers/${customer.id}`} className="btn-ghost text-xs whitespace-nowrap">
+                          View customer
+                        </Link>
+                        {balance > 0 ? (
+                          <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-xs whitespace-nowrap">
+                            Record payment
+                          </Link>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -252,6 +311,7 @@ export default async function CustomersPage({
           searchParams={{
             q: q || undefined,
             storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
+            balanceDue: balanceDue ? '1' : undefined,
           }}
         />
       </div>
