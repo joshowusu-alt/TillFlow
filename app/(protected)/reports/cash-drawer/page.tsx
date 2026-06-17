@@ -10,6 +10,11 @@ import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
+import {
+  CASH_DRAWER_BREAKDOWN_ORDER,
+  CASH_DRAWER_ENTRY_LABELS,
+  summarizeCashDrawerEntries,
+} from '@/lib/services/cash-drawer';
 
 const REASON_CODE_LABELS: Record<string, string> = {
   COUNT_ERROR: 'Count Error',
@@ -86,12 +91,22 @@ export default async function CashDrawerReportPage({
       },
       user: { select: { name: true } },
       closeManagerApprovedBy: { select: { name: true } },
+      cashDrawerEntries: {
+        select: { entryType: true, amountPence: true },
+      },
     },
   });
 
   const totalExpected = shifts.reduce((sum, shift) => sum + shift.expectedCashPence, 0);
   const totalActual = shifts.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
   const totalVariance = shifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
+  const movementTotals = shifts.reduce<Record<string, number>>((acc, shift) => {
+    const summary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
+    for (const [entryType, amount] of Object.entries(summary.byType)) {
+      acc[entryType] = (acc[entryType] ?? 0) + amount;
+    }
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-6">
@@ -160,13 +175,42 @@ export default async function CashDrawerReportPage({
         />
       </div>
 
-      <ReportTableCard tableClassName="table w-full min-w-[72rem] border-separate border-spacing-y-2">
+      <ReportTableCard title="Cash movement breakdown" tableClassName="table w-full min-w-[48rem] border-separate border-spacing-y-2">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CASH_DRAWER_BREAKDOWN_ORDER.map((entryType) => (
+            <tr key={entryType} className="rounded-xl bg-white">
+              <td className="px-3 py-3 text-sm">{CASH_DRAWER_ENTRY_LABELS[entryType]}</td>
+              <td className="px-3 py-3 text-sm font-semibold">
+                {formatMoney(movementTotals[entryType] ?? 0, business.currency)}
+              </td>
+            </tr>
+          ))}
+          {shifts.length === 0 ? (
+            <ReportTableEmptyRow colSpan={2} message="No cash movements found in this date range." paddingClassName="px-3 py-8" />
+          ) : null}
+        </tbody>
+      </ReportTableCard>
+
+      <ReportTableCard tableClassName="table w-full min-w-[104rem] border-separate border-spacing-y-2">
         <thead>
           <tr>
             <th>Date</th>
             <th>Branch</th>
             <th>Till</th>
             <th>Cashier</th>
+            <th>Opening float</th>
+            <th>Cash sales</th>
+            <th>Customer payments</th>
+            <th>Supplier payments</th>
+            <th>Expenses</th>
+            <th>Refunds</th>
+            <th>Adjustments</th>
             <th>Expected</th>
             <th>Counted</th>
             <th>Variance</th>
@@ -176,56 +220,66 @@ export default async function CashDrawerReportPage({
           </tr>
         </thead>
         <tbody>
-          {shifts.map((shift) => (
-            <tr key={shift.id} className="rounded-xl bg-white">
-              <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
-              <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
-              <td className="px-3 py-3 text-sm">{shift.till.name}</td>
-              <td className="px-3 py-3 text-sm">{shift.user.name}</td>
-              <td className="px-3 py-3 text-sm font-semibold">
-                {formatMoney(shift.expectedCashPence, business.currency)}
-              </td>
-              <td className="px-3 py-3 text-sm font-semibold">
-                {shift.actualCashPence !== null
-                  ? formatMoney(shift.actualCashPence, business.currency)
-                  : '-'}
-              </td>
-              <td className="px-3 py-3 text-sm">
-                {shift.variance !== null ? (
-                  <span
-                    className={
-                      shift.variance === 0
-                        ? 'text-emerald-700'
-                        : shift.variance > 0
-                          ? 'text-accent'
-                          : 'text-rose'
-                    }
-                  >
-                    {formatMoney(shift.variance, business.currency)}
-                  </span>
-                ) : (
-                  <span className="text-black/40">-</span>
-                )}
-              </td>
-              <td className="px-3 py-3 text-sm">
-                {shift.varianceReasonCode ? (
-                  <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">
-                    {reasonCodeLabel(shift.varianceReasonCode)}
-                  </span>
-                ) : (
-                  <span className="text-black/40">-</span>
-                )}
-              </td>
-              <td className="px-3 py-3 align-top text-sm">
-                <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
-              </td>
-              <td className="px-3 py-3 text-xs">
-                {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
-              </td>
-            </tr>
-          ))}
+          {shifts.map((shift) => {
+            const byType = summarizeCashDrawerEntries(shift.cashDrawerEntries).byType;
+            return (
+              <tr key={shift.id} className="rounded-xl bg-white">
+                <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
+                <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
+                <td className="px-3 py-3 text-sm">{shift.till.name}</td>
+                <td className="px-3 py-3 text-sm">{shift.user.name}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.OPEN_FLOAT ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_SALE ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_DEBTOR_PAYMENT ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
+                <td className="px-3 py-3 text-sm font-semibold">
+                  {formatMoney(shift.expectedCashPence, business.currency)}
+                </td>
+                <td className="px-3 py-3 text-sm font-semibold">
+                  {shift.actualCashPence !== null
+                    ? formatMoney(shift.actualCashPence, business.currency)
+                    : '-'}
+                </td>
+                <td className="px-3 py-3 text-sm">
+                  {shift.variance !== null ? (
+                    <span
+                      className={
+                        shift.variance === 0
+                          ? 'text-emerald-700'
+                          : shift.variance > 0
+                            ? 'text-accent'
+                            : 'text-rose'
+                      }
+                    >
+                      {formatMoney(shift.variance, business.currency)}
+                    </span>
+                  ) : (
+                    <span className="text-black/40">-</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-sm">
+                  {shift.varianceReasonCode ? (
+                    <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">
+                      {reasonCodeLabel(shift.varianceReasonCode)}
+                    </span>
+                  ) : (
+                    <span className="text-black/40">-</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 align-top text-sm">
+                  <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
+                </td>
+                <td className="px-3 py-3 text-xs">
+                  {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
+                </td>
+              </tr>
+            );
+          })}
           {shifts.length === 0 ? (
-            <ReportTableEmptyRow colSpan={10} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
+            <ReportTableEmptyRow colSpan={17} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
           ) : null}
         </tbody>
       </ReportTableCard>

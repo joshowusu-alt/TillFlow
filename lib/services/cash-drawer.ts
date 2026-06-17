@@ -5,9 +5,31 @@ export type CashDrawerEntryType =
   | 'CASH_SALE'
   | 'CASH_REFUND'
   | 'CASH_DEBTOR_PAYMENT'
+  | 'PAID_OUT_SUPPLIER'
   | 'PAID_OUT_EXPENSE'
   | 'CLOSE_RECONCILIATION'
   | 'CASH_ADJUSTMENT';
+
+export const CASH_DRAWER_ENTRY_LABELS: Record<string, string> = {
+  OPEN_FLOAT: 'Opening float',
+  CASH_SALE: 'Cash sales',
+  CASH_DEBTOR_PAYMENT: 'Customer payments received',
+  PAID_OUT_SUPPLIER: 'Supplier payments',
+  PAID_OUT_EXPENSE: 'Expenses paid from till',
+  CASH_REFUND: 'Refunds paid',
+  CASH_ADJUSTMENT: 'Adjustments',
+  CLOSE_RECONCILIATION: 'Close reconciliation',
+};
+
+export const CASH_DRAWER_BREAKDOWN_ORDER = [
+  'OPEN_FLOAT',
+  'CASH_SALE',
+  'CASH_DEBTOR_PAYMENT',
+  'PAID_OUT_SUPPLIER',
+  'PAID_OUT_EXPENSE',
+  'CASH_REFUND',
+  'CASH_ADJUSTMENT',
+] as const;
 
 export type CashDrawerAuditActor = {
   userId: string;

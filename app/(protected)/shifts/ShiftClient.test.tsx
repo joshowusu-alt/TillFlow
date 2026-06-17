@@ -71,4 +71,47 @@ describe('ShiftClient', () => {
     expect(screen.getByText('Owner Override')).toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  it('shows supplier payments and other cash movement categories in the close breakdown', () => {
+    render(
+      <ShiftClient
+        tills={[{ id: 'till-1', name: 'Till 1' }]}
+        openShift={{
+          id: 'shift-1',
+          till: { name: 'Till 1' },
+          openedAt: new Date('2026-03-18T08:00:00.000Z'),
+          openingCashPence: 20000,
+          salesCount: 1,
+          salesTotal: 100000,
+          expectedCash: 260000,
+          cardTotal: 0,
+          transferTotal: 0,
+          momoTotal: 0,
+          cashByType: {
+            OPEN_FLOAT: 20000,
+            CASH_SALE: 100000,
+            CASH_DEBTOR_PAYMENT: 200000,
+            PAID_OUT_SUPPLIER: -50000,
+            PAID_OUT_EXPENSE: -10000,
+            CASH_REFUND: 0,
+            CASH_ADJUSTMENT: 0,
+          },
+        }}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Shift' }));
+
+    expect(screen.getByText('Opening Cash')).toBeInTheDocument();
+    expect(screen.getByText('Cash Sales')).toBeInTheDocument();
+    expect(screen.getByText('Customer payments received')).toBeInTheDocument();
+    expect(screen.getByText('Supplier payments')).toBeInTheDocument();
+    expect(screen.getByText('Expenses paid from till')).toBeInTheDocument();
+    expect(screen.getAllByText('Expected Cash').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('GH₵2,600.00').length).toBeGreaterThanOrEqual(1);
+  });
 });

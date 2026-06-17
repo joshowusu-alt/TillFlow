@@ -227,6 +227,8 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
   const variancePence = actualCash ? Math.round(Number(actualCash) * 100) - (shiftToClose?.expectedCash ?? 0) : 0;
   const varianceNeedsReason = variancePence !== 0;
   const cashSalesPence = shiftToClose?.cashByType?.CASH_SALE ?? 0;
+  const supplierPaymentsPence = shiftToClose?.cashByType?.PAID_OUT_SUPPLIER ?? 0;
+  const adjustmentsPence = shiftToClose?.cashByType?.CASH_ADJUSTMENT ?? 0;
 
   // Same-day warning: check if the shift was opened on a different calendar day
   const isStaleShift = shiftToClose
@@ -625,15 +627,23 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               </div>
               {shiftToClose.cashByType?.CASH_DEBTOR_PAYMENT ? (
                 <div className="mt-2 flex justify-between text-sm">
-                  <span>Cash Debtor Payments</span>
+                  <span>Customer payments received</span>
                   <span className="font-semibold">
                     + {formatMoney(shiftToClose.cashByType.CASH_DEBTOR_PAYMENT, currency)}
                   </span>
                 </div>
               ) : null}
+              {supplierPaymentsPence ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Supplier payments</span>
+                  <span className="font-semibold">
+                    - {formatMoney(Math.abs(supplierPaymentsPence), currency)}
+                  </span>
+                </div>
+              ) : null}
               {shiftToClose.cashByType?.PAID_OUT_EXPENSE ? (
                 <div className="mt-2 flex justify-between text-sm">
-                  <span>Paid-outs / Expenses</span>
+                  <span>Expenses paid from till</span>
                   <span className="font-semibold">
                     - {formatMoney(Math.abs(shiftToClose.cashByType.PAID_OUT_EXPENSE), currency)}
                   </span>
@@ -644,6 +654,14 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
                   <span>Cash Refunds</span>
                   <span className="font-semibold">
                     - {formatMoney(Math.abs(shiftToClose.cashByType.CASH_REFUND), currency)}
+                  </span>
+                </div>
+              ) : null}
+              {adjustmentsPence ? (
+                <div className="mt-2 flex justify-between text-sm">
+                  <span>Adjustments</span>
+                  <span className="font-semibold">
+                    {adjustmentsPence >= 0 ? '+' : '-'} {formatMoney(Math.abs(adjustmentsPence), currency)}
                   </span>
                 </div>
               ) : null}

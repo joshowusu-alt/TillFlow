@@ -10,6 +10,36 @@ import {
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
 
+async function getOpenCashShiftForPayment(
+  tx: any,
+  input: {
+    businessId: string;
+    storeId: string;
+    userId?: string | null;
+    fallbackTillId?: string | null;
+  }
+) {
+  if (input.userId) {
+    const userShift = await tx.shift.findFirst({
+      where: {
+        status: 'OPEN',
+        userId: input.userId,
+        till: {
+          storeId: input.storeId,
+          store: { businessId: input.businessId },
+        },
+      },
+      select: { id: true, tillId: true },
+      orderBy: { openedAt: 'desc' },
+    });
+    if (userShift) return userShift;
+  }
+
+  if (!input.fallbackTillId) return null;
+  const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
+  return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
+}
+
 /**
  * Record additional payment(s) against an existing sales invoice.
  */
@@ -53,29 +83,35 @@ export async function recordCustomerPayment(
       }))
     });
 
-    if (split.cashPence > 0 && actorUserId) {
-      const openShift =
-        (invoice.shiftId
-          ? await tx.shift.findFirst({
-              where: { id: invoice.shiftId, status: 'OPEN' },
-            })
-          : await getOpenShiftForTill(businessId, invoice.tillId, tx)) ?? null;
-      if (openShift) {
-        await recordCashDrawerEntryTx(tx, {
-          businessId,
-          storeId: invoice.storeId,
-          tillId: invoice.tillId,
-          shiftId: openShift.id,
-          createdByUserId: actorUserId,
-          cashierUserId: invoice.cashierUserId,
-          entryType: 'CASH_DEBTOR_PAYMENT',
-          amountPence: split.cashPence,
-          reasonCode: 'CUSTOMER_RECEIPT',
-          reason: 'Cash received against outstanding invoice',
-          referenceType: 'SALES_INVOICE',
-          referenceId: invoice.id,
-        });
+    if (split.cashPence > 0) {
+      if (!actorUserId) {
+        throw new Error('Open shift is required before recording cash customer payments.');
       }
+
+      const openShift = await getOpenCashShiftForPayment(tx, {
+        businessId,
+        storeId: invoice.storeId,
+        userId: actorUserId,
+        fallbackTillId: invoice.tillId,
+      });
+      if (!openShift) {
+        throw new Error('Open shift is required before recording cash customer payments.');
+      }
+
+      await recordCashDrawerEntryTx(tx, {
+        businessId,
+        storeId: invoice.storeId,
+        tillId: openShift.tillId,
+        shiftId: openShift.id,
+        createdByUserId: actorUserId,
+        cashierUserId: actorUserId,
+        entryType: 'CASH_DEBTOR_PAYMENT',
+        amountPence: split.cashPence,
+        reasonCode: 'CUSTOMER_RECEIPT',
+        reason: 'Cash received against outstanding invoice',
+        referenceType: 'SALES_INVOICE',
+        referenceId: invoice.id,
+      });
     }
 
     const updatedInvoice = await tx.salesInvoice.update({
@@ -127,7 +163,10 @@ export async function recordSupplierPayment(
     // Re-read payments inside the transaction to prevent concurrent overpayment.
     const invoice = await tx.purchaseInvoice.findFirst({
       where: { id: invoiceId, businessId },
-      include: { payments: true },
+      include: {
+        payments: true,
+        supplier: { select: { id: true, name: true } },
+      },
     });
     if (!invoice) throw new Error('Invoice not found');
 
@@ -138,17 +177,54 @@ export async function recordSupplierPayment(
 
     const status = derivePaymentStatus(invoice.totalPence, totalPaid);
 
-    await tx.purchasePayment.createMany({
-      data: newPayments.map((p) => ({
-        purchaseInvoiceId: invoice.id,
-        method: p.method,
-        amountPence: p.amountPence,
-        reference: p.reference ?? null,
-        ...(paidAt ? { paidAt } : {}),
-        ...(recordedByUserId ? { recordedByUserId } : {}),
-        ...(notes ? { notes } : {}),
-      }))
-    });
+    const openShift = split.cashPence > 0
+      ? await getOpenCashShiftForPayment(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          userId: recordedByUserId,
+        })
+      : null;
+
+    if (split.cashPence > 0 && (!recordedByUserId || !openShift)) {
+      throw new Error('Open shift is required before recording cash supplier payments.');
+    }
+
+    const createdPayments = [];
+    for (const p of newPayments) {
+      const createdPayment = await tx.purchasePayment.create({
+        data: {
+          purchaseInvoiceId: invoice.id,
+          method: p.method,
+          amountPence: p.amountPence,
+          reference: p.reference ?? null,
+          ...(paidAt ? { paidAt } : {}),
+          ...(recordedByUserId ? { recordedByUserId } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      });
+      createdPayments.push(createdPayment);
+    }
+
+    if (openShift && recordedByUserId) {
+      for (const payment of createdPayments.filter((p) => p.method === 'CASH' && p.amountPence > 0)) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: recordedByUserId,
+          cashierUserId: recordedByUserId,
+          entryType: 'PAID_OUT_SUPPLIER',
+          amountPence: -payment.amountPence,
+          reasonCode: 'SUPPLIER_PAYMENT',
+          reason: invoice.supplier?.name
+            ? `Cash paid to supplier: ${invoice.supplier.name}`
+            : 'Cash paid to supplier',
+          referenceType: 'PURCHASE_PAYMENT',
+          referenceId: payment.id,
+        });
+      }
+    }
 
     const updatedInvoice = await tx.purchaseInvoice.update({
       where: { id: invoice.id },
