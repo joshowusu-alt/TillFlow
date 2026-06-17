@@ -96,14 +96,20 @@ const getCachedShifts = unstable_cache(
   { revalidate: 10, tags: ['pos-shifts'] }
 );
 
-export default async function PosPage() {
+export default async function PosPage({
+  searchParams,
+}: {
+  searchParams?: { customerId?: string };
+}) {
   const { business, store: baseStore, user } = await requireBusinessStore();
   if (!business) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
   // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
-  const [tills, openShifts, inventory, products, units, categories, customers] = await Promise.all([
+  const requestedCustomerId = searchParams?.customerId?.trim() || undefined;
+
+  const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] = await Promise.all([
     // Short-lived cache: till/shift/inventory bust quickly or on-demand
     getCachedTills(baseStore.id),
     getCachedShifts(baseStore.id),
@@ -113,6 +119,12 @@ export default async function PosPage() {
     getCachedUnits(business.id),
     getCachedCategories(business.id),
     getCachedCustomers(business.id),
+    requestedCustomerId
+      ? prisma.customer.findFirst({
+          where: { id: requestedCustomerId, businessId: business.id },
+          select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const userOpenShift = await prisma.shift.findFirst({
@@ -146,6 +158,10 @@ export default async function PosPage() {
     onHandBase: inventoryMap.get(product.id) ?? 0
   }));
 
+  const customerOptions = requestedCustomer && !customers.some((customer) => customer.id === requestedCustomer.id)
+    ? [requestedCustomer, ...customers]
+    : customers;
+
   return (
     <>
       <PosWelcomeShelf
@@ -172,7 +188,7 @@ export default async function PosPage() {
       tills={tills.map((till) => ({ id: till.id, name: till.name }))}
       openShiftTillIds={openShifts.map((shift) => shift.tillId)}
       products={productDtos}
-      customers={customers.map((customer) => ({
+      customers={customerOptions.map((customer) => ({
         id: customer.id,
         name: customer.name,
         creditLimitPence: customer.creditLimitPence,

@@ -80,6 +80,11 @@ describe('supplier detail page', () => {
     expect(src).toContain('Record payment');
   });
 
+  it('action bar Create purchase links to purchases with supplierId', () => {
+    expect(src).toContain('/purchases?supplierId=');
+    expect(src).toContain('Create purchase');
+  });
+
   it('all invoice Pay links include supplierId param', () => {
     const payLinks = [...src.matchAll(/supplier-payments\?supplierId=/g)];
     expect(payLinks.length).toBeGreaterThan(2);
@@ -90,6 +95,13 @@ describe('supplier detail page', () => {
     expect(src).toContain('linkedProducts');
     expect(src).toContain('preferredSupplierId');
     expect(src).toContain('products-supplied');
+  });
+
+  it('shows stock and cost in the products supplied section', () => {
+    expect(src).toContain('Current stock');
+    expect(src).toContain('Default cost');
+    expect(src).toContain('inventoryBalances');
+    expect(src).toContain('defaultCostBasePence');
   });
 
   it('uses owner-friendly statement column labels', () => {
@@ -135,7 +147,31 @@ describe('supplier payments page — supplierId support', () => {
     expect(src).toContain('/suppliers/${linkedSupplier.id}');
   });
 
+  it('returns to the supplier profile after recording a filtered payment', () => {
+    expect(src).toContain('name="returnTo"');
+    expect(src).toContain('value={`/suppliers/${linkedSupplier.id}`}');
+  });
+
   it('uses owner-friendly page title', () => {
     expect(src).toContain('Record payment to supplier');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Supplier purchase preselection
+// ---------------------------------------------------------------------------
+
+describe('supplier profile to purchase integration', () => {
+  const purchasesPageSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/page.tsx'), 'utf8');
+  const purchaseFormSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/PurchaseFormClient.tsx'), 'utf8');
+
+  it('accepts supplierId on the purchases page', () => {
+    expect(purchasesPageSrc).toContain('supplierId?: string');
+  });
+
+  it('preselects the supplierId URL param in the purchase form when valid', () => {
+    expect(purchaseFormSrc).toContain("searchParams?.get('supplierId')");
+    expect(purchaseFormSrc).toContain('validRequestedSupplierId');
+    expect(purchaseFormSrc).toContain('setSupplierId(validRequestedSupplierId');
   });
 });

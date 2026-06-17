@@ -9,6 +9,7 @@ export type ProductCoreInput = {
   sku: string | null;
   barcode: string | null;
   categoryId: string | null;
+  preferredSupplierId?: string | null;
   imageUrl: string | null;
   sellingPriceBasePence: number;
   defaultCostBasePence: number;
@@ -127,6 +128,19 @@ async function assertNoDuplicateProductName(
   }
 }
 
+async function assertSupplierBelongsToBusiness(businessId: string, supplierId: string | null | undefined): Promise<void> {
+  if (!supplierId) return;
+
+  const supplier = await prisma.supplier.findFirst({
+    where: { id: supplierId, businessId },
+    select: { id: true },
+  });
+
+  if (!supplier) {
+    throw new Error('Selected supplier was not found for this business.');
+  }
+}
+
 /**
  * Build the `productUnits.create` array from a base unit and an optional
  * packaging unit.  Returns only valid entries (packaging is omitted when
@@ -174,6 +188,7 @@ function normalizeCoreProductInput(data: ProductCoreInput): ProductCoreInput {
     sku: data.sku?.trim() ? data.sku.trim() : null,
     barcode: data.barcode?.trim() ? data.barcode.trim() : null,
     categoryId: data.categoryId?.trim() ? data.categoryId.trim() : null,
+    preferredSupplierId: data.preferredSupplierId?.trim() ? data.preferredSupplierId.trim() : null,
     imageUrl: data.imageUrl?.trim() ? data.imageUrl.trim() : null,
     baseUnitId: data.baseUnitId.trim(),
     packagingUnitId: data.packagingUnitId?.trim() ?? '',
@@ -384,6 +399,7 @@ export async function createProduct(
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
 
+  await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
   await assertNoDuplicateProductName(businessId, normalized.name);
 
   const product = await prisma.product.create({
@@ -393,6 +409,7 @@ export async function createProduct(
       sku: normalized.sku,
       barcode: normalized.barcode,
       categoryId: normalized.categoryId,
+      preferredSupplierId: normalized.preferredSupplierId,
       imageUrl: normalized.imageUrl,
       sellingPriceBasePence: normalized.sellingPriceBasePence,
       defaultCostBasePence: normalized.defaultCostBasePence,
@@ -440,6 +457,7 @@ export async function updateProduct(
   }
 
   await assertNoDuplicateProductName(businessId, normalized.name, existing.id);
+  await assertSupplierBelongsToBusiness(businessId, normalized.preferredSupplierId);
 
   await prisma.$transaction(async (tx) => {
     await tx.product.update({
@@ -449,6 +467,7 @@ export async function updateProduct(
         sku: normalized.sku,
         barcode: normalized.barcode,
         categoryId: normalized.categoryId,
+        preferredSupplierId: normalized.preferredSupplierId,
         imageUrl: normalized.imageUrl,
         sellingPriceBasePence: normalized.sellingPriceBasePence,
         defaultCostBasePence: normalized.defaultCostBasePence,

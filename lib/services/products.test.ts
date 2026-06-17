@@ -22,6 +22,9 @@ const { prismaMock } = vi.hoisted(() => ({
     stockMovement: {
       findMany: vi.fn(),
     },
+    supplier: {
+      findFirst: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   },
@@ -37,6 +40,7 @@ describe('product unit configuration helpers', () => {
     prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.product.findFirst.mockResolvedValue(null);
     prismaMock.product.findMany.mockResolvedValue([]);
+    prismaMock.supplier.findFirst.mockResolvedValue({ id: 'supplier-1' });
     prismaMock.inventoryBalance.findMany.mockResolvedValue([]);
     prismaMock.inventoryBalance.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.stockMovement.findMany.mockResolvedValue([]);
@@ -224,6 +228,68 @@ describe('product unit configuration helpers', () => {
     );
   });
 
+  it('persists a preferred supplier when creating a product', async () => {
+    prismaMock.product.create.mockResolvedValue({ id: 'prod-supplier', name: 'Supplier product' });
+
+    await createProduct('biz-1', {
+      name: 'Supplier product',
+      sku: null,
+      barcode: null,
+      categoryId: null,
+      preferredSupplierId: ' supplier-1 ',
+      imageUrl: null,
+      sellingPriceBasePence: 900,
+      defaultCostBasePence: 550,
+      minimumMarginThresholdBps: null,
+      vatRateBps: 0,
+      promoBuyQty: 0,
+      promoGetQty: 0,
+      baseUnitId: 'unit-piece',
+      packagingUnitId: '',
+      packagingConversion: 0,
+      unitConfigs: [{ unitId: 'unit-piece', conversionToBase: 1, isBaseUnit: true }],
+    });
+
+    expect(prismaMock.supplier.findFirst).toHaveBeenCalledWith({
+      where: { id: 'supplier-1', businessId: 'biz-1' },
+      select: { id: true },
+    });
+    expect(prismaMock.product.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          preferredSupplierId: 'supplier-1',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a preferred supplier from another business', async () => {
+    prismaMock.supplier.findFirst.mockResolvedValue(null);
+
+    await expect(
+      createProduct('biz-1', {
+        name: 'Wrong supplier',
+        sku: null,
+        barcode: null,
+        categoryId: null,
+        preferredSupplierId: 'supplier-other',
+        imageUrl: null,
+        sellingPriceBasePence: 900,
+        defaultCostBasePence: 550,
+        minimumMarginThresholdBps: null,
+        vatRateBps: 0,
+        promoBuyQty: 0,
+        promoGetQty: 0,
+        baseUnitId: 'unit-piece',
+        packagingUnitId: '',
+        packagingConversion: 0,
+        unitConfigs: [{ unitId: 'unit-piece', conversionToBase: 1, isBaseUnit: true }],
+      }),
+    ).rejects.toThrow('Selected supplier was not found for this business.');
+
+    expect(prismaMock.product.create).not.toHaveBeenCalled();
+  });
+
   it('syncs default-cost-managed inventory balances when product cost changes', async () => {
     prismaMock.product.findFirst.mockResolvedValue({
       id: 'prod-1',
@@ -271,6 +337,50 @@ describe('product unit configuration helpers', () => {
       where: { id: { in: ['balance-1'] } },
       data: { avgCostBasePence: 550 },
     });
+  });
+
+  it('persists a preferred supplier when updating a product', async () => {
+    prismaMock.product.findFirst.mockResolvedValue({
+      id: 'prod-1',
+      defaultCostBasePence: 550,
+    });
+    const txMock = {
+      product: { update: vi.fn().mockResolvedValue({}) },
+      productUnit: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'pu-1', unitId: 'unit-piece' }]),
+        update: vi.fn().mockResolvedValue({}),
+        create: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (callback) => callback(txMock));
+
+    await updateProduct('prod-1', 'biz-1', {
+      name: 'PPP',
+      sku: null,
+      barcode: null,
+      categoryId: null,
+      preferredSupplierId: 'supplier-1',
+      imageUrl: null,
+      sellingPriceBasePence: 900,
+      defaultCostBasePence: 550,
+      minimumMarginThresholdBps: null,
+      vatRateBps: 0,
+      promoBuyQty: 0,
+      promoGetQty: 0,
+      baseUnitId: 'unit-piece',
+      packagingUnitId: '',
+      packagingConversion: 0,
+      unitConfigs: [{ unitId: 'unit-piece', conversionToBase: 1, isBaseUnit: true }],
+    });
+
+    expect(txMock.product.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          preferredSupplierId: 'supplier-1',
+        }),
+      }),
+    );
   });
 
   it('does not override balances with authoritative inbound cost history during drift repair', async () => {

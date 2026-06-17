@@ -34,6 +34,36 @@ function buildHref(params: { period?: string; from?: string; to?: string; suppli
   return `/reports/sales-by-supplier${qs ? `?${qs}` : ''}`;
 }
 
+function ReportSetupEmptyState({
+  title,
+  body,
+  actions,
+}: {
+  title: string;
+  body: string;
+  actions: Array<{ label: string; href: string; primary?: boolean }>;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-black/15 bg-white px-5 py-5">
+      <div className="max-w-3xl">
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        <p className="mt-1 text-sm text-black/55">{body}</p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {actions.map((action) => (
+          <Link
+            key={`${action.href}-${action.label}`}
+            href={action.href}
+            className={`${action.primary ? 'btn-primary' : 'btn-secondary'} text-sm`}
+          >
+            {action.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default async function SalesBySupplierPage({
   searchParams,
 }: {
@@ -79,6 +109,11 @@ export default async function SalesBySupplierPage({
 
   const isDrillDown = Boolean(supplierId && drilledSupplier);
   const drilledRow = isDrillDown ? report.rows.find((r) => r.supplierId === supplierId) : null;
+  const hasSupplierLinks = report.rows.length > 0;
+  const hasLinkedProductsWithoutSales = hasSupplierLinks && report.totalRevenuePence === 0;
+  const drilledHasNoLinkedProducts = isDrillDown && (!drilledRow || drilledRow.linkedProductCount === 0);
+  const drilledHasLinkedProductsWithoutSales =
+    isDrillDown && Boolean(drilledRow && drilledRow.linkedProductCount > 0 && drilledRow.products.length === 0);
 
   return (
     <div className="space-y-5">
@@ -194,6 +229,28 @@ export default async function SalesBySupplierPage({
             </div>
           </div>
 
+          {drilledHasNoLinkedProducts ? (
+            <ReportSetupEmptyState
+              title={`No products linked to ${drilledSupplier!.name}`}
+              body="Assign this supplier as the preferred supplier on the products it supplies. Those products will then appear in this report."
+              actions={[
+                { label: 'Manage products', href: '/products', primary: true },
+                { label: 'View supplier profile', href: `/suppliers/${supplierId}` },
+              ]}
+            />
+          ) : null}
+
+          {drilledHasLinkedProductsWithoutSales ? (
+            <ReportSetupEmptyState
+              title="No sales for linked products in this period"
+              body={`Products are linked to ${drilledSupplier!.name}, but none were sold in the selected date range.`}
+              actions={[
+                { label: 'Change period', href: buildHref({ period: 'mtd', supplierId }) },
+                { label: 'View linked products', href: `/suppliers/${supplierId}#products-supplied`, primary: true },
+              ]}
+            />
+          ) : null}
+
           {/* Product table */}
           <ReportTableCard title="Linked products sold">
             <thead>
@@ -227,8 +284,8 @@ export default async function SalesBySupplierPage({
                   colSpan={5}
                   message={
                     drilledRow && drilledRow.linkedProductCount > 0
-                      ? `No sales found for products linked to ${drilledSupplier?.name} during the selected period.`
-                      : `No products are currently linked to ${drilledSupplier?.name}.`
+                      ? `No sales for linked products in this period.`
+                      : `No products are linked to ${drilledSupplier?.name}.`
                   }
                 />
               )}
@@ -258,6 +315,26 @@ export default async function SalesBySupplierPage({
               </DownloadLink>
             }
           />
+          {!hasSupplierLinks ? (
+            <ReportSetupEmptyState
+              title="No supplier-linked products yet"
+              body="Link products to their preferred suppliers to start this report. Existing sales will then be grouped by the product's current preferred supplier setting."
+              actions={[
+                { label: 'Manage products', href: '/products', primary: true },
+                { label: 'View suppliers', href: '/suppliers' },
+              ]}
+            />
+          ) : null}
+          {hasLinkedProductsWithoutSales ? (
+            <ReportSetupEmptyState
+              title="No sales for linked products in this period"
+              body="Supplier links exist, but no linked products were sold in the selected date range."
+              actions={[
+                { label: 'Change period', href: buildHref({ period: 'mtd' }) },
+                { label: 'Manage products', href: '/products', primary: true },
+              ]}
+            />
+          ) : null}
           <ReportTableCard>
             <thead>
               <tr>
@@ -314,7 +391,7 @@ export default async function SalesBySupplierPage({
               ) : (
                 <ReportTableEmptyRow
                   colSpan={7}
-                  message="No suppliers have products linked via preferred supplier setting."
+                  message="Link products to their preferred suppliers to start this report."
                 />
               )}
             </tbody>

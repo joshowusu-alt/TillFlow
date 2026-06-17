@@ -249,7 +249,7 @@ export default async function CustomerDetailPage({
         <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-sm">
           Record payment
         </Link>
-        <Link href="/pos" className="btn-secondary text-sm">
+        <Link href={`/pos?customerId=${customer.id}`} className="btn-secondary text-sm">
           Create sale
         </Link>
         <DownloadLink

@@ -73,6 +73,10 @@ export default async function SupplierDetailPage({
         name: true,
         sku: true,
         sellingPriceBasePence: true,
+        defaultCostBasePence: true,
+        inventoryBalances: {
+          select: { qtyOnHandBase: true },
+        },
       },
       orderBy: { name: 'asc' },
       take: 50,
@@ -197,7 +201,7 @@ export default async function SupplierDetailPage({
         <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-primary text-sm">
           Record payment
         </Link>
-        <Link href="/purchases/new" className="btn-secondary text-sm">
+        <Link href={`/purchases?supplierId=${supplier.id}`} className="btn-secondary text-sm">
           Create purchase
         </Link>
         <DownloadLink
@@ -212,9 +216,9 @@ export default async function SupplierDetailPage({
             View Sales Performance
           </Link>
         ) : null}
-        {linkedProducts.length > 0 ? (
-          <a href="#products-supplied" className="btn-secondary text-sm">View linked products</a>
-        ) : null}
+        <a href="#products-supplied" className="btn-secondary text-sm">
+          {linkedProducts.length > 0 ? 'View linked products' : 'Link products'}
+        </a>
       </div>
 
       {/* Summary cards */}
@@ -252,9 +256,7 @@ export default async function SupplierDetailPage({
           <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
           <div>Phone: {supplier.phone ?? '-'}</div>
           <div>Email: {supplier.email ?? '-'}</div>
-          {linkedProducts.length > 0 && (
-            <div className="text-xs text-black/50">{linkedProducts.length} linked product{linkedProducts.length === 1 ? '' : 's'}</div>
-          )}
+          <div className="text-xs text-black/50">{linkedProducts.length} linked product{linkedProducts.length === 1 ? '' : 's'}</div>
         </div>
       </div>
 
@@ -367,38 +369,60 @@ export default async function SupplierDetailPage({
       })() : null}
 
       {/* Products supplied */}
-      {linkedProducts.length > 0 ? (
-        <div className="card p-6" id="products-supplied">
-          <h2 className="text-lg font-display font-semibold">Products supplied</h2>
-          <p className="mt-1 text-sm text-black/50">Products where {supplier.name} is the preferred supplier.</p>
+      <div className="card p-6" id="products-supplied">
+        <h2 className="text-lg font-display font-semibold">Products supplied</h2>
+        <p className="mt-1 text-sm text-black/50">Products where {supplier.name} is the preferred supplier.</p>
+        {linkedProducts.length > 0 ? (
           <div className="responsive-table-shell mt-4">
             <table className="table w-full border-separate border-spacing-y-2">
               <thead>
                 <tr>
                   <th>Product</th>
                   <th>SKU</th>
+                  <th>Current stock</th>
+                  <th>Default cost</th>
                   <th>Selling price</th>
                 </tr>
               </thead>
               <tbody>
-                {linkedProducts.map((product) => (
-                  <tr key={product.id} className="rounded-xl bg-white">
-                    <td className="px-3 py-3 text-sm font-semibold">
-                      <Link href={`/products/${product.id}`} className="hover:underline">
-                        {product.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3 text-sm text-black/60">{product.sku ?? '-'}</td>
-                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
-                      {formatMoney(product.sellingPriceBasePence, business.currency)}
-                    </td>
-                  </tr>
-                ))}
+                {linkedProducts.map((product) => {
+                  const currentStock = product.inventoryBalances.reduce((sum, balance) => sum + balance.qtyOnHandBase, 0);
+                  return (
+                    <tr key={product.id} className="rounded-xl bg-white">
+                      <td className="px-3 py-3 text-sm font-semibold">
+                        <Link href={`/products/${product.id}`} className="hover:underline">
+                          {product.name}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-black/60">{product.sku ?? '-'}</td>
+                      <td className="px-3 py-3 text-sm tabular-nums">{currentStock.toLocaleString()}</td>
+                      <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                        {formatMoney(product.defaultCostBasePence, business.currency)}
+                      </td>
+                      <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                        {formatMoney(product.sellingPriceBasePence, business.currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
-      ) : null}
+        ) : (
+          <div className="mt-4 rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6">
+            <div className="text-sm font-semibold text-ink">No products linked yet</div>
+            <p className="mt-1 max-w-2xl text-sm text-black/55">
+              Set {supplier.name} as the preferred supplier on the products it supplies to populate this section and the Sales by Linked Supplier report.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/products" className="btn-primary text-sm">Manage products</Link>
+              <Link href={`/reports/sales-by-supplier?supplierId=${supplier.id}&period=mtd`} className="btn-secondary text-sm">
+                View report
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Purchase history */}
       <div className="card p-6">

@@ -24,7 +24,7 @@ export default async function ProductDetailPage({
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
   const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
 
-  const [product, units, categories] = await Promise.all([
+  const [product, units, categories, suppliers] = await Promise.all([
     prisma.product.findFirst({
       where: { id: params.id, businessId: business.id },
         include: {
@@ -33,7 +33,8 @@ export default async function ProductDetailPage({
             where: { storeId: store.id },
             select: { storeId: true, qtyOnHandBase: true, avgCostBasePence: true }
           },
-          category: true
+          category: true,
+          preferredSupplier: { select: { id: true, name: true } }
         }
     }),
     prisma.unit.findMany({
@@ -42,6 +43,11 @@ export default async function ProductDetailPage({
     prisma.category.findMany({
       where: { businessId: business.id },
       orderBy: { sortOrder: 'asc' }
+    }),
+    prisma.supplier.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' }
     })
   ]);
 
@@ -100,6 +106,16 @@ export default async function ProductDetailPage({
           )}
           {product.sku && <div className="text-xs text-black/50 mt-1">SKU: {product.sku}</div>}
           {product.barcode && <div className="text-xs text-black/50">Barcode: {product.barcode}</div>}
+          <div className="text-xs text-black/50">
+            Preferred supplier:{' '}
+            {product.preferredSupplier ? (
+              <a href={`/suppliers/${product.preferredSupplier.id}`} className="text-accent hover:underline">
+                {product.preferredSupplier.name}
+              </a>
+            ) : (
+              'None'
+            )}
+          </div>
         </div>
       </div>
 
@@ -165,6 +181,18 @@ export default async function ProductDetailPage({
               </select>
               <div className="mt-1 text-xs text-black/50">
                 Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+              </div>
+            </div>
+            <div>
+              <label className="label">Preferred supplier</label>
+              <select className="input" name="preferredSupplierId" defaultValue={product.preferredSupplierId ?? ''}>
+                <option value="">No preferred supplier</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+                ))}
+              </select>
+              <div className="mt-1 text-xs text-black/50">
+                Used by Sales by Linked Supplier reporting. It does not track exact stock-batch origin.
               </div>
             </div>
             <div>

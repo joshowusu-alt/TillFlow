@@ -297,6 +297,13 @@ export default function PosClient({
     customerStorageKey,
   });
 
+  useEffect(() => {
+    const urlCustomerId = searchParams?.get('customerId');
+    if (urlCustomerId && customerExists(urlCustomerId)) {
+      setCustomerId(urlCustomerId);
+    }
+  }, [customerExists, searchParams, setCustomerId]);
+
   const playBeep = useCallback((success: boolean) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();

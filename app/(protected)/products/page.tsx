@@ -35,7 +35,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   };
 
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units] = await Promise.all([
+  const [totalProductCount, products, categories, units, suppliers] = await Promise.all([
     prisma.product.count({ where: productWhere }),
     prisma.product.findMany({
       where: productWhere,
@@ -52,7 +52,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             unit: { select: { name: true, pluralName: true } }
           }
         },
-        category: { select: { name: true, colour: true } }
+        category: { select: { name: true, colour: true } },
+        preferredSupplier: { select: { id: true, name: true } }
       },
       orderBy: { name: 'asc' },
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
@@ -71,6 +72,11 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
     }),
     prisma.unit.findMany({
       select: { id: true, name: true }
+    }),
+    prisma.supplier.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' }
     }),
   ]);
   const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
@@ -161,6 +167,20 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   </select>
                   <div className="mt-1 text-xs text-black/50">
                     Don&apos;t see your category? <a href="/products?tab=categories" className="text-accent underline">Add one here</a>.
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Preferred supplier</label>
+                  <select className="input" name="preferredSupplierId">
+                    <option value="">No preferred supplier</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 text-xs text-black/50">
+                    Used by Sales by Linked Supplier reporting. It does not track exact stock-batch origin.
                   </div>
                 </div>
                 <div>
@@ -295,6 +315,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       <DataCardField label="Base price" value={<span className="font-semibold text-ink">{formatMoney(product.sellingPriceBasePence, business.currency)}</span>} />
                       <DataCardField label="Default cost" value={<span className="font-semibold text-ink">{formatMoney(product.defaultCostBasePence, business.currency)}</span>} />
+                      <DataCardField label="Preferred supplier" value={<span className="text-black/65">{product.preferredSupplier?.name ?? 'None'}</span>} className="col-span-2" />
                       <DataCardField label="Unit display" value={<span className="text-black/65">{preview}</span>} className="col-span-2" />
                     </div>
                     <DataCardActions>
@@ -316,13 +337,14 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                     <th className="hidden sm:table-cell">Category</th>
                     <th>Base Price</th>
                     <th className="hidden lg:table-cell">Default Cost</th>
+                    <th className="hidden xl:table-cell">Preferred Supplier</th>
                     <th className="hidden lg:table-cell">Unit Display</th>
                   </tr>
                 </thead>
                 <tbody>
                   {products.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-10 text-center">
+                      <td colSpan={7} className="px-3 py-10 text-center">
                         <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : 'No products loaded yet.'}</div>
                         <div className="mt-1 text-sm text-black/55">
                           {q ? 'Try a different search term or clear the search.' : 'Add your first few products to start receiving stock and selling from the till.'}
@@ -379,6 +401,15 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                         </td>
                         <td className="px-3 py-3">{formatMoney(product.sellingPriceBasePence, business.currency)}</td>
                         <td className="hidden lg:table-cell px-3 py-3">{formatMoney(product.defaultCostBasePence, business.currency)}</td>
+                        <td className="hidden xl:table-cell px-3 py-3 text-sm text-black/60">
+                          {product.preferredSupplier ? (
+                            <Link href={`/suppliers/${product.preferredSupplier.id}`} className="hover:underline">
+                              {product.preferredSupplier.name}
+                            </Link>
+                          ) : (
+                            <span className="text-black/30">—</span>
+                          )}
+                        </td>
                         <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
                       </tr>
                     );

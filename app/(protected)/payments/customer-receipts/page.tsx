@@ -112,6 +112,9 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                     <td className="px-3 py-3">
                       <form action={recordCustomerPaymentAction} className="grid gap-2 md:grid-cols-2">
                         <input type="hidden" name="invoiceId" value={invoice.id} />
+                        {linkedCustomer ? (
+                          <input type="hidden" name="returnTo" value={`/customers/${linkedCustomer.id}`} />
+                        ) : null}
                         <div>
                           <div className="text-xs text-black/50">Payment method</div>
                           <select className="input" name="paymentMethod" defaultValue="CASH">

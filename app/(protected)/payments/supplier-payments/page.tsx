@@ -165,6 +165,9 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                         <td className="px-3 py-3">
                           <form action={recordSupplierPaymentAction} className="grid gap-2 md:grid-cols-2">
                             <input type="hidden" name="invoiceId" value={invoice.id} />
+                            {linkedSupplier ? (
+                              <input type="hidden" name="returnTo" value={`/suppliers/${linkedSupplier.id}`} />
+                            ) : null}
                             <div>
                               <div className="text-xs text-black/50">Method</div>
                               <select className="input" name="paymentMethod" defaultValue="CASH">
@@ -260,6 +263,9 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
 
                   <form action={recordSupplierPaymentAction} className="grid gap-2">
                     <input type="hidden" name="invoiceId" value={invoice.id} />
+                    {linkedSupplier ? (
+                      <input type="hidden" name="returnTo" value={`/suppliers/${linkedSupplier.id}`} />
+                    ) : null}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <div className="text-xs text-black/50">Method</div>

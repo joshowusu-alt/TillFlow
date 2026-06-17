@@ -14,7 +14,7 @@ import { getBusinessStores } from '@/lib/services/stores';
 export default async function PurchasesPage({
   searchParams,
 }: {
-  searchParams?: { error?: string; page?: string; storeId?: string; created?: string };
+  searchParams?: { error?: string; page?: string; storeId?: string; created?: string; supplierId?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) {

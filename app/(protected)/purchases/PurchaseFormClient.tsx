@@ -136,6 +136,11 @@ export default function PurchaseFormClient({
   }, [productSearch, productOptions]);
 
   useEffect(() => {
+    const requestedSupplierId = searchParams?.get('supplierId') ?? '';
+    const validRequestedSupplierId = suppliers.some((supplier) => supplier.id === requestedSupplierId)
+      ? requestedSupplierId
+      : '';
+
     if (searchParams?.get('created')) {
       try {
         window.localStorage.removeItem(draftStorageKey);
@@ -147,6 +152,9 @@ export default function PurchaseFormClient({
     try {
       const raw = window.localStorage.getItem(draftStorageKey);
       if (!raw) {
+        if (validRequestedSupplierId) {
+          setSupplierId(validRequestedSupplierId);
+        }
         draftReadyRef.current = true;
         return;
       }
@@ -168,7 +176,7 @@ export default function PurchaseFormClient({
         ? parsed.paymentMethods.filter((method): method is PaymentMethod => ['CASH', 'CARD', 'TRANSFER'].includes(method))
         : [];
 
-      setSupplierId(typeof parsed.supplierId === 'string' ? parsed.supplierId : '');
+      setSupplierId(validRequestedSupplierId || (typeof parsed.supplierId === 'string' ? parsed.supplierId : ''));
       setCart(restoredCart);
       setPaymentMethods(restoredMethods.length > 0 ? restoredMethods : ['CASH']);
       setPaymentStatus(

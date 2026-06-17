@@ -139,6 +139,69 @@ describe('sales-by-supplier page', () => {
   it('uses resolveSelectableReportDateRange for date parsing', () => {
     expect(src).toContain('resolveSelectableReportDateRange');
   });
+
+  it('shows an actionable setup state when no products are linked to suppliers', () => {
+    expect(src).toContain('No supplier-linked products yet');
+    expect(src).toContain('Link products to their preferred suppliers to start this report');
+    expect(src).toContain('Manage products');
+    expect(src).toContain('View suppliers');
+  });
+
+  it('distinguishes linked products with no sales from missing supplier links', () => {
+    expect(src).toContain('No sales for linked products in this period');
+    expect(src).toContain('Supplier links exist, but no linked products were sold');
+    expect(src).toContain('Change period');
+  });
+
+  it('shows filtered supplier setup actions for empty drill-downs', () => {
+    expect(src).toContain('No products linked to');
+    expect(src).toContain('Assign this supplier as the preferred supplier');
+    expect(src).toContain('View linked products');
+    expect(src).toContain('#products-supplied');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Product setup UX for supplier linking
+// ---------------------------------------------------------------------------
+
+describe('product setup — preferred supplier linking', () => {
+  const productsPage = readFileSync(
+    join(process.cwd(), 'app/(protected)/products/page.tsx'),
+    'utf8',
+  );
+  const productDetailPage = readFileSync(
+    join(process.cwd(), 'app/(protected)/products/[id]/page.tsx'),
+    'utf8',
+  );
+  const productActions = readFileSync(join(process.cwd(), 'app/actions/products.ts'), 'utf8');
+  const productService = readFileSync(join(process.cwd(), 'lib/services/products.ts'), 'utf8');
+
+  it('loads suppliers and renders a preferred supplier selector on product creation', () => {
+    expect(productsPage).toContain('prisma.supplier.findMany');
+    expect(productsPage).toContain('name="preferredSupplierId"');
+    expect(productsPage).toContain('No preferred supplier');
+    expect(productsPage).toContain('Used by Sales by Linked Supplier reporting');
+  });
+
+  it('loads and displays preferred supplier links in the product list', () => {
+    expect(productsPage).toContain('preferredSupplier: { select: { id: true, name: true } }');
+    expect(productsPage).toContain('Preferred Supplier');
+    expect(productsPage).toContain('/suppliers/${product.preferredSupplier.id}');
+  });
+
+  it('renders a preferred supplier selector on product edit with the current value selected', () => {
+    expect(productDetailPage).toContain('prisma.supplier.findMany');
+    expect(productDetailPage).toContain('name="preferredSupplierId"');
+    expect(productDetailPage).toContain("defaultValue={product.preferredSupplierId ?? ''}");
+  });
+
+  it('parses and persists preferredSupplierId through product actions and service writes', () => {
+    expect(productActions).toContain("formOptionalString(formData, 'preferredSupplierId')");
+    expect(productService).toContain('preferredSupplierId?: string | null');
+    expect(productService).toContain('assertSupplierBelongsToBusiness');
+    expect(productService).toContain('preferredSupplierId: normalized.preferredSupplierId');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -354,5 +417,12 @@ describe('supplier detail page — sales performance section', () => {
 
   it('action bar has View Sales Performance link for Growth+ plans', () => {
     expect(src).toContain('View Sales Performance');
+  });
+
+  it('shows an empty state when the supplier has no linked products', () => {
+    expect(src).toContain('No products linked yet');
+    expect(src).toContain('Set {supplier.name} as the preferred supplier');
+    expect(src).toContain('Link products');
+    expect(src).toContain('Manage products');
   });
 });

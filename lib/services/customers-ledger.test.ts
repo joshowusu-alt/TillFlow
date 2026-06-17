@@ -100,6 +100,11 @@ describe('customer detail page', () => {
     expect(src).toContain('Record payment');
   });
 
+  it('action bar links Create sale to POS with this customer selected', () => {
+    expect(src).toContain('/pos?customerId=');
+    expect(src).toContain('Create sale');
+  });
+
   it('uses owner-friendly statement column headers', () => {
     expect(src).toContain('>Invoice<');
     expect(src).toContain('>Payment<');
@@ -134,7 +139,33 @@ describe('customer receipts page', () => {
     expect(src).toContain('/customers/${linkedCustomer.id}');
   });
 
+  it('returns to the customer profile after recording a filtered payment', () => {
+    expect(src).toContain('name="returnTo"');
+    expect(src).toContain('value={`/customers/${linkedCustomer.id}`}');
+  });
+
   it('uses owner-friendly page title', () => {
     expect(src).toContain('Record customer payment');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Customer sale preselection
+// ---------------------------------------------------------------------------
+
+describe('customer profile to POS integration', () => {
+  const posPageSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/page.tsx'), 'utf8');
+  const posClientSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/PosClient.tsx'), 'utf8');
+
+  it('loads a customer requested by customerId even when not in the cached POS list', () => {
+    expect(posPageSrc).toContain('searchParams?: { customerId?: string }');
+    expect(posPageSrc).toContain('requestedCustomerId');
+    expect(posPageSrc).toContain('customerOptions');
+  });
+
+  it('selects the customerId URL param in POS when valid', () => {
+    expect(posClientSrc).toContain("searchParams?.get('customerId')");
+    expect(posClientSrc).toContain('customerExists(urlCustomerId)');
+    expect(posClientSrc).toContain('setCustomerId(urlCustomerId)');
   });
 });
