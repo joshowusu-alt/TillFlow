@@ -4,7 +4,7 @@ import { createPurchase } from '@/lib/services/purchases';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { toInt, toPence, formString, formInt, formDate } from '@/lib/form-helpers';
+import { toPence, formString, formInt, formDate } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -43,7 +43,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       }
     }
 
-    await createPurchase({
+    const invoice = await createPurchase({
       businessId,
       storeId,
       supplierId,
@@ -63,8 +63,89 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     revalidateTag('pos-products');
     revalidateTag('reports');
 
-    redirect(`/purchases?created=${Date.now()}`);
+    const summary = (invoice as any).supplierProductLinkSummary as
+      | {
+          linkedCount?: number;
+          alreadyLinkedCount?: number;
+          skippedDifferentSupplierCount?: number;
+        }
+      | undefined;
+    const params = new URLSearchParams({ created: '1' });
+    if (summary) {
+      params.set('linked', String(summary.linkedCount ?? 0));
+      params.set('already', String(summary.alreadyLinkedCount ?? 0));
+      params.set('left', String(summary.skippedDifferentSupplierCount ?? 0));
+    }
+
+    redirect(`/purchases/${invoice.id}?${params.toString()}`);
   }, '/purchases');
+}
+
+export async function changePurchaseProductSupplierLinkAction(formData: FormData): Promise<void> {
+  const purchaseInvoiceId = formString(formData, 'purchaseInvoiceId');
+  const productId = formString(formData, 'productId');
+  const fallbackPath = purchaseInvoiceId ? `/purchases/${purchaseInvoiceId}` : '/purchases';
+
+  const result = await safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    if (!purchaseInvoiceId || !productId) {
+      return err('Choose a product to update.');
+    }
+
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseInvoiceId, businessId },
+      select: { id: true, supplierId: true, supplier: { select: { id: true, name: true } } },
+    });
+    if (!invoice) return err('Purchase not found.');
+    if (!invoice.supplierId || !invoice.supplier) {
+      return err('This purchase has no supplier.');
+    }
+
+    const line = await prisma.purchaseInvoiceLine.findFirst({
+      where: { purchaseInvoiceId: invoice.id, productId },
+      select: { id: true },
+    });
+    if (!line) {
+      return err('This product is not on the purchase.');
+    }
+
+    const updateResult = await prisma.product.updateMany({
+      where: { id: productId, businessId },
+      data: { preferredSupplierId: invoice.supplierId },
+    });
+    if ((updateResult.count ?? 0) === 0) {
+      return err('Product not found.');
+    }
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRODUCT_UPDATE',
+      entity: 'Product',
+      entityId: productId,
+      details: { purchaseInvoiceId: invoice.id, supplierId: invoice.supplierId },
+    }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('pos-products');
+    revalidateTag('reports');
+    revalidatePath('/reports/sales-by-supplier');
+    revalidatePath('/products');
+    revalidatePath(`/products/${productId}`);
+    revalidatePath('/purchases');
+    revalidatePath(`/purchases/${invoice.id}`);
+    revalidatePath(`/suppliers/${invoice.supplierId}`);
+
+    return ok({ invoiceId: invoice.id });
+  });
+
+  if (!result.success) {
+    redirect(`${fallbackPath}?error=${encodeURIComponent(result.error)}`);
+  }
+
+  redirect(`/purchases/${result.data.invoiceId}?supplierLinkChanged=1`);
 }
 
 /**

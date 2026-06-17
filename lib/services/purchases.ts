@@ -40,6 +40,23 @@ export type CreatePurchaseInput = {
   stockMovementType?: 'OPENING' | 'PURCHASE';
 };
 
+export type SupplierProductLinkSkippedProduct = {
+  productId: string;
+  productName: string;
+  sku: string | null;
+  currentSupplierId: string;
+  currentSupplierName: string;
+  purchaseSupplierId: string;
+  purchaseSupplierName: string;
+};
+
+export type SupplierProductLinkSummary = {
+  linkedCount: number;
+  alreadyLinkedCount: number;
+  skippedDifferentSupplierCount: number;
+  skippedProducts: SupplierProductLinkSkippedProduct[];
+};
+
 /**
  * Multiplier above which a per-base-unit purchase cost is considered
  * suspicious relative to the product's selling price. Tuned to catch the
@@ -67,6 +84,88 @@ export class HighPurchaseCostError extends Error {
   }
 }
 
+async function linkPurchasedProductsToSupplier(
+  client: any,
+  input: {
+    businessId: string;
+    supplierId?: string | null;
+    supplierName?: string | null;
+    lines: Array<{ productId?: string | null }>;
+  },
+): Promise<SupplierProductLinkSummary> {
+  const productIds = [...new Set(input.lines.map((line) => line.productId).filter(Boolean))] as string[];
+  if (!input.supplierId || productIds.length === 0) {
+    return {
+      linkedCount: 0,
+      alreadyLinkedCount: 0,
+      skippedDifferentSupplierCount: 0,
+      skippedProducts: [],
+    };
+  }
+
+  const products = await client.product.findMany({
+    where: {
+      businessId: input.businessId,
+      id: { in: productIds },
+    },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      preferredSupplierId: true,
+      preferredSupplier: { select: { id: true, name: true } },
+    },
+  });
+
+  const toLink = products
+    .filter((product: { preferredSupplierId: string | null }) => !product.preferredSupplierId)
+    .map((product: { id: string }) => product.id);
+  const alreadyLinkedCount = products.filter(
+    (product: { preferredSupplierId: string | null }) => product.preferredSupplierId === input.supplierId,
+  ).length;
+  const skippedProducts = products
+    .filter(
+      (product: { preferredSupplierId: string | null }) =>
+        Boolean(product.preferredSupplierId && product.preferredSupplierId !== input.supplierId),
+    )
+    .map(
+      (product: {
+        id: string;
+        name: string;
+        sku: string | null;
+        preferredSupplierId: string | null;
+        preferredSupplier: { id: string; name: string } | null;
+      }) => ({
+        productId: product.id,
+        productName: product.name,
+        sku: product.sku,
+        currentSupplierId: product.preferredSupplierId ?? '',
+        currentSupplierName: product.preferredSupplier?.name ?? 'Another supplier',
+        purchaseSupplierId: input.supplierId,
+        purchaseSupplierName: input.supplierName ?? 'Purchase supplier',
+      }),
+    );
+
+  const updateResult =
+    toLink.length > 0
+      ? await client.product.updateMany({
+          where: {
+            businessId: input.businessId,
+            id: { in: toLink },
+            preferredSupplierId: null,
+          },
+          data: { preferredSupplierId: input.supplierId },
+        })
+      : { count: 0 };
+
+  return {
+    linkedCount: updateResult.count ?? 0,
+    alreadyLinkedCount,
+    skippedDifferentSupplierCount: skippedProducts.length,
+    skippedProducts,
+  };
+}
+
 export async function createPurchase(input: CreatePurchaseInput, db?: any) {
   if (!input.lines.length) {
     throw new Error('No items in purchase');
@@ -86,7 +185,7 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     input.supplierId
       ? prisma.supplier.findFirst({
           where: { id: input.supplierId, businessId: input.businessId },
-          select: { id: true },
+          select: { id: true, name: true },
         })
       : Promise.resolve(null),
     dbClient.productUnit.findMany({
@@ -387,10 +486,20 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     // Called inside a caller-supplied transaction — all writes in the same tx.
     invoice = await _doInvoice(db);
     await _doInventory(db, invoice.id);
+    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(db, {
+      ...input,
+      supplierName: supplier?.name ?? null,
+    });
+    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
   } else {
     // Normal path: no outer $transaction needed — createMany = 1 RTT per step.
     invoice = await _doInvoice(prisma);
     await _doInventory(prisma as any, invoice.id);
+    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
+      ...input,
+      supplierName: supplier?.name ?? null,
+    });
+    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
   }
 
   return invoice;

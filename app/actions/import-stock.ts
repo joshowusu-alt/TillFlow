@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { createPurchase } from '@/lib/services/purchases';
+import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
@@ -44,6 +45,22 @@ export type ImportStockMeta = {
   errorReportJson?: string;
 };
 
+export type ImportSupplierLinkSupplierSummary = {
+  supplierId: string;
+  supplierName: string;
+  linkedCount: number;
+  alreadyLinkedCount: number;
+  skippedDifferentSupplierCount: number;
+};
+
+export type ImportSupplierLinkSummary = {
+  linkedCount: number;
+  alreadyLinkedCount: number;
+  skippedDifferentSupplierCount: number;
+  skippedProducts: SupplierProductLinkSkippedProduct[];
+  supplierSummaries: ImportSupplierLinkSupplierSummary[];
+};
+
 export type ImportStockResult = {
   importId: string | null;
   created: number;
@@ -62,7 +79,18 @@ export type ImportStockResult = {
   suppliersCreated: number;
   categoriesCreated: number;
   warningsAcknowledged: number;
+  supplierLinkSummary: ImportSupplierLinkSummary;
 };
+
+function emptyImportSupplierLinkSummary(): ImportSupplierLinkSummary {
+  return {
+    linkedCount: 0,
+    alreadyLinkedCount: 0,
+    skippedDifferentSupplierCount: 0,
+    skippedProducts: [],
+    supplierSummaries: [],
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Action
@@ -264,6 +292,20 @@ async function _runImport(
       ).map((s) => [s.name.toLowerCase(), s.id])
     );
     const supplierStats = { matched: 0, created: 0 };
+    const supplierIdByName = new Map<string, string | null>();
+    const resolveSupplierIdForRow = async (row: ConfirmedImportRow) => {
+      const key = (row.supplierName ?? '').trim().toLowerCase();
+      if (!key) return null;
+      if (supplierIdByName.has(key)) return supplierIdByName.get(key) ?? null;
+      const supplierId = await resolveSupplierId(
+        businessId,
+        row.supplierName,
+        supplierMap,
+        supplierStats
+      );
+      supplierIdByName.set(key, supplierId);
+      return supplierId;
+    };
     let categoriesCreated = 0;
 
     const allCategoryNames = [
@@ -293,13 +335,6 @@ async function _runImport(
       const categoryId = categoryName
         ? categoryMap.get(categoryName.toLowerCase()) ?? null
         : null;
-      const supplierId = await resolveSupplierId(
-        businessId,
-        row.supplierName,
-        supplierMap,
-        supplierStats
-      );
-
       let barcode = row.barcode || null;
       if (barcode) {
         const conflict = await prisma.product.findFirst({
@@ -324,7 +359,6 @@ async function _runImport(
             ? { storefrontPublished: row.storefrontPublished }
             : {}),
           ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
-          ...(supplierId ? { preferredSupplierId: supplierId } : {}),
         },
       });
       updatedCount++;
@@ -358,12 +392,7 @@ async function _runImport(
           const categoryName = row.category
             ? suggestImportCategoryName(row.category) || row.category
             : '';
-          const supplierId = await resolveSupplierId(
-            businessId,
-            row.supplierName,
-            supplierMap,
-            supplierStats
-          );
+          const supplierId = await resolveSupplierIdForRow(row);
           return {
             businessId,
             name: row.name,
@@ -517,8 +546,28 @@ async function _runImport(
     const allItems = [...createdItems, ...skippedWithStockItems, ...updateWithStockItems];
     const paidItemsAll   = allItems.filter((c) => c.row.paymentStatus === 'PAID');
     const unpaidItemsAll = allItems.filter((c) => c.row.paymentStatus === 'UNPAID');
-    const paidLinesAll   = paidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
-    const unpaidLinesAll = unpaidItemsAll.filter(({ row }) => row.quantity > 0).map(({ row, productId }) => toPurchaseLine(row, productId));
+    const groupLinesBySupplier = async (
+      items: Array<{ row: ConfirmedImportRow; productId: string }>
+    ) => {
+      const groups = new Map<
+        string,
+        { supplierId: string | null; supplierName: string | null; lines: ReturnType<typeof toPurchaseLine>[] }
+      >();
+      for (const item of items) {
+        if (item.row.quantity <= 0) continue;
+        const supplierId = await resolveSupplierIdForRow(item.row);
+        const key = supplierId ?? '__NO_SUPPLIER__';
+        const supplierName = supplierId ? (item.row.supplierName ?? '').trim() || null : null;
+        const group = groups.get(key) ?? { supplierId, supplierName, lines: [] };
+        group.lines.push(toPurchaseLine(item.row, item.productId));
+        groups.set(key, group);
+      }
+      return [...groups.values()];
+    };
+    const paidLineGroups = await groupLinesBySupplier(paidItemsAll);
+    const unpaidLineGroups = await groupLinesBySupplier(unpaidItemsAll);
+    const paidLinesAll = paidLineGroups.flatMap((group) => group.lines);
+    const unpaidLinesAll = unpaidLineGroups.flatMap((group) => group.lines);
 
     // Pre-seed the full chart of accounts ONCE before launching invoice
     // creation. Without this, multiple createPurchase calls may each try
@@ -532,46 +581,87 @@ async function _runImport(
     // Products are already committed above; losing an invoice chunk is far
     // better than rolling back everything.
     const invoiceErrors: string[] = [];
+    const supplierLinkSummary = emptyImportSupplierLinkSummary();
+    const supplierSummaryMap = new Map<string, ImportSupplierLinkSupplierSummary>();
+    const mergeSupplierProductLinkSummary = (
+      summary: SupplierProductLinkSummary | undefined,
+      group: { supplierId: string | null; supplierName: string | null },
+    ) => {
+      if (!summary || !group.supplierId) return;
+
+      supplierLinkSummary.linkedCount += summary.linkedCount;
+      supplierLinkSummary.alreadyLinkedCount += summary.alreadyLinkedCount;
+      supplierLinkSummary.skippedDifferentSupplierCount += summary.skippedDifferentSupplierCount;
+      supplierLinkSummary.skippedProducts.push(...summary.skippedProducts);
+
+      const supplierName =
+        group.supplierName ??
+        summary.skippedProducts.find((product) => product.purchaseSupplierId === group.supplierId)?.purchaseSupplierName ??
+        'Purchase supplier';
+      const supplierSummary =
+        supplierSummaryMap.get(group.supplierId) ??
+        {
+          supplierId: group.supplierId,
+          supplierName,
+          linkedCount: 0,
+          alreadyLinkedCount: 0,
+          skippedDifferentSupplierCount: 0,
+        };
+      supplierSummary.linkedCount += summary.linkedCount;
+      supplierSummary.alreadyLinkedCount += summary.alreadyLinkedCount;
+      supplierSummary.skippedDifferentSupplierCount += summary.skippedDifferentSupplierCount;
+      supplierSummaryMap.set(group.supplierId, supplierSummary);
+    };
+
     let paidChunkCount = 0;
-    for (let i = 0; i < paidLinesAll.length; i += INVOICE_CHUNK) {
-      const chunk = paidLinesAll.slice(i, i + INVOICE_CHUNK);
-      try {
-        await createPurchase({
-          businessId, storeId: store.id, supplierId: null,
-          paymentStatus: 'PAID', dueDate: null, payments: [],
-          lines: chunk, userId: user.id,
-          stockMovementType: 'OPENING',
-          acknowledgeHighCost: true,
-        });
-        paidChunkCount++;
-      } catch (chunkErr: unknown) {
-        const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-        console.error(`[importStock] paid chunk ${Math.floor(i / INVOICE_CHUNK) + 1} failed:`, chunkErr);
-        invoiceErrors.push(`Paid chunk ${Math.floor(i / INVOICE_CHUNK) + 1}: ${msg}`);
+    for (const group of paidLineGroups) {
+      for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
+        const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
+        try {
+          const invoice = await createPurchase({
+            businessId, storeId: store.id, supplierId: group.supplierId,
+            paymentStatus: 'PAID', dueDate: null, payments: [],
+            lines: chunk, userId: user.id,
+            stockMovementType: 'OPENING',
+            acknowledgeHighCost: true,
+          });
+          mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
+          paidChunkCount++;
+        } catch (chunkErr: unknown) {
+          const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+          console.error(`[importStock] paid chunk ${paidChunkCount + 1} failed:`, chunkErr);
+          invoiceErrors.push(`Paid chunk ${paidChunkCount + 1}: ${msg}`);
+        }
       }
     }
     let unpaidChunkCount = 0;
-    for (let i = 0; i < unpaidLinesAll.length; i += INVOICE_CHUNK) {
-      const chunk = unpaidLinesAll.slice(i, i + INVOICE_CHUNK);
-      try {
-        await createPurchase({
-          businessId, storeId: store.id, supplierId: null,
-          paymentStatus: 'UNPAID', dueDate: null, payments: [],
-          lines: chunk, userId: user.id,
-          stockMovementType: 'OPENING',
-          acknowledgeHighCost: true,
-        });
-        unpaidChunkCount++;
-      } catch (chunkErr: unknown) {
-        const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-        console.error(`[importStock] unpaid chunk ${Math.floor(i / INVOICE_CHUNK) + 1} failed:`, chunkErr);
-        invoiceErrors.push(`Unpaid chunk ${Math.floor(i / INVOICE_CHUNK) + 1}: ${msg}`);
+    for (const group of unpaidLineGroups) {
+      for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
+        const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
+        try {
+          const invoice = await createPurchase({
+            businessId, storeId: store.id, supplierId: group.supplierId,
+            paymentStatus: 'UNPAID', dueDate: null, payments: [],
+            lines: chunk, userId: user.id,
+            stockMovementType: 'OPENING',
+            acknowledgeHighCost: true,
+          });
+          mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
+          unpaidChunkCount++;
+        } catch (chunkErr: unknown) {
+          const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+          console.error(`[importStock] unpaid chunk ${unpaidChunkCount + 1} failed:`, chunkErr);
+          invoiceErrors.push(`Unpaid chunk ${unpaidChunkCount + 1}: ${msg}`);
+        }
       }
     }
 
     if (invoiceErrors.length > 0) {
       console.error('[importStock] invoice chunk errors (products ARE created):', invoiceErrors);
     }
+    supplierLinkSummary.supplierSummaries = [...supplierSummaryMap.values()].sort((a, b) =>
+      a.supplierName.localeCompare(b.supplierName),
+    );
     console.log(`[importStock] ${paidChunkCount} paid chunk(s) + ${unpaidChunkCount} unpaid chunk(s) complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
 
     const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
@@ -650,6 +740,7 @@ async function _runImport(
       suppliersCreated: supplierStats.created,
       categoriesCreated,
       warningsAcknowledged: rows.filter((r) => r.confirmBelowCost).length,
+      supplierLinkSummary,
     });
   });
 }
