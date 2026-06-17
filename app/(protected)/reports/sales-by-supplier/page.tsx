@@ -1,0 +1,326 @@
+import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
+import DownloadLink from '@/components/DownloadLink';
+import StatCard from '@/components/StatCard';
+import ReportFilterCard from '@/components/reports/ReportFilterCard';
+import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
+import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
+import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
+import { formatMoney } from '@/lib/format';
+import { resolveSelectableReportDateRange } from '@/lib/reports/date-parsing';
+import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
+import { prisma } from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+
+const PERIOD_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'This week' },
+  { value: 'mtd', label: 'This month' },
+  { value: 'last-month', label: 'Last month' },
+  { value: 'ytd', label: 'This year' },
+  { value: 'custom', label: 'Custom' },
+] as const;
+
+function buildHref(params: { period?: string; from?: string; to?: string; supplierId?: string }) {
+  const p = new URLSearchParams();
+  if (params.period) p.set('period', params.period);
+  if (params.from) p.set('from', params.from);
+  if (params.to) p.set('to', params.to);
+  if (params.supplierId) p.set('supplierId', params.supplierId);
+  const qs = p.toString();
+  return `/reports/sales-by-supplier${qs ? `?${qs}` : ''}`;
+}
+
+export default async function SalesBySupplierPage({
+  searchParams,
+}: {
+  searchParams?: { period?: string; from?: string; to?: string; supplierId?: string };
+}) {
+  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
+  if (!business) return <div className="card p-6">Business not found.</div>;
+
+  const features = getFeatures(
+    (business as any).plan ?? (business.mode as any),
+    (business as any).storeMode as any,
+  );
+
+  if (!features.advancedReports) {
+    return (
+      <AdvancedModeNotice
+        title="Sales by Linked Supplier is available on Growth and Pro"
+        description="Supplier-linked product sales reporting is unlocked on businesses provisioned for Growth or Pro."
+        featureName="Sales by Linked Supplier"
+        minimumPlan="GROWTH"
+      />
+    );
+  }
+
+  const { start, end, fromInputValue, toInputValue, periodInputValue, isCustomRange } =
+    resolveSelectableReportDateRange(searchParams, 'mtd');
+
+  const supplierId = searchParams?.supplierId?.trim() || undefined;
+
+  // When drilling into a supplier, also fetch its name for the header
+  const [report, drilledSupplier] = await Promise.all([
+    getSupplierSalesReport(business.id, { start, end, supplierId }),
+    supplierId
+      ? prisma.supplier.findFirst({
+          where: { id: supplierId, businessId: business.id },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const exportHref = buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue, supplierId })
+    .replace('/reports/sales-by-supplier', '/reports/sales-by-supplier/export');
+
+  const isDrillDown = Boolean(supplierId && drilledSupplier);
+  const drilledRow = isDrillDown ? report.rows.find((r) => r.supplierId === supplierId) : null;
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title="Sales by Linked Supplier"
+        subtitle={
+          isDrillDown
+            ? `Products linked to ${drilledSupplier!.name}`
+            : 'Revenue and sales volume for products linked to each supplier.'
+        }
+        secondaryCta={
+          isDrillDown
+            ? {
+                label: '← All suppliers',
+                href: buildHref({ period: periodInputValue, from: fromInputValue, to: toInputValue }),
+              }
+            : undefined
+        }
+      />
+
+      {/* Disclaimer note */}
+      <p className="text-sm text-black/50">
+        This report shows sales for products linked to each supplier via their preferred supplier setting.
+        It does not track the exact supplier source of each inventory unit sold.
+      </p>
+
+      {/* Filter card */}
+      <ReportFilterCard
+        columnsClassName={`grid gap-3 sm:grid-cols-${isCustomRange ? '5' : '3'}`}
+        actions={
+          <DownloadLink
+            href={exportHref}
+            fallbackFilename={`supplier-sales-${fromInputValue}-to-${toInputValue}.csv`}
+            className="btn-secondary text-sm"
+          >
+            Download CSV
+          </DownloadLink>
+        }
+      >
+        <div>
+          <label className="label">Period</label>
+          <select className="input" name="period" defaultValue={periodInputValue}>
+            {PERIOD_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        {isCustomRange ? (
+          <>
+            <div>
+              <label className="label">From</label>
+              <input className="input" type="date" name="from" defaultValue={fromInputValue} />
+            </div>
+            <div>
+              <label className="label">To</label>
+              <input className="input" type="date" name="to" defaultValue={toInputValue} />
+            </div>
+          </>
+        ) : null}
+        {supplierId ? <input type="hidden" name="supplierId" value={supplierId} /> : null}
+      </ReportFilterCard>
+
+      {/* Summary cards — not shown in drill-down mode */}
+      {!isDrillDown ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Total revenue"
+            value={formatMoney(report.totalRevenuePence, business.currency)}
+            tone="accent"
+            helper="From products linked to any supplier"
+          />
+          <StatCard
+            label="Units sold"
+            value={report.totalQtyBase.toLocaleString()}
+            helper="Sum of all base-unit quantities"
+          />
+          <StatCard
+            label="Suppliers with sales"
+            value={report.suppliersWithSalesCount.toLocaleString()}
+            helper="Suppliers with revenue in this period"
+          />
+          <StatCard
+            label="Top supplier"
+            value={report.topSupplierName ?? '—'}
+            tone={report.topSupplierName ? 'success' : 'default'}
+            helper="By revenue in this period"
+          />
+        </div>
+      ) : null}
+
+      {/* Drill-down: product breakdown for a specific supplier */}
+      {isDrillDown ? (
+        <div className="space-y-4">
+          {/* Supplier summary */}
+          <div className="card grid gap-4 p-5 sm:grid-cols-3">
+            <div className="space-y-1">
+              <div className="text-xs uppercase tracking-wide text-black/40">Revenue</div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {formatMoney(drilledRow?.totalRevenuePence ?? 0, business.currency)}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs uppercase tracking-wide text-black/40">Units sold</div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {(drilledRow?.totalQtyBase ?? 0).toLocaleString()}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs uppercase tracking-wide text-black/40">Sales</div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {(drilledRow?.totalSalesCount ?? 0).toLocaleString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Product table */}
+          <ReportTableCard title="Linked products sold">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>SKU</th>
+                <th>Qty sold</th>
+                <th>Revenue</th>
+                <th>Sales count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drilledRow && drilledRow.products.length > 0 ? (
+                drilledRow.products.map((p) => (
+                  <tr key={p.productId} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      <Link href={`/products/${p.productId}`} className="hover:underline">
+                        {p.productName}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-3 text-sm text-black/60">{p.sku ?? '—'}</td>
+                    <td className="px-3 py-3 text-sm tabular-nums">{p.qtyBase.toLocaleString()}</td>
+                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                      {formatMoney(p.revenuePence, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm tabular-nums">{p.salesCount.toLocaleString()}</td>
+                  </tr>
+                ))
+              ) : (
+                <ReportTableEmptyRow
+                  colSpan={5}
+                  message={
+                    drilledRow && drilledRow.linkedProductCount > 0
+                      ? `No sales found for products linked to ${drilledSupplier?.name} during the selected period.`
+                      : `No products are currently linked to ${drilledSupplier?.name}.`
+                  }
+                />
+              )}
+            </tbody>
+          </ReportTableCard>
+
+          <Link
+            href={`/suppliers/${supplierId}`}
+            className="btn-ghost text-sm"
+          >
+            ← View supplier profile
+          </Link>
+        </div>
+      ) : (
+        /* Supplier table */
+        <div className="space-y-4">
+          <ReportSectionHeader
+            title="Revenue by supplier"
+            subtitle="Products are attributed to the supplier set as preferred supplier."
+            trailing={
+              <DownloadLink
+                href={exportHref}
+                fallbackFilename={`supplier-sales-${fromInputValue}-to-${toInputValue}.csv`}
+                className="btn-ghost text-xs"
+              >
+                CSV
+              </DownloadLink>
+            }
+          />
+          <ReportTableCard>
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th className="hidden sm:table-cell">Linked products</th>
+                <th>Revenue</th>
+                <th className="hidden lg:table-cell">Qty sold</th>
+                <th className="hidden lg:table-cell">Sales count</th>
+                <th className="hidden xl:table-cell">Avg sale value</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.rows.length > 0 ? (
+                report.rows.map((row) => (
+                  <tr key={row.supplierId} className="rounded-xl bg-white">
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      <Link href={`/suppliers/${row.supplierId}`} className="hover:underline">
+                        {row.supplierName}
+                      </Link>
+                    </td>
+                    <td className="hidden sm:table-cell px-3 py-3 text-sm text-black/60">
+                      {row.linkedProductCount}
+                    </td>
+                    <td className="px-3 py-3 text-sm font-semibold tabular-nums">
+                      {row.totalRevenuePence > 0
+                        ? formatMoney(row.totalRevenuePence, business.currency)
+                        : <span className="text-black/30">—</span>}
+                    </td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm tabular-nums">
+                      {row.totalQtyBase > 0 ? row.totalQtyBase.toLocaleString() : <span className="text-black/30">—</span>}
+                    </td>
+                    <td className="hidden lg:table-cell px-3 py-3 text-sm tabular-nums">
+                      {row.totalSalesCount > 0 ? row.totalSalesCount.toLocaleString() : <span className="text-black/30">—</span>}
+                    </td>
+                    <td className="hidden xl:table-cell px-3 py-3 text-sm tabular-nums text-black/60">
+                      {row.avgSaleValuePence > 0 ? formatMoney(row.avgSaleValuePence, business.currency) : <span className="text-black/30">—</span>}
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      <Link
+                        href={buildHref({
+                          period: periodInputValue,
+                          from: fromInputValue,
+                          to: toInputValue,
+                          supplierId: row.supplierId,
+                        })}
+                        className="btn-ghost text-xs whitespace-nowrap"
+                      >
+                        View products
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <ReportTableEmptyRow
+                  colSpan={7}
+                  message="No suppliers have products linked via preferred supplier setting."
+                />
+              )}
+            </tbody>
+          </ReportTableCard>
+        </div>
+      )}
+    </div>
+  );
+}

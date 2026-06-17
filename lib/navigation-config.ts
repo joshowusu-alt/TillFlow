@@ -89,6 +89,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
       { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/sales-by-supplier', label: 'Sales by Supplier', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
       { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },

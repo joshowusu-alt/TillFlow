@@ -71,6 +71,16 @@ function resolvePeriodPreset(period: string | undefined, now: Date): PeriodPrese
 				start: new Date(now.getFullYear(), now.getMonth(), 1),
 				end: endOfDay(now),
 			};
+		case 'last-month': {
+			const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+			const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+			return { key: 'last-month', start, end };
+		}
+		case 'ytd':
+		case 'this-year': {
+			const start = new Date(now.getFullYear(), 0, 1);
+			return { key: 'ytd', start, end: endOfDay(now) };
+		}
 		default: {
 			const fallbackStart = new Date(todayStart);
 			fallbackStart.setDate(fallbackStart.getDate() - 29);
