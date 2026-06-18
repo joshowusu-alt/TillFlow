@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
-import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction } from '@/app/actions/shifts';
+import { openShiftAction, closeShiftAction, closeShiftOwnerOverrideAction, addCashToTillAction } from '@/app/actions/shifts';
 
 type Till = { id: string; name: string };
 
@@ -81,6 +81,14 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
   const [overrideReasonCode, setOverrideReasonCode] = useState('');
   const [overrideJustification, setOverrideJustification] = useState('');
   const isOwner = userRole === 'OWNER';
+  const isManagerOrOwner = userRole === 'OWNER' || userRole === 'MANAGER';
+
+  const [showAddCash, setShowAddCash] = useState(false);
+  const [addCashAmount, setAddCashAmount] = useState('');
+  const [addCashReasonCode, setAddCashReasonCode] = useState('');
+  const [addCashNote, setAddCashNote] = useState('');
+  const [addCashError, setAddCashError] = useState<string | null>(null);
+  const [addCashSuccess, setAddCashSuccess] = useState(false);
 
   // Lock background scroll when close-shift modal is open
   useEffect(() => {
@@ -115,6 +123,35 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     setOverrideReasonCode('');
     setOverrideJustification('');
     setShowOwnerOverride(false);
+  };
+
+  const handleAddCash = () => {
+    setAddCashError(null);
+    if (!addCashAmount) { setAddCashError('Amount is required.'); return; }
+    if (Number(addCashAmount) <= 0) { setAddCashError('Amount must be greater than zero.'); return; }
+    if (!addCashReasonCode) { setAddCashError('A reason is required.'); return; }
+    if (addCashReasonCode === 'OTHER' && !addCashNote.trim()) {
+      setAddCashError('Please describe the reason for adding cash.');
+      return;
+    }
+    const formData = new FormData();
+    formData.set('amount', addCashAmount);
+    formData.set('reasonCode', addCashReasonCode);
+    formData.set('note', addCashNote);
+    startTransition(async () => {
+      try {
+        const result = await addCashToTillAction(formData);
+        if (!result.success) { setAddCashError(result.error); return; }
+        setAddCashSuccess(true);
+        setAddCashAmount('');
+        setAddCashReasonCode('');
+        setAddCashNote('');
+        setShowAddCash(false);
+        router.refresh();
+      } catch (e) {
+        setAddCashError(e instanceof Error ? e.message : 'Failed to add cash to till');
+      }
+    });
   };
 
   const handleOpenShift = () => {
@@ -279,14 +316,22 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               <div className="text-xs uppercase tracking-wide text-black/40">Sales Total</div>
               <div className="mt-1 text-2xl font-bold">{formatMoney(openShift.salesTotal, currency)}</div>
             </div>
-            <div className="rounded-xl border border-black/10 bg-white p-4">
+            <div className={`rounded-xl border p-4 ${openShift.expectedCash < 0 ? 'border-amber-200 bg-amber-50/60' : 'border-black/10 bg-white'}`}>
               <div className="text-xs uppercase tracking-wide text-black/40">Expected Cash</div>
-              <div className="mt-1 text-2xl font-bold text-emerald-700">
+              <div className={`mt-1 text-2xl font-bold ${openShift.expectedCash < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                 {formatMoney(openShift.expectedCash, currency)}
               </div>
               <div className="text-xs text-black/50">
                 Opening: {formatMoney(openShift.openingCashPence, currency)}
               </div>
+              {openShift.expectedCash < 0 && (
+                <div className="mt-2 text-xs text-amber-700 leading-snug">
+                  More cash has been paid out than received in this shift.
+                  {openShift.openingCashPence === 0 && (
+                    <span className="block mt-0.5">No opening float was recorded.</span>
+                  )}
+                </div>
+              )}
             </div>
             <div className="rounded-xl border border-black/10 bg-white p-4">
               <div className="text-xs uppercase tracking-wide text-black/40">Card / Transfer</div>
@@ -303,6 +348,102 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               </div>
             )}
           </div>
+
+          {isManagerOrOwner && (
+            <div className="mt-5 border-t border-black/5 pt-4">
+              {addCashSuccess && !showAddCash && (
+                <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                  Cash added to till.
+                </div>
+              )}
+              {!showAddCash ? (
+                <button
+                  type="button"
+                  className="btn-ghost text-sm"
+                  onClick={() => { setShowAddCash(true); setAddCashError(null); setAddCashSuccess(false); }}
+                >
+                  + Add cash to till
+                </button>
+              ) : (
+                <div className="rounded-xl border border-black/10 bg-slate-50 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-ink">Add cash to till</h3>
+                    <button
+                      type="button"
+                      className="text-xs text-black/40 hover:text-black/60"
+                      onClick={() => { setShowAddCash(false); setAddCashError(null); }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <p className="mb-3 text-xs text-black/55">
+                    Use this when cash is added to the drawer from the safe, owner, or manager. This increases expected cash but does not count as revenue.
+                  </p>
+                  {addCashError && (
+                    <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      {addCashError}
+                    </div>
+                  )}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="label">Amount</label>
+                      <input
+                        className="input"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        value={addCashAmount}
+                        onChange={(e) => setAddCashAmount(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Reason</label>
+                      <select
+                        className="input"
+                        value={addCashReasonCode}
+                        onChange={(e) => setAddCashReasonCode(e.target.value)}
+                      >
+                        <option value="">Select reason</option>
+                        <option value="SAFE">Cash from safe / cash box</option>
+                        <option value="OWNER">Owner cash injection</option>
+                        <option value="MANAGER">Manager top-up</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  {addCashReasonCode === 'OTHER' && (
+                    <div className="mt-3">
+                      <label className="label">Note (required)</label>
+                      <input
+                        className="input"
+                        placeholder="Describe why cash is being added"
+                        value={addCashNote}
+                        onChange={(e) => setAddCashNote(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className="mt-4 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => { setShowAddCash(false); setAddCashError(null); }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={handleAddCash}
+                      disabled={isPending}
+                    >
+                      {isPending ? 'Adding...' : 'Add cash'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -659,7 +800,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               ) : null}
               {adjustmentsPence ? (
                 <div className="mt-2 flex justify-between text-sm">
-                  <span>Adjustments</span>
+                  <span>Cash added / adjustments</span>
                   <span className="font-semibold">
                     {adjustmentsPence >= 0 ? '+' : '-'} {formatMoney(Math.abs(adjustmentsPence), currency)}
                   </span>

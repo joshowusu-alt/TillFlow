@@ -97,9 +97,12 @@ export default async function CashDrawerReportPage({
     },
   });
 
+  const closedShifts = shifts.filter((s) => s.status === 'CLOSED');
+  const openShiftCount = shifts.filter((s) => s.status === 'OPEN').length;
+
   const totalExpected = shifts.reduce((sum, shift) => sum + shift.expectedCashPence, 0);
-  const totalActual = shifts.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
-  const totalVariance = shifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
+  const totalActual = closedShifts.reduce((sum, shift) => sum + (shift.actualCashPence ?? 0), 0);
+  const totalVariance = closedShifts.reduce((sum, shift) => sum + (shift.variance ?? 0), 0);
   const movementTotals = shifts.reduce<Record<string, number>>((acc, shift) => {
     const summary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
     for (const [entryType, amount] of Object.entries(summary.byType)) {
@@ -165,15 +168,23 @@ export default async function CashDrawerReportPage({
           value={formatMoney(totalExpected, business.currency)}
         />
         <StatCard
-          label="Counted Cash"
+          label={openShiftCount > 0 ? 'Counted Cash (closed shifts only)' : 'Counted Cash'}
           value={formatMoney(totalActual, business.currency)}
         />
         <StatCard
-          label="Variance"
+          label={openShiftCount > 0 ? 'Variance (closed shifts only)' : 'Variance'}
           value={formatMoney(totalVariance, business.currency)}
           tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'accent' : 'danger'}
         />
       </div>
+
+      {openShiftCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>{openShiftCount} shift{openShiftCount > 1 ? 's are' : ' is'} still open.</strong>{' '}
+          Open shifts have not been counted yet, so Counted Cash and Variance are calculated from closed shifts only.
+          Expected Cash includes all shifts.
+        </div>
+      )}
 
       <ReportTableCard title="Cash movement breakdown" tableClassName="table w-full min-w-[48rem] border-separate border-spacing-y-2">
         <thead>
@@ -210,7 +221,7 @@ export default async function CashDrawerReportPage({
             <th>Supplier payments</th>
             <th>Expenses</th>
             <th>Refunds</th>
-            <th>Adjustments</th>
+            <th>Cash added / adjustments</th>
             <th>Expected</th>
             <th>Counted</th>
             <th>Variance</th>
@@ -239,12 +250,18 @@ export default async function CashDrawerReportPage({
                   {formatMoney(shift.expectedCashPence, business.currency)}
                 </td>
                 <td className="px-3 py-3 text-sm font-semibold">
-                  {shift.actualCashPence !== null
-                    ? formatMoney(shift.actualCashPence, business.currency)
-                    : '-'}
+                  {shift.status === 'OPEN' ? (
+                    <span className="text-amber-600">Not counted yet</span>
+                  ) : shift.actualCashPence !== null ? (
+                    formatMoney(shift.actualCashPence, business.currency)
+                  ) : (
+                    '-'
+                  )}
                 </td>
                 <td className="px-3 py-3 text-sm">
-                  {shift.variance !== null ? (
+                  {shift.status === 'OPEN' ? (
+                    <span className="text-amber-600">Pending close</span>
+                  ) : shift.variance !== null ? (
                     <span
                       className={
                         shift.variance === 0

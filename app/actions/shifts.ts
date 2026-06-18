@@ -10,6 +10,70 @@ import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/servi
 import { performShiftClose } from '@/lib/services/shifts';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 
+const ADD_CASH_REASON_LABELS: Record<string, string> = {
+  SAFE: 'Cash from safe / cash box',
+  OWNER: 'Owner cash injection',
+  MANAGER: 'Manager top-up',
+  OTHER: 'Other',
+};
+
+export async function addCashToTillAction(
+  formData: FormData
+): Promise<ActionResult<{ id: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const amountRaw = formData.get('amount');
+    const reasonCode = formString(formData, 'reasonCode');
+    const note = formString(formData, 'note') || null;
+
+    if (!amountRaw) return err('Amount is required.');
+    const amountPence = toPence(amountRaw);
+    if (amountPence <= 0) return err('Amount must be greater than zero.');
+    if (!reasonCode) return err('A reason is required.');
+    if (reasonCode === 'OTHER' && !note?.trim()) return err('Please describe the reason for adding cash.');
+
+    const openShift = await prisma.shift.findFirst({
+      where: {
+        status: 'OPEN',
+        userId: user.id,
+        till: { store: { businessId } },
+      },
+      select: { id: true, tillId: true, till: { select: { storeId: true } } },
+      orderBy: { openedAt: 'desc' },
+    });
+    if (!openShift) return err('Open shift is required before adding cash to till.');
+
+    const reasonLabel = ADD_CASH_REASON_LABELS[reasonCode] ?? reasonCode;
+    const fullReason = note?.trim()
+      ? `Cash added to till — ${reasonLabel}: ${note.trim()}`
+      : `Cash added to till — ${reasonLabel}`;
+
+    const result = await prisma.$transaction(async (tx) =>
+      recordCashDrawerEntryTx(tx, {
+        businessId,
+        storeId: openShift.till.storeId,
+        tillId: openShift.tillId,
+        shiftId: openShift.id,
+        createdByUserId: user.id,
+        cashierUserId: user.id,
+        entryType: 'CASH_ADJUSTMENT',
+        amountPence,
+        reasonCode,
+        reason: fullReason,
+        actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
+      })
+    );
+
+    revalidateTag('pos-shifts');
+    revalidateTag('reports');
+    revalidatePath('/shifts');
+    revalidatePath('/pos');
+    revalidatePath('/reports/cash-drawer');
+    return ok({ id: result.entry.id });
+  });
+}
+
 export async function openShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {

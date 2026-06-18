@@ -17,7 +17,7 @@ export const CASH_DRAWER_ENTRY_LABELS: Record<string, string> = {
   PAID_OUT_SUPPLIER: 'Supplier payments',
   PAID_OUT_EXPENSE: 'Expenses paid from till',
   CASH_REFUND: 'Refunds paid',
-  CASH_ADJUSTMENT: 'Adjustments',
+  CASH_ADJUSTMENT: 'Cash added / adjustments',
   CLOSE_RECONCILIATION: 'Close reconciliation',
 };
 
