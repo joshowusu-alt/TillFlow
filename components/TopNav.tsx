@@ -88,15 +88,19 @@ export default function TopNav({
   );
 
   const visibleGroups = useMemo(() => {
+    const itemIsVisible = (item: (typeof NAV_GROUPS)[number]['items'][number]) =>
+      item.roles.includes(user.role) &&
+      (features.multiStore || item.href !== '/transfers') &&
+      (momoEnabled !== false || item.href !== '/payments/reconciliation');
+
     return NAV_GROUPS
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) =>
-          item.roles.includes(user.role) &&
-          (features.multiStore || item.href !== '/transfers') &&
-          (momoEnabled !== false || item.href !== '/payments/reconciliation')
-        )
-      }))
+      .map((group) => {
+        const items = group.items.filter(itemIsVisible);
+        const sections = group.sections
+          ?.map((section) => ({ ...section, items: section.items.filter(itemIsVisible) }))
+          .filter((section) => section.items.length > 0);
+        return { ...group, items, sections };
+      })
       .filter((group) => group.items.length > 0);
   }, [user.role, features.multiStore, momoEnabled]);
 
@@ -229,45 +233,54 @@ export default function TopNav({
                   </button>
                   {openGroup === group.id ? (
                     <div
-                      className="shell-dropdown-panel absolute left-0 mt-2.5 min-w-[240px] animate-scale-in"
+                      className="shell-dropdown-panel absolute left-0 mt-2.5 min-w-[260px] animate-scale-in"
                       onMouseLeave={() => setOpenGroup(null)}
                     >
                       <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
                         {group.label}
                       </div>
-                      {group.items.map((item) => {
-                        const active = pathname === item.href;
-                        const requiredFeature = featureGatedLinks.get(item.href);
-                        const featureLocked = requiredFeature ? !features[requiredFeature] : false;
-                        const minimumPlan = planGatedLinks.get(item.href);
-                        const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
-                        const lockLabel =
-                          featureLocked && requiredFeature
-                            ? getFeatureLockLabel(requiredFeature, features.plan)
-                            : planLocked
-                              ? minimumPlan
-                              : null;
-                        const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            className={active ? 'shell-nav-link shell-nav-link-active' : 'shell-nav-link'}
-                            onClick={() => setOpenGroup(null)}
-                          >
-                            <span>{item.label}</span>
-                            {lockLabel ? (
-                              <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                                {lockLabel}
-                              </span>
-                            ) : itemCount > 0 ? (
-                              <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
-                                {itemCount > 99 ? '99+' : itemCount}
-                              </span>
-                            ) : null}
-                          </Link>
-                        );
-                      })}
+                      {(group.sections?.length ? group.sections : [{ id: group.id, label: '', items: group.items }]).map((section, sectionIndex) => (
+                        <div key={section.id} className={sectionIndex > 0 ? 'mt-2 border-t border-slate-100 pt-2' : undefined}>
+                          {section.label ? (
+                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/35">
+                              {section.label}
+                            </div>
+                          ) : null}
+                          {section.items.map((item) => {
+                            const active = pathname === item.href;
+                            const requiredFeature = featureGatedLinks.get(item.href);
+                            const featureLocked = requiredFeature ? !features[requiredFeature] : false;
+                            const minimumPlan = planGatedLinks.get(item.href);
+                            const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                            const lockLabel =
+                              featureLocked && requiredFeature
+                                ? getFeatureLockLabel(requiredFeature, features.plan)
+                                : planLocked
+                                  ? minimumPlan
+                                  : null;
+                            const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                className={active ? 'shell-nav-link shell-nav-link-active' : 'shell-nav-link'}
+                                onClick={() => setOpenGroup(null)}
+                              >
+                                <span>{item.label}</span>
+                                {lockLabel ? (
+                                  <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
+                                    {lockLabel}
+                                  </span>
+                                ) : itemCount > 0 ? (
+                                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                                    {itemCount > 99 ? '99+' : itemCount}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>

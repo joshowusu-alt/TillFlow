@@ -17,6 +17,11 @@ interface NavMobileMenuProps {
     id: string;
     label: string;
     items: Array<{ href: string; label: string; roles: string[] }>;
+    sections?: Array<{
+      id: string;
+      label: string;
+      items: Array<{ href: string; label: string; roles: string[] }>;
+    }>;
   }>;
   isOnline: boolean;
   user: TopNavUser;
@@ -91,8 +96,10 @@ export default function NavMobileMenu({
       case '/suppliers': return <svg {...props}><path {...p} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016 2.993 2.993 0 002.25-1.016 3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg>;
       case '/reports/command-center': return <svg {...props}><path {...p} d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
       case '/reports/dashboard': return <svg {...props}><path {...p} d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>;
+      case '/reports/weekly-digest': return <svg {...props}><path {...p} d="M6.75 3v2.25M17.25 3v2.25M3.75 8.25h16.5M5.25 5.25h13.5A1.5 1.5 0 0120.25 6.75v12A1.5 1.5 0 0118.75 20.25H5.25A1.5 1.5 0 013.75 18.75v-12A1.5 1.5 0 015.25 5.25zM8.25 12h3.75m-3.75 3h7.5" /></svg>;
       case '/reports/analytics': return <svg {...props}><path {...p} d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" /></svg>;
       case '/reports/margins': return <svg {...props}><path {...p} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" /></svg>;
+      case '/reports/sales-by-supplier': return <svg {...props}><path {...p} d="M3 7.5h18M6 7.5V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v1.5m-12 0v10.125A2.625 2.625 0 008.625 20.25h6.75A2.625 2.625 0 0018 17.625V7.5M9 12h6m-6 3h4.5" /></svg>;
       case '/reports/reorder-suggestions': return <svg {...props}><path {...p} d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>;
       case '/reports/income-statement': return <svg {...props}><path {...p} d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>;
       case '/reports/balance-sheet': return <svg {...props}><path {...p} d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0012 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52l2.62 10.726c.122.499-.106 1.028-.589 1.202a5.988 5.988 0 01-2.031.352 5.988 5.988 0 01-2.031-.352c-.483-.174-.711-.703-.589-1.202L18.75 4.97zm-16.5 0c-.99.143-1.99.317-3 .52m3-.52L5.63 15.696c-.122.499.106 1.028.589 1.202a5.989 5.989 0 002.031.352 5.989 5.989 0 002.031-.352c.483-.174.711-.703.589-1.202L5.25 4.97z" /></svg>;
@@ -157,12 +164,21 @@ export default function NavMobileMenu({
 
           <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             <div className="space-y-1">
-              {visibleGroups.map((group, groupIndex) => (
+              {visibleGroups.map((group, groupIndex) => {
+                const sections = group.sections?.length ? group.sections : [{ id: group.id, label: '', items: group.items }];
+                return (
                 <section key={group.id}>
                   {groupIndex > 0 && <hr className="my-1 -mx-4 border-gray-100" />}
                   <div className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-gray-400">{group.label}</div>
-                  <div className="grid gap-1.5">
-                    {group.items.map((item) => {
+                  <div className="grid gap-2">
+                    {sections.map((section, sectionIndex) => (
+                      <div key={section.id} className="grid gap-1.5">
+                        {section.label ? (
+                          <div className={`px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-300 ${sectionIndex > 0 ? 'pt-2' : ''}`}>
+                            {section.label}
+                          </div>
+                        ) : null}
+                        {section.items.map((item) => {
                       const active = pathname === item.href || pathname.startsWith(item.href + '/');
                       const requiredFeature = featureGatedLinks?.get(item.href);
                       const featureLocked = requiredFeature ? !features[requiredFeature] : false;
@@ -197,9 +213,12 @@ export default function NavMobileMenu({
                         </Link>
                       );
                     })}
+                      </div>
+                    ))}
                   </div>
                 </section>
-              ))}
+              );
+              })}
             </div>
           </div>
 

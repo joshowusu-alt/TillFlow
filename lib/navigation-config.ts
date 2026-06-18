@@ -24,10 +24,17 @@ export type NavigationItem = {
   requiresFeature?: FeatureKey;
 };
 
+export type NavigationSection = {
+  id: string;
+  label: string;
+  items: NavigationItem[];
+};
+
 export type NavigationGroup = {
   id: string;
   label: string;
   items: NavigationItem[];
+  sections?: NavigationSection[];
 };
 
 export type SettingsTabSection = {
@@ -35,6 +42,55 @@ export type SettingsTabSection = {
   label: string;
   items: NavigationItem[];
 };
+
+export const REPORT_NAV_SECTIONS: NavigationSection[] = [
+  {
+    id: 'main',
+    label: 'Main',
+    items: [
+      { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/dashboard', label: 'Trading Report', roles: ['MANAGER', 'OWNER'] },
+      { href: '/reports/weekly-digest', label: 'Weekly Digest', roles: ['MANAGER', 'OWNER'] },
+    ],
+  },
+  {
+    id: 'sales-stock',
+    label: 'Sales & Stock',
+    items: [
+      { href: '/reports/analytics', label: 'Sales Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/sales-by-supplier', label: 'Sales by Linked Supplier', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+    ],
+  },
+  {
+    id: 'finance',
+    label: 'Finance',
+    items: [
+      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/cashflow', label: 'Cash Flow', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
+    ],
+  },
+  {
+    id: 'control',
+    label: 'Control',
+    items: [
+      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
+      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'], minimumPlan: 'PRO' },
+      { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
+    ],
+  },
+  {
+    id: 'advanced',
+    label: 'Advanced',
+    items: [
+      { href: '/reports/owner', label: 'Owner Brief', roles: ['OWNER'], minimumPlan: 'PRO' },
+      { href: '/reports/cashflow-forecast', label: 'Cash Flow Forecast', roles: ['OWNER'], minimumPlan: 'PRO' },
+    ],
+  },
+];
 
 export const NAV_GROUPS: NavigationGroup[] = [
   {
@@ -83,23 +139,8 @@ export const NAV_GROUPS: NavigationGroup[] = [
   {
     id: 'reports',
     label: 'Reports',
-    items: [
-      { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/dashboard', label: 'Dashboard', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/analytics', label: 'Analytics', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/margins', label: 'Profit Margins', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/reorder-suggestions', label: 'Reorder Suggestions', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/sales-by-supplier', label: 'Sales by Supplier', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/income-statement', label: 'Income Statement', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/balance-sheet', label: 'Balance Sheet', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/cashflow', label: 'Cashflow', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/exports', label: 'Exports', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/cash-drawer', label: 'Cash Drawer', roles: ['MANAGER', 'OWNER'] },
-      { href: '/reports/risk-monitor', label: 'Risk Monitor', roles: ['MANAGER', 'OWNER'], minimumPlan: 'GROWTH' },
-      { href: '/reports/owner', label: 'Owner Intelligence', roles: ['OWNER'], minimumPlan: 'PRO' },
-      { href: '/reports/cashflow-forecast', label: 'Cashflow Forecast', roles: ['OWNER'], minimumPlan: 'PRO' },
-      { href: '/reports/audit-log', label: 'Audit Log', roles: ['OWNER'], minimumPlan: 'PRO' },
-    ],
+    items: REPORT_NAV_SECTIONS.flatMap((section) => section.items),
+    sections: REPORT_NAV_SECTIONS,
   },
   {
     id: 'admin',
