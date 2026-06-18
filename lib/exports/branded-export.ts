@@ -8,6 +8,14 @@ import { NextResponse } from 'next/server';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export type ExportSummaryCard = { label: string; value: string };
+
+export type ExportSection = {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+  note?: string;
+};
+
 export type ExportOptions = {
   businessName: string;
   reportTitle: string;
@@ -15,6 +23,8 @@ export type ExportOptions = {
   currency?: string;
   columns: { header: string; key: string; width?: number }[];
   rows: Record<string, string | number | null | undefined>[];
+  summaryCards?: ExportSummaryCard[];
+  sections?: ExportSection[];
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -24,6 +34,18 @@ function fmtDate(d: Date): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+  });
+}
+
+export function fmtDateTime(d: Date): string {
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
   });
 }
 
@@ -118,8 +140,7 @@ export function buildBrandedExcel(options: ExportOptions): Buffer {
 // ── 2. buildBrandedPdf (HTML) ────────────────────────────────────────────────
 
 export function buildBrandedPdf(options: ExportOptions): string {
-  const { businessName, reportTitle, dateRange, currency, columns, rows } =
-    options;
+  const { businessName, reportTitle, dateRange, currency, columns, rows, summaryCards, sections } = options;
 
   const dateRangeText = dateRange
     ? `${fmtDate(dateRange.from)} — ${fmtDate(dateRange.to)}`
@@ -127,6 +148,40 @@ export function buildBrandedPdf(options: ExportOptions): string {
   const currencyLabel = currency ? ` (${currency})` : '';
   const generatedOn = fmtDate(new Date());
   const rowCount = rows.length;
+
+  const resolvedSummaryCards: ExportSummaryCard[] = summaryCards ?? [
+    { label: 'Rows exported', value: String(rowCount) },
+    { label: 'Data range', value: dateRangeText || 'Full export' },
+    { label: 'Format', value: 'Print-ready PDF view' },
+  ];
+
+  const summaryCardsHtml = resolvedSummaryCards
+    .map(
+      (card) =>
+        `<div class="summary-card"><div class="label">${escapeHtml(card.label)}</div><div class="value">${escapeHtml(card.value)}</div></div>`,
+    )
+    .join('\n');
+
+  const sectionsHtml = sections?.length
+    ? `<div class="sections-outer">
+${sections
+  .map(
+    (sec) => `  <div class="section-card">
+    <h3 class="section-title">${escapeHtml(sec.title)}</h3>
+    <table class="section-table">
+      ${sec.rows
+        .map(
+          (r) =>
+            `<tr><td class="section-label">${escapeHtml(r.label)}</td><td class="section-value">${escapeHtml(r.value)}</td></tr>`,
+        )
+        .join('\n      ')}
+    </table>
+    ${sec.note ? `<p class="section-note">${escapeHtml(sec.note)}</p>` : ''}
+  </div>`,
+  )
+  .join('\n')}
+</div>`
+    : '';
 
   const headerRow = columns
     .map((c) => `<th>${escapeHtml(c.header)}</th>`)
@@ -188,7 +243,7 @@ export function buildBrandedPdf(options: ExportOptions): string {
       max-width:1100px;margin:-1.25rem auto 0;padding:0 2.5rem;position:relative;z-index:1;
     }
     .summary-grid{
-      display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;
+      display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.9rem;
     }
     .summary-card{
       background:rgba(255,255,255,.95);border:1px solid rgba(37,99,235,.12);
@@ -197,8 +252,18 @@ export function buildBrandedPdf(options: ExportOptions): string {
     .summary-card .label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
     .summary-card .value{margin-top:.35rem;font-size:1rem;font-weight:800;color:var(--brand-dark)}
 
+    /* ── Sections (breakdown tables) ──── */
+    .sections-outer{max-width:1100px;margin:1.5rem auto 0;padding:0 2.5rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem}
+    .section-card{background:#fff;border:1px solid rgba(37,99,235,.1);border-radius:16px;padding:1rem 1.1rem;box-shadow:0 8px 20px rgba(15,23,42,.05)}
+    .section-title{font-size:.85rem;font-weight:800;color:var(--brand-dark);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.05em}
+    .section-table{width:100%;border-collapse:collapse;font-size:.82rem}
+    .section-label{padding:.3rem .1rem;color:var(--muted)}
+    .section-value{padding:.3rem .1rem;font-weight:700;text-align:right;color:var(--ink)}
+    .section-table tr:not(:last-child) td{border-bottom:1px solid var(--border)}
+    .section-note{margin-top:.6rem;font-size:.75rem;color:var(--muted);font-style:italic}
+
     /* ── Content ──────────────────────── */
-    .content{max-width:1100px;margin:0 auto;padding:1.8rem 2.5rem 2rem}
+    .content{max-width:1100px;margin:1.5rem auto 0;padding:0 2.5rem 2rem}
     .content-shell{
       border:1px solid rgba(17,24,39,.06);border-radius:24px;background:#fff;
       box-shadow:0 18px 34px rgba(15,23,42,.06);overflow:hidden;
@@ -247,14 +312,14 @@ export function buildBrandedPdf(options: ExportOptions): string {
       .toolbar{display:none!important}
       body{background:#fff}
       .summary-strip{margin-top:.75rem}
-      .summary-card,.content-shell{box-shadow:none}
+      .summary-card,.content-shell,.section-card{box-shadow:none}
       .hero{-webkit-print-color-adjust:exact;print-color-adjust:exact}
       th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
       tr.alt td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     }
     @media (max-width: 840px){
-      .summary-strip,.content{padding-left:1rem;padding-right:1rem}
-      .summary-grid{grid-template-columns:1fr}
+      .summary-strip,.content,.sections-outer{padding-left:1rem;padding-right:1rem}
+      .summary-grid,.sections-outer{grid-template-columns:1fr}
       .content-header{flex-direction:column;align-items:flex-start}
     }
     @page{size:A4 landscape;margin:10mm}
@@ -278,20 +343,11 @@ export function buildBrandedPdf(options: ExportOptions): string {
 
   <div class="summary-strip">
     <div class="summary-grid">
-      <div class="summary-card">
-        <div class="label">Rows exported</div>
-        <div class="value">${escapeHtml(rowCount)}</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">Data range</div>
-        <div class="value">${escapeHtml(dateRangeText || 'Full export')}</div>
-      </div>
-      <div class="summary-card">
-        <div class="label">Format</div>
-        <div class="value">Print-ready PDF view</div>
-      </div>
+      ${summaryCardsHtml}
     </div>
   </div>
+
+  ${sectionsHtml}
 
   <div class="content">
     <div class="content-shell">

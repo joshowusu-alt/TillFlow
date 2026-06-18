@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildBrandedCsv, buildBrandedPdf, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
+import {
+  buildBrandedCsv,
+  buildBrandedPdf,
+  fmtDateTime,
+  respondWithExport,
+  type ExportOptions,
+} from '@/lib/exports/branded-export';
 
 const exportOptions: ExportOptions = {
   businessName: 'Accra Market Hub',
@@ -36,6 +42,60 @@ describe('branded export helpers', () => {
     expect(html).toContain('Rows exported');
     expect(html).toContain('Print-ready PDF view');
     expect(html).toContain('Powered by <strong>TillFlow</strong>');
+  });
+
+  it('uses custom summaryCards when provided', () => {
+    const html = buildBrandedPdf({
+      ...exportOptions,
+      summaryCards: [
+        { label: 'Expected Cash', value: 'GH₵865.50' },
+        { label: 'Counted Cash', value: 'GH₵800.00' },
+        { label: 'Variance', value: '-GH₵65.50' },
+        { label: 'Shifts exported', value: '3' },
+      ],
+    });
+
+    expect(html).toContain('Expected Cash');
+    expect(html).toContain('GH₵865.50');
+    expect(html).toContain('Shifts exported');
+    expect(html).not.toContain('Print-ready PDF view');
+  });
+
+  it('renders sections when provided', () => {
+    const html = buildBrandedPdf({
+      ...exportOptions,
+      sections: [
+        {
+          title: 'Cash movement breakdown',
+          rows: [
+            { label: 'Opening float', value: 'GH₵0.00' },
+            { label: 'Cash sales', value: 'GH₵865.50' },
+            { label: 'Supplier payments', value: '-GH₵6,769.00' },
+          ],
+          note: 'Open shifts have not been counted yet, so variance is shown as pending.',
+        },
+      ],
+    });
+
+    expect(html).toContain('Cash movement breakdown');
+    expect(html).toContain('Opening float');
+    expect(html).toContain('GH₵865.50');
+    expect(html).toContain('Supplier payments');
+    expect(html).toContain('Open shifts have not been counted yet');
+  });
+
+  it('renders no sections block when sections array is empty', () => {
+    const html = buildBrandedPdf({ ...exportOptions, sections: [] });
+    expect(html).not.toContain('<div class="sections-outer">');
+  });
+
+  it('fmtDateTime formats a Date as owner-friendly string', () => {
+    const d = new Date('2026-06-17T07:44:00.000Z');
+    const result = fmtDateTime(d);
+    expect(result).toContain('17');
+    expect(result).toContain('Jun');
+    expect(result).toContain('2026');
+    expect(result).toContain('07:44');
   });
 
   it('returns branded CSV responses with utf-8 content', async () => {

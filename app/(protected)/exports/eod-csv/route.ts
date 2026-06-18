@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { csvEscape, formatPence, requireExportUser } from '../_shared';
-import { detectExportFormat, respondWithExport, type ExportOptions } from '@/lib/exports/branded-export';
+import { detectExportFormat, fmtDateTime, respondWithExport } from '@/lib/exports/branded-export';
+import {
+  CASH_DRAWER_BREAKDOWN_ORDER,
+  CASH_DRAWER_ENTRY_LABELS,
+  summarizeCashDrawerEntries,
+} from '@/lib/services/cash-drawer';
 
 function parseDate(value: string | null, fallback: Date) {
   if (!value) return fallback;
@@ -50,6 +55,7 @@ export async function GET(request: Request) {
         till: { select: { name: true, store: { select: { name: true } } } },
         user: { select: { name: true } },
         closeManagerApprovedBy: { select: { name: true } },
+        cashDrawerEntries: { select: { entryType: true, amountPence: true } },
       },
     }),
     prisma.business.findUnique({
@@ -58,13 +64,18 @@ export async function GET(request: Request) {
     }),
   ]);
 
+  const movementColumns = CASH_DRAWER_BREAKDOWN_ORDER.map((type) => ({
+    header: CASH_DRAWER_ENTRY_LABELS[type],
+    key: `mv_${type}`,
+  }));
+
   const columns = [
     { header: 'Date', key: 'date', width: 20 },
     { header: 'Branch', key: 'branch' },
     { header: 'Till', key: 'till' },
     { header: 'Cashier', key: 'cashier' },
     { header: 'Status', key: 'status' },
-    { header: 'Opening Float', key: 'openingFloat' },
+    ...movementColumns,
     { header: 'Expected Cash', key: 'expectedCash' },
     { header: 'Counted Cash', key: 'countedCash' },
     { header: 'Variance', key: 'variance' },
@@ -74,24 +85,32 @@ export async function GET(request: Request) {
     { header: 'Manager Approval', key: 'managerApproval' },
   ];
 
-  const rows = shifts.map((shift) => ({
-    date: shift.openedAt.toISOString(),
-    branch: shift.till.store.name,
-    till: shift.till.name,
-    cashier: shift.user.name,
-    status: shift.status,
-    openingFloat: formatPence(shift.openingCashPence),
-    expectedCash: formatPence(shift.expectedCashPence),
-    countedCash: formatPence(shift.actualCashPence ?? 0),
-    variance: formatPence(shift.variance ?? 0),
-    varianceReasonCode: shift.varianceReasonCode ?? '',
-    varianceDetails: shift.varianceReason ?? '',
-    notes: shift.notes ?? '',
-    managerApproval: shift.closeManagerApprovedBy?.name ?? '',
-  }));
+  const rows = shifts.map((shift) => {
+    const { byType } = summarizeCashDrawerEntries(shift.cashDrawerEntries);
+    const movementValues = Object.fromEntries(
+      CASH_DRAWER_BREAKDOWN_ORDER.map((type) => [`mv_${type}`, formatPence(byType[type] ?? 0)]),
+    );
+    return {
+      date: fmtDateTime(shift.openedAt),
+      branch: shift.till.store.name,
+      till: shift.till.name,
+      cashier: shift.user.name,
+      status: shift.status,
+      ...movementValues,
+      expectedCash: formatPence(shift.expectedCashPence),
+      countedCash: shift.status === 'OPEN' ? 'Not counted yet' : formatPence(shift.actualCashPence ?? 0),
+      variance: shift.status === 'OPEN' ? 'Pending close' : formatPence(shift.variance ?? 0),
+      varianceReasonCode: shift.varianceReasonCode ?? '',
+      varianceDetails: shift.varianceReason ?? '',
+      notes: shift.notes ?? '',
+      managerApproval: shift.closeManagerApprovedBy?.name ?? '',
+    };
+  });
 
   const csvHeader = columns.map((c) => c.header).join(',');
-  const csvRows = rows.map((row) => columns.map((c) => csvEscape((row as Record<string, any>)[c.key] ?? '')).join(',')).join('\n');
+  const csvRows = rows
+    .map((row) => columns.map((c) => csvEscape((row as Record<string, string>)[c.key] ?? '')).join(','))
+    .join('\n');
   const csv = `${csvHeader}\n${csvRows}`;
 
   const format = detectExportFormat(request);
