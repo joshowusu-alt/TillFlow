@@ -108,8 +108,8 @@ export default async function CommandCenterPage() {
       attentionItems.push({
         id: 'cash-variance',
         severity: 'warning',
-        title: `${formatMoney(kpis.cashVarianceTotalPence, currency)} unreconciled cash variance`,
-        detail: 'Till cash does not match expected balance — investigate discrepancies.',
+        title: `${formatMoney(kpis.cashVarianceTotalPence, currency)} closed-shift cash variance`,
+        detail: 'Total absolute cash variance from shifts closed in the recent reporting window.',
         href: '/reports/cash-drawer',
         cta: 'Investigate',
       });
@@ -207,6 +207,7 @@ export default async function CommandCenterPage() {
   /* ── Deeper analysis links ──────────────────────────────────────── */
   const deeperLinks: DeeperLink[] = [
     { label: 'Trading Report', desc: 'Sales, debtors, and stock pressure for any date range', href: '/reports/dashboard' },
+    { label: 'Weekly Digest', desc: 'Owner-friendly weekly sales, receipts, and control summary', href: '/reports/weekly-digest' },
   ];
 
   if (features.advancedReports) {
@@ -215,16 +216,16 @@ export default async function CommandCenterPage() {
       { label: 'Profit Margins', desc: 'Product-level margin analysis with cost breakdown', href: '/reports/margins', plan: 'GROWTH' },
       { label: 'Risk Monitor', desc: 'Overrides, variances, and control alerts', href: '/reports/risk-monitor', plan: 'GROWTH' },
       { label: 'Reorder Queue', desc: 'Stock replenishment priorities ranked by urgency', href: '/reports/reorder-suggestions', plan: 'GROWTH' },
-      { label: 'Sales by Supplier', desc: 'Revenue and volume for products linked to each supplier', href: '/reports/sales-by-supplier', plan: 'GROWTH' },
+      { label: 'Sales by Linked Supplier', desc: 'Revenue and volume for products linked to each supplier', href: '/reports/sales-by-supplier', plan: 'GROWTH' },
       { label: 'Income Statement', desc: 'Revenue minus costs for any period', href: '/reports/income-statement', plan: 'GROWTH' },
-      { label: 'Cashflow', desc: 'Cash movements and payment method split', href: '/reports/cashflow', plan: 'GROWTH' },
+      { label: 'Cash Flow', desc: 'Cash movements and payment method split', href: '/reports/cashflow', plan: 'GROWTH' },
     );
   }
 
   if (features.ownerIntelligence) {
     deeperLinks.push(
-      { label: 'Owner Intelligence', desc: 'Executive brief — health score, leakage watch, activity', href: '/reports/owner', plan: 'PRO' },
-      { label: 'Cashflow Forecast', desc: '14-day money pulse and low-balance alerts', href: '/reports/cashflow-forecast', plan: 'PRO' },
+      { label: 'Owner Brief', desc: 'Executive brief — health score, leakage watch, activity', href: '/reports/owner', plan: 'PRO' },
+      { label: 'Cash Flow Forecast', desc: '14-day money pulse and low-balance alerts', href: '/reports/cashflow-forecast', plan: 'PRO' },
     );
   }
 

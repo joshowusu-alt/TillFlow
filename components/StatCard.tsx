@@ -32,7 +32,7 @@ const valueColors = {
 export default function StatCard({ label, value, tone = 'default', helper }: StatCardProps) {
   return (
     <div
-      className={`relative min-w-0 overflow-hidden rounded-[1.25rem] border p-4 transition-all duration-200 sm:rounded-[1.4rem] sm:p-5 ${tones[tone]}`}
+      className={`relative min-w-0 overflow-visible rounded-[1.25rem] border p-4 transition-all duration-200 sm:rounded-[1.4rem] sm:p-5 ${tones[tone]}`}
       style={{ boxShadow: '0 1px 3px rgba(15,23,42,0.05), 0 10px 30px rgba(15,23,42,0.06)' }}
     >
       <div className={`absolute inset-x-0 top-0 h-1 ${stripColors[tone]}`} />
@@ -40,8 +40,8 @@ export default function StatCard({ label, value, tone = 'default', helper }: Sta
       <div className="relative">
         <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">{label}</div>
         <div
-          className={`mt-3 whitespace-nowrap font-display font-bold tabular-nums tracking-tight leading-none ${valueColors[tone]}`}
-          style={{ fontSize: 'clamp(1.35rem, 7vw, 2rem)' }}
+          className={`mt-3 break-words font-display font-bold tabular-nums tracking-tight leading-tight [overflow-wrap:anywhere] ${valueColors[tone]}`}
+          style={{ fontSize: 'clamp(1.3rem, 3vw, 2rem)' }}
         >{value}</div>
         {helper ? <div className="mt-2 text-xs leading-relaxed text-slate-500">{helper}</div> : null}
       </div>

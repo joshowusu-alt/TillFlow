@@ -11,6 +11,7 @@ export type WeeklyDigestData = {
   discountOverrides: number;
   adjustmentCount: number;
   paymentSplit: Record<string, number>;
+  totalReceiptsPence: number;
   topSellers: { name: string; qty: number; revenue: number }[];
   topMargin: { name: string; revenue: number; marginPct: number }[];
   cashierPerf: { name: string; sales: number; tx: number; discounts: number }[];
@@ -65,6 +66,7 @@ async function _getWeeklyDigestData(
       by: ['method'],
       where: {
         receivedAt: { gte: weekStart, lte: weekEnd },
+        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
         salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
       },
       _sum: { amountPence: true },
@@ -124,6 +126,7 @@ async function _getWeeklyDigestData(
   for (const p of paymentsByMethod) {
     paymentSplit[p.method] = p._sum.amountPence ?? 0;
   }
+  const totalReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   // Top sellers
   const productMap = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
@@ -179,6 +182,7 @@ async function _getWeeklyDigestData(
     discountOverrides,
     adjustmentCount: adjustments,
     paymentSplit,
+    totalReceiptsPence,
     topSellers,
     topMargin,
     cashierPerf: Array.from(cashierPerfMap.values()).sort((a, b) => b.sales - a.sales).slice(0, 5),

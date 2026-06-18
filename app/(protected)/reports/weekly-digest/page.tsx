@@ -143,7 +143,13 @@ export default async function WeeklyDigestPage({
 
       {/* Payment split */}
       <div className="card p-4 sm:p-6">
-        <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Payment Split</h2>
+        <div className="mb-4">
+          <h2 className="text-base font-display font-semibold sm:text-lg">Payment Receipts Split</h2>
+          <p className="mt-1 text-xs leading-relaxed text-black/50">
+            Shows payments received during the week, including collections from earlier credit sales.
+            Receipts may differ from sales when customers pay old credit balances.
+          </p>
+        </div>
         {Object.keys(data.paymentSplit).length === 0 ? (
           <EmptyState icon="receipt" title="No payments this week" subtitle="Record sales to see payment breakdown." />
         ) : (
@@ -153,7 +159,7 @@ export default async function WeeklyDigestPage({
                 <span className="text-xs text-muted uppercase">{method.replace('_', ' ')}</span>
                 <span className="mt-1 text-lg font-semibold">{formatMoney(amount, currency)}</span>
                 <span className="text-xs text-muted">
-                  {data.totalSalesPence > 0 ? Math.round((amount / data.totalSalesPence) * 100) : 0}%
+                  {data.totalReceiptsPence > 0 ? Math.round((amount / data.totalReceiptsPence) * 100) : 0}%
                 </span>
               </div>
             ))}
@@ -234,7 +240,7 @@ export default async function WeeklyDigestPage({
                   <div className="mt-1 flex gap-3 text-xs text-muted">
                     {c.voids > 0 && <span>{c.voids} voids</span>}
                     {c.discounts > 0 && <span>{c.discounts} disc. overrides</span>}
-                    {c.cashVar > 0 && <span>Var: {formatMoney(c.cashVar, currency)}</span>}
+                    {c.cashVar > 0 && <span>Closed-shift variance: {formatMoney(c.cashVar, currency)}</span>}
                   </div>
                 </div>
               ))}

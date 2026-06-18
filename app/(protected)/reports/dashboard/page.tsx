@@ -85,6 +85,7 @@ export default async function DashboardPage({
       by: ['method'],
       where: {
         receivedAt: { gte: start, lte: end },
+        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
         salesInvoice: {
           businessId: business.id,
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
@@ -304,6 +305,7 @@ export default async function DashboardPage({
     const k = p.method as keyof typeof paymentSplit;
     if (k in paymentSplit) paymentSplit[k] = p._sum.amountPence ?? 0;
   }
+  const totalPaymentReceipts = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   // AR / AP
   const outstandingAR = outstandingSales.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
@@ -384,6 +386,13 @@ export default async function DashboardPage({
     : null;
   const activeCashierCount = openShifts.length;
   const hasNonDefaultParams = !!(searchParams?.from || searchParams?.to || (searchParams?.storeId && searchParams?.storeId !== 'ALL'));
+  const scopeHelper =
+    selectedStoreId === 'ALL'
+      ? 'Expenses and net profit use accounting journals.'
+      : 'Expenses and net profit are business-wide accounting journal totals.';
+  const cashDrawerParams = new URLSearchParams({ from: fromIso, to: toIso });
+  if (selectedStoreId !== 'ALL') cashDrawerParams.set('storeId', selectedStoreId);
+  const cashDrawerHref = `/reports/cash-drawer?${cashDrawerParams.toString()}`;
 
   const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
   const lastSaleChipLabel =
@@ -437,14 +446,17 @@ export default async function DashboardPage({
           value={formatMoney(totalGrossMargin, currency)}
           tone={gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger'}
         />
-        <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} />
+        <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} helper={scopeHelper} />
         <StatCard
           label={`Net Profit (${npPercent}%)`}
           value={formatMoney(totalGrossMargin - income.otherExpenses, currency)}
           tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
+          helper={scopeHelper}
         />
-        <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} />
-        <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} />
+        <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} helper="Current customer credit owed." />
+        <a href="/payments/supplier-payments" className="block min-w-0">
+          <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record payments." />
+        </a>
       </div>
 
       <details className="details-mobile" open={hasNonDefaultParams}>
@@ -456,7 +468,7 @@ export default async function DashboardPage({
         </summary>
         <div className="mt-2 space-y-2">
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-            Gross profit uses sale-line cost snapshots. Expenses and net profit use accounting journals.
+            Gross profit uses sale-line cost snapshots. {scopeHelper}
           </div>
           <ReportFilterCard
             columnsClassName={stores.length > 1 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}
@@ -511,7 +523,13 @@ export default async function DashboardPage({
       {/* Payment split + Activity highlights */}
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Payment Split</h2>
+          <div className="mb-4">
+            <h2 className="text-base font-display font-semibold sm:text-lg">Payment Receipts Split</h2>
+            <p className="mt-1 text-xs leading-relaxed text-black/50">
+              Shows payments received during the selected period, including collections from earlier credit sales.
+              Receipts may differ from sales when customers pay old credit balances.
+            </p>
+          </div>
           <div className="space-y-3 text-sm">
             {(
               [
@@ -522,7 +540,7 @@ export default async function DashboardPage({
               ] as const
             ).map(({ label, key, cls, text }) => {
               const amount = paymentSplit[key as keyof typeof paymentSplit];
-              const pct = totalSales > 0 ? Math.round((amount / totalSales) * 100) : 0;
+              const pct = totalPaymentReceipts > 0 ? Math.round((amount / totalPaymentReceipts) * 100) : 0;
               return (
                 <div key={key}>
                   <div className="mb-1 flex justify-between text-xs">
@@ -555,10 +573,10 @@ export default async function DashboardPage({
                 </div>
               )}
               {todayReturns.length > 0 && (
-                <div className="flex justify-between rounded-lg bg-amber-50 px-3 py-2">
+                <a href="/sales" className="flex justify-between rounded-lg bg-amber-50 px-3 py-2 hover:bg-amber-100/70">
                   <span className="text-amber-700">Returns ({todayReturns.length})</span>
                   <span className="font-semibold text-amber-700">{formatMoney(returnTotal, currency)}</span>
-                </div>
+                </a>
               )}
               {todayAdj.map((adj: any, i: number) => (
                 <div key={i} className="flex flex-col gap-1 rounded-lg bg-accentSoft px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
@@ -569,11 +587,21 @@ export default async function DashboardPage({
                 </div>
               ))}
               {cashVarTotal > 0 && (
-                <div className="flex justify-between rounded-lg bg-purple-50 px-3 py-2">
-                  <span className="text-purple-700">
-                    Cash Variance ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
-                  </span>
-                  <span className="font-semibold text-purple-700">{formatMoney(cashVarTotal, currency)}</span>
+                <div className="rounded-lg bg-purple-50 px-3 py-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="font-medium text-purple-700">
+                        Closed Shift Cash Variance ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
+                      </div>
+                      <div className="mt-0.5 text-xs leading-relaxed text-purple-700/70">
+                        Total absolute cash variance from shifts closed during this period.
+                      </div>
+                    </div>
+                    <span className="font-semibold text-purple-700 sm:text-right">{formatMoney(cashVarTotal, currency)}</span>
+                  </div>
+                  <a href={cashDrawerHref} className="mt-2 inline-flex text-xs font-medium text-purple-700 underline-offset-2 hover:underline">
+                    View Cash Drawer Report
+                  </a>
                 </div>
               )}
             </div>
@@ -610,7 +638,12 @@ export default async function DashboardPage({
         </div>
 
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Debtors</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-display font-semibold sm:text-lg">Top Debtors</h2>
+            <a href="/payments/customer-receipts" className="text-xs text-black/40 hover:text-black/70">
+              Receive payments →
+            </a>
+          </div>
           <div className="space-y-2 text-sm">
             {topDebtorList.length === 0 ? (
               <div className="py-4 text-center text-black/40">No outstanding debts</div>
@@ -679,7 +712,12 @@ export default async function DashboardPage({
         </div>
 
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Revenue Products</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-display font-semibold sm:text-lg">Top Revenue Products</h2>
+            <a href="/reports/analytics" className="text-xs text-black/40 hover:text-black/70">
+              Sales analytics →
+            </a>
+          </div>
           <div className="space-y-2 text-sm">
             {bestItems.length === 0 ? (
               <div className="py-6 text-center animate-fade-in-up">

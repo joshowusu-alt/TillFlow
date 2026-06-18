@@ -48,7 +48,8 @@ export async function GET(request: Request) {
     ['Prev GP', formatMoney(data.prevGrossProfitPence, currency)],
     ['Prev Transactions', String(data.prevTxCount)],
     [],
-    ['Payment Method', 'Amount'],
+    ['Total Receipts', formatMoney(data.totalReceiptsPence, currency)],
+    ['Payment Receipts Method', 'Amount'],
     ...Object.entries(data.paymentSplit).map(([method, amount]) => [
       method.replace('_', ' '),
       formatMoney(amount, currency),
