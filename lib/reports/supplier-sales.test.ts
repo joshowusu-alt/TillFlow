@@ -464,8 +464,8 @@ describe('command-center — Top Supplier This Month card', () => {
     expect(src).toContain('Does not track exact stock-batch origin');
   });
 
-  it('includes Sales by Supplier in deeper analysis links for Growth+ users', () => {
-    expect(src).toContain('Sales by Supplier');
+  it('includes Sales by Linked Supplier in deeper analysis links for Growth+ users', () => {
+    expect(src).toContain('Sales by Linked Supplier');
     expect(src).toContain('/reports/sales-by-supplier');
   });
 
