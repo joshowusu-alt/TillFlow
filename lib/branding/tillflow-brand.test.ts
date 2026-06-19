@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 
 const readSource = (relativePath: string) => readFileSync(join(process.cwd(), relativePath), 'utf8');
 const assetExists = (relativePath: string) => existsSync(join(process.cwd(), relativePath));
@@ -30,6 +31,18 @@ describe('TillFlow brand logo system', () => {
       'public/icons/tillflow-icon-512.png',
       'public/og/tillflow-og.png',
     ].forEach((assetPath) => expect(assetExists(assetPath), assetPath).toBe(true));
+  });
+
+  it('keeps the standalone symbol as the full designer mark', async () => {
+    const blueSymbol = await sharp(join(process.cwd(), 'public/brand/tillflow-symbol-blue.png')).metadata();
+    const whiteSymbol = await sharp(join(process.cwd(), 'public/brand/tillflow-symbol-white.png')).metadata();
+    const logo = readSource('components/Logo.tsx');
+
+    expect(blueSymbol.width).toBe(679);
+    expect(blueSymbol.height).toBe(465);
+    expect(whiteSymbol.width).toBe(679);
+    expect(whiteSymbol.height).toBe(465);
+    expect(logo).toContain('const MARK_RATIO = MARK_IMG_W / MARK_IMG_H');
   });
 
   it('uses the new logo component in app, public, and auth headers', () => {

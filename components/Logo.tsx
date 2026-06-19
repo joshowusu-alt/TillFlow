@@ -26,7 +26,9 @@ const ASSETS = {
   },
 } as const;
 
-const MARK_RATIO = 332 / 481;
+const MARK_IMG_W = 679;
+const MARK_IMG_H = 465;
+const MARK_RATIO = MARK_IMG_W / MARK_IMG_H;
 
 // Display the full designer lockup at its natural proportions.
 // The icon descender intentionally extends below the wordmark — that is the design.
