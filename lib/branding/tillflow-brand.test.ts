@@ -91,6 +91,7 @@ describe('TillFlow brand logo system', () => {
     expect(layout).not.toContain('black-translucent');
     expect(globals).toContain('background-color: #F8FBFF');
     expect(middleware).toContain("'/brand'");
+    expect(middleware).toContain("'/splash'");
     expect(middleware).toContain("'/favicon.png'");
     expect(middleware).toContain("'/apple-touch-icon.png'");
     expect(middleware).toContain("'/logo.png'");

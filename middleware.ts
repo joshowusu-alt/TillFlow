@@ -17,6 +17,7 @@ const PUBLIC_PATHS = [
   '/icon',
   '/icon.png',
   '/icons',
+  '/splash',
   '/apple-icon',
   '/apple-touch-icon.png',
   '/brand',
