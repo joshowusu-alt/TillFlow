@@ -71,6 +71,9 @@ function buildCsvRow(values: Array<string | number | null | undefined>) {
   return values.map((value) => escapeCsv(value)).join(',');
 }
 
+export const TILLFLOW_EXPORT_LOGO =
+  '<img class="tillflow-export-logo" src="/brand/tillflow-logo-white.png" alt="TillFlow" width="1712" height="481" />';
+
 // ── 1. buildBrandedExcel ─────────────────────────────────────────────────────
 
 export function buildBrandedExcel(options: ExportOptions): Buffer {
@@ -231,6 +234,8 @@ ${sections
       background:rgba(255,255,255,.12);font-size:.72rem;font-weight:700;
       letter-spacing:.08em;text-transform:uppercase;
     }
+    .brand-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.1rem}
+    .tillflow-export-logo{width:152px;height:auto;display:block;flex:0 0 auto}
     .hero h1{font-size:1.6rem;font-weight:800;letter-spacing:-0.02em}
     .hero .subtitle{font-size:1.1rem;font-weight:600;opacity:.9;margin-top:0.25rem}
     .hero .meta{font-size:0.8rem;opacity:.78;margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:.75rem}
@@ -321,6 +326,7 @@ ${sections
       .summary-strip,.content,.sections-outer{padding-left:1rem;padding-right:1rem}
       .summary-grid,.sections-outer{grid-template-columns:1fr}
       .content-header{flex-direction:column;align-items:flex-start}
+      .brand-row{align-items:flex-start;flex-direction:column}
     }
     @page{size:A4 landscape;margin:10mm}
   </style>
@@ -331,7 +337,10 @@ ${sections
   </div>
 
   <div class="hero">
-    <div class="eyebrow">TillFlow export</div>
+    <div class="brand-row">
+      ${TILLFLOW_EXPORT_LOGO}
+      <div class="eyebrow">Export</div>
+    </div>
     <h1>${escapeHtml(businessName)}</h1>
     <div class="subtitle">${escapeHtml(reportTitle)}</div>
     <div class="meta">

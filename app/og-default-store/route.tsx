@@ -1,12 +1,12 @@
 import { ImageResponse } from 'next/og';
-import { renderTillFlowAppIcon } from '@/lib/branding/app-icon';
 
 export const runtime = 'edge';
 
 const WIDTH = 1200;
 const HEIGHT = 630;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
   const response = new ImageResponse(
     (
       <div
@@ -31,7 +31,13 @@ export async function GET() {
             gap: '32px',
           }}
         >
-          {renderTillFlowAppIcon(160)}
+          <img
+            src={`${origin}/brand/tillflow-app-icon.png`}
+            alt="TillFlow"
+            width={160}
+            height={160}
+            style={{ width: 160, height: 160, objectFit: 'cover', borderRadius: 36 }}
+          />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div
               style={{

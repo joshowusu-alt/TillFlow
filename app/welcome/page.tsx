@@ -153,13 +153,13 @@ export default function WelcomePage() {
         style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 0px))' }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6 sm:py-3.5">
-          <div className="flex items-center gap-2">
-            <Logo variant="mark" size={32} className="h-8 w-8 rounded-xl sm:h-9 sm:w-9" ariaHidden />
-            <span className="text-lg font-bold font-display sm:text-xl">
-              <span className="text-accent">Till</span>
-              <span className="text-gray-800">Flow</span>
-            </span>
-          </div>
+          <Logo
+            variant="lockup"
+            size={34}
+            className="gap-2"
+            wordmarkClassName="text-lg sm:text-xl"
+            alt="TillFlow"
+          />
           <div className="flex items-center gap-2">
             <Link
               href="/login"
@@ -492,12 +492,8 @@ export default function WelcomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-2">
-              <Logo variant="mark" size={24} className="mt-0.5 h-6 w-6 rounded-lg" ariaHidden />
+              <Logo variant="lockup" size={24} className="mt-0.5 gap-1.5" wordmarkClassName="text-sm" alt="TillFlow" />
               <div>
-                <span className="text-sm font-semibold font-display">
-                  <span className="text-accent">Till</span>
-                  <span className="text-gray-800">Flow</span>
-                </span>
                 <p className="mt-1 text-xs leading-5 text-black/45">
                   Cloud-based · Works on phone, tablet and desktop · Built for Ghanaian businesses
                 </p>

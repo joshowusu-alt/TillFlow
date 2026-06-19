@@ -13,7 +13,7 @@ export default function ForgotPasswordPage({
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Logo variant="mark" size={56} className="mx-auto h-14 w-14 rounded-2xl shadow-lg mb-3" alt="TillFlow" />
+        <Logo variant="lockup" size={40} className="mx-auto mb-3 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
         <h1 className="text-2xl font-bold font-display">Forgot Password</h1>
         <p className="mt-2 text-sm text-black/60">
           Enter your email and we&apos;ll send you a link to reset your password.

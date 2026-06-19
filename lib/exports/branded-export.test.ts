@@ -38,7 +38,10 @@ describe('branded export helpers', () => {
   it('renders a richer print-ready PDF view', () => {
     const html = buildBrandedPdf(exportOptions);
 
-    expect(html).toContain('TillFlow export');
+    expect(html).toContain('class="tillflow-export-logo"');
+    expect(html).toContain('src="/brand/tillflow-logo-white.png"');
+    expect(html).toContain('alt="TillFlow"');
+    expect(html).toContain('<div class="eyebrow">Export</div>');
     expect(html).toContain('Rows exported');
     expect(html).toContain('Print-ready PDF view');
     expect(html).toContain('Powered by <strong>TillFlow</strong>');

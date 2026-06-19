@@ -11,8 +11,9 @@ const PRECACHE_ASSETS = [
   '/offline/sales',
   '/shop/offline',
   '/manifest.json',
-  '/api/icon?size=192',
-  '/api/icon?size=512'
+  '/favicon.png',
+  '/icons/tillflow-icon-192.png',
+  '/icons/tillflow-icon-512.png'
 ];
 
 // API routes that should be cached for offline access

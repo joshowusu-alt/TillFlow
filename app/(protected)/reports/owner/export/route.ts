@@ -3,6 +3,7 @@ import { getFeatures } from '@/lib/features';
 import { getOwnerBrief } from '@/lib/owner-intel';
 import { formatMoney } from '@/lib/format';
 import { NextResponse } from 'next/server';
+import { TILLFLOW_EXPORT_LOGO } from '@/lib/exports/branded-export';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,6 +109,8 @@ export async function GET(request: Request) {
     /* ── Hero ───────────────────────────── */
     .hero{background:linear-gradient(135deg,var(--brand-dark) 0%,#2563EB 100%);color:#fff;padding:2rem 1.5rem 1.5rem}
     .hero-inner{max-width:900px;margin:0 auto;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1.5rem}
+    .brand-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.25rem}
+    .tillflow-export-logo{width:146px;height:auto;display:block;flex:0 0 auto}
     .hero-text h1{font-size:1.5rem;font-weight:800;letter-spacing:-0.02em}
     .hero-text .biz{font-size:1rem;font-weight:600;opacity:.85;margin-top:0.2rem}
     .hero-text .meta{font-size:0.75rem;opacity:.65;margin-top:0.35rem}
@@ -124,7 +127,7 @@ export async function GET(request: Request) {
     .page{max-width:900px;margin:0 auto;padding:1.5rem}
     .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
     .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem}
-    @media(max-width:640px){.grid2,.grid4{grid-template-columns:1fr}}
+    @media(max-width:640px){.grid2,.grid4{grid-template-columns:1fr}.brand-row{align-items:flex-start;flex-direction:column}}
 
     /* ── Cards ──────────────────────────── */
     .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -186,6 +189,9 @@ export async function GET(request: Request) {
 <!-- Hero with health score -->
 <div class="hero">
   <div class="hero-inner">
+    <div class="brand-row">
+      ${TILLFLOW_EXPORT_LOGO}
+    </div>
     <div class="hero-text">
       <h1>Owner Intelligence Brief</h1>
       <div class="biz">${escHtml(business.name)}</div>

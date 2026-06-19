@@ -15,7 +15,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Logo variant="mark" size={64} className="mx-auto h-16 w-16 rounded-2xl shadow-lg mb-4" alt="TillFlow" />
+        <Logo variant="lockup" size={44} className="mx-auto mb-4 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
         <h1 className="text-3xl font-bold font-display">
           <span className="text-accent">Till</span>
           <span className="text-gray-800">Flow</span>
