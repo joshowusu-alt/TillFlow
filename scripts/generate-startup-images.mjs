@@ -33,9 +33,9 @@ const DEVICES = [
   { w: 1668, h: 2224, cssW:  834, cssH: 1112, dpr: 2, label: 'iPad Air 10.9" / iPad mini' },
 ];
 
-// Physical icon dimensions (from Logo.tsx constants: 332×481)
-const ICON_NATURAL_W = 332;
-const ICON_NATURAL_H = 481;
+// Physical icon dimensions (from the full uploaded TillFlow symbol crop)
+const ICON_NATURAL_W = 679;
+const ICON_NATURAL_H = 465;
 
 async function main() {
   await mkdir(SPLASH_DIR, { recursive: true });
@@ -44,17 +44,18 @@ async function main() {
     const filename = `apple-splash-${device.w}x${device.h}.png`;
     const outPath = join(SPLASH_DIR, filename);
 
-    // Icon: ~27% of splash width to match native app splash sizing
-    const iconW = Math.round(device.w * 0.27);
+    // Icon: ~30% of splash width to match native app splash sizing
+    const iconW = Math.round(device.w * 0.30);
     const iconH = Math.round(iconW * (ICON_NATURAL_H / ICON_NATURAL_W));
 
     const iconResized = await sharp(ICON_PATH)
-      .resize(iconW, iconH, { fit: 'fill' })
+      .flatten({ background: BG })
+      .resize(iconW, iconH, { fit: 'contain', background: BG })
       .toBuffer();
 
-    // Center horizontally; position icon at 40% from top (natural visual balance)
+    // Center the symbol so iOS never shows a blank or black launch canvas.
     const left = Math.round((device.w - iconW) / 2);
-    const top = Math.round(device.h * 0.40);
+    const top = Math.round((device.h - iconH) / 2);
 
     await sharp({
       create: { width: device.w, height: device.h, channels: 4, background: BG },

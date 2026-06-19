@@ -30,6 +30,9 @@ describe('TillFlow brand logo system', () => {
       'public/icons/tillflow-icon-192.png',
       'public/icons/tillflow-icon-512.png',
       'public/og/tillflow-og.png',
+      'public/splash/apple-splash-1290x2796.png',
+      'public/splash/apple-splash-1170x2532.png',
+      'public/splash/apple-splash-750x1334.png',
     ].forEach((assetPath) => expect(assetExists(assetPath), assetPath).toBe(true));
   });
 
@@ -66,6 +69,7 @@ describe('TillFlow brand logo system', () => {
 
   it('points metadata and manifests at the new favicon and PWA icon files', () => {
     const layout = readSource('app/layout.tsx');
+    const globals = readSource('app/globals.css');
     const middleware = readSource('middleware.ts');
     const sw = readSource('public/sw.js');
     const manifest = JSON.parse(readSource('public/manifest.json')) as {
@@ -82,6 +86,10 @@ describe('TillFlow brand logo system', () => {
     expect(layout).toContain('/favicon.png');
     expect(layout).toContain('/apple-touch-icon.png');
     expect(layout).toContain("statusBarStyle: 'default'");
+    expect(layout).toContain('html,body{background-color:#F8FBFF}');
+    expect(layout).toContain("backgroundColor: '#F8FBFF'");
+    expect(layout).not.toContain('black-translucent');
+    expect(globals).toContain('background-color: #F8FBFF');
     expect(middleware).toContain("'/brand'");
     expect(middleware).toContain("'/favicon.png'");
     expect(middleware).toContain("'/apple-touch-icon.png'");
@@ -99,6 +107,7 @@ describe('TillFlow brand logo system', () => {
     expect(sw).toContain('/brand/tillflow-logo-blue.png');
     expect(sw).toContain('/brand/tillflow-symbol-blue.png');
     expect(sw).toContain('/apple-touch-icon.png');
+    expect(sw).toContain("pos-cache-v17");
   });
 
   it('shows a branded non-black launch state while the app loads', () => {
@@ -111,15 +120,44 @@ describe('TillFlow brand logo system', () => {
     expect(rootLoading).toContain('AppLaunchLoading');
     expect(protectedLoading).toContain('AppLaunchLoading');
     expect(commandCenterLoading).toContain('AppLaunchLoading');
-    expect(launchLoading).toContain('Loading your business');
-    expect(protectedLoading).toContain('Preparing your dashboard');
-    expect(commandCenterLoading).toContain('Preparing your dashboard');
+    expect(launchLoading).toContain('Opening TillFlow');
+    expect(launchLoading).toContain('Getting your business workspace ready');
+    expect(launchLoading).toContain("Getting today's sales, stock, and cash ready.");
+    expect(protectedLoading).not.toContain('Preparing your dashboard');
+    expect(commandCenterLoading).not.toContain('Preparing your dashboard');
+    expect(launchLoading).not.toContain('Loading your business');
     expect(launchLoading).toContain('bg-[#F8FBFF]');
-    expect(launchLoading).toContain('variant="mark"');
     expect(launchLoading).toContain('variant="lockup"');
+    expect(launchLoading).not.toContain('variant="mark"');
+    expect(launchLoading).not.toContain('showSkeleton');
+    expect(launchLoading).not.toContain('grid grid-cols-3');
+    expect(launchLoading).not.toContain('h-12 rounded-2xl');
     expect(launchLoading).not.toContain('bg-black');
     expect(topNav).toContain('variant="lockup"');
     expect(topNav).toContain('size={28}');
+  });
+
+  it('generates light iOS startup images from the full non-distorted symbol', async () => {
+    const generator = readSource('scripts/generate-startup-images.mjs');
+    const splash = await sharp(join(process.cwd(), 'public/splash/apple-splash-1170x2532.png')).metadata();
+    const { data, info } = await sharp(join(process.cwd(), 'public/splash/apple-splash-1170x2532.png'))
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let blackPixelCount = 0;
+
+    for (let offset = 0; offset < data.length; offset += info.channels) {
+      if (data[offset] < 30 && data[offset + 1] < 30 && data[offset + 2] < 30) {
+        blackPixelCount += 1;
+      }
+    }
+
+    expect(generator).toContain('const ICON_NATURAL_W = 679');
+    expect(generator).toContain('const ICON_NATURAL_H = 465');
+    expect(generator).toContain("fit: 'contain', background: BG");
+    expect(generator).not.toContain("fit: 'fill'");
+    expect(splash.width).toBe(1170);
+    expect(splash.height).toBe(2532);
+    expect(blackPixelCount).toBe(0);
   });
 
   it('uses the new export logo in printable report surfaces', () => {

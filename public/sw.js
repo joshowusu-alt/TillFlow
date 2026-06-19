@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v16';
+const CACHE_NAME = 'pos-cache-v17';
 const OFFLINE_URL = '/offline';
 const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
