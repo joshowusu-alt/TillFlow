@@ -105,6 +105,11 @@ describe('Reports navigation clarity', () => {
     expect(itemByHref.get('/reports/weekly-digest')?.minimumPlan).toBeUndefined();
   });
 
+  it('does not duplicate report routes across grouped navigation sections', () => {
+    const reportHrefs = REPORT_NAV_SECTIONS.flatMap((section) => section.items.map((item) => item.href));
+    expect(new Set(reportHrefs).size).toBe(reportHrefs.length);
+  });
+
   it('renders grouped report sections in desktop and mobile navigation components', () => {
     const topNav = readSource('components/TopNav.tsx');
     const mobileNav = readSource('components/NavMobileMenu.tsx');
@@ -112,5 +117,28 @@ describe('Reports navigation clarity', () => {
     expect(topNav).toContain('group.sections');
     expect(mobileNav).toContain('group.sections');
     expect(mobileNav).toContain('/reports/weekly-digest');
+  });
+
+  it('keeps the desktop Reports dropdown compact and scroll-safe', () => {
+    const topNav = readSource('components/TopNav.tsx');
+
+    expect(topNav).toContain("group.id === 'reports'");
+    expect(topNav).toContain("['main', 'sales-stock', 'finance']");
+    expect(topNav).toContain("['control', 'advanced']");
+    expect(topNav).toContain('max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)]');
+    expect(topNav).toContain('w-[min(40rem,calc(100vw_-_2rem))]');
+    expect(topNav).toContain('overflow-y-auto');
+    expect(topNav).toContain('overscroll-contain');
+    expect(topNav).toContain('grid grid-cols-2');
+    expect(topNav).toContain('[scrollbar-gutter:stable]');
+  });
+
+  it('keeps desktop nav interaction accessible enough for keyboard and click users', () => {
+    const topNav = readSource('components/TopNav.tsx');
+
+    expect(topNav).toContain("event.key === 'Escape'");
+    expect(topNav).toContain('setOpenGroup(null)');
+    expect(topNav).toContain('onClick={() => setOpenGroup(null)}');
+    expect(topNav).toContain('shell-nav-link-active');
   });
 });

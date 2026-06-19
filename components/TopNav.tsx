@@ -199,7 +199,7 @@ export default function TopNav({
               variant="lockup"
               size={32}
               className="gap-2.5"
-              wordmarkClassName="text-lg"
+              wordmarkClassName="h-8 w-auto"
               ariaHidden
             />
           </a>
@@ -208,6 +208,11 @@ export default function TopNav({
             ref={navRef}
             aria-label="Main navigation"
             className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setOpenGroup(null);
+              }
+            }}
           >
             {visibleGroups.map((group) => {
               const isActive = group.items.some(
@@ -215,6 +220,68 @@ export default function TopNav({
               );
               const groupHasOnlineOrders = group.items.some((i) => i.href === '/online-orders');
               const showGroupBadge = groupHasOnlineOrders && onlineOrdersCount > 0;
+              const sections = group.sections?.length ? group.sections : [{ id: group.id, label: '', items: group.items }];
+              const isReportsMenu = group.id === 'reports' && sections.length > 1;
+              const reportLeftSections = sections.filter((section) => ['main', 'sales-stock', 'finance'].includes(section.id));
+              const reportRightSections = sections.filter((section) => ['control', 'advanced'].includes(section.id));
+              const sectionColumns = isReportsMenu
+                ? [reportLeftSections, reportRightSections].filter((column) => column.length > 0)
+                : [sections];
+
+              const renderNavItem = (item: (typeof sections)[number]['items'][number]) => {
+                const active = pathname === item.href;
+                const requiredFeature = featureGatedLinks.get(item.href);
+                const featureLocked = requiredFeature ? !features[requiredFeature] : false;
+                const minimumPlan = planGatedLinks.get(item.href);
+                const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
+                const lockLabel =
+                  featureLocked && requiredFeature
+                    ? getFeatureLockLabel(requiredFeature, features.plan)
+                    : planLocked
+                      ? minimumPlan
+                      : null;
+                const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={
+                      active
+                        ? 'shell-nav-link shell-nav-link-active min-h-10'
+                        : 'shell-nav-link min-h-10'
+                    }
+                    onClick={() => setOpenGroup(null)}
+                  >
+                    <span className="min-w-0 truncate">{item.label}</span>
+                    {lockLabel ? (
+                      <span className="ml-3 shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
+                        {lockLabel}
+                      </span>
+                    ) : itemCount > 0 ? (
+                      <span className="ml-3 inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                        {itemCount > 99 ? '99+' : itemCount}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              };
+
+              const renderSection = (section: (typeof sections)[number], sectionIndex: number) => (
+                <div
+                  key={section.id}
+                  className={sectionIndex > 0 ? 'mt-2 border-t border-slate-100 pt-2' : undefined}
+                >
+                  {section.label ? (
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/35">
+                      {section.label}
+                    </div>
+                  ) : null}
+                  <div className="space-y-0.5">
+                    {section.items.map(renderNavItem)}
+                  </div>
+                </div>
+              );
+
               return (
                 <div key={group.id} className="relative">
                   <button
@@ -233,54 +300,27 @@ export default function TopNav({
                   </button>
                   {openGroup === group.id ? (
                     <div
-                      className="shell-dropdown-panel absolute left-0 mt-2.5 min-w-[260px] animate-scale-in"
+                      className={
+                        isReportsMenu
+                          ? 'shell-dropdown-panel absolute right-0 z-50 mt-2.5 max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)] w-[min(40rem,calc(100vw_-_2rem))] animate-scale-in overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
+                          : 'shell-dropdown-panel absolute left-0 z-50 mt-2.5 min-w-[260px] animate-scale-in'
+                      }
                       onMouseLeave={() => setOpenGroup(null)}
                     >
                       <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
                         {group.label}
                       </div>
-                      {(group.sections?.length ? group.sections : [{ id: group.id, label: '', items: group.items }]).map((section, sectionIndex) => (
-                        <div key={section.id} className={sectionIndex > 0 ? 'mt-2 border-t border-slate-100 pt-2' : undefined}>
-                          {section.label ? (
-                            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/35">
-                              {section.label}
+                      {isReportsMenu ? (
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                          {sectionColumns.map((column, columnIndex) => (
+                            <div key={columnIndex} className="min-w-0">
+                              {column.map((section, sectionIndex) => renderSection(section, sectionIndex))}
                             </div>
-                          ) : null}
-                          {section.items.map((item) => {
-                            const active = pathname === item.href;
-                            const requiredFeature = featureGatedLinks.get(item.href);
-                            const featureLocked = requiredFeature ? !features[requiredFeature] : false;
-                            const minimumPlan = planGatedLinks.get(item.href);
-                            const planLocked = !requiredFeature && minimumPlan ? !hasPlanAccess(features.plan, minimumPlan) : false;
-                            const lockLabel =
-                              featureLocked && requiredFeature
-                                ? getFeatureLockLabel(requiredFeature, features.plan)
-                                : planLocked
-                                  ? minimumPlan
-                                  : null;
-                            const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
-                            return (
-                              <Link
-                                key={item.href}
-                                href={item.href}
-                                className={active ? 'shell-nav-link shell-nav-link-active' : 'shell-nav-link'}
-                                onClick={() => setOpenGroup(null)}
-                              >
-                                <span>{item.label}</span>
-                                {lockLabel ? (
-                                  <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                                    {lockLabel}
-                                  </span>
-                                ) : itemCount > 0 ? (
-                                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
-                                    {itemCount > 99 ? '99+' : itemCount}
-                                  </span>
-                                ) : null}
-                              </Link>
-                            );
-                          })}
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        sections.map(renderSection)
+                      )}
                     </div>
                   ) : null}
                 </div>
