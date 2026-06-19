@@ -1,0 +1,4 @@
+name,sku,barcode,category,selling_price,cost_price,quantity,base_unit,pack_unit,pack_size,qty_in,supplier_name,reorder_point,storefront_published,image_url,notes,payment_status
+Rehearsal Water 500ml,RH-001,7990010000001,Drinks,3.50,2.30,52,Piece,,,,Test Supplier A,12,yes,,price update,paid
+Rehearsal Rice 1kg,RH-002,7990010000002,Rice,13.00,10.50,35,Piece,,,,Test Supplier A,10,yes,,,paid
+New By Barcode Only,,7990010000099,Misc,9.99,7.00,5,Piece,,,,Test Supplier Z,2,no,,new sku via barcode,paid

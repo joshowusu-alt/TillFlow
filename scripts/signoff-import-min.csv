@@ -1,0 +1,4 @@
+name,sku,barcode,category,selling_price,cost_price,quantity,base_unit
+Signoff Import A,SIGNOFF-IMP-A,8990099900101,Drinks,4.00,2.50,10,Piece
+Signoff Import B,SIGNOFF-IMP-B,8990099900102,Snacks,6.00,4.00,8,Piece
+Signoff Import C,SIGNOFF-IMP-C,8990099900103,Grocery,9.00,7.00,5,Piece

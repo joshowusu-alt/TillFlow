@@ -1,0 +1,21 @@
+name,sku,barcode,category,selling_price,cost_price,quantity,base_unit,pack_unit,pack_size,qty_in,supplier_name,reorder_point,storefront_published,image_url,notes,payment_status
+Rehearsal Water 500ml,RH-001,7990010000001,Drinks,3.00,2.20,48,Piece,,,,Test Supplier A,12,yes,,,paid
+Rehearsal Rice 1kg,RH-002,7990010000002,Rice,12.00,10.00,30,Piece,,,,Test Supplier A,10,yes,,,paid
+Rehearsal Soap Bar,RH-003,7990010000003,Household,5.00,3.50,60,Piece,,,,Test Supplier B,15,no,,,paid
+Rehearsal Milk Tin,RH-004,7990010000004,Dairy,18.00,14.00,24,Tin,Carton,12,,Test Supplier B,6,yes,,,paid
+Rehearsal Sugar 1kg,RH-005,7990010000005,Grocery,14.00,11.00,40,Piece,,,,Test Supplier A,8,yes,,,paid
+Rehearsal Oil 1L,RH-006,7990010000006,Cooking,28.00,24.00,20,Bottle,,,,Test Supplier C,5,yes,,,paid
+Rehearsal Biscuit Pack,RH-007,7990010000007,Snacks,4.50,3.20,80,Piece,,,,Test Supplier C,20,yes,,,paid
+Rehearsal Tissue Box,RH-008,7990010000008,Household,8.00,6.00,35,Piece,,,,Test Supplier B,10,no,,,paid
+Rehearsal Tomato Paste,RH-009,7990010000009,Cooking,5.50,4.20,50,Tin,,,,Test Supplier A,12,yes,,,paid
+Rehearsal Noodles,RH-010,7990010000010,Pasta,3.50,2.80,100,Piece,Carton,40,,Test Supplier C,25,yes,,,paid
+Rehearsal Juice 1L,RH-011,7990010000011,Drinks,9.00,7.00,18,Bottle,,,,Test Supplier A,4,yes,,,paid
+Rehearsal Bleach,RH-012,7990010000012,Household,12.00,9.50,15,Bottle,,,,Test Supplier B,3,no,,,paid
+Rehearsal Flour 2kg,RH-013,7990010000013,Baking,22.00,18.00,25,Piece,,,,Test Supplier A,6,yes,,,paid
+Rehearsal Eggs Tray,RH-014,7990010000014,Dairy,28.00,24.00,10,Piece,,,,Test Supplier C,2,yes,,,paid
+Rehearsal Salt 1kg,RH-015,7990010000015,Grocery,6.00,4.50,45,Piece,,,,Test Supplier A,10,yes,,,paid
+Rehearsal Pepper Sachet,RH-016,7990010000016,Spices,1.50,1.00,200,Piece,,,,Test Supplier B,40,yes,,,paid
+Rehearsal Diapers Pack,RH-017,7990010000017,Baby,45.00,38.00,12,Pack,,,,Test Supplier C,3,no,,,paid
+Rehearsal Toothpaste,RH-018,7990010000018,Personal care,15.00,11.00,22,Piece,,,,Test Supplier B,5,yes,,,paid
+Rehearsal Beans 1kg,RH-019,7990010000019,Pulses,18.00,15.00,28,Piece,,,,Test Supplier A,7,yes,,,paid
+Rehearsal Chocolate Bar,RH-020,7990010000020,Snacks,7.00,5.50,55,Piece,,,,Test Supplier C,12,yes,,,paid

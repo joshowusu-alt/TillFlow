@@ -1,0 +1,9 @@
+name,sku,barcode,category,selling_price,cost_price,quantity,base_unit,pack_unit,pack_size,qty_in,supplier_name,reorder_point,storefront_published,image_url,notes,payment_status
+,RM-BAD1,7990010000101,Drinks,3.00,2.00,10,Piece,,,,Supplier X,5,yes,,,paid
+Bad Price Item,RM-BAD2,7990010000102,Drinks,not-a-price,2.00,10,Piece,,,,Supplier X,5,yes,,,paid
+Dup Barcode A,RM-DUP1,7990010000999,Grocery,5.00,4.00,10,Piece,,,,Supplier X,5,yes,,,paid
+Dup Barcode B,RM-DUP2,7990010000999,Grocery,6.00,4.00,10,Piece,,,,Supplier X,5,yes,,,paid
+Rehearsal Water 500ml,RM-DUPNAME,7990010000103,Drinks,4.00,3.00,10,Piece,,,,Supplier X,5,yes,,duplicate name,paid
+No Category Item,RM-NOCAT,7990010000104,,8.00,6.00,10,Piece,,,,Supplier X,5,yes,,,paid
+Below Cost Item,RM-MARGIN,7990010000105,Snacks,2.00,5.00,10,Piece,,,,Supplier X,5,yes,,selling below cost,paid
+Zero Stock Item,RM-ZERO,7990010000106,Grocery,5.00,4.00,0,Piece,,,,Supplier X,5,yes,,,paid
