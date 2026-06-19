@@ -1,5 +1,5 @@
 import AppLaunchLoading from '@/components/AppLaunchLoading';
 
 export default function Loading() {
-  return <AppLaunchLoading message="Preparing your dashboard..." shell="content" />;
+  return <AppLaunchLoading message="Loading your business..." />;
 }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pos-cache-v14';
+const CACHE_NAME = 'pos-cache-v15';
 const OFFLINE_URL = '/offline';
 const SHOP_OFFLINE_URL = '/shop/offline';
 const MAX_CACHE_ITEMS = 100; // LRU eviction when exceeded
@@ -12,6 +12,9 @@ const PRECACHE_ASSETS = [
   '/shop/offline',
   '/manifest.json',
   '/favicon.png',
+  '/apple-touch-icon.png',
+  '/brand/tillflow-logo-blue.png',
+  '/brand/tillflow-symbol-blue.png',
   '/icons/tillflow-icon-192.png',
   '/icons/tillflow-icon-512.png'
 ];

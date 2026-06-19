@@ -54,23 +54,59 @@ describe('TillFlow brand logo system', () => {
   it('points metadata and manifests at the new favicon and PWA icon files', () => {
     const layout = readSource('app/layout.tsx');
     const middleware = readSource('middleware.ts');
+    const sw = readSource('public/sw.js');
     const manifest = JSON.parse(readSource('public/manifest.json')) as {
+      background_color: string;
+      theme_color: string;
       icons: Array<{ src: string; sizes: string }>;
     };
     const shopManifest = JSON.parse(readSource('public/shop-manifest.json')) as {
+      background_color: string;
+      theme_color: string;
       icons: Array<{ src: string; sizes: string }>;
     };
 
     expect(layout).toContain('/favicon.png');
     expect(layout).toContain('/apple-touch-icon.png');
+    expect(layout).toContain("statusBarStyle: 'default'");
     expect(middleware).toContain("'/brand'");
     expect(middleware).toContain("'/favicon.png'");
     expect(middleware).toContain("'/apple-touch-icon.png'");
     expect(middleware).toContain("'/logo.png'");
+    expect(manifest.background_color.toLowerCase()).not.toBe('#000000');
+    expect(manifest.background_color.toLowerCase()).not.toBe('#000');
+    expect(manifest.theme_color.toUpperCase()).toBe('#1E40AF');
+    expect(shopManifest.background_color.toLowerCase()).not.toBe('#000000');
+    expect(shopManifest.background_color.toLowerCase()).not.toBe('#000');
+    expect(shopManifest.theme_color.toUpperCase()).toBe('#1E40AF');
     expect(manifest.icons.some((icon) => icon.src === '/icons/tillflow-icon-192.png' && icon.sizes === '192x192')).toBe(true);
     expect(manifest.icons.some((icon) => icon.src === '/icons/tillflow-icon-512.png' && icon.sizes === '512x512')).toBe(true);
     expect(manifest.icons.some((icon) => icon.src === '/apple-touch-icon.png' && icon.sizes === '180x180')).toBe(true);
     expect(shopManifest.icons.some((icon) => icon.src === '/icons/tillflow-icon-512.png')).toBe(true);
+    expect(sw).toContain('/brand/tillflow-logo-blue.png');
+    expect(sw).toContain('/brand/tillflow-symbol-blue.png');
+    expect(sw).toContain('/apple-touch-icon.png');
+  });
+
+  it('shows a branded non-black launch state while the app loads', () => {
+    const rootLoading = readSource('app/loading.tsx');
+    const protectedLoading = readSource('app/(protected)/loading.tsx');
+    const commandCenterLoading = readSource('app/(protected)/reports/command-center/loading.tsx');
+    const launchLoading = readSource('components/AppLaunchLoading.tsx');
+    const topNav = readSource('components/TopNav.tsx');
+
+    expect(rootLoading).toContain('AppLaunchLoading');
+    expect(protectedLoading).toContain('AppLaunchLoading');
+    expect(commandCenterLoading).toContain('AppLaunchLoading');
+    expect(launchLoading).toContain('Loading your business');
+    expect(protectedLoading).toContain('Preparing your dashboard');
+    expect(commandCenterLoading).toContain('Preparing your dashboard');
+    expect(launchLoading).toContain('bg-[#F8FBFF]');
+    expect(launchLoading).toContain('variant="mark"');
+    expect(launchLoading).toContain('variant="lockup"');
+    expect(launchLoading).not.toContain('bg-black');
+    expect(topNav).toContain('variant="lockup"');
+    expect(topNav).toContain('size={28}');
   });
 
   it('uses the new export logo in printable report surfaces', () => {
