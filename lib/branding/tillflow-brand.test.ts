@@ -108,7 +108,7 @@ describe('TillFlow brand logo system', () => {
     expect(sw).toContain('/brand/tillflow-logo-blue.png');
     expect(sw).toContain('/brand/tillflow-symbol-blue.png');
     expect(sw).toContain('/apple-touch-icon.png');
-    expect(sw).toContain("pos-cache-v17");
+    expect(sw).toContain("pos-cache-v18");
   });
 
   it('shows a branded non-black launch state while the app loads', () => {
@@ -121,11 +121,20 @@ describe('TillFlow brand logo system', () => {
     expect(rootLoading).toContain('AppLaunchLoading');
     expect(protectedLoading).toContain('AppLaunchLoading');
     expect(commandCenterLoading).toContain('AppLaunchLoading');
-    expect(launchLoading).toContain('Opening TillFlow');
-    expect(launchLoading).toContain('Getting your business workspace ready');
+    expect(launchLoading).toContain('fixed inset-0');
+    expect(launchLoading).toContain('z-[9999]');
+    expect(launchLoading).toContain('w-screen');
+    expect(launchLoading).toContain('min-h-dvh');
+    expect(launchLoading).toContain('safe-area-inset-top');
+    expect(launchLoading).toContain('safe-area-inset-bottom');
+    expect(launchLoading).toContain('Opening ${cleanBusinessName}...');
+    expect(launchLoading).toContain('Opening your business workspace');
+    expect(launchLoading).toContain('Getting sales, stock, and cash ready.');
     expect(launchLoading).toContain("Getting today's sales, stock, and cash ready.");
     expect(protectedLoading).not.toContain('Preparing your dashboard');
     expect(commandCenterLoading).not.toContain('Preparing your dashboard');
+    expect(commandCenterLoading).not.toContain('Opening TillFlow');
+    expect(launchLoading).not.toContain('Opening TillFlow');
     expect(launchLoading).not.toContain('Loading your business');
     expect(launchLoading).toContain('bg-[#F8FBFF]');
     expect(launchLoading).toContain('variant="lockup"');
@@ -134,6 +143,12 @@ describe('TillFlow brand logo system', () => {
     expect(launchLoading).not.toContain('grid grid-cols-3');
     expect(launchLoading).not.toContain('h-12 rounded-2xl');
     expect(launchLoading).not.toContain('bg-black');
+    expect(launchLoading).not.toContain('Home');
+    expect(launchLoading).not.toContain('POS');
+    expect(launchLoading).not.toContain('Shifts');
+    expect(launchLoading).not.toContain('More');
+    expect(launchLoading).not.toContain('Sync ready');
+    expect(launchLoading).not.toContain('Main branch');
     expect(topNav).toContain('variant="lockup"');
     expect(topNav).toContain('size={28}');
   });
