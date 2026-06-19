@@ -125,6 +125,9 @@ describe('Reports navigation clarity', () => {
     expect(topNav).toContain("group.id === 'reports'");
     expect(topNav).toContain("['main', 'sales-stock', 'finance']");
     expect(topNav).toContain("['control', 'advanced']");
+    expect(topNav).toContain('fixed left-1/2');
+    expect(topNav).toContain('top-[calc(var(--app-header-offset-desktop)_+_0.75rem)]');
+    expect(topNav).toContain('-translate-x-1/2');
     expect(topNav).toContain('max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)]');
     expect(topNav).toContain('w-[min(40rem,calc(100vw_-_2rem))]');
     expect(topNav).toContain('overflow-y-auto');

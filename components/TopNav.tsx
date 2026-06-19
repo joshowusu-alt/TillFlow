@@ -302,7 +302,7 @@ export default function TopNav({
                     <div
                       className={
                         isReportsMenu
-                          ? 'shell-dropdown-panel absolute right-0 z-50 mt-2.5 max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)] w-[min(40rem,calc(100vw_-_2rem))] animate-scale-in overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
+                          ? 'shell-dropdown-panel fixed left-1/2 top-[calc(var(--app-header-offset-desktop)_+_0.75rem)] z-50 max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)] w-[min(40rem,calc(100vw_-_2rem))] -translate-x-1/2 animate-scale-in overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
                           : 'shell-dropdown-panel absolute left-0 z-50 mt-2.5 min-w-[260px] animate-scale-in'
                       }
                       onMouseLeave={() => setOpenGroup(null)}
