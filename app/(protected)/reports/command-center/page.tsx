@@ -45,9 +45,9 @@ export default async function CommandCenterPage() {
     (business as any).storeMode as any,
   );
 
-  const store = await getFirstStore(business.id);
   const now = new Date();
-  const [kpis, topSupplier] = await Promise.all([
+  const [store, kpis, topSupplier] = await Promise.all([
+    getFirstStore(business.id),
     getTodayKPIs(business.id).catch(() => null),
     features.advancedReports ? getTopLinkedSupplierForMonth(business.id).catch(() => null) : Promise.resolve(null),
   ]);

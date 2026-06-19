@@ -64,8 +64,9 @@ function RestrictedAccessScreen({
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
+  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
 
-  const [store, kpisResult] = await Promise.all([
+  const [store, kpisResult, onlineOrdersCount, setupBanner] = await Promise.all([
     getFirstStore(business.id),
     getTodayKPIs(business.id).catch((error) => {
       console.error('[protected-layout] Failed to load today KPIs', {
@@ -99,7 +100,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         fourWeekAvgExpensesPence: 0,
         discountOverrideCount: 0,
       };
-    })
+    }),
+    (user.role === 'OWNER' || user.role === 'MANAGER')
+      ? countOnlineOrdersNeedingAttention(business.id).catch(() => 0)
+      : Promise.resolve(0),
+    needsOnboarding
+      ? getOwnerSetupBannerState(business.id)
+      : Promise.resolve(null),
   ]);
 
   // Keep nav and owner/dashboard summaries on the exact same KPI source so they
@@ -111,15 +118,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     currency: business.currency,
   };
 
-  // Online orders attention count — shown as a badge on the Online Orders nav item.
-  // Only fetch for OWNER/MANAGER to avoid unnecessary queries for cashiers.
-  const onlineOrdersCount =
-    (user.role === 'OWNER' || user.role === 'MANAGER')
-      ? await countOnlineOrdersNeedingAttention(business.id).catch(() => 0)
-      : 0;
-
   // Show onboarding banner when onboarding is not complete
-  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
   const billingAccessState = String((business as any).billingAccessState ?? 'ACTIVE');
@@ -133,9 +132,6 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
     !isAllowedWhenBillingRestricted(pathname);
 
-  const setupBanner = needsOnboarding
-    ? await getOwnerSetupBannerState(business.id)
-    : null;
   const readinessPct = setupBanner?.setupProgressPercent ?? 0;
 
   return (
