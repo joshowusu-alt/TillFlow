@@ -5,7 +5,7 @@ export default function CommandCenterLoading() {
   return (
     <div className="space-y-6">
       <AppLaunchLoading
-        message="Opening TillFlow..."
+        message="Opening your reports workspace..."
         detail="Getting your reports workspace ready."
         shell="content"
         showProgress={false}
