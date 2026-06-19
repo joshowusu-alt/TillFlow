@@ -227,7 +227,7 @@ export default function TopNav({
                 : [sections];
 
               const renderNavItem = (item: (typeof sections)[number]['items'][number]) => {
-                const active = pathname === item.href;
+                const active = pathname === item.href || pathname.startsWith(item.href + '/');
                 const requiredFeature = featureGatedLinks.get(item.href);
                 const featureLocked = requiredFeature ? !features[requiredFeature] : false;
                 const minimumPlan = planGatedLinks.get(item.href);
@@ -270,7 +270,7 @@ export default function TopNav({
                   className={sectionIndex > 0 ? 'mt-2 border-t border-slate-100 pt-2' : undefined}
                 >
                   {section.label ? (
-                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/35">
+                    <div className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-black/40">
                       {section.label}
                     </div>
                   ) : null}
@@ -300,25 +300,33 @@ export default function TopNav({
                     <div
                       className={
                         isReportsMenu
-                          ? 'shell-dropdown-panel fixed left-1/2 top-[calc(var(--app-header-offset-desktop)_+_0.75rem)] z-50 max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)] w-[min(40rem,calc(100vw_-_2rem))] -translate-x-1/2 animate-scale-in overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
-                          : 'shell-dropdown-panel absolute left-0 z-50 mt-2.5 min-w-[260px] animate-scale-in'
+                          ? 'absolute left-1/2 top-full z-50 mt-2.5 w-[min(38rem,calc(100vw_-_2rem))] -translate-x-1/2'
+                          : 'absolute left-1/2 top-full z-50 mt-2.5 w-[min(18rem,calc(100vw_-_2rem))] -translate-x-1/2'
                       }
                       onMouseLeave={() => setOpenGroup(null)}
                     >
-                      <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-                        {group.label}
-                      </div>
-                      {isReportsMenu ? (
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                          {sectionColumns.map((column, columnIndex) => (
-                            <div key={columnIndex} className="min-w-0">
-                              {column.map((section, sectionIndex) => renderSection(section, sectionIndex))}
-                            </div>
-                          ))}
+                      <div
+                        className={
+                          isReportsMenu
+                            ? 'shell-dropdown-panel dropdown-motion max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem)] overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
+                            : 'shell-dropdown-panel dropdown-motion max-h-[min(28rem,calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem))] overflow-y-auto overscroll-contain p-2 [scrollbar-gutter:stable]'
+                        }
+                      >
+                        <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
+                          {group.label}
                         </div>
-                      ) : (
-                        sections.map(renderSection)
-                      )}
+                        {isReportsMenu ? (
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                            {sectionColumns.map((column, columnIndex) => (
+                              <div key={columnIndex} className="min-w-0">
+                                {column.map((section, sectionIndex) => renderSection(section, sectionIndex))}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          sections.map(renderSection)
+                        )}
+                      </div>
                     </div>
                   ) : null}
                 </div>
