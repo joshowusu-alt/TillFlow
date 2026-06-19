@@ -132,6 +132,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     id: 'relationships',
     label: 'People',
     items: [
+      { href: '/people', label: 'People Hub', roles: ['MANAGER', 'OWNER'] },
       { href: '/customers', label: 'Customers', roles: ['MANAGER', 'OWNER'] },
       { href: '/suppliers', label: 'Suppliers', roles: ['MANAGER', 'OWNER'] },
     ],

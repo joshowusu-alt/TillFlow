@@ -125,11 +125,10 @@ describe('Reports navigation clarity', () => {
     expect(topNav).toContain("group.id === 'reports'");
     expect(topNav).toContain("['main', 'sales-stock', 'finance']");
     expect(topNav).toContain("['control', 'advanced']");
-    expect(topNav).toContain('fixed left-1/2');
-    expect(topNav).toContain('top-[calc(var(--app-header-offset-desktop)_+_0.75rem)]');
+    expect(topNav).toContain('absolute left-1/2 top-full');
     expect(topNav).toContain('-translate-x-1/2');
-    expect(topNav).toContain('max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.5rem)]');
-    expect(topNav).toContain('w-[min(40rem,calc(100vw_-_2rem))]');
+    expect(topNav).toContain('w-[min(38rem,calc(100vw_-_2rem))]');
+    expect(topNav).toContain('max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem)]');
     expect(topNav).toContain('overflow-y-auto');
     expect(topNav).toContain('overscroll-contain');
     expect(topNav).toContain('grid grid-cols-2');
@@ -143,5 +142,45 @@ describe('Reports navigation clarity', () => {
     expect(topNav).toContain('setOpenGroup(null)');
     expect(topNav).toContain('onClick={() => setOpenGroup(null)}');
     expect(topNav).toContain('shell-nav-link-active');
+  });
+
+  it('keeps smaller desktop dropdowns compact, animated, and active-aware', () => {
+    const topNav = readSource('components/TopNav.tsx');
+    const styles = readSource('app/globals.css');
+
+    expect(topNav).toContain('w-[min(18rem,calc(100vw_-_2rem))]');
+    expect(topNav).toContain('max-h-[min(28rem,calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem))]');
+    expect(topNav).toContain('dropdown-motion');
+    expect(topNav).toContain('shell-nav-link-active');
+    expect(styles).toContain('@keyframes dropdown-in');
+    expect(styles).toContain('.dropdown-motion');
+    expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
+  it('adds a People hub without duplicating navigation routes', () => {
+    const people = NAV_GROUPS.find((group) => group.id === 'relationships');
+    expect(people).toBeDefined();
+    expect(people!.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ href: '/people', label: 'People Hub' }),
+      expect.objectContaining({ href: '/customers', label: 'Customers' }),
+      expect.objectContaining({ href: '/suppliers', label: 'Suppliers' }),
+    ]));
+
+    const allHrefs = NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
+    expect(new Set(allHrefs).size).toBe(allHrefs.length);
+  });
+
+  it('renders People module cards and payment actions', () => {
+    const peoplePage = readSource('app/(protected)/people/page.tsx');
+
+    expect(peoplePage).toContain('Manage customers, suppliers, balances, and relationships.');
+    expect(peoplePage).toContain('Customers');
+    expect(peoplePage).toContain('Suppliers');
+    expect(peoplePage).toContain('Customer payments');
+    expect(peoplePage).toContain('Supplier payments');
+    expect(peoplePage).toContain('/payments/customer-receipts');
+    expect(peoplePage).toContain('/payments/supplier-payments');
+    expect(peoplePage).toContain('module-card');
+    expect(peoplePage).toContain('stagger-children');
   });
 });
