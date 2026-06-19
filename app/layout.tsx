@@ -6,6 +6,7 @@ import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration';
 import NetworkStatus from '@/components/NetworkStatus';
 import ToastProvider from '@/components/ToastProvider';
 import KeyboardViewportBridge from '@/components/KeyboardViewportBridge';
+import SplashRemover from '@/components/SplashRemover';
 
 const displayFont = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Critical background painted before any CSS or React loads — prevents black flash */}
         <style dangerouslySetInnerHTML={{ __html: `html,body{background-color:#F8FBFF}` }} />
+        <style dangerouslySetInnerHTML={{ __html: `@keyframes tf-phs-slide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}` }} />
         {/* Apple PWA startup images — shown by iOS immediately on cold launch, before the WebView
             loads any HTML. Without these, iOS shows a black screen for 0.5–2s. One image is
             required per physical screen size; media queries select the correct one per device. */}
@@ -77,11 +79,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-startup-image" href="/splash/apple-splash-1668x2224.png" media="screen and (device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
       </head>
       <body className="min-h-screen bg-paper text-ink antialiased selection:bg-accent/15 selection:text-accent" style={{ backgroundColor: '#F8FBFF' }}>
+        {/* Pre-hydration splash: created before React mounts so the user sees branding
+            immediately during the server-side blocking phase. SplashRemover fades it out
+            once React has hydrated. The element is never in the React tree — no mismatch. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var bn=localStorage.getItem('tillflow:lastBusinessName');var el=document.createElement('div');el.id='tillflow-initial-splash';el.setAttribute('aria-hidden','true');el.style.cssText='position:fixed;inset:0;z-index:9999;background:#F8FBFF;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;animation:tf-phs-slide 0.3s ease both';var img=document.createElement('img');img.src='/brand/tillflow-logo-blue.png';img.alt='';img.style.cssText='width:180px;height:auto;display:block';var p=document.createElement('p');p.style.cssText='font-size:0.875rem;font-weight:600;color:#334155;margin:0;text-align:center';p.textContent=bn?('Opening '+bn+'...'):'Opening your business workspace...';el.appendChild(img);el.appendChild(p);document.body.appendChild(el);}catch(e){}})();` }} />
         <div
           aria-hidden="true"
           className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[26rem] bg-shell-glow opacity-80"
         />
         <div className="relative z-10">
+          <SplashRemover />
           <ServiceWorkerRegistration />
           <KeyboardViewportBridge />
           <Suspense>

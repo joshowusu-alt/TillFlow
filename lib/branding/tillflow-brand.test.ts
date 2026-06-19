@@ -187,6 +187,23 @@ describe('TillFlow brand logo system', () => {
     expect(ownerBriefExport).toContain('TILLFLOW_EXPORT_LOGO');
   });
 
+  it('injects a pre-hydration splash before React mounts', () => {
+    const layout = readSource('app/layout.tsx');
+    const splashRemover = readSource('components/SplashRemover.tsx');
+    const businessNameSaver = readSource('components/BusinessNameSaver.tsx');
+    const protectedLayout = readSource('app/(protected)/layout.tsx');
+
+    expect(layout).toContain('tillflow-initial-splash');
+    expect(layout).toContain('position:fixed');
+    expect(layout).toContain('tillflow:lastBusinessName');
+    expect(layout).toContain('Opening your business workspace');
+    expect(layout).toContain('SplashRemover');
+    expect(splashRemover).toContain('tillflow-initial-splash');
+    expect(splashRemover).toContain('setTimeout');
+    expect(businessNameSaver).toContain('tillflow:lastBusinessName');
+    expect(protectedLayout).toContain('BusinessNameSaver');
+  });
+
   it('keeps compatibility logo filenames on uploaded-artwork derivatives', () => {
     expect(assetExists('public/brand-icon.png')).toBe(true);
     expect(assetExists('public/logo.png')).toBe(true);

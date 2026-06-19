@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
+import BusinessNameSaver from '@/components/BusinessNameSaver';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -136,6 +137,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen w-full max-w-full">
+      <BusinessNameSaver name={business.name} />
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <PullToRefresh />
       <TopNav
