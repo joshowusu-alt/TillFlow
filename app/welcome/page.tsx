@@ -155,9 +155,7 @@ export default function WelcomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6 sm:py-3.5">
           <Logo
             variant="lockup"
-            size={34}
-            className="gap-2"
-            wordmarkClassName="text-lg sm:text-xl"
+            size={30}
             alt="TillFlow"
           />
           <div className="flex items-center gap-2">
@@ -492,7 +490,7 @@ export default function WelcomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-2">
-              <Logo variant="lockup" size={24} className="mt-0.5 gap-1.5" wordmarkClassName="text-sm" alt="TillFlow" />
+              <Logo variant="lockup" size={22} className="mt-0.5" alt="TillFlow" />
               <div>
                 <p className="mt-1 text-xs leading-5 text-black/45">
                   Cloud-based · Works on phone, tablet and desktop · Built for Ghanaian businesses

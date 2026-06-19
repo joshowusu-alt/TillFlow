@@ -45,7 +45,7 @@ describe('TillFlow brand logo system', () => {
     expect(logo).toContain("alt = 'TillFlow'");
     expect(logo).not.toContain('<svg');
     expect(topNav).toContain('variant="lockup"');
-    expect(topNav).toContain('h-8 w-auto');
+    expect(topNav).toContain('size={28}');
     expect(welcome).toContain('variant="lockup"');
     expect(login).toContain('variant="lockup"');
     expect(register).toContain('variant="lockup"');

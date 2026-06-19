@@ -66,19 +66,12 @@ export default function RegisterForm({ error }: RegisterFormProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <Logo variant="lockup" size={40} className="mx-auto mb-3 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
-        <h1 className="text-2xl font-bold font-display">
-          <span className="text-accent">Till</span>
-          <span className="text-gray-800">Flow</span>
-        </h1>
-        <p className="mt-0.5 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
-
-        <div className="mt-4">
+        <Logo variant="lockup" size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
+        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
+        <div className="mt-3">
           <p className="text-sm text-black/60">Your products, your prices, your currency. Clean start — yours from day one.</p>
         </div>
-
-        {/* Social proof */}
-        <div className="mt-3 text-xs text-black/35 font-medium">
+        <div className="mt-2 text-xs text-black/35 font-medium">
           Built for product-based businesses in Ghana
         </div>
       </div>

@@ -197,9 +197,7 @@ export default function TopNav({
           >
             <Logo
               variant="lockup"
-              size={32}
-              className="gap-2.5"
-              wordmarkClassName="h-8 w-auto"
+              size={28}
               ariaHidden
             />
           </a>

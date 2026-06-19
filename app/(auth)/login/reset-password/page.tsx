@@ -23,7 +23,7 @@ export default function ResetPasswordPage({
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <Logo variant="lockup" size={40} className="mx-auto mb-3 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
+          <Logo variant="lockup" size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
           <h1 className="text-2xl font-bold font-display">Reset Password</h1>
         </div>
         <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -44,7 +44,7 @@ export default function ResetPasswordPage({
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Logo variant="lockup" size={40} className="mx-auto mb-3 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
+        <Logo variant="lockup" size={36} className="mx-auto mb-3 justify-center" alt="TillFlow" />
         <h1 className="text-2xl font-bold font-display">Set New Password</h1>
         <p className="mt-2 text-sm text-black/60">
           Choose a new password for your account.

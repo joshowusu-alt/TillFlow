@@ -15,13 +15,9 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Logo variant="lockup" size={44} className="mx-auto mb-4 justify-center gap-2.5" wordmarkClassName="text-2xl" alt="TillFlow" />
-        <h1 className="text-3xl font-bold font-display">
-          <span className="text-accent">Till</span>
-          <span className="text-gray-800">Flow</span>
-        </h1>
-        <p className="mt-1 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
-        <p className="mt-4 text-sm text-black/60">Sign in to your account</p>
+        <Logo variant="lockup" size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
+        <p className="mt-2 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>
+        <p className="mt-3 text-sm text-black/60">Sign in to your account</p>
       </div>
       {success === 'password_reset' && (
         <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
