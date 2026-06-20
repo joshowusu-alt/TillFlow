@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/login',
   '/register',
   '/offline',
+  // PWA start_url must return HTML immediately so the splash can paint before auth routing.
+  '/launch',
   '/welcome',
   '/demo',
   '/shop',
