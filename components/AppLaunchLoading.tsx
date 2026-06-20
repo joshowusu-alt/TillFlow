@@ -7,9 +7,15 @@ type AppLaunchLoadingProps = {
   businessName?: string | null;
   message?: string;
   detail?: string;
+  mode?: 'launch' | 'internal';
   shell?: 'fullscreen' | 'content' | 'launch';
   showProgress?: boolean;
 };
+
+const INTERNAL_MESSAGE = 'Loading section...';
+const INTERNAL_DETAIL = 'Please wait while TillFlow gets this section ready.';
+const LAUNCH_MESSAGE = 'Opening your business workspace...';
+const LAUNCH_DETAIL = 'Getting sales, stock, and cash ready.';
 
 function readLastBusinessName() {
   try {
@@ -34,28 +40,35 @@ export default function AppLaunchLoading({
   businessName,
   message,
   detail,
-  shell = 'fullscreen',
+  mode = 'internal',
+  shell = 'content',
   showProgress = true,
 }: AppLaunchLoadingProps) {
   const [lastBusinessName, setLastBusinessName] = useState<string | null>(businessName?.trim() || null);
   const [launchMode, setLaunchMode] = useState(false);
+  const shouldReadLaunchSession = mode === 'launch' || shell === 'launch';
 
   useEffect(() => {
-    setLastBusinessName(businessName?.trim() || readLastBusinessName());
-    if (shell === 'launch') {
-      setLaunchMode(readLaunchMode());
-    }
-  }, [businessName, shell]);
+    const nextLaunchMode = shouldReadLaunchSession ? readLaunchMode() : false;
+    setLaunchMode(nextLaunchMode);
+    setLastBusinessName(
+      businessName?.trim() ||
+      (mode === 'launch' && (nextLaunchMode || shell === 'fullscreen') ? readLastBusinessName() : null)
+    );
+  }, [businessName, mode, shell, shouldReadLaunchSession]);
 
   const fullscreen = shell === 'fullscreen' || (shell === 'launch' && launchMode);
+  const useLaunchCopy = mode === 'launch' && (launchMode || shell === 'fullscreen');
   const cleanBusinessName = (businessName?.trim() || lastBusinessName?.trim()) ?? '';
   const loadingMessage =
-    message ?? (cleanBusinessName ? `Opening ${cleanBusinessName}...` : 'Opening your business workspace...');
+    message ?? (useLaunchCopy ? (cleanBusinessName ? `Opening ${cleanBusinessName}...` : LAUNCH_MESSAGE) : INTERNAL_MESSAGE);
   const loadingDetail =
     detail ??
-    (cleanBusinessName
+    (useLaunchCopy && cleanBusinessName
       ? "Getting today's sales, stock, and cash ready."
-      : 'Getting sales, stock, and cash ready.');
+      : useLaunchCopy
+        ? LAUNCH_DETAIL
+        : INTERNAL_DETAIL);
 
   return (
     <div
