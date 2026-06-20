@@ -148,13 +148,61 @@ describe('Reports navigation clarity', () => {
     const topNav = readSource('components/TopNav.tsx');
     const styles = readSource('app/globals.css');
 
-    expect(topNav).toContain('w-[min(18rem,calc(100vw_-_2rem))]');
+    expect(topNav).toContain('w-[min(23rem,calc(100vw_-_2rem))]');
     expect(topNav).toContain('max-h-[min(28rem,calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem))]');
     expect(topNav).toContain('dropdown-motion');
     expect(topNav).toContain('shell-nav-link-active');
+    expect(topNav).toContain('shell-nav-card-link');
+    expect(topNav).toContain('item.description');
     expect(styles).toContain('@keyframes dropdown-in');
     expect(styles).toContain('.dropdown-motion');
+    expect(styles).toContain('.shell-nav-card-link');
+    expect(styles).toContain('.shell-nav-icon-badge');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
+  it('adds desktop navigation icon metadata and descriptions without moving routes', () => {
+    const config = readSource('lib/navigation-config.ts');
+    const topNav = readSource('components/TopNav.tsx');
+    const navIcon = readSource('components/navigation/NavIcon.tsx');
+    const stock = NAV_GROUPS.find((group) => group.id === 'stock')!;
+    const reports = NAV_GROUPS.find((group) => group.id === 'reports')!;
+
+    expect(config).toContain('export type NavIconKey');
+    expect(config).toContain('iconKey?: NavIconKey');
+    expect(config).toContain('description?: string');
+    expect(navIcon).toContain('ICON_PATHS');
+    expect(navIcon).toContain('fallback');
+    expect(topNav).toContain("import NavIcon from './navigation/NavIcon'");
+    expect(topNav).toContain('<NavIcon');
+
+    expect(stock.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ href: '/inventory', label: 'Inventory', iconKey: 'inventory', description: 'View stock levels and reorder needs.' }),
+      expect.objectContaining({ href: '/purchases', label: 'Purchases', iconKey: 'purchases', description: 'Receive stock and supplier invoices.' }),
+      expect.objectContaining({ href: '/products', label: 'Products', iconKey: 'products', description: 'Manage catalogue, prices, and barcodes.' }),
+      expect.objectContaining({ href: '/products/labels', label: 'Product Labels', iconKey: 'labels', description: 'Print product and shelf labels.' }),
+    ]));
+    expect(reports.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ href: '/reports/owner', label: 'Owner Brief', iconKey: 'ownerBrief' }),
+      expect.objectContaining({ href: '/reports/cashflow-forecast', label: 'Cash Flow Forecast', iconKey: 'forecast' }),
+    ]));
+    expect(reports.items.every((item) => item.description === undefined)).toBe(true);
+  });
+
+  it('keeps plan, role, feature gates and mobile nav stable after desktop polish', () => {
+    const mobileNav = readSource('components/NavMobileMenu.tsx');
+    const allHrefs = NAV_GROUPS.flatMap((group) => group.items.map((item) => item.href));
+    const sell = NAV_GROUPS.find((group) => group.id === 'sell')!;
+    const stock = NAV_GROUPS.find((group) => group.id === 'stock')!;
+    const reports = NAV_GROUPS.find((group) => group.id === 'reports')!;
+
+    expect(new Set(allHrefs).size).toBe(allHrefs.length);
+    expect(sell.items.find((item) => item.href === '/online-orders')?.requiresFeature).toBe('onlineStorefront');
+    expect(stock.items.find((item) => item.href === '/products/labels')?.minimumPlan).toBe('GROWTH');
+    expect(reports.items.find((item) => item.href === '/reports/owner')?.minimumPlan).toBe('PRO');
+    expect(reports.items.find((item) => item.href === '/reports/audit-log')?.roles).toEqual(['OWNER']);
+    expect(mobileNav).toContain('getNavIcon');
+    expect(mobileNav).not.toContain('description');
   });
 
   it('adds a People hub without duplicating navigation routes', () => {
