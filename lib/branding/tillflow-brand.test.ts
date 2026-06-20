@@ -125,10 +125,10 @@ describe('TillFlow brand logo system', () => {
     expect(rootLoading).toContain('mode="launch"');
     expect(rootLoading).toContain('shell="fullscreen"');
     expect(protectedLoading).toContain('AppLaunchLoading');
-    expect(protectedLoading).toContain('mode="internal"');
-    expect(protectedLoading).toContain('Loading section...');
-    expect(protectedLoading).toContain('Please wait while TillFlow gets this section ready.');
-    expect(protectedLoading).not.toContain('shell="launch"');
+    expect(protectedLoading).toContain('mode="launch"');
+    expect(protectedLoading).toContain('shell="launch"');
+    expect(protectedLoading).not.toContain('Loading section...');
+    expect(protectedLoading).not.toContain('Please wait while TillFlow gets this section ready.');
     expect(protectedLoading).not.toContain('Opening');
     expect(protectedLoading).not.toContain("Getting today's sales, stock, and cash ready.");
     expect(commandCenterLoading).toContain('AppLaunchLoading');
@@ -212,6 +212,8 @@ describe('TillFlow brand logo system', () => {
     const businessNameSaver = readSource('components/BusinessNameSaver.tsx');
     const launchSessionCompletion = readSource('components/LaunchSessionCompletion.tsx');
     const protectedLayout = readSource('app/(protected)/layout.tsx');
+    const onboardingClient = readSource('app/(protected)/onboarding/OnboardingClient.tsx');
+    const posPage = readSource('app/(protected)/pos/page.tsx');
 
     expect(layout).toContain('tillflow-initial-splash');
     expect(layout).toContain('position:fixed');
@@ -232,7 +234,12 @@ describe('TillFlow brand logo system', () => {
     expect(splashRemover).toContain('setTimeout');
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
-    expect(protectedLayout).toContain('LaunchSessionCompletion');
+    expect(protectedLayout).not.toContain('LaunchSessionCompletion');
+    expect(onboardingClient).toContain('LaunchSessionCompletion');
+    expect(onboardingClient).toContain('ReadinessJourney');
+    expect(posPage).toContain('LaunchSessionCompletion');
+    expect(posPage).toContain('PosWelcomeShelf');
+    expect(launchSessionCompletion).toContain('Mount this only inside real page content');
     expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
     expect(launchSessionCompletion).toContain("window.sessionStorage.removeItem('tillflow:launching')");
     expect(launchSessionCompletion).toContain('removeInitialSplash');

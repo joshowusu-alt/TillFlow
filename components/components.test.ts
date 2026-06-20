@@ -122,6 +122,8 @@ describe('AppLaunchLoading', () => {
 
         expect(await screen.findByText('Opening EL-SHADDAI SUPERMARKET...')).toBeInTheDocument();
         expect(screen.getByText("Getting today's sales, stock, and cash ready.")).toBeInTheDocument();
+        expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();
+        expect(screen.queryByText('Please wait while TillFlow gets this section ready.')).not.toBeInTheDocument();
     });
 
     it('suppresses repeated launch copy after the launch splash has been seen', async () => {
