@@ -506,6 +506,11 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
     box-shadow: 0 7px 16px rgba(30, 64, 175, 0.16);
   }
 
+  .shell-nav-trigger-active:hover {
+    @apply text-white;
+    background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%);
+  }
+
   .shell-dropdown-panel {
     @apply rounded-2xl border bg-white p-2;
     border-color: rgba(203, 213, 225, 0.78);
@@ -528,7 +533,7 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   }
 
   .shell-nav-card-link {
-    @apply flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-sm;
+    @apply flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm;
     color: rgb(71 85 105);
     transition:
       background-color var(--motion-fast) ease,
@@ -545,16 +550,16 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   }
 
   .shell-nav-card-link-active {
-    @apply bg-blue-50/90;
+    @apply bg-blue-50/95;
     box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.95);
   }
 
   .shell-nav-card-link-active .shell-nav-card-title {
-    @apply text-blue-800;
+    @apply text-blue-900;
   }
 
   .shell-nav-card-link-active .shell-nav-card-description {
-    @apply text-blue-700/70;
+    @apply text-blue-800/75;
   }
 
   .shell-nav-icon-badge {
@@ -567,15 +572,27 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   }
 
   .shell-nav-card-link:hover .shell-nav-icon-badge {
-    @apply bg-white text-slate-700;
+    @apply bg-white text-slate-800;
     box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
     transform: translateX(1px);
   }
 
   .shell-nav-icon-badge-active,
   .shell-nav-card-link-active:hover .shell-nav-icon-badge {
-    @apply bg-blue-100 text-blue-800;
+    @apply bg-blue-100 text-blue-900;
     box-shadow: 0 6px 16px rgba(30, 64, 175, 0.12);
+  }
+
+  .shell-dropdown-panel-small {
+    overflow-y: visible;
+  }
+
+  @media (max-height: 700px) {
+    .shell-dropdown-panel-small {
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
   }
 
   .status-dot {

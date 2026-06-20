@@ -280,8 +280,8 @@ export default function TopNav({
                     href={item.href}
                     className={
                       active
-                        ? 'shell-nav-card-link shell-nav-card-link-active group min-h-[4.25rem]'
-                        : 'shell-nav-card-link group min-h-[4.25rem]'
+                        ? 'shell-nav-card-link shell-nav-card-link-active group min-h-[3.875rem]'
+                        : 'shell-nav-card-link group min-h-[3.875rem]'
                     }
                     onClick={() => setOpenGroup(null)}
                   >
@@ -356,7 +356,7 @@ export default function TopNav({
                         className={
                           isReportsMenu
                             ? 'shell-dropdown-panel dropdown-motion max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem)] overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]'
-                            : 'shell-dropdown-panel dropdown-motion max-h-[min(28rem,calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem))] overflow-y-auto overscroll-contain p-2 [scrollbar-gutter:stable]'
+                            : 'shell-dropdown-panel shell-dropdown-panel-small dropdown-motion max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem)] p-2'
                         }
                       >
                         <div className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
