@@ -1,12 +1,34 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { Logo } from './Logo';
 
 type AppLaunchLoadingProps = {
   businessName?: string | null;
   message?: string;
   detail?: string;
-  shell?: 'fullscreen' | 'content';
+  shell?: 'fullscreen' | 'content' | 'launch';
   showProgress?: boolean;
 };
+
+function readLastBusinessName() {
+  try {
+    return window.localStorage.getItem('tillflow:lastBusinessName')?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function readLaunchMode() {
+  try {
+    return (
+      window.sessionStorage.getItem('tillflow:launching') === '1' &&
+      window.sessionStorage.getItem('tillflow:launchSplashSeen') !== '1'
+    );
+  } catch {
+    return false;
+  }
+}
 
 export default function AppLaunchLoading({
   businessName,
@@ -15,8 +37,18 @@ export default function AppLaunchLoading({
   shell = 'fullscreen',
   showProgress = true,
 }: AppLaunchLoadingProps) {
-  const fullscreen = shell === 'fullscreen';
-  const cleanBusinessName = businessName?.trim();
+  const [lastBusinessName, setLastBusinessName] = useState<string | null>(businessName?.trim() || null);
+  const [launchMode, setLaunchMode] = useState(false);
+
+  useEffect(() => {
+    setLastBusinessName(businessName?.trim() || readLastBusinessName());
+    if (shell === 'launch') {
+      setLaunchMode(readLaunchMode());
+    }
+  }, [businessName, shell]);
+
+  const fullscreen = shell === 'fullscreen' || (shell === 'launch' && launchMode);
+  const cleanBusinessName = (businessName?.trim() || lastBusinessName?.trim()) ?? '';
   const loadingMessage =
     message ?? (cleanBusinessName ? `Opening ${cleanBusinessName}...` : 'Opening your business workspace...');
   const loadingDetail =

@@ -17,6 +17,9 @@ export default function LaunchRedirector() {
 
   useEffect(() => {
     try {
+      window.sessionStorage.setItem('tillflow:launching', '1');
+      window.sessionStorage.removeItem('tillflow:launchSplashSeen');
+
       const businessName = window.localStorage.getItem(LAST_BUSINESS_NAME_KEY);
       const cleanName = businessName?.trim();
       setMessage(getLaunchMessage(cleanName ?? null));
