@@ -3,6 +3,7 @@ import { requireBusinessStore } from '@/lib/auth';
 import { unstable_cache } from 'next/cache';
 import PosClient from './PosClient';
 import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
+import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 
 // ── Cached lookups for data that rarely changes ───────────────────
 // Revalidates every 60 s or when explicitly invalidated.
@@ -164,6 +165,7 @@ export default async function PosPage({
 
   return (
     <>
+      <LaunchSessionCompletion />
       <PosWelcomeShelf
         firstName={firstName}
         storeName={baseStore.name}

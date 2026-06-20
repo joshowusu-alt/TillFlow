@@ -28,6 +28,7 @@ export default function LaunchSessionCompletion() {
 
     const completeLaunch = () => {
       try {
+        // Mount this only inside real page content so the app shell cannot clear the splash early.
         window.sessionStorage.setItem('tillflow:launchSplashSeen', '1');
         window.sessionStorage.removeItem('tillflow:launching');
       } catch {
