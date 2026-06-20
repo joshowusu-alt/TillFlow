@@ -123,6 +123,7 @@ describe('TillFlow brand logo system', () => {
 
     expect(rootLoading).toContain('AppLaunchLoading');
     expect(protectedLoading).toContain('AppLaunchLoading');
+    expect(protectedLoading).toContain('shell="launch"');
     expect(commandCenterLoading).toContain('AppLaunchLoading');
     expect(launchLoading).toContain('fixed inset-0');
     expect(launchLoading).toContain('z-[9999]');
@@ -134,6 +135,10 @@ describe('TillFlow brand logo system', () => {
     expect(launchLoading).toContain('Opening your business workspace');
     expect(launchLoading).toContain('Getting sales, stock, and cash ready.');
     expect(launchLoading).toContain("Getting today's sales, stock, and cash ready.");
+    expect(launchLoading).toContain("window.localStorage.getItem('tillflow:lastBusinessName')");
+    expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launching')");
+    expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launchSplashSeen')");
+    expect(launchLoading).toContain("shell === 'launch' && launchMode");
     expect(protectedLoading).not.toContain('Preparing your dashboard');
     expect(commandCenterLoading).not.toContain('Preparing your dashboard');
     expect(commandCenterLoading).not.toContain('Opening TillFlow');
@@ -194,17 +199,33 @@ describe('TillFlow brand logo system', () => {
     const layout = readSource('app/layout.tsx');
     const splashRemover = readSource('components/SplashRemover.tsx');
     const businessNameSaver = readSource('components/BusinessNameSaver.tsx');
+    const launchSessionCompletion = readSource('components/LaunchSessionCompletion.tsx');
     const protectedLayout = readSource('app/(protected)/layout.tsx');
 
     expect(layout).toContain('tillflow-initial-splash');
     expect(layout).toContain('position:fixed');
     expect(layout).toContain('tillflow:lastBusinessName');
+    expect(layout).toContain("path==='/launch'");
+    expect(layout).toContain("sessionStorage.setItem('tillflow:launching','1')");
+    expect(layout).toContain("sessionStorage.removeItem('tillflow:launchSplashSeen')");
+    expect(layout).toContain("sessionStorage.getItem('tillflow:launchSplashSeen')");
+    expect(layout).toContain('publicAuth');
     expect(layout).toContain('Opening your business workspace');
+    expect(layout).toContain('sales, stock, and cash ready.');
     expect(layout).toContain('SplashRemover');
     expect(splashRemover).toContain('tillflow-initial-splash');
+    expect(splashRemover).toContain('isLaunchHandoff');
+    expect(splashRemover).toContain("window.sessionStorage.getItem('tillflow:launching')");
+    expect(splashRemover).toContain("window.sessionStorage.getItem('tillflow:launchSplashSeen')");
+    expect(splashRemover).toContain('8000');
     expect(splashRemover).toContain('setTimeout');
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
+    expect(protectedLayout).toContain('LaunchSessionCompletion');
+    expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
+    expect(launchSessionCompletion).toContain("window.sessionStorage.removeItem('tillflow:launching')");
+    expect(launchSessionCompletion).toContain('removeInitialSplash');
+    expect(launchSessionCompletion).not.toContain('localStorage');
   });
 
   it('starts the installed PWA on a public launch route that can paint before auth routing', () => {
@@ -222,6 +243,8 @@ describe('TillFlow brand logo system', () => {
     expect(launchPage).toContain('LaunchRedirector');
     expect(launchPage).not.toContain('Opening TillFlow');
     expect(launchRedirector).toContain('tillflow:lastBusinessName');
+    expect(launchRedirector).toContain("window.sessionStorage.setItem('tillflow:launching', '1')");
+    expect(launchRedirector).toContain("window.sessionStorage.removeItem('tillflow:launchSplashSeen')");
     expect(launchRedirector).toContain('Opening ${cleanName}...');
     expect(launchRedirector).toContain('Opening your business workspace...');
     expect(launchRedirector).toContain("Getting today's sales, stock, and cash ready.");
@@ -231,6 +254,27 @@ describe('TillFlow brand logo system', () => {
     expect(launchRedirector).not.toContain('Opening TillFlow');
     expect(middleware).toContain("'/launch'");
     expect(middleware).toContain('PWA start_url must return HTML immediately');
+  });
+
+  it('keeps launch-session state in sessionStorage and last business name in localStorage', () => {
+    const sources = [
+      readSource('app/layout.tsx'),
+      readSource('components/LaunchRedirector.tsx'),
+      readSource('components/LaunchSessionCompletion.tsx'),
+      readSource('components/SplashRemover.tsx'),
+      readSource('components/AppLaunchLoading.tsx'),
+      readSource('components/BusinessNameSaver.tsx'),
+    ].join('\n');
+
+    expect(sources).toContain('tillflow:launching');
+    expect(sources).toContain('tillflow:launchSplashSeen');
+    expect(sources).toContain('tillflow:lastBusinessName');
+    expect(sources).toContain('sessionStorage');
+    expect(readSource('components/BusinessNameSaver.tsx')).toContain("localStorage.setItem('tillflow:lastBusinessName'");
+    expect(sources).not.toContain("localStorage.setItem('tillflow:launchSplashSeen'");
+    expect(sources).not.toContain("localStorage.getItem('tillflow:launchSplashSeen'");
+    expect(sources).not.toContain('Preparing your dashboard');
+    expect(sources).not.toContain('Opening TillFlow');
   });
 
   it('keeps compatibility logo filenames on uploaded-artwork derivatives', () => {
