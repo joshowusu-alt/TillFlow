@@ -131,7 +131,10 @@ describe('TillFlow brand logo system', () => {
     expect(protectedLoading).not.toContain('Please wait while TillFlow gets this section ready.');
     expect(protectedLoading).not.toContain('Opening');
     expect(protectedLoading).not.toContain("Getting today's sales, stock, and cash ready.");
-    expect(commandCenterLoading).toContain('AppLaunchLoading');
+    expect(commandCenterLoading).toContain('Skeleton');
+    expect(commandCenterLoading).not.toContain('AppLaunchLoading');
+    expect(commandCenterLoading).not.toContain('Loading section...');
+    expect(commandCenterLoading).not.toContain('Opening your reports workspace');
     expect(launchLoading).toContain('fixed inset-0');
     expect(launchLoading).toContain('z-[9999]');
     expect(launchLoading).toContain('w-screen');
@@ -170,6 +173,25 @@ describe('TillFlow brand logo system', () => {
     expect(launchLoading).not.toContain('Main branch');
     expect(topNav).toContain('variant="lockup"');
     expect(topNav).toContain('size={28}');
+  });
+
+  it('defers protected shell badge data so launch content is not blocked by nav KPIs', () => {
+    const protectedLayout = readSource('app/(protected)/layout.tsx');
+    const topNav = readSource('components/TopNav.tsx');
+    const navKpisAction = readSource('app/actions/nav-kpis.ts');
+    const onboardingActions = readSource('app/actions/onboarding.ts');
+
+    expect(protectedLayout).not.toContain("import { getTodayKPIs }");
+    expect(protectedLayout).not.toContain('countOnlineOrdersNeedingAttention');
+    expect(protectedLayout).not.toContain('todaySales={');
+    expect(protectedLayout).not.toContain('onlineOrdersCount={');
+    expect(protectedLayout).toContain('Suspense fallback={null}');
+    expect(protectedLayout).toContain('OwnerSetupBanner');
+    expect(navKpisAction).toContain('getTodayKPIs');
+    expect(navKpisAction).toContain('countOnlineOrdersNeedingAttention');
+    expect(topNav).toContain('setLiveOnlineOrdersCount');
+    expect(topNav).toContain('void refreshNavKpis(!todaySales)');
+    expect(onboardingActions).toContain('getTodayKPIs');
   });
 
   it('generates light iOS startup images from the full non-distorted symbol', async () => {
