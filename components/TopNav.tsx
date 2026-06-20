@@ -15,6 +15,7 @@ import { Logo } from './Logo';
 import MerchantBrandBadge from './MerchantBrandBadge';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
+import NavIcon from './navigation/NavIcon';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
 
 export type TopNavUser = {
@@ -239,27 +240,73 @@ export default function TopNav({
                       ? minimumPlan
                       : null;
                 const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
+                const metaBadge = lockLabel ? (
+                  <span className="ml-3 shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
+                    {lockLabel}
+                  </span>
+                ) : itemCount > 0 ? (
+                  <span className="ml-3 inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
+                    {itemCount > 99 ? '99+' : itemCount}
+                  </span>
+                ) : null;
+
+                if (isReportsMenu) {
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={
+                        active
+                          ? 'shell-nav-link shell-nav-link-active min-h-10 gap-2'
+                          : 'shell-nav-link min-h-10 gap-2'
+                      }
+                      onClick={() => setOpenGroup(null)}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <NavIcon
+                          iconKey={item.iconKey}
+                          className={active ? 'h-4 w-4 shrink-0 text-blue-700' : 'h-4 w-4 shrink-0 text-slate-400'}
+                        />
+                        <span className="min-w-0 truncate">{item.label}</span>
+                      </span>
+                      {metaBadge}
+                    </Link>
+                  );
+                }
+
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={
                       active
-                        ? 'shell-nav-link shell-nav-link-active min-h-10'
-                        : 'shell-nav-link min-h-10'
+                        ? 'shell-nav-card-link shell-nav-card-link-active group min-h-[4.25rem]'
+                        : 'shell-nav-card-link group min-h-[4.25rem]'
                     }
                     onClick={() => setOpenGroup(null)}
                   >
-                    <span className="min-w-0 truncate">{item.label}</span>
-                    {lockLabel ? (
-                      <span className="ml-3 shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
-                        {lockLabel}
+                    <span className="flex min-w-0 items-start gap-3">
+                      <span
+                        className={
+                          active
+                            ? 'shell-nav-icon-badge shell-nav-icon-badge-active mt-0.5'
+                            : 'shell-nav-icon-badge mt-0.5'
+                        }
+                      >
+                        <NavIcon iconKey={item.iconKey} className="h-[18px] w-[18px]" />
                       </span>
-                    ) : itemCount > 0 ? (
-                      <span className="ml-3 inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
-                        {itemCount > 99 ? '99+' : itemCount}
+                      <span className="min-w-0">
+                        <span className="shell-nav-card-title block truncate text-sm font-semibold text-slate-800 group-hover:text-slate-950">
+                          {item.label}
+                        </span>
+                        {item.description ? (
+                          <span className="shell-nav-card-description mt-0.5 block truncate text-xs leading-5 text-slate-500">
+                            {item.description}
+                          </span>
+                        ) : null}
                       </span>
-                    ) : null}
+                    </span>
+                    {metaBadge}
                   </Link>
                 );
               };
@@ -301,7 +348,7 @@ export default function TopNav({
                       className={
                         isReportsMenu
                           ? 'absolute left-1/2 top-full z-50 mt-2.5 w-[min(38rem,calc(100vw_-_2rem))] -translate-x-1/2'
-                          : 'absolute left-1/2 top-full z-50 mt-2.5 w-[min(18rem,calc(100vw_-_2rem))] -translate-x-1/2'
+                          : 'absolute left-1/2 top-full z-50 mt-2.5 w-[min(23rem,calc(100vw_-_2rem))] -translate-x-1/2'
                       }
                       onMouseLeave={() => setOpenGroup(null)}
                     >
