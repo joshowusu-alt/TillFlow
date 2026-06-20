@@ -73,6 +73,7 @@ describe('TillFlow brand logo system', () => {
     const middleware = readSource('middleware.ts');
     const sw = readSource('public/sw.js');
     const manifest = JSON.parse(readSource('public/manifest.json')) as {
+      start_url: string;
       background_color: string;
       theme_color: string;
       icons: Array<{ src: string; sizes: string }>;
@@ -97,6 +98,7 @@ describe('TillFlow brand logo system', () => {
     expect(middleware).toContain("'/logo.png'");
     expect(manifest.background_color.toLowerCase()).not.toBe('#000000');
     expect(manifest.background_color.toLowerCase()).not.toBe('#000');
+    expect(manifest.start_url).toBe('/launch');
     expect(manifest.theme_color.toUpperCase()).toBe('#1E40AF');
     expect(shopManifest.background_color.toLowerCase()).not.toBe('#000000');
     expect(shopManifest.background_color.toLowerCase()).not.toBe('#000');
@@ -108,7 +110,8 @@ describe('TillFlow brand logo system', () => {
     expect(sw).toContain('/brand/tillflow-logo-blue.png');
     expect(sw).toContain('/brand/tillflow-symbol-blue.png');
     expect(sw).toContain('/apple-touch-icon.png');
-    expect(sw).toContain("pos-cache-v18");
+    expect(sw).toContain("pos-cache-v19");
+    expect(sw).toContain('/launch');
   });
 
   it('shows a branded non-black launch state while the app loads', () => {
@@ -202,6 +205,32 @@ describe('TillFlow brand logo system', () => {
     expect(splashRemover).toContain('setTimeout');
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
+  });
+
+  it('starts the installed PWA on a public launch route that can paint before auth routing', () => {
+    const manifest = JSON.parse(readSource('public/manifest.json')) as { start_url: string };
+    const launchPage = readSource('app/launch/page.tsx');
+    const launchRedirector = readSource('components/LaunchRedirector.tsx');
+    const middleware = readSource('middleware.ts');
+
+    expect(manifest.start_url).toBe('/launch');
+    expect(assetExists('app/launch/page.tsx')).toBe(true);
+    expect(launchPage).not.toContain('requireBusiness');
+    expect(launchPage).not.toContain('prisma');
+    expect(launchPage).not.toContain('redirect(');
+    expect(launchPage).toContain('/brand/tillflow-logo-blue.png');
+    expect(launchPage).toContain('LaunchRedirector');
+    expect(launchPage).not.toContain('Opening TillFlow');
+    expect(launchRedirector).toContain('tillflow:lastBusinessName');
+    expect(launchRedirector).toContain('Opening ${cleanName}...');
+    expect(launchRedirector).toContain('Opening your business workspace...');
+    expect(launchRedirector).toContain("Getting today's sales, stock, and cash ready.");
+    expect(launchRedirector).toContain('Getting sales, stock, and cash ready.');
+    expect(launchRedirector).toContain("window.location.replace('/onboarding')");
+    expect(launchRedirector).toContain('requestAnimationFrame');
+    expect(launchRedirector).not.toContain('Opening TillFlow');
+    expect(middleware).toContain("'/launch'");
+    expect(middleware).toContain('PWA start_url must return HTML immediately');
   });
 
   it('keeps compatibility logo filenames on uploaded-artwork derivatives', () => {
