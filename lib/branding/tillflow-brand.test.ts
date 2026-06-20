@@ -122,8 +122,15 @@ describe('TillFlow brand logo system', () => {
     const topNav = readSource('components/TopNav.tsx');
 
     expect(rootLoading).toContain('AppLaunchLoading');
+    expect(rootLoading).toContain('mode="launch"');
+    expect(rootLoading).toContain('shell="fullscreen"');
     expect(protectedLoading).toContain('AppLaunchLoading');
-    expect(protectedLoading).toContain('shell="launch"');
+    expect(protectedLoading).toContain('mode="internal"');
+    expect(protectedLoading).toContain('Loading section...');
+    expect(protectedLoading).toContain('Please wait while TillFlow gets this section ready.');
+    expect(protectedLoading).not.toContain('shell="launch"');
+    expect(protectedLoading).not.toContain('Opening');
+    expect(protectedLoading).not.toContain("Getting today's sales, stock, and cash ready.");
     expect(commandCenterLoading).toContain('AppLaunchLoading');
     expect(launchLoading).toContain('fixed inset-0');
     expect(launchLoading).toContain('z-[9999]');
@@ -131,6 +138,10 @@ describe('TillFlow brand logo system', () => {
     expect(launchLoading).toContain('min-h-dvh');
     expect(launchLoading).toContain('safe-area-inset-top');
     expect(launchLoading).toContain('safe-area-inset-bottom');
+    expect(launchLoading).toContain("mode = 'internal'");
+    expect(launchLoading).toContain('INTERNAL_MESSAGE');
+    expect(launchLoading).toContain('const useLaunchCopy');
+    expect(launchLoading).toContain("mode === 'launch'");
     expect(launchLoading).toContain('Opening ${cleanBusinessName}...');
     expect(launchLoading).toContain('Opening your business workspace');
     expect(launchLoading).toContain('Getting sales, stock, and cash ready.');

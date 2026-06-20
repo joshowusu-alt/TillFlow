@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
+import AppLaunchLoading from '@/components/AppLaunchLoading';
 import { resolveDownloadFilename } from '@/components/DownloadLink';
 import ResponsiveModal from '@/components/ResponsiveModal';
 
@@ -89,6 +90,52 @@ describe('ResponsiveModal', () => {
 
         expect(document.body.style.overflow).toBe('');
         expect(document.documentElement.style.overflow).toBe('');
+    });
+});
+
+describe('AppLaunchLoading', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+    });
+
+    it('uses neutral internal copy by default even when a last business name exists', async () => {
+        window.localStorage.setItem('tillflow:lastBusinessName', 'EL-SHADDAI SUPERMARKET');
+
+        render(React.createElement(AppLaunchLoading));
+
+        expect(screen.getByText('Loading section...')).toBeInTheDocument();
+        expect(screen.getByText('Please wait while TillFlow gets this section ready.')).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(screen.queryByText('Opening EL-SHADDAI SUPERMARKET...')).not.toBeInTheDocument();
+            expect(screen.queryByText("Getting today's sales, stock, and cash ready.")).not.toBeInTheDocument();
+        });
+    });
+
+    it('uses business launch copy while the launch session is active', async () => {
+        window.localStorage.setItem('tillflow:lastBusinessName', 'EL-SHADDAI SUPERMARKET');
+        window.sessionStorage.setItem('tillflow:launching', '1');
+        window.sessionStorage.removeItem('tillflow:launchSplashSeen');
+
+        render(React.createElement(AppLaunchLoading, { mode: 'launch', shell: 'launch' }));
+
+        expect(await screen.findByText('Opening EL-SHADDAI SUPERMARKET...')).toBeInTheDocument();
+        expect(screen.getByText("Getting today's sales, stock, and cash ready.")).toBeInTheDocument();
+    });
+
+    it('suppresses repeated launch copy after the launch splash has been seen', async () => {
+        window.localStorage.setItem('tillflow:lastBusinessName', 'EL-SHADDAI SUPERMARKET');
+        window.sessionStorage.setItem('tillflow:launching', '1');
+        window.sessionStorage.setItem('tillflow:launchSplashSeen', '1');
+
+        render(React.createElement(AppLaunchLoading, { mode: 'launch', shell: 'launch' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Loading section...')).toBeInTheDocument();
+            expect(screen.queryByText('Opening EL-SHADDAI SUPERMARKET...')).not.toBeInTheDocument();
+            expect(screen.queryByText("Getting today's sales, stock, and cash ready.")).not.toBeInTheDocument();
+        });
     });
 });
 
