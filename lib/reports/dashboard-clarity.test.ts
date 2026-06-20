@@ -121,6 +121,7 @@ describe('Reports navigation clarity', () => {
 
   it('keeps the desktop Reports dropdown compact and scroll-safe', () => {
     const topNav = readSource('components/TopNav.tsx');
+    const reportsPanelClass = topNav.match(/\? '([^']*overflow-y-auto[^']*\[scrollbar-gutter:stable\][^']*)'/)?.[1] ?? '';
 
     expect(topNav).toContain("group.id === 'reports'");
     expect(topNav).toContain("['main', 'sales-stock', 'finance']");
@@ -133,6 +134,8 @@ describe('Reports navigation clarity', () => {
     expect(topNav).toContain('overscroll-contain');
     expect(topNav).toContain('grid grid-cols-2');
     expect(topNav).toContain('[scrollbar-gutter:stable]');
+    expect(reportsPanelClass).toContain('overflow-y-auto');
+    expect(reportsPanelClass).toContain('[scrollbar-gutter:stable]');
   });
 
   it('keeps desktop nav interaction accessible enough for keyboard and click users', () => {
@@ -147,17 +150,36 @@ describe('Reports navigation clarity', () => {
   it('keeps smaller desktop dropdowns compact, animated, and active-aware', () => {
     const topNav = readSource('components/TopNav.tsx');
     const styles = readSource('app/globals.css');
+    const smallPanelClass = topNav.match(/: '([^']*shell-dropdown-panel-small[^']*)'/)?.[1] ?? '';
+    const stock = NAV_GROUPS.find((group) => group.id === 'stock')!;
 
     expect(topNav).toContain('w-[min(23rem,calc(100vw_-_2rem))]');
-    expect(topNav).toContain('max-h-[min(28rem,calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem))]');
+    expect(topNav).toContain('max-h-[calc(100vh_-_var(--app-header-offset-desktop)_-_1.25rem)]');
     expect(topNav).toContain('dropdown-motion');
     expect(topNav).toContain('shell-nav-link-active');
     expect(topNav).toContain('shell-nav-card-link');
     expect(topNav).toContain('item.description');
+    expect(smallPanelClass).toContain('shell-dropdown-panel-small');
+    expect(smallPanelClass).not.toContain('overflow-y-auto');
+    expect(smallPanelClass).not.toContain('[scrollbar-gutter:stable]');
+    expect(stock.items.map((item) => item.label)).toEqual([
+      'Inventory',
+      'Stock Adjustments',
+      'Stock Movements',
+      'Purchases',
+      'Transfers',
+      'Products',
+      'Product Labels',
+    ]);
     expect(styles).toContain('@keyframes dropdown-in');
     expect(styles).toContain('.dropdown-motion');
+    expect(styles).toContain('.shell-dropdown-panel-small');
+    expect(styles).toContain('@media (max-height: 700px)');
+    expect(styles).toContain('scrollbar-gutter: stable');
     expect(styles).toContain('.shell-nav-card-link');
     expect(styles).toContain('.shell-nav-icon-badge');
+    expect(styles).toContain('.shell-nav-trigger-active:hover');
+    expect(styles).toContain('text-blue-900');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
