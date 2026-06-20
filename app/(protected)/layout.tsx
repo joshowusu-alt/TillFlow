@@ -1,8 +1,6 @@
+import { Suspense } from 'react';
 import { requireBusiness, getFirstStore } from '@/lib/auth';
 import { getBusinessPlan } from '@/lib/features';
-import { prisma } from '@/lib/prisma';
-import { getTodayKPIs } from '@/lib/reports/today-kpis';
-import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-attention';
 import TopNav from '@/components/TopNav';
 import BottomTabBar from '@/components/BottomTabBar';
 import ProtectedBusinessScope from '@/components/ProtectedBusinessScope';
@@ -63,61 +61,61 @@ function RestrictedAccessScreen({
   );
 }
 
+async function OwnerSetupBanner({
+  businessId,
+  pathname,
+}: {
+  businessId: string;
+  pathname: string;
+}) {
+  if (pathname.includes('/onboarding')) return null;
+
+  const setupBanner = await getOwnerSetupBannerState(businessId);
+  const readinessPct = setupBanner?.setupProgressPercent ?? 0;
+
+  return (
+    <div className="border-b border-blue-200/70 bg-gradient-to-r from-blue-50 via-white to-indigo-50/80 px-4 py-3 sm:px-6">
+      <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 text-accent">
+          <div className="flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/80 px-3 py-2 shadow-sm">
+            <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500"
+                style={{ width: `${readinessPct}%` }}
+              />
+            </div>
+            <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
+          </div>
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
+              {setupBanner?.title ?? 'Start properly'}
+            </div>
+            <span className="text-sm font-medium text-accent">
+              {setupBanner?.detail ?? `Business setup: ${readinessPct}% complete`}
+            </span>
+            {setupBanner?.activationStatus ? (
+              <span className="mt-0.5 block text-[11px] text-accent/70">
+                {getActivationStatusLabel(setupBanner.activationStatus)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <Link
+          href="/onboarding"
+          className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
+        >
+          {setupBanner?.cta ?? (readinessPct > 0 ? 'Continue setup' : 'Begin setup')} &rarr;
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, business } = await requireBusiness();
   const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
 
-  const [store, kpisResult, onlineOrdersCount, setupBanner] = await Promise.all([
-    getFirstStore(business.id),
-    getTodayKPIs(business.id).catch((error) => {
-      console.error('[protected-layout] Failed to load today KPIs', {
-        businessId: business.id,
-        userId: user.id,
-        error,
-      });
-
-      return {
-        totalSalesPence: 0,
-        grossMarginPence: 0,
-        gpPercent: 0,
-        txCount: 0,
-        outstandingARPence: 0,
-        outstandingAPPence: 0,
-        arOver60Pence: 0,
-        arOver90Pence: 0,
-        cashVarianceTotalPence: 0,
-        openHighAlerts: 0,
-        totalTrackedProducts: 0,
-        productsAboveReorderPoint: 0,
-        paymentSplit: {},
-        avgDailyExpensesPence: 0,
-        cashOnHandEstimatePence: 0,
-        todayReceiptsPence: 0,
-        negativeMarginProductCount: 0,
-        momoPendingCount: 0,
-        stockoutImminentCount: 0,
-        urgentReorderCount: 0,
-        thisWeekExpensesPence: 0,
-        fourWeekAvgExpensesPence: 0,
-        discountOverrideCount: 0,
-      };
-    }),
-    (user.role === 'OWNER' || user.role === 'MANAGER')
-      ? countOnlineOrdersNeedingAttention(business.id).catch(() => 0)
-      : Promise.resolve(0),
-    needsOnboarding
-      ? getOwnerSetupBannerState(business.id)
-      : Promise.resolve(null),
-  ]);
-
-  // Keep nav and owner/dashboard summaries on the exact same KPI source so they
-  // never disagree about today's trading position.
-  const kpis = kpisResult;
-  const todaySales = {
-    totalPence: kpis.totalSalesPence,
-    txCount: kpis.txCount,
-    currency: business.currency,
-  };
+  const store = await getFirstStore(business.id);
 
   // Show onboarding banner when onboarding is not complete
   const headersList = headers();
@@ -132,8 +130,6 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const shouldRestrictPage =
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
     !isAllowedWhenBillingRestricted(pathname);
-
-  const readinessPct = setupBanner?.setupProgressPercent ?? 0;
 
   return (
     <div className="min-h-screen w-full max-w-full">
@@ -164,46 +160,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         }}
         momoEnabled={!!business.momoEnabled}
         addonOnlineStorefront={Boolean((business as any).addonOnlineStorefront)}
-        todaySales={todaySales}
-        onlineOrdersCount={onlineOrdersCount}
       />
 
-      {/* Setup banner for owners who haven't completed onboarding */}
       {needsOnboarding && !pathname.includes('/onboarding') && (
-        <div className="border-b border-blue-200/70 bg-gradient-to-r from-blue-50 via-white to-indigo-50/80 px-4 py-3 sm:px-6">
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3 text-accent">
-              <div className="flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/80 px-3 py-2 shadow-sm">
-                <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
-                  <div
-                    className="h-full rounded-full bg-accent transition-all duration-500"
-                    style={{ width: `${readinessPct}%` }}
-                  />
-                </div>
-                <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
-                  {setupBanner?.title ?? 'Start properly'}
-                </div>
-                <span className="text-sm font-medium text-accent">
-                  {setupBanner?.detail ?? `Business setup: ${readinessPct}% complete`}
-                </span>
-                {setupBanner?.activationStatus ? (
-                  <span className="mt-0.5 block text-[11px] text-accent/70">
-                    {getActivationStatusLabel(setupBanner.activationStatus)}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <Link
-              href="/onboarding"
-              className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
-            >
-              {setupBanner?.cta ?? (readinessPct > 0 ? 'Continue setup' : 'Begin setup')} &rarr;
-            </Link>
-          </div>
-        </div>
+        <Suspense fallback={null}>
+          <OwnerSetupBanner businessId={business.id} pathname={pathname} />
+        </Suspense>
       )}
 
       {billingPrimaryBanner && !pathname.includes('/settings/billing') && (

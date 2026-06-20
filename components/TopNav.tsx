@@ -51,6 +51,7 @@ export default function TopNav({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
+  const [liveOnlineOrdersCount, setLiveOnlineOrdersCount] = useState(onlineOrdersCount);
   const lastSalesRefreshAtRef = useRef(0);
   const isOnline = useNetworkStatus();
   const router = useRouter();
@@ -115,10 +116,14 @@ export default function TopNav({
   }, [todaySales]);
 
   useEffect(() => {
+    setLiveOnlineOrdersCount(onlineOrdersCount);
+  }, [onlineOrdersCount]);
+
+  useEffect(() => {
     if (!(user.role === 'MANAGER' || user.role === 'OWNER')) return;
 
     let cancelled = false;
-    const refreshSales = async (force = false) => {
+    const refreshNavKpis = async (force = false) => {
       const now = Date.now();
       if (!force && now - lastSalesRefreshAtRef.current < 8_000) return;
       lastSalesRefreshAtRef.current = now;
@@ -130,19 +135,22 @@ export default function TopNav({
             txCount: fresh.txCount,
             currency: fresh.currency,
           });
+          setLiveOnlineOrdersCount(fresh.onlineOrdersCount);
         }
       } catch {
-        // Keep the server-rendered value if the lightweight refresh cannot complete.
+        // Keep the existing badge values if the deferred refresh cannot complete.
       }
     };
 
+    void refreshNavKpis(!todaySales);
+
     if (mobileOpen) {
-      void refreshSales(true);
+      void refreshNavKpis(true);
     }
 
-    const handleFocus = () => void refreshSales(false);
+    const handleFocus = () => void refreshNavKpis(false);
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void refreshSales(false);
+      if (document.visibilityState === 'visible') void refreshNavKpis(false);
     };
 
     window.addEventListener('focus', handleFocus);
@@ -153,7 +161,7 @@ export default function TopNav({
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [mobileOpen, user.role]);
+  }, [mobileOpen, todaySales, user.role]);
 
   useEffect(() => {
     setOpenGroup(null);
@@ -218,7 +226,7 @@ export default function TopNav({
                 (item) => pathname === item.href || pathname.startsWith(item.href + '/')
               );
               const groupHasOnlineOrders = group.items.some((i) => i.href === '/online-orders');
-              const showGroupBadge = groupHasOnlineOrders && onlineOrdersCount > 0;
+              const showGroupBadge = groupHasOnlineOrders && liveOnlineOrdersCount > 0;
               const sections = group.sections?.length ? group.sections : [{ id: group.id, label: '', items: group.items }];
               const isReportsMenu = group.id === 'reports' && sections.length > 1;
               const reportLeftSections = sections.filter((section) => ['main', 'sales-stock', 'finance'].includes(section.id));
@@ -239,7 +247,7 @@ export default function TopNav({
                     : planLocked
                       ? minimumPlan
                       : null;
-                const itemCount = item.href === '/online-orders' ? onlineOrdersCount : 0;
+                const itemCount = item.href === '/online-orders' ? liveOnlineOrdersCount : 0;
                 const metaBadge = lockLabel ? (
                   <span className="ml-3 shrink-0 rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
                     {lockLabel}
@@ -339,7 +347,7 @@ export default function TopNav({
                     {group.label}
                     {showGroupBadge ? (
                       <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-none text-white">
-                        {onlineOrdersCount > 99 ? '99+' : onlineOrdersCount}
+                        {liveOnlineOrdersCount > 99 ? '99+' : liveOnlineOrdersCount}
                       </span>
                     ) : null}
                   </button>
@@ -483,7 +491,7 @@ export default function TopNav({
         planGatedLinks={planGatedLinks}
         featureGatedLinks={featureGatedLinks}
         todaySales={liveTodaySales}
-        onlineOrdersCount={onlineOrdersCount}
+        onlineOrdersCount={liveOnlineOrdersCount}
       />
     </>
   );

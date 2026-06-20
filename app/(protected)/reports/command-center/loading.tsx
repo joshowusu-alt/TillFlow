@@ -1,15 +1,8 @@
-import AppLaunchLoading from '@/components/AppLaunchLoading';
 import Skeleton from '@/components/Skeleton';
 
 export default function CommandCenterLoading() {
   return (
     <div className="space-y-6">
-      <AppLaunchLoading
-        message="Opening your reports workspace..."
-        detail="Getting your reports workspace ready."
-        shell="content"
-        showProgress={false}
-      />
       <Skeleton variant="line" className="h-8 w-72" />
       <div className="grid gap-6 lg:grid-cols-3">
         <Skeleton variant="card" />
