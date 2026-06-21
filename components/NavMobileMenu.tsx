@@ -13,6 +13,8 @@ import type { TopNavUser } from './TopNav';
 interface NavMobileMenuProps {
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  pendingHref?: string | null;
+  onNavigateStart?: (href: string) => void;
   visibleGroups: Array<{
     id: string;
     label: string;
@@ -37,6 +39,8 @@ interface NavMobileMenuProps {
 export default function NavMobileMenu({
   mobileOpen,
   setMobileOpen,
+  pendingHref,
+  onNavigateStart,
   visibleGroups,
   isOnline,
   user,
@@ -71,6 +75,10 @@ export default function NavMobileMenu({
   }, [mobileOpen, setMobileOpen]);
 
   if (!mobileOpen) return null;
+
+  const handleNavigateStart = (href: string) => {
+    onNavigateStart?.(href);
+  };
 
   function getNavIcon(href: string): React.ReactNode {
     const cls = 'h-4 w-4 flex-shrink-0 text-black/40';
@@ -190,18 +198,37 @@ export default function NavMobileMenu({
                           : planLocked
                             ? minimumPlan
                             : null;
+                      const isPending = pendingHref === item.href;
+                      const navItemClassName = [
+                        'shell-nav-link border border-slate-200/70 bg-white',
+                        active ? 'shell-nav-link-active border-blue-100' : '',
+                        isPending ? 'border-blue-200 bg-blue-50/90 text-blue-900 shadow-sm' : '',
+                        pendingHref && !isPending ? 'opacity-60' : '',
+                      ].filter(Boolean).join(' ');
+
                       return (
                         <Link
                           key={item.href}
                           href={item.href}
-                          className={active ? 'shell-nav-link shell-nav-link-active border border-blue-100' : 'shell-nav-link border border-slate-200/70 bg-white'}
-                          onClick={() => setMobileOpen(false)}
+                          className={navItemClassName}
+                          aria-busy={isPending || undefined}
+                          data-mobile-nav-pending={isPending ? 'true' : undefined}
+                          onPointerDown={() => handleNavigateStart(item.href)}
+                          onClick={() => {
+                            handleNavigateStart(item.href);
+                            setMobileOpen(false);
+                          }}
                         >
                           <span className="flex items-center gap-2.5">
                             {getNavIcon(item.href)}
-                            {item.label}
+                            <span className="min-w-0 truncate">{item.label}</span>
                           </span>
-                          {lockLabel ? (
+                          {isPending ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600" aria-hidden="true" />
+                              Opening
+                            </span>
+                          ) : lockLabel ? (
                             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
                               {lockLabel}
                             </span>

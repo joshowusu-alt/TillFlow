@@ -50,6 +50,7 @@ export default function TopNav({
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE', { onlineStorefront: addonOnlineStorefront });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [pendingMobileHref, setPendingMobileHref] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
   const [liveOnlineOrdersCount, setLiveOnlineOrdersCount] = useState(onlineOrdersCount);
   const lastSalesRefreshAtRef = useRef(0);
@@ -63,6 +64,11 @@ export default function TopNav({
       await refreshCurrentView(pathname).catch(() => null);
       router.refresh();
     });
+  };
+  const handleMobileNavigateStart = (href: string) => {
+    const currentRoute =
+      pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
+    setPendingMobileHref(currentRoute ? null : href);
   };
   const navRef = useRef<HTMLDivElement>(null);
   const planGatedLinks = useMemo(
@@ -166,7 +172,24 @@ export default function TopNav({
   useEffect(() => {
     setOpenGroup(null);
     setMobileOpen(false);
+    setPendingMobileHref(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!pendingMobileHref) return;
+
+    const targetReached =
+      pathname === pendingMobileHref ||
+      (pendingMobileHref !== '/' && pathname.startsWith(`${pendingMobileHref}/`));
+
+    if (targetReached) {
+      const settleTimer = window.setTimeout(() => setPendingMobileHref(null), 250);
+      return () => window.clearTimeout(settleTimer);
+    }
+
+    const failsafeTimer = window.setTimeout(() => setPendingMobileHref(null), 12_000);
+    return () => window.clearTimeout(failsafeTimer);
+  }, [pathname, pendingMobileHref]);
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -477,11 +500,24 @@ export default function TopNav({
             </div>
           ) : null}
         </div>
+        {pendingMobileHref ? (
+          <div
+            className="h-1 overflow-hidden bg-blue-50 lg:hidden"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading selected section"
+            data-mobile-route-progress="true"
+          >
+            <div className="h-full w-1/2 rounded-r-full bg-gradient-to-r from-blue-700 via-blue-400 to-blue-700 bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none" />
+          </div>
+        ) : null}
       </header>
 
       <NavMobileMenu
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
+        pendingHref={pendingMobileHref}
+        onNavigateStart={handleMobileNavigateStart}
         visibleGroups={visibleGroups}
         isOnline={isOnline}
         user={user}
