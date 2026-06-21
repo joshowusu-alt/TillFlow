@@ -194,6 +194,28 @@ describe('TillFlow brand logo system', () => {
     expect(onboardingActions).toContain('getTodayKPIs');
   });
 
+  it('gives mobile drawer taps immediate internal route feedback without launch copy', () => {
+    const topNav = readSource('components/TopNav.tsx');
+    const mobileMenu = readSource('components/NavMobileMenu.tsx');
+
+    expect(topNav).toContain('pendingMobileHref');
+    expect(topNav).toContain('data-mobile-route-progress="true"');
+    expect(topNav).toContain('Loading selected section');
+    expect(topNav).toContain('setPendingMobileHref(null)');
+    expect(topNav).toContain('12_000');
+    expect(topNav).not.toContain('Opening EL-SHADDAI SUPERMARKET');
+
+    expect(mobileMenu).toContain('pendingHref');
+    expect(mobileMenu).toContain('onNavigateStart');
+    expect(mobileMenu).toContain('onPointerDown');
+    expect(mobileMenu).toContain('setMobileOpen(false)');
+    expect(mobileMenu).toContain('data-mobile-nav-pending');
+    expect(mobileMenu).toContain('Opening');
+    expect(mobileMenu).not.toContain('AppLaunchLoading');
+    expect(mobileMenu).not.toContain('Opening your business workspace');
+    expect(mobileMenu).not.toContain("Getting today's sales, stock, and cash ready.");
+  });
+
   it('generates light iOS startup images from the full non-distorted symbol', async () => {
     const generator = readSource('scripts/generate-startup-images.mjs');
     const splash = await sharp(join(process.cwd(), 'public/splash/apple-splash-1170x2532.png')).metadata();
