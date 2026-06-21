@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const LAST_BUSINESS_NAME_KEY = 'tillflow:lastBusinessName';
 const FALLBACK_MESSAGE = 'Opening your business workspace...';
@@ -12,6 +13,7 @@ function getLaunchMessage(name: string | null) {
 }
 
 export default function LaunchRedirector() {
+  const router = useRouter();
   const [message, setMessage] = useState(FALLBACK_MESSAGE);
   const [detail, setDetail] = useState(FALLBACK_DETAIL);
 
@@ -40,7 +42,7 @@ export default function LaunchRedirector() {
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         timeoutId = window.setTimeout(() => {
-          window.location.replace('/onboarding');
+          router.push('/onboarding');
         }, 160);
       });
     });
@@ -52,7 +54,7 @@ export default function LaunchRedirector() {
         window.clearTimeout(timeoutId);
       }
     };
-  }, []);
+  }, [router]);
 
   return (
     <>

@@ -1,7 +1,10 @@
 'use client';
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 export default function SplashRemover() {
+  const pathname = usePathname();
+
   useEffect(() => {
     const remove = () => {
       const el = document.getElementById('tillflow-initial-splash');
@@ -11,7 +14,6 @@ export default function SplashRemover() {
     const el = document.getElementById('tillflow-initial-splash');
     if (!el) return;
 
-    const pathname = window.location.pathname;
     const isPublicAuthRoute = pathname === '/login' || pathname === '/welcome' || pathname === '/register';
     let isLaunchHandoff = false;
 
@@ -49,7 +51,7 @@ export default function SplashRemover() {
       clearTimeout(fadeTimer);
       clearTimeout(failsafe);
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }

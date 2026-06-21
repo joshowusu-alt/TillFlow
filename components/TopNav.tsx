@@ -529,6 +529,13 @@ export default function TopNav({
         todaySales={liveTodaySales}
         onlineOrdersCount={liveOnlineOrdersCount}
       />
+      {pendingMobileHref ? (
+        <div
+          aria-hidden="true"
+          data-route-transition="true"
+          className="fixed inset-0 z-[25] bg-paper lg:hidden"
+        />
+      ) : null}
     </>
   );
 }

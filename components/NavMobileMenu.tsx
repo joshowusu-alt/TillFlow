@@ -213,7 +213,6 @@ export default function NavMobileMenu({
                           className={navItemClassName}
                           aria-busy={isPending || undefined}
                           data-mobile-nav-pending={isPending ? 'true' : undefined}
-                          onPointerDown={() => handleNavigateStart(item.href)}
                           onClick={() => {
                             handleNavigateStart(item.href);
                             setMobileOpen(false);
@@ -223,12 +222,7 @@ export default function NavMobileMenu({
                             {getNavIcon(item.href)}
                             <span className="min-w-0 truncate">{item.label}</span>
                           </span>
-                          {isPending ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600" aria-hidden="true" />
-                              Opening
-                            </span>
-                          ) : lockLabel ? (
+                          {lockLabel ? (
                             <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-black/50">
                               {lockLabel}
                             </span>

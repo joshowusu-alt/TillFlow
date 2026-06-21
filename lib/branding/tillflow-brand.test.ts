@@ -207,10 +207,11 @@ describe('TillFlow brand logo system', () => {
 
     expect(mobileMenu).toContain('pendingHref');
     expect(mobileMenu).toContain('onNavigateStart');
-    expect(mobileMenu).toContain('onPointerDown');
+    expect(mobileMenu).not.toContain('onPointerDown');
     expect(mobileMenu).toContain('setMobileOpen(false)');
     expect(mobileMenu).toContain('data-mobile-nav-pending');
-    expect(mobileMenu).toContain('Opening');
+    expect(mobileMenu).not.toContain('Opening');
+    expect(topNav).toContain('data-route-transition="true"');
     expect(mobileMenu).not.toContain('AppLaunchLoading');
     expect(mobileMenu).not.toContain('Opening your business workspace');
     expect(mobileMenu).not.toContain("Getting today's sales, stock, and cash ready.");
@@ -311,7 +312,9 @@ describe('TillFlow brand logo system', () => {
     expect(launchRedirector).toContain('Opening your business workspace...');
     expect(launchRedirector).toContain("Getting today's sales, stock, and cash ready.");
     expect(launchRedirector).toContain('Getting sales, stock, and cash ready.');
-    expect(launchRedirector).toContain("window.location.replace('/onboarding')");
+    expect(launchRedirector).not.toContain("window.location.replace");
+    expect(launchRedirector).toContain("router.push('/onboarding')");
+    expect(launchRedirector).toContain("useRouter");
     expect(launchRedirector).toContain('requestAnimationFrame');
     expect(launchRedirector).not.toContain('Opening TillFlow');
     expect(middleware).toContain("'/launch'");
