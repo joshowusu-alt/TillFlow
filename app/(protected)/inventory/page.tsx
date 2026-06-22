@@ -9,6 +9,21 @@ import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+function InventoryEmptyState({ q }: { q: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-7 text-center">
+      <div className="text-sm font-semibold text-ink">
+        {q ? `No products matching "${q}".` : 'No stock items yet.'}
+      </div>
+      <div className="mt-1 text-sm text-black/55">
+        {q
+          ? 'Try a different search term.'
+          : 'Add products and opening stock so TillFlow can help you monitor stock levels and movement.'}
+      </div>
+    </div>
+  );
+}
+
 export default async function InventoryPage({ searchParams }: { searchParams?: { q?: string; page?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
@@ -93,27 +108,33 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Inventory"
-        subtitle="Real-time balances in mixed units."
+        subtitle="See what is in stock, what is running low, and what needs attention."
         actions={<RefreshIndicator fetchedAt={new Date().toISOString()} />}
       />
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Products</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-ink">{totalCount}</div>
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Products</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{totalCount}</div>
+          <div className="mt-1 text-xs text-black/50">Active in catalogue</div>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-amber-700/70">Low stock</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-amber-800">{lowStockCount}</div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Low stock</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-amber-800">{lowStockCount}</div>
+          <div className="mt-1 text-xs text-amber-600/70">Need restocking soon</div>
         </div>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Out of stock</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-rose-700">{outOfStockCount}</div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Out of stock</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{outOfStockCount}</div>
+          <div className="mt-1 text-xs text-rose-600/70">Need immediate attention</div>
         </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-sky-700/70">Cost drift</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-sky-800">{costDriftCount}</div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700/70">Cost drift</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-sky-800">{costDriftCount}</div>
+          <div className="mt-1 text-xs text-sky-600/70">Avg cost differs from default</div>
         </div>
       </div>
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="w-full max-w-xl">
           <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
@@ -127,12 +148,13 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           </Link>
         </div>
       </div>
+
       <div className="card p-4 sm:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-display font-semibold">Current stock</h2>
             <p className="mt-1 text-sm text-black/55">
-              {healthyCount} healthy, {lowStockCount} low, {outOfStockCount} out of stock, {costDriftCount} with cost drift.
+              {healthyCount} healthy · {lowStockCount} low · {outOfStockCount} out of stock · {costDriftCount} with cost drift
             </p>
           </div>
         </div>
@@ -149,16 +171,15 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           </div>
         ) : null}
 
+        {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {inventoryRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
-              No products found.
-            </div>
+            <InventoryEmptyState q={q} />
           ) : (
             inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => (
               <div
                 key={product.id}
-                className={`rounded-2xl border px-4 py-4 shadow-sm ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
+                className={`rounded-2xl border px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100 ${isOut ? 'border-rose-200 bg-rose-50' : isLow ? 'border-amber-200 bg-amber-50' : 'border-black/5 bg-white'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -200,50 +221,66 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
           )}
         </div>
 
+        {/* Desktop table */}
         <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>On Hand</th>
-              <th>Avg Cost (Base)</th>
-              <th>Default Cost</th>
-              <th>Base Unit</th>
-              <th>Packaging Unit</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => {
-              return (
-                <tr key={product.id} className={`rounded-xl ${isOut ? 'bg-rose-50' : isLow ? 'bg-amber-50' : 'bg-white'}`}>
-                  <td className="px-3 py-3 font-semibold">{product.name}</td>
-                  <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(avgCostBase, business.currency)}
-                  </td>
-                  <td className={`px-3 py-3 text-sm ${hasCostDrift ? 'font-semibold text-sky-700' : 'text-black/60'}`}>
-                    {formatMoney(product.defaultCostBasePence, business.currency)}
-                  </td>
-                  <td className="px-3 py-3 text-sm text-black/60">{baseUnit?.unit.name ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm text-black/60">
-                    {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : '-'}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    {hasCostDrift ? (
-                      <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">Cost drift</span>
-                    ) : isOut ? (
-                      <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Out of stock</span>
-                    ) : isLow ? (
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Low stock</span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">OK</span>
-                    )}
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>On Hand</th>
+                <th>Avg Cost (Base)</th>
+                <th>Default Cost</th>
+                <th>Base Unit</th>
+                <th>Packaging Unit</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inventoryRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-12 text-center">
+                    <InventoryEmptyState q={q} />
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
+              ) : (
+                inventoryRows.map(({ product, baseUnit, packaging, formatted, avgCostBase, hasCostDrift, isLow, isOut }) => (
+                  <tr
+                    key={product.id}
+                    className={`rounded-xl transition-all duration-150 motion-reduce:transform-none motion-reduce:transition-none ${
+                      isOut
+                        ? 'bg-rose-50 hover:-translate-y-px hover:shadow-sm'
+                        : isLow
+                        ? 'bg-amber-50 hover:-translate-y-px hover:shadow-sm'
+                        : 'bg-white hover:-translate-y-px hover:bg-slate-50 hover:shadow-card'
+                    }`}
+                  >
+                    <td className="px-3 py-3 font-semibold">{product.name}</td>
+                    <td className={`px-3 py-3 font-semibold ${isOut ? 'text-rose-600' : isLow ? 'text-amber-700' : ''}`}>{formatted}</td>
+                    <td className="px-3 py-3 text-sm font-semibold">
+                      {formatMoney(avgCostBase, business.currency)}
+                    </td>
+                    <td className={`px-3 py-3 text-sm ${hasCostDrift ? 'font-semibold text-sky-700' : 'text-black/60'}`}>
+                      {formatMoney(product.defaultCostBasePence, business.currency)}
+                    </td>
+                    <td className="px-3 py-3 text-sm text-black/60">{baseUnit?.unit.name ?? '-'}</td>
+                    <td className="px-3 py-3 text-sm text-black/60">
+                      {packaging ? `${packaging.unit.name} (${packaging.conversionToBase} base)` : '-'}
+                    </td>
+                    <td className="px-3 py-3 text-sm">
+                      {hasCostDrift ? (
+                        <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">Cost drift</span>
+                      ) : isOut ? (
+                        <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700">Out of stock</span>
+                      ) : isLow ? (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Low stock</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">OK</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
           </table>
         </div>
         <Pagination currentPage={page} totalPages={totalPages} basePath="/inventory" searchParams={{ q: q || undefined }} />
