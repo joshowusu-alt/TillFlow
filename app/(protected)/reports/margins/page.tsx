@@ -307,6 +307,10 @@ export default async function MarginsPage({
         <StatCard label="Healthy products" value={String(snapshot.healthyCount)} tone="success" />
       </div>
 
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-black/65">
+        Margins show what is left after product cost. They do not include wages, rent, utilities, or other operating expenses.
+      </div>
+
       <ReportTableCard
         title={currentView === 'all' ? 'All sold products' : viewLabel}
         tableClassName="table mt-3 w-full min-w-[72rem] border-separate border-spacing-y-2"
@@ -315,8 +319,8 @@ export default async function MarginsPage({
           <tr>
             <th className="text-left">Product</th>
             <th className="text-right">Qty Sold</th>
-            <th className="text-right">Avg Sell / Base</th>
-            <th className="text-right">Avg Cost / Base</th>
+            <th className="text-right">Avg sell price</th>
+            <th className="text-right">Avg cost per unit</th>
             <th className="text-right">Revenue</th>
             <th className="text-right">Cost</th>
             <th className="text-right">Profit</th>

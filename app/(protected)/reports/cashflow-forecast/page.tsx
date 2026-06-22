@@ -46,7 +46,7 @@ export default async function CashflowForecastPage({
     <div className="space-y-6">
       <PageHeader
         title="Cashflow Forecast"
-        subtitle={`${days}-day projection based on current AR, AP, and daily revenue.`}
+        subtitle={`${days}-day projection based on money owed to you, money you owe, and daily sales.`}
         actions={
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             {([7, 14, 30] as const).map((d) => (

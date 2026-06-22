@@ -44,7 +44,7 @@ export default async function IncomeStatementPage({
     <div className="space-y-6">
       <PageHeader
         title="Income Statement"
-        subtitle="Revenue, COGS, expenses, and profit for the selected period."
+        subtitle="Sales, product costs, expenses, and profit for the selected period."
         actions={
           <ReportActionGroup>
             <DownloadLink
@@ -67,7 +67,7 @@ export default async function IncomeStatementPage({
           tone="accent"
         />
         <StatCard
-          label="COGS"
+          label="Cost of products sold"
           value={formatMoney(statement.cogs, business.currency)}
         />
         <StatCard
@@ -85,13 +85,13 @@ export default async function IncomeStatementPage({
       <DateRangeFilterCard from={fromStr} to={toStr} />
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        Revenue and COGS are derived from sale transactions. Operating expenses are from accounting journals. The Balance Sheet remains fully journal-based.
+        Sales and product costs come from your recorded sales. Expenses come from recorded business costs. Sales figures include credit sales not yet collected — this report shows profit performance, not cash in the bank.
       </div>
 
       {!hasData ? (
         <EmptyState
           icon="chart"
-          title="No journal entries yet"
+          title="No financial activity recorded yet"
           subtitle="Record sales or expenses to see your income statement."
           cta={{ label: 'Open POS', href: '/pos' }}
           secondaryCta={{ label: 'Run Demo Day', href: '/onboarding#demo' }}
@@ -104,7 +104,7 @@ export default async function IncomeStatementPage({
             value={formatMoney(statement.revenue, business.currency)}
           />
           <ReportSummaryRow
-            label="Cost of Goods Sold"
+            label="Cost of products sold"
             value={formatMoney(statement.cogs, business.currency)}
           />
           <ReportSummaryRow

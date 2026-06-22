@@ -42,7 +42,7 @@ export default async function CashflowPage({
     <div className="space-y-6">
       <PageHeader
         title="Cashflow"
-        subtitle="Indirect cashflow (operations)."
+        subtitle="See how money moved in and out of the business during the selected period."
         actions={
           <ReportActionGroup>
             <DownloadLink
@@ -65,7 +65,7 @@ export default async function CashflowPage({
           value={formatMoney(cashflow.beginningCash, business.currency)}
         />
         <StatCard
-          label="Net Cash from Ops"
+          label="Net change in cash"
           value={formatMoney(cashflow.netCashFromOps, business.currency)}
           tone={cashflow.netCashFromOps >= 0 ? 'success' : 'danger'}
         />
@@ -78,10 +78,15 @@ export default async function CashflowPage({
           label="Net Profit"
           value={formatMoney(cashflow.netProfit, business.currency)}
           tone={cashflow.netProfit >= 0 ? 'success' : 'danger'}
+          helper="Starting point for this cashflow calculation"
         />
       </div>
 
       <DateRangeFilterCard from={fromStr} to={toStr} />
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Cashflow is not the same as profit. It shows money movement. Credit sales may increase profit before the cash is collected.
+      </div>
 
       {!hasData ? (
         <EmptyState
@@ -108,24 +113,24 @@ export default async function CashflowPage({
             />
           )}
           <ReportSummaryRow
-            label="Net Profit"
+            label="Net profit starting point"
             value={formatMoney(cashflow.netProfit, business.currency)}
             divider="subtle"
           />
           <ReportSummaryRow
-            label="Change in Accounts Receivable"
+            label="Customer credit not yet collected"
             value={formatMoney(cashflow.arChange, business.currency)}
           />
           <ReportSummaryRow
-            label="Change in Inventory"
+            label="Cash tied up in stock"
             value={formatMoney(cashflow.invChange, business.currency)}
           />
           <ReportSummaryRow
-            label="Change in Accounts Payable"
+            label="Supplier bills not yet paid"
             value={formatMoney(cashflow.apChange, business.currency)}
           />
           <ReportSummaryRow
-            label="Net Cash from Operations"
+            label="Net cash movement"
             value={formatMoney(cashflow.netCashFromOps, business.currency)}
             divider="default"
           />

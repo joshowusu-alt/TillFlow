@@ -10,6 +10,14 @@ import PlanFeatureBadge from '@/components/PlanFeatureBadge';
 import { getFeatures } from '@/lib/features';
 import BalanceSheetDatePicker from './BalanceSheetDatePicker';
 
+function accountLineHelper(name: string): string | null {
+  const n = name.toLowerCase();
+  if (n.includes('receivable')) return 'Money customers owe you';
+  if (n.includes('inventor')) return 'Value of stock on hand, not cash';
+  if (n.includes('payable')) return 'Money you owe suppliers';
+  return null;
+}
+
 export default async function BalanceSheetPage({
   searchParams
 }: {
@@ -138,15 +146,22 @@ export default async function BalanceSheetPage({
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="card p-6">
             <h2 className="text-lg font-display font-semibold">Assets</h2>
+            <p className="mt-0.5 text-xs text-black/50">What the business owns or is owed</p>
             <div className="mt-4 space-y-2 text-sm">
-              {sheet.assets.map((line) => (
-                <div key={line.accountCode} className="flex justify-between">
-                  <span>{line.name}</span>
-                  <span className={`font-semibold ${line.balancePence < 0 ? 'text-red-600' : ''}`}>
-                    {formatMoney(line.balancePence, business.currency)}
-                  </span>
-                </div>
-              ))}
+              {sheet.assets.map((line) => {
+                const helper = accountLineHelper(line.name);
+                return (
+                  <div key={line.accountCode} className="flex justify-between gap-2">
+                    <span className="flex flex-col">
+                      <span>{line.name}</span>
+                      {helper && <span className="text-xs text-black/45">{helper}</span>}
+                    </span>
+                    <span className={`font-semibold ${line.balancePence < 0 ? 'text-red-600' : ''}`}>
+                      {formatMoney(line.balancePence, business.currency)}
+                    </span>
+                  </div>
+                );
+              })}
               <div className="flex justify-between border-t border-black/10 pt-2 text-sm font-semibold">
                 <span>Total Assets</span>
                 <span>{formatMoney(sheet.totalAssets, business.currency)}</span>
@@ -156,13 +171,20 @@ export default async function BalanceSheetPage({
 
           <div className="card p-6">
             <h2 className="text-lg font-display font-semibold">Liabilities</h2>
+            <p className="mt-0.5 text-xs text-black/50">What the business owes</p>
             <div className="mt-4 space-y-2 text-sm">
-              {sheet.liabilities.map((line) => (
-                <div key={line.accountCode} className="flex justify-between">
-                  <span>{line.name}</span>
-                  <span className="font-semibold">{formatMoney(line.balancePence, business.currency)}</span>
-                </div>
-              ))}
+              {sheet.liabilities.map((line) => {
+                const helper = accountLineHelper(line.name);
+                return (
+                  <div key={line.accountCode} className="flex justify-between gap-2">
+                    <span className="flex flex-col">
+                      <span>{line.name}</span>
+                      {helper && <span className="text-xs text-black/45">{helper}</span>}
+                    </span>
+                    <span className="font-semibold">{formatMoney(line.balancePence, business.currency)}</span>
+                  </div>
+                );
+              })}
               <div className="flex justify-between border-t border-black/10 pt-2 text-sm font-semibold">
                 <span>Total Liabilities</span>
                 <span>{formatMoney(sheet.totalLiabilities, business.currency)}</span>
@@ -172,6 +194,7 @@ export default async function BalanceSheetPage({
 
           <div className="card p-6">
             <h2 className="text-lg font-display font-semibold">Equity</h2>
+            <p className="mt-0.5 text-xs text-black/50">The remaining business value</p>
             <div className="mt-4 space-y-2 text-sm">
               {sheet.equity.map((line) => (
                 <div key={line.accountCode} className="flex justify-between">
