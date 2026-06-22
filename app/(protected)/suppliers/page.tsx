@@ -24,6 +24,47 @@ function SupplierStatusBadge({ balance, creditLimit }: { balance: number; credit
   return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Amount owed</span>;
 }
 
+function SupplierStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">{label}</div>
+      <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{value}</div>
+      <div className="mt-1 text-xs text-black/50">{helper}</div>
+    </div>
+  );
+}
+
+function SuppliersEmptyState({ q, amountOwed }: { q: string; amountOwed: boolean }) {
+  const isFiltered = Boolean(q) || amountOwed;
+  const title = q
+    ? `No suppliers matching "${q}".`
+    : amountOwed
+      ? 'No suppliers with amount owed.'
+      : 'No suppliers yet.';
+  const description = q
+    ? 'Try a different search, or add the supplier if this is a new account.'
+    : amountOwed
+      ? 'No outstanding payables right now. Suppliers you owe will appear here when purchases are unpaid.'
+      : 'Add your first supplier so you can track purchases, payables, and payments in one place.';
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-7 text-center">
+      <div className="flex flex-col items-center">
+        <div className="mb-3 rounded-full bg-white p-3 shadow-sm">
+          <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        </div>
+        <div className="text-sm font-semibold text-ink">{title}</div>
+        <div className="mt-1 max-w-md text-sm text-black/55">{description}</div>
+        <Link href={isFiltered ? '/suppliers' : '#add-supplier'} className="btn-primary mt-4 text-xs">
+          {isFiltered ? 'Show all suppliers' : 'Add first supplier'}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function SuppliersPage({ searchParams }: { searchParams?: { error?: string; q?: string; page?: string; amountOwed?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -119,30 +160,33 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       tags: parseTags(supplier.tagsJson),
     };
   });
+  const suppliersWithBalanceCount = suppliersWithData.filter((supplier) => supplier.balance > 0).length;
+  const totalApOutstandingPence = suppliersWithData.reduce((sum, supplier) => sum + supplier.balance, 0);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Suppliers" subtitle="Vendors and payables." />
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader
+        title="Suppliers"
+        subtitle="Track who you buy from, what you owe, and when supplier payments are due."
+        primaryCta={{ label: 'Add supplier', href: '#add-supplier' }}
+      />
 
-      {/* Add supplier */}
-      <div className="card p-5 sm:p-6">
-        <h2 className="text-lg font-display font-semibold">Add supplier</h2>
-        <FormError error={searchParams?.error} />
-        <form action={createSupplierAction} className="mt-4 grid gap-4 md:grid-cols-3">
-          <input className="input" name="name" placeholder="Supplier name" required />
-          <input className="input" name="phone" placeholder="Phone" />
-          <input className="input" name="email" placeholder="Email" />
-          <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
-          <div className="md:col-span-2">
-            <input className="input" name="tags" placeholder="Tags — e.g. Wholesale, Local, Net 30" />
-          </div>
-          <div className="md:col-span-3">
-            <textarea className="input min-h-16" name="notes" placeholder="Notes — delivery quirks, account contact, payment preferences." />
-          </div>
-          <div className="md:col-span-3">
-            <SubmitButton className="btn-primary" loadingText="Adding…">Add supplier</SubmitButton>
-          </div>
-        </form>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <SupplierStatCard
+          label="Total suppliers"
+          value={totalCount.toLocaleString('en-GH')}
+          helper={q || amountOwed ? 'Matching current filters' : 'Supplier accounts'}
+        />
+        <SupplierStatCard
+          label="Suppliers with balance"
+          value={suppliersWithBalanceCount.toLocaleString('en-GH')}
+          helper="Visible suppliers owed money"
+        />
+        <SupplierStatCard
+          label="Total AP outstanding"
+          value={formatMoney(totalApOutstandingPence, business.currency)}
+          helper="Visible amount owed"
+        />
       </div>
 
       {/* Search and filter */}
@@ -174,24 +218,47 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         </div>
       </div>
 
+      {/* Add supplier */}
+      <details className="group">
+        <summary id="add-supplier" className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add supplier
+          </span>
+          <svg className="h-4 w-4 text-muted transition-transform duration-150 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="card mt-2 p-5 sm:p-6">
+          <FormError error={searchParams?.error} />
+          <form action={createSupplierAction} className="grid gap-4 md:grid-cols-3">
+            <input className="input" name="name" placeholder="Supplier name" required />
+            <input className="input" name="phone" placeholder="Phone" />
+            <input className="input" name="email" placeholder="Email" />
+            <input className="input" name="creditLimit" placeholder="Credit limit (e.g., 500.00)" />
+            <div className="md:col-span-2">
+              <input className="input" name="tags" placeholder="Tags — e.g. Wholesale, Local, Net 30" />
+            </div>
+            <div className="md:col-span-3">
+              <textarea className="input min-h-16" name="notes" placeholder="Notes — delivery quirks, account contact, payment preferences." />
+            </div>
+            <div className="md:col-span-3">
+              <SubmitButton className="btn-primary" loadingText="Adding…">Add supplier</SubmitButton>
+            </div>
+          </form>
+        </div>
+      </details>
+
       <div className="card p-4 sm:p-6">
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {suppliersWithData.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-black/10 bg-white px-4 py-10 text-center">
-              <div className="mx-auto mb-2 inline-flex rounded-full bg-black/5 p-3">
-                <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <div className="text-sm text-black/70">{q ? `No suppliers matching "${q}"` : amountOwed ? 'No suppliers with amount owed' : 'No suppliers yet'}</div>
-              <div className="mt-1 text-xs text-black/40">
-                {amountOwed ? 'No outstanding payables.' : 'Add your first supplier using the form above.'}
-              </div>
-            </div>
+            <SuppliersEmptyState q={q} amountOwed={amountOwed} />
           ) : (
             suppliersWithData.map((supplier) => (
-              <DataCard key={supplier.id}>
+              <DataCard key={supplier.id} className="transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                 <DataCardHeader
                   title={<Link href={`/suppliers/${supplier.id}`} className="hover:underline">{supplier.name}</Link>}
                   subtitle={supplier.phone ?? 'No phone saved'}
@@ -208,7 +275,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
                   ) : null}
                 </div>
                 <DataCardActions>
-                  <Link href={`/suppliers/${supplier.id}`} className="btn-ghost text-xs">View supplier</Link>
+                  <Link href={`/suppliers/${supplier.id}`} className="btn-ghost text-xs">Open account</Link>
                   {supplier.balance > 0 ? (
                     <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-primary text-xs">Record payment</Link>
                   ) : null}
@@ -219,7 +286,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden overflow-x-auto lg:block">
+        <div className="responsive-table-shell hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
             <thead>
               <tr>
@@ -237,22 +304,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
               {suppliersWithData.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
-                    <div className="flex flex-col items-center">
-                      <div className="rounded-full bg-black/5 p-3 mb-2">
-                        <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                      </div>
-                      <div className="text-sm text-black/70">{q ? `No suppliers matching "${q}"` : amountOwed ? 'No suppliers with amount owed' : 'No suppliers yet'}</div>
-                      <div className="text-xs text-black/40 mt-1">
-                        {amountOwed ? 'No outstanding payables.' : 'Add your first supplier using the form above.'}
-                      </div>
-                    </div>
+                    <SuppliersEmptyState q={q} amountOwed={amountOwed} />
                   </td>
                 </tr>
               )}
               {suppliersWithData.map((supplier) => (
-                <tr key={supplier.id} className="rounded-xl bg-white">
+                <tr key={supplier.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                   <td className="px-3 py-3 font-semibold">
                     <div className="flex flex-col gap-1">
                       <Link href={`/suppliers/${supplier.id}`} className="hover:underline">
@@ -280,7 +337,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <Link href={`/suppliers/${supplier.id}`} className="btn-ghost text-xs whitespace-nowrap">
-                        View supplier
+                        Open account
                       </Link>
                       {supplier.balance > 0 ? (
                         <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-primary text-xs whitespace-nowrap">

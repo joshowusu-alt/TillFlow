@@ -23,6 +23,47 @@ function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLi
   return <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">Balance due</span>;
 }
 
+function CustomerStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">{label}</div>
+      <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{value}</div>
+      <div className="mt-1 text-xs text-black/50">{helper}</div>
+    </div>
+  );
+}
+
+function CustomersEmptyState({ q, balanceDue }: { q: string; balanceDue: boolean }) {
+  const isFiltered = Boolean(q) || balanceDue;
+  const title = q
+    ? `No customers matching "${q}".`
+    : balanceDue
+      ? 'No customers with a balance due.'
+      : 'No customers yet.';
+  const description = q
+    ? 'Try a different search, or add the customer if this is a new account.'
+    : balanceDue
+      ? 'All customer accounts are up to date. New credit balances will appear here when customers owe you money.'
+      : 'Add your first customer account so you can track balances, credit limits, and payments in one place.';
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-7 text-center">
+      <div className="flex flex-col items-center">
+        <div className="mb-3 rounded-full bg-white p-3 shadow-sm">
+          <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <div className="text-sm font-semibold text-ink">{title}</div>
+        <div className="mt-1 max-w-md text-sm text-black/55">{description}</div>
+        <Link href={isFiltered ? '/customers' : '#add-customer'} className="btn-primary mt-4 text-xs">
+          {isFiltered ? 'Show all customers' : 'Add first customer'}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function CustomersPage({
   searchParams,
 }: {
@@ -43,14 +84,40 @@ export default async function CustomersPage({
     storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
     balanceDue: balanceDue || undefined,
   });
+  const customersWithBalanceCount = customers.filter((customer) => customer.outstandingBalancePence > 0).length;
+  const totalArOutstandingPence = customers.reduce((sum, customer) => sum + customer.outstandingBalancePence, 0);
+  const creditLimitCount = customers.filter((customer) => customer.creditLimitPence > 0).length;
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Customers"
-        subtitle="Credit accounts, balances, and contact details."
+        subtitle="Track what your customers owe you, set credit limits, and record payments."
         primaryCta={{ label: 'Add customer', href: '#add-customer' }}
       />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <CustomerStatCard
+          label="Total customers"
+          value={totalCount.toLocaleString('en-GH')}
+          helper={q || balanceDue ? 'Matching current filters' : 'Customer accounts'}
+        />
+        <CustomerStatCard
+          label="Customers with balance"
+          value={customersWithBalanceCount.toLocaleString('en-GH')}
+          helper="Visible accounts owing money"
+        />
+        <CustomerStatCard
+          label="Total AR outstanding"
+          value={formatMoney(totalArOutstandingPence, business.currency)}
+          helper="Visible balance due"
+        />
+        <CustomerStatCard
+          label="Credit limits set"
+          value={creditLimitCount.toLocaleString('en-GH')}
+          helper="Visible accounts with limits"
+        />
+      </div>
 
       {/* Search, branch filter, and debtor filter */}
       <div className="flex flex-wrap items-end gap-3">
@@ -96,15 +163,15 @@ export default async function CustomersPage({
         </div>
       </div>
 
-      <details className="details-mobile" id="add-customer" open>
-        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
+      <details className="group">
+        <summary id="add-customer" className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             Add customer
           </span>
-          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="h-4 w-4 text-muted transition-transform duration-150 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </summary>
@@ -158,19 +225,7 @@ export default async function CustomersPage({
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {customers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center">
-              <div className="flex flex-col items-center">
-                <div className="mb-2 rounded-full bg-black/5 p-3">
-                  <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </div>
-                <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : balanceDue ? 'No customers with a balance due' : 'No customers yet'}</div>
-                <div className="mt-1 text-xs text-black/40">
-                  {balanceDue ? 'All accounts are up to date.' : 'Use the \'Add customer\' section above.'}
-                </div>
-              </div>
-            </div>
+            <CustomersEmptyState q={q} balanceDue={balanceDue} />
           ) : customers.map((customer) => {
             const balance = customer.outstandingBalancePence;
             const branchName = customer.storeId
@@ -178,7 +233,7 @@ export default async function CustomersPage({
               : 'Shared';
 
             return (
-              <DataCard key={customer.id}>
+              <DataCard key={customer.id} className="transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                 <DataCardHeader
                   title={<Link href={`/customers/${customer.id}`} className="hover:underline">{customer.name}</Link>}
                   subtitle={customer.phone ?? 'No phone number'}
@@ -203,7 +258,7 @@ export default async function CustomersPage({
                 </div>
                 <DataCardActions>
                   <Link href={`/customers/${customer.id}`} className="btn-ghost text-xs">
-                    View customer
+                    Open account
                   </Link>
                   {balance > 0 ? (
                     <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-xs">
@@ -235,17 +290,7 @@ export default async function CustomersPage({
               {customers.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-3 py-12 text-center">
-                    <div className="flex flex-col items-center">
-                      <div className="rounded-full bg-black/5 p-3 mb-2">
-                        <svg className="h-6 w-6 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                      </div>
-                      <div className="text-sm text-black/70">{q ? `No customers matching "${q}"` : balanceDue ? 'No customers with a balance due' : 'No customers yet'}</div>
-                      <div className="text-xs text-black/40 mt-1">
-                        {balanceDue ? 'All accounts are up to date.' : 'Use the \'Add customer\' section above.'}
-                      </div>
-                    </div>
+                    <CustomersEmptyState q={q} balanceDue={balanceDue} />
                   </td>
                 </tr>
               )}
@@ -256,7 +301,7 @@ export default async function CustomersPage({
                   : 'Shared';
 
                 return (
-                  <tr key={customer.id} className="rounded-xl bg-white">
+                  <tr key={customer.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                     <td className="px-3 py-3 font-semibold">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
@@ -289,7 +334,7 @@ export default async function CustomersPage({
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         <Link href={`/customers/${customer.id}`} className="btn-ghost text-xs whitespace-nowrap">
-                          View customer
+                          Open account
                         </Link>
                         {balance > 0 ? (
                           <Link href={`/payments/customer-receipts?customerId=${customer.id}`} className="btn-primary text-xs whitespace-nowrap">

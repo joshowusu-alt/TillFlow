@@ -4,6 +4,7 @@ import SubmitButton from '@/components/SubmitButton';
 import TagChips from '@/components/TagChips';
 import Link from 'next/link';
 import { Fragment } from 'react';
+import type { ReactNode } from 'react';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
@@ -14,6 +15,26 @@ import { updateSupplierAction } from '@/app/actions/suppliers';
 import DueDateBadge from '@/components/DueDateBadge';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
+
+function SupplierStatusBadge({ status }: { status: 'up-to-date' | 'amount-owed' | 'over-limit' }) {
+  if (status === 'over-limit') {
+    return <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Over limit</span>;
+  }
+  if (status === 'amount-owed') {
+    return <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Amount owed</span>;
+  }
+  return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Up to date</span>;
+}
+
+function AccountStatCard({ label, value, helper }: { label: string; value: ReactNode; helper?: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">{label}</div>
+      <div className="mt-2 text-lg font-bold tabular-nums text-ink">{value}</div>
+      {helper ? <div className="mt-1 text-xs text-black/50">{helper}</div> : null}
+    </div>
+  );
+}
 
 export default async function SupplierDetailPage({
   params,
@@ -105,6 +126,7 @@ export default async function SupplierDetailPage({
   const outstanding = activeInvoices.reduce((sum, invoice) => sum + invoice.balance, 0);
   const totalBilled = activeInvoices.reduce((sum, invoice) => sum + invoice.totalPence, 0);
   const totalPaid = activeInvoices.reduce((sum, invoice) => sum + invoice.effectivePaid, 0);
+  const activePurchaseInvoiceCount = activeInvoices.filter((invoice) => invoice.balance > 0).length;
 
   // Last payment across all invoices in range
   const allPaymentsInRange = invoices.flatMap((inv) => inv.payments);
@@ -178,27 +200,40 @@ export default async function SupplierDetailPage({
     <div className="space-y-6">
       <PageHeader
         title={supplier.name}
-        subtitle="Supplier profile and payable history."
+        subtitle="Supplier account, purchases, and payment history."
         secondaryCta={{ label: '← Back to suppliers', href: '/suppliers' }}
       />
 
-      {/* Tags + status badge */}
-      <div className="flex flex-wrap items-center gap-2 -mt-2">
-        {supplierTags.length > 0 ? <TagChips tags={supplierTags} /> : null}
-        {supplierStatus === 'over-limit' && (
-          <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Over limit</span>
-        )}
-        {supplierStatus === 'amount-owed' && (
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Amount owed</span>
-        )}
-        {supplierStatus === 'up-to-date' && (
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Up to date</span>
-        )}
-      </div>
+      {/* Account hero */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-card sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Supplier account</span>
+              <SupplierStatusBadge status={supplierStatus} />
+              {supplierTags.length > 0 ? <TagChips tags={supplierTags} /> : null}
+            </div>
+            <h2 className="text-2xl font-display font-semibold text-ink">{supplier.name}</h2>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-black/60">
+              <span>Phone: {supplier.phone ?? 'No phone saved'}</span>
+              <span>Email: {supplier.email ?? 'No email saved'}</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-5 py-4 lg:min-w-72">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">What you owe</div>
+            <div className={`mt-2 text-3xl font-bold tabular-nums ${outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+              {formatMoney(outstanding, business.currency)}
+            </div>
+            <div className="mt-1 text-xs text-black/55">
+              {outstanding > 0 ? `${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'} need attention.` : 'This supplier account is up to date.'}
+            </div>
+          </div>
+        </div>
+      </section>
 
-      {/* Action bar */}
+      {/* Primary actions */}
       <div className="flex flex-wrap gap-2">
-        <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-primary text-sm">
+        <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className={outstanding > 0 ? 'btn-primary text-sm' : 'btn-secondary text-sm'}>
           Record payment
         </Link>
         <Link href={`/purchases?supplierId=${supplier.id}`} className="btn-secondary text-sm">
@@ -219,98 +254,337 @@ export default async function SupplierDetailPage({
         <a href="#products-supplied" className="btn-secondary text-sm">
           {linkedProducts.length > 0 ? 'View linked products' : 'Link products'}
         </a>
+        <a href="#account-details" className="btn-ghost text-sm">
+          Edit details
+        </a>
       </div>
 
-      {/* Summary cards */}
-      <div className="card grid gap-4 p-5 sm:p-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-black/40">Amount owed</div>
-          <div className={`text-2xl font-semibold tabular-nums ${outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-            {formatMoney(outstanding, business.currency)}
-          </div>
-          {creditLimit > 0 && (
-            <div className="text-xs text-black/50">
-              Threshold: {formatMoney(creditLimit, business.currency)}
-              {availableCredit !== null && availableCredit < 0 && (
-                <span className="ml-1 text-red-600">({formatMoney(Math.abs(availableCredit), business.currency)} over)</span>
-              )}
-              {availableCredit !== null && availableCredit >= 0 && (
-                <span className="ml-1 text-black/40">· {formatMoney(availableCredit, business.currency)} remaining</span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-black/40">Total purchases</div>
-          <div className="text-2xl font-semibold tabular-nums">{formatMoney(totalBilled, business.currency)}</div>
-          <div className="text-xs text-black/50">{invoices.length} invoice{invoices.length === 1 ? '' : 's'} in range</div>
-        </div>
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-black/40">Last payment</div>
-          <div className="text-base font-semibold text-ink">
-            {lastPaymentAt ? formatRelativeDate(lastPaymentAt) : 'No payment yet'}
-          </div>
-          {lastPaymentAt ? <div className="text-xs text-black/50">{formatDate(lastPaymentAt)}</div> : null}
-        </div>
-        <div className="space-y-2 text-sm">
-          <div className="text-xs uppercase tracking-wide text-black/40">Contact</div>
-          <div>Phone: {supplier.phone ?? '-'}</div>
-          <div>Email: {supplier.email ?? '-'}</div>
-          <div className="text-xs text-black/50">{linkedProducts.length} linked product{linkedProducts.length === 1 ? '' : 's'}</div>
-        </div>
+      {/* Key stats */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <AccountStatCard
+          label="What you owe"
+          value={<span className={outstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}>{formatMoney(outstanding, business.currency)}</span>}
+          helper={`${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'}`}
+        />
+        <AccountStatCard
+          label="Payment threshold"
+          value={formatMoney(creditLimit, business.currency)}
+          helper={
+            creditLimit > 0 && availableCredit !== null
+              ? availableCredit < 0
+                ? <span className="text-red-600">{formatMoney(Math.abs(availableCredit), business.currency)} over</span>
+                : `${formatMoney(availableCredit, business.currency)} remaining`
+              : 'No threshold set'
+          }
+        />
+        <AccountStatCard
+          label="Last payment"
+          value={lastPaymentAt ? formatRelativeDate(lastPaymentAt) : 'No payment yet'}
+          helper={lastPaymentAt ? formatDate(lastPaymentAt) : 'Payments will appear once recorded.'}
+        />
+        <AccountStatCard
+          label="Total purchases"
+          value={formatMoney(totalBilled, business.currency)}
+          helper={`${invoices.length} invoice${invoices.length === 1 ? '' : 's'} in range`}
+        />
+        <AccountStatCard
+          label="Linked products"
+          value={linkedProducts.length.toLocaleString()}
+          helper="Products using this preferred supplier"
+        />
       </div>
 
-      {/* Edit supplier */}
-      <div className="card p-5 sm:p-6">
-        <h2 className="text-lg font-display font-semibold">Edit supplier</h2>
-        <form action={updateSupplierAction} className="mt-4 grid gap-4 md:grid-cols-3">
-          <input type="hidden" name="id" value={supplier.id} />
-          <div>
-            <label className="label">Name</label>
-            <input className="input" name="name" defaultValue={supplier.name} required />
-          </div>
-          <div>
-            <label className="label">Phone</label>
-            <input className="input" name="phone" defaultValue={supplier.phone ?? ''} placeholder="Phone" />
-          </div>
-          <div>
-            <label className="label">Email</label>
-            <input className="input" name="email" defaultValue={supplier.email ?? ''} placeholder="Email" />
-          </div>
-          <div>
-            <label className="label">Credit limit</label>
-            <input
-              className="input"
-              name="creditLimit"
-              defaultValue={(supplier.creditLimitPence / 100).toFixed(2)}
-              placeholder="Credit limit"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="label">Tags</label>
-            <input
-              className="input"
-              name="tags"
-              defaultValue={supplierTags.join(', ')}
-              placeholder="Wholesale, Local, Net 30"
-            />
-            <div className="mt-1 text-xs text-black/50">
-              Comma-separated. Use tags to group suppliers (e.g. Wholesale, Local, Imported).
+      {/* Account details */}
+      <details className="group" id="account-details">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
+          <span className="text-sm font-semibold text-ink">Account details</span>
+          <svg className="h-4 w-4 text-muted transition-transform duration-150 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </summary>
+        <div className="card mt-2 p-5 sm:p-6">
+          <form action={updateSupplierAction} className="grid gap-4 md:grid-cols-3">
+            <input type="hidden" name="id" value={supplier.id} />
+            <div>
+              <label className="label">Name</label>
+              <input className="input" name="name" defaultValue={supplier.name} required />
             </div>
+            <div>
+              <label className="label">Phone</label>
+              <input className="input" name="phone" defaultValue={supplier.phone ?? ''} placeholder="Phone" />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input className="input" name="email" defaultValue={supplier.email ?? ''} placeholder="Email" />
+            </div>
+            <div>
+              <label className="label">Credit limit</label>
+              <input
+                className="input"
+                name="creditLimit"
+                defaultValue={(supplier.creditLimitPence / 100).toFixed(2)}
+                placeholder="Credit limit"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Tags</label>
+              <input
+                className="input"
+                name="tags"
+                defaultValue={supplierTags.join(', ')}
+                placeholder="Wholesale, Local, Net 30"
+              />
+              <div className="mt-1 text-xs text-black/50">
+                Comma-separated. Use tags to group suppliers (e.g. Wholesale, Local, Imported).
+              </div>
+            </div>
+            <div className="md:col-span-3">
+              <label className="label">Notes</label>
+              <textarea
+                className="input min-h-20"
+                name="notes"
+                defaultValue={supplierNotes}
+                placeholder="Delivery quirks, account contact, payment preferences."
+              />
+            </div>
+            <div className="md:col-span-3">
+              <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
+            </div>
+          </form>
+        </div>
+      </details>
+
+      {/* Purchase history */}
+      <div className="card p-6">
+        <h2 className="text-lg font-display font-semibold">Purchases and payment history</h2>
+        <p className="mt-1 text-sm text-black/50">Purchases increase what you owe; payments reduce the supplier balance.</p>
+        <form className="mt-4 grid gap-4 md:grid-cols-4">
+          <div>
+            <label className="label">From</label>
+            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
           </div>
-          <div className="md:col-span-3">
-            <label className="label">Notes</label>
-            <textarea
-              className="input min-h-20"
-              name="notes"
-              defaultValue={supplierNotes}
-              placeholder="Delivery quirks, account contact, payment preferences."
-            />
+          <div>
+            <label className="label">To</label>
+            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
           </div>
-          <div className="md:col-span-3">
-            <SubmitButton className="btn-primary" loadingText="Saving…">Save changes</SubmitButton>
+          <div className="flex items-end">
+            <button className="btn-primary w-full">Filter</button>
+          </div>
+          <div className="flex items-end">
+            <DownloadLink
+              className="btn-ghost w-full text-xs"
+              href={`/suppliers/${supplier.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
+                end?.toISOString().slice(0, 10) ?? ''
+              }`}
+              fallbackFilename={`supplier-statement-${supplier.id.slice(0, 8)}.csv`}
+            >
+              Download CSV
+            </DownloadLink>
           </div>
         </form>
+        <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            Total purchases: {formatMoney(totalBilled, business.currency)}
+          </div>
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            Total paid: {formatMoney(totalPaid, business.currency)}
+          </div>
+          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
+            What you owe: {formatMoney(outstanding, business.currency)}
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3 lg:hidden">
+          {invoices.length === 0 ? (
+            <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-black/50">
+              <div className="font-semibold text-ink">No purchases yet.</div>
+              <div className="mt-1">When you record purchases from this supplier, unpaid items will appear here.</div>
+            </div>
+          ) : (
+            invoices.map((invoice) => {
+              const now = new Date();
+              return (
+                <div key={invoice.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                        {invoice.id.slice(0, 8)}
+                      </Link>
+                      <div className="mt-1 text-xs text-black/50">{formatDateTime(invoice.createdAt)}</div>
+                    </div>
+                    <span className="pill shrink-0 bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs uppercase tracking-wide text-black/40">Total</div>
+                      <div className="font-semibold">{formatMoney(invoice.totalPence, business.currency)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs uppercase tracking-wide text-black/40">Amount owed</div>
+                      <div className="font-semibold">{formatMoney(invoice.balance, business.currency)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
+                    {!invoice.isClosed && (
+                      <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
+                    )}
+                  </div>
+
+                  {invoice.payments.length > 0 && (
+                    <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
+                      <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
+                      <div className="space-y-1">
+                        {invoice.payments.map((payment) => (
+                          <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
+                            <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
+                            <span>{payment.method}</span>
+                            <span className="text-black/40">{formatDate(payment.paidAt)}</span>
+                            {payment.notes && <span className="text-black/40">{payment.notes}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!invoice.isClosed && invoice.balance > 0 && (
+                    <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-ghost mt-3 w-full justify-center text-xs">
+                      Record payment
+                    </Link>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="responsive-table-shell hidden lg:block">
+          <table className="table mt-4 w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Purchased</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Total</th>
+                <th>Amount owed</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((invoice) => {
+                const now = new Date();
+                return (
+                  <Fragment key={invoice.id}>
+                    <tr className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
+                      <td className="px-3 py-3 text-sm">
+                        <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
+                          {invoice.id.slice(0, 8)}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(invoice.createdAt)}</td>
+                      <td className="px-3 py-3 text-sm">
+                        <div className="flex items-center gap-1">
+                          <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
+                          {!invoice.isClosed && (
+                            <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                      </td>
+                      <td className="px-3 py-3 text-sm font-semibold">
+                        {formatMoney(invoice.totalPence, business.currency)}
+                      </td>
+                      <td className="px-3 py-3 text-sm font-semibold">
+                        {formatMoney(invoice.balance, business.currency)}
+                      </td>
+                      <td className="px-3 py-3 text-sm">
+                        {!invoice.isClosed && invoice.balance > 0 && (
+                          <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-ghost text-xs">
+                            Record payment
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                    {invoice.payments.length > 0 && (
+                      <tr className="bg-transparent">
+                        <td colSpan={7} className="px-3 pb-3 pt-0">
+                          <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
+                            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
+                            <div className="space-y-1">
+                              {invoice.payments.map((payment) => (
+                                <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
+                                  <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
+                                  <span>{payment.method}</span>
+                                  <span className="text-black/40">{formatDate(payment.paidAt)}</span>
+                                  {payment.notes && <span className="text-black/40">{payment.notes}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+              {invoices.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
+                    <div className="font-semibold text-ink">No purchases yet.</div>
+                    <div className="mt-1">When you record purchases from this supplier, unpaid items will appear here.</div>
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Statement */}
+      <div className="card p-6">
+        <h2 className="text-lg font-display font-semibold">Statement</h2>
+        <p className="mt-1 text-sm text-black/50">Purchases increase the amount owed; payments reduce it.</p>
+        <div className="responsive-table-shell mt-4">
+          <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Purchase</th>
+                <th>Payment</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ledgerRows.slice(-80).map((row) => (
+                <tr key={row.key} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
+                  <td className="px-3 py-3 text-sm text-black/60">{formatDate(row.date)}</td>
+                  <td className="px-3 py-3 text-sm">
+                    <span className={row.type === 'payment' ? 'text-emerald-700' : row.type === 'purchase' ? 'text-ink' : 'text-black/50'}>
+                      {row.description}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">{row.debitPence > 0 ? formatMoney(row.debitPence, business.currency) : '-'}</td>
+                  <td className="px-3 py-3 text-sm font-semibold text-emerald-700">{row.creditPence > 0 ? formatMoney(row.creditPence, business.currency) : '-'}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">{formatMoney(row.balancePence, business.currency)}</td>
+                </tr>
+              ))}
+              {ledgerRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-black/50">
+                    <div className="font-semibold text-ink">No payments recorded yet.</div>
+                    <div className="mt-1">Payments will appear here once recorded.</div>
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Sales Performance (Growth+ only) */}
@@ -388,7 +662,7 @@ export default async function SupplierDetailPage({
                 {linkedProducts.map((product) => {
                   const currentStock = product.inventoryBalances.reduce((sum, balance) => sum + balance.qtyOnHandBase, 0);
                   return (
-                    <tr key={product.id} className="rounded-xl bg-white">
+                    <tr key={product.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                       <td className="px-3 py-3 text-sm font-semibold">
                         <Link href={`/products/${product.id}`} className="hover:underline">
                           {product.name}
@@ -422,226 +696,6 @@ export default async function SupplierDetailPage({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Purchase history */}
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Purchase history</h2>
-        <form className="mt-4 grid gap-4 md:grid-cols-4">
-          <div>
-            <label className="label">From</label>
-            <input className="input" name="from" type="date" defaultValue={start?.toISOString().slice(0, 10)} />
-          </div>
-          <div>
-            <label className="label">To</label>
-            <input className="input" name="to" type="date" defaultValue={end?.toISOString().slice(0, 10)} />
-          </div>
-          <div className="flex items-end">
-            <button className="btn-primary w-full">Filter</button>
-          </div>
-          <div className="flex items-end">
-            <DownloadLink
-              className="btn-ghost w-full text-xs"
-              href={`/suppliers/${supplier.id}/statement?from=${start?.toISOString().slice(0, 10) ?? ''}&to=${
-                end?.toISOString().slice(0, 10) ?? ''
-              }`}
-              fallbackFilename={`supplier-statement-${supplier.id.slice(0, 8)}.csv`}
-            >
-              Download CSV
-            </DownloadLink>
-          </div>
-        </form>
-        <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
-          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Total purchases: {formatMoney(totalBilled, business.currency)}
-          </div>
-          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Total paid: {formatMoney(totalPaid, business.currency)}
-          </div>
-          <div className="rounded-xl border border-black/10 bg-white px-3 py-2">
-            Amount owed: {formatMoney(outstanding, business.currency)}
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3 lg:hidden">
-          {invoices.length === 0 ? (
-            <div className="rounded-xl border border-black/10 bg-white px-4 py-6 text-center text-sm text-black/50">
-              No purchase history for this supplier yet.
-            </div>
-          ) : (
-            invoices.map((invoice) => {
-              const now = new Date();
-              return (
-                <div key={invoice.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
-                        {invoice.id.slice(0, 8)}
-                      </Link>
-                      <div className="mt-1 text-xs text-black/50">{formatDateTime(invoice.createdAt)}</div>
-                    </div>
-                    <span className="pill shrink-0 bg-black/5 text-black/60">{invoice.paymentStatus}</span>
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-black/40">Total</div>
-                      <div className="font-semibold">{formatMoney(invoice.totalPence, business.currency)}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs uppercase tracking-wide text-black/40">Amount owed</div>
-                      <div className="font-semibold">{formatMoney(invoice.balance, business.currency)}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
-                    {!invoice.isClosed && (
-                      <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
-                    )}
-                  </div>
-
-                  {invoice.payments.length > 0 && (
-                    <div className="mt-3 rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
-                      <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
-                      <div className="space-y-1">
-                        {invoice.payments.map((payment) => (
-                          <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
-                            <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
-                            <span>{payment.method}</span>
-                            <span className="text-black/40">{formatDate(payment.paidAt)}</span>
-                            {payment.notes && <span className="text-black/40">{payment.notes}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {!invoice.isClosed && invoice.balance > 0 && (
-                    <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-ghost mt-3 w-full justify-center text-xs">
-                      Record payment
-                    </Link>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <div className="hidden overflow-x-auto lg:block">
-          <table className="table mt-4 w-full border-separate border-spacing-y-2">
-            <thead>
-              <tr>
-                <th>Invoice</th>
-                <th>Purchased</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Total</th>
-                <th>Amount owed</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((invoice) => {
-                const now = new Date();
-                return (
-                  <Fragment key={invoice.id}>
-                    <tr className="rounded-xl bg-white">
-                      <td className="px-3 py-3 text-sm">
-                        <Link href={`/purchases/${invoice.id}`} className="font-mono text-xs hover:underline">
-                          {invoice.id.slice(0, 8)}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-sm text-black/60">{formatDateTime(invoice.createdAt)}</td>
-                      <td className="px-3 py-3 text-sm">
-                        <div className="flex items-center gap-1">
-                          <DueDateBadge dueDate={invoice.dueDate} now={now} isClosed={invoice.isClosed} />
-                          {!invoice.isClosed && (
-                            <SetPurchaseDueDateButton invoiceId={invoice.id} currentDueDate={invoice.dueDate} />
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
-                      </td>
-                      <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(invoice.totalPence, business.currency)}
-                      </td>
-                      <td className="px-3 py-3 text-sm font-semibold">
-                        {formatMoney(invoice.balance, business.currency)}
-                      </td>
-                      <td className="px-3 py-3 text-sm">
-                        {!invoice.isClosed && invoice.balance > 0 && (
-                          <Link href={`/payments/supplier-payments?supplierId=${supplier.id}`} className="btn-ghost text-xs">
-                            Record payment
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                    {invoice.payments.length > 0 && (
-                      <tr className="bg-transparent">
-                        <td colSpan={7} className="px-3 pb-3 pt-0">
-                          <div className="rounded-xl border border-black/5 bg-black/[0.02] px-3 py-2">
-                            <div className="mb-1 text-xs font-medium uppercase tracking-wider text-black/40">Payment history</div>
-                            <div className="space-y-1">
-                              {invoice.payments.map((payment) => (
-                                <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
-                                  <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
-                                  <span>{payment.method}</span>
-                                  <span className="text-black/40">{formatDate(payment.paidAt)}</span>
-                                  {payment.notes && <span className="text-black/40">{payment.notes}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Statement */}
-      <div className="card p-6">
-        <h2 className="text-lg font-display font-semibold">Statement</h2>
-        <p className="mt-1 text-sm text-black/50">Purchases increase the amount owed; payments reduce it.</p>
-        <div className="responsive-table-shell mt-4">
-          <table className="table w-full min-w-[48rem] border-separate border-spacing-y-2">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Purchase</th>
-                <th>Payment</th>
-                <th>Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledgerRows.slice(-80).map((row) => (
-                <tr key={row.key} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm text-black/60">{formatDate(row.date)}</td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className={row.type === 'payment' ? 'text-emerald-700' : row.type === 'purchase' ? 'text-ink' : 'text-black/50'}>
-                      {row.description}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-sm font-semibold">{row.debitPence > 0 ? formatMoney(row.debitPence, business.currency) : '-'}</td>
-                  <td className="px-3 py-3 text-sm font-semibold text-emerald-700">{row.creditPence > 0 ? formatMoney(row.creditPence, business.currency) : '-'}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">{formatMoney(row.balancePence, business.currency)}</td>
-                </tr>
-              ))}
-              {ledgerRows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-sm text-black/50">No statement activity yet.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
