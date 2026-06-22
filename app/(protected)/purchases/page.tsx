@@ -123,7 +123,15 @@ export default async function PurchasesPage({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader title="Purchases" subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together." />
+      <PageHeader
+        title="Purchases"
+        subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together."
+        actions={
+          <a href="#record-purchase-form" className="btn-primary justify-center text-sm sm:w-auto">
+            Record purchase
+          </a>
+        }
+      />
       <FormError error={searchParams?.error} />
 
       {searchParams?.created === '1' && (
@@ -173,15 +181,15 @@ export default async function PurchasesPage({
       </div>
 
       {/* Receive stock — collapsible on mobile, always open on desktop */}
-      <details className="details-mobile">
-        <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
-          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <details id="record-purchase-form" className="details-mobile scroll-mt-16">
+        <summary className="flex cursor-pointer select-none items-center justify-between rounded-2xl border border-accent/20 bg-accent/5 px-4 py-3.5 shadow-sm transition-colors duration-150 hover:bg-accent/10 active:bg-accent/[0.12]">
+          <span className="flex items-center gap-2 text-sm font-semibold text-accent">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Record delivery
+            Record purchase
           </span>
-          <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+          <svg className="h-4 w-4 text-accent/50" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
         </summary>
@@ -235,7 +243,7 @@ export default async function PurchasesPage({
             <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6">
               <div className="text-sm font-semibold text-ink">No purchases recorded yet.</div>
               <div className="mt-1 text-sm text-black/55">
-                Tap "Record delivery" above when stock arrives from a supplier. TillFlow will increase inventory and track what is still unpaid.
+                Tap "Record purchase" above when stock arrives from a supplier. TillFlow will increase inventory and track what is still unpaid.
               </div>
             </div>
           ) : (

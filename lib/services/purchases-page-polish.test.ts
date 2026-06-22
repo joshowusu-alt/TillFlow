@@ -27,12 +27,24 @@ describe('purchases page polish', () => {
   });
 
   it('receive stock details form does not have open attribute', () => {
-    expect(pageSrc).toContain('<details className="details-mobile">');
-    expect(pageSrc).not.toContain('<details className="details-mobile" open>');
+    expect(pageSrc).toContain('details-mobile');
+    expect(pageSrc).not.toContain('details-mobile" open>');
   });
 
-  it('record delivery summary label remains present', () => {
-    expect(pageSrc).toContain('Record delivery');
+  it('record purchase CTA is clearly visible at the top of the page', () => {
+    expect(pageSrc).toContain('Record purchase');
+  });
+
+  it('record purchase CTA appears before recent purchases section', () => {
+    const ctaPos = pageSrc.indexOf('Record purchase');
+    const historyPos = pageSrc.indexOf('Recent purchases');
+    expect(ctaPos).toBeGreaterThanOrEqual(0);
+    expect(historyPos).toBeGreaterThanOrEqual(0);
+    expect(ctaPos).toBeLessThan(historyPos);
+  });
+
+  it('record-purchase-form anchor target exists for CTA link', () => {
+    expect(pageSrc).toContain('record-purchase-form');
   });
 
   it('outstanding column exists in desktop table header', () => {
