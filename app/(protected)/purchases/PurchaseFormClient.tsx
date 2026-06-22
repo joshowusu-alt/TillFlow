@@ -681,7 +681,7 @@ export default function PurchaseFormClient({
         <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-black/40">Build purchase</div>
+              <div className="text-xs uppercase tracking-[0.2em] text-black/40">Add items</div>
               <div className="mt-1 text-sm text-black/60">Look up a product, choose the purchase unit, then add the line to the cart.</div>
             </div>
             <div className="text-xs text-black/45">{cart.length} line{cart.length === 1 ? '' : 's'} in cart</div>
@@ -1170,7 +1170,7 @@ function ReceivePurchaseButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button className="btn-primary w-full sm:w-auto" disabled={disabled || pending}>
-      {pending ? 'Submitting…' : 'Receive Purchase'}
+      {pending ? 'Submitting…' : 'Record purchase'}
     </button>
   );
 }

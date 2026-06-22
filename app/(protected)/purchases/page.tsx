@@ -119,6 +119,7 @@ export default async function PurchasesPage({
       outstandingPence,
     };
   });
+  const unpaidCount = purchaseRows.filter((r) => ['UNPAID', 'PART_PAID'].includes(r.purchase.paymentStatus)).length;
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -158,8 +159,21 @@ export default async function PurchasesPage({
         </form>
       )}
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Total invoices</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{purchaseCount}</div>
+          <div className="mt-1 text-xs text-black/50">Supplier deliveries recorded</div>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Awaiting payment</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-amber-800">{unpaidCount}</div>
+          <div className="mt-1 text-xs text-amber-600/70">{purchaseRows.length < purchaseCount ? 'On this page' : 'Unpaid or part paid'}</div>
+        </div>
+      </div>
+
       {/* Receive stock — collapsible on mobile, always open on desktop */}
-      <details className="details-mobile" open>
+      <details className="details-mobile">
         <summary className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink">
             <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -226,7 +240,7 @@ export default async function PurchasesPage({
             </div>
           ) : (
             purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => (
-              <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+              <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-ink">#{purchase.id.slice(0, 8)}</div>
@@ -299,13 +313,14 @@ export default async function PurchasesPage({
               <th>Lines</th>
               <th>Status</th>
               <th>Total</th>
+              <th>Outstanding</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {purchaseRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-10 text-center">
+                <td colSpan={8} className="px-3 py-10 text-center">
                   <div className="text-sm font-semibold text-ink">No purchases recorded yet.</div>
                   <div className="mt-1 text-sm text-black/55">Receive your first supplier delivery above to update stock and payables together.</div>
                 </td>
@@ -313,7 +328,7 @@ export default async function PurchasesPage({
             )}
             {purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => {
               return (
-                <tr key={purchase.id} className="rounded-xl bg-white">
+                <tr key={purchase.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
                   <td className="px-3 py-3 text-sm">{purchase.id.slice(0, 8)}</td>
                   <td className="px-3 py-3 text-sm">
                     {purchase.supplier?.name
@@ -330,6 +345,9 @@ export default async function PurchasesPage({
                   </td>
                   <td className="px-3 py-3 text-sm font-semibold">
                     {formatMoney(purchase.totalPence, business.currency)}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {formatMoney(Math.max(0, outstandingPence), business.currency)}
                   </td>
                   <td className="px-3 py-3">
                     {purchase.purchaseReturn || ['RETURNED', 'VOID'].includes(purchase.paymentStatus) ? (

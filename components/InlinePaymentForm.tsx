@@ -61,14 +61,14 @@ export default function InlinePaymentForm({ invoiceId, outstandingPence, currenc
         disabled={submitting}
         className="btn-primary py-1 px-2 text-xs"
       >
-        {submitting ? '...' : '✓'}
+        {submitting ? '…' : 'Confirm'}
       </button>
       <button
         type="button"
         onClick={() => setOpen(false)}
         className="btn-ghost py-1 px-2 text-xs text-muted"
       >
-        ✕
+        Cancel
       </button>
     </form>
   );
