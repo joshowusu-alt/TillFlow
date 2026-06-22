@@ -18,6 +18,16 @@ import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/comp
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
 
+function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+      <div className="text-xs uppercase tracking-[0.2em] text-black/40">{label}</div>
+      <div className="mt-1 text-2xl font-display font-semibold text-ink">{value}</div>
+      <div className="mt-1 text-xs text-black/45">{helper}</div>
+    </div>
+  );
+}
+
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -86,13 +96,36 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         title="Products"
-        subtitle="Your live catalogue for pricing, stock, and barcode selling."
+        subtitle="Manage the items you sell, their prices, stock levels, and suppliers."
         actions={
           <Link href="/products/labels" className="btn-secondary justify-center text-sm">
             Print Labels
           </Link>
         }
       />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <ProductStatCard
+          label="Total products"
+          value={totalProductCount.toLocaleString('en-GH')}
+          helper={q ? 'Matching current search' : 'Active catalogue items'}
+        />
+        <ProductStatCard
+          label="Visible products"
+          value={products.length.toLocaleString('en-GH')}
+          helper="Shown on this page"
+        />
+        <ProductStatCard
+          label="Categories"
+          value={categories.length.toLocaleString('en-GH')}
+          helper="Available product groups"
+        />
+        <ProductStatCard
+          label="Suppliers available"
+          value={suppliers.length.toLocaleString('en-GH')}
+          helper="Ready for preferred supplier links"
+        />
+      </div>
 
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">
@@ -127,11 +160,41 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
               </Link>
             </div>
           )}
+          {/* Product search and actions */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-full max-w-sm">
+              <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+            </div>
+            {isManager ? (
+              <div className="flex flex-wrap gap-2">
+                <a href="#product-create" className="btn-secondary text-sm">
+                  Add product
+                </a>
+                <Link href="/settings/import-stock" className="btn-secondary text-sm">
+                  Import from file
+                </Link>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Add product */}
           {isManager ? (
-            <div id="product-create" className="card p-4 sm:p-5">
-              <h2 className="text-lg font-display font-semibold">Add product</h2>
-              <p className="mt-1 text-sm text-black/55">Start with the items you sell every day. You can add the rest of the catalogue later.</p>
-              <FormError error={searchParams?.error} />
+            <details className="group">
+              <summary id="product-create" className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add product
+                </span>
+                <svg className="h-4 w-4 text-muted transition-transform duration-150 group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </summary>
+              <div className="card mt-2 p-4 sm:p-5">
+                <h2 className="text-lg font-display font-semibold">Add product</h2>
+                <p className="mt-1 text-sm text-black/55">Start with the items you sell every day. You can add the rest of the catalogue later.</p>
+                <FormError error={searchParams?.error} />
               <ProductCreateFormEnhancer
                 createAction={createProductAction}
                 currencySymbol={getCurrencySymbol(business.currency)}
@@ -220,11 +283,9 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   <SubmitButton className="btn-primary" loadingText="Creating…">Create product</SubmitButton>
                 </div>
               </ProductCreateFormEnhancer>
-            </div>
+              </div>
+            </details>
           ) : null}
-          <div className="mb-4 max-w-xs">
-            <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
-          </div>
           <div className="card p-4 sm:p-5">
             <div className="space-y-3 lg:hidden">
               {products.length === 0 ? (
@@ -236,8 +297,9 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                     </>
                   ) : (
                     <>
-                      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-black/30 mb-4">Your catalogue is empty</div>
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="text-sm font-semibold text-ink">No products yet.</div>
+                      <div className="mt-1 text-sm text-black/55">Add your first product so you can start selling, tracking stock, and seeing clear reports.</div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
                         {([
                           { n: '1', title: 'Add your fastest-moving lines', detail: 'Start with 5–10 core products. The full catalogue can follow at any pace.' },
                           { n: '2', title: 'Set cost and selling price', detail: 'TillFlow calculates your gross margin automatically as each sale is recorded.' },
@@ -276,7 +338,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                 });
 
                 return (
-                  <DataCard key={product.id}>
+                  <DataCard key={product.id} className="transition duration-150 hover:-translate-y-px hover:shadow-card active:scale-[0.98]">
                     <DataCardHeader
                       title={
                         <div className="flex items-center gap-3">
@@ -318,7 +380,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                     </div>
                     <DataCardActions>
                       <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
-                        View Product
+                        Open product
                       </Link>
                     </DataCardActions>
                   </DataCard>
@@ -343,10 +405,18 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                   {products.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-3 py-10 text-center">
-                        <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : 'No products loaded yet.'}</div>
+                        <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : 'No products yet.'}</div>
                         <div className="mt-1 text-sm text-black/55">
-                          {q ? 'Try a different search term or clear the search.' : 'Add your first few products to start receiving stock and selling from the till.'}
+                          {q ? 'Try a different search term or clear the search.' : 'Add your first product so you can start selling, tracking stock, and seeing clear reports.'}
                         </div>
+                        {!q && isManager ? (
+                          <div className="mt-4 flex justify-center gap-2">
+                            <a href="#product-create" className="btn-primary text-xs px-3 py-1.5">Add first product</a>
+                            <Link href="/settings/import-stock" className="btn-ghost border border-black/10 rounded-lg px-3 py-1.5 text-xs">
+                              Import from file
+                            </Link>
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   )}
@@ -364,7 +434,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                       packagingConversion: packaging?.conversionToBase
                     });
                     return (
-                      <tr key={product.id} className="rounded-xl bg-white">
+                      <tr key={product.id} className="rounded-xl bg-white transition-colors duration-150 hover:bg-slate-50">
                         <td className="hidden sm:table-cell px-3 py-3 w-10">
                           {product.imageUrl ? (
                             <AdminProductImage
