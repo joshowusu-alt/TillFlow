@@ -11,6 +11,13 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  TRANSFER: 'Bank Transfer',
+  MOBILE_MONEY: 'Mobile Money (MoMo)',
+};
+
 export default async function SupplierPaymentsPage({ searchParams }: { searchParams?: { error?: string; supplierId?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -91,8 +98,8 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         <select className="input" name="paymentMethod" defaultValue="CASH">
           <option value="CASH">Cash</option>
           <option value="CARD">Card</option>
-          <option value="TRANSFER">Transfer</option>
-          <option value="MOBILE_MONEY">Mobile Money</option>
+          <option value="TRANSFER">Bank Transfer</option>
+          <option value="MOBILE_MONEY">Mobile Money (MoMo)</option>
         </select>
       </div>
       <div>
@@ -346,7 +353,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                         <td className="px-3 py-2 text-sm">
                           {payment.purchaseInvoice.supplier?.name ?? 'Supplier not set'}
                         </td>
-                        <td className="px-3 py-2 text-sm">{payment.method}</td>
+                        <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
                         <td className="px-3 py-2 text-sm font-semibold tabular-nums">
                           {formatMoney(payment.amountPence, business.currency)}
                         </td>
@@ -370,7 +377,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
                       <div>
                         <div className="text-xs text-black/50">{formatDate(payment.paidAt)}</div>
                         <div className="text-sm font-medium">{payment.purchaseInvoice.supplier?.name ?? 'Supplier not set'}</div>
-                        <div className="text-xs text-black/50">{payment.method}</div>
+                        <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method}</div>
                       </div>
                       <div className="text-sm font-semibold tabular-nums">{formatMoney(payment.amountPence, business.currency)}</div>
                     </div>

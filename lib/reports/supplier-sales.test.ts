@@ -86,8 +86,8 @@ describe('sales-by-supplier page', () => {
   });
 
   it('shows summary cards: total revenue, units sold, suppliers with sales, top supplier', () => {
-    expect(src).toContain('Total revenue');
-    expect(src).toContain('Units sold');
+    expect(src).toContain('Supplier-linked sales value');
+    expect(src).toContain('Quantity sold');
     expect(src).toContain('Suppliers with sales');
     expect(src).toContain('Top supplier');
   });
@@ -123,8 +123,9 @@ describe('sales-by-supplier page', () => {
   });
 
   it('renders disclaimer note about preferred supplier attribution', () => {
-    expect(src).toContain('This report shows sales for products linked to each supplier');
-    expect(src).toContain('does not track the exact supplier source');
+    expect(src).toContain('Based on preferred supplier links on products.');
+    expect(src).toContain('This is a sales performance view, not supplier debt.');
+    expect(src).toContain('does not track exact stock batch origin');
   });
 
   it('links back to all suppliers from drill-down', () => {
@@ -141,8 +142,8 @@ describe('sales-by-supplier page', () => {
   });
 
   it('shows an actionable setup state when no products are linked to suppliers', () => {
-    expect(src).toContain('No supplier-linked products yet');
-    expect(src).toContain('Add a preferred supplier on products, or record purchases from suppliers');
+    expect(src).toContain('No supplier-linked sales yet');
+    expect(src).toContain('link products to their preferred supplier');
     expect(src).toContain('Manage products');
     expect(src).toContain('View suppliers');
   });
@@ -150,12 +151,13 @@ describe('sales-by-supplier page', () => {
   it('distinguishes linked products with no sales from missing supplier links', () => {
     expect(src).toContain('No sales for linked products in this period');
     expect(src).toContain('Supplier links exist, but no linked products were sold');
+    expect(src).toContain('Use supplier payables for what you owe suppliers.');
     expect(src).toContain('Change period');
   });
 
   it('shows filtered supplier setup actions for empty drill-downs', () => {
     expect(src).toContain('No products linked to');
-    expect(src).toContain('as the preferred supplier on products, or record a purchase from');
+    expect(src).toContain('this does not create supplier debt or track exact stock batches');
     expect(src).toContain('View linked products');
     expect(src).toContain('#products-supplied');
   });

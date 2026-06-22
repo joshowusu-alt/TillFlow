@@ -218,7 +218,7 @@ export default async function ReorderSuggestionsPage({
     <div className="space-y-6">
       <PageHeader
         title="Reorder Suggestions"
-        subtitle={`Velocity-based reorder: avg daily demand x ${leadDays}-day lead time + safety stock.`}
+        subtitle="Products that may need restocking based on recent sales and current stock."
         actions={
           <ReportActionGroup>
             <a
@@ -233,6 +233,17 @@ export default async function ReorderSuggestionsPage({
         }
       />
 
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
+        <p className="font-semibold">Use these suggestions as a guide before placing supplier orders.</p>
+        <p className="mt-1">
+          TillFlow does not order stock automatically. Suggested quantities are based on recent sales, current stock,
+          supplier lead time, and backup stock.
+        </p>
+        <p className="mt-2 text-xs text-blue-800/80">
+          Formula guide: recent average daily sales x supplier lead time + backup stock, compared with current stock.
+        </p>
+      </section>
+
       <div className="card p-3.5 sm:p-4">
         <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
@@ -246,11 +257,11 @@ export default async function ReorderSuggestionsPage({
             </select>
           </div>
           <div>
-            <label className="label">Lookback Days</label>
+            <label className="label">Sales period</label>
             <input name="days" type="number" min={7} max={90} className="input" defaultValue={lookbackDays} />
           </div>
           <div>
-            <label className="label">Lead Time (Days)</label>
+            <label className="label">Supplier lead time</label>
             <input name="lead" type="number" min={1} max={30} className="input" defaultValue={leadDays} />
           </div>
           <div className="flex items-end">
@@ -264,8 +275,8 @@ export default async function ReorderSuggestionsPage({
         <div className="card p-6">
           <EmptyState
             icon="check"
-            title="No reorder suggestions"
-            subtitle="All products are above their reorder points. Adjust lookback days or lead time to check again."
+            title="No reorder suggestions right now."
+            subtitle="When products start running low based on recent sales and stock levels, TillFlow will show them here."
           />
         </div>
       ) : supplierGroups ? (
@@ -323,16 +334,61 @@ function ReorderTable({
   selectedStoreId: string;
 }) {
   return (
-    <div className="responsive-table-shell">
+    <>
+    <div className="space-y-3 md:hidden">
+      {items.map((item) => (
+        <div key={item.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-ink">{item.name}</h3>
+              {item.supplierName ? <p className="mt-1 text-xs text-muted">{item.supplierName}</p> : null}
+            </div>
+            <Badge tone={urgencyTone[item.urgency]}>{item.urgency}</Badge>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-black/40">Current stock</p>
+              <p className="mt-1 font-semibold text-ink">{item.onHandLabel}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-black/40">Suggested reorder quantity</p>
+              <p className="mt-1 font-semibold text-ink">{item.suggestionLabel}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-black/40">Average daily sales</p>
+              <p className="mt-1 tabular-nums text-ink">{item.avgDailyDemand.toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-black/40">Days of stock left</p>
+              <p className="mt-1 text-ink">
+                {Number.isFinite(item.daysOfCover) ? `${item.daysOfCover.toFixed(1)} days` : 'No demand'}
+              </p>
+            </div>
+          </div>
+          {item.pendingQty > 0 ? (
+            <div className="mt-4">
+              <Badge tone="info">{item.pendingQty} ordered</Badge>
+            </div>
+          ) : null}
+          {item.suggestedQty > 0 && item.pendingQty === 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-black/50">Mark ordered after you have placed the supplier order.</p>
+              <MarkOrderedForm item={item} selectedStoreId={selectedStoreId} />
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+    <div className="responsive-table-shell hidden md:block">
       <table className="table w-full min-w-[72rem] border-separate border-spacing-y-2">
           <thead>
             <tr>
               <th>Product</th>
               <th>Sold ({lookbackDays}d)</th>
-              <th>Avg / Day</th>
-              <th>On Hand</th>
-              <th>Suggested</th>
-              <th>Coverage</th>
+              <th>Average daily sales</th>
+              <th>Current stock</th>
+              <th>Suggested reorder quantity</th>
+              <th>Days of stock left</th>
               <th>Priority</th>
               <th>Status</th>
               <th></th>
@@ -364,17 +420,10 @@ function ReorderTable({
                 </td>
                 <td className="px-3 py-3 text-sm">
                   {item.suggestedQty > 0 && item.pendingQty === 0 && (
-                    <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }}>
-                      <input type="hidden" name="productId" value={item.id} />
-                      <input type="hidden" name="qtyBase" value={item.suggestedQty} />
-                      <input type="hidden" name="storeId" value={selectedStoreId} />
-                      <button
-                        type="submit"
-                        className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-900"
-                      >
-                        Mark Ordered
-                      </button>
-                    </form>
+                    <div className="space-y-1">
+                      <p className="text-xs text-black/50">Mark ordered after supplier order.</p>
+                      <MarkOrderedForm item={item} selectedStoreId={selectedStoreId} />
+                    </div>
                   )}
                 </td>
               </tr>
@@ -382,5 +431,28 @@ function ReorderTable({
           </tbody>
       </table>
     </div>
+    </>
+  );
+}
+
+function MarkOrderedForm({
+  item,
+  selectedStoreId,
+}: {
+  item: SuggestionItem;
+  selectedStoreId: string;
+}) {
+  return (
+    <form action={async (fd: FormData) => { 'use server'; await markAsOrdered(fd); }}>
+      <input type="hidden" name="productId" value={item.id} />
+      <input type="hidden" name="qtyBase" value={item.suggestedQty} />
+      <input type="hidden" name="storeId" value={selectedStoreId} />
+      <button
+        type="submit"
+        className="rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-900"
+      >
+        Mark Ordered
+      </button>
+    </form>
   );
 }

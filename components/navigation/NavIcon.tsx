@@ -29,6 +29,7 @@ const ICON_PATHS: Record<NavIconKey | 'fallback', IconPath[]> = {
   people: [{ d: 'M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 18a3 3 0 0 0-2.25-2.9M17 7.5a2.5 2.5 0 0 1 0 5' }],
   customers: [{ d: 'M15.5 19a5.5 5.5 0 0 0-11 0M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM17 8h4M19 6v4' }],
   suppliers: [{ d: 'M4 10.5V20h16v-9.5M4 10.5 5.5 4h13l1.5 6.5M4 10.5h16M8 20v-5h4v5M15 14h2' }],
+  reportsHub: [{ d: 'M4 5.5a1.5 1.5 0 0 1 1.5-1.5h5v7h-6.5V5.5zM13.5 4h5A1.5 1.5 0 0 1 20 5.5v4h-6.5V4zM4 13.5h6.5V20h-5A1.5 1.5 0 0 1 4 18.5v-5zM13.5 12H20v6.5a1.5 1.5 0 0 1-1.5 1.5h-5V12z' }],
   reports: [{ d: 'M4 19V5M4 19h16M8 15v-4M12 15V7M16 15v-6' }],
   analytics: [{ d: 'M3 17l5-5 4 4 7-8M15 8h4v4' }],
   profit: [{ d: 'M4 19h16M6 16V9M12 16V5M18 16v-7M8 7l4-4 4 4' }],

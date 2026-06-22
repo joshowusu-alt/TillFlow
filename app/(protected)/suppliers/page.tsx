@@ -171,6 +171,8 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         primaryCta={{ label: 'Add supplier', href: '#add-supplier' }}
       />
 
+      <p className="text-xs text-black/50">These are current supplier balances across recorded purchases and payments, not limited to a date range.</p>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <SupplierStatCard
           label="Total suppliers"
@@ -180,12 +182,12 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
         <SupplierStatCard
           label="Suppliers with balance"
           value={suppliersWithBalanceCount.toLocaleString('en-GH')}
-          helper="Visible suppliers owed money"
+          helper="Suppliers with unpaid purchase balances"
         />
         <SupplierStatCard
-          label="Total AP outstanding"
+          label="What you owe suppliers"
           value={formatMoney(totalApOutstandingPence, business.currency)}
-          helper="Visible amount owed"
+          helper="Current balance across all supplier accounts"
         />
       </div>
 

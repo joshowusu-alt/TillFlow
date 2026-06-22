@@ -10,6 +10,13 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import DueDateBadge from '@/components/DueDateBadge';
 import Link from 'next/link';
 
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  TRANSFER: 'Bank Transfer',
+  MOBILE_MONEY: 'Mobile Money (MoMo)',
+};
+
 export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
@@ -84,8 +91,8 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
         <select className="input" name="paymentMethod" defaultValue="CASH">
           <option value="CASH">Cash</option>
           <option value="CARD">Card</option>
-          <option value="TRANSFER">Transfer</option>
-          <option value="MOBILE_MONEY">Mobile Money</option>
+          <option value="TRANSFER">Bank Transfer</option>
+          <option value="MOBILE_MONEY">Mobile Money (MoMo)</option>
         </select>
       </div>
       <div>
@@ -320,7 +327,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                         <td className="px-3 py-2 text-sm text-black/60">{formatDate(payment.receivedAt)}</td>
                         <td className="px-3 py-2 text-sm">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</td>
                         <td className="px-3 py-2 font-mono text-xs text-black/60">{payment.salesInvoice.id.slice(0, 8)}</td>
-                        <td className="px-3 py-2 text-sm">{payment.method}</td>
+                        <td className="px-3 py-2 text-sm">{PAYMENT_LABEL[payment.method] ?? payment.method}</td>
                         <td className="px-3 py-2 text-sm font-semibold tabular-nums">
                           {formatMoney(payment.amountPence, business.currency)}
                         </td>
@@ -339,7 +346,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
                       <div>
                         <div className="text-xs text-black/50">{formatDate(payment.receivedAt)}</div>
                         <div className="mt-1 text-sm font-semibold text-ink">{payment.salesInvoice.customer?.name ?? 'Walk-in'}</div>
-                        <div className="text-xs text-black/50">{payment.method} · invoice {payment.salesInvoice.id.slice(0, 8)}</div>
+                        <div className="text-xs text-black/50">{PAYMENT_LABEL[payment.method] ?? payment.method} · invoice {payment.salesInvoice.id.slice(0, 8)}</div>
                       </div>
                       <div className="text-sm font-bold tabular-nums">{formatMoney(payment.amountPence, business.currency)}</div>
                     </div>

@@ -16,6 +16,21 @@ import DueDateBadge from '@/components/DueDateBadge';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import { getSupplierSalesReport } from '@/lib/reports/supplier-sales';
 
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  TRANSFER: 'Bank Transfer',
+  MOBILE_MONEY: 'Mobile Money (MoMo)',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  UNPAID: 'Unpaid',
+  PART_PAID: 'Partially paid',
+  PAID: 'Paid',
+  VOID: 'Voided',
+  RETURNED: 'Returned',
+};
+
 function SupplierStatusBadge({ status }: { status: 'up-to-date' | 'amount-owed' | 'over-limit' }) {
   if (status === 'over-limit') {
     return <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">Over limit</span>;
@@ -173,7 +188,7 @@ export default async function SupplierDetailPage({
         date: payment.paidAt,
         sortKey: payment.paidAt.getTime() + 0.1,
         type: 'payment' as const,
-        description: `Payment${payment.notes ? ` - ${payment.notes}` : ''} (${payment.method.toLowerCase().replace('_', ' ')})`,
+        description: `Payment${payment.notes ? ` - ${payment.notes}` : ''} (${PAYMENT_LABEL[payment.method] ?? payment.method})`,
         debitPence: 0,
         creditPence: payment.amountPence,
       })),
@@ -267,14 +282,14 @@ export default async function SupplierDetailPage({
           helper={`${activePurchaseInvoiceCount} unpaid purchase invoice${activePurchaseInvoiceCount === 1 ? '' : 's'}`}
         />
         <AccountStatCard
-          label="Payment threshold"
+          label="Credit limit"
           value={formatMoney(creditLimit, business.currency)}
           helper={
             creditLimit > 0 && availableCredit !== null
               ? availableCredit < 0
                 ? <span className="text-red-600">{formatMoney(Math.abs(availableCredit), business.currency)} over</span>
                 : `${formatMoney(availableCredit, business.currency)} remaining`
-              : 'No threshold set'
+              : 'No limit set'
           }
         />
         <AccountStatCard
@@ -412,7 +427,7 @@ export default async function SupplierDetailPage({
                       </Link>
                       <div className="mt-1 text-xs text-black/50">{formatDateTime(invoice.createdAt)}</div>
                     </div>
-                    <span className="pill shrink-0 bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                    <span className="pill shrink-0 bg-black/5 text-black/60">{STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}</span>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
@@ -440,7 +455,7 @@ export default async function SupplierDetailPage({
                         {invoice.payments.map((payment) => (
                           <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
                             <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
-                            <span>{payment.method}</span>
+                            <span>{PAYMENT_LABEL[payment.method] ?? payment.method}</span>
                             <span className="text-black/40">{formatDate(payment.paidAt)}</span>
                             {payment.notes && <span className="text-black/40">{payment.notes}</span>}
                           </div>
@@ -494,7 +509,7 @@ export default async function SupplierDetailPage({
                         </div>
                       </td>
                       <td className="px-3 py-3">
-                        <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                        <span className="pill bg-black/5 text-black/60">{STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}</span>
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         {formatMoney(invoice.totalPence, business.currency)}
@@ -519,7 +534,7 @@ export default async function SupplierDetailPage({
                               {invoice.payments.map((payment) => (
                                 <div key={payment.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-black/70">
                                   <span className="font-semibold">{formatMoney(payment.amountPence, business.currency)}</span>
-                                  <span>{payment.method}</span>
+                                  <span>{PAYMENT_LABEL[payment.method] ?? payment.method}</span>
                                   <span className="text-black/40">{formatDate(payment.paidAt)}</span>
                                   {payment.notes && <span className="text-black/40">{payment.notes}</span>}
                                 </div>

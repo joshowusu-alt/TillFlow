@@ -388,8 +388,8 @@ export default async function DashboardPage({
   const hasNonDefaultParams = !!(searchParams?.from || searchParams?.to || (searchParams?.storeId && searchParams?.storeId !== 'ALL'));
   const scopeHelper =
     selectedStoreId === 'ALL'
-      ? 'Expenses and net profit use accounting journals.'
-      : 'Expenses and net profit are business-wide accounting journal totals.';
+      ? 'Figures use the selected period across all branches. Expenses and net profit use business-wide accounting records.'
+      : 'Sales are filtered to this branch. Expenses and net profit use the business-wide accounting records currently available.';
   const cashDrawerParams = new URLSearchParams({ from: fromIso, to: toIso });
   if (selectedStoreId !== 'ALL') cashDrawerParams.set('storeId', selectedStoreId);
   const cashDrawerHref = `/reports/cash-drawer?${cashDrawerParams.toString()}`;
@@ -445,17 +445,18 @@ export default async function DashboardPage({
           label={`Gross Profit (${gpPercent}%)`}
           value={formatMoney(totalGrossMargin, currency)}
           tone={gpPercent >= 20 ? 'success' : gpPercent >= 0 ? 'warn' : 'danger'}
+          helper="Profit before expenses."
         />
         <StatCard label="Expenses" value={formatMoney(income.otherExpenses, currency)} helper={scopeHelper} />
         <StatCard
           label={`Net Profit (${npPercent}%)`}
           value={formatMoney(totalGrossMargin - income.otherExpenses, currency)}
           tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
-          helper={scopeHelper}
+          helper="Profit after expenses."
         />
-        <StatCard label="Debtors (AR)" value={formatMoney(outstandingAR, currency)} helper="Current customer credit owed." />
+        <StatCard label="What customers owe" value={formatMoney(outstandingAR, currency)} helper="Current customer credit balance, not just this period. Record receipts when customers pay." />
         <a href="/payments/supplier-payments" className="block min-w-0">
-          <StatCard label="Payables (AP)" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record payments." />
+          <StatCard label="What you owe suppliers" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record supplier payments when purchases are paid." />
         </a>
       </div>
 
@@ -468,7 +469,8 @@ export default async function DashboardPage({
         </summary>
         <div className="mt-2 space-y-2">
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-            Gross profit uses sale-line cost snapshots. {scopeHelper}
+            <p>Figures use the selected period and branch where supported. Sales and receipts may differ because customer credit can be paid later.</p>
+            <p className="mt-1">Customer and supplier balances show the current position, not only this period. Gross profit uses sale-line cost snapshots.</p>
           </div>
           <ReportFilterCard
             columnsClassName={stores.length > 1 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}
@@ -524,10 +526,9 @@ export default async function DashboardPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card p-4 sm:p-6">
           <div className="mb-4">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Payment Receipts Split</h2>
+            <h2 className="text-base font-display font-semibold sm:text-lg">How money came in</h2>
             <p className="mt-1 text-xs leading-relaxed text-black/50">
-              Shows payments received during the selected period, including collections from earlier credit sales.
-              Receipts may differ from sales when customers pay old credit balances.
+              Shows payment receipts by method. This can differ from sales when customers pay old credit.
             </p>
           </div>
           <div className="space-y-3 text-sm">
@@ -559,7 +560,10 @@ export default async function DashboardPage({
         </div>
 
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Activity Highlights</h2>
+          <div className="mb-4">
+            <h2 className="text-base font-display font-semibold sm:text-lg">Period activity highlights</h2>
+            <p className="mt-1 text-xs text-black/50">Returns, voids, and movement recorded during the selected period.</p>
+          </div>
           {!hasActivity ? (
             <div className="flex flex-col items-center py-6 text-center text-sm text-black/40">
               <span>No voids, returns, adjustments, or cash variances in this period.</span>
@@ -591,10 +595,10 @@ export default async function DashboardPage({
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="font-medium text-purple-700">
-                        Closed Shift Cash Variance ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
+                        Closed-shift cash difference ({todayCashVar.length} shift{todayCashVar.length !== 1 ? 's' : ''})
                       </div>
                       <div className="mt-0.5 text-xs leading-relaxed text-purple-700/70">
-                        Total absolute cash variance from shifts closed during this period.
+                        Difference between expected and counted cash from closed shifts.
                       </div>
                     </div>
                     <span className="font-semibold text-purple-700 sm:text-right">{formatMoney(cashVarTotal, currency)}</span>
@@ -663,7 +667,7 @@ export default async function DashboardPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Low Stock Alerts</h2>
+            <h2 className="text-base font-display font-semibold sm:text-lg">Stock needing attention</h2>
             <a href="/reports/reorder-suggestions" className="text-xs text-black/40 hover:text-black/70">
               Reorder →
             </a>
@@ -713,7 +717,7 @@ export default async function DashboardPage({
 
         <div className="card p-4 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-base font-display font-semibold sm:text-lg">Top Revenue Products</h2>
+            <h2 className="text-base font-display font-semibold sm:text-lg">Best-selling products by revenue</h2>
             <a href="/reports/analytics" className="text-xs text-black/40 hover:text-black/70">
               Sales analytics →
             </a>

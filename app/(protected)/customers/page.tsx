@@ -96,6 +96,8 @@ export default async function CustomersPage({
         primaryCta={{ label: 'Add customer', href: '#add-customer' }}
       />
 
+      <p className="text-xs text-black/50">These are current customer balances across recorded sales and receipts, not limited to a date range.</p>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <CustomerStatCard
           label="Total customers"
@@ -105,12 +107,12 @@ export default async function CustomersPage({
         <CustomerStatCard
           label="Customers with balance"
           value={customersWithBalanceCount.toLocaleString('en-GH')}
-          helper="Visible accounts owing money"
+          helper="Customers with an unpaid balance"
         />
         <CustomerStatCard
-          label="Total AR outstanding"
+          label="What customers owe"
           value={formatMoney(totalArOutstandingPence, business.currency)}
-          helper="Visible balance due"
+          helper="Current balance across all customer accounts"
         />
         <CustomerStatCard
           label="Credit limits set"

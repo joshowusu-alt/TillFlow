@@ -21,6 +21,7 @@ export type NavIconKey =
   | 'people'
   | 'customers'
   | 'suppliers'
+  | 'reportsHub'
   | 'reports'
   | 'analytics'
   | 'profit'
@@ -88,6 +89,7 @@ export const REPORT_NAV_SECTIONS: NavigationSection[] = [
     id: 'main',
     label: 'Main',
     items: [
+      { href: '/reports', label: 'Reports Hub', roles: ['MANAGER', 'OWNER'], iconKey: 'reportsHub' },
       { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
       { href: '/reports/dashboard', label: 'Trading Report', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
       { href: '/reports/weekly-digest', label: 'Weekly Digest', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },

@@ -53,7 +53,7 @@ describe('supplier list — payables filter and status', () => {
     expect(src).toContain('SupplierStatCard');
     expect(src).toContain('Total suppliers');
     expect(src).toContain('Suppliers with balance');
-    expect(src).toContain('Total AP outstanding');
+    expect(src).toContain('What you owe suppliers');
     expect(src).toContain('totalCount.toLocaleString');
     expect(src).toContain('suppliersWithBalanceCount');
     expect(src).toContain('totalApOutstandingPence');

@@ -102,6 +102,7 @@ export default function NavMobileMenu({
       case '/payments/reconciliation/card-transfer': return <svg {...props}><path {...p} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" /></svg>;
       case '/customers': return <svg {...props}><path {...p} d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>;
       case '/suppliers': return <svg {...props}><path {...p} d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016 2.993 2.993 0 002.25-1.016 3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" /></svg>;
+      case '/reports': return <svg {...props}><path {...p} d="M4 5.5a1.5 1.5 0 011.5-1.5h5v7H4V5.5zM13.5 4h5A1.5 1.5 0 0120 5.5v4h-6.5V4zM4 13.5h6.5V20h-5A1.5 1.5 0 014 18.5v-5zM13.5 12H20v6.5a1.5 1.5 0 01-1.5 1.5h-5V12z" /></svg>;
       case '/reports/command-center': return <svg {...props}><path {...p} d="M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
       case '/reports/dashboard': return <svg {...props}><path {...p} d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" /></svg>;
       case '/reports/weekly-digest': return <svg {...props}><path {...p} d="M6.75 3v2.25M17.25 3v2.25M3.75 8.25h16.5M5.25 5.25h13.5A1.5 1.5 0 0120.25 6.75v12A1.5 1.5 0 0118.75 20.25H5.25A1.5 1.5 0 013.75 18.75v-12A1.5 1.5 0 015.25 5.25zM8.25 12h3.75m-3.75 3h7.5" /></svg>;
@@ -187,7 +188,7 @@ export default function NavMobileMenu({
                           </div>
                         ) : null}
                         {section.items.map((item) => {
-                      const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                      const active = pathname === item.href || (item.href !== '/reports' && pathname.startsWith(item.href + '/'));
                       const requiredFeature = featureGatedLinks?.get(item.href);
                       const featureLocked = requiredFeature ? !features[requiredFeature] : false;
                       const minimumPlan = planGatedLinks.get(item.href);

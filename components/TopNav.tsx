@@ -259,7 +259,7 @@ export default function TopNav({
                 : [sections];
 
               const renderNavItem = (item: (typeof sections)[number]['items'][number]) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                const active = pathname === item.href || (item.href !== '/reports' && pathname.startsWith(item.href + '/'));
                 const requiredFeature = featureGatedLinks.get(item.href);
                 const featureLocked = requiredFeature ? !features[requiredFeature] : false;
                 const minimumPlan = planGatedLinks.get(item.href);

@@ -13,6 +13,21 @@ import { updateCustomerAction } from '@/app/actions/customers';
 import { getFeatures } from '@/lib/features';
 import type { ReactNode } from 'react';
 
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  TRANSFER: 'Bank Transfer',
+  MOBILE_MONEY: 'Mobile Money (MoMo)',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  UNPAID: 'Unpaid',
+  PART_PAID: 'Partially paid',
+  PAID: 'Paid',
+  VOID: 'Voided',
+  RETURNED: 'Returned',
+};
+
 type OnlineOrderHistoryRow = {
   id: string;
   orderNumber: string;
@@ -221,7 +236,7 @@ export default async function CustomerDetailPage({
         date: payment.receivedAt,
         sortKey: payment.receivedAt.getTime() + 0.1,
         type: 'payment' as const,
-        description: `Payment${payment.reference ? ` - ${payment.reference}` : ''} (${payment.method.toLowerCase().replace('_', ' ')})`,
+        description: `Payment${payment.reference ? ` - ${payment.reference}` : ''} (${PAYMENT_LABEL[payment.method] ?? payment.method})`,
         debitPence: 0,
         creditPence: payment.amountPence,
       })),
@@ -460,7 +475,7 @@ export default async function CustomerDetailPage({
                       <td className="px-3 py-3 text-sm">{invoice.id.slice(0, 8)}</td>
                       <td className="px-3 py-3 text-sm">{formatDateTime(invoice.createdAt)}</td>
                       <td className="px-3 py-3">
-                        <span className="pill bg-black/5 text-black/60">{invoice.paymentStatus}</span>
+                        <span className="pill bg-black/5 text-black/60">{STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}</span>
                       </td>
                       <td className="px-3 py-3 text-sm font-semibold">
                         {formatMoney(invoice.totalPence, business.currency)}

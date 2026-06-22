@@ -121,8 +121,8 @@ export default async function SalesBySupplierPage({
         title="Sales by Linked Supplier"
         subtitle={
           isDrillDown
-            ? `Products linked to ${drilledSupplier!.name}`
-            : 'Revenue and sales volume for products linked to each supplier.'
+            ? `Product sales under the preferred supplier link for ${drilledSupplier!.name}.`
+            : 'Understand sales performance by the preferred supplier linked to each product.'
         }
         secondaryCta={
           isDrillDown
@@ -134,11 +134,29 @@ export default async function SalesBySupplierPage({
         }
       />
 
-      {/* Disclaimer note */}
-      <p className="text-sm text-black/50">
-        This report shows sales for products linked to each supplier.
-        It does not track the exact supplier source of each inventory unit sold.
-      </p>
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-4 text-sm leading-relaxed text-blue-900 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
+          <div>
+            <p className="font-semibold">Based on preferred supplier links on products.</p>
+            <p className="mt-1">
+              This is a sales performance view, not supplier debt. It does not prove which supplier supplied the exact
+              item sold, and it does not track exact stock batch origin.
+            </p>
+            <p className="mt-1">
+              Returned and void sales are excluded. Supplier sales performance is separate from supplier purchases,
+              balances, and payments.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Link href="/payments/supplier-aging" className="btn-secondary text-xs">
+              View supplier payables
+            </Link>
+            <Link href="/payments/supplier-payments" className="btn-ghost text-xs">
+              Supplier payments
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* Filter card */}
       <ReportFilterCard
@@ -180,13 +198,13 @@ export default async function SalesBySupplierPage({
       {!isDrillDown ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Total revenue"
+            label="Supplier-linked sales value"
             value={formatMoney(report.totalRevenuePence, business.currency)}
             tone="accent"
             helper="From products linked to any supplier"
           />
           <StatCard
-            label="Units sold"
+            label="Quantity sold"
             value={report.totalQtyBase.toLocaleString()}
             helper="Sum of all base-unit quantities"
           />
@@ -216,7 +234,7 @@ export default async function SalesBySupplierPage({
               </div>
             </div>
             <div className="space-y-1">
-              <div className="text-xs uppercase tracking-wide text-black/40">Units sold</div>
+              <div className="text-xs uppercase tracking-wide text-black/40">Quantity sold</div>
               <div className="text-2xl font-semibold tabular-nums">
                 {(drilledRow?.totalQtyBase ?? 0).toLocaleString()}
               </div>
@@ -232,7 +250,7 @@ export default async function SalesBySupplierPage({
           {drilledHasNoLinkedProducts ? (
             <ReportSetupEmptyState
               title={`No products linked to ${drilledSupplier!.name}`}
-              body={`Add ${drilledSupplier!.name} as the preferred supplier on products, or record a purchase from ${drilledSupplier!.name} containing those products.`}
+              body={`To use this report, link products to ${drilledSupplier!.name} as their preferred supplier. TillFlow will group sales by those product links; this does not create supplier debt or track exact stock batches.`}
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View supplier profile', href: `/suppliers/${supplierId}` },
@@ -243,7 +261,7 @@ export default async function SalesBySupplierPage({
           {drilledHasLinkedProductsWithoutSales ? (
             <ReportSetupEmptyState
               title="No sales for linked products in this period"
-              body={`Products are linked to ${drilledSupplier!.name}, but none were sold in the selected date range.`}
+              body={`Products are linked to ${drilledSupplier!.name}, but none were sold in the selected date range. This report only shows sales performance for linked products, not purchases or supplier balances.`}
               actions={[
                 { label: 'Change period', href: buildHref({ period: 'mtd', supplierId }) },
                 { label: 'View linked products', href: `/suppliers/${supplierId}#products-supplied`, primary: true },
@@ -257,8 +275,8 @@ export default async function SalesBySupplierPage({
               <tr>
                 <th>Product</th>
                 <th>SKU</th>
-                <th>Qty sold</th>
-                <th>Revenue</th>
+                <th>Quantity sold</th>
+                <th>Sales value</th>
                 <th>Sales count</th>
               </tr>
             </thead>
@@ -303,8 +321,8 @@ export default async function SalesBySupplierPage({
         /* Supplier table */
         <div className="space-y-4">
           <ReportSectionHeader
-            title="Revenue by supplier"
-            subtitle="Products are attributed to the supplier set as preferred supplier."
+            title="Supplier-linked sales"
+            subtitle="Products are attributed to the supplier set as preferred supplier. This is not supplier debt."
             trailing={
               <DownloadLink
                 href={exportHref}
@@ -317,8 +335,8 @@ export default async function SalesBySupplierPage({
           />
           {!hasSupplierLinks ? (
             <ReportSetupEmptyState
-              title="No supplier-linked products yet"
-              body="Add a preferred supplier on products, or record purchases from suppliers so TillFlow can link products for this report."
+              title="No supplier-linked sales yet"
+              body="To use this report, link products to their preferred supplier. TillFlow will group sales by those product links; this does not create supplier debt or track exact stock batches."
               actions={[
                 { label: 'Manage products', href: '/products', primary: true },
                 { label: 'View suppliers', href: '/suppliers' },
@@ -328,7 +346,7 @@ export default async function SalesBySupplierPage({
           {hasLinkedProductsWithoutSales ? (
             <ReportSetupEmptyState
               title="No sales for linked products in this period"
-              body="Supplier links exist, but no linked products were sold in the selected date range."
+              body="Supplier links exist, but no linked products were sold in the selected date range. Use supplier payables for what you owe suppliers."
               actions={[
                 { label: 'Change period', href: buildHref({ period: 'mtd' }) },
                 { label: 'Manage products', href: '/products', primary: true },
@@ -339,11 +357,11 @@ export default async function SalesBySupplierPage({
             <thead>
               <tr>
                 <th>Supplier</th>
-                <th className="hidden sm:table-cell">Linked products</th>
-                <th>Revenue</th>
-                <th className="hidden lg:table-cell">Qty sold</th>
+                <th className="hidden sm:table-cell">Products linked</th>
+                <th>Sales value</th>
+                <th className="hidden lg:table-cell">Quantity sold</th>
                 <th className="hidden lg:table-cell">Sales count</th>
-                <th className="hidden xl:table-cell">Avg sale value</th>
+                <th className="hidden xl:table-cell">Average sale value</th>
                 <th></th>
               </tr>
             </thead>
@@ -391,7 +409,7 @@ export default async function SalesBySupplierPage({
               ) : (
                 <ReportTableEmptyRow
                   colSpan={7}
-                  message="Add preferred suppliers on products or record supplier purchases to start this report."
+                  message="Link products to their preferred supplier to start this sales performance report."
                 />
               )}
             </tbody>

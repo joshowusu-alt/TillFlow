@@ -45,7 +45,7 @@ describe('customer list — debtor filter and status', () => {
     expect(src).toContain('CustomerStatCard');
     expect(src).toContain('Total customers');
     expect(src).toContain('Customers with balance');
-    expect(src).toContain('Total AR outstanding');
+    expect(src).toContain('What customers owe');
     expect(src).toContain('totalCount.toLocaleString');
     expect(src).toContain('customersWithBalanceCount');
     expect(src).toContain('totalArOutstandingPence');

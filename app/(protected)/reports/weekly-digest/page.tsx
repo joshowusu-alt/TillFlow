@@ -24,6 +24,13 @@ function pctChange(current: number, previous: number): string {
   return pct >= 0 ? `+${pct}%` : `${pct}%`;
 }
 
+const PAYMENT_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  MOBILE_MONEY: 'Mobile Money (MoMo)',
+  TRANSFER: 'Bank Transfer',
+};
+
 export default async function WeeklyDigestPage({
   searchParams,
 }: {
@@ -75,25 +82,34 @@ export default async function WeeklyDigestPage({
         }
       />
 
-      {/* Weekly KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Weekly Sales"
-          value={formatMoney(data.totalSalesPence, currency)}
-          tone="accent"
-          helper={`${salesChange} vs prev week`}
-        />
-        <StatCard
-          label={`Gross Profit (${data.gpPercent}%)`}
-          value={formatMoney(data.grossProfitPence, currency)}
-          tone={data.gpPercent >= 20 ? 'success' : data.gpPercent >= 0 ? 'warn' : 'danger'}
-          helper={`${gpChange} vs prev week`}
-        />
-        <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
-        <StatCard
-          label="Avg. Transaction"
-          value={formatMoney(data.txCount > 0 ? Math.round(data.totalSalesPence / data.txCount) : 0, currency)}
-        />
+      {/* Scope and trust note */}
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+        <p>This digest covers Monday to Sunday for the whole business. Generated from recorded sales, receipts, returns, voids, stock adjustments, and shift activity.</p>
+        <p className="mt-1">Receipts may include payments for older customer credit. <a href="/reports/dashboard" className="font-medium underline-offset-2 hover:underline">Use the Trading Report</a> for date and branch filtering.</p>
+      </div>
+
+      {/* Week at a glance — KPIs */}
+      <div className="space-y-2">
+        <div className="px-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-black/45">Week at a glance</div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Sales this week"
+            value={formatMoney(data.totalSalesPence, currency)}
+            tone="accent"
+            helper={`${salesChange} vs prev week`}
+          />
+          <StatCard
+            label={`Gross Profit (${data.gpPercent}%)`}
+            value={formatMoney(data.grossProfitPence, currency)}
+            tone={data.gpPercent >= 20 ? 'success' : data.gpPercent >= 0 ? 'warn' : 'danger'}
+            helper="Profit before expenses."
+          />
+          <StatCard label="Transactions" value={String(data.txCount)} helper={`${txChange} vs prev week`} />
+          <StatCard
+            label="Average sale"
+            value={formatMoney(data.txCount > 0 ? Math.round(data.totalSalesPence / data.txCount) : 0, currency)}
+          />
+        </div>
       </div>
 
       {/* Data-quality warning for extremely negative GP */}
@@ -133,21 +149,23 @@ export default async function WeeklyDigestPage({
         </div>
       </div>
 
-      {/* Risk + Controls summary */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Voids" value={String(data.voidCount)} tone={data.voidCount > 0 ? 'warn' : 'default'} />
-        <StatCard label="Returns" value={String(data.returnCount)} tone={data.returnCount > 0 ? 'warn' : 'default'} />
-        <StatCard label="Discount Overrides" value={String(data.discountOverrides)} tone={data.discountOverrides > 0 ? 'warn' : 'default'} />
-        <StatCard label="Stock Adjustments" value={String(data.adjustmentCount)} />
+      {/* Activity & control summary */}
+      <div className="space-y-2">
+        <div className="px-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-black/45">Activity & control</div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Voids" value={String(data.voidCount)} tone={data.voidCount > 0 ? 'warn' : 'default'} />
+          <StatCard label="Returns" value={String(data.returnCount)} tone={data.returnCount > 0 ? 'warn' : 'default'} />
+          <StatCard label="Discount overrides" value={String(data.discountOverrides)} tone={data.discountOverrides > 0 ? 'warn' : 'default'} />
+          <StatCard label="Stock adjustments" value={String(data.adjustmentCount)} />
+        </div>
       </div>
 
-      {/* Payment split */}
+      {/* How money came in — payment split */}
       <div className="card p-4 sm:p-6">
         <div className="mb-4">
-          <h2 className="text-base font-display font-semibold sm:text-lg">Payment Receipts Split</h2>
+          <h2 className="text-base font-display font-semibold sm:text-lg">How money came in</h2>
           <p className="mt-1 text-xs leading-relaxed text-black/50">
-            Shows payments received during the week, including collections from earlier credit sales.
-            Receipts may differ from sales when customers pay old credit balances.
+            Shows payment receipts by method. Receipts may include payments for older customer credit.
           </p>
         </div>
         {Object.keys(data.paymentSplit).length === 0 ? (
@@ -156,7 +174,7 @@ export default async function WeeklyDigestPage({
           <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
             {Object.entries(data.paymentSplit).map(([method, amount]) => (
               <div key={method} className="flex flex-col items-center rounded-xl border border-black/5 bg-white px-4 py-3.5 text-center shadow-card sm:px-6 sm:py-4">
-                <span className="text-xs text-muted uppercase">{method.replace('_', ' ')}</span>
+                <span className="text-xs text-muted">{PAYMENT_LABEL[method] ?? method.replace('_', ' ')}</span>
                 <span className="mt-1 text-lg font-semibold">{formatMoney(amount, currency)}</span>
                 <span className="text-xs text-muted">
                   {data.totalReceiptsPence > 0 ? Math.round((amount / data.totalReceiptsPence) * 100) : 0}%
@@ -186,7 +204,7 @@ export default async function WeeklyDigestPage({
         </div>
 
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Top Margin Items (est.)</h2>
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Highest estimated margin items</h2>
           {data.topMargin.length === 0 ? (
             <EmptyState icon="chart" title="No margin data" subtitle="Record sales with cost prices to see margins." />
           ) : (
@@ -229,7 +247,7 @@ export default async function WeeklyDigestPage({
         </div>
 
         <div className="card p-4 sm:p-6">
-          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Risk Trends by Cashier</h2>
+          <h2 className="mb-4 text-base font-display font-semibold sm:text-lg">Control checks by cashier</h2>
           {data.riskCashiers.length === 0 ? (
             <EmptyState icon="check" title="No risk events" subtitle="No voids, discount overrides, or cash variances this week." />
           ) : (

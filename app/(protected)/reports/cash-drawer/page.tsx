@@ -115,8 +115,16 @@ export default async function CashDrawerReportPage({
     <div className="space-y-6">
       <PageHeader
         title="Cash Drawer Report"
-        subtitle="Daily cash summary by branch/store, till and cashier."
+        subtitle="Track cash expected and cash counted across all tills and shifts."
       />
+
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
+        This report covers physical cash only. MoMo, card, and bank transfer receipts are not included here — see the{' '}
+        <a href="/reports/dashboard" className="font-semibold underline underline-offset-2">
+          Trading Report
+        </a>{' '}
+        for all payment methods.
+      </section>
 
       <ReportFilterCard
         actions={
@@ -164,70 +172,109 @@ export default async function CashDrawerReportPage({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
-          label="Expected Cash"
+          label="Cash expected"
           value={formatMoney(totalExpected, business.currency)}
+          helper="What the till should hold based on recorded activity."
         />
         <StatCard
-          label={openShiftCount > 0 ? 'Counted Cash (closed shifts only)' : 'Counted Cash'}
+          label={openShiftCount > 0 ? 'Cash counted (closed shifts only)' : 'Cash counted'}
           value={formatMoney(totalActual, business.currency)}
+          helper="Cash physically counted when the shift was closed."
         />
         <StatCard
-          label={openShiftCount > 0 ? 'Variance (closed shifts only)' : 'Variance'}
+          label={openShiftCount > 0 ? 'Difference (closed shifts only)' : 'Difference'}
           value={formatMoney(totalVariance, business.currency)}
-          tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'accent' : 'danger'}
+          tone={totalVariance === 0 ? 'default' : totalVariance > 0 ? 'success' : 'danger'}
+          helper="Positive = more than expected. Negative = less than expected."
         />
       </div>
 
       {openShiftCount > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <strong>{openShiftCount} shift{openShiftCount > 1 ? 's are' : ' is'} still open.</strong>{' '}
-          Open shifts have not been counted yet, so Counted Cash and Variance are calculated from closed shifts only.
-          Expected Cash includes all shifts.
+          <strong>
+            {openShiftCount} shift{openShiftCount > 1 ? 's' : ''} still open — not counted yet.
+          </strong>{' '}
+          Cash counted and difference are from closed shifts only. Cash expected includes all shifts. Close open shifts
+          before relying on these figures.
         </div>
       )}
 
-      <ReportTableCard title="Cash movement breakdown" tableClassName="table w-full min-w-[48rem] border-separate border-spacing-y-2">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {CASH_DRAWER_BREAKDOWN_ORDER.map((entryType) => (
-            <tr key={entryType} className="rounded-xl bg-white">
-              <td className="px-3 py-3 text-sm">{CASH_DRAWER_ENTRY_LABELS[entryType]}</td>
-              <td className="px-3 py-3 text-sm font-semibold">
-                {formatMoney(movementTotals[entryType] ?? 0, business.currency)}
-              </td>
-            </tr>
-          ))}
-          {shifts.length === 0 ? (
-            <ReportTableEmptyRow colSpan={2} message="No cash movements found in this date range." paddingClassName="px-3 py-8" />
-          ) : null}
-        </tbody>
-      </ReportTableCard>
+      <div className="card overflow-hidden p-3.5 sm:p-4">
+        <h2 className="text-base font-display font-semibold sm:text-lg">How cash moved through the drawer</h2>
+        <p className="mt-1 text-sm leading-relaxed text-black/55">
+          Negative amounts are cash paid out of the drawer, such as supplier payments, expenses, or refunds.
+        </p>
+        <div className="mt-3 space-y-2 md:hidden">
+          {CASH_DRAWER_BREAKDOWN_ORDER.map((entryType) => {
+            const amount = movementTotals[entryType] ?? 0;
 
-      <ReportTableCard tableClassName="table w-full min-w-[104rem] border-separate border-spacing-y-2">
+            return (
+              <div
+                key={entryType}
+                className="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm"
+              >
+                <span className="min-w-0 flex-1 text-sm text-slate-700">{CASH_DRAWER_ENTRY_LABELS[entryType]}</span>
+                <span
+                  className={`shrink-0 text-right text-sm font-bold tabular-nums ${
+                    amount < 0 ? 'text-rose-700' : 'text-slate-950'
+                  }`}
+                >
+                  {formatMoney(amount, business.currency)}
+                </span>
+              </div>
+            );
+          })}
+          {shifts.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No cash movements found in this date range.
+            </div>
+          ) : null}
+        </div>
+        <div className="responsive-table-shell -mx-1 hidden px-1 md:block sm:mx-0 sm:px-0">
+          <table className="table mt-3 w-full border-separate border-spacing-y-2">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CASH_DRAWER_BREAKDOWN_ORDER.map((entryType) => (
+                <tr key={entryType} className="rounded-xl bg-white">
+                  <td className="px-3 py-3 text-sm">{CASH_DRAWER_ENTRY_LABELS[entryType]}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {formatMoney(movementTotals[entryType] ?? 0, business.currency)}
+                  </td>
+                </tr>
+              ))}
+              {shifts.length === 0 ? (
+                <ReportTableEmptyRow colSpan={2} message="No cash movements found in this date range." paddingClassName="px-3 py-8" />
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <ReportTableCard tableClassName="table w-full min-w-[56rem] border-separate border-spacing-y-2 xl:min-w-[104rem]">
         <thead>
           <tr>
             <th>Date</th>
             <th>Branch</th>
             <th>Till</th>
             <th>Cashier</th>
-            <th>Opening float</th>
-            <th>Cash sales</th>
-            <th>Customer payments</th>
-            <th>Supplier payments</th>
-            <th>Expenses</th>
-            <th>Refunds</th>
-            <th>Cash added / adjustments</th>
-            <th>Expected</th>
-            <th>Counted</th>
-            <th>Variance</th>
+            <th className="hidden xl:table-cell">Opening float</th>
+            <th className="hidden xl:table-cell">Cash sales</th>
+            <th className="hidden xl:table-cell">Customer payments</th>
+            <th className="hidden xl:table-cell">Supplier cash paid out</th>
+            <th className="hidden xl:table-cell">Expenses paid out</th>
+            <th className="hidden xl:table-cell">Refunds</th>
+            <th className="hidden xl:table-cell">Cash added</th>
+            <th>Cash expected</th>
+            <th>Cash counted</th>
+            <th>Difference</th>
             <th>Reason</th>
             <th>Notes</th>
-            <th>Approved By</th>
+            <th>Manager approval</th>
           </tr>
         </thead>
         <tbody>
@@ -239,13 +286,13 @@ export default async function CashDrawerReportPage({
                 <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
                 <td className="px-3 py-3 text-sm">{shift.till.name}</td>
                 <td className="px-3 py-3 text-sm">{shift.user.name}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.OPEN_FLOAT ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_SALE ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_DEBTOR_PAYMENT ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.OPEN_FLOAT ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_SALE ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_DEBTOR_PAYMENT ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
+                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
                 <td className="px-3 py-3 text-sm font-semibold">
                   {formatMoney(shift.expectedCashPence, business.currency)}
                 </td>
@@ -290,7 +337,7 @@ export default async function CashDrawerReportPage({
                   <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
                 </td>
                 <td className="px-3 py-3 text-xs">
-                  {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Open' : 'N/A')}
+                  {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Shift open' : '—')}
                 </td>
               </tr>
             );

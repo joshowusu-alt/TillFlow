@@ -1,9 +1,10 @@
+import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
 import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
-import { DataCard, DataCardHeader } from '@/components/DataCard';
+import { DataCard, DataCardActions, DataCardHeader } from '@/components/DataCard';
 import {
   getSupplierAgingReport,
   AGING_BUCKETS,
@@ -206,6 +207,7 @@ export default async function SupplierAgingPage({
                     <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-amber-700">61–90 days</th>
                     <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-rose-700">90+ days</th>
                     <th className="px-4 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wider text-muted">Oldest Due</th>
+                    <th className="px-4 py-3.5"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -234,6 +236,14 @@ export default async function SupplierAgingPage({
                       <td className="px-4 py-3.5 text-right tabular-nums text-muted">
                         {row.oldestDueDate ? formatDate(row.oldestDueDate) : <span className="text-slate-300">—</span>}
                       </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href={`/payments/supplier-payments?supplierId=${row.supplierId}`}
+                          className="btn-ghost text-xs whitespace-nowrap"
+                        >
+                          Record payment
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -261,6 +271,7 @@ export default async function SupplierAgingPage({
                       {report.totals.buckets.D90_PLUS > 0 ? formatMoney(report.totals.buckets.D90_PLUS, currency) : '—'}
                     </td>
                     <td />
+                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -280,13 +291,21 @@ export default async function SupplierAgingPage({
                     </span>
                   }
                 />
-                <div className="flex flex-wrap gap-1.5 px-4 pb-4">
+                <div className="flex flex-wrap gap-1.5 px-4 pb-3">
                   {AGING_BUCKETS.filter((b) => row.buckets[b] > 0).map((b) => (
                     <span key={b} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${BUCKET_CHIP_CLASSES[b]}`}>
                       {AGING_BUCKET_LABELS[b]}: {formatMoney(row.buckets[b], currency)}
                     </span>
                   ))}
                 </div>
+                <DataCardActions>
+                  <Link
+                    href={`/payments/supplier-payments?supplierId=${row.supplierId}`}
+                    className="btn-primary text-xs"
+                  >
+                    Record payment
+                  </Link>
+                </DataCardActions>
               </DataCard>
             ))}
           </div>
