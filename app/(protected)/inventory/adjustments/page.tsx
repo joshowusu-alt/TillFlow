@@ -19,6 +19,21 @@ function isReversal(reason?: string | null) {
   return Boolean(reason?.includes('Reversal of adjustment'));
 }
 
+function AdjustmentsEmptyState({ q }: { q?: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-7 text-center">
+      <div className="text-sm font-semibold text-ink">
+        {q ? `No adjustments matching "${q}".` : 'No stock adjustments yet.'}
+      </div>
+      <div className="mt-1 text-sm text-black/55">
+        {q
+          ? 'Try a different search term.'
+          : 'When stock needs correcting, record an adjustment so TillFlow keeps a clear audit trail.'}
+      </div>
+    </div>
+  );
+}
+
 export default async function StockAdjustmentsPage({
   searchParams,
 }: {
@@ -106,10 +121,11 @@ export default async function StockAdjustmentsPage({
   });
   const countIn = adjustmentRows.filter(({ adjustment }) => isIncreaseDirection(adjustment.direction)).length;
   const countOut = adjustmentRows.filter(({ adjustment }) => !isIncreaseDirection(adjustment.direction)).length;
+  const isPaginated = adjustmentRows.length < adjustmentCount;
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader title="Stock Adjustments" subtitle="Record shrinkage, found stock, and corrections." />
+      <PageHeader title="Stock Adjustments" subtitle="Correct stock safely and keep a clear audit trail." />
 
       {searchParams?.reversed === '1' ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
@@ -123,17 +139,20 @@ export default async function StockAdjustmentsPage({
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Recorded</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-ink">{adjustmentCount}</div>
+        <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Recorded</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{adjustmentCount}</div>
+          <div className="mt-1 text-xs text-black/50">Total adjustments</div>
         </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">Added</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-emerald-700">{countIn}</div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700/70">Added</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-emerald-700">{countIn}</div>
+          <div className="mt-1 text-xs text-emerald-600/70">{isPaginated ? 'On this page' : 'Stock increases'}</div>
         </div>
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-          <div className="text-xs uppercase tracking-[0.2em] text-rose-700/70">Removed</div>
-          <div className="mt-1 text-2xl font-display font-semibold text-rose-700">{countOut}</div>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-card">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Removed</div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{countOut}</div>
+          <div className="mt-1 text-xs text-rose-600/70">{isPaginated ? 'On this page' : 'Stock decreases'}</div>
         </div>
       </div>
 
@@ -156,22 +175,24 @@ export default async function StockAdjustmentsPage({
       </div>
 
       <div className="card p-4 sm:p-6">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-lg font-display font-semibold">Recent adjustments</h2>
-            <p className="text-sm text-black/55">Latest stock corrections, shrinkage, and found stock entries for this branch.</p>
+            <p className="mt-1 text-sm text-black/55">Every adjustment is permanently recorded. Owners can reverse any entry, which adds an audited opposite entry.</p>
           </div>
-          <div className="text-xs text-black/45">{adjustmentCount} total records</div>
+          <div className="text-xs text-black/45 sm:flex-shrink-0">{adjustmentCount} total records</div>
         </div>
 
-        <div className="mt-4 space-y-3 lg:hidden">
+        {/* Mobile cards */}
+        <div className="space-y-3 lg:hidden">
           {adjustmentRows.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-sm text-black/50">
-              No stock adjustments recorded yet.
-            </div>
+            <AdjustmentsEmptyState />
           ) : (
             adjustmentRows.map(({ adjustment, formatted }) => (
-              <div key={adjustment.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">
+              <div
+                key={adjustment.id}
+                className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-ink">{adjustment.product.name}</div>
@@ -209,43 +230,55 @@ export default async function StockAdjustmentsPage({
           )}
         </div>
 
+        {/* Desktop table */}
         <div className="responsive-table-shell mt-4 hidden lg:block">
           <table className="table w-full border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Direction</th>
-              <th>Reason</th>
-              <th>User</th>
-              {canReverseAdjustments ? <th>Owner action</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {adjustmentRows.map(({ adjustment, formatted }) => {
-              return (
-                <tr key={adjustment.id} className="rounded-xl bg-white">
-                  <td className="px-3 py-3 text-sm">{formatDateTime(adjustment.createdAt)}</td>
-                  <td className="px-3 py-3 text-sm font-semibold">{adjustment.product.name}</td>
-                  <td className="px-3 py-3 text-sm">{formatted}</td>
-                  <td className="px-3 py-3 text-sm">
-                    <span className="pill bg-black/5 text-black/60">{adjustment.direction}</span>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Direction</th>
+                <th>Reason</th>
+                <th>User</th>
+                {canReverseAdjustments ? <th>Owner action</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {adjustmentRows.length === 0 ? (
+                <tr>
+                  <td colSpan={canReverseAdjustments ? 7 : 6} className="px-3 py-12 text-center">
+                    <AdjustmentsEmptyState />
                   </td>
-                  <td className="px-3 py-3 text-sm">{adjustment.reason ?? '-'}</td>
-                  <td className="px-3 py-3 text-sm">{adjustment.user.name ?? 'Unknown'}</td>
-                  {canReverseAdjustments ? (
-                    <td className="px-3 py-3 text-sm">
-                      <ReverseStockAdjustmentForm
-                        adjustmentId={adjustment.id}
-                        disabled={isReversal(adjustment.reason)}
-                      />
-                    </td>
-                  ) : null}
                 </tr>
-              );
-            })}
-          </tbody>
+              ) : (
+                adjustmentRows.map(({ adjustment, formatted }) => (
+                  <tr
+                    key={adjustment.id}
+                    className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none"
+                  >
+                    <td className="px-3 py-3 text-sm">{formatDateTime(adjustment.createdAt)}</td>
+                    <td className="px-3 py-3 text-sm font-semibold">{adjustment.product.name}</td>
+                    <td className="px-3 py-3 text-sm">{formatted}</td>
+                    <td className="px-3 py-3 text-sm">
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {adjustment.direction}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-sm">{adjustment.reason ?? '-'}</td>
+                    <td className="px-3 py-3 text-sm">{adjustment.user.name ?? 'Unknown'}</td>
+                    {canReverseAdjustments ? (
+                      <td className="px-3 py-3 text-sm">
+                        <ReverseStockAdjustmentForm
+                          adjustmentId={adjustment.id}
+                          disabled={isReversal(adjustment.reason)}
+                        />
+                      </td>
+                    ) : null}
+                  </tr>
+                ))
+              )}
+            </tbody>
           </table>
         </div>
         <Pagination
