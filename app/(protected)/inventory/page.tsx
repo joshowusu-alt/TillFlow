@@ -121,17 +121,17 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700/70">Low stock</div>
           <div className="mt-2 text-2xl font-bold tabular-nums text-amber-800">{lowStockCount}</div>
-          <div className="mt-1 text-xs text-amber-600/70">Need restocking soon</div>
+          <div className="mt-1 text-xs text-amber-600/70">On this page</div>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Out of stock</div>
           <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{outOfStockCount}</div>
-          <div className="mt-1 text-xs text-rose-600/70">Need immediate attention</div>
+          <div className="mt-1 text-xs text-rose-600/70">On this page</div>
         </div>
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700/70">Cost drift</div>
           <div className="mt-2 text-2xl font-bold tabular-nums text-sky-800">{costDriftCount}</div>
-          <div className="mt-1 text-xs text-sky-600/70">Avg cost differs from default</div>
+          <div className="mt-1 text-xs text-sky-600/70">Avg cost differs on this page</div>
         </div>
       </div>
 

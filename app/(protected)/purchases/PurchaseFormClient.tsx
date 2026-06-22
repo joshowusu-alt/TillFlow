@@ -593,6 +593,7 @@ export default function PurchaseFormClient({
                   type="button"
                   onClick={() => setQuickCameraOpen(true)}
                   className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
+                  aria-label="Open barcode scanner"
                   title="Scan with camera"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -707,6 +708,7 @@ export default function PurchaseFormClient({
                 type="button"
                 onClick={() => setLookupCameraOpen(true)}
                 className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
+                aria-label="Open barcode scanner"
                 title="Scan with camera"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

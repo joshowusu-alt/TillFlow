@@ -24,9 +24,20 @@ describe('inventory page polish', () => {
 
   it('stat cards have helper text', () => {
     expect(src).toContain('Active in catalogue');
-    expect(src).toContain('Need restocking soon');
-    expect(src).toContain('Need immediate attention');
-    expect(src).toContain('Avg cost differs from default');
+    expect(src).toContain('Avg cost differs on this page');
+  });
+
+  it('page-scoped stat helpers clarify their scope', () => {
+    const lowStockLabelPos = src.indexOf('Low stock');
+    const outOfStockLabelPos = src.indexOf('Out of stock');
+    const costDriftLabelPos = src.indexOf('Cost drift');
+
+    expect(lowStockLabelPos).toBeGreaterThanOrEqual(0);
+    expect(outOfStockLabelPos).toBeGreaterThanOrEqual(0);
+    expect(costDriftLabelPos).toBeGreaterThanOrEqual(0);
+    expect(src.indexOf('On this page', lowStockLabelPos)).toBeGreaterThan(lowStockLabelPos);
+    expect(src.indexOf('On this page', outOfStockLabelPos)).toBeGreaterThan(outOfStockLabelPos);
+    expect(src.indexOf('Avg cost differs on this page', costDriftLabelPos)).toBeGreaterThan(costDriftLabelPos);
   });
 
   it('stat cards use shadow-card and polished typography', () => {

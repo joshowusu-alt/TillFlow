@@ -7,6 +7,7 @@ describe('purchases page polish', () => {
   const formSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/PurchaseFormClient.tsx'), 'utf8');
   const paymentSrc = readFileSync(join(process.cwd(), 'components/InlinePaymentForm.tsx'), 'utf8');
   const btnSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/RecordPurchaseButton.tsx'), 'utf8');
+  const barcodeScanSrc = readFileSync(join(process.cwd(), 'components/BarcodeScanInput.tsx'), 'utf8');
 
   it('purchases page component exists', () => {
     expect(pageSrc).toContain('export default async function PurchasesPage');
@@ -109,10 +110,38 @@ describe('purchases page polish', () => {
     expect(pageSrc).not.toContain('onTouchStart');
     expect(pageSrc).not.toContain('onTouchMove');
     expect(pageSrc).not.toContain('onTouchEnd');
+    expect(formSrc).not.toContain('onPointerDown');
+    expect(formSrc).not.toContain('onTouchStart');
+    expect(formSrc).not.toContain('onTouchMove');
+    expect(formSrc).not.toContain('onTouchEnd');
+    expect(barcodeScanSrc).not.toContain('onPointerDown');
+    expect(barcodeScanSrc).not.toContain('onTouchStart');
+    expect(barcodeScanSrc).not.toContain('onTouchMove');
+    expect(barcodeScanSrc).not.toContain('onTouchEnd');
   });
 
   it('PurchaseFormClient still references createPurchaseAction', () => {
     expect(formSrc).toContain('createPurchaseAction');
+  });
+
+  it('barcode camera buttons have explicit accessible labels', () => {
+    const purchaseScannerLabels = formSrc.match(/aria-label="Open barcode scanner"/g) ?? [];
+
+    expect(purchaseScannerLabels).toHaveLength(2);
+    expect(barcodeScanSrc).toContain('aria-label="Open barcode scanner"');
+    expect(formSrc).toContain('title="Scan with camera"');
+    expect(barcodeScanSrc).toContain('title="Scan with camera"');
+  });
+
+  it('barcode scanner logic remains wired to the same handlers', () => {
+    expect(formSrc).toContain("import CameraScanner from '@/app/(protected)/pos/components/CameraScanner'");
+    expect(formSrc).toContain('setQuickCameraOpen(true)');
+    expect(formSrc).toContain('setLookupCameraOpen(true)');
+    expect(formSrc).toContain('handleBarcodeLookup(code)');
+    expect(formSrc).toContain('setQuickBarcode(code)');
+    expect(barcodeScanSrc).toContain("import CameraScanner from '@/app/(protected)/pos/components/CameraScanner'");
+    expect(barcodeScanSrc).toContain('setCameraOpen(true)');
+    expect(barcodeScanSrc).toContain('handleChange(code)');
   });
 
   it('cart hidden inputs remain unchanged', () => {
