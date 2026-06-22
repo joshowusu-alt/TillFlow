@@ -9,6 +9,7 @@ import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import PurchaseFormClient from './PurchaseFormClient';
 import DeletePurchaseButton from './DeletePurchaseButton';
+import RecordPurchaseButton from './RecordPurchaseButton';
 import { getBusinessStores } from '@/lib/services/stores';
 
 export default async function PurchasesPage({
@@ -126,11 +127,7 @@ export default async function PurchasesPage({
       <PageHeader
         title="Purchases"
         subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together."
-        actions={
-          <a href="#record-purchase-form" className="btn-primary justify-center text-sm sm:w-auto">
-            Record purchase
-          </a>
-        }
+        actions={<RecordPurchaseButton />}
       />
       <FormError error={searchParams?.error} />
 

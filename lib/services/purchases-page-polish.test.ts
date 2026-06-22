@@ -6,6 +6,7 @@ describe('purchases page polish', () => {
   const pageSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/page.tsx'), 'utf8');
   const formSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/PurchaseFormClient.tsx'), 'utf8');
   const paymentSrc = readFileSync(join(process.cwd(), 'components/InlinePaymentForm.tsx'), 'utf8');
+  const btnSrc = readFileSync(join(process.cwd(), 'app/(protected)/purchases/RecordPurchaseButton.tsx'), 'utf8');
 
   it('purchases page component exists', () => {
     expect(pageSrc).toContain('export default async function PurchasesPage');
@@ -32,19 +33,38 @@ describe('purchases page polish', () => {
   });
 
   it('record purchase CTA is clearly visible at the top of the page', () => {
-    expect(pageSrc).toContain('Record purchase');
+    expect(pageSrc).toContain('RecordPurchaseButton');
   });
 
   it('record purchase CTA appears before recent purchases section', () => {
-    const ctaPos = pageSrc.indexOf('Record purchase');
+    const ctaPos = pageSrc.indexOf('RecordPurchaseButton');
     const historyPos = pageSrc.indexOf('Recent purchases');
     expect(ctaPos).toBeGreaterThanOrEqual(0);
     expect(historyPos).toBeGreaterThanOrEqual(0);
     expect(ctaPos).toBeLessThan(historyPos);
   });
 
-  it('record-purchase-form anchor target exists for CTA link', () => {
-    expect(pageSrc).toContain('record-purchase-form');
+  it('record-purchase-form id exists on the details wrapper', () => {
+    expect(pageSrc).toContain('id="record-purchase-form"');
+  });
+
+  it('CTA is a client component that opens the details element', () => {
+    expect(btnSrc).toContain("'use client'");
+    expect(btnSrc).toContain('record-purchase-form');
+    expect(btnSrc).toContain('details.open = true');
+    expect(btnSrc).toContain('scrollIntoView');
+    expect(btnSrc).toContain('onClick');
+  });
+
+  it('CTA uses click only, no touch or pointer handlers', () => {
+    expect(btnSrc).not.toContain('onPointerDown');
+    expect(btnSrc).not.toContain('onTouchStart');
+    expect(btnSrc).not.toContain('onTouchMove');
+    expect(btnSrc).not.toContain('onTouchEnd');
+  });
+
+  it('page does not use a plain anchor to the form (client CTA instead)', () => {
+    expect(pageSrc).not.toContain('href="#record-purchase-form"');
   });
 
   it('outstanding column exists in desktop table header', () => {
