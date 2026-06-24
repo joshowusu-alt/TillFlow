@@ -9,6 +9,7 @@ import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createPurchaseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -62,6 +63,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     const summary = (invoice as any).supplierProductLinkSummary as
       | {
@@ -211,6 +213,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     return ok();
   });
@@ -265,6 +268,7 @@ export async function setPurchaseDueDateAction(
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/payments/supplier-aging');
     revalidatePath('/payments/supplier-payments');
     revalidatePath('/purchases');

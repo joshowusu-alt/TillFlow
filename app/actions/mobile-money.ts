@@ -9,9 +9,10 @@ import {
 } from '@/lib/services/mobile-money';
 import { withBusinessContext, safeAction, formAction, ok, type ActionResult } from '@/lib/action-utils';
 import type { CollectionNetwork } from '@/lib/payments/providers/types';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString } from '@/lib/form-helpers';
 import { audit } from '@/lib/audit';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export type InitiateMomoPayload = {
   storeId: string;
@@ -61,6 +62,9 @@ export async function initiateMomoCollectionAction(
       },
     });
 
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
+
     return ok({
       collectionId: collection.id,
       status: collection.status,
@@ -106,6 +110,9 @@ export async function checkMomoCollectionStatusAction(
       },
     });
 
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
+
     return ok({
       collectionId: collection.id,
       status: collection.status,
@@ -132,6 +139,8 @@ export async function recheckMomoCollectionAction(formData: FormData): Promise<v
       entityId: collectionId,
       details: { source: 'reconciliation-screen' },
     });
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/payments/reconciliation');
     return ok();
   }, '/payments/reconciliation');
@@ -156,6 +165,8 @@ export async function reinitiateMomoCollectionAction(formData: FormData): Promis
       entityId: next.id,
       details: { retryOfCollectionId: collectionId, status: next.status },
     });
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/payments/reconciliation');
     return ok();
   }, '/payments/reconciliation');
@@ -174,6 +185,8 @@ export async function reconcilePendingMomoCollectionsAction(_formData: FormData)
       entity: 'MobileMoneyCollection',
       details: { updatedCount: updates.length },
     });
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/payments/reconciliation');
     return ok();
   }, '/payments/reconciliation');

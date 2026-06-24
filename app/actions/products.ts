@@ -29,6 +29,7 @@ import {
   formatProductPriceWarnings,
   getProductPriceWarnings,
 } from '@/lib/product-price-guards';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 // ---------------------------------------------------------------------------
 // Private helpers (FormData parsing — stays in the action layer)
@@ -189,6 +190,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
 
     revalidateTag('pos-products');
     revalidateTag(`readiness-${businessId}`);
+    revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     const createdQuery = openingStockQty > 0 ? 'created=1&stock=1' : 'created=1';
     redirect(`/products?${createdQuery}`);
@@ -217,6 +219,7 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     redirect(`/products/${productId}`);
   }, '/products');
@@ -227,6 +230,7 @@ export async function quickCreateProductAction(input: QuickCreateProductInput) {
     const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
     const result = await quickCreateProduct(businessId, input);
     revalidateTag('pos-products');
+    revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     return ok(result);
   });
@@ -253,6 +257,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
@@ -288,6 +293,7 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('pos-products');
+    revalidateOwnerDashboardCache();
     return ok({ fixed: inflated.length });
   });
 }

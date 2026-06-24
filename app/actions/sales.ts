@@ -14,6 +14,7 @@ import { resolveEffectiveSellingPricePence, type PaymentStatus } from '@/lib/ser
 import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -121,6 +122,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       revalidateTag(`today-sales-${businessId}`);
       revalidateTag(`readiness-${businessId}`);
       revalidateTag('reports');
+      revalidateOwnerDashboardCache();
       revalidatePath('/onboarding');
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
@@ -288,6 +290,7 @@ export async function completeSaleAction(data: {
     // lightweight tag invalidation, so the dashboard reflects new tickets
     // promptly without a manual refresh cycle.
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
@@ -415,6 +418,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     redirect('/sales?amended=true');
   }, '/sales');

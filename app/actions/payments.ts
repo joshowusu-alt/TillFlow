@@ -7,6 +7,7 @@ import { toPence } from '@/lib/form-helpers';
 import { formString, formPence } from '@/lib/form-helpers';
 import { withBusinessContext, formAction, type ActionResult } from '@/lib/action-utils';
 import type { PaymentMethod, PaymentInput } from '@/lib/services/shared';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 /** Build a payments array from FormData — supports both single-amount and split modes. */
 function parsePayments(formData: FormData): PaymentInput[] {
@@ -32,6 +33,7 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
     await recordCustomerPayment(businessId, invoiceId, payments, user.id);
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
     redirect(returnTo);
   }, '/payments/customer-receipts');
@@ -49,6 +51,7 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
 
     await recordSupplierPayment(businessId, invoiceId, payments, paidAt, user.id, notes);
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/supplier-payments';
     redirect(returnTo);
   }, '/payments/supplier-payments');

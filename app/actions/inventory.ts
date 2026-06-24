@@ -9,6 +9,7 @@ import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/a
 import { audit } from '@/lib/audit';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createStockAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -48,6 +49,7 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     redirect('/inventory/adjustments');
   }, '/inventory');
@@ -145,6 +147,7 @@ export async function reverseStockAdjustmentAction(formData: FormData): Promise<
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/inventory');
     revalidatePath('/inventory/adjustments');
 

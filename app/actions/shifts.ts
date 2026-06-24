@@ -9,6 +9,7 @@ import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
 import { performShiftClose } from '@/lib/services/shifts';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 const ADD_CASH_REASON_LABELS: Record<string, string> = {
   SAFE: 'Cash from safe / cash box',
@@ -67,6 +68,7 @@ export async function addCashToTillAction(
 
     revalidateTag('pos-shifts');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     revalidatePath('/shifts');
     revalidatePath('/pos');
     revalidatePath('/reports/cash-drawer');
@@ -182,6 +184,8 @@ export async function closeShiftAction(
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidateTag('pos-shifts');
+      revalidateTag('reports');
+      revalidateOwnerDashboardCache();
       revalidatePath('/shifts');
       revalidatePath('/pos');
       revalidatePath('/reports', 'layout');
@@ -299,6 +303,8 @@ export async function closeShiftOwnerOverrideAction(
       });
       void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
       revalidateTag('pos-shifts');
+      revalidateTag('reports');
+      revalidateOwnerDashboardCache();
       revalidatePath('/shifts');
       revalidatePath('/pos');
       revalidatePath('/reports', 'layout');

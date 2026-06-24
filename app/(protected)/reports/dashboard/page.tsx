@@ -13,8 +13,264 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import { getBusinessStores } from '@/lib/services/stores';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import { unstable_cache } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
+
+async function _getTradingDashboardSnapshot(
+  businessId: string,
+  currency: string,
+  startIso: string,
+  endIso: string,
+  selectedStoreId: string,
+) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+
+  const [
+    salesAgg,
+    paymentsByMethod,
+    income,
+    outstandingSales,
+    outstandingPurchases,
+    balances,
+    bestSellerGroups,
+    todayAdj,
+    todayVoids,
+    todayReturns,
+    todayCashVar,
+    costedMarginAgg,
+    uncostedMarginGroups,
+  ] = await Promise.all([
+    prisma.salesInvoice.aggregate({
+      where: {
+        businessId,
+        ...storeFilter,
+        createdAt: { gte: start, lte: end },
+        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+      },
+      _sum: { totalPence: true },
+    }),
+    prisma.salesPayment.groupBy({
+      by: ['method'],
+      where: {
+        receivedAt: { gte: start, lte: end },
+        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
+        salesInvoice: {
+          businessId,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      _sum: { amountPence: true },
+    }),
+    getIncomeStatement(businessId, start, end),
+    prisma.salesInvoice.findMany({
+      where: {
+        businessId,
+        ...storeFilter,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      },
+      select: {
+        id: true,
+        totalPence: true,
+        dueDate: true,
+        createdAt: true,
+        customer: { select: { id: true, name: true } },
+        payments: { select: { amountPence: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.purchaseInvoice.findMany({
+      where: {
+        businessId,
+        ...storeFilter,
+        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      },
+      select: { totalPence: true, payments: { select: { amountPence: true } } },
+    }),
+    prisma.inventoryBalance.findMany({
+      where: {
+        ...(selectedStoreId === 'ALL'
+          ? { store: { businessId } }
+          : { storeId: selectedStoreId }),
+      },
+      select: {
+        id: true,
+        qtyOnHandBase: true,
+        product: {
+          select: {
+            name: true,
+            reorderPointBase: true,
+            reorderQtyBase: true,
+            productUnits: {
+              select: {
+                isBaseUnit: true,
+                conversionToBase: true,
+                unit: { select: { name: true, pluralName: true } },
+              },
+            },
+          },
+        },
+      },
+      take: 1000,
+    }),
+    prisma.salesInvoiceLine.groupBy({
+      by: ['productId'],
+      where: {
+        salesInvoice: {
+          businessId,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      _sum: {
+        qtyBase: true,
+        lineTotalPence: true,
+      },
+      orderBy: {
+        _sum: {
+          lineTotalPence: 'desc',
+        },
+      },
+      take: 20,
+    }),
+    prisma.stockAdjustment.findMany({
+      where: {
+        store: { businessId },
+        ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+        createdAt: { gte: start, lte: end },
+      },
+      select: {
+        direction: true,
+        qtyBase: true,
+        product: { select: { name: true } },
+        user: { select: { name: true } },
+      },
+      take: 8,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.salesInvoice.findMany({
+      where: {
+        businessId,
+        ...storeFilter,
+        createdAt: { gte: start, lte: end },
+        paymentStatus: 'VOID',
+      },
+      select: { totalPence: true, cashierUser: { select: { name: true } } },
+      take: 200,
+    }),
+    prisma.salesReturn.findMany({
+      where: {
+        store: { businessId },
+        ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+        createdAt: { gte: start, lte: end },
+        type: 'RETURN',
+      },
+      select: { refundAmountPence: true },
+      take: 500,
+    }),
+    prisma.shift.findMany({
+      where: {
+        till: {
+          store: {
+            businessId,
+            ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
+          },
+        },
+        closedAt: { gte: start, lte: end },
+        variance: { not: null },
+      },
+      select: { variance: true, user: { select: { name: true } } },
+      take: 100,
+    }),
+    prisma.salesInvoiceLine.aggregate({
+      where: {
+        salesInvoice: {
+          businessId,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+        lineCostPence: { gt: 0 },
+      },
+      _sum: {
+        lineSubtotalPence: true,
+        lineCostPence: true,
+      },
+    }),
+    prisma.salesInvoiceLine.groupBy({
+      by: ['productId'],
+      where: {
+        salesInvoice: {
+          businessId,
+          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
+          createdAt: { gte: start, lte: end },
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+        lineCostPence: 0,
+      },
+      _sum: {
+        lineSubtotalPence: true,
+        qtyBase: true,
+      },
+    }),
+  ]);
+
+  const bestSellerProductIds = bestSellerGroups.map((group) => group.productId);
+  const uncostedProductIds = uncostedMarginGroups.map((group) => group.productId);
+  const [bestSellerProducts, uncostedProducts] = await Promise.all([
+    bestSellerProductIds.length
+      ? prisma.product.findMany({
+        where: { id: { in: bestSellerProductIds } },
+        select: {
+          id: true,
+          name: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } },
+            },
+          },
+        },
+      })
+      : Promise.resolve([]),
+    uncostedProductIds.length
+      ? prisma.product.findMany({
+        where: { id: { in: uncostedProductIds } },
+        select: { id: true, defaultCostBasePence: true },
+      })
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    currency,
+    salesAgg,
+    paymentsByMethod,
+    income,
+    outstandingSales,
+    outstandingPurchases,
+    balances,
+    bestSellerGroups,
+    todayAdj,
+    todayVoids,
+    todayReturns,
+    todayCashVar,
+    costedMarginAgg,
+    uncostedMarginGroups,
+    bestSellerProducts,
+    uncostedProducts,
+  };
+}
+
+const getCachedTradingDashboardSnapshot = unstable_cache(
+  _getTradingDashboardSnapshot,
+  ['report-trading-dashboard'],
+  { revalidate: 60, tags: ['reports', 'trading-dashboard'] },
+);
 
 export default async function DashboardPage({
   searchParams,
@@ -55,7 +311,7 @@ export default async function DashboardPage({
     start.toDateString() === todayStart.toDateString() &&
     end.toDateString() === todayEnd.toDateString();
 
-  const [
+  const {
     salesAgg,
     paymentsByMethod,
     income,
@@ -69,217 +325,17 @@ export default async function DashboardPage({
     todayCashVar,
     costedMarginAgg,
     uncostedMarginGroups,
-  ] = await Promise.all([
-    // Sales — aggregate at DB level
-    prisma.salesInvoice.aggregate({
-      where: {
-        businessId: business.id,
-        ...storeFilter,
-        createdAt: { gte: start, lte: end },
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-      },
-      _sum: { totalPence: true },
-    }),
-    // Payments grouped by method — aggregate at DB level
-    prisma.salesPayment.groupBy({
-      by: ['method'],
-      where: {
-        receivedAt: { gte: start, lte: end },
-        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
-        salesInvoice: {
-          businessId: business.id,
-          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      _sum: { amountPence: true },
-    }),
-    getIncomeStatement(business.id, start, end),
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId: business.id,
-        ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-      },
-      select: {
-        id: true,
-        totalPence: true,
-        dueDate: true,
-        createdAt: true,
-        customer: { select: { id: true, name: true } },
-        payments: { select: { amountPence: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.purchaseInvoice.findMany({
-      where: {
-        businessId: business.id,
-        ...storeFilter,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-      },
-      select: { totalPence: true, payments: { select: { amountPence: true } } },
-    }),
-    prisma.inventoryBalance.findMany({
-      where: {
-        ...(selectedStoreId === 'ALL'
-          ? { store: { businessId: business.id } }
-          : { storeId: selectedStoreId }),
-      },
-      select: {
-        id: true,
-        qtyOnHandBase: true,
-        product: {
-          select: {
-            name: true,
-            reorderPointBase: true,
-            reorderQtyBase: true,
-            productUnits: {
-              select: {
-                isBaseUnit: true,
-                conversionToBase: true,
-                unit: { select: { name: true, pluralName: true } },
-              },
-            },
-          },
-        },
-      },
-      take: 1000,
-    }),
-    prisma.salesInvoiceLine.groupBy({
-      by: ['productId'],
-      where: {
-        salesInvoice: {
-          businessId: business.id,
-          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      _sum: {
-        qtyBase: true,
-        lineTotalPence: true,
-      },
-      orderBy: {
-        _sum: {
-          lineTotalPence: 'desc',
-        },
-      },
-      take: 20,
-    }),
-    // Phase 3B: stock adjustments in range
-    prisma.stockAdjustment.findMany({
-      where: {
-        store: { businessId: business.id },
-        ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-        createdAt: { gte: start, lte: end },
-      },
-      select: {
-        direction: true,
-        qtyBase: true,
-        product: { select: { name: true } },
-        user: { select: { name: true } },
-      },
-      take: 8,
-      orderBy: { createdAt: 'desc' },
-    }),
-    // Voided sales in range
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId: business.id,
-        ...storeFilter,
-        createdAt: { gte: start, lte: end },
-        paymentStatus: 'VOID',
-      },
-      select: { totalPence: true, cashierUser: { select: { name: true } } },
-      take: 200,
-    }),
-    // Returns in range
-    prisma.salesReturn.findMany({
-      where: {
-        store: { businessId: business.id },
-        ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-        createdAt: { gte: start, lte: end },
-        type: 'RETURN',
-      },
-      select: { refundAmountPence: true },
-      take: 500,
-    }),
-    // Cash variances (shift closures with non-zero variance) in range
-    prisma.shift.findMany({
-      where: {
-        till: {
-          store: {
-            businessId: business.id,
-            ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
-          },
-        },
-        closedAt: { gte: start, lte: end },
-        variance: { not: null },
-      },
-      select: { variance: true, user: { select: { name: true } } },
-      take: 100,
-    }),
-    // Sale lines for GP computation — single source of truth
-    prisma.salesInvoiceLine.aggregate({
-      where: {
-        salesInvoice: {
-          businessId: business.id,
-          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-        lineCostPence: { gt: 0 },
-      },
-      _sum: {
-        lineSubtotalPence: true,
-        lineCostPence: true,
-      },
-    }),
-    prisma.salesInvoiceLine.groupBy({
-      by: ['productId'],
-      where: {
-        salesInvoice: {
-          businessId: business.id,
-          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-        lineCostPence: 0,
-      },
-      _sum: {
-        lineSubtotalPence: true,
-        qtyBase: true,
-      },
-    }),
-  ]);
+    bestSellerProducts,
+    uncostedProducts,
+  } = await getCachedTradingDashboardSnapshot(
+    business.id,
+    business.currency,
+    start.toISOString(),
+    end.toISOString(),
+    selectedStoreId,
+  );
 
   const currency = business.currency;
-  const bestSellerProductIds = bestSellerGroups.map((group) => group.productId);
-  const uncostedProductIds = uncostedMarginGroups.map((group) => group.productId);
-  const [bestSellerProducts, uncostedProducts] = await Promise.all([
-    bestSellerProductIds.length
-      ? prisma.product.findMany({
-        where: { id: { in: bestSellerProductIds } },
-        select: {
-          id: true,
-          name: true,
-          productUnits: {
-            select: {
-              isBaseUnit: true,
-              conversionToBase: true,
-              unit: { select: { name: true, pluralName: true } },
-            },
-          },
-        },
-      })
-      : Promise.resolve([]),
-    uncostedProductIds.length
-      ? prisma.product.findMany({
-        where: { id: { in: uncostedProductIds } },
-        select: { id: true, defaultCostBasePence: true },
-      })
-      : Promise.resolve([]),
-  ]);
   const bestSellerProductMap = new Map(bestSellerProducts.map((product) => [product.id, product]));
   const uncostedProductCostMap = new Map(uncostedProducts.map((product) => [product.id, product.defaultCostBasePence]));
 

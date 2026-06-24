@@ -10,6 +10,7 @@ import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { isVoidReturnReasonCode } from '@/lib/fraud/reason-codes';
 import { sendVoidReturnAlert } from '@/app/actions/stock-alerts';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createSalesReturnAction(formData: FormData): Promise<void> {
   const salesInvoiceId = formString(formData, 'salesInvoiceId');
@@ -112,6 +113,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     redirect('/sales');
   }, returnErrorPath);
@@ -148,6 +150,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
 
     redirect('/purchases');
   }, '/purchases');

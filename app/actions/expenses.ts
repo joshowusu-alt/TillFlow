@@ -11,6 +11,7 @@ import { PaymentStatusEnum, PaymentMethodEnum } from '@/lib/validation/enums';
 import { audit } from '@/lib/audit';
 import type { PaymentMethod, PaymentStatus } from '@/lib/services/shared';
 import { saveExpenseAttachment, type AttachmentResult } from '@/lib/services/storage';
+import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 
 export async function createExpenseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -73,6 +74,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));
 
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     redirect('/expenses');
   }, '/expenses');
 }
@@ -100,6 +102,7 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_DELETE', entity: 'Expense', entityId: id, details: { amountPence: expense.amountPence, vendorName: expense.vendorName } }).catch(() => {});
 
     revalidateTag('reports');
+    revalidateOwnerDashboardCache();
     redirect('/expenses');
   }, '/expenses');
 }
