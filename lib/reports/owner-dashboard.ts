@@ -11,6 +11,7 @@ import {
 	isDateWithinRange,
 	isSqliteRuntime,
 } from './sqlite-report-date-normalization';
+import { unstable_cache } from 'next/cache';
 
 type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -165,7 +166,7 @@ function severityRank(severity: AttentionSeverity) {
 	return 2;
 }
 
-export async function getOwnerDashboardSnapshot(
+async function _getOwnerDashboardSnapshot(
 	businessId: string,
 	currency: string,
 	storeId?: string,
@@ -188,6 +189,7 @@ export async function getOwnerDashboardSnapshot(
 	const yesterdayStart = startOfDay(new Date(todayStart.getTime() - 86_400_000));
 	const yesterdayEnd = endOfDay(new Date(todayStart.getTime() - 86_400_000));
 	const sevenDaysOut = endOfDay(new Date(todayEnd.getTime() + 7 * 86_400_000));
+	const thirtyDaysAgo = new Date(todayStart.getTime() - 30 * 86_400_000);
 
 	const storeFilter = storeId ? { storeId } : {};
 	const tillStoreFilter = storeId ? { id: storeId } : {};
@@ -362,6 +364,7 @@ export async function getOwnerDashboardSnapshot(
 			where: {
 				store: { businessId },
 				...(storeId ? { storeId } : {}),
+				createdAt: { gte: thirtyDaysAgo },
 			},
 			select: {
 				id: true,
@@ -378,6 +381,7 @@ export async function getOwnerDashboardSnapshot(
 				...storeFilter,
 				discountOverrideReason: { not: null },
 				paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+				createdAt: { gte: thirtyDaysAgo },
 			},
 			select: {
 				id: true,
@@ -391,7 +395,7 @@ export async function getOwnerDashboardSnapshot(
 		prisma.shift.findMany({
 			where: {
 				till: { store: { businessId, ...tillStoreFilter } },
-				closedAt: { not: null },
+				closedAt: { gte: thirtyDaysAgo },
 				variance: { not: 0 },
 			},
 			select: {
@@ -884,4 +888,21 @@ export async function getOwnerDashboardSnapshot(
 			projectedBalancePence: day.projectedBalancePence,
 		})),
 	};
+}
+
+// Cache the owner dashboard snapshot for 60 seconds.
+// Key includes businessId + currency + storeId to prevent cross-business leakage.
+// Tagged 'owner-dashboard' so write actions can bust it on-demand after key writes.
+const cachedOwnerDashboard = unstable_cache(
+	_getOwnerDashboardSnapshot,
+	['report-owner-dashboard'],
+	{ revalidate: 60, tags: ['owner-dashboard'] }
+);
+
+export function getOwnerDashboardSnapshot(
+	businessId: string,
+	currency: string,
+	storeId?: string,
+): Promise<OwnerDashboardSnapshot> {
+	return cachedOwnerDashboard(businessId, currency, storeId ?? '');
 }

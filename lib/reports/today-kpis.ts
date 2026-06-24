@@ -133,6 +133,10 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   const thirtyFiveDaysAgo = new Date(now);
   thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 86_400_000);
+  // Recency floor for KPI monitoring queries. Invoices older than 90 days that
+  // are still unpaid are not filtered out from authoritative balances (customers
+  // page / supplier ledger) — only from the today-KPI dashboard cards.
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
 
   const storeFilter = storeId ? { storeId } : {};
 
@@ -162,7 +166,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
     }),
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
       select: {
         totalPence: true,
         dueDate: true,
@@ -171,7 +175,7 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
       },
     }),
     prisma.purchaseInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
     }),
     prisma.riskAlert.findMany({
@@ -355,6 +359,8 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyFiveDaysAgo = new Date(now);
   thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+  // Recency floor for KPI monitoring queries only.
+  const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
 
   const storeFilter = storeId ? { storeId } : {};
 
@@ -399,7 +405,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       _sum: { amountPence: true },
     }),
     prisma.salesInvoice.findMany({
-      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
       select: {
         totalPence: true,
         dueDate: true,
@@ -412,6 +418,7 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       where: {
         businessId, ...storeFilter,
         paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+        createdAt: { gte: ninetyDaysAgo },
       },
       select: { totalPence: true, payments: { select: { amountPence: true } } },
     }),
