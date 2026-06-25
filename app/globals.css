@@ -100,6 +100,9 @@ select:-webkit-autofill {
   --app-header-height-desktop: 5.75rem;
   --app-header-offset: calc(var(--safe-area-top) + var(--app-header-height-mobile));
   --app-header-offset-desktop: calc(var(--safe-area-top) + var(--app-header-height-desktop));
+  --mobile-bottom-nav-content-height: 5rem;
+  --mobile-bottom-nav-height: calc(var(--mobile-bottom-nav-content-height) + env(safe-area-inset-bottom, 0px));
+  --mobile-bottom-nav-clearance: calc(var(--mobile-bottom-nav-height) + 4rem);
 }
 
 html {
@@ -107,6 +110,7 @@ html {
   max-width: 100%;
   overflow-x: clip;
   scroll-padding-top: var(--app-header-offset);
+  scroll-padding-bottom: var(--mobile-bottom-nav-clearance);
   background-color: #F8FBFF; /* matches splash images and AppLaunchLoading */
 }
 
@@ -254,6 +258,14 @@ textarea {
   padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
 }
 
+.app-main-shell {
+  padding-bottom: var(--mobile-bottom-nav-clearance);
+}
+
+.mobile-bottom-tab-bar {
+  min-height: var(--mobile-bottom-nav-height);
+}
+
 .mobile-scroll-panel {
   max-height: min(92dvh, calc(var(--visual-viewport-height) - env(safe-area-inset-top, 0px) - 1rem));
   overflow-y: auto;
@@ -315,10 +327,15 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
 @media (min-width: 1024px) {
   html {
     scroll-padding-top: var(--app-header-offset-desktop);
+    scroll-padding-bottom: 0;
   }
 
   main#main-content {
     scroll-margin-top: var(--app-header-offset-desktop);
+  }
+
+  .app-main-shell {
+    padding-bottom: 1.25rem;
   }
 }
 

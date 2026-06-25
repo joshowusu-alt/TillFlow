@@ -194,6 +194,26 @@ describe('TillFlow brand logo system', () => {
     expect(onboardingActions).toContain('getTodayKPIs');
   });
 
+  it('keeps mobile bottom navigation clearance centralized in the protected shell', () => {
+    const globals = readSource('app/globals.css');
+    const protectedLayout = readSource('app/(protected)/layout.tsx');
+    const bottomTabBar = readSource('components/BottomTabBar.tsx');
+
+    expect(globals).toContain('--mobile-bottom-nav-content-height');
+    expect(globals).toContain('--mobile-bottom-nav-height');
+    expect(globals).toContain('--mobile-bottom-nav-clearance');
+    expect(globals).toContain('scroll-padding-bottom: var(--mobile-bottom-nav-clearance)');
+    expect(globals).toContain('.app-main-shell');
+    expect(globals).toContain('padding-bottom: var(--mobile-bottom-nav-clearance)');
+    expect(globals).toContain('.mobile-bottom-tab-bar');
+    expect(globals).toContain('min-height: var(--mobile-bottom-nav-height)');
+    expect(globals).toContain('padding-bottom: 1.25rem');
+    expect(protectedLayout).toContain('app-main-shell');
+    expect(protectedLayout).not.toContain('pb-[calc(9rem+env(safe-area-inset-bottom,0px))]');
+    expect(bottomTabBar).toContain('mobile-bottom-tab-bar');
+    expect(bottomTabBar).toContain("'/pos'");
+  });
+
   it('gives mobile drawer taps immediate internal route feedback without launch copy', () => {
     const topNav = readSource('components/TopNav.tsx');
     const mobileMenu = readSource('components/NavMobileMenu.tsx');
