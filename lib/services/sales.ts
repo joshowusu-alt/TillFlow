@@ -280,29 +280,98 @@ export type CreateSaleInput = {
   lines: SaleLineInput[];
 };
 
+const CHECKOUT_STAGE_THRESHOLDS_MS = {
+  validate: 200,
+  context: 300,
+  cartPricing: 300,
+  creditCustomer: 300,
+  sequence: 200,
+  transactionTotal: 750,
+  invoiceCreate: 300,
+  inventoryUpdate: 300,
+  journalPost: 300,
+  shiftUpdate: 300,
+  stockMovements: 300,
+} as const;
+
+function checkoutPerformanceMetadata(
+  input: CreateSaleInput,
+  extra: Record<string, unknown> = {},
+) {
+  const positivePaymentMethods = new Set(
+    input.payments
+      .filter((payment) => payment.amountPence > 0)
+      .map((payment) => payment.method),
+  );
+  const hasLineDiscount = input.lines.some(
+    (line) => (line.discountType && line.discountType !== 'NONE') || (line.discountValue ?? 0) > 0,
+  );
+
+  return {
+    businessId: input.businessId,
+    storeId: input.storeId,
+    action: 'completeSaleAction',
+    cartLineCount: input.lines.length,
+    distinctProductCount: new Set(input.lines.map((line) => line.productId)).size,
+    paymentMethodCount: positivePaymentMethods.size,
+    hasCredit: input.paymentStatus !== 'PAID',
+    hasCustomerId: Boolean(input.customerId),
+    hasCashPayment: positivePaymentMethods.has('CASH'),
+    hasCardPayment: positivePaymentMethods.has('CARD'),
+    hasBankTransferPayment: positivePaymentMethods.has('TRANSFER'),
+    hasMobileMoneyPayment: positivePaymentMethods.has('MOBILE_MONEY'),
+    hasDiscount:
+      hasLineDiscount ||
+      Boolean(input.orderDiscountType && input.orderDiscountType !== 'NONE') ||
+      (input.orderDiscountValue ?? 0) > 0 ||
+      (input.loyaltyPointsToRedeem ?? 0) > 0,
+    isOfflineSubmission: Boolean(input.externalRef),
+    duplicateCheckPerformed: Boolean(input.externalRef),
+    cacheState: 'write-through',
+    ...extra,
+  };
+}
+
+function measureCheckoutStage<T>(
+  operation: string,
+  input: CreateSaleInput,
+  callback: () => Promise<T>,
+  metadata: Record<string, unknown>,
+  thresholdMs: number,
+) {
+  return measureServerOperation(
+    operation,
+    callback,
+    checkoutPerformanceMetadata(input, metadata),
+    { thresholdMs, operationType: 'action' },
+  );
+}
+
 export async function createSale(input: CreateSaleInput) {
   return measureServerOperation(
     'action.checkout.create-sale',
     () => createSaleImpl(input),
-    {
-      businessId: input.businessId,
-      storeId: input.storeId,
-      action: 'completeSaleAction',
-      rowCount: input.lines.length,
-      cacheState: 'write-through',
-    },
+    checkoutPerformanceMetadata(input, { rowCount: input.lines.length }),
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
   );
 }
 
 async function createSaleImpl(input: CreateSaleInput) {
-  if (!input.lines.length) {
-    throw new UserError('No items in cart');
-  }
+  await measureCheckoutStage(
+    'action.checkout.validate',
+    input,
+    async () => {
+      if (!input.lines.length) {
+        throw new UserError('No items in cart');
+      }
 
-  if ((input.loyaltyPointsToRedeem ?? 0) > 0 && !input.customerId) {
-    throw new UserError('Select a customer to redeem loyalty points.');
-  }
+      if ((input.loyaltyPointsToRedeem ?? 0) > 0 && !input.customerId) {
+        throw new UserError('Select a customer to redeem loyalty points.');
+      }
+    },
+    { stage: 'validate', rowCount: input.lines.length },
+    CHECKOUT_STAGE_THRESHOLDS_MS.validate,
+  );
 
   // Pre-compute values available from input (no DB dependency)
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
@@ -355,48 +424,54 @@ async function createSaleImpl(input: CreateSaleInput) {
   const [
     business, store, productUnits, till, branchId, openShift,
     accounts, inventoryMap, momoResult, customerResult,
-  ] = await Promise.all([
-    prisma.business.findUnique({ where: { id: input.businessId } }),
-    prisma.store.findFirst({
-      where: { id: input.storeId, businessId: input.businessId },
-      select: { id: true },
-    }),
-    prisma.productUnit.findMany({
-      where: {
-        product: { businessId: input.businessId },
-        OR: input.lines.map((line) => ({
-          productId: line.productId,
-          unitId: line.unitId,
-        })),
-      },
-      include: {
-        product: {
-          include: {
-            productUnits: {
-              select: {
-                isBaseUnit: true,
-                conversionToBase: true,
-                defaultCostPence: true,
+  ] = await measureCheckoutStage(
+    'action.checkout.context',
+    input,
+    async () => Promise.all([
+      prisma.business.findUnique({ where: { id: input.businessId } }),
+      prisma.store.findFirst({
+        where: { id: input.storeId, businessId: input.businessId },
+        select: { id: true },
+      }),
+      prisma.productUnit.findMany({
+        where: {
+          product: { businessId: input.businessId },
+          OR: input.lines.map((line) => ({
+            productId: line.productId,
+            unitId: line.unitId,
+          })),
+        },
+        include: {
+          product: {
+            include: {
+              productUnits: {
+                select: {
+                  isBaseUnit: true,
+                  conversionToBase: true,
+                  defaultCostPence: true,
+                },
               },
             },
           },
+          unit: true,
         },
-        unit: true,
-      },
-    }),
-    prisma.till.findFirst({
-      where: { id: input.tillId, storeId: input.storeId, active: true },
-      select: { id: true },
-    }),
-    resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
-    getOpenShiftForTill(input.businessId, input.tillId),
-    prisma.account.findMany({
-      where: { businessId: input.businessId, code: { in: allAccountCodes } },
-    }),
-    fetchInventoryMap(input.storeId, productIds),
-    momoLookup,
-    customerLookup,
-  ]);
+      }),
+      prisma.till.findFirst({
+        where: { id: input.tillId, storeId: input.storeId, active: true },
+        select: { id: true },
+      }),
+      resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
+      getOpenShiftForTill(input.businessId, input.tillId),
+      prisma.account.findMany({
+        where: { businessId: input.businessId, code: { in: allAccountCodes } },
+      }),
+      fetchInventoryMap(input.storeId, productIds),
+      momoLookup,
+      customerLookup,
+    ]),
+    { stage: 'context', rowCount: input.lines.length },
+    CHECKOUT_STAGE_THRESHOLDS_MS.context,
+  );
 
   if (!business) throw new Error('Business not found');
   if (!store) throw new Error('Store not found');
@@ -419,7 +494,13 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   const unitMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
 
-  const lineDetails = buildLinePricing(input.lines, unitMap, business.vatEnabled);
+  const lineDetails = await measureCheckoutStage(
+    'action.checkout.cart-pricing',
+    input,
+    async () => buildLinePricing(input.lines, unitMap, business.vatEnabled),
+    { stage: 'cart-pricing', rowCount: input.lines.length },
+    CHECKOUT_STAGE_THRESHOLDS_MS.cartPricing,
+  );
 
   const qtyByProduct = buildQtyByProductMap(lineDetails);
   const enforceInventory = (input.inventoryPolicy ?? 'enforce') === 'enforce';
@@ -629,31 +710,42 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   let stockMovementInventoryMap = inventoryMap;
 
-  const invoice = await prisma.$transaction(
-    async (tx) => {
+  const invoice = await measureCheckoutStage(
+    'action.checkout.transaction.total',
+    input,
+    async () => prisma.$transaction(
+      async (tx) => {
     // Credit limit enforcement: reject credit/part-paid sales that would exceed the customer's limit
     if (input.customerId && customerResult && customerResult.creditLimitPence > 0) {
-      const openInvoices = await tx.salesInvoice.findMany({
-        where: {
-          customerId: input.customerId,
-          businessId: input.businessId,
-          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+      await measureCheckoutStage(
+        'action.checkout.credit-customer',
+        input,
+        async () => {
+          const openInvoices = await tx.salesInvoice.findMany({
+            where: {
+              customerId: input.customerId,
+              businessId: input.businessId,
+              paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
+            },
+            select: {
+              totalPence: true,
+              payments: { select: { amountPence: true } },
+            },
+          });
+          const outstanding = openInvoices.reduce((sum, invoice) => {
+            const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
+            return sum + Math.max(invoice.totalPence - paid, 0);
+          }, 0);
+          const newCreditExposure = outstanding + balanceDue;
+          if (newCreditExposure > customerResult.creditLimitPence) {
+            throw new UserError(
+              `This sale would exceed the customer's credit limit.`
+            );
+          }
         },
-        select: {
-          totalPence: true,
-          payments: { select: { amountPence: true } },
-        },
-      });
-      const outstanding = openInvoices.reduce((sum, invoice) => {
-        const paid = invoice.payments.reduce((paidSum, payment) => paidSum + payment.amountPence, 0);
-        return sum + Math.max(invoice.totalPence - paid, 0);
-      }, 0);
-      const newCreditExposure = outstanding + balanceDue;
-      if (newCreditExposure > customerResult.creditLimitPence) {
-        throw new UserError(
-          `This sale would exceed the customer's credit limit.`
-        );
-      }
+        { stage: 'credit-customer' },
+        CHECKOUT_STAGE_THRESHOLDS_MS.creditCustomer,
+      );
     }
 
     const invoiceCreateData = {
@@ -712,17 +804,28 @@ async function createSaleImpl(input: CreateSaleInput) {
 
     const created = await (async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
-        const transactionNumber = `INV-${String(
-          await reserveNextInvoiceNumber(tx, input.businessId)
-        ).padStart(6, '0')}`;
+        const sequenceValue = await measureCheckoutStage(
+          'action.checkout.sequence',
+          input,
+          async () => reserveNextInvoiceNumber(tx, input.businessId),
+          { stage: 'sequence' },
+          CHECKOUT_STAGE_THRESHOLDS_MS.sequence,
+        );
+        const transactionNumber = `INV-${String(sequenceValue).padStart(6, '0')}`;
 
         try {
-          return await tx.salesInvoice.create({
-            data: {
-              ...invoiceCreateData,
-              transactionNumber,
-            }
-          });
+          return await measureCheckoutStage(
+            'action.checkout.invoice-create',
+            input,
+            async () => tx.salesInvoice.create({
+              data: {
+                ...invoiceCreateData,
+                transactionNumber,
+              }
+            }),
+            { stage: 'invoice-create', rowCount: lineDetails.length },
+            CHECKOUT_STAGE_THRESHOLDS_MS.invoiceCreate,
+          );
         } catch (error) {
           if (!isPrismaUniqueConstraintOn(error, ['businessId', 'transactionNumber'])) {
             throw error;
@@ -776,37 +879,59 @@ async function createSaleImpl(input: CreateSaleInput) {
       const beforeCash = openShift.expectedCashPence ?? 0;
       const afterCash = beforeCash + cashPence;
       txPromises.push(
-        tx.cashDrawerEntry.create({
-          data: {
-            businessId: input.businessId,
-            storeId: input.storeId,
-            tillId: till.id,
-            shiftId: openShift.id,
-            createdByUserId: input.cashierUserId,
-            cashierUserId: input.cashierUserId,
-            entryType: 'CASH_SALE',
-            amountPence: cashPence,
-            reasonCode: 'SALE',
-            reason: 'Cash sale collected',
-            referenceType: 'SALES_INVOICE',
-            referenceId: created.id,
-            beforeExpectedCashPence: beforeCash,
-            afterExpectedCashPence: afterCash,
-          },
-        }),
-        // Atomic increment — safe under concurrent sales on the same shift.
-        tx.shift.update({
-          where: { id: openShift.id },
-          data: { expectedCashPence: { increment: cashPence } },
-        }),
+        measureCheckoutStage(
+          'action.checkout.shift-update',
+          input,
+          async () => Promise.all([
+            tx.cashDrawerEntry.create({
+              data: {
+                businessId: input.businessId,
+                storeId: input.storeId,
+                tillId: till.id,
+                shiftId: openShift.id,
+                createdByUserId: input.cashierUserId,
+                cashierUserId: input.cashierUserId,
+                entryType: 'CASH_SALE',
+                amountPence: cashPence,
+                reasonCode: 'SALE',
+                reason: 'Cash sale collected',
+                referenceType: 'SALES_INVOICE',
+                referenceId: created.id,
+                beforeExpectedCashPence: beforeCash,
+                afterExpectedCashPence: afterCash,
+              },
+            }),
+            // Atomic increment — safe under concurrent sales on the same shift.
+            tx.shift.update({
+              where: { id: openShift.id },
+              data: { expectedCashPence: { increment: cashPence } },
+            }),
+          ]),
+          { stage: 'shift-update', rowCount: 2 },
+          CHECKOUT_STAGE_THRESHOLDS_MS.shiftUpdate,
+        ),
       );
     }
 
     if (enforceInventory && shouldApplyInventoryMovements) {
       // Single SQL UPDATE for all products — 1 RTT regardless of cart size
-      txPromises.push(batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct));
+      txPromises.push(
+        measureCheckoutStage(
+          'action.checkout.inventory-update',
+          input,
+          async () => batchDecrementInventoryBalance(tx, input.storeId, qtyByProduct),
+          { stage: 'inventory-update', rowCount: qtyByProduct.size },
+          CHECKOUT_STAGE_THRESHOLDS_MS.inventoryUpdate,
+        ),
+      );
     } else if (!enforceInventory && shouldApplyInventoryMovements) {
-      const inventoryMapInTx = await fetchInventoryMap(input.storeId, productIds, tx as any);
+      const inventoryMapInTx = await measureCheckoutStage(
+        'action.checkout.inventory-update',
+        input,
+        async () => fetchInventoryMap(input.storeId, productIds, tx as any),
+        { stage: 'inventory-update', rowCount: productIds.length },
+        CHECKOUT_STAGE_THRESHOLDS_MS.inventoryUpdate,
+      );
       stockMovementInventoryMap = inventoryMapInTx;
 
       for (const [productId, qtyBase] of qtyByProduct.entries()) {
@@ -844,45 +969,60 @@ async function createSaleImpl(input: CreateSaleInput) {
     journalLines.push({ accountCode: ACCOUNT_CODES.cogs, debitPence: cogsTotal });
     journalLines.push({ accountCode: ACCOUNT_CODES.inventory, creditPence: cogsTotal });
     txPromises.push(
-      postJournalEntry({
-        businessId: input.businessId,
-        description: `Sale ${created.id}`,
-        referenceType: 'SALES_INVOICE',
-        referenceId: created.id,
-        lines: journalLines,
-        prismaClient: tx as any,
-        accountMap,
-      }),
+      measureCheckoutStage(
+        'action.checkout.journal-post',
+        input,
+        async () => postJournalEntry({
+          businessId: input.businessId,
+          description: `Sale ${created.id}`,
+          referenceType: 'SALES_INVOICE',
+          referenceId: created.id,
+          lines: journalLines,
+          prismaClient: tx as any,
+          accountMap,
+        }),
+        { stage: 'journal-post', rowCount: journalLines.length },
+        CHECKOUT_STAGE_THRESHOLDS_MS.journalPost,
+      ),
     );
 
     // Run inventory batch + journal entry in parallel
     await Promise.all(txPromises);
 
     return created;
-  },
-  { maxWait: 10000, timeout: 15000 },
+      },
+      { maxWait: 10000, timeout: 15000 },
+    ),
+    { stage: 'transaction-total', rowCount: input.lines.length },
+    CHECKOUT_STAGE_THRESHOLDS_MS.transactionTotal,
   );
 
   // Post-tx: stock movement audit trail — non-critical, fire-and-forget
   if (shouldApplyInventoryMovements) {
-    void prisma.stockMovement.createMany({
-      data: lineDetails.map((line) => {
-        const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-        const afterQtyBase = beforeQtyBase - line.qtyBase;
-        return {
-          storeId: input.storeId,
-          productId: line.productId,
-          qtyBase: -line.qtyBase,
-          beforeQtyBase,
-          afterQtyBase,
-          unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-          type: 'SALE' as const,
-          referenceType: 'SALES_INVOICE' as const,
-          referenceId: invoice.id,
-          userId: input.cashierUserId,
-        };
+    void measureCheckoutStage(
+      'action.checkout.stock-movements',
+      input,
+      async () => prisma.stockMovement.createMany({
+        data: lineDetails.map((line) => {
+          const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+          const afterQtyBase = beforeQtyBase - line.qtyBase;
+          return {
+            storeId: input.storeId,
+            productId: line.productId,
+            qtyBase: -line.qtyBase,
+            beforeQtyBase,
+            afterQtyBase,
+            unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
+            type: 'SALE' as const,
+            referenceType: 'SALES_INVOICE' as const,
+            referenceId: invoice.id,
+            userId: input.cashierUserId,
+          };
+        }),
       }),
-    }).catch(() => {});
+      { stage: 'stock-movements', rowCount: lineDetails.length },
+      CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
+    ).catch(() => {});
   }
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale

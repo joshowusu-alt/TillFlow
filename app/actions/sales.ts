@@ -15,6 +15,53 @@ import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { measureServerOperation } from '@/lib/observability';
+
+const CHECKOUT_ACTION_STAGE_THRESHOLDS_MS = {
+  auditLog: 200,
+  revalidate: 300,
+} as const;
+
+function checkoutActionTimingMetadata({
+  businessId,
+  storeId,
+  lines,
+  payments,
+  customerId,
+  paymentStatus,
+  hasDiscount,
+}: {
+  businessId: string;
+  storeId: string;
+  lines: Array<{ productId: string; discountType?: DiscountType; discountValue?: number }>;
+  payments: Array<{ method: string; amountPence: number }>;
+  customerId: string | null;
+  paymentStatus: PaymentStatus;
+  hasDiscount: boolean;
+}) {
+  const positivePaymentMethods = new Set(
+    payments.filter((payment) => payment.amountPence > 0).map((payment) => payment.method),
+  );
+
+  return {
+    businessId,
+    storeId,
+    action: 'completeSaleAction',
+    cartLineCount: lines.length,
+    distinctProductCount: new Set(lines.map((line) => line.productId)).size,
+    paymentMethodCount: positivePaymentMethods.size,
+    hasCredit: paymentStatus !== 'PAID',
+    hasCustomerId: Boolean(customerId),
+    hasCashPayment: positivePaymentMethods.has('CASH'),
+    hasCardPayment: positivePaymentMethods.has('CARD'),
+    hasBankTransferPayment: positivePaymentMethods.has('TRANSFER'),
+    hasMobileMoneyPayment: positivePaymentMethods.has('MOBILE_MONEY'),
+    hasDiscount:
+      hasDiscount ||
+      lines.some((line) => (line.discountType && line.discountType !== 'NONE') || (line.discountValue ?? 0) > 0),
+    cacheState: 'write-through',
+  };
+}
 
 export async function createSaleAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -89,6 +136,20 @@ export async function createSaleAction(formData: FormData): Promise<void> {
     }
 
     try {
+      const checkoutTimingMetadata = checkoutActionTimingMetadata({
+        businessId,
+        storeId,
+        lines,
+        payments: [
+          { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
+          { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
+          { method: 'TRANSFER', amountPence: formInt(formData, 'transferPaid') },
+        ],
+        customerId,
+        paymentStatus,
+        hasDiscount: Boolean(orderDiscountType && orderDiscountType !== 'NONE') || orderDiscountValue > 0,
+      });
+
       const invoice = await createSale({
         businessId,
         storeId,
@@ -117,13 +178,25 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         productIds: affectedProductIds,
       }).catch(() => {});
 
-      audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }).catch(() => {});
+      void measureServerOperation(
+        'action.checkout.audit-log',
+        async () => audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SALE_CREATE', entity: 'SalesInvoice', entityId: invoice.id, details: { lines: lines.length, total: invoice.totalPence } }),
+        { ...checkoutTimingMetadata, stage: 'audit-log', rowCount: 1 },
+        { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.auditLog, operationType: 'action' },
+      ).catch(() => {});
 
-      revalidateTag(`today-sales-${businessId}`);
-      revalidateTag(`readiness-${businessId}`);
-      revalidateTag('reports');
-      revalidateOwnerDashboardCache();
-      revalidatePath('/onboarding');
+      await measureServerOperation(
+        'action.checkout.revalidate',
+        async () => {
+          revalidateTag(`today-sales-${businessId}`);
+          revalidateTag(`readiness-${businessId}`);
+          revalidateTag('reports');
+          revalidateOwnerDashboardCache();
+          revalidatePath('/onboarding');
+        },
+        { ...checkoutTimingMetadata, stage: 'revalidate' },
+        { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },
+      );
       redirect(`/receipts/${invoice.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -237,6 +310,28 @@ export async function completeSaleAction(data: {
       return { success: false, error: 'Select a customer for credit or part-paid sales.' };
     }
 
+    const salePayments = [
+      { method: 'CASH' as const, amountPence: data.cashPaid },
+      { method: 'CARD' as const, amountPence: data.cardPaid },
+      { method: 'TRANSFER' as const, amountPence: data.transferPaid },
+      {
+        method: 'MOBILE_MONEY' as const,
+        amountPence: momoPaid,
+        reference: data.momoRef ?? null,
+        payerMsisdn: data.momoPayerMsisdn ?? null,
+        network: data.momoNetwork ?? null,
+      },
+    ];
+    const checkoutTimingMetadata = checkoutActionTimingMetadata({
+      businessId,
+      storeId: data.storeId,
+      lines,
+      payments: salePayments,
+      customerId,
+      paymentStatus,
+      hasDiscount: Boolean(orderDiscountType && orderDiscountType !== 'NONE') || orderDiscountValue > 0,
+    });
+
     const invoice = await createSale({
       businessId,
       storeId: data.storeId,
@@ -252,18 +347,7 @@ export async function completeSaleAction(data: {
       discountApprovedByUserId,
       momoCollectionId: data.momoCollectionId || null,
       loyaltyPointsToRedeem: Math.max(0, Math.floor(data.loyaltyPointsToRedeem ?? 0)),
-      payments: [
-        { method: 'CASH', amountPence: data.cashPaid },
-        { method: 'CARD', amountPence: data.cardPaid },
-        { method: 'TRANSFER', amountPence: data.transferPaid },
-        {
-          method: 'MOBILE_MONEY',
-          amountPence: momoPaid,
-          reference: data.momoRef ?? null,
-          payerMsisdn: data.momoPayerMsisdn ?? null,
-          network: data.momoNetwork ?? null,
-        },
-      ],
+      payments: salePayments,
       lines,
     });
 
@@ -275,22 +359,34 @@ export async function completeSaleAction(data: {
     }).catch(() => {});
 
     // Fire-and-forget: audit + cache revalidation should not block the cashier
-    audit({
-      businessId,
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'SALE_CREATE',
-      entity: 'SalesInvoice',
-      entityId: invoice.id,
-      details: { lines: lines.length, total: invoice.totalPence },
-    }).catch(() => {});
+    void measureServerOperation(
+      'action.checkout.audit-log',
+      async () => audit({
+        businessId,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        action: 'SALE_CREATE',
+        entity: 'SalesInvoice',
+        entityId: invoice.id,
+        details: { lines: lines.length, total: invoice.totalPence },
+      }),
+      { ...checkoutTimingMetadata, stage: 'audit-log', rowCount: 1 },
+      { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.auditLog, operationType: 'action' },
+    ).catch(() => {});
 
     // Keep owner/reporting surfaces fresh after a sale lands. This is a single
     // lightweight tag invalidation, so the dashboard reflects new tickets
     // promptly without a manual refresh cycle.
-    revalidateTag('reports');
-    revalidateOwnerDashboardCache();
+    await measureServerOperation(
+      'action.checkout.revalidate',
+      async () => {
+        revalidateTag('reports');
+        revalidateOwnerDashboardCache();
+      },
+      { ...checkoutTimingMetadata, stage: 'revalidate' },
+      { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },
+    );
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
