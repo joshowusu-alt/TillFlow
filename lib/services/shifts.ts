@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
 import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
 import { audit } from '@/lib/audit';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type CloseShiftApproval =
   | { mode: 'PIN'; approvingManagerId: string }
@@ -24,6 +25,19 @@ export type CloseShiftInput = {
 };
 
 export async function performShiftClose(input: CloseShiftInput): Promise<{ id: string }> {
+  return measureServerOperation(
+    'action.shift.close',
+    () => performShiftCloseImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'closeShiftAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: string }> {
   const { businessId, actor, shiftId, actualCash, notes, varianceReasonCode, varianceReason, approval } = input;
 
   const shift = await prisma.shift.findFirst({

@@ -14,6 +14,7 @@ import { getBusinessStores } from '@/lib/services/stores';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { unstable_cache } from 'next/cache';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export const dynamic = 'force-dynamic';
 
@@ -327,12 +328,22 @@ export default async function DashboardPage({
     uncostedMarginGroups,
     bestSellerProducts,
     uncostedProducts,
-  } = await getCachedTradingDashboardSnapshot(
+  } = await measureServerOperation(
+    'report.trading-dashboard.snapshot',
+    () => getCachedTradingDashboardSnapshot(
     business.id,
     business.currency,
     start.toISOString(),
     end.toISOString(),
     selectedStoreId,
+    ),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/dashboard',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
   );
 
   const currency = business.currency;
@@ -412,31 +423,41 @@ export default async function DashboardPage({
   const hasActivity = todayAdj.length > 0 || todayVoids.length > 0 || todayReturns.length > 0 || cashVarTotal > 0;
 
   // Live status: last sale time today and open shift count
-  const [lastSaleRecord, openShifts] = await Promise.all([
-    prisma.salesInvoice.findFirst({
-      where: {
-        businessId: business.id,
-        ...storeFilter,
-        createdAt: { gte: todayStart },
-        paymentStatus: { notIn: ['VOID', 'RETURNED'] },
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    }),
-    prisma.shift.findMany({
-      where: {
-        till: {
-          store: {
-            businessId: business.id,
-            ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
-          },
+  const [lastSaleRecord, openShifts] = await measureServerOperation(
+    'report.trading-dashboard.live-pulse',
+    () => Promise.all([
+      prisma.salesInvoice.findFirst({
+        where: {
+          businessId: business.id,
+          ...storeFilter,
+          createdAt: { gte: todayStart },
+          paymentStatus: { notIn: ['VOID', 'RETURNED'] },
         },
-        closedAt: null,
-      },
-      select: { id: true, user: { select: { name: true } } },
-      take: 20,
-    }),
-  ]);
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      prisma.shift.findMany({
+        where: {
+          till: {
+            store: {
+              businessId: business.id,
+              ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
+            },
+          },
+          closedAt: null,
+        },
+        select: { id: true, user: { select: { name: true } } },
+        take: 20,
+      }),
+    ]),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/dashboard',
+      cacheState: 'uncached-live-pulse',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' },
+  );
   const lastSaleMinutesAgo = lastSaleRecord
     ? Math.floor((Date.now() - lastSaleRecord.createdAt.getTime()) / 60_000)
     : null;

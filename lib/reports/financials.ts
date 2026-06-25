@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -97,7 +98,16 @@ const cachedIncomeStatement = unstable_cache(
 );
 
 export function getIncomeStatement(businessId: string, start: Date, end: Date) {
-  return cachedIncomeStatement(businessId, start.toISOString(), end.toISOString());
+  return measureServerOperation(
+    'report.income-statement.snapshot',
+    () => cachedIncomeStatement(businessId, start.toISOString(), end.toISOString()),
+    {
+      businessId,
+      route: '/reports/income-statement',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' }
+  );
 }
 
 async function _getBalanceSheet(businessId: string, asOfIso: string) {
@@ -214,7 +224,16 @@ const cachedBalanceSheet = unstable_cache(
 );
 
 export function getBalanceSheet(businessId: string, asOf: Date) {
-  return cachedBalanceSheet(businessId, asOf.toISOString());
+  return measureServerOperation(
+    'report.balance-sheet.snapshot',
+    () => cachedBalanceSheet(businessId, asOf.toISOString()),
+    {
+      businessId,
+      route: '/reports/balance-sheet',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' }
+  );
 }
 
 export async function getAccountBalance(businessId: string, code: string, asOf: Date) {
@@ -297,5 +316,14 @@ const cachedCashflow = unstable_cache(
 );
 
 export function getCashflow(businessId: string, start: Date, end: Date) {
-  return cachedCashflow(businessId, start.toISOString(), end.toISOString());
+  return measureServerOperation(
+    'report.cashflow.snapshot',
+    () => cachedCashflow(businessId, start.toISOString(), end.toISOString()),
+    {
+      businessId,
+      route: '/reports/cashflow',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' }
+  );
 }

@@ -26,6 +26,7 @@ import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-mo
 import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function computeDiscount(
   subtotal: number,
@@ -280,6 +281,21 @@ export type CreateSaleInput = {
 };
 
 export async function createSale(input: CreateSaleInput) {
+  return measureServerOperation(
+    'action.checkout.create-sale',
+    () => createSaleImpl(input),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'completeSaleAction',
+      rowCount: input.lines.length,
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createSaleImpl(input: CreateSaleInput) {
   if (!input.lines.length) {
     throw new UserError('No items in cart');
   }

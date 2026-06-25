@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type ForecastDay = {
   date: string;
@@ -269,5 +270,14 @@ export function getCashflowForecast(
   businessId: string,
   days: 7 | 14 | 30 = 14
 ): Promise<ForecastResult> {
-  return cachedCashflowForecast(businessId, days);
+  return measureServerOperation(
+    'report.cashflow-forecast.snapshot',
+    () => cachedCashflowForecast(businessId, days),
+    {
+      businessId,
+      route: '/reports/cashflow-forecast',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' }
+  );
 }

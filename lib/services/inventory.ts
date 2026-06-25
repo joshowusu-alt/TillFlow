@@ -3,8 +3,32 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { resolveAvgCost, upsertInventoryBalance } from './shared';
 import { detectInventoryAdjustmentRisk } from './risk-monitor';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export async function createStockAdjustment(input: {
+  businessId: string;
+  storeId: string;
+  productId: string;
+  unitId: string;
+  qtyInUnit: number;
+  direction: 'INCREASE' | 'DECREASE';
+  reason?: string | null;
+  userId: string;
+}, tx?: Prisma.TransactionClient) {
+  return measureServerOperation(
+    'action.stock-adjustment.create',
+    () => createStockAdjustmentImpl(input, tx),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'createStockAdjustmentAction',
+      cacheState: tx ? 'nested-transaction' : 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createStockAdjustmentImpl(input: {
   businessId: string;
   storeId: string;
   productId: string;

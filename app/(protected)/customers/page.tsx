@@ -12,6 +12,7 @@ import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLimit: number }) {
   if (balance === 0) {
@@ -75,15 +76,35 @@ export default async function CustomersPage({
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const balanceDue = searchParams?.balanceDue === '1';
-  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(business.id, searchParams?.storeId);
+  const { stores, selectedStoreId: rawStoreId } = await measureServerOperation(
+    'page.customers.stores-load',
+    () => getBusinessStores(business.id, searchParams?.storeId),
+    {
+      businessId: business.id,
+      route: '/customers',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
   const selectedStoreId = (rawStoreId ?? stores[0]?.id) ?? '';
 
-  const { customers, totalCount, totalPages } = await getCustomers(business.id, {
-    search: q || undefined,
-    page,
-    storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
-    balanceDue: balanceDue || undefined,
-  });
+  const { customers, totalCount, totalPages } = await measureServerOperation(
+    'page.customers.load',
+    () => getCustomers(business.id, {
+      search: q || undefined,
+      page,
+      storeId: business.customerScope === 'BRANCH' ? selectedStoreId : undefined,
+      balanceDue: balanceDue || undefined,
+    }),
+    {
+      businessId: business.id,
+      storeId: business.customerScope === 'BRANCH' ? selectedStoreId : 'ALL',
+      route: '/customers',
+      page,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
   const customersWithBalanceCount = customers.filter((customer) => customer.outstandingBalancePence > 0).length;
   const totalArOutstandingPence = customers.reduce((sum, customer) => sum + customer.outstandingBalancePence, 0);
   const creditLimitCount = customers.filter((customer) => customer.creditLimitPence > 0).length;

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 // ---------------------------------------------------------------------------
 // Input / output types
@@ -395,6 +396,22 @@ export async function createProduct(
   businessId: string,
   data: ProductCoreInput
 ): Promise<{ id: string; name: string }> {
+  return measureServerOperation(
+    'action.product.create',
+    () => createProductImpl(businessId, data),
+    {
+      businessId,
+      action: 'createProductAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createProductImpl(
+  businessId: string,
+  data: ProductCoreInput
+): Promise<{ id: string; name: string }> {
   const normalized = normalizeCoreProductInput(data);
   validateProductValues(normalized);
   validateMarginThresholdBps(normalized.minimumMarginThresholdBps);
@@ -440,6 +457,23 @@ export async function createProduct(
  * Returns the product id (for use in audit logs / redirects).
  */
 export async function updateProduct(
+  id: string,
+  businessId: string,
+  data: ProductCoreInput
+): Promise<string> {
+  return measureServerOperation(
+    'action.product.update',
+    () => updateProductImpl(id, businessId, data),
+    {
+      businessId,
+      action: 'updateProductAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function updateProductImpl(
   id: string,
   businessId: string,
   data: ProductCoreInput
@@ -587,6 +621,23 @@ export async function repairInventoryAverageCostDrift(
  * Pass `db` to run all queries inside an existing Prisma transaction.
  */
 export async function quickCreateProduct(
+  businessId: string,
+  input: QuickCreateProductInput,
+  db: any = prisma
+): Promise<QuickCreateProductResult> {
+  return measureServerOperation(
+    'action.product.quick-create',
+    () => quickCreateProductImpl(businessId, input, db),
+    {
+      businessId,
+      action: 'quickCreateProductAction',
+      cacheState: db === prisma ? 'write-through' : 'nested-transaction',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function quickCreateProductImpl(
   businessId: string,
   input: QuickCreateProductInput,
   db: any = prisma

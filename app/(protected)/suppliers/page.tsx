@@ -13,6 +13,7 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import { parseTags } from '@/lib/contact-tags';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function SupplierStatusBadge({ balance, creditLimit }: { balance: number; creditLimit: number }) {
   if (balance === 0) {
@@ -81,50 +82,71 @@ export default async function SuppliersPage({ searchParams }: { searchParams?: {
       : {}),
   };
 
-  const [totalCount, suppliers] = await Promise.all([
-    prisma.supplier.count({ where }),
-    prisma.supplier.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        creditLimitPence: true,
-        tagsJson: true,
-        purchaseInvoices: {
-          where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-          select: {
-            paymentStatus: true,
-            totalPence: true,
-            createdAt: true,
-            payments: {
-              select: { amountPence: true, paidAt: true },
-              orderBy: { paidAt: 'desc' },
-            }
-          },
-          orderBy: { createdAt: 'desc' },
-        }
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
-  ]);
+  const [totalCount, suppliers] = await measureServerOperation(
+    'page.suppliers.load',
+    () => Promise.all([
+      prisma.supplier.count({ where }),
+      prisma.supplier.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          creditLimitPence: true,
+          tagsJson: true,
+          purchaseInvoices: {
+            where: { paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
+            select: {
+              paymentStatus: true,
+              totalPence: true,
+              createdAt: true,
+              payments: {
+                select: { amountPence: true, paidAt: true },
+                orderBy: { paidAt: 'desc' },
+              }
+            },
+            orderBy: { createdAt: 'desc' },
+          }
+        },
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * DEFAULT_PAGE_SIZE,
+        take: DEFAULT_PAGE_SIZE,
+      }),
+    ]),
+    {
+      businessId: business.id,
+      route: '/suppliers',
+      page,
+      pageSize: DEFAULT_PAGE_SIZE,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
 
   // Batch-load linked product counts
   const supplierIds = suppliers.map((s) => s.id);
   const productCounts = supplierIds.length
-    ? await prisma.product.groupBy({
-        by: ['preferredSupplierId'],
-        where: {
+    ? await measureServerOperation(
+        'page.suppliers.linked-products-load',
+        () => prisma.product.groupBy({
+          by: ['preferredSupplierId'],
+          where: {
+            businessId: business.id,
+            preferredSupplierId: { in: supplierIds },
+          },
+          _count: { _all: true },
+        }),
+        {
           businessId: business.id,
-          preferredSupplierId: { in: supplierIds },
+          route: '/suppliers',
+          rowCount: supplierIds.length,
+          cacheState: 'uncached-page-load',
         },
-        _count: { _all: true },
-      })
+        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+      )
     : ([] as Array<{ preferredSupplierId: string | null; _count: { _all: number } }>);
 
   const productCountMap = new Map<string, number>();

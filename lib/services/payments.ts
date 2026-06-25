@@ -9,6 +9,7 @@ import {
   type JournalLine
 } from './shared';
 import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 async function getOpenCashShiftForPayment(
   tx: any,
@@ -44,6 +45,25 @@ async function getOpenCashShiftForPayment(
  * Record additional payment(s) against an existing sales invoice.
  */
 export async function recordCustomerPayment(
+  businessId: string,
+  invoiceId: string,
+  payments: PaymentInput[],
+  actorUserId?: string
+) {
+  return measureServerOperation(
+    'action.customer-receipt.record',
+    () => recordCustomerPaymentImpl(businessId, invoiceId, payments, actorUserId),
+    {
+      businessId,
+      action: 'recordCustomerPaymentAction',
+      rowCount: payments.length,
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function recordCustomerPaymentImpl(
   businessId: string,
   invoiceId: string,
   payments: PaymentInput[],
@@ -142,6 +162,27 @@ export async function recordCustomerPayment(
  * Record additional payment(s) against an existing purchase invoice.
  */
 export async function recordSupplierPayment(
+  businessId: string,
+  invoiceId: string,
+  payments: PaymentInput[],
+  paidAt?: Date,
+  recordedByUserId?: string,
+  notes?: string
+) {
+  return measureServerOperation(
+    'action.supplier-payment.record',
+    () => recordSupplierPaymentImpl(businessId, invoiceId, payments, paidAt, recordedByUserId, notes),
+    {
+      businessId,
+      action: 'recordSupplierPaymentAction',
+      rowCount: payments.length,
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function recordSupplierPaymentImpl(
   businessId: string,
   invoiceId: string,
   payments: PaymentInput[],

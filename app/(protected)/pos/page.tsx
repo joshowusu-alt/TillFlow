@@ -4,6 +4,7 @@ import { unstable_cache } from 'next/cache';
 import PosClient from './PosClient';
 import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 // ── Cached lookups for data that rarely changes ───────────────────
 // Revalidates every 60 s or when explicitly invalidated.
@@ -110,28 +111,48 @@ export default async function PosPage({
   // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
   const requestedCustomerId = searchParams?.customerId?.trim() || undefined;
 
-  const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] = await Promise.all([
-    // Short-lived cache: till/shift/inventory bust quickly or on-demand
-    getCachedTills(baseStore.id),
-    getCachedShifts(baseStore.id),
-    getCachedInventory(baseStore.id),
-    // Cached: products, units, categories change infrequently
-    getCachedProducts(business.id),
-    getCachedUnits(business.id),
-    getCachedCategories(business.id),
-    getCachedCustomers(business.id),
-    requestedCustomerId
-      ? prisma.customer.findFirst({
-          where: { id: requestedCustomerId, businessId: business.id },
-          select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-        })
-      : Promise.resolve(null),
-  ]);
+  const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] = await measureServerOperation(
+    'page.pos.initial-data-load',
+    () => Promise.all([
+      // Short-lived cache: till/shift/inventory bust quickly or on-demand
+      getCachedTills(baseStore.id),
+      getCachedShifts(baseStore.id),
+      getCachedInventory(baseStore.id),
+      // Cached: products, units, categories change infrequently
+      getCachedProducts(business.id),
+      getCachedUnits(business.id),
+      getCachedCategories(business.id),
+      getCachedCustomers(business.id),
+      requestedCustomerId
+        ? prisma.customer.findFirst({
+            where: { id: requestedCustomerId, businessId: business.id },
+            select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
+          })
+        : Promise.resolve(null),
+    ]),
+    {
+      businessId: business.id,
+      storeId: baseStore.id,
+      route: '/pos',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 
-  const userOpenShift = await prisma.shift.findFirst({
-    where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
-    select: { till: { select: { name: true } } },
-  });
+  const userOpenShift = await measureServerOperation(
+    'page.pos.open-shift-load',
+    () => prisma.shift.findFirst({
+      where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
+      select: { till: { select: { name: true } } },
+    }),
+    {
+      businessId: business.id,
+      storeId: baseStore.id,
+      route: '/pos',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
+  );
   const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
 
   const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));

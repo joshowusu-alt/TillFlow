@@ -9,6 +9,7 @@ import type {
   InitiateCollectionResult,
   ReconcileInput,
 } from '@/lib/payments/providers/types';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const TERMINAL_STATUSES = new Set<CollectionStatus>(['CONFIRMED', 'FAILED', 'TIMEOUT']);
 
@@ -329,6 +330,20 @@ export type InitiateMobileMoneyCollectionInput = {
 };
 
 export async function initiateMobileMoneyCollection(input: InitiateMobileMoneyCollectionInput) {
+  return measureServerOperation(
+    'action.mobile-money.initiate',
+    () => initiateMobileMoneyCollectionImpl(input),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'initiateMomoCollectionAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function initiateMobileMoneyCollectionImpl(input: InitiateMobileMoneyCollectionInput) {
   if (input.amountPence <= 0) {
     throw new Error('Mobile money amount must be greater than 0.');
   }
@@ -434,6 +449,23 @@ export async function initiateMobileMoneyCollection(input: InitiateMobileMoneyCo
 }
 
 export async function checkMobileMoneyCollectionStatus(input: {
+  businessId: string;
+  collectionId: string;
+  force?: boolean;
+}) {
+  return measureServerOperation(
+    'action.mobile-money.status',
+    () => checkMobileMoneyCollectionStatusImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'checkMomoCollectionStatusAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function checkMobileMoneyCollectionStatusImpl(input: {
   businessId: string;
   collectionId: string;
   force?: boolean;
@@ -570,6 +602,24 @@ export async function reconcileMobileMoneyCollections(input: {
   statuses?: CollectionStatus[];
   limit?: number;
 }) {
+  return measureServerOperation(
+    'action.mobile-money.reconcile',
+    () => reconcileMobileMoneyCollectionsImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'reconcilePendingMomoCollectionsAction',
+      rowCount: input.limit ?? 100,
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'action' },
+  );
+}
+
+async function reconcileMobileMoneyCollectionsImpl(input: {
+  businessId: string;
+  statuses?: CollectionStatus[];
+  limit?: number;
+}) {
   const statuses = input.statuses?.length ? input.statuses : ['PENDING'];
   const collections = await prisma.mobileMoneyCollection.findMany({
     where: {
@@ -639,6 +689,24 @@ export async function reconcileMobileMoneyCollections(input: {
 }
 
 export async function reinitiateMobileMoneyCollection(input: {
+  businessId: string;
+  collectionId: string;
+  initiatedByUserId?: string | null;
+  idempotencyKey?: string;
+}) {
+  return measureServerOperation(
+    'action.mobile-money.reinitiate',
+    () => reinitiateMobileMoneyCollectionImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'reinitiateMomoCollectionAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function reinitiateMobileMoneyCollectionImpl(input: {
   businessId: string;
   collectionId: string;
   initiatedByUserId?: string | null;

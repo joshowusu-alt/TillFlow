@@ -9,6 +9,7 @@ import {
   isSqliteRuntime,
 } from './sqlite-report-date-normalization';
 import { summarizeInventoryRisk, summarizeReceivables } from './operational-metrics';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type TodayKPIs = {
   totalSalesPence: number;
@@ -620,5 +621,15 @@ const cachedTodayKPIs = unstable_cache(
 );
 
 export function getTodayKPIs(businessId: string, storeId?: string): Promise<TodayKPIs> {
-  return cachedTodayKPIs(businessId, storeId ?? '');
+  return measureServerOperation(
+    'report.today-kpis.snapshot',
+    () => cachedTodayKPIs(businessId, storeId ?? ''),
+    {
+      businessId,
+      storeId: storeId ?? 'ALL',
+      route: '/reports/dashboard',
+      cacheState: 'cached-wrapper',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' }
+  );
 }

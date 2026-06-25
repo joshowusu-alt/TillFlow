@@ -11,6 +11,7 @@ import {
   AGING_BUCKET_LABELS,
   type AgingBucket,
 } from '@/lib/services/supplier-aging';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export const metadata = { title: 'Supplier Aging Report' };
 export const dynamic = 'force-dynamic';
@@ -67,7 +68,16 @@ export default async function SupplierAgingPage({
   const asOfStr = rawAsOf && rawAsOf <= todayStr ? rawAsOf : todayStr;
   const asOf = utcStartOfDay(new Date(asOfStr + 'T00:00:00Z'));
 
-  const report = await getSupplierAgingReport(business.id, asOf);
+  const report = await measureServerOperation(
+    'page.supplier-aging.load',
+    () => getSupplierAgingReport(business.id, asOf),
+    {
+      businessId: business.id,
+      route: '/payments/supplier-aging',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+  );
   const currency = business.currency;
   const exportHref = `/payments/supplier-aging/export?asOf=${asOfStr}`;
   const hasData = report.rows.length > 0;

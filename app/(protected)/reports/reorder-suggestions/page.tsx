@@ -10,6 +10,7 @@ import ReportSectionHeader from '@/components/reports/ReportSectionHeader';
 import { markAsOrdered } from '@/app/actions/reorder';
 import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { getFeatures } from '@/lib/features';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 type QueryParams = {
   days?: string;
@@ -57,11 +58,21 @@ export default async function ReorderSuggestionsPage({
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
-  const stores = await prisma.store.findMany({
-    where: { businessId: business.id },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' }
-  });
+  const stores = await measureServerOperation(
+    'report.reorder-suggestions.stores-load',
+    () => prisma.store.findMany({
+      where: { businessId: business.id },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' }
+    }),
+    {
+      businessId: business.id,
+      storeId: defaultStore.id,
+      route: '/reports/reorder-suggestions',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' },
+  );
 
   const selectedStoreId =
     searchParams.storeId && stores.some((candidate) => candidate.id === searchParams.storeId)
@@ -70,48 +81,60 @@ export default async function ReorderSuggestionsPage({
 
   const since = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
 
-  const [products, salesLines, pendingOrders] = await Promise.all([
-    prisma.product.findMany({
-      where: { businessId: business.id, active: true },
-      select: {
-        id: true,
-        name: true,
-        reorderPointBase: true,
-        preferredSupplierId: true,
-        preferredSupplier: { select: { id: true, name: true } },
-        productUnits: {
-          select: {
-            isBaseUnit: true,
-            conversionToBase: true,
-            unit: { select: { name: true, pluralName: true } }
+  const [products, salesLines, pendingOrders] = await measureServerOperation(
+    'report.reorder-suggestions.load',
+    () => Promise.all([
+      prisma.product.findMany({
+        where: { businessId: business.id, active: true },
+        select: {
+          id: true,
+          name: true,
+          reorderPointBase: true,
+          preferredSupplierId: true,
+          preferredSupplier: { select: { id: true, name: true } },
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } }
+            }
+          },
+          inventoryBalances: {
+            where: { storeId: selectedStoreId },
+            select: { qtyOnHandBase: true }
+          }
+        }
+      }),
+      prisma.salesInvoiceLine.findMany({
+        where: {
+          salesInvoice: {
+            businessId: business.id,
+            storeId: selectedStoreId,
+            createdAt: { gte: since },
+            paymentStatus: { notIn: ['RETURNED', 'VOID'] }
           }
         },
-        inventoryBalances: {
-          where: { storeId: selectedStoreId },
-          select: { qtyOnHandBase: true }
-        }
-      }
-    }),
-    prisma.salesInvoiceLine.findMany({
-      where: {
-        salesInvoice: {
+        select: { productId: true, qtyBase: true }
+      }),
+      prisma.reorderAction.findMany({
+        where: {
           businessId: business.id,
           storeId: selectedStoreId,
-          createdAt: { gte: since },
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] }
-        }
-      },
-      select: { productId: true, qtyBase: true }
-    }),
-    prisma.reorderAction.findMany({
-      where: {
-        businessId: business.id,
-        storeId: selectedStoreId,
-        status: 'ORDERED',
-      },
-      select: { productId: true, qtyBase: true, orderedAt: true },
-    }),
-  ]);
+          status: 'ORDERED',
+        },
+        select: { productId: true, qtyBase: true, orderedAt: true },
+      }),
+    ]),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/reorder-suggestions',
+      page,
+      pageSize,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+  );
 
   const soldByProduct = new Map<string, number>();
   for (const line of salesLines) {

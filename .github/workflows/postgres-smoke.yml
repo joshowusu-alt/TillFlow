@@ -1,0 +1,56 @@
+name: Postgres Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'prisma/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/postgres-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tillflow_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tillflow_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+      POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Postgres Prisma client
+        run: npx prisma generate --schema=prisma/schema.postgres.prisma
+
+      - name: Deploy migrations
+        run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
+
+      - name: Check migration status
+        run: npx prisma migrate status --schema=prisma/schema.postgres.prisma

@@ -10,6 +10,7 @@ import {
 } from './shared';
 import { recordCashDrawerEntryTx } from './cash-drawer';
 import { detectVoidFrequencyRisk } from './risk-monitor';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 // ---------------------------------------------------------------------------
 // Shared helper — accumulate payments by method
@@ -43,6 +44,30 @@ function buildAvgCostMap(
 }
 
 export async function createSalesReturn(input: {
+  businessId: string;
+  salesInvoiceId: string;
+  userId: string;
+  reasonCode?: string | null;
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
+  refundAmountPence?: number | null;
+  reason?: string | null;
+  managerApprovedByUserId?: string | null;
+  managerApprovalMode?: string | null;
+  type: 'RETURN' | 'VOID';
+}) {
+  return measureServerOperation(
+    'action.sales-return.create',
+    () => createSalesReturnImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'createSalesReturnAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createSalesReturnImpl(input: {
   businessId: string;
   salesInvoiceId: string;
   userId: string;
@@ -217,6 +242,27 @@ export async function createSalesReturn(input: {
 }
 
 export async function createPurchaseReturn(input: {
+  businessId: string;
+  purchaseInvoiceId: string;
+  userId: string;
+  refundMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
+  refundAmountPence?: number | null;
+  reason?: string | null;
+  type: 'RETURN' | 'VOID';
+}) {
+  return measureServerOperation(
+    'action.purchase-return.create',
+    () => createPurchaseReturnImpl(input),
+    {
+      businessId: input.businessId,
+      action: 'createPurchaseReturnAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createPurchaseReturnImpl(input: {
   businessId: string;
   purchaseInvoiceId: string;
   userId: string;

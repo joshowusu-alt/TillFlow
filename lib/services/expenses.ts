@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { creditCashBankLines, splitPayments, type JournalLine } from './shared';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type ExpenseInput = {
   businessId: string;
@@ -19,6 +20,20 @@ export type ExpenseInput = {
 };
 
 export async function createExpense(input: ExpenseInput) {
+  return measureServerOperation(
+    'action.expense.create',
+    () => createExpenseImpl(input),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'createExpenseAction',
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createExpenseImpl(input: ExpenseInput) {
   if (input.amountPence <= 0) throw new Error('Amount must be greater than 0');
 
   const account = await prisma.account.findFirst({

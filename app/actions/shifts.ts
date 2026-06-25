@@ -10,6 +10,7 @@ import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/servi
 import { performShiftClose } from '@/lib/services/shifts';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const ADD_CASH_REASON_LABELS: Record<string, string> = {
   SAFE: 'Cash from safe / cash box',
@@ -50,20 +51,30 @@ export async function addCashToTillAction(
       ? `Cash added to till — ${reasonLabel}: ${note.trim()}`
       : `Cash added to till — ${reasonLabel}`;
 
-    const result = await prisma.$transaction(async (tx) =>
-      recordCashDrawerEntryTx(tx, {
+    const result = await measureServerOperation(
+      'action.shift.add-cash',
+      () => prisma.$transaction(async (tx) =>
+        recordCashDrawerEntryTx(tx, {
+          businessId,
+          storeId: openShift.till.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: user.id,
+          cashierUserId: user.id,
+          entryType: 'CASH_ADJUSTMENT',
+          amountPence,
+          reasonCode,
+          reason: fullReason,
+          actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
+        })
+      ),
+      {
         businessId,
         storeId: openShift.till.storeId,
-        tillId: openShift.tillId,
-        shiftId: openShift.id,
-        createdByUserId: user.id,
-        cashierUserId: user.id,
-        entryType: 'CASH_ADJUSTMENT',
-        amountPence,
-        reasonCode,
-        reason: fullReason,
-        actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
-      })
+        action: 'addCashToTillAction',
+        cacheState: 'write-through',
+      },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
     );
 
     revalidateTag('pos-shifts');
@@ -93,41 +104,51 @@ export async function openShiftAction(
     });
     if (!till) return err('Till not found for your business.');
 
-    const shift = await prisma.$transaction(async (tx) => {
-      const existingShift = await tx.shift.findFirst({
-        where: { tillId: till.id, status: 'OPEN' },
-      });
-      if (existingShift) throw new Error('A shift is already open for this till');
+    const shift = await measureServerOperation(
+      'action.shift.open',
+      () => prisma.$transaction(async (tx) => {
+        const existingShift = await tx.shift.findFirst({
+          where: { tillId: till.id, status: 'OPEN' },
+        });
+        if (existingShift) throw new Error('A shift is already open for this till');
 
-      const created = await tx.shift.create({
-        data: {
+        const created = await tx.shift.create({
+          data: {
+            tillId: till.id,
+            userId: user.id,
+            openingCashPence: openingCash,
+            expectedCashPence: 0,
+            status: 'OPEN',
+            openKey: till.id,
+          },
+        });
+
+        await recordCashDrawerEntryTx(tx, {
+          businessId,
+          storeId: till.storeId,
           tillId: till.id,
-          userId: user.id,
-          openingCashPence: openingCash,
-          expectedCashPence: 0,
-          status: 'OPEN',
-          openKey: till.id,
-        },
-      });
+          shiftId: created.id,
+          createdByUserId: user.id,
+          cashierUserId: user.id,
+          entryType: 'OPEN_FLOAT',
+          amountPence: openingCash,
+          reasonCode: 'OPEN_FLOAT',
+          reason: 'Till opened with float',
+          referenceType: 'SHIFT',
+          referenceId: created.id,
+          actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
+        });
 
-      await recordCashDrawerEntryTx(tx, {
+        return created;
+      }),
+      {
         businessId,
         storeId: till.storeId,
-        tillId: till.id,
-        shiftId: created.id,
-        createdByUserId: user.id,
-        cashierUserId: user.id,
-        entryType: 'OPEN_FLOAT',
-        amountPence: openingCash,
-        reasonCode: 'OPEN_FLOAT',
-        reason: 'Till opened with float',
-        referenceType: 'SHIFT',
-        referenceId: created.id,
-        actor: { userId: user.id, userName: user.name ?? 'Unknown', userRole: user.role },
-      });
-
-      return created;
-    });
+        action: 'openShiftAction',
+        cacheState: 'write-through',
+      },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+    );
 
     audit({
       businessId,

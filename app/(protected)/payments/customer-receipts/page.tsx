@@ -9,6 +9,7 @@ import { recordCustomerPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import DueDateBadge from '@/components/DueDateBadge';
 import Link from 'next/link';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const PAYMENT_LABEL: Record<string, string> = {
   CASH: 'Cash',
@@ -22,53 +23,62 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const customerId = searchParams?.customerId?.trim() || undefined;
 
-  const [invoices, recentPayments, linkedCustomer] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId: business.id,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        ...(customerId ? { customerId } : {}),
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        dueDate: true,
-        totalPence: true,
-        customer: { select: { id: true, name: true, phone: true } },
-        payments: { select: { amountPence: true } }
-      },
-      orderBy: { createdAt: 'desc' }
-    }),
-    prisma.salesPayment.findMany({
-      where: {
-        salesInvoice: {
+  const [invoices, recentPayments, linkedCustomer] = await measureServerOperation(
+    'page.customer-receipts.load',
+    () => Promise.all([
+      prisma.salesInvoice.findMany({
+        where: {
           businessId: business.id,
+          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
           ...(customerId ? { customerId } : {}),
         },
-      },
-      select: {
-        id: true,
-        method: true,
-        amountPence: true,
-        receivedAt: true,
-        reference: true,
-        salesInvoice: {
-          select: {
-            id: true,
-            customer: { select: { id: true, name: true } },
+        select: {
+          id: true,
+          createdAt: true,
+          dueDate: true,
+          totalPence: true,
+          customer: { select: { id: true, name: true, phone: true } },
+          payments: { select: { amountPence: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.salesPayment.findMany({
+        where: {
+          salesInvoice: {
+            businessId: business.id,
+            ...(customerId ? { customerId } : {}),
           },
         },
-      },
-      orderBy: { receivedAt: 'desc' },
-      take: 20,
-    }),
-    customerId
-      ? prisma.customer.findFirst({
-          where: { id: customerId, businessId: business.id },
-          select: { id: true, name: true, phone: true, creditLimitPence: true }
-        })
-      : Promise.resolve(null),
-  ]);
+        select: {
+          id: true,
+          method: true,
+          amountPence: true,
+          receivedAt: true,
+          reference: true,
+          salesInvoice: {
+            select: {
+              id: true,
+              customer: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { receivedAt: 'desc' },
+        take: 20,
+      }),
+      customerId
+        ? prisma.customer.findFirst({
+            where: { id: customerId, businessId: business.id },
+            select: { id: true, name: true, phone: true, creditLimitPence: true }
+          })
+        : Promise.resolve(null),
+    ]),
+    {
+      businessId: business.id,
+      route: '/payments/customer-receipts',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 
   const outstandingInvoices = invoices
     .map((invoice) => ({

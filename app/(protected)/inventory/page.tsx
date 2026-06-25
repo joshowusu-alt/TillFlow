@@ -8,6 +8,7 @@ import { formatMoney, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function InventoryEmptyState({ q }: { q: string }) {
   return (
@@ -39,32 +40,45 @@ export default async function InventoryPage({ searchParams }: { searchParams?: {
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
   };
 
-  const [totalCount, products] = await Promise.all([
-    prisma.product.count({ where }),
-    prisma.product.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        reorderPointBase: true,
-        defaultCostBasePence: true,
-        productUnits: {
-          select: {
-            isBaseUnit: true,
-            conversionToBase: true,
-            unit: { select: { name: true, pluralName: true } }
+  const [totalCount, products] = await measureServerOperation(
+    'page.inventory.load',
+    () => Promise.all([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          reorderPointBase: true,
+          defaultCostBasePence: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } }
+            }
+          },
+          inventoryBalances: {
+            where: { storeId: store.id },
+            select: { qtyOnHandBase: true, avgCostBasePence: true }
           }
         },
-        inventoryBalances: {
-          where: { storeId: store.id },
-          select: { qtyOnHandBase: true, avgCostBasePence: true }
-        }
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
-  ]);
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * DEFAULT_PAGE_SIZE,
+        take: DEFAULT_PAGE_SIZE,
+      }),
+    ]),
+    {
+      businessId: business.id,
+      storeId: store.id,
+      route: '/inventory',
+      page,
+      pageSize: DEFAULT_PAGE_SIZE,
+      rowCount: DEFAULT_PAGE_SIZE,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE));
   const inventoryRows = products.map((product) => {

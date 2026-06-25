@@ -11,6 +11,7 @@ import {
   type JournalLine
 } from './shared';
 import { fetchInventoryMap, incrementInventoryBalance } from './shared';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type PurchasePaymentInput = PaymentInput;
 
@@ -167,6 +168,21 @@ async function linkPurchasedProductsToSupplier(
 }
 
 export async function createPurchase(input: CreatePurchaseInput, db?: any) {
+  return measureServerOperation(
+    'action.purchase.create',
+    () => createPurchaseImpl(input, db),
+    {
+      businessId: input.businessId,
+      storeId: input.storeId,
+      action: 'createPurchaseAction',
+      rowCount: input.lines.length,
+      cacheState: 'write-through',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
+}
+
+async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   if (!input.lines.length) {
     throw new Error('No items in purchase');
   }

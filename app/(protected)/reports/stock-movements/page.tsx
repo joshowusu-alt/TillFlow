@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { formatDateTime } from '@/lib/format';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,25 +99,37 @@ export default async function StockMovementsPage({
     ...(q ? { product: { name: { contains: q, mode: 'insensitive' as const } } } : {}),
   };
 
-  const [totalCount, movements] = await Promise.all([
-    prisma.stockMovement.count({ where }),
-    prisma.stockMovement.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        type: true,
-        qtyBase: true,
-        beforeQtyBase: true,
-        afterQtyBase: true,
-        createdAt: true,
-        product: { select: { name: true } },
-        user: { select: { name: true } },
-      },
-    }),
-  ]);
+  const [totalCount, movements] = await measureServerOperation(
+    'report.stock-movements.load',
+    () => Promise.all([
+      prisma.stockMovement.count({ where }),
+      prisma.stockMovement.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          type: true,
+          qtyBase: true,
+          beforeQtyBase: true,
+          afterQtyBase: true,
+          createdAt: true,
+          product: { select: { name: true } },
+          user: { select: { name: true } },
+        },
+      }),
+    ]),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/stock-movements',
+      page,
+      pageSize,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 

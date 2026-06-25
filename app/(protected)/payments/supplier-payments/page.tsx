@@ -10,6 +10,7 @@ import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const PAYMENT_LABEL: Record<string, string> = {
   CASH: 'Cash',
@@ -25,54 +26,63 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   const supplierId = searchParams?.supplierId?.trim() || undefined;
   const today = new Date().toISOString().slice(0, 10);
 
-  const [invoices, recentPayments, linkedSupplier] = await Promise.all([
-    prisma.purchaseInvoice.findMany({
-      where: {
-        businessId: business.id,
-        paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
-        ...(supplierId ? { supplierId } : {}),
-      },
-      select: {
-        id: true,
-        createdAt: true,
-        dueDate: true,
-        totalPence: true,
-        supplier: { select: { id: true, name: true } },
-        payments: { select: { amountPence: true, paidAt: true, method: true } }
-      },
-      orderBy: [
-        { dueDate: 'asc' },
-        { createdAt: 'asc' },
-      ],
-    }),
-    prisma.purchasePayment.findMany({
-      where: {
-        purchaseInvoice: {
+  const [invoices, recentPayments, linkedSupplier] = await measureServerOperation(
+    'page.supplier-payments.load',
+    () => Promise.all([
+      prisma.purchaseInvoice.findMany({
+        where: {
           businessId: business.id,
+          paymentStatus: { in: ['UNPAID', 'PART_PAID'] },
           ...(supplierId ? { supplierId } : {}),
-        }
-      },
-      select: {
-        id: true,
-        method: true,
-        amountPence: true,
-        paidAt: true,
-        notes: true,
-        recordedBy: { select: { name: true } },
-        purchaseInvoice: {
-          select: { id: true, supplier: { select: { name: true } } }
-        }
-      },
-      orderBy: { paidAt: 'desc' },
-      take: 20,
-    }),
-    supplierId
-      ? prisma.supplier.findFirst({
-          where: { id: supplierId, businessId: business.id },
-          select: { id: true, name: true, phone: true, creditLimitPence: true }
-        })
-      : Promise.resolve(null),
-  ]);
+        },
+        select: {
+          id: true,
+          createdAt: true,
+          dueDate: true,
+          totalPence: true,
+          supplier: { select: { id: true, name: true } },
+          payments: { select: { amountPence: true, paidAt: true, method: true } }
+        },
+        orderBy: [
+          { dueDate: 'asc' },
+          { createdAt: 'asc' },
+        ],
+      }),
+      prisma.purchasePayment.findMany({
+        where: {
+          purchaseInvoice: {
+            businessId: business.id,
+            ...(supplierId ? { supplierId } : {}),
+          }
+        },
+        select: {
+          id: true,
+          method: true,
+          amountPence: true,
+          paidAt: true,
+          notes: true,
+          recordedBy: { select: { name: true } },
+          purchaseInvoice: {
+            select: { id: true, supplier: { select: { name: true } } }
+          }
+        },
+        orderBy: { paidAt: 'desc' },
+        take: 20,
+      }),
+      supplierId
+        ? prisma.supplier.findFirst({
+            where: { id: supplierId, businessId: business.id },
+            select: { id: true, name: true, phone: true, creditLimitPence: true }
+          })
+        : Promise.resolve(null),
+    ]),
+    {
+      businessId: business.id,
+      route: '/payments/supplier-payments',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 
   const outstandingInvoices = invoices
     .map((invoice) => ({

@@ -15,6 +15,7 @@ import {
   CASH_DRAWER_ENTRY_LABELS,
   summarizeCashDrawerEntries,
 } from '@/lib/services/cash-drawer';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const REASON_CODE_LABELS: Record<string, string> = {
   COUNT_ERROR: 'Count Error',
@@ -62,40 +63,62 @@ export default async function CashDrawerReportPage({
     openedAt: { gte: from, lte: to },
   };
 
-  const totalRows = await prisma.shift.count({ where });
+  const totalRows = await measureServerOperation(
+    'report.cash-drawer.count',
+    () => prisma.shift.count({ where }),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/cash-drawer',
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'report' },
+  );
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const currentPage = Math.min(requestedPage, totalPages);
 
-  const shifts = await prisma.shift.findMany({
-    where,
-    orderBy: { openedAt: 'desc' },
-    skip: (currentPage - 1) * pageSize,
-    take: pageSize,
-    select: {
-      id: true,
-      openedAt: true,
-      closedAt: true,
-      status: true,
-      openingCashPence: true,
-      expectedCashPence: true,
-      actualCashPence: true,
-      variance: true,
-      varianceReasonCode: true,
-      varianceReason: true,
-      notes: true,
-      till: {
-        select: {
-          name: true,
-          store: { select: { name: true } },
+  const shifts = await measureServerOperation(
+    'report.cash-drawer.rows',
+    () => prisma.shift.findMany({
+      where,
+      orderBy: { openedAt: 'desc' },
+      skip: (currentPage - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        openedAt: true,
+        closedAt: true,
+        status: true,
+        openingCashPence: true,
+        expectedCashPence: true,
+        actualCashPence: true,
+        variance: true,
+        varianceReasonCode: true,
+        varianceReason: true,
+        notes: true,
+        till: {
+          select: {
+            name: true,
+            store: { select: { name: true } },
+          },
+        },
+        user: { select: { name: true } },
+        closeManagerApprovedBy: { select: { name: true } },
+        cashDrawerEntries: {
+          select: { entryType: true, amountPence: true },
         },
       },
-      user: { select: { name: true } },
-      closeManagerApprovedBy: { select: { name: true } },
-      cashDrawerEntries: {
-        select: { entryType: true, amountPence: true },
-      },
+    }),
+    {
+      businessId: business.id,
+      storeId: selectedStoreId,
+      route: '/reports/cash-drawer',
+      page: currentPage,
+      pageSize,
+      cacheState: 'uncached-page-load',
     },
-  });
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+  );
 
   const closedShifts = shifts.filter((s) => s.status === 'CLOSED');
   const openShiftCount = shifts.filter((s) => s.status === 'OPEN').length;

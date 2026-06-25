@@ -12,6 +12,7 @@ import {
 	isSqliteRuntime,
 } from './sqlite-report-date-normalization';
 import { unstable_cache } from 'next/cache';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
@@ -904,5 +905,15 @@ export function getOwnerDashboardSnapshot(
 	currency: string,
 	storeId?: string,
 ): Promise<OwnerDashboardSnapshot> {
-	return cachedOwnerDashboard(businessId, currency, storeId ?? '');
+	return measureServerOperation(
+		'report.owner-dashboard.snapshot',
+		() => cachedOwnerDashboard(businessId, currency, storeId ?? ''),
+		{
+			businessId,
+			storeId: storeId ?? 'ALL',
+			route: '/reports/owner',
+			cacheState: 'cached-wrapper',
+		},
+		{ thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+	);
 }

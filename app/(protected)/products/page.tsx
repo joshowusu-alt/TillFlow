@@ -17,6 +17,7 @@ import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
@@ -44,50 +45,62 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   };
 
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units, suppliers] = await Promise.all([
-    prisma.product.count({ where: productWhere }),
-    prisma.product.findMany({
-      where: productWhere,
-      select: {
-        id: true,
-        name: true,
-        imageUrl: true,
-        sellingPriceBasePence: true,
-        defaultCostBasePence: true,
-        productUnits: {
-          select: {
-            isBaseUnit: true,
-            conversionToBase: true,
-            unit: { select: { name: true, pluralName: true } }
-          }
+  const [totalProductCount, products, categories, units, suppliers] = await measureServerOperation(
+    'page.products.load',
+    () => Promise.all([
+      prisma.product.count({ where: productWhere }),
+      prisma.product.findMany({
+        where: productWhere,
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          sellingPriceBasePence: true,
+          defaultCostBasePence: true,
+          productUnits: {
+            select: {
+              isBaseUnit: true,
+              conversionToBase: true,
+              unit: { select: { name: true, pluralName: true } }
+            }
+          },
+          category: { select: { name: true, colour: true } },
+          preferredSupplier: { select: { id: true, name: true } }
         },
-        category: { select: { name: true, colour: true } },
-        preferredSupplier: { select: { id: true, name: true } }
-      },
-      orderBy: { name: 'asc' },
-      skip: (page - 1) * DEFAULT_PAGE_SIZE,
-      take: DEFAULT_PAGE_SIZE,
-    }),
-    prisma.category.findMany({
-      where: { businessId: business.id },
-      orderBy: { sortOrder: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        colour: true,
-        imageUrl: true,
-        _count: { select: { products: true } }
-      }
-    }),
-    prisma.unit.findMany({
-      select: { id: true, name: true }
-    }),
-    prisma.supplier.findMany({
-      where: { businessId: business.id },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' }
-    }),
-  ]);
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * DEFAULT_PAGE_SIZE,
+        take: DEFAULT_PAGE_SIZE,
+      }),
+      prisma.category.findMany({
+        where: { businessId: business.id },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          colour: true,
+          imageUrl: true,
+          _count: { select: { products: true } }
+        }
+      }),
+      prisma.unit.findMany({
+        select: { id: true, name: true }
+      }),
+      prisma.supplier.findMany({
+        where: { businessId: business.id },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' }
+      }),
+    ]),
+    {
+      businessId: business.id,
+      route: '/products',
+      page,
+      pageSize: DEFAULT_PAGE_SIZE,
+      rowCount: DEFAULT_PAGE_SIZE,
+      cacheState: 'uncached-page-load',
+    },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
   const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
