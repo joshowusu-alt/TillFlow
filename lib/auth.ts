@@ -1,9 +1,11 @@
 import { cache } from 'react';
+import { Prisma } from '@prisma/client';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { findBusinessForAuth } from '@/lib/billing-db-compat';
 import { getBillingEntitlement } from '@/lib/billing-entitlements';
+import { appLog } from '@/lib/observability';
 import {
   ACTIVE_BUSINESS_COOKIE,
   extractBusinessIdFromSessionCookie,
@@ -53,6 +55,54 @@ function clearResolvedSessionCookie(cookieName: string) {
     }
   } catch {
     // cookies().delete can throw in certain rendering contexts
+  }
+}
+
+function isPrismaP1017(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P1017';
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function findSessionWithP1017Retry<T>(findSession: () => Promise<T>) {
+  try {
+    return await findSession();
+  } catch (error) {
+    if (!isPrismaP1017(error)) {
+      throw error;
+    }
+
+    appLog('warn', 'db.connection.retry', {
+      operation: 'auth.session.findUnique',
+      code: 'P1017',
+      attempt: 1,
+      operationType: 'read-auth',
+    });
+
+    await delay(150);
+
+    try {
+      const session = await findSession();
+      appLog('info', 'db.connection.retry.success', {
+        operation: 'auth.session.findUnique',
+        code: 'P1017',
+        attempt: 1,
+        operationType: 'read-auth',
+      });
+      return session;
+    } catch (retryError) {
+      if (isPrismaP1017(retryError)) {
+        appLog('error', 'db.connection.retry.failed', {
+          operation: 'auth.session.findUnique',
+          code: 'P1017',
+          attempt: 1,
+          operationType: 'read-auth',
+        });
+      }
+      throw retryError;
+    }
   }
 }
 
@@ -137,32 +187,33 @@ export const getUser = cache(async () => {
 
   let session;
   try {
-    session = await prisma.session.findUnique({
-      where: { token },
-      select: {
-        id: true,
-        expiresAt: true,
-        userAgent: true,
-        ipAddress: true,
-        lastSeenAt: true,
-        user: {
-          select: {
-            id: true,
-            businessId: true,
-            name: true,
-            email: true,
-            role: true,
-            active: true,
-            twoFactorEnabled: true,
+    session = await findSessionWithP1017Retry(() =>
+      prisma.session.findUnique({
+        where: { token },
+        select: {
+          id: true,
+          expiresAt: true,
+          userAgent: true,
+          ipAddress: true,
+          lastSeenAt: true,
+          user: {
+            select: {
+              id: true,
+              businessId: true,
+              name: true,
+              email: true,
+              role: true,
+              active: true,
+              twoFactorEnabled: true,
+            }
           }
         }
-      }
-    });
-  } catch (err) {
+      })
+    );
+  } catch {
     // DB connection failure — DON'T delete the cookie so the user can retry.
     // Throwing lets the error boundary show "Try Again" instead of silently
     // logging out (important for flaky connections, e.g. Africa/cold-starts).
-    console.error('[auth] DB lookup failed:', err);
     throw new Error('Database temporarily unavailable. Please try again.');
   }
 
