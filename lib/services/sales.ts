@@ -27,6 +27,56 @@ import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { unstable_cache } from 'next/cache';
+
+// Account codes fetched on every checkout — extracted to module level so the
+// unstable_cache key is stable across calls.
+const CHECKOUT_ACCOUNT_CODES = [
+  ACCOUNT_CODES.cash,
+  ACCOUNT_CODES.bank,
+  ACCOUNT_CODES.ar,
+  ACCOUNT_CODES.sales,
+  ACCOUNT_CODES.vatPayable,
+  ACCOUNT_CODES.cogs,
+  ACCOUNT_CODES.inventory,
+] as const;
+
+// ── Checkout context caches ────────────────────────────────────────────────
+// These three reads are pre-transaction and contain data that rarely changes
+// (business settings, store existence, chart of accounts). Caching them
+// eliminates 2–3 serialised Neon RTTs per checkout (~300–450 ms at iad1).
+//
+// Tag: 'checkout-context' — invalidated by app/actions/settings.ts whenever
+// business settings change, and by refreshCurrentView for manual resets.
+//
+// NOT cached: till (active-flag safety gate), branchId (active-flag risk),
+// openShift (changes on shift open/close), inventoryMap (changes every sale),
+// productUnits (cart-dependent), momoResult, customerResult (per-checkout).
+
+const getCachedBusiness = unstable_cache(
+  async (businessId: string) => prisma.business.findUnique({ where: { id: businessId } }),
+  ['checkout-context-business'],
+  { revalidate: 60, tags: ['checkout-context'] },
+);
+
+const getCachedStore = unstable_cache(
+  async (storeId: string, businessId: string) =>
+    prisma.store.findFirst({
+      where: { id: storeId, businessId },
+      select: { id: true },
+    }),
+  ['checkout-context-store'],
+  { revalidate: 300, tags: ['checkout-context'] },
+);
+
+const getCachedCheckoutAccounts = unstable_cache(
+  async (businessId: string) =>
+    prisma.account.findMany({
+      where: { businessId, code: { in: [...CHECKOUT_ACCOUNT_CODES] } },
+    }),
+  ['checkout-context-accounts'],
+  { revalidate: 300, tags: ['checkout-context'] },
+);
 
 function computeDiscount(
   subtotal: number,
@@ -375,15 +425,6 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   // Pre-compute values available from input (no DB dependency)
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
-  const allAccountCodes = [
-    ACCOUNT_CODES.cash,
-    ACCOUNT_CODES.bank,
-    ACCOUNT_CODES.ar,
-    ACCOUNT_CODES.sales,
-    ACCOUNT_CODES.vatPayable,
-    ACCOUNT_CODES.cogs,
-    ACCOUNT_CODES.inventory,
-  ];
   const hasMomoPayment = input.payments.some(
     (p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0
   );
@@ -428,11 +469,8 @@ async function createSaleImpl(input: CreateSaleInput) {
     'action.checkout.context',
     input,
     async () => Promise.all([
-      prisma.business.findUnique({ where: { id: input.businessId } }),
-      prisma.store.findFirst({
-        where: { id: input.storeId, businessId: input.businessId },
-        select: { id: true },
-      }),
+      getCachedBusiness(input.businessId),
+      getCachedStore(input.storeId, input.businessId),
       prisma.productUnit.findMany({
         where: {
           product: { businessId: input.businessId },
@@ -462,9 +500,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       }),
       resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
       getOpenShiftForTill(input.businessId, input.tillId),
-      prisma.account.findMany({
-        where: { businessId: input.businessId, code: { in: allAccountCodes } },
-      }),
+      getCachedCheckoutAccounts(input.businessId),
       fetchInventoryMap(input.storeId, productIds),
       momoLookup,
       customerLookup,

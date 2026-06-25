@@ -21,6 +21,7 @@ export async function refreshCurrentView(pathname?: string) {
     'pos-shifts',
     'pos-tills',
     'pos-units',
+    'checkout-context',
     `readiness-${business.id}`,
     `today-sales-${business.id}`,
   ].forEach((tag) => revalidateTag(tag));

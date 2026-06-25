@@ -41,6 +41,9 @@ const {
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('next/cache', () => ({
+  unstable_cache: (fn: unknown) => fn,
+}));
 vi.mock('@/lib/accounting', () => ({
   ACCOUNT_CODES: {
     cash: '1000',

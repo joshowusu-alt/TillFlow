@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { findBusinessCommercialSnapshot } from '@/lib/billing-db-compat';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -44,6 +44,7 @@ export async function setStoreModeAction(storeMode: 'SINGLE_STORE' | 'MULTI_STOR
     entityId: businessId,
     details: { storeMode: validated, requestedStoreMode, source: 'onboarding' },
   }).catch((e) => console.error('[audit]', e));
+  revalidateTag('checkout-context');
   return { success: true };
 }
 
@@ -135,8 +136,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'SETTINGS_UPDATE', entity: 'Business', entityId: businessId, details: { name, currency, momoEnabled } }).catch((e) => console.error('[audit]', e));
 
-    const { revalidateTag } = await import('next/cache');
     revalidateTag(`readiness-${businessId}`);
+    revalidateTag('checkout-context');
 
     redirect('/settings');
   }, '/settings');
@@ -172,6 +173,8 @@ export async function updateOrganizationSettingsAction(formData: FormData): Prom
       entityId: businessId,
       details: { customerScope, storeMode, requestedStoreMode, source: 'organization-settings' },
     }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('checkout-context');
 
     redirect('/settings/organization');
   }, '/settings/organization');
@@ -334,6 +337,8 @@ export async function updateLoyaltySettingsAction(formData: FormData): Promise<v
       entityId: businessId,
       details: { source: 'loyalty-settings', loyaltyEnabled, loyaltyPointsPerGhsPence, loyaltyGhsPerHundredPoints },
     }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('checkout-context');
 
     redirect('/settings/loyalty');
   }, '/settings/loyalty');

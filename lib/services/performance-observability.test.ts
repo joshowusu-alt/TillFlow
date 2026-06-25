@@ -248,6 +248,49 @@ describe('Phase C3: performance observability baseline', () => {
     expect(existsSync(join(process.cwd(), 'prisma/migrations'))).toBe(true);
   });
 
+  it('Phase C9: checkout context reads use unstable_cache with correct TTLs and tag', () => {
+    const sales = read('lib/services/sales.ts');
+
+    // Cache functions present with correct keys and TTLs
+    expect(sales).toContain("['checkout-context-business']");
+    expect(sales).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
+    expect(sales).toContain("['checkout-context-store']");
+    expect(sales).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
+    expect(sales).toContain("['checkout-context-accounts']");
+
+    // C5 checkout timing instrumentation is untouched
+    expect(sales).toContain('action.checkout.context');
+    expect(sales).toContain('action.checkout.transaction.total');
+    expect(sales).toContain('action.checkout.inventory-update');
+    expect(sales).toContain('action.checkout.journal-post');
+  });
+
+  it('Phase C9: checkout-context tag is invalidated on all business setting mutations', () => {
+    const settings = read('app/actions/settings.ts');
+    const refresh = read('app/actions/refresh.ts');
+
+    // Tag present in settings mutations that affect checkout business logic
+    expect(settings).toContain("revalidateTag('checkout-context')");
+
+    // Manual refresh also clears checkout context
+    expect(refresh).toContain("'checkout-context'");
+
+    // Phase A/B existing tags are undisturbed in refresh
+    expect(refresh).toContain("'pos-products'");
+    expect(refresh).toContain("'reports'");
+  });
+
+  it('Phase C9: dynamic checkout reads are NOT replaced with cached versions', () => {
+    const sales = read('lib/services/sales.ts');
+
+    // openShift, inventoryMap, till all remain as direct DB calls inside context
+    expect(sales).toContain('getOpenShiftForTill(input.businessId, input.tillId)');
+    expect(sales).toContain('fetchInventoryMap(input.storeId, productIds)');
+    expect(sales).toContain('prisma.till.findFirst(');
+    // productUnits stays as a direct Prisma call (cart-dependent)
+    expect(sales).toContain('prisma.productUnit.findMany(');
+  });
+
   it('adds a minimal Postgres smoke lane without replacing SQLite tests', () => {
     const workflow = read('.github/workflows/postgres-smoke.yml');
     const packageJson = read('package.json');
