@@ -1,4 +1,5 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { UserError } from '@/lib/action-utils';
@@ -910,40 +911,71 @@ async function createSaleImpl(input: CreateSaleInput) {
     }
 
     if (cashPence > 0 && openShift) {
-      // Use atomic increment to avoid lost-update race when two sales commit concurrently.
-      // The CashDrawerEntry snapshot uses the pre-tx value for the audit log — acceptable.
-      const beforeCash = openShift.expectedCashPence ?? 0;
-      const afterCash = beforeCash + cashPence;
       txPromises.push(
         measureCheckoutStage(
           'action.checkout.shift-update',
           input,
-          async () => Promise.all([
-            tx.cashDrawerEntry.create({
-              data: {
-                businessId: input.businessId,
-                storeId: input.storeId,
-                tillId: till.id,
-                shiftId: openShift.id,
-                createdByUserId: input.cashierUserId,
-                cashierUserId: input.cashierUserId,
-                entryType: 'CASH_SALE',
-                amountPence: cashPence,
-                reasonCode: 'SALE',
-                reason: 'Cash sale collected',
-                referenceType: 'SALES_INVOICE',
-                referenceId: created.id,
-                beforeExpectedCashPence: beforeCash,
-                afterExpectedCashPence: afterCash,
-              },
-            }),
-            // Atomic increment — safe under concurrent sales on the same shift.
-            tx.shift.update({
-              where: { id: openShift.id },
-              data: { expectedCashPence: { increment: cashPence } },
-            }),
-          ]),
-          { stage: 'shift-update', rowCount: 2 },
+          async () => {
+            const entryId = randomUUID();
+            // Single CTE: atomically updates Shift.expectedCashPence and inserts
+            // CashDrawerEntry in one DB round-trip. The RETURNING clause supplies
+            // the accurate before/after values directly from the UPDATE, eliminating
+            // the stale-snapshot race present in the previous two-call approach.
+            const rows = await tx.$queryRaw<{ id: string }[]>`
+              WITH shift_upd AS (
+                UPDATE "Shift" AS sh
+                SET "expectedCashPence" = sh."expectedCashPence" + ${cashPence}
+                FROM "Till" AS t
+                JOIN "Store" AS st ON st."id" = t."storeId"
+                WHERE sh."id" = ${openShift.id}
+                  AND sh."status" = ${'OPEN'}
+                  AND sh."tillId" = ${till.id}
+                  AND t."id" = sh."tillId"
+                  AND t."active" = TRUE
+                  AND st."id" = ${input.storeId}
+                  AND st."businessId" = ${input.businessId}
+                RETURNING
+                  sh."expectedCashPence" - ${cashPence} AS "beforeCash",
+                  sh."expectedCashPence"                AS "afterCash"
+              ),
+              drawer_ins AS (
+                INSERT INTO "CashDrawerEntry" (
+                  "id", "businessId", "storeId", "tillId", "shiftId",
+                  "createdByUserId", "cashierUserId",
+                  "entryType", "amountPence",
+                  "reasonCode", "reason",
+                  "referenceType", "referenceId",
+                  "beforeExpectedCashPence", "afterExpectedCashPence",
+                  "createdAt"
+                )
+                SELECT
+                  ${entryId},
+                  ${input.businessId},
+                  ${input.storeId},
+                  ${till.id},
+                  ${openShift.id},
+                  ${input.cashierUserId},
+                  ${input.cashierUserId},
+                  ${'CASH_SALE'},
+                  ${cashPence},
+                  ${'SALE'},
+                  ${'Cash sale collected'},
+                  ${'SALES_INVOICE'},
+                  ${created.id},
+                  su."beforeCash",
+                  su."afterCash",
+                  NOW()
+                FROM shift_upd su
+                RETURNING "id"
+              )
+              SELECT "id" FROM drawer_ins
+            `;
+            if (rows.length === 0) {
+              throw new Error('Shift not found or already closed during checkout');
+            }
+            return rows[0];
+          },
+          { stage: 'shift-update', rowCount: 1, hasCashPayment: true },
           CHECKOUT_STAGE_THRESHOLDS_MS.shiftUpdate,
         ),
       );

@@ -28,6 +28,7 @@ const {
     businessSequence: { create: vi.fn(), update: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     $transaction: vi.fn(),
+    $queryRaw: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
   fetchInventoryMapMock: vi.fn(),
@@ -246,6 +247,7 @@ beforeEach(() => {
     payments: [],
   });
   prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
+  prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
   (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
@@ -638,7 +640,7 @@ describe('createSale — pricing interaction matrix', () => {
 });
 
 describe('createSale — payments & stock', () => {
-  it('creates cash drawer entry when cash payment with open shift', async () => {
+  it('executes consolidated shift/cash-drawer CTE when cash payment with open shift', async () => {
     const shift = { id: 'shift-1', expectedCashPence: 5000 };
     getOpenShiftForTillMock.mockResolvedValue(shift);
 
@@ -647,11 +649,33 @@ describe('createSale — payments & stock', () => {
       lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
     }));
 
-    // Sales code uses tx.cashDrawerEntry.create directly inside the transaction
-    expect((prismaMock as any).cashDrawerEntry.create).toHaveBeenCalledTimes(1);
-    const drawerCall = (prismaMock as any).cashDrawerEntry.create.mock.calls[0][0];
-    expect(drawerCall.data.amountPence).toBe(500);
-    expect(drawerCall.data.entryType).toBe('CASH_SALE');
+    // C11: shift + cash drawer are consolidated into one $queryRaw CTE call.
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    // The old two-call path must not be used.
+    expect((prismaMock as any).cashDrawerEntry.create).not.toHaveBeenCalled();
+    expect((prismaMock as any).shift.update).not.toHaveBeenCalled();
+  });
+
+  it('skips shift/cash-drawer CTE when no cash payment', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 5000 });
+
+    await createSale(makeBaseInput({
+      payments: [{ method: 'CARD', amountPence: 500 }],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+    }));
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('skips shift/cash-drawer CTE when no open shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue(null);
+
+    await createSale(makeBaseInput({
+      payments: [{ method: 'CASH', amountPence: 500 }],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+    }));
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('decrements inventory after sale', async () => {
