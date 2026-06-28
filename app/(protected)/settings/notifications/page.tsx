@@ -13,6 +13,7 @@ import {
 } from '@/lib/notifications/merchant-delivery-log';
 import { getMerchantDailySummaryStatus } from '@/lib/notifications/merchant-summary-status';
 import { OWNER_DAILY_SUMMARY_EVENT_TYPE } from '@/lib/notifications/owner-daily-summary-sms';
+import { getBusinessDayBounds } from '@/lib/notifications/utils';
 import { prisma } from '@/lib/prisma';
 import MessageLogActions from './MessageLogActions';
 import NotificationsSettingsForm from './NotificationsSettingsForm';
@@ -63,6 +64,9 @@ export default async function NotificationsSettingsPage({
     ownerPhone: business.whatsappPhone,
   });
 
+  const now = new Date();
+  const { dayStart: todayStart } = getBusinessDayBounds(now, businessTimezone);
+
   const requestedPage = Number(searchParams?.page ?? '1');
   const currentPage = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
 
@@ -78,7 +82,7 @@ export default async function NotificationsSettingsPage({
     ],
   };
 
-  const [pendingReviewCount, pendingReviewMessages, smsLogs, whatsappLogs] = await Promise.all([
+  const [pendingReviewCount, pendingReviewMessages, smsLogs, whatsappLogs, todaySmsRow] = await Promise.all([
     prisma.messageLog.count({ where: pendingReviewWhere }),
     prisma.messageLog.findMany({
       where: pendingReviewWhere,
@@ -151,6 +155,24 @@ export default async function NotificationsSettingsPage({
         deliveredAt: Date | null;
       }>
     >,
+    prisma.messageOutbox.findFirst({
+      where: {
+        businessId: business.id,
+        eventType: OWNER_DAILY_SUMMARY_EVENT_TYPE,
+        createdAt: { gte: todayStart },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        recipient: true,
+        createdAt: true,
+        sentAt: true,
+        attempts: true,
+        lastError: true,
+        nextAttemptAt: true,
+      },
+    }),
   ]);
 
   const mergedLogs: DeliveryLogEntry[] = [
@@ -255,12 +277,77 @@ export default async function NotificationsSettingsPage({
         summaryStatus={summaryStatus}
       />
 
+      <div className="card p-4 sm:p-6">
+        <h2 className="text-base font-semibold">SMS daily summary status</h2>
+        <p className="mt-1 text-sm text-black/55">
+          Whether today&apos;s scheduled SMS summary was created and delivered via the SMS channel.
+        </p>
+        <div className="mt-4">
+          {!business.whatsappEnabled ? (
+            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3 text-sm text-black/70">
+              <p className="font-medium">Daily summary is not enabled</p>
+              <p className="mt-1 text-xs text-black/45">
+                Enable the Daily Owner Summary in settings above to start receiving SMS summaries.
+              </p>
+            </div>
+          ) : todaySmsRow?.status === 'SENT' ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
+              <p className="font-medium text-emerald-800">Today&apos;s SMS summary was sent</p>
+              <p className="mt-1 text-xs text-black/45">
+                Sent at {todaySmsRow.sentAt ? new Date(todaySmsRow.sentAt).toLocaleString() : '—'}
+                {' · '}
+                {maskOwnerPhone(todaySmsRow.recipient)}
+              </p>
+            </div>
+          ) : todaySmsRow?.status === 'PENDING' ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+              <p className="font-medium text-amber-900">Today&apos;s SMS summary is queued</p>
+              <p className="mt-1 text-xs text-black/45">
+                Created at {new Date(todaySmsRow.createdAt).toLocaleString()}
+                {' · '}
+                {maskOwnerPhone(todaySmsRow.recipient)}
+                {todaySmsRow.nextAttemptAt
+                  ? ` · Next attempt: ${new Date(todaySmsRow.nextAttemptAt).toLocaleString()}`
+                  : ''}
+              </p>
+            </div>
+          ) : todaySmsRow?.status === 'FAILED' ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm">
+              <p className="font-medium text-rose-800">Today&apos;s SMS summary failed to send</p>
+              <p className="mt-1 text-xs text-black/45">
+                Attempts: {todaySmsRow.attempts}
+                {' · '}
+                Created: {new Date(todaySmsRow.createdAt).toLocaleString()}
+                {' · '}
+                {maskOwnerPhone(todaySmsRow.recipient)}
+              </p>
+              {todaySmsRow.lastError ? (
+                <p className="mt-1 text-xs text-rose-700">{todaySmsRow.lastError}</p>
+              ) : null}
+              <p className="mt-2 text-xs text-black/45">
+                This may be due to insufficient SMS credit balance. Contact support if this persists.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3 text-sm text-black/70">
+              <p className="font-medium">No SMS summary created yet today</p>
+              <p className="mt-1 text-xs text-black/45">
+                {business.whatsappScheduleTime
+                  ? `Scheduled at ${business.whatsappScheduleTime} (${businessTimezone ?? 'Africa/Accra'}).`
+                  : 'Using the default schedule (20:00 Africa/Accra).'}{' '}
+                This is normal before the scheduled send time.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {pendingReviewCount > 0 ? (
         <div className="card p-4 sm:p-6">
           <div>
-            <h2 className="text-base font-semibold">Needs follow-up</h2>
+            <h2 className="text-base font-semibold">WhatsApp needs follow-up</h2>
             <p className="mt-1 text-sm text-black/55">
-              These summaries still need manual follow-up or confirmation in WhatsApp.
+              These WhatsApp summaries still need manual follow-up or confirmation. They are not SMS failures.
             </p>
           </div>
 
