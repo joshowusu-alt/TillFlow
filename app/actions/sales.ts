@@ -381,8 +381,11 @@ export async function completeSaleAction(data: {
     await measureServerOperation(
       'action.checkout.revalidate',
       async () => {
+        revalidateTag(`today-sales-${businessId}`);
+        revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');
         revalidateOwnerDashboardCache();
+        revalidatePath('/onboarding');
       },
       { ...checkoutTimingMetadata, stage: 'revalidate' },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },

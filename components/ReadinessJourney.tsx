@@ -10,6 +10,7 @@ import { acknowledgeTrialBilling } from '@/app/actions/activation';
 import { clearSampleData, generateDemoDay } from '@/app/actions/demo-day';
 import { formatMoney } from '@/lib/format';
 import BusinessCategoryPicker from '@/components/onboarding/BusinessCategoryPicker';
+import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
@@ -588,7 +589,8 @@ function WelcomeDashboard({
                 <Link href={smartSubtitle.href} className="mt-2 inline-block text-sm font-medium text-blue-100/80 underline-offset-4 hover:text-white hover:underline">
                   {smartSubtitle.text}
                 </Link>
-                <p className="mt-1 text-[11px] text-blue-200/50">{lastCloseText}</p>
+                <p className="mt-1 text-[11px] text-blue-200/50">Today · all branches</p>
+                <p className="mt-0.5 text-[11px] text-blue-200/50">{lastCloseText}</p>
 
                 <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusPill.shell}`}>
                   <span className="relative flex h-2 w-2">
@@ -617,7 +619,7 @@ function WelcomeDashboard({
                     {footer ? (
                       <span className="pointer-events-none relative z-10 mt-auto pt-2 text-[10px] font-semibold leading-snug text-blue-200/55">{footer}</span>
                     ) : (
-                      <span className="pointer-events-none relative z-10 mt-auto pt-2 text-[10px] font-semibold text-blue-200/45">Today</span>
+                      <span className="pointer-events-none relative z-10 mt-auto pt-2 text-[10px] font-semibold text-blue-200/45">Today · all branches</span>
                     )}
                   </Link>
                 ))}
@@ -726,6 +728,8 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   useEffect(() => {
     setData(initial);
   }, [initial]);
+
+  useRouterRefreshOnVisibility(router, { enabled: data.onboardingComplete });
 
   const handleGenerateDemo = async () => {
     setIsBusy(true);

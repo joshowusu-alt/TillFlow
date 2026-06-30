@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { requireBusiness } from '@/lib/auth';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
-import { getFirstStore } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import RefreshIndicator from '@/components/RefreshIndicator';
@@ -46,8 +45,7 @@ export default async function CommandCenterPage() {
   );
 
   const now = new Date();
-  const [store, kpis, topSupplier] = await Promise.all([
-    getFirstStore(business.id),
+  const [kpis, topSupplier] = await Promise.all([
     getTodayKPIs(business.id).catch(() => null),
     features.advancedReports ? getTopLinkedSupplierForMonth(business.id).catch(() => null) : Promise.resolve(null),
   ]);
@@ -248,7 +246,7 @@ export default async function CommandCenterPage() {
             Operations Today
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · {store?.name ?? 'Main branch'}
+            {business.name} · {user.role === 'OWNER' ? 'Owner view' : 'Manager view'} · All branches
           </p>
         </div>
         <RefreshIndicator fetchedAt={fetchedAt} autoRefreshMs={60_000} />

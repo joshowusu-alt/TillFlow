@@ -488,14 +488,14 @@ export default function TopNav({
           <div className="flex flex-wrap items-center gap-2">
             <span className="metric-chip">
               <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-              {storeName || 'Main branch'}
+              {mobileSales ? 'All branches' : (storeName || 'Main branch')}
             </span>
             <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
           </div>
           {mobileSales ? (
-            <div className="mt-1 text-xs font-semibold tabular-nums text-ink">
+            <div className="mt-1 text-xs font-semibold tabular-nums text-ink" title="Today sales across all branches">
               {formatMoney(mobileSales.totalPence, mobileSales.currency)} · {mobileSales.txCount} txn{mobileSales.txCount !== 1 ? 's' : ''} today
             </div>
           ) : null}

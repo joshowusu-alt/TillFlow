@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
 
 /**
  * Shows when data was last fetched with a manual refresh button.
@@ -18,6 +19,8 @@ export default function RefreshIndicator({
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+
+  useRouterRefreshOnVisibility(router);
 
   // Auto-refresh
   useEffect(() => {

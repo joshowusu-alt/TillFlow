@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
 
+vi.mock('@/hooks/useRouterRefreshOnVisibility', () => ({
+  useRouterRefreshOnVisibility: vi.fn(),
+}));
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => (
     <a href={href} {...props}>
@@ -215,5 +219,14 @@ describe('ReadinessJourney home stats', () => {
 
     expect(within(expectedCashCard).getByText('GH₵0.00')).toBeInTheDocument();
     expect(within(expectedCashCard).getByText('No open till')).toBeInTheDocument();
+  });
+
+  it('labels business-wide hero stats as all branches and wires visibility refresh', async () => {
+    const { useRouterRefreshOnVisibility } = await import('@/hooks/useRouterRefreshOnVisibility');
+
+    renderDashboard();
+
+    expect(screen.getAllByText('Today · all branches').length).toBeGreaterThanOrEqual(1);
+    expect(useRouterRefreshOnVisibility).toHaveBeenCalled();
   });
 });

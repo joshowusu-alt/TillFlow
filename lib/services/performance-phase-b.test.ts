@@ -73,6 +73,18 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
     expect(salesActionsSrc).toContain("revalidateTag('reports')");
   });
 
+  it('POS completeSaleAction revalidates readiness and onboarding after successful checkout', () => {
+    const completeSaleBlock = salesActionsSrc.slice(
+      salesActionsSrc.indexOf('export async function completeSaleAction'),
+      salesActionsSrc.indexOf('export async function amendSaleAction'),
+    );
+
+    expect(completeSaleBlock).toContain("revalidateTag('reports')");
+    expect(completeSaleBlock).toContain('revalidateOwnerDashboardCache()');
+    expect(completeSaleBlock).toContain('revalidateTag(`readiness-${businessId}`)');
+    expect(completeSaleBlock).toContain("revalidatePath('/onboarding')");
+  });
+
   it('customer and supplier payments revalidate reports and owner dashboard', () => {
     expect(paymentActionsSrc).toContain('await recordCustomerPayment');
     expect(paymentActionsSrc).toContain('await recordSupplierPayment');

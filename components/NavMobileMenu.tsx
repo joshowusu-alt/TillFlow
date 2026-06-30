@@ -158,13 +158,13 @@ export default function NavMobileMenu({
             {(user.role === 'MANAGER' || user.role === 'OWNER') && todaySales ? (
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Today sales</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Today sales · all branches</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums text-ink">
                     {formatMoney(todaySales.totalPence, todaySales.currency)}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-2.5 text-right">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Transactions</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">Transactions · all branches</div>
                   <div className="mt-1 text-sm font-semibold tabular-nums text-ink">{todaySales.txCount}</div>
                 </div>
               </div>
