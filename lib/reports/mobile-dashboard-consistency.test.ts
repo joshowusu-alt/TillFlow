@@ -42,6 +42,21 @@ describe('Mobile dashboard sales consistency', () => {
     expect(readiness).toContain('Today · all branches');
   });
 
+  it('home hero live revenue and transaction stats refresh from the same action as the top nav', () => {
+    const topNav = read('components/TopNav.tsx');
+    const readiness = read('components/ReadinessJourney.tsx');
+
+    expect(topNav).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
+    expect(topNav).toContain('const fresh = await getNavTodaySales()');
+
+    expect(readiness).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
+    expect(readiness).toContain('const fresh = await getNavTodaySales()');
+    expect(readiness).toContain('todayRevenuePence: fresh.totalPence');
+    expect(readiness).toContain('todayTransactionCount: fresh.txCount');
+    expect(readiness).toContain('displayData');
+    expect(readiness).toContain('expectedCashPence');
+  });
+
   it('keeps expected cash and receipts as distinct metrics on Operations Today', () => {
     const commandCenter = read('app/(protected)/reports/command-center/page.tsx');
     const readiness = read('components/ReadinessJourney.tsx');

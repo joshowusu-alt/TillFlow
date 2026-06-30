@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,6 +8,7 @@ import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
 import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
 import { acknowledgeTrialBilling } from '@/app/actions/activation';
 import { clearSampleData, generateDemoDay } from '@/app/actions/demo-day';
+import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import { formatMoney } from '@/lib/format';
 import BusinessCategoryPicker from '@/components/onboarding/BusinessCategoryPicker';
 import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
@@ -721,8 +722,13 @@ function WelcomeDashboard({
 export default function ReadinessJourney({ initial }: { initial: ReadinessData }) {
   const router = useRouter();
   const [data, setData] = useState(initial);
+  const [liveTodayKpis, setLiveTodayKpis] = useState({
+    todayRevenuePence: initial.todayRevenuePence,
+    todayTransactionCount: initial.todayTransactionCount,
+  });
   const [isBusy, setIsBusy] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const lastLiveKpiRefreshAtRef = useRef(0);
   const { toast: showToast } = useToast();
 
   useEffect(() => {
@@ -730,6 +736,49 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
   }, [initial]);
 
   useRouterRefreshOnVisibility(router, { enabled: data.onboardingComplete });
+
+  const refreshLiveTodayKpis = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastLiveKpiRefreshAtRef.current < 8_000) return;
+    lastLiveKpiRefreshAtRef.current = now;
+
+    try {
+      const fresh = await getNavTodaySales();
+      setLiveTodayKpis({
+        todayRevenuePence: fresh.totalPence,
+        todayTransactionCount: fresh.txCount,
+      });
+    } catch {
+      // Keep the readiness snapshot values if the small live KPI refresh fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!data.onboardingComplete) return;
+
+    void refreshLiveTodayKpis(true);
+
+    const handleFocus = () => void refreshLiveTodayKpis(false);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void refreshLiveTodayKpis(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [data.onboardingComplete, initial, refreshLiveTodayKpis]);
+
+  const displayData: ReadinessData = data.onboardingComplete
+    ? {
+        ...data,
+        todayRevenuePence: liveTodayKpis.todayRevenuePence,
+        todayTransactionCount: liveTodayKpis.todayTransactionCount,
+      }
+    : data;
 
   const handleGenerateDemo = async () => {
     setIsBusy(true);
@@ -795,7 +844,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
       <>
         <CelebrationOverlay show={showCelebration} />
         <WelcomeDashboard
-          data={data}
+          data={displayData}
           onGenerateDemo={handleGenerateDemo}
           onWipeDemo={handleWipeDemo}
           isBusy={isBusy}

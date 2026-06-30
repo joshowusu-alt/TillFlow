@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
@@ -32,6 +32,10 @@ vi.mock('@/components/ToastProvider', () => ({
 vi.mock('@/app/actions/onboarding', () => ({
   completeOnboarding: vi.fn(),
   toggleGuidedSetup: vi.fn(),
+}));
+
+vi.mock('@/app/actions/nav-kpis', () => ({
+  getNavTodaySales: vi.fn(),
 }));
 
 vi.mock('@/app/actions/demo-day', () => ({
@@ -228,5 +232,161 @@ describe('ReadinessJourney home stats', () => {
 
     expect(screen.getAllByText('Today · all branches').length).toBeGreaterThanOrEqual(1);
     expect(useRouterRefreshOnVisibility).toHaveBeenCalled();
+  });
+
+  it('patches stale hero revenue and transactions from the shared live nav KPI action on mount', async () => {
+    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
+    vi.mocked(getNavTodaySales).mockResolvedValueOnce({
+      totalPence: 1_223_850,
+      txCount: 114,
+      currency: 'GHS',
+      onlineOrdersCount: 0,
+      userRole: 'OWNER',
+    });
+
+    renderDashboard({
+      todayRevenuePence: 959_300,
+      todayTransactionCount: 85,
+      expectedCashPence: 891_900,
+      openShiftCount: 1,
+    });
+
+    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Today's Transactions: 85/ })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('link', { name: /Expected Cash: GH₵8,919.00/ })).toBeInTheDocument();
+  });
+
+  it('keeps readiness task data while live KPI refresh updates only hero sales values', async () => {
+    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
+    vi.mocked(getNavTodaySales).mockResolvedValueOnce({
+      totalPence: 1_223_850,
+      txCount: 114,
+      currency: 'GHS',
+      onlineOrdersCount: 0,
+      userRole: 'OWNER',
+    });
+
+    renderDashboard({
+      todayRevenuePence: 959_300,
+      todayTransactionCount: 85,
+      openIssueCount: 4,
+      reorderNeededCount: 1,
+      overdueSupplierInvoiceCount: 1,
+      openShiftCount: 1,
+      openShiftSalesCount: 85,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('4 items need attention')).toBeInTheDocument();
+    expect(screen.getAllByText(/85 sales recorded/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Supplier payments due/).length).toBeGreaterThan(0);
+  });
+
+  it('keeps initial readiness values visible if the live KPI action fails', async () => {
+    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
+    vi.mocked(getNavTodaySales).mockRejectedValueOnce(new Error('network unavailable'));
+
+    renderDashboard({
+      todayRevenuePence: 959_300,
+      todayTransactionCount: 85,
+    });
+
+    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalled());
+
+    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Today's Transactions: 85/ })).toBeInTheDocument();
+  });
+
+  it('refreshes hero live KPIs when the dashboard regains focus', async () => {
+    const nowSpy = vi.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(1_000).mockReturnValue(9_001);
+    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
+    vi.mocked(getNavTodaySales)
+      .mockResolvedValueOnce({
+        totalPence: 959_300,
+        txCount: 85,
+        currency: 'GHS',
+        onlineOrdersCount: 0,
+        userRole: 'OWNER',
+      })
+      .mockResolvedValueOnce({
+        totalPence: 1_223_850,
+        txCount: 114,
+        currency: 'GHS',
+        onlineOrdersCount: 0,
+        userRole: 'OWNER',
+      });
+
+    renderDashboard({
+      todayRevenuePence: 959_300,
+      todayTransactionCount: 85,
+    });
+
+    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+
+    await waitFor(() => {
+      expect(getNavTodaySales).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
+    });
+
+    nowSpy.mockRestore();
+  });
+
+  it('refreshes hero live KPIs when the dashboard becomes visible again', async () => {
+    const nowSpy = vi.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(1_000).mockReturnValue(9_001);
+    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
+    vi.mocked(getNavTodaySales)
+      .mockResolvedValueOnce({
+        totalPence: 959_300,
+        txCount: 85,
+        currency: 'GHS',
+        onlineOrdersCount: 0,
+        userRole: 'OWNER',
+      })
+      .mockResolvedValueOnce({
+        totalPence: 1_223_850,
+        txCount: 114,
+        currency: 'GHS',
+        onlineOrdersCount: 0,
+        userRole: 'OWNER',
+      });
+
+    renderDashboard({
+      todayRevenuePence: 959_300,
+      todayTransactionCount: 85,
+    });
+
+    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await waitFor(() => {
+      expect(getNavTodaySales).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
+    });
+
+    nowSpy.mockRestore();
   });
 });
