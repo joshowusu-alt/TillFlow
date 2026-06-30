@@ -1,5 +1,5 @@
-import AppLaunchLoading from '@/components/AppLaunchLoading';
+import ProtectedRouteLoading from '@/components/ProtectedRouteLoading';
 
 export default function Loading() {
-  return <AppLaunchLoading mode="launch" shell="launch" showProgress={false} />;
+  return <ProtectedRouteLoading />;
 }

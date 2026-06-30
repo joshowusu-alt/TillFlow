@@ -124,9 +124,10 @@ describe('TillFlow brand logo system', () => {
     expect(rootLoading).toContain('AppLaunchLoading');
     expect(rootLoading).toContain('mode="launch"');
     expect(rootLoading).toContain('shell="fullscreen"');
-    expect(protectedLoading).toContain('AppLaunchLoading');
-    expect(protectedLoading).toContain('mode="launch"');
-    expect(protectedLoading).toContain('shell="launch"');
+    expect(protectedLoading).not.toContain('AppLaunchLoading');
+    expect(protectedLoading).not.toContain('mode="launch"');
+    expect(protectedLoading).not.toContain('shell="launch"');
+    expect(protectedLoading).toContain('ProtectedRouteLoading');
     expect(protectedLoading).not.toContain('Loading section...');
     expect(protectedLoading).not.toContain('Please wait while TillFlow gets this section ready.');
     expect(protectedLoading).not.toContain('Opening');
