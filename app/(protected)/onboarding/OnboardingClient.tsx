@@ -1,6 +1,5 @@
 'use client';
 
-import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
 import { useEffect } from 'react';
@@ -11,10 +10,5 @@ export default function OnboardingClient({ readiness }: { readiness: ReadinessDa
         markTillflowPerformance('tillflow.launch.protected-content.mounted');
     }, []);
 
-    return (
-        <>
-            <LaunchSessionCompletion />
-            <ReadinessJourney initial={readiness} />
-        </>
-    );
+    return <ReadinessJourney initial={readiness} />;
 }

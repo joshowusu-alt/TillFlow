@@ -25,8 +25,10 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
 
   it('instruments owner onboarding readiness', () => {
     expect(onboardingAction).toContain('page.onboarding.get-readiness');
-    expect(onboardingPage).toContain('page.onboarding.owner-readiness');
-    expect(onboardingPage).toContain('measureServerOperation');
+    expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('page.onboarding.owner-readiness');
+    expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('measureServerOperation');
+    expect(onboardingPage).toContain('<Suspense');
+    expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 
   it('adds launch handoff performance marks without changing delay constants', () => {

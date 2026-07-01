@@ -283,6 +283,7 @@ describe('TillFlow brand logo system', () => {
     const businessNameSaver = readSource('components/BusinessNameSaver.tsx');
     const launchSessionCompletion = readSource('components/LaunchSessionCompletion.tsx');
     const protectedLayout = readSource('app/(protected)/layout.tsx');
+    const onboardingPage = readSource('app/(protected)/onboarding/page.tsx');
     const onboardingClient = readSource('app/(protected)/onboarding/OnboardingClient.tsx');
     const posPage = readSource('app/(protected)/pos/page.tsx');
 
@@ -306,8 +307,9 @@ describe('TillFlow brand logo system', () => {
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
     expect(protectedLayout).not.toContain('LaunchSessionCompletion');
-    expect(onboardingClient).toContain('LaunchSessionCompletion');
+    expect(onboardingPage).toContain('LaunchSessionCompletion');
     expect(onboardingClient).toContain('ReadinessJourney');
+    expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(posPage).toContain('LaunchSessionCompletion');
     expect(posPage).toContain('PosWelcomeShelf');
     expect(launchSessionCompletion).toContain('Mount this only inside real page content');

@@ -185,7 +185,7 @@ describe('Phase C3: performance observability baseline', () => {
   it('instruments protected layout and onboarding readiness gates', () => {
     expect(read('app/(protected)/layout.tsx')).toContain('app.protected.layout-gate');
     expect(read('app/actions/onboarding.ts')).toContain('page.onboarding.get-readiness');
-    expect(read('app/(protected)/onboarding/page.tsx')).toContain('page.onboarding.owner-readiness');
+    expect(read('app/(protected)/onboarding/OwnerReadinessContent.tsx')).toContain('page.onboarding.owner-readiness');
   });
 
   it('instruments priority write actions through service entry points', () => {
