@@ -132,7 +132,12 @@ describe('TillFlow brand logo system', () => {
     expect(protectedLoading).not.toContain('Please wait while TillFlow gets this section ready.');
     expect(protectedLoading).not.toContain('Opening');
     expect(protectedLoading).not.toContain("Getting today's sales, stock, and cash ready.");
-    expect(commandCenterLoading).toContain('Skeleton');
+    expect(commandCenterLoading).not.toContain("import Skeleton from '@/components/Skeleton'");
+    expect(commandCenterLoading).not.toContain('Skeleton variant="card"');
+    expect(commandCenterLoading).not.toContain('lg:grid-cols-3');
+    expect(commandCenterLoading).not.toContain('lg:grid-cols-2');
+    expect(commandCenterLoading).toContain('grid-cols-2');
+    expect(commandCenterLoading).toContain('animate-pulse');
     expect(commandCenterLoading).not.toContain('AppLaunchLoading');
     expect(commandCenterLoading).not.toContain('Loading section...');
     expect(commandCenterLoading).not.toContain('Opening your reports workspace');

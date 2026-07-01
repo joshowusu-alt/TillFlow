@@ -9,7 +9,7 @@ const readSource = (path: string) => readFileSync(join(root, path), 'utf8');
 
 describe('Reports dashboard clarity pass', () => {
   it('calculates receipt percentages from total receipts rather than invoice sales', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
 
@@ -20,7 +20,7 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('excludes failed, cancelled, and void sales payment statuses from receipt splits', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
 
     expect(dashboard).toContain("status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] }");
@@ -28,7 +28,7 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('describes cash variance with owner-friendly label and helper', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
     const commandCenter = readSource('app/(protected)/reports/command-center/page.tsx');
 
@@ -44,7 +44,7 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('keeps branch-selected expense and net profit scope in expenses stat card', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
 
     // Phase 2A: scopeHelper text updated to be more owner-friendly
     expect(dashboard).toContain('Expenses and net profit use the business-wide accounting records currently available.');
@@ -62,7 +62,7 @@ describe('Reports dashboard clarity pass', () => {
 
   // Phase 2A: Trading Report label / copy clarity
   it('payment section heading uses owner-friendly "How money came in" label on both reports', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
 
     expect(dashboard).toContain('How money came in');
@@ -73,7 +73,7 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('payment section helper clarifies receipts vs sales distinction on both reports', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
 
     expect(dashboard).toContain('can differ from sales when customers pay old credit');
@@ -82,77 +82,77 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('"What customers owe" replaces "Debtors (AR)" label', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('What customers owe');
     expect(dashboard).not.toContain('Debtors (AR)');
   });
 
   it('"What you owe suppliers" replaces "Payables (AP)" label', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('What you owe suppliers');
     expect(dashboard).not.toContain('Payables (AP)');
   });
 
   it('"Profit before expenses" helper is present on Gross Profit stat card', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Profit before expenses');
   });
 
   it('"Profit after expenses" helper is present on Net Profit stat card', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Profit after expenses');
   });
 
   it('"Stock needing attention" replaces "Low Stock Alerts"', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Stock needing attention');
     expect(dashboard).not.toContain('Low Stock Alerts');
   });
 
   it('"Best-selling products by revenue" replaces "Top Revenue Products"', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Best-selling products by revenue');
     expect(dashboard).not.toContain('Top Revenue Products');
   });
 
   it('"Period activity highlights" replaces "Activity Highlights"', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Period activity highlights');
     expect(dashboard).not.toContain('>Activity Highlights<');
   });
 
   it('period activity helper text is present', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Returns, voids, and movement recorded during the selected period.');
   });
 
   it('customer debt helper clarifies current-state balance', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Current customer credit balance');
     expect(dashboard).toContain('not just this period');
   });
 
   it('supplier payable helper clarifies current-state balance', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('Current supplier balances');
     expect(dashboard).toContain('Record supplier payments');
   });
 
   it('trust copy in filter info box clarifies sales and receipts distinction', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
-    expect(dashboard).toContain('Sales and receipts may differ');
-    expect(dashboard).toContain('current position, not only this period');
+    const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
+    expect(dashboardPage).toContain('Sales and receipts may differ');
+    expect(dashboardPage).toContain('current position, not only this period');
   });
 
   it('date controls remain present and unchanged', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
-    expect(dashboard).toContain('name="from"');
-    expect(dashboard).toContain('name="to"');
-    expect(dashboard).toContain('name="storeId"');
+    const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
+    expect(dashboardPage).toContain('name="from"');
+    expect(dashboardPage).toContain('name="to"');
+    expect(dashboardPage).toContain('name="storeId"');
   });
 
   it('existing action links remain present', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('/payments/customer-receipts');
     expect(dashboard).toContain('/payments/supplier-payments');
     expect(dashboard).toContain('cashDrawerHref');
@@ -161,18 +161,19 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('report service imports remain unchanged', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
+    const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
     expect(dashboard).toContain("from '@/lib/reports/financials'");
     expect(dashboard).toContain("from '@/lib/reports/operational-metrics'");
-    expect(dashboard).toContain("from '@/lib/reports/date-parsing'");
+    expect(dashboardPage).toContain("from '@/lib/reports/date-parsing'");
     expect(dashboard).toContain('getIncomeStatement');
     expect(dashboard).toContain('classifyInventoryState');
-    expect(dashboard).toContain('resolveReportDateRange');
+    expect(dashboardPage).toContain('resolveReportDateRange');
     expect(dashboard).toContain('computeOutstandingBalance');
   });
 
   it('sales aggregation and calculation logic is unchanged', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).toContain('salesAgg._sum.totalPence');
     expect(dashboard).toContain('outstandingAR');
     expect(dashboard).toContain('outstandingAP');
@@ -182,7 +183,7 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('does not add touch or pointer handlers', () => {
-    const dashboard = readSource('app/(protected)/reports/dashboard/page.tsx');
+    const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     expect(dashboard).not.toContain('onPointerDown');
     expect(dashboard).not.toContain('onTouchStart');
     expect(dashboard).not.toContain('onTouchMove');

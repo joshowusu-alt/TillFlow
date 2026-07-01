@@ -144,7 +144,7 @@ describe('Phase C3: performance observability baseline', () => {
   it('instruments key cached and uncached report loaders', () => {
     const ownerDashboard = read('lib/reports/owner-dashboard.ts');
     const todayKpis = read('lib/reports/today-kpis.ts');
-    const tradingDashboard = read('app/(protected)/reports/dashboard/page.tsx');
+    const tradingDashboard = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const forecast = read('lib/reports/forecast.ts');
     const financials = read('lib/reports/financials.ts');
 
@@ -153,6 +153,7 @@ describe('Phase C3: performance observability baseline', () => {
     expect(todayKpis).toContain('report.today-kpis.snapshot');
     expect(tradingDashboard).toContain('report.trading-dashboard.snapshot');
     expect(tradingDashboard).toContain('report.trading-dashboard.live-pulse');
+    expect(read('app/(protected)/reports/analytics/AnalyticsContent.tsx')).toContain('report.analytics.snapshot');
     expect(tradingDashboard).toContain("cacheState: 'uncached-live-pulse'");
     expect(forecast).toContain('report.cashflow-forecast.snapshot');
     expect(financials).toContain('report.income-statement.snapshot');
@@ -218,7 +219,7 @@ describe('Phase C3: performance observability baseline', () => {
   it('keeps cache TTLs and keys unchanged for Phase A/B caches', () => {
     const ownerDashboard = read('lib/reports/owner-dashboard.ts');
     const todayKpis = read('lib/reports/today-kpis.ts');
-    const tradingDashboard = read('app/(protected)/reports/dashboard/page.tsx');
+    const tradingDashboard = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const pos = read('app/(protected)/pos/page.tsx');
 
     expect(ownerDashboard).toContain("['report-owner-dashboard']");
