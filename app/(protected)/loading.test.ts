@@ -28,11 +28,13 @@ describe('Protected route loading fallback (Phase 1)', () => {
 
   it('keeps branded launch loading for cold boot entry points', () => {
     const rootLoading = read('app/loading.tsx');
+    const rootLaunchLoading = read('components/RootLaunchLoading.tsx');
     const launchPage = read('app/launch/page.tsx');
 
-    expect(rootLoading).toContain('AppLaunchLoading');
-    expect(rootLoading).toContain('mode="launch"');
-    expect(rootLoading).toContain('shell="fullscreen"');
+    expect(rootLoading).toContain('RootLaunchLoading');
+    expect(rootLaunchLoading).toContain('AppLaunchLoading');
+    expect(rootLaunchLoading).toContain('mode="launch"');
+    expect(rootLaunchLoading).toContain('shell="fullscreen"');
     expect(launchPage).toContain('tillflow-logo-blue.png');
     expect(launchPage).toContain('LaunchRedirector');
     expect(launchPage).toContain('fixed inset-0');

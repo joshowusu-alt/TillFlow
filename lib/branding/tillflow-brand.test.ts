@@ -121,9 +121,10 @@ describe('TillFlow brand logo system', () => {
     const launchLoading = readSource('components/AppLaunchLoading.tsx');
     const topNav = readSource('components/TopNav.tsx');
 
-    expect(rootLoading).toContain('AppLaunchLoading');
-    expect(rootLoading).toContain('mode="launch"');
-    expect(rootLoading).toContain('shell="fullscreen"');
+    expect(rootLoading).toContain('RootLaunchLoading');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('AppLaunchLoading');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('mode="launch"');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('shell="fullscreen"');
     expect(protectedLoading).not.toContain('AppLaunchLoading');
     expect(protectedLoading).not.toContain('mode="launch"');
     expect(protectedLoading).not.toContain('shell="launch"');
@@ -306,13 +307,14 @@ describe('TillFlow brand logo system', () => {
     expect(splashRemover).toContain('setTimeout');
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
-    expect(protectedLayout).not.toContain('LaunchSessionCompletion');
-    expect(onboardingPage).toContain('LaunchSessionCompletion');
+    expect(protectedLayout).toContain('LaunchSessionCompletion');
+    expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).toContain('ReadinessJourney');
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(posPage).toContain('LaunchSessionCompletion');
     expect(posPage).toContain('PosWelcomeShelf');
-    expect(launchSessionCompletion).toContain('Mount this only inside real page content');
+    expect(launchSessionCompletion).toContain('protected shell');
+    expect(launchSessionCompletion).toContain('not after the full readiness body');
     expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
     expect(launchSessionCompletion).toContain("window.sessionStorage.removeItem('tillflow:launching')");
     expect(launchSessionCompletion).toContain('removeInitialSplash');

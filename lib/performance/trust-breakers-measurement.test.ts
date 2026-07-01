@@ -31,19 +31,20 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
     expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 
-  it('adds launch handoff performance marks without changing delay constants', () => {
+  it('adds launch handoff performance marks with approved timing constants', () => {
     expect(launchRedirector).toContain('markTillflowPerformance');
     expect(launchRedirector).not.toContain("performance.mark('tillflow.launch.mounted')");
     expect(launchRedirector).toContain("'tillflow.launch.mounted'");
     expect(launchRedirector).toContain("'tillflow.launch.redirect.scheduled'");
     expect(launchRedirector).toContain("'tillflow.launch.redirect.started'");
-    expect(launchRedirector).toContain('160');
+    expect(launchRedirector).toContain('LAUNCH_REDIRECT_DELAY_MS');
 
     expect(launchCompletion).toContain('markTillflowPerformance');
     expect(launchCompletion).toContain("'tillflow.launch.completion.mounted'");
     expect(launchCompletion).toContain("'tillflow.launch.splash.remove.started'");
     expect(launchCompletion).toContain("'tillflow.launch.splash.removed'");
-    expect(launchCompletion).toContain('480');
+    expect(launchCompletion).toContain('LAUNCH_COMPLETION_HOLD_MS');
+    expect(launchCompletion).not.toContain(', 480');
 
     expect(onboardingClient).toContain("'tillflow.launch.protected-content.mounted'");
   });

@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { requireUser } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import OwnerReadinessContent from './OwnerReadinessContent';
 import OwnerReadinessSkeleton from './OwnerReadinessSkeleton';
 
@@ -11,11 +10,8 @@ export default async function OnboardingPage() {
   if (user.role !== 'OWNER') redirect('/pos');
 
   return (
-    <>
-      <LaunchSessionCompletion />
-      <Suspense fallback={<OwnerReadinessSkeleton />}>
-        <OwnerReadinessContent />
-      </Suspense>
-    </>
+    <Suspense fallback={<OwnerReadinessSkeleton />}>
+      <OwnerReadinessContent />
+    </Suspense>
   );
 }

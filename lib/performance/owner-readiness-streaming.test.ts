@@ -47,11 +47,13 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(todayKpis).toContain('report.today-kpis.snapshot');
   });
 
-  it('preserves hero live KPI refresh and launch instrumentation', () => {
+  it('preserves hero live KPI refresh and protected-shell launch completion', () => {
     const readinessJourney = read('components/ReadinessJourney.tsx');
+    const protectedLayout = read('app/(protected)/layout.tsx');
 
     expect(onboardingClient).toContain("'tillflow.launch.protected-content.mounted'");
-    expect(onboardingPage).toContain('LaunchSessionCompletion');
+    expect(protectedLayout).toContain('LaunchSessionCompletion');
+    expect(onboardingPage).not.toContain('LaunchSessionCompletion');
 
     expect(readinessJourney).toContain('getNavTodaySales');
     expect(readinessJourney).toContain('todayRevenuePence: fresh.totalPence');

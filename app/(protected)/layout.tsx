@@ -11,6 +11,7 @@ import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
+import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function formatDateLabel(value: Date | string | null | undefined) {
@@ -213,6 +214,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           ) : children}
         </main>
         <BottomTabBar />
+        <LaunchSessionCompletion />
     </div>
   );
 }
