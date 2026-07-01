@@ -1,0 +1,60 @@
+name: Authenticated Production QA
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: authenticated-production-qa
+  cancel-in-progress: true
+
+jobs:
+  authenticated-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BASE_URL: https://www.tillflow.app
+      PLAYWRIGHT_OWNER_EMAIL: ${{ secrets.PLAYWRIGHT_OWNER_EMAIL }}
+      PLAYWRIGHT_OWNER_PASSWORD: ${{ secrets.PLAYWRIGHT_OWNER_PASSWORD }}
+      PLAYWRIGHT_CASHIER_EMAIL: ${{ secrets.PLAYWRIGHT_CASHIER_EMAIL }}
+      PLAYWRIGHT_CASHIER_PASSWORD: ${{ secrets.PLAYWRIGHT_CASHIER_PASSWORD }}
+      PLAYWRIGHT_MANAGER_EMAIL: ${{ secrets.PLAYWRIGHT_MANAGER_EMAIL }}
+      PLAYWRIGHT_MANAGER_PASSWORD: ${{ secrets.PLAYWRIGHT_MANAGER_PASSWORD }}
+      PLAYWRIGHT_QA_TENANT_CONFIRMED: 'true'
+      PLAYWRIGHT_ALLOW_QA_SALE: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify QA secrets are configured
+        run: |
+          missing=0
+          for key in PLAYWRIGHT_OWNER_EMAIL PLAYWRIGHT_OWNER_PASSWORD PLAYWRIGHT_CASHIER_EMAIL PLAYWRIGHT_CASHIER_PASSWORD PLAYWRIGHT_MANAGER_EMAIL PLAYWRIGHT_MANAGER_PASSWORD; do
+            if [ -z "${!key}" ]; then
+              echo "::error title=Missing secret::Set GitHub secret ${key} before running authenticated production QA."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Authenticated production QA
+        run: node scripts/run-playwright-qa.mjs
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-qa-traces
+          path: playwright/test-results/**
+          if-no-files-found: ignore

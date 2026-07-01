@@ -17,6 +17,12 @@ test.txt
 
 .vercel
 .playwright-mcp/
+.playwright-qa.local.env
+playwright/.auth/
+playwright/report.json
+playwright/test-results/
+test-results/
+playwright-report/
 market-upstash.html
 tsconfig.tsbuildinfo
 
