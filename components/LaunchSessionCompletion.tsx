@@ -1,15 +1,18 @@
 'use client';
 
 import { useEffect } from 'react';
+import { markTillflowPerformance } from '@/lib/performance/client-performance-marks';
 
 function removeInitialSplash() {
   const el = document.getElementById('tillflow-initial-splash');
   if (!el) return;
 
+  markTillflowPerformance('tillflow.launch.splash.remove.started');
   el.style.transition = 'opacity 0.18s ease';
   el.style.opacity = '0';
   window.setTimeout(() => {
     el.remove();
+    markTillflowPerformance('tillflow.launch.splash.removed');
   }, 220);
 }
 
@@ -25,6 +28,8 @@ export default function LaunchSessionCompletion() {
     } catch {
       return;
     }
+
+    markTillflowPerformance('tillflow.launch.completion.mounted');
 
     const completeLaunch = () => {
       try {

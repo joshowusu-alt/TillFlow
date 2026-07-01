@@ -163,7 +163,8 @@ describe('Phase C3: performance observability baseline', () => {
 
   it('instruments priority operational pages', () => {
     const files = [
-      ['app/(protected)/pos/page.tsx', 'page.pos.initial-data-load'],
+      ['app/(protected)/pos/page.tsx', 'page.pos.total-load'],
+      ['app/(protected)/pos/page.tsx', 'page.pos.products-load'],
       ['app/(protected)/products/page.tsx', 'page.products.load'],
       ['app/(protected)/inventory/page.tsx', 'page.inventory.load'],
       ['app/(protected)/customers/page.tsx', 'page.customers.load'],
@@ -179,6 +180,12 @@ describe('Phase C3: performance observability baseline', () => {
     for (const [path, marker] of files) {
       expect(read(path)).toContain(marker);
     }
+  });
+
+  it('instruments protected layout and onboarding readiness gates', () => {
+    expect(read('app/(protected)/layout.tsx')).toContain('app.protected.layout-gate');
+    expect(read('app/actions/onboarding.ts')).toContain('page.onboarding.get-readiness');
+    expect(read('app/(protected)/onboarding/page.tsx')).toContain('page.onboarding.owner-readiness');
   });
 
   it('instruments priority write actions through service entry points', () => {

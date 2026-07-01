@@ -108,118 +108,162 @@ export default async function PosPage({
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
-  // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
   const requestedCustomerId = searchParams?.customerId?.trim() || undefined;
+  const posRouteMeta = {
+    businessId: business.id,
+    storeId: baseStore.id,
+    route: '/pos',
+  };
+  const posRouteTiming = {
+    thresholdMs: PERFORMANCE_THRESHOLDS_MS.route,
+    operationType: 'route' as const,
+  };
 
-  const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] = await measureServerOperation(
-    'page.pos.initial-data-load',
-    () => Promise.all([
-      // Short-lived cache: till/shift/inventory bust quickly or on-demand
-      getCachedTills(baseStore.id),
-      getCachedShifts(baseStore.id),
-      getCachedInventory(baseStore.id),
-      // Cached: products, units, categories change infrequently
-      getCachedProducts(business.id),
-      getCachedUnits(business.id),
-      getCachedCategories(business.id),
-      getCachedCustomers(business.id),
-      requestedCustomerId
-        ? prisma.customer.findFirst({
-            where: { id: requestedCustomerId, businessId: business.id },
-            select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-          })
-        : Promise.resolve(null),
-    ]),
-    {
-      businessId: business.id,
-      storeId: baseStore.id,
-      route: '/pos',
-      cacheState: 'cached-wrapper',
+  return measureServerOperation(
+    'page.pos.total-load',
+    async () => {
+      const measurePosFetch = <T,>(
+        operation: string,
+        callback: () => Promise<T>,
+        cacheState: string,
+      ) =>
+        measureServerOperation(
+          operation,
+          callback,
+          { ...posRouteMeta, cacheState },
+          posRouteTiming,
+        );
+
+      const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] =
+        await measureServerOperation(
+          'page.pos.initial-data-load',
+          () =>
+            Promise.all([
+              measurePosFetch('page.pos.tills-load', () => getCachedTills(baseStore.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.shifts-load', () => getCachedShifts(baseStore.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.inventory-load', () => getCachedInventory(baseStore.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.products-load', () => getCachedProducts(business.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.units-load', () => getCachedUnits(business.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.categories-load', () => getCachedCategories(business.id), 'cached-wrapper'),
+              measurePosFetch('page.pos.customers-load', () => getCachedCustomers(business.id), 'cached-wrapper'),
+              requestedCustomerId
+                ? measurePosFetch(
+                    'page.pos.requested-customer-load',
+                    () =>
+                      prisma.customer.findFirst({
+                        where: { id: requestedCustomerId, businessId: business.id },
+                        select: {
+                          id: true,
+                          name: true,
+                          creditLimitPence: true,
+                          loyaltyPointsBalance: true,
+                        },
+                      }),
+                    'uncached-page-load',
+                  )
+                : Promise.resolve(null),
+            ]),
+          { ...posRouteMeta, cacheState: 'cached-wrapper' },
+          posRouteTiming,
+        );
+
+      const userOpenShift = await measureServerOperation(
+        'page.pos.open-shift-load',
+        () =>
+          prisma.shift.findFirst({
+            where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
+            select: { till: { select: { name: true } } },
+          }),
+        {
+          ...posRouteMeta,
+          cacheState: 'uncached-page-load',
+        },
+        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
+      );
+
+      const { firstName, productDtos, customerOptions } = await measureServerOperation(
+        'page.pos.dto-map',
+        async () => {
+          const resolvedFirstName =
+            (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
+          const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
+          const mappedProducts = products.map((product) => ({
+            id: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            sellingPriceBasePence: product.sellingPriceBasePence,
+            vatRateBps: product.vatRateBps,
+            promoBuyQty: product.promoBuyQty,
+            promoGetQty: product.promoGetQty,
+            categoryId: product.categoryId,
+            categoryName: product.category?.name ?? null,
+            imageUrl: product.imageUrl,
+            units: product.productUnits.map((pu) => ({
+              id: pu.unitId,
+              name: pu.unit.name,
+              pluralName: pu.unit.pluralName,
+              conversionToBase: pu.conversionToBase,
+              isBaseUnit: pu.isBaseUnit,
+              sellingPricePence: pu.sellingPricePence,
+              defaultCostPence: pu.defaultCostPence,
+            })),
+            onHandBase: inventoryMap.get(product.id) ?? 0,
+          }));
+          const resolvedCustomers =
+            requestedCustomer && !customers.some((customer) => customer.id === requestedCustomer.id)
+              ? [requestedCustomer, ...customers]
+              : customers;
+
+          return {
+            firstName: resolvedFirstName,
+            productDtos: mappedProducts,
+            customerOptions: resolvedCustomers,
+          };
+        },
+        { ...posRouteMeta, cacheState: 'cpu-map', rowCount: products.length },
+        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
+      );
+
+      return (
+        <>
+          <LaunchSessionCompletion />
+          <PosWelcomeShelf
+            firstName={firstName}
+            storeName={baseStore.name}
+            hasOpenShift={!!userOpenShift}
+            openTillName={userOpenShift?.till?.name ?? null}
+            userKey={user.id}
+          />
+          <PosClient
+            business={{
+              id: business.id,
+              currency: business.currency,
+              vatEnabled: business.vatEnabled,
+              momoEnabled: (business as any).momoEnabled ?? false,
+              momoProvider: (business as any).momoProvider ?? null,
+              requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
+              discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
+              loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
+              loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
+              loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
+            }}
+            store={{ id: baseStore.id, name: baseStore.name }}
+            tills={tills.map((till) => ({ id: till.id, name: till.name }))}
+            openShiftTillIds={openShifts.map((shift) => shift.tillId)}
+            products={productDtos}
+            customers={customerOptions.map((customer) => ({
+              id: customer.id,
+              name: customer.name,
+              creditLimitPence: customer.creditLimitPence,
+              loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
+            }))}
+            units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
+            categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
+          />
+        </>
+      );
     },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-  );
-
-  const userOpenShift = await measureServerOperation(
-    'page.pos.open-shift-load',
-    () => prisma.shift.findFirst({
-      where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
-      select: { till: { select: { name: true } } },
-    }),
-    {
-      businessId: business.id,
-      storeId: baseStore.id,
-      route: '/pos',
-      cacheState: 'uncached-page-load',
-    },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
-  );
-  const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
-
-  const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-
-  const productDtos = products.map((product) => ({
-    id: product.id,
-    name: product.name,
-    barcode: product.barcode,
-    sellingPriceBasePence: product.sellingPriceBasePence,
-    vatRateBps: product.vatRateBps,
-    promoBuyQty: product.promoBuyQty,
-    promoGetQty: product.promoGetQty,
-    categoryId: product.categoryId,
-    categoryName: product.category?.name ?? null,
-    imageUrl: product.imageUrl,
-    units: product.productUnits.map((pu) => ({
-      id: pu.unitId,
-      name: pu.unit.name,
-      pluralName: pu.unit.pluralName,
-      conversionToBase: pu.conversionToBase,
-      isBaseUnit: pu.isBaseUnit,
-      sellingPricePence: pu.sellingPricePence,
-      defaultCostPence: pu.defaultCostPence,
-    })),
-    onHandBase: inventoryMap.get(product.id) ?? 0
-  }));
-
-  const customerOptions = requestedCustomer && !customers.some((customer) => customer.id === requestedCustomer.id)
-    ? [requestedCustomer, ...customers]
-    : customers;
-
-  return (
-    <>
-      <LaunchSessionCompletion />
-      <PosWelcomeShelf
-        firstName={firstName}
-        storeName={baseStore.name}
-        hasOpenShift={!!userOpenShift}
-        openTillName={userOpenShift?.till?.name ?? null}
-        userKey={user.id}
-      />
-    <PosClient
-      business={{
-        id: business.id,
-        currency: business.currency,
-        vatEnabled: business.vatEnabled,
-        momoEnabled: (business as any).momoEnabled ?? false,
-        momoProvider: (business as any).momoProvider ?? null,
-        requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
-        discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
-        loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
-        loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
-        loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
-      }}
-      store={{ id: baseStore.id, name: baseStore.name }}
-      tills={tills.map((till) => ({ id: till.id, name: till.name }))}
-      openShiftTillIds={openShifts.map((shift) => shift.tillId)}
-      products={productDtos}
-      customers={customerOptions.map((customer) => ({
-        id: customer.id,
-        name: customer.name,
-        creditLimitPence: customer.creditLimitPence,
-        loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
-      }))}
-      units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
-      categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
-    />
-    </>
+    posRouteMeta,
+    posRouteTiming,
   );
 }
