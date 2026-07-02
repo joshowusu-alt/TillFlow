@@ -7,12 +7,24 @@ import {
   assertTenantUsableForQa,
 } from './helpers/login';
 import { qaSaleAllowed } from './helpers/env';
-import { assertAuthStateFile } from './helpers/auth-storage';
+import { assertAuthStateFile, logAuthStateDiagnostics } from './helpers/auth-storage';
+
+function logFinalUrlOnFailure(role: string) {
+  return async ({ page }: { page: import('@playwright/test').Page }, testInfo: import('@playwright/test').TestInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      console.log(
+        `[qa-auth] after role=${role} test="${testInfo.title}" finalUrl=${page.url()} status=${testInfo.status}`,
+      );
+    }
+  };
+}
 
 test.describe('Owner authenticated QA @owner', () => {
   test.beforeEach(() => {
     assertAuthStateFile('owner');
+    logAuthStateDiagnostics('owner', 'before-protected-nav');
   });
+  test.afterEach(logFinalUrlOnFailure('owner'));
   test('owner home shows shell, readiness skeleton, then dashboard content', async ({ page }) => {
     await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
     await waitForProtectedShell(page);
@@ -131,7 +143,9 @@ test.describe('Owner authenticated QA @owner', () => {
 test.describe('Cashier authenticated QA @cashier', () => {
   test.beforeEach(() => {
     assertAuthStateFile('cashier');
+    logAuthStateDiagnostics('cashier', 'before-protected-nav');
   });
+  test.afterEach(logFinalUrlOnFailure('cashier'));
   test('cashier lands on POS or operational route', async ({ page }) => {
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/pos/);
@@ -153,7 +167,9 @@ test.describe('Cashier authenticated QA @cashier', () => {
 test.describe('Manager authenticated QA @manager', () => {
   test.beforeEach(() => {
     assertAuthStateFile('manager');
+    logAuthStateDiagnostics('manager', 'before-protected-nav');
   });
+  test.afterEach(logFinalUrlOnFailure('manager'));
   test('manager can reach POS when allowed', async ({ page }) => {
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#main-content')).toBeVisible();

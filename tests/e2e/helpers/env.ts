@@ -1,9 +1,26 @@
+import { devices } from '@playwright/test';
+
 export type QaRole = 'owner' | 'cashier' | 'manager';
 
 type RoleCredentials = {
   email: string;
   password: string;
 };
+
+/**
+ * Single, stable user-agent shared by the setup login, the storageState
+ * validation context, and every downstream role project.
+ *
+ * TillFlow's getUser() invalidates a session when the browser family
+ * (browser + OS) of the current request differs from the family captured at
+ * login. The setup project logs in with the runner's default headless UA
+ * (Chrome/Linux on GitHub CI), while downstream role projects used
+ * devices['Desktop Chrome'] (Chrome/Windows). That cross-OS mismatch deleted
+ * the session on the first protected navigation and bounced the role projects
+ * to /login — but only in CI, since a local Windows runner already matches
+ * Desktop Chrome. Pinning one UA keeps the family identical on any OS.
+ */
+export const QA_USER_AGENT = devices['Desktop Chrome'].userAgent;
 
 const ROLE_ENV: Record<QaRole, { email: string; password: string }> = {
   owner: {

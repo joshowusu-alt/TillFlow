@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { QA_USER_AGENT } from './tests/e2e/helpers/env';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:6200';
 const isCi = !!process.env.CI;
@@ -15,6 +16,11 @@ export default defineConfig({
   outputDir: 'playwright/test-results',
   use: {
     baseURL,
+    // Pin one user-agent for setup login AND downstream role projects. TillFlow's
+    // getUser() drops a session when the request's browser family differs from
+    // the family stored at login, so a Chrome/Linux setup + Chrome/Windows role
+    // project (devices['Desktop Chrome']) logged the role contexts out in CI.
+    userAgent: QA_USER_AGENT,
     // Fresh Playwright contexts can hit a service-worker controllerchange reload
     // mid server-action login and abort the POST before session cookies are set.
     serviceWorkers: 'block',
