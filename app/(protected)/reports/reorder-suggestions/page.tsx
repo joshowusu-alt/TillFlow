@@ -37,7 +37,7 @@ export default async function ReorderSuggestionsPage({
 }) {
   const { business, store: defaultStore } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !defaultStore) {
-    return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your shop setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
+    return <EmptyState icon="box" title="Business setup incomplete" subtitle="Complete your business setup to see reorder suggestions." cta={{ label: 'Complete Setup', href: '/onboarding' }} />;
   }
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
   if (!features.advancedReports) {

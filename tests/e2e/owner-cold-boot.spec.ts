@@ -54,7 +54,7 @@ test.describe('Owner cold boot QA @owner', () => {
       .getByRole('status', { name: /Preparing owner dashboard/i })
       .isVisible()
       .catch(() => false);
-    const todayCopyVisible = await page.getByText(/Today in your shop/i).isVisible().catch(() => false);
+    const todayCopyVisible = await page.getByText(/Your business today/i).isVisible().catch(() => false);
     const dashboardReady = await page
       .getByRole('link', { name: /Expected Cash/i })
       .isVisible()

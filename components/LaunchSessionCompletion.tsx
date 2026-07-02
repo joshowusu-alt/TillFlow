@@ -13,6 +13,17 @@ function removeInitialSplash() {
   if (!el) return;
 
   markTillflowPerformance('tillflow.launch.splash.remove.started');
+
+  // Freeze the entry slide animation so the fade does not compete with transform.
+  el.style.animation = 'none';
+  el.style.transform = 'none';
+  // Keep full-screen fixed coverage through the entire opacity fade.
+  el.style.position = 'fixed';
+  el.style.inset = '0';
+  el.style.width = '100%';
+  el.style.height = '100%';
+  el.style.pointerEvents = 'none';
+
   el.style.transition = `opacity ${LAUNCH_SPLASH_TRANSITION_MS / 1000}s ease`;
   el.style.opacity = '0';
   window.setTimeout(() => {

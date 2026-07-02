@@ -5,6 +5,7 @@ import {
   LAUNCH_COMPLETION_HOLD_MS,
   LAUNCH_REDIRECT_DELAY_MS,
   LAUNCH_SPLASH_FADE_MS,
+  LAUNCH_SPLASH_TRANSITION_MS,
 } from '@/lib/performance/launch-handoff-timing';
 
 const root = process.cwd();
@@ -51,14 +52,30 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(LAUNCH_REDIRECT_DELAY_MS).toBe(160);
     expect(LAUNCH_COMPLETION_HOLD_MS).toBeLessThan(480);
     expect(LAUNCH_COMPLETION_HOLD_MS).toBe(120);
+    expect(LAUNCH_SPLASH_TRANSITION_MS).toBe(180);
+    expect(LAUNCH_SPLASH_FADE_MS).toBeGreaterThanOrEqual(LAUNCH_SPLASH_TRANSITION_MS);
 
     expect(launchRedirector).toContain('LAUNCH_REDIRECT_DELAY_MS');
     expect(launchCompletion).toContain('LAUNCH_COMPLETION_HOLD_MS');
     expect(launchCompletion).toContain('LAUNCH_SPLASH_FADE_MS');
+    expect(launchCompletion).toContain('LAUNCH_SPLASH_TRANSITION_MS');
     expect(launchCompletion).toContain("'tillflow.launch.completion.mounted'");
     expect(launchCompletion).toContain("'tillflow.launch.splash.remove.started'");
     expect(launchCompletion).toContain("'tillflow.launch.splash.removed'");
     expect(launchCompletion).not.toContain(', 480');
+  });
+
+  it('fades the pre-hydration splash with opacity only and removes it after the transition', () => {
+    expect(launchCompletion).toContain("el.style.transition = `opacity ${LAUNCH_SPLASH_TRANSITION_MS / 1000}s ease`");
+    expect(launchCompletion).toContain("el.style.opacity = '0'");
+    expect(launchCompletion).toContain("el.style.animation = 'none'");
+    expect(launchCompletion).toContain("el.style.transform = 'none'");
+    expect(launchCompletion).toContain("el.style.position = 'fixed'");
+    expect(launchCompletion).toContain("el.style.inset = '0'");
+    expect(launchCompletion).toContain("el.style.height = '100%'");
+    expect(launchCompletion).not.toContain('maxHeight');
+    expect(launchCompletion).not.toContain('scale');
+    expect(launchCompletion).toContain('LAUNCH_SPLASH_FADE_MS');
   });
 
   it('preserves auth and role gates on owner onboarding', () => {

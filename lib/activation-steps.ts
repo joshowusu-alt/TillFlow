@@ -35,14 +35,14 @@ export const ACTIVATION_STEP_DEFINITIONS: ActivationStepDefinition[] = [
   {
     key: 'profile',
     title: 'Confirm business profile',
-    explanation: 'Add your shop name, phone, and address so receipts and reports look right.',
+    explanation: 'Add your business name, phone, and address so receipts and reports look right.',
     href: '/settings',
     countsTowardProgress: true,
   },
   {
     key: 'business-type',
     title: 'Choose business type',
-    explanation: 'Tell us what kind of shop you run so TillFlow fits your daily work.',
+    explanation: 'Tell us what kind of business you run so TillFlow fits your daily work.',
     href: '/settings',
     countsTowardProgress: true,
   },

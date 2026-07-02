@@ -6,7 +6,7 @@ export default function OwnerReadinessSkeleton() {
   return (
     <div className="space-y-4 animate-pulse" role="status" aria-live="polite" aria-label="Preparing owner dashboard">
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Today in your shop</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">Your business today</p>
         <div className="h-7 w-48 max-w-[70%] rounded-xl bg-black/5" />
         <p className="text-xs text-black/40">Preparing today&apos;s view…</p>
       </div>
