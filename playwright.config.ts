@@ -1,5 +1,4 @@
 import { defineConfig, devices } from '@playwright/test';
-import { authStatePath } from './tests/e2e/helpers/auth-paths';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:6200';
 const isCi = !!process.env.CI;
@@ -22,55 +21,43 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'setup-owner',
-      testMatch: /auth\.owner\.setup\.ts/,
-      timeout: isCi ? 240_000 : 150_000,
-    },
-    {
-      name: 'setup-cashier',
-      testMatch: /auth\.cashier\.setup\.ts/,
-      dependencies: ['setup-owner'],
-      timeout: isCi ? 240_000 : 150_000,
-    },
-    {
-      name: 'setup-manager',
-      testMatch: /auth\.manager\.setup\.ts/,
-      dependencies: ['setup-cashier'],
-      timeout: isCi ? 240_000 : 150_000,
+      name: 'setup-auth',
+      testMatch: /auth\.setup\.ts/,
+      timeout: isCi ? 300_000 : 180_000,
     },
     {
       name: 'owner-chromium',
-      dependencies: ['setup-owner'],
+      dependencies: ['setup-auth'],
       testMatch: /trust-breakers-authenticated\.spec\.ts/,
       grep: /@owner/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: authStatePath('owner'),
+        storageState: 'playwright/.auth/owner.json',
       },
     },
     {
       name: 'cashier-chromium',
-      dependencies: ['setup-cashier'],
+      dependencies: ['setup-auth'],
       testMatch: /trust-breakers-authenticated\.spec\.ts/,
       grep: /@cashier/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: authStatePath('cashier'),
+        storageState: 'playwright/.auth/cashier.json',
       },
     },
     {
       name: 'manager-chromium',
-      dependencies: ['setup-manager'],
+      dependencies: ['setup-auth'],
       testMatch: /trust-breakers-authenticated\.spec\.ts/,
       grep: /@manager/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: authStatePath('manager'),
+        storageState: 'playwright/.auth/manager.json',
       },
     },
     {
       name: 'owner-cold-boot-chromium',
-      dependencies: ['setup-owner'],
+      dependencies: ['setup-auth'],
       testMatch: /owner-cold-boot\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },

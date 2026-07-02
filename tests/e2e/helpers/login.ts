@@ -30,7 +30,25 @@ async function submitLogin(page: Page, role: QaRole, attempt: number) {
   await passwordInput.fill(password);
 
   await expectInputValue(emailInput, email);
+
+  const postResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && /\/login(?:\?|$)/.test(response.url()),
+    { timeout: loginTimeoutMs() },
+  );
+
   await page.getByRole('button', { name: /sign in/i }).click();
+
+  const postResponse = await postResponsePromise.catch(() => null);
+  if (!postResponse) {
+    const diagnostics = await readLoginDiagnostics(page);
+    throw new Error(
+      `${role} login POST did not respond on attempt ${attempt}. url=${diagnostics.url} loginFormVisible=${diagnostics.loginFormVisible} mainVisible=${diagnostics.mainVisible} banner=${diagnostics.banner ?? 'none'}`,
+    );
+  }
+
+  if (postResponse.status() === 403) {
+    throw new Error(`${role} login blocked by middleware/CSRF (403).`);
+  }
 
   const deadline = Date.now() + loginTimeoutMs();
   while (Date.now() < deadline) {
@@ -79,7 +97,8 @@ export async function loginAsRole(page: Page, role: QaRole) {
       firstError instanceof Error &&
       (/invalid credentials/i.test(firstError.message) ||
         /rate limiter/i.test(firstError.message) ||
-        /requires 2FA/i.test(firstError.message))
+        /requires 2FA/i.test(firstError.message) ||
+        /middleware\/CSRF/i.test(firstError.message))
     ) {
       throw firstError;
     }

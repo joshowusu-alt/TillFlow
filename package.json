@@ -21,7 +21,7 @@
     "test:e2e:deep": "node scripts/manual-e2e-deep-check.js",
     "test:e2e:authenticated": "playwright test",
     "test:e2e:authenticated:owner": "playwright test --project=owner-chromium --project=owner-cold-boot-chromium",
-    "test:e2e:authenticated:setup": "playwright test --project=setup-owner --project=setup-cashier --project=setup-manager",
+    "test:e2e:authenticated:setup": "playwright test --project=setup-auth",
     "test:e2e:authenticated:prod": "node scripts/run-playwright-qa.mjs",
     "test:qa:phase3a": "tsx scripts/phase3a-qa.ts",
     "test:qa:phase3b": "tsx scripts/phase3b-qa.ts",
