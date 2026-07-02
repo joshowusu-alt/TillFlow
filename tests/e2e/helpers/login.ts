@@ -72,7 +72,7 @@ async function submitLogin(page: Page, role: QaRole, attempt: number) {
       return;
     }
 
-    const invalidBanner = page.getByText(/Invalid credentials/i);
+    const invalidBanner = page.getByText(/Invalid (credentials|email or password)/i);
     if (await invalidBanner.isVisible().catch(() => false)) {
       throw new Error(`${role} login failed: invalid credentials for the configured QA account.`);
     }
@@ -111,7 +111,7 @@ export async function loginAsRole(page: Page, role: QaRole) {
   } catch (firstError) {
     if (
       firstError instanceof Error &&
-      (/invalid credentials/i.test(firstError.message) ||
+      (/invalid (credentials|email or password)/i.test(firstError.message) ||
         /rate limiter/i.test(firstError.message) ||
         /requires 2FA/i.test(firstError.message) ||
         /middleware\/CSRF/i.test(firstError.message))

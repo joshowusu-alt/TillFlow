@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { deferServiceWorkerReload, isLoginSubmitting } from '@/lib/pwa/login-submit-guard';
 
 type BackgroundSyncRegistration = ServiceWorkerRegistration & {
   sync?: {
@@ -42,11 +43,18 @@ export default function ServiceWorkerRegistration() {
     let updateTimer: ReturnType<typeof setInterval> | null = null;
     let refreshing = false;
 
+    const performReload = () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    };
+
     const handleControllerChange = () => {
-      if (!refreshing) {
-        refreshing = true;
-        window.location.reload();
+      if (isLoginSubmitting()) {
+        deferServiceWorkerReload(performReload);
+        return;
       }
+      performReload();
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
