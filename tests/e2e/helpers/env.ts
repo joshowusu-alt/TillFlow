@@ -27,7 +27,7 @@ export function getBaseUrl() {
 export function requireRoleCredentials(role: QaRole): RoleCredentials {
   const keys = ROLE_ENV[role];
   const email = process.env[keys.email]?.trim();
-  const password = process.env[keys.password];
+  const password = process.env[keys.password]?.trim();
 
   if (!email || !password) {
     throw new Error(

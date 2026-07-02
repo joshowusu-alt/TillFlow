@@ -46,8 +46,9 @@ describe('Authenticated Playwright QA setup', () => {
 
   it('does not commit auth storage paths in repo tree config', () => {
     const config = read('playwright.config.ts');
-    expect(config).toContain("'owner.json'");
-    expect(config).toContain('playwright/.auth');
+    const authPaths = read('tests/e2e/helpers/auth-paths.ts');
+    expect(config).toContain('authStatePath');
+    expect(authPaths).toContain("path.resolve(process.cwd(), 'playwright', '.auth')");
     expect(config).not.toContain('storageState: process.env');
   });
 });

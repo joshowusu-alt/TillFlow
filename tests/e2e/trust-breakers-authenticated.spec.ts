@@ -7,8 +7,12 @@ import {
   assertTenantUsableForQa,
 } from './helpers/login';
 import { qaSaleAllowed } from './helpers/env';
+import { assertAuthStateFile } from './helpers/auth-storage';
 
 test.describe('Owner authenticated QA @owner', () => {
+  test.beforeEach(() => {
+    assertAuthStateFile('owner');
+  });
   test('owner home shows shell, readiness skeleton, then dashboard content', async ({ page }) => {
     await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
     await waitForProtectedShell(page);
@@ -125,6 +129,9 @@ test.describe('Owner authenticated QA @owner', () => {
 });
 
 test.describe('Cashier authenticated QA @cashier', () => {
+  test.beforeEach(() => {
+    assertAuthStateFile('cashier');
+  });
   test('cashier lands on POS or operational route', async ({ page }) => {
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/pos/);
@@ -144,6 +151,9 @@ test.describe('Cashier authenticated QA @cashier', () => {
 });
 
 test.describe('Manager authenticated QA @manager', () => {
+  test.beforeEach(() => {
+    assertAuthStateFile('manager');
+  });
   test('manager can reach POS when allowed', async ({ page }) => {
     await page.goto('/pos', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#main-content')).toBeVisible();

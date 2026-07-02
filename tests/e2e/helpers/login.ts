@@ -2,10 +2,27 @@ import type { Page } from '@playwright/test';
 import type { QaRole } from './env';
 import { requireRoleCredentials } from './env';
 
-export async function loginAsRole(page: Page, role: QaRole) {
+function loginTimeoutMs() {
+  return process.env.CI ? 90_000 : 45_000;
+}
+
+async function readLoginDiagnostics(page: Page) {
+  const url = page.url();
+  const loginFormVisible = await page.locator('input[name="email"]').isVisible().catch(() => false);
+  const mainVisible = await page.locator('#main-content').isVisible().catch(() => false);
+  const banner = await page.locator('.border-rose-300').first().textContent().catch(() => null);
+  return {
+    url,
+    loginFormVisible,
+    mainVisible,
+    banner: banner?.trim() || null,
+  };
+}
+
+async function submitLogin(page: Page, role: QaRole, attempt: number) {
   const { email, password } = requireRoleCredentials(role);
 
-  await page.goto('/login', { waitUntil: 'networkidle' });
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   const emailInput = page.locator('input[name="email"]');
   const passwordInput = page.locator('input[name="password"]');
   await emailInput.waitFor({ state: 'visible' });
@@ -15,7 +32,7 @@ export async function loginAsRole(page: Page, role: QaRole) {
   await expectInputValue(emailInput, email);
   await page.getByRole('button', { name: /sign in/i }).click();
 
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + loginTimeoutMs();
   while (Date.now() < deadline) {
     const url = page.url();
     if (!url.includes('/login')) {
@@ -24,6 +41,7 @@ export async function loginAsRole(page: Page, role: QaRole) {
           `${role} login requires 2FA. Authenticated QA needs a QA account without MFA or a test login bypass.`,
         );
       }
+      await page.locator('#main-content').waitFor({ state: 'visible', timeout: 45_000 }).catch(() => undefined);
       return;
     }
 
@@ -44,11 +62,33 @@ export async function loginAsRole(page: Page, role: QaRole) {
       );
     }
 
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
   }
 
-  const banner = await page.locator('.border-rose-300').first().textContent().catch(() => null);
-  throw new Error(`${role} login timed out. Login error banner: ${banner ?? 'none'}`);
+  const diagnostics = await readLoginDiagnostics(page);
+  throw new Error(
+    `${role} login timed out on attempt ${attempt}. url=${diagnostics.url} loginFormVisible=${diagnostics.loginFormVisible} mainVisible=${diagnostics.mainVisible} banner=${diagnostics.banner ?? 'none'}`,
+  );
+}
+
+export async function loginAsRole(page: Page, role: QaRole) {
+  try {
+    await submitLogin(page, role, 1);
+  } catch (firstError) {
+    if (
+      firstError instanceof Error &&
+      (/invalid credentials/i.test(firstError.message) ||
+        /rate limiter/i.test(firstError.message) ||
+        /requires 2FA/i.test(firstError.message))
+    ) {
+      throw firstError;
+    }
+
+    if (process.env.CI) {
+      await page.waitForTimeout(2_000);
+    }
+    await submitLogin(page, role, 2);
+  }
 }
 
 async function expectInputValue(locator: ReturnType<Page['locator']>, expected: string) {

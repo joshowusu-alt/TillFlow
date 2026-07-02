@@ -1,16 +1,16 @@
 import { mkdirSync } from 'node:fs';
-import path from 'node:path';
 import { test as setup } from '@playwright/test';
+import { AUTH_DIR } from './helpers/auth-paths';
+import { saveAndValidateAuthState } from './helpers/auth-storage';
 import { loginAsRole, expectCashierLanding } from './helpers/login';
 import { hasRoleCredentials, missingRoleEnvMessage } from './helpers/env';
 
-const authDir = path.join(process.cwd(), 'playwright/.auth');
-mkdirSync(authDir, { recursive: true });
+mkdirSync(AUTH_DIR, { recursive: true });
 
-setup('authenticate cashier QA user', async ({ page }) => {
+setup('authenticate cashier QA user', async ({ page, browser }) => {
   setup.skip(!hasRoleCredentials('cashier'), missingRoleEnvMessage('cashier'));
 
   await loginAsRole(page, 'cashier');
   await expectCashierLanding(page);
-  await page.context().storageState({ path: path.join(authDir, 'cashier.json') });
+  await saveAndValidateAuthState(page, browser, 'cashier');
 });

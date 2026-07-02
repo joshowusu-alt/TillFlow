@@ -1,17 +1,17 @@
-import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { authStatePath } from './tests/e2e/helpers/auth-paths';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:6200';
-const authDir = path.join(__dirname, 'playwright/.auth');
+const isCi = !!process.env.CI;
 
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  forbidOnly: isCi,
+  retries: isCi ? 1 : 0,
   workers: 1,
-  timeout: 90_000,
-  expect: { timeout: 20_000 },
+  timeout: isCi ? 120_000 : 90_000,
+  expect: { timeout: isCi ? 30_000 : 20_000 },
   reporter: [['list'], ['json', { outputFile: 'playwright/report.json' }]],
   outputDir: 'playwright/test-results',
   use: {
@@ -21,9 +21,23 @@ export default defineConfig({
     video: 'off',
   },
   projects: [
-    { name: 'setup-owner', testMatch: /auth\.owner\.setup\.ts/ },
-    { name: 'setup-cashier', testMatch: /auth\.cashier\.setup\.ts/ },
-    { name: 'setup-manager', testMatch: /auth\.manager\.setup\.ts/ },
+    {
+      name: 'setup-owner',
+      testMatch: /auth\.owner\.setup\.ts/,
+      timeout: isCi ? 240_000 : 150_000,
+    },
+    {
+      name: 'setup-cashier',
+      testMatch: /auth\.cashier\.setup\.ts/,
+      dependencies: ['setup-owner'],
+      timeout: isCi ? 240_000 : 150_000,
+    },
+    {
+      name: 'setup-manager',
+      testMatch: /auth\.manager\.setup\.ts/,
+      dependencies: ['setup-cashier'],
+      timeout: isCi ? 240_000 : 150_000,
+    },
     {
       name: 'owner-chromium',
       dependencies: ['setup-owner'],
@@ -31,7 +45,7 @@ export default defineConfig({
       grep: /@owner/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: path.join(authDir, 'owner.json'),
+        storageState: authStatePath('owner'),
       },
     },
     {
@@ -41,7 +55,7 @@ export default defineConfig({
       grep: /@cashier/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: path.join(authDir, 'cashier.json'),
+        storageState: authStatePath('cashier'),
       },
     },
     {
@@ -51,7 +65,7 @@ export default defineConfig({
       grep: /@manager/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: path.join(authDir, 'manager.json'),
+        storageState: authStatePath('manager'),
       },
     },
     {
