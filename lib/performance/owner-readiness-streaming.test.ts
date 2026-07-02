@@ -10,7 +10,7 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
   const ownerContent = read('app/(protected)/onboarding/OwnerReadinessContent.tsx');
   const onboardingAction = read('app/actions/onboarding.ts');
   const onboardingClient = read('app/(protected)/onboarding/OnboardingClient.tsx');
-  const posPage = read('app/(protected)/pos/page.tsx');
+  const posPage = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
   const salesAction = read('app/actions/sales.ts');
   const todayKpis = read('lib/reports/today-kpis.ts');
 

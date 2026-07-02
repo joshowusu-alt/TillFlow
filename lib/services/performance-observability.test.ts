@@ -163,8 +163,8 @@ describe('Phase C3: performance observability baseline', () => {
 
   it('instruments priority operational pages', () => {
     const files = [
-      ['app/(protected)/pos/page.tsx', 'page.pos.total-load'],
-      ['app/(protected)/pos/page.tsx', 'page.pos.products-load'],
+      ['app/(protected)/pos/PosBoard.tsx', 'page.pos.total-load'],
+      ['app/(protected)/pos/PosBoard.tsx', 'page.pos.products-load'],
       ['app/(protected)/products/page.tsx', 'page.products.load'],
       ['app/(protected)/inventory/page.tsx', 'page.inventory.load'],
       ['app/(protected)/customers/page.tsx', 'page.customers.load'],
@@ -227,7 +227,7 @@ describe('Phase C3: performance observability baseline', () => {
     const ownerDashboard = read('lib/reports/owner-dashboard.ts');
     const todayKpis = read('lib/reports/today-kpis.ts');
     const tradingDashboard = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    const pos = read('app/(protected)/pos/page.tsx');
+    const pos = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
 
     expect(ownerDashboard).toContain("['report-owner-dashboard']");
     expect(ownerDashboard).toContain("{ revalidate: 60, tags: ['owner-dashboard'] }");

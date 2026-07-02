@@ -286,7 +286,7 @@ describe('TillFlow brand logo system', () => {
     const protectedLayout = readSource('app/(protected)/layout.tsx');
     const onboardingPage = readSource('app/(protected)/onboarding/page.tsx');
     const onboardingClient = readSource('app/(protected)/onboarding/OnboardingClient.tsx');
-    const posPage = readSource('app/(protected)/pos/page.tsx');
+    const posPage = readSource('app/(protected)/pos/page.tsx') + '\n' + readSource('app/(protected)/pos/PosBoard.tsx');
 
     expect(layout).toContain('tillflow-initial-splash');
     expect(layout).toContain('position:fixed');

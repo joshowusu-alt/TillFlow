@@ -19,7 +19,7 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
   const protectedLoading = read('app/(protected)/loading.tsx');
   const onboardingPage = read('app/(protected)/onboarding/page.tsx');
   const onboardingClient = read('app/(protected)/onboarding/OnboardingClient.tsx');
-  const posPage = read('app/(protected)/pos/page.tsx');
+  const posPage = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
   const launchPage = read('app/launch/page.tsx');
 
   it('keeps a single branded launch entry and protected non-launch fallback', () => {
