@@ -6,6 +6,16 @@ function loginTimeoutMs() {
   return process.env.CI ? 90_000 : 45_000;
 }
 
+async function hasSessionCookie(page: Page) {
+  const cookies = await page.context().cookies();
+  return cookies.some((cookie) => cookie.name.startsWith('pos_session_'));
+}
+
+async function landingPathForRole(role: QaRole) {
+  if (role === 'owner') return '/onboarding';
+  return '/pos';
+}
+
 async function readLoginDiagnostics(page: Page) {
   const url = page.url();
   const loginFormVisible = await page.locator('input[name="email"]').isVisible().catch(() => false);
@@ -31,27 +41,26 @@ async function submitLogin(page: Page, role: QaRole, attempt: number) {
 
   await expectInputValue(emailInput, email);
 
-  const postResponsePromise = page.waitForResponse(
-    (response) => response.request().method() === 'POST' && /\/login(?:\?|$)/.test(response.url()),
-    { timeout: loginTimeoutMs() },
-  );
+  const postResponsePromise = page
+    .waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        /\/login(?:\?|$)/.test(response.url()) &&
+        response.status() >= 300,
+      { timeout: loginTimeoutMs() },
+    )
+    .catch(() => null);
 
   await page.getByRole('button', { name: /sign in/i }).click();
 
-  const postResponse = await postResponsePromise.catch(() => null);
-  if (!postResponse) {
-    const diagnostics = await readLoginDiagnostics(page);
-    throw new Error(
-      `${role} login POST did not respond on attempt ${attempt}. url=${diagnostics.url} loginFormVisible=${diagnostics.loginFormVisible} mainVisible=${diagnostics.mainVisible} banner=${diagnostics.banner ?? 'none'}`,
-    );
-  }
-
-  if (postResponse.status() === 403) {
-    throw new Error(`${role} login blocked by middleware/CSRF (403).`);
-  }
-
   const deadline = Date.now() + loginTimeoutMs();
   while (Date.now() < deadline) {
+    if (await hasSessionCookie(page)) {
+      await page.goto(await landingPathForRole(role), { waitUntil: 'domcontentloaded' });
+      await page.locator('#main-content').waitFor({ state: 'visible', timeout: 45_000 }).catch(() => undefined);
+      return;
+    }
+
     const url = page.url();
     if (!url.includes('/login')) {
       if (url.includes('error=otp_required') || url.includes('error=otp_invalid')) {
@@ -81,6 +90,13 @@ async function submitLogin(page: Page, role: QaRole, attempt: number) {
     }
 
     await page.waitForTimeout(500);
+  }
+
+  const postResponse = await postResponsePromise;
+  if (postResponse && (await hasSessionCookie(page))) {
+    await page.goto(await landingPathForRole(role), { waitUntil: 'domcontentloaded' });
+    await page.locator('#main-content').waitFor({ state: 'visible', timeout: 45_000 }).catch(() => undefined);
+    return;
   }
 
   const diagnostics = await readLoginDiagnostics(page);

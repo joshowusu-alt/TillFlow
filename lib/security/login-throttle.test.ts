@@ -383,4 +383,21 @@ describe('login-throttle — Redis-backed path', () => {
     const { clearLoginFailures: clear } = await loadWithRedis();
     await expect(clear(EMAIL, IP)).resolves.toBeUndefined();
   });
+
+  it('falls back to in-memory when Redis hangs beyond the timeout', async () => {
+    vi.useFakeTimers();
+    mockRedisTtl.mockImplementation(() => new Promise(() => {}));
+    mockRedisGet.mockImplementation(() => new Promise(() => {}));
+
+    const { getLoginThrottleStatus: get } = await loadWithRedis();
+    const statusPromise = get(EMAIL, IP, FAST_OPTS);
+    await vi.advanceTimersByTimeAsync(3_500);
+
+    await expect(statusPromise).resolves.toMatchObject({
+      isBlocked: false,
+      remainingAttempts: FAST_OPTS.maxAttempts,
+    });
+
+    vi.useRealTimers();
+  });
 });

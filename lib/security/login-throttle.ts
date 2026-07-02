@@ -24,6 +24,31 @@ const hasRedisEnv =
 
 const redisClient = hasRedisEnv ? Redis.fromEnv() : null;
 
+const REDIS_OP_TIMEOUT_MS = Math.max(
+  Number(process.env.LOGIN_THROTTLE_REDIS_TIMEOUT_MS ?? 3_000) || 3_000,
+  500,
+);
+
+async function withRedisTimeout<T>(promise: Promise<T>, operation: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`login-throttle redis ${operation} timed out after ${REDIS_OP_TIMEOUT_MS}ms`));
+        }, REDIS_OP_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function warnRedisFallback(operation: string, error: unknown) {
+  console.warn(`[security] Redis login throttle ${operation} failed, falling back to in-memory:`, error);
+}
+
 // In development and test environments the in-memory Map fallback is acceptable:
 // instances are long-lived, single-process, and brute-force protection is not a
 // production concern.
@@ -123,10 +148,13 @@ export async function getLoginThrottleStatus(
   }
 
   try {
-    const [lockTtlRaw, attemptsRaw] = await Promise.all([
-      redisClient.ttl(redisLockKey(email, ipAddress)),
-      redisClient.get<number>(redisAttemptsKey(email, ipAddress))
-    ]);
+    const [lockTtlRaw, attemptsRaw] = await withRedisTimeout(
+      Promise.all([
+        redisClient.ttl(redisLockKey(email, ipAddress)),
+        redisClient.get<number>(redisAttemptsKey(email, ipAddress)),
+      ]),
+      'getLoginThrottleStatus',
+    );
 
     const lockTtl = typeof lockTtlRaw === 'number' ? lockTtlRaw : Number(lockTtlRaw ?? -2);
     const attempts = typeof attemptsRaw === 'number' ? attemptsRaw : Number(attemptsRaw ?? 0);
@@ -138,7 +166,7 @@ export async function getLoginThrottleStatus(
       remainingAttempts: Math.max(maxAttempts - attempts, 0)
     };
   } catch (e) {
-    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
+    warnRedisFallback('getLoginThrottleStatus', e);
     return getInMemoryLoginThrottleStatus(email, ipAddress, opts);
   }
 }
@@ -158,15 +186,21 @@ export async function recordLoginFailure(
   try {
     const attemptsKey = redisAttemptsKey(email, ipAddress);
     const lockKey = redisLockKey(email, ipAddress);
-    const attempts = await redisClient.incr(attemptsKey);
+    const attempts = await withRedisTimeout(redisClient.incr(attemptsKey), 'recordLoginFailure.incr');
     if (attempts === 1) {
-      await redisClient.expire(attemptsKey, msToSeconds(windowMs));
+      await withRedisTimeout(
+        redisClient.expire(attemptsKey, msToSeconds(windowMs)),
+        'recordLoginFailure.expire',
+      );
     }
     if (attempts >= maxAttempts) {
-      await redisClient.set(lockKey, '1', { ex: msToSeconds(lockoutMs) });
+      await withRedisTimeout(
+        redisClient.set(lockKey, '1', { ex: msToSeconds(lockoutMs) }),
+        'recordLoginFailure.set',
+      );
     }
   } catch (e) {
-    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
+    warnRedisFallback('recordLoginFailure', e);
     recordInMemoryLoginFailure(email, ipAddress, opts);
   }
 }
@@ -178,12 +212,15 @@ export async function clearLoginFailures(email: string, ipAddress: string) {
   }
 
   try {
-    await redisClient.del(
-      redisAttemptsKey(email, ipAddress),
-      redisLockKey(email, ipAddress)
+    await withRedisTimeout(
+      redisClient.del(
+        redisAttemptsKey(email, ipAddress),
+        redisLockKey(email, ipAddress),
+      ),
+      'clearLoginFailures',
     );
   } catch (e) {
-    console.warn('[security] Redis login throttle error, falling back to in-memory:', e);
+    warnRedisFallback('clearLoginFailures', e);
     clearInMemoryLoginFailures(email, ipAddress);
   }
 }

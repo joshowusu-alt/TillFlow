@@ -11,7 +11,7 @@ import { cleanupStaleData } from '@/lib/services/maintenance';
 import { headers } from 'next/headers';
 import { clearLoginFailures, getLoginThrottleStatus, recordLoginFailure } from '@/lib/security/login-throttle';
 import { verifyTwoFactorCode } from '@/lib/security/two-factor';
-import { appLog } from '@/lib/observability';
+import { appLog, measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -48,24 +48,39 @@ export async function login(formData: FormData) {
 
   try {
 
-  const throttleStatus = await getLoginThrottleStatus(email, ipAddress);
+  const throttleStatus = await measureServerOperation(
+    'auth.login.rate-limit',
+    () => getLoginThrottleStatus(email, ipAddress),
+    { operationType: 'action' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
   if (throttleStatus.isBlocked) {
     appLog('warn', 'Login blocked by rate limiter', { email, ipAddress });
     redirect('/login?error=locked');
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await measureServerOperation(
+    'auth.login.user-lookup',
+    () => prisma.user.findUnique({ where: { email } }),
+    { operationType: 'action' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
   if (!user || !user.active) {
     await recordLoginFailure(email, ipAddress);
     appLog('warn', 'Login failed for unknown or inactive user', { email, ipAddress });
     redirect('/login?error=invalid');
   }
 
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  const ok = await measureServerOperation(
+    'auth.login.password-verify',
+    () => bcrypt.compare(password, user.passwordHash),
+    { operationType: 'action' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
   if (!ok) {
     await recordLoginFailure(email, ipAddress);
     appLog('warn', 'Login failed due to password mismatch', { email, ipAddress, userId: user.id });
-    await audit({
+    void audit({
       businessId: user.businessId,
       userId: user.id,
       userName: user.name,
@@ -85,7 +100,7 @@ export async function login(formData: FormData) {
     if (!user.twoFactorSecret || !verifyTwoFactorCode(user.twoFactorSecret, otp)) {
       await recordLoginFailure(email, ipAddress);
       appLog('warn', 'Login failed due to invalid OTP', { email, ipAddress, userId: user.id });
-      await audit({
+      void audit({
         businessId: user.businessId,
         userId: user.id,
         userName: user.name,
@@ -111,21 +126,27 @@ export async function login(formData: FormData) {
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
-  await prisma.$transaction([
-    prisma.session.create({
-      data: {
-        token,
-        userId: user.id,
-        ipAddress,
-        userAgent,
-        expiresAt,
-      },
-    }),
-    prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    }),
-  ]);
+  await measureServerOperation(
+    'auth.login.session-create',
+    () =>
+      prisma.$transaction([
+        prisma.session.create({
+          data: {
+            token,
+            userId: user.id,
+            ipAddress,
+            userAgent,
+            expiresAt,
+          },
+        }),
+        prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        }),
+      ]),
+    { operationType: 'action' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
+  );
 
   const staleSessions = await prisma.session.findMany({
     where: { userId: user.id },
@@ -160,7 +181,7 @@ export async function login(formData: FormData) {
     expires: expiresAt
   });
 
-  await audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'LOGIN' });
+  void audit({ businessId: user.businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'LOGIN' });
   appLog('info', 'Login successful', { email, ipAddress, userId: user.id });
 
   // Opportunistic cleanup of expired sessions and old audit logs

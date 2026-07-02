@@ -15,6 +15,9 @@ export default defineConfig({
   outputDir: 'playwright/test-results',
   use: {
     baseURL,
+    // Fresh Playwright contexts can hit a service-worker controllerchange reload
+    // mid server-action login and abort the POST before session cookies are set.
+    serviceWorkers: 'block',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
