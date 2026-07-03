@@ -13,6 +13,7 @@ import {
   type MobileBrowseArea,
   type MobileNavContext,
   type MobileNavLink,
+  type OwnerQuickAction,
 } from '@/lib/navigation/mobile-menu-config';
 import InstallButton from './InstallButton';
 import NavIcon from './navigation/NavIcon';
@@ -44,6 +45,25 @@ function roleLabel(role: TopNavUser['role']) {
 
 function pathIsActive(pathname: string, href: string) {
   return pathname === href || (href !== '/reports' && pathname.startsWith(`${href}/`));
+}
+
+function quickActionIconTone(actionId: string) {
+  switch (actionId) {
+    case 'open-pos':
+      return 'bg-blue-50 text-blue-700';
+    case 'sales':
+      return 'bg-emerald-50 text-emerald-700';
+    case 'inventory':
+      return 'bg-indigo-50 text-indigo-700';
+    case 'purchases':
+      return 'bg-amber-50 text-amber-800';
+    case 'reports':
+      return 'bg-violet-50 text-violet-700';
+    case 'business-settings':
+      return 'bg-slate-100 text-slate-700';
+    default:
+      return 'bg-slate-100 text-slate-700';
+  }
 }
 
 export default function NavMobileMenu({
@@ -150,17 +170,15 @@ export default function NavMobileMenu({
     return null;
   };
 
-  const renderNavLink = (item: MobileNavLink, variant: 'tile' | 'row' | 'compact' = 'row') => {
+  const renderNavLink = (item: MobileNavLink, variant: 'row' | 'compact' = 'row') => {
     const active = pathIsActive(pathname, item.href);
     const isPending = pendingHref === item.href;
     const badge = renderLockBadge(item.href);
 
     const baseClasses =
-      variant === 'tile'
-        ? 'flex min-h-[5.25rem] flex-col items-start justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 text-left shadow-sm transition active:scale-[0.99]'
-        : variant === 'compact'
-          ? 'flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-medium text-ink'
-          : 'flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-sm font-medium text-ink';
+      variant === 'compact'
+        ? 'flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5 text-sm font-medium text-ink'
+        : 'flex min-h-11 items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-sm font-medium text-ink';
 
     const stateClasses = [
       active ? 'border-blue-200 bg-blue-50/80 text-blue-950' : '',
@@ -183,18 +201,49 @@ export default function NavMobileMenu({
         }}
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={
-              variant === 'tile'
-                ? 'flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700'
-                : 'flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600'
-            }
-          >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
             <NavIcon iconKey={item.iconKey} className="h-[18px] w-[18px]" />
           </span>
           <span className="min-w-0 truncate">{item.label}</span>
         </span>
         {badge}
+      </Link>
+    );
+  };
+
+  const renderQuickActionTile = (item: OwnerQuickAction) => {
+    const active = pathIsActive(pathname, item.href);
+    const isPending = pendingHref === item.href;
+    const badge = renderLockBadge(item.href);
+    const stateClasses = [
+      active ? 'border-blue-200 bg-blue-50/80 text-blue-950' : '',
+      isPending ? 'border-blue-200 bg-blue-50/90 shadow-sm' : '',
+      pendingHref && !isPending ? 'opacity-60' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return (
+      <Link
+        key={item.href + item.label}
+        href={item.href}
+        className={`flex min-h-[4.75rem] flex-col items-start gap-2 rounded-2xl border border-slate-200/80 bg-white p-3 text-left shadow-sm transition active:scale-[0.99] ${stateClasses}`.trim()}
+        aria-busy={isPending || undefined}
+        data-mobile-nav-pending={isPending ? 'true' : undefined}
+        onClick={() => {
+          handleNavigateStart(item.href);
+          setMobileOpen(false);
+        }}
+      >
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${quickActionIconTone(item.id)}`}
+        >
+          <NavIcon iconKey={item.iconKey} className="h-[17px] w-[17px]" />
+        </span>
+        <span className="min-w-0 text-[13px] font-medium leading-snug text-ink [overflow-wrap:anywhere]">
+          {item.label}
+        </span>
+        {badge ? <span className="mt-auto">{badge}</span> : null}
       </Link>
     );
   };
@@ -261,20 +310,20 @@ export default function NavMobileMenu({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3.5 pb-6">
             {user.role === 'OWNER' && ownerMenu ? (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <section>
-                  <div className="px-1 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                  <div className="px-0.5 pb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
                     Quick actions
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {ownerMenu.quickActions.map((item) => renderNavLink(item, 'tile'))}
+                  <div className="grid grid-cols-2 gap-2">
+                    {ownerMenu.quickActions.map((item) => renderQuickActionTile(item))}
                   </div>
                 </section>
 
-                <section className="space-y-2.5">
-                  <div className="px-1 pb-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                <section className="space-y-2">
+                  <div className="px-0.5 pb-0.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
                     Browse by area
                   </div>
                   {ownerMenu.browseAreas.map((area) => renderBrowseArea(area))}
@@ -307,10 +356,10 @@ export default function NavMobileMenu({
             ) : null}
           </div>
 
-          <div className="space-y-2 border-t border-slate-200/80 bg-slate-50/80 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="shrink-0 space-y-1.5 border-t border-slate-200/80 bg-slate-50/90 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <Link
               href="/help"
-              className="btn-ghost w-full text-sm"
+              className="btn-ghost w-full py-2 text-sm"
               onClick={() => {
                 handleNavigateStart('/help');
                 setMobileOpen(false);
@@ -319,7 +368,7 @@ export default function NavMobileMenu({
               Help & support
             </Link>
             <form action={logout}>
-              <button type="submit" className="btn-ghost w-full text-sm text-black/70">
+              <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
                 Sign out
               </button>
             </form>

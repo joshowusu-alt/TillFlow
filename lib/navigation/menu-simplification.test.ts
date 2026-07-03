@@ -205,5 +205,11 @@ describe('T4 role-based business launcher menu', () => {
     );
     expect(mobileMenu).toContain('Help & support');
     expect(mobileMenu).toContain('Sign out');
+    const quickActionBlock = mobileMenu.slice(
+      mobileMenu.indexOf('const renderQuickActionTile'),
+      mobileMenu.indexOf('const renderBrowseArea'),
+    );
+    expect(quickActionBlock).toContain('[overflow-wrap:anywhere]');
+    expect(quickActionBlock).not.toContain('truncate');
   });
 });
