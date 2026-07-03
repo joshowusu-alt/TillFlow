@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { createPurchaseAction } from '@/app/actions/purchases';
@@ -11,6 +11,11 @@ import { resolveEffectiveDefaultCostPence } from '@/lib/services/shared';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
+import {
+  PURCHASE_DRAFT_VERSION,
+  clearPurchaseDraft,
+  getPurchaseDraftStorageKey,
+} from '@/lib/purchases/purchase-draft';
 
 type UnitDto = {
   id: string;
@@ -74,8 +79,6 @@ type PurchaseDraft = {
   dueDate: string;
 };
 
-const PURCHASE_DRAFT_VERSION = 1;
-
 export default function PurchaseFormClient({
   storeId,
   products,
@@ -92,7 +95,7 @@ export default function PurchaseFormClient({
   vatEnabled: boolean;
 }) {
   const searchParams = useSearchParams();
-  const draftStorageKey = `tillflow:purchase-draft:${storeId}`;
+  const draftStorageKey = getPurchaseDraftStorageKey(storeId);
   const draftReadyRef = useRef(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [productOptions, setProductOptions] = useState<ProductDto[]>(products);
@@ -135,6 +138,29 @@ export default function PurchaseFormClient({
     );
   }, [productSearch, productOptions]);
 
+  const resetPurchaseForm = useCallback(() => {
+    clearPurchaseDraft(storeId);
+    setDraftNotice(null);
+    setSupplierId('');
+    setProductId(products[0]?.id ?? '');
+    setUnitId(products[0]?.units[0]?.id ?? '');
+    setQtyInput('1');
+    setUnitCostInput('');
+    setUnitCostTouched(false);
+    setCart([]);
+    setQtyDrafts({});
+    setCostDrafts({});
+    setPaymentMethods(['CASH']);
+    setPaymentStatus('PAID');
+    setDueDate('');
+    setCashPaid('');
+    setCardPaid('');
+    setTransferPaid('');
+    setBarcodeLookup('');
+    setProductSearch('');
+    setProductDropdownOpen(false);
+  }, [products, storeId]);
+
   useEffect(() => {
     const requestedSupplierId = searchParams?.get('supplierId') ?? '';
     const validRequestedSupplierId = suppliers.some((supplier) => supplier.id === requestedSupplierId)
@@ -142,9 +168,7 @@ export default function PurchaseFormClient({
       : '';
 
     if (searchParams?.get('created')) {
-      try {
-        window.localStorage.removeItem(draftStorageKey);
-      } catch {}
+      resetPurchaseForm();
       draftReadyRef.current = true;
       return;
     }
@@ -160,7 +184,7 @@ export default function PurchaseFormClient({
       }
       const parsed = JSON.parse(raw) as Partial<PurchaseDraft>;
       if (parsed.version !== PURCHASE_DRAFT_VERSION) {
-        window.localStorage.removeItem(draftStorageKey);
+        clearPurchaseDraft(storeId);
         draftReadyRef.current = true;
         return;
       }
@@ -192,14 +216,12 @@ export default function PurchaseFormClient({
         setDraftNotice('Draft restored. You can continue this purchase after serving the customer.');
       }
     } catch {
-      try {
-        window.localStorage.removeItem(draftStorageKey);
-      } catch {}
+      clearPurchaseDraft(storeId);
     } finally {
       draftReadyRef.current = true;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [resetPurchaseForm]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;
@@ -215,7 +237,7 @@ export default function PurchaseFormClient({
 
     try {
       if (!hasDraft) {
-        window.localStorage.removeItem(draftStorageKey);
+        clearPurchaseDraft(storeId);
         return;
       }
       const draft: PurchaseDraft = {
@@ -232,7 +254,7 @@ export default function PurchaseFormClient({
       };
       window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
     } catch {}
-  }, [cardPaid, cart, cashPaid, draftStorageKey, dueDate, paymentMethods, paymentStatus, supplierId, transferPaid]);
+  }, [cardPaid, cart, cashPaid, dueDate, paymentMethods, paymentStatus, storeId, supplierId, transferPaid]);
 
   useEffect(() => {
     if (!draftReadyRef.current) return;

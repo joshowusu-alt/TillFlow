@@ -9,6 +9,7 @@ import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { changePurchaseProductSupplierLinkAction } from '@/app/actions/purchases';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
+import PurchaseDraftClearer from '@/components/purchases/PurchaseDraftClearer';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -86,6 +87,7 @@ export default async function PurchaseInvoicePage({
 
   return (
     <div className="space-y-6">
+      <PurchaseDraftClearer storeId={invoice.storeId} active={searchParams?.created === '1'} />
       <PageHeader
         title={`Purchase Invoice`}
         subtitle={invoice.supplier ? `Supplier: ${invoice.supplier.name}` : 'No supplier linked'}

@@ -31,6 +31,7 @@ import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
+import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events';
 import {
   getLastReceiptStorageKey,
   getParkedCartsStorageKey,
@@ -795,6 +796,7 @@ export default function PosClient({
           window.localStorage.setItem(lastReceiptStorageKey, receiptId);
         }
         showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
+        dispatchNavKpiRefresh();
       } else {
         restoreSaleSnapshot(saleSnapshot, result.error);
       }

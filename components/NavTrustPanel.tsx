@@ -15,7 +15,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
   return (
     <>
       <div className="hidden items-center gap-2 xl:flex">
-        {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') ? (
+        {todaySales ? (
           <div
             className="hidden h-9 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm xl:flex"
             aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
@@ -68,12 +68,12 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         <div className="text-gray-500 uppercase tracking-[0.15em]">
           {user.role}{storeName ? ` · ${storeName}` : ''}
         </div>
-        {todaySales && (user.role === 'MANAGER' || user.role === 'OWNER') && (
+        {todaySales ? (
           <div className="text-gray-400 tabular-nums">
             {formatMoney(todaySales.totalPence, todaySales.currency)}
             {' · '}{todaySales.txCount} txn{todaySales.txCount !== 1 ? 's' : ''} today
           </div>
-        )}
+        ) : null}
       </div>
 
       <form action={logout} className="hidden sm:block xl:hidden">

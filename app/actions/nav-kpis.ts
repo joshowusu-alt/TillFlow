@@ -6,7 +6,7 @@ import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-
 
 /** Nav/header today sales — same business-wide source as Operations Today and home readiness. */
 export async function getNavTodaySales() {
-  const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
+  const { business, user } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   const [kpis, onlineOrdersCount] = await Promise.all([
     getTodayKPIs(business.id),
     countOnlineOrdersNeedingAttention(business.id).catch(() => 0),

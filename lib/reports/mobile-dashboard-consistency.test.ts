@@ -49,6 +49,7 @@ describe('Mobile dashboard sales consistency', () => {
 
     expect(topNav).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
     expect(topNav).toContain('const fresh = await getNavTodaySales()');
+    expect(topNav).toContain('NAV_KPI_REFRESH_EVENT');
 
     expect(readiness).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
     expect(readiness).toContain('const fresh = await getNavTodaySales()');

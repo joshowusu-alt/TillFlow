@@ -18,6 +18,7 @@ import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
 import NavIcon from './navigation/NavIcon';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
+import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
 
 export type TopNavUser = {
   name: string;
@@ -109,9 +110,7 @@ export default function TopNav({
       .filter((group) => group.items.length > 0);
   }, [user.role, features.multiStore, momoEnabled]);
 
-  const showMobileSalesPulse =
-    Boolean(liveTodaySales && (user.role === 'MANAGER' || user.role === 'OWNER')) &&
-    !pathname.startsWith('/onboarding');
+  const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding');
   const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
 
   useEffect(() => {
@@ -123,8 +122,6 @@ export default function TopNav({
   }, [onlineOrdersCount]);
 
   useEffect(() => {
-    if (!(user.role === 'MANAGER' || user.role === 'OWNER')) return;
-
     let cancelled = false;
     const refreshNavKpis = async (force = false) => {
       const now = Date.now();
@@ -155,16 +152,22 @@ export default function TopNav({
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void refreshNavKpis(false);
     };
+    const handlePosSaleComplete = (event: Event) => {
+      const detail = (event as CustomEvent<NavKpiRefreshDetail>).detail;
+      void refreshNavKpis(detail?.force ?? true);
+    };
 
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener(NAV_KPI_REFRESH_EVENT, handlePosSaleComplete);
 
     return () => {
       cancelled = true;
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener(NAV_KPI_REFRESH_EVENT, handlePosSaleComplete);
     };
-  }, [mobileOpen, todaySales, user.role]);
+  }, [mobileOpen, todaySales]);
 
   useEffect(() => {
     setOpenGroup(null);
