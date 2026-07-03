@@ -9,6 +9,7 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
     where: { id: params.id, businessId: user.businessId },
     select: {
       id: true,
+      cashierUserId: true,
       createdAt: true,
       transactionNumber: true,
       subtotalPence: true,
@@ -78,6 +79,10 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
     return <div className="card p-6">Receipt not found.</div>;
   }
 
+  if (user.role === 'CASHIER' && invoice.cashierUserId !== user.id) {
+    return <div className="card p-6">Receipt not found.</div>;
+  }
+
   const lines = invoice.lines.map((line) => {
     const baseUnit = line.product.productUnits.find((unit) => unit.isBaseUnit);
     const packaging = getPrimaryPackagingUnit(
@@ -102,7 +107,8 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
   });
 
   const isReturned = Boolean(invoice.salesReturn) || ['RETURNED', 'VOID'].includes(invoice.paymentStatus);
-  const canReturn = !isReturned;
+  const canReturn = user.role !== 'CASHIER' && !isReturned;
+  const salesListHref = user.role === 'CASHIER' ? '/my-sales' : '/sales';
 
   return (
     <ReceiptClient
@@ -147,6 +153,7 @@ export default async function ReceiptPage({ params }: { params: { id: string } }
       lines={lines}
       canReturn={canReturn}
       isReturned={isReturned}
+      salesListHref={salesListHref}
     />
   );
 }

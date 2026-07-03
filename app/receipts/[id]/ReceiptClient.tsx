@@ -57,6 +57,7 @@ type ReceiptClientProps = {
   }[];
   canReturn?: boolean;
   isReturned?: boolean;
+  salesListHref?: string;
 };
 
 export default function ReceiptClient({
@@ -69,6 +70,7 @@ export default function ReceiptClient({
   payments,
   canReturn = false,
   isReturned = false,
+  salesListHref = '/sales',
 }: ReceiptClientProps) {
   const [directStatus, setDirectStatus] = useState<'idle' | 'printing' | 'failed' | 'success'>('idle');
   const [directError, setDirectError] = useState<string | null>(null);
@@ -209,7 +211,7 @@ export default function ReceiptClient({
             </a>
           )}
           {isReturned ? (
-            <a href="/sales" className="btn-secondary text-xs">
+            <a href={salesListHref} className="btn-secondary text-xs">
               Back to Sales
             </a>
           ) : canReturn ? (

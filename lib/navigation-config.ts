@@ -140,6 +140,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     label: 'Sell',
     items: [
       { href: '/pos', label: 'POS', roles: ['CASHIER', 'MANAGER', 'OWNER'], iconKey: 'pos', description: 'Open the sales counter.' },
+      { href: '/my-sales', label: 'My Sales', roles: ['CASHIER'], iconKey: 'sales', description: 'View sales you recorded on the till.' },
       { href: '/sales', label: 'Sales', roles: ['MANAGER', 'OWNER'], iconKey: 'sales', description: 'Review transactions and receipts.' },
       { href: '/online-orders', label: 'Online Orders', roles: ['MANAGER', 'OWNER'], iconKey: 'orders', description: 'Manage storefront orders.', requiresFeature: 'onlineStorefront' },
       { href: '/shifts', label: 'Shifts', roles: ['CASHIER', 'MANAGER', 'OWNER'], iconKey: 'shifts', description: 'Start, close, and review cashier shifts.' },

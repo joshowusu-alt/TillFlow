@@ -213,7 +213,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             <RestrictedAccessScreen message={billingMerchantMessage} />
           ) : children}
         </main>
-        <BottomTabBar />
+        <BottomTabBar userRole={user.role as 'CASHIER' | 'MANAGER' | 'OWNER'} />
         <LaunchSessionCompletion />
     </div>
   );

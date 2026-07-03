@@ -216,9 +216,11 @@ describe('TillFlow brand logo system', () => {
     expect(globals).toContain('min-height: var(--mobile-bottom-nav-height)');
     expect(globals).toContain('padding-bottom: 1.25rem');
     expect(protectedLayout).toContain('app-main-shell');
+    expect(protectedLayout).toContain('<BottomTabBar userRole=');
     expect(protectedLayout).not.toContain('pb-[calc(9rem+env(safe-area-inset-bottom,0px))]');
     expect(bottomTabBar).toContain('mobile-bottom-tab-bar');
-    expect(bottomTabBar).toContain("'/pos'");
+    expect(bottomTabBar).toContain('userRole');
+    expect(bottomTabBar).toContain('getBottomTabsForRole');
   });
 
   it('gives mobile drawer taps immediate internal route feedback without launch copy', () => {
@@ -241,7 +243,8 @@ describe('TillFlow brand logo system', () => {
     expect(topNav).toContain('data-route-transition="true"');
     expect(mobileMenu).not.toContain('AppLaunchLoading');
     expect(mobileMenu).not.toContain('Opening your business workspace');
-    expect(mobileMenu).not.toContain("Getting today's sales, stock, and cash ready.");
+    expect(mobileMenu).not.toContain('Today sales · all branches');
+    expect(mobileMenu).not.toContain('Transactions · all branches');
   });
 
   it('generates light iOS startup images from the full non-distorted symbol', async () => {

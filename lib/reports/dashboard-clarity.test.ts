@@ -233,13 +233,15 @@ describe('Reports navigation clarity', () => {
     expect(new Set(reportHrefs).size).toBe(reportHrefs.length);
   });
 
-  it('renders grouped report sections in desktop and mobile navigation components', () => {
+  it('renders grouped report sections in desktop navigation and launcher browse areas on mobile', () => {
     const topNav = readSource('components/TopNav.tsx');
     const mobileNav = readSource('components/NavMobileMenu.tsx');
+    const mobileConfig = readSource('lib/navigation/mobile-menu-config.ts');
 
     expect(topNav).toContain('group.sections');
-    expect(mobileNav).toContain('group.sections');
-    expect(mobileNav).toContain('/reports/weekly-digest');
+    expect(mobileNav).toContain('getOwnerLauncherMenu');
+    expect(mobileConfig).toContain("label: 'Reports Hub'");
+    expect(mobileConfig).toContain("href: '/reports/analytics'");
   });
 
   it('keeps the desktop Reports dropdown compact and scroll-safe', () => {
@@ -346,8 +348,8 @@ describe('Reports navigation clarity', () => {
     expect(stock.items.find((item) => item.href === '/products/labels')?.minimumPlan).toBe('GROWTH');
     expect(reports.items.find((item) => item.href === '/reports/owner')?.minimumPlan).toBe('PRO');
     expect(reports.items.find((item) => item.href === '/reports/audit-log')?.roles).toEqual(['OWNER']);
-    expect(mobileNav).toContain('getNavIcon');
-    expect(mobileNav).not.toContain('description');
+    expect(mobileNav).toContain('NavIcon');
+    expect(mobileNav).toContain('Browse by area');
   });
 
   it('adds a People hub without duplicating navigation routes', () => {

@@ -8,6 +8,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getFeatures, hasPlanAccess, type BusinessPlan, type StoreMode } from '@/lib/features';
 import { formatMoney } from '@/lib/format';
 import { getFeatureLockLabel, NAV_GROUPS, type FeatureKey } from '@/lib/navigation-config';
+import { collectMobileNavGates, getAllMobileNavGateItems } from '@/lib/navigation/mobile-menu-config';
 import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import type { MerchantBrandProfile } from '@/lib/merchant-branding';
 import InstallButton from './InstallButton';
@@ -71,29 +72,25 @@ export default function TopNav({
     setPendingMobileHref(currentRoute ? null : href);
   };
   const navRef = useRef<HTMLDivElement>(null);
-  const planGatedLinks = useMemo(
-    () =>
-      new Map(
-        NAV_GROUPS.flatMap((group) =>
-          group.items
-            .filter((item): item is typeof item & { minimumPlan: BusinessPlan } => Boolean(item.minimumPlan))
-            .map((item) => [item.href, item.minimumPlan] as const)
-        )
-      ),
-    []
-  );
+  const planGatedLinks = useMemo(() => {
+    const desktopGates = NAV_GROUPS.flatMap((group) =>
+      group.items
+        .filter((item): item is typeof item & { minimumPlan: BusinessPlan } => Boolean(item.minimumPlan))
+        .map((item) => [item.href, item.minimumPlan] as const),
+    );
+    const mobileGates = collectMobileNavGates(getAllMobileNavGateItems()).planGated;
+    return new Map([...desktopGates, ...mobileGates.entries()]);
+  }, []);
 
-  const featureGatedLinks = useMemo(
-    () =>
-      new Map(
-        NAV_GROUPS.flatMap((group) =>
-          group.items
-            .filter((item): item is typeof item & { requiresFeature: FeatureKey } => Boolean(item.requiresFeature))
-            .map((item) => [item.href, item.requiresFeature] as const)
-        )
-      ),
-    []
-  );
+  const featureGatedLinks = useMemo(() => {
+    const desktopGates = NAV_GROUPS.flatMap((group) =>
+      group.items
+        .filter((item): item is typeof item & { requiresFeature: FeatureKey } => Boolean(item.requiresFeature))
+        .map((item) => [item.href, item.requiresFeature] as const),
+    );
+    const mobileGates = collectMobileNavGates(getAllMobileNavGateItems()).featureGated;
+    return new Map([...desktopGates, ...mobileGates.entries()]);
+  }, []);
 
   const visibleGroups = useMemo(() => {
     const itemIsVisible = (item: (typeof NAV_GROUPS)[number]['items'][number]) =>
@@ -518,16 +515,16 @@ export default function TopNav({
         setMobileOpen={setMobileOpen}
         pendingHref={pendingMobileHref}
         onNavigateStart={handleMobileNavigateStart}
-        visibleGroups={visibleGroups}
         isOnline={isOnline}
         user={user}
         storeName={storeName}
+        businessName={businessName}
         features={features}
         pathname={pathname}
         planGatedLinks={planGatedLinks}
         featureGatedLinks={featureGatedLinks}
-        todaySales={liveTodaySales}
         onlineOrdersCount={liveOnlineOrdersCount}
+        momoEnabled={momoEnabled !== false}
       />
       {pendingMobileHref ? (
         <div

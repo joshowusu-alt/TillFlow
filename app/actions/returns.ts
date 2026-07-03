@@ -16,7 +16,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
   const salesInvoiceId = formString(formData, 'salesInvoiceId');
   const returnErrorPath = salesInvoiceId ? `/sales/return/${salesInvoiceId}` : '/sales';
   return formAction(async () => {
-    const { user, businessId } = await withBusinessContext(['CASHIER', 'MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
 
     const salesInvoiceId = formString(formData, 'salesInvoiceId');
     const refundMethod = formString(formData, 'refundMethod') as 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | '';
