@@ -311,7 +311,7 @@ export default function NavMobileMenu({
   const renderCashierCompactBody = () => (
     <div className="space-y-3 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
       <p className="px-0.5 text-sm leading-5 text-black/55">
-        Use the tabs below for POS, My Sales, My Shift, and Account. Need help or ready to sign out?
+        Need help or ready to sign out?
       </p>
       {cashierItems.length > 0 ? (
         <div className="grid gap-2">{cashierItems.map((item) => renderNavLink(item, 'compact'))}</div>

@@ -165,7 +165,8 @@ describe('T4 role-based business launcher menu', () => {
 
   it('uses a compact content-height cashier drawer instead of an empty launcher body', () => {
     expect(read('app/globals.css')).toContain('.nav-mobile-panel-compact');
-    expect(mobileMenu).toContain('Use the tabs below for POS, My Sales, My Shift, and Account');
+    expect(mobileMenu).toContain('Need help or ready to sign out?');
+    expect(mobileMenu).not.toContain('tabs below');
     expect(mobileMenu).toContain('renderCashierCompactBody()');
     expect(mobileMenu).toContain("isCashierCompactDrawer ? 'flex flex-col' : 'flex h-full flex-col'");
   });
