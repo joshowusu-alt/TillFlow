@@ -156,10 +156,38 @@ For broader maintenance and live support, use:
 
 ---
 
+## Git auto-deploy (production)
+
+Normal releases should **not** require `vercel deploy --prod`. Pushes to `master` on `joshowusu-alt/TillFlow` should automatically build and promote to:
+
+- `https://www.tillflow.app`
+- `https://tillflow.app`
+
+**Project:** `supermarket-pos` (`prj_Ndxzi9vvY6R5MMDPZYGe3GwkNcli`)  
+**Production branch:** `master`  
+**Root directory:** `.` (repo root)
+
+If a push to `master` does not start a Vercel deployment:
+
+1. In Vercel → **Project Settings → Git**, confirm the repo is connected to `joshowusu-alt/TillFlow`.
+2. Confirm **Production Branch** is `master` (not `main`).
+3. Confirm **Automatic Deployments** are enabled for the production branch.
+4. From a linked checkout, reconnect if needed:
+   ```bash
+   vercel link --project supermarket-pos --yes
+   vercel git connect https://github.com/joshowusu-alt/TillFlow.git --yes
+   ```
+5. Check GitHub → **Settings → Integrations → Vercel** has access to the `TillFlow` repository.
+
+CLI deploys (`vercel deploy --prod`) are a fallback only. They attach local git metadata but do **not** replace Git webhooks for day-to-day releases.
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
 |---|---|
+| Push to `master` does not deploy | Reconnect Git (see **Git auto-deploy** above). Confirm production branch is `master` and auto-deploy is enabled. |
 | `DEPLOYMENT_NOT_FOUND` | Make sure the project is deployed and the URL matches. |
 | Build fails with `POSTGRES_PRISMA_URL` error | Add the env vars in Step 3. |
 | `prisma migrate deploy` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL and that the migration files are committed. |

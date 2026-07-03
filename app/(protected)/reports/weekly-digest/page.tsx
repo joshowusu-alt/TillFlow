@@ -40,7 +40,7 @@ export default async function WeeklyDigestPage({
   if (!business) {
     return (
       <div className="card p-6">
-        <EmptyState icon="chart" title="Setup required" subtitle="Complete your shop setup to unlock weekly reports." cta={{ label: 'Complete Setup', href: '/onboarding' }} />
+        <EmptyState icon="chart" title="Setup required" subtitle="Complete your business setup to unlock weekly reports." cta={{ label: 'Complete Setup', href: '/onboarding' }} />
       </div>
     );
   }

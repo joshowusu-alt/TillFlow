@@ -11,6 +11,7 @@ import {
   type JournalLine
 } from './shared';
 import { fetchInventoryMap, incrementInventoryBalance } from './shared';
+import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type PurchasePaymentInput = PaymentInput;
@@ -180,6 +181,70 @@ export async function createPurchase(input: CreatePurchaseInput, db?: any) {
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
   );
+}
+
+async function createPurchaseInvoicePayments(
+  client: any,
+  input: {
+    businessId: string;
+    storeId: string;
+    invoiceId: string;
+    payments: PaymentInput[];
+    recordedByUserId?: string | null;
+    supplierName?: string | null;
+  }
+) {
+  if (input.payments.length === 0) return;
+
+  const cashSplit = splitPayments(input.payments);
+  const openShift =
+    cashSplit.cashPence > 0
+      ? await getOpenCashShiftForPayment(client, {
+          businessId: input.businessId,
+          storeId: input.storeId,
+          userId: input.recordedByUserId,
+        })
+      : null;
+
+  if (cashSplit.cashPence > 0 && (!input.recordedByUserId || !openShift)) {
+    throw new Error('Open shift is required before recording cash supplier payments.');
+  }
+
+  for (const payment of input.payments) {
+    const createdPayment = await client.purchasePayment.create({
+      data: {
+        purchaseInvoiceId: input.invoiceId,
+        method: payment.method,
+        amountPence: payment.amountPence,
+        reference: payment.reference ?? null,
+        ...(input.recordedByUserId ? { recordedByUserId: input.recordedByUserId } : {}),
+      },
+    });
+
+    if (
+      payment.method === 'CASH' &&
+      payment.amountPence > 0 &&
+      openShift &&
+      input.recordedByUserId
+    ) {
+      await recordCashDrawerEntryTx(client, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        tillId: openShift.tillId,
+        shiftId: openShift.id,
+        createdByUserId: input.recordedByUserId,
+        cashierUserId: input.recordedByUserId,
+        entryType: 'PAID_OUT_SUPPLIER',
+        amountPence: -payment.amountPence,
+        reasonCode: 'SUPPLIER_PAYMENT',
+        reason: input.supplierName
+          ? `Cash paid to supplier: ${input.supplierName}`
+          : 'Cash paid to supplier',
+        referenceType: 'PURCHASE_PAYMENT',
+        referenceId: createdPayment.id,
+      });
+    }
+  }
 }
 
 async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
@@ -379,15 +444,15 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       }))
     });
 
-    // 3. Payments — 1 RTT
+    // 3. Payments — individual creates so CASH rows can link to drawer entries
     if (payments.length > 0) {
-      await client.purchasePayment.createMany({
-        data: payments.map((payment) => ({
-          purchaseInvoiceId: created.id,
-          method: payment.method,
-          amountPence: payment.amountPence,
-          reference: payment.reference ?? null,
-        }))
+      await createPurchaseInvoicePayments(client, {
+        businessId: input.businessId,
+        storeId: store.id,
+        invoiceId: created.id,
+        payments,
+        recordedByUserId: input.userId ?? null,
+        supplierName: supplier?.name ?? null,
       });
     }
 
@@ -498,11 +563,20 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
+  const needsCashDrawerTransaction = split.cashPence > 0;
   if (db) {
     // Called inside a caller-supplied transaction — all writes in the same tx.
     invoice = await _doInvoice(db);
     await _doInventory(db, invoice.id);
     const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(db, {
+      ...input,
+      supplierName: supplier?.name ?? null,
+    });
+    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
+  } else if (needsCashDrawerTransaction) {
+    invoice = await prisma.$transaction(async (tx) => _doInvoice(tx));
+    await _doInventory(prisma as any, invoice.id);
+    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
       ...input,
       supplierName: supplier?.name ?? null,
     });

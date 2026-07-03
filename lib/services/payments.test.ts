@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PaymentInput } from './shared';
 
-const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock, getOpenShiftForTillMock } = vi.hoisted(() => ({
+const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoisted(() => ({
   prismaMock: {
     salesInvoice: {
       findFirst: vi.fn(),
@@ -25,7 +25,6 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock, getOpenSh
   },
   postJournalEntryMock: vi.fn(),
   recordCashDrawerEntryTxMock: vi.fn(),
-  getOpenShiftForTillMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -42,10 +41,13 @@ vi.mock('@/lib/accounting', () => ({
   postJournalEntry: postJournalEntryMock,
 }));
 
-vi.mock('./cash-drawer', () => ({
-  getOpenShiftForTill: getOpenShiftForTillMock,
-  recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
-}));
+vi.mock('./cash-drawer', async () => {
+  const actual = await vi.importActual<typeof import('./cash-drawer')>('./cash-drawer');
+  return {
+    ...actual,
+    recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
+  };
+});
 
 import { recordCustomerPayment, recordSupplierPayment } from './payments';
 

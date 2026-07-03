@@ -106,7 +106,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <select className="input" name="businessCategory" defaultValue={(business as { businessCategory?: string | null }).businessCategory ?? ''}>
               <option value="">Select type</option>
               <option value="SUPERMARKET">Supermarket</option>
-              <option value="PROVISION">Provision shop</option>
+              <option value="PROVISION">Provisions business</option>
               <option value="MINI_MART">Mini mart</option>
               <option value="PHARMACY">Pharmacy</option>
               <option value="COSMETICS">Cosmetics / beauty</option>
@@ -156,7 +156,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
           <div className="md:col-span-2 pt-2">
             <h2 className="text-base font-display font-semibold">Printing & tax</h2>
-            <p className="mt-1 text-sm text-black/55">Receipt output, printer setup, and tax registration details for live shop use.</p>
+            <p className="mt-1 text-sm text-black/55">Receipt output, printer setup, and tax registration details for day-to-day business use.</p>
           </div>
           <div>
             <label className="label">Receipt Template</label>

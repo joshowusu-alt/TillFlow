@@ -8,38 +8,8 @@ import {
   debitCashBankLines,
   type JournalLine
 } from './shared';
-import { getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
-
-async function getOpenCashShiftForPayment(
-  tx: any,
-  input: {
-    businessId: string;
-    storeId: string;
-    userId?: string | null;
-    fallbackTillId?: string | null;
-  }
-) {
-  if (input.userId) {
-    const userShift = await tx.shift.findFirst({
-      where: {
-        status: 'OPEN',
-        userId: input.userId,
-        till: {
-          storeId: input.storeId,
-          store: { businessId: input.businessId },
-        },
-      },
-      select: { id: true, tillId: true },
-      orderBy: { openedAt: 'desc' },
-    });
-    if (userShift) return userShift;
-  }
-
-  if (!input.fallbackTillId) return null;
-  const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
-  return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
-}
 
 /**
  * Record additional payment(s) against an existing sales invoice.

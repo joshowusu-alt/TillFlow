@@ -265,7 +265,7 @@ describe('customer receipts page', () => {
 // ---------------------------------------------------------------------------
 
 describe('customer profile to POS integration', () => {
-  const posPageSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/page.tsx'), 'utf8');
+  const posPageSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/page.tsx'), 'utf8') + '\n' + readFileSync(join(process.cwd(), 'app/(protected)/pos/PosBoard.tsx'), 'utf8');
   const posClientSrc = readFileSync(join(process.cwd(), 'app/(protected)/pos/PosClient.tsx'), 'utf8');
 
   it('loads a customer requested by customerId even when not in the cached POS list', () => {

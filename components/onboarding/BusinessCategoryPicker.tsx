@@ -6,7 +6,7 @@ import { BUSINESS_CATEGORIES } from '@/lib/activation-steps';
 
 const CATEGORY_LABELS: Record<string, string> = {
   SUPERMARKET: 'Supermarket',
-  PROVISION: 'Provision shop',
+  PROVISION: 'Provisions business',
   MINI_MART: 'Mini mart',
   PHARMACY: 'Pharmacy',
   COSMETICS: 'Cosmetics / beauty',

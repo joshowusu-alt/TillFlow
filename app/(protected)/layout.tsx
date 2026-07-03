@@ -11,6 +11,8 @@ import { getMerchantSubscriptionMessage } from '@/lib/subscription-lifecycle';
 import { getOwnerSetupBannerState } from '@/lib/activation-setup-progress';
 import { getActivationStatusLabel } from '@/lib/activation-display';
 import BusinessNameSaver from '@/components/BusinessNameSaver';
+import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function formatDateLabel(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -112,14 +114,32 @@ async function OwnerSetupBanner({
 }
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user, business } = await requireBusiness();
-  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
-
-  const store = await getFirstStore(business.id);
-
-  // Show onboarding banner when onboarding is not complete
   const headersList = headers();
   const pathname = headersList.get('x-pathname') || '';
+
+  const { user, business, store } = await measureServerOperation(
+    'app.protected.layout-gate',
+    async () => {
+      const auth = await measureServerOperation(
+        'app.protected.require-business',
+        () => requireBusiness(),
+        { route: pathname || 'protected-layout' },
+        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+      );
+      const firstStore = await measureServerOperation(
+        'app.protected.first-store',
+        () => getFirstStore(auth.business.id),
+        { businessId: auth.business.id, route: pathname || 'protected-layout' },
+        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+      );
+      return { user: auth.user, business: auth.business, store: firstStore };
+    },
+    { route: pathname || 'protected-layout' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
+  const needsOnboarding = user.role === 'OWNER' && !business.onboardingCompletedAt;
+
+  // Show onboarding banner when onboarding is not complete
   const billingAccessState = String((business as any).billingAccessState ?? 'ACTIVE');
   const billingDisplayStatus = String((business as any).billingDisplayStatus ?? billingAccessState.replace(/_/g, ' '));
   const billingPrimaryBanner = (business as any).billingPrimaryBanner as string | null | undefined;
@@ -194,6 +214,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           ) : children}
         </main>
         <BottomTabBar />
+        <LaunchSessionCompletion />
     </div>
   );
 }

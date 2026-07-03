@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { markTillflowPerformance } from '@/lib/performance/client-performance-marks';
+import { LAUNCH_REDIRECT_DELAY_MS } from '@/lib/performance/launch-handoff-timing';
 
 const LAST_BUSINESS_NAME_KEY = 'tillflow:lastBusinessName';
 const FALLBACK_MESSAGE = 'Opening your business workspace...';
@@ -18,6 +20,8 @@ export default function LaunchRedirector() {
   const [detail, setDetail] = useState(FALLBACK_DETAIL);
 
   useEffect(() => {
+    markTillflowPerformance('tillflow.launch.mounted');
+
     try {
       window.sessionStorage.setItem('tillflow:launching', '1');
       window.sessionStorage.removeItem('tillflow:launchSplashSeen');
@@ -41,9 +45,11 @@ export default function LaunchRedirector() {
 
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
+        markTillflowPerformance('tillflow.launch.redirect.scheduled');
         timeoutId = window.setTimeout(() => {
+          markTillflowPerformance('tillflow.launch.redirect.started');
           router.push('/onboarding');
-        }, 160);
+        }, LAUNCH_REDIRECT_DELAY_MS);
       });
     });
 

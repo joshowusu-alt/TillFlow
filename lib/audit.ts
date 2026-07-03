@@ -63,7 +63,7 @@ export type AuditAction =
   | 'CATEGORY_UPDATE';
 
 /**
- * Write an entry to the audit trail — fire-and-forget, never throws.
+ * Write an entry to the audit trail — best-effort, never throws, must not block callers.
  */
 export async function audit(opts: {
   businessId: string;
@@ -75,6 +75,8 @@ export async function audit(opts: {
   entityId?: string;
   details?: Record<string, unknown>;
 }) {
+  const AUDIT_WRITE_TIMEOUT_MS = 3_000;
+
   try {
     const hdrs = headers();
     const ip =
@@ -82,19 +84,24 @@ export async function audit(opts: {
       hdrs.get('x-real-ip') ??
       null;
 
-    await prisma.auditLog.create({
-      data: {
-        businessId: opts.businessId,
-        userId: opts.userId ?? null,
-        userName: opts.userName ?? 'Unknown',
-        userRole: opts.userRole,
-        action: opts.action,
-        entity: opts.entity,
-        entityId: opts.entityId,
-        details: opts.details ? JSON.stringify(opts.details) : null,
-        ipAddress: ip,
-      },
-    });
+    await Promise.race([
+      prisma.auditLog.create({
+        data: {
+          businessId: opts.businessId,
+          userId: opts.userId ?? null,
+          userName: opts.userName ?? 'Unknown',
+          userRole: opts.userRole,
+          action: opts.action,
+          entity: opts.entity,
+          entityId: opts.entityId,
+          details: opts.details ? JSON.stringify(opts.details) : null,
+          ipAddress: ip,
+        },
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('audit write timed out')), AUDIT_WRITE_TIMEOUT_MS);
+      }),
+    ]);
   } catch (err) {
     // Never let audit logging break the main action
     console.error('[audit] Failed to write audit log:', err);

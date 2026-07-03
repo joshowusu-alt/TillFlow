@@ -1,5 +1,5 @@
-import AppLaunchLoading from '@/components/AppLaunchLoading';
+import RootLaunchLoading from '@/components/RootLaunchLoading';
 
 export default function Loading() {
-  return <AppLaunchLoading mode="launch" shell="fullscreen" />;
+  return <RootLaunchLoading />;
 }

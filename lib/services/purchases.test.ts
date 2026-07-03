@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock } = vi.hoisted(() => ({
+const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock, recordCashDrawerEntryTxMock } = vi.hoisted(() => ({
   prismaMock: {
     business: { findUnique: vi.fn() },
     store: { findFirst: vi.fn() },
@@ -10,7 +10,8 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock } = vi.hoist
     account: { findMany: vi.fn() },
     purchaseInvoice: { create: vi.fn() },
     purchaseInvoiceLine: { createMany: vi.fn() },
-    purchasePayment: { createMany: vi.fn() },
+    purchasePayment: { create: vi.fn() },
+    shift: { findFirst: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
@@ -18,6 +19,7 @@ const { prismaMock, postJournalEntryMock, ensureChartOfAccountsMock } = vi.hoist
   },
   postJournalEntryMock: vi.fn(),
   ensureChartOfAccountsMock: vi.fn(),
+  recordCashDrawerEntryTxMock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -38,12 +40,20 @@ vi.mock('./shared', async () => {
     incrementInventoryBalance: vi.fn(),
   };
 });
+vi.mock('./cash-drawer', async () => {
+  const actual = await vi.importActual<typeof import('./cash-drawer')>('./cash-drawer');
+  return {
+    ...actual,
+    recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
+  };
+});
 
 import { createPurchase, type PurchaseLineInput } from './purchases';
 
 describe('purchase unit conversion', () => {
   const bizId = 'biz-1';
   const storeId = 'store-1';
+  const userId = 'user-1';
   const defaultAccounts = [
     { code: '1000', id: 'acc-cash' },
     { code: '1010', id: 'acc-bank' },
@@ -72,7 +82,17 @@ describe('purchase unit conversion', () => {
       id: 'inv-1', totalPence: 0, lines: [],
     });
     prismaMock.purchaseInvoiceLine.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.purchasePayment.createMany.mockResolvedValue({ count: 0 });
+    prismaMock.purchasePayment.create.mockImplementation(async ({ data }: any) => ({
+      id: `payment-${data.method.toLowerCase()}`,
+      ...data,
+    }));
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+    recordCashDrawerEntryTxMock.mockResolvedValue({
+      entry: { id: 'drawer-1' },
+      shiftId: 'shift-1',
+      beforeExpectedCashPence: 0,
+      afterExpectedCashPence: 0,
+    });
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
     prismaMock.inventoryBalance.upsert.mockResolvedValue({});
     prismaMock.$executeRaw.mockResolvedValue(1);
@@ -103,6 +123,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 8000 }],
       lines,
+      userId,
     });
 
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
@@ -136,6 +157,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 2500 }],
       lines,
+      userId,
     });
 
     expect(prismaMock.purchaseInvoiceLine.createMany).toHaveBeenCalledTimes(1);
@@ -197,6 +219,7 @@ describe('purchase unit conversion', () => {
         paymentStatus: 'PAID',
         payments: [{ method: 'CASH', amountPence: 999999 }],
         lines: [{ productId: 'prod-1', unitId: 'unit-1', qtyInUnit: 1, unitCostPence: 100 }],
+        userId,
       })
     ).rejects.toThrow('Payment exceeds total due');
   });
@@ -222,6 +245,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 1050 }],
       lines: [{ productId, unitId: quarterPackUnitId, qtyInUnit: 2 }],
+      userId,
     });
 
     const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
@@ -249,6 +273,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith({
@@ -286,6 +311,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -324,6 +350,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -393,6 +420,7 @@ describe('purchase unit conversion', () => {
         { productId: 'prod-2', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 },
         { productId: 'prod-3', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 },
       ],
+      userId,
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith(
@@ -439,6 +467,7 @@ describe('purchase unit conversion', () => {
       paymentStatus: 'PAID',
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
     });
 
     expect(prismaMock.product.findMany).not.toHaveBeenCalled();

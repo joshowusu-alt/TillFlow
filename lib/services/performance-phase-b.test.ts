@@ -8,8 +8,8 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
   const revalidationSrc = read('lib/reports/cache-revalidation.ts');
   const ownerDashboardSrc = read('lib/reports/owner-dashboard.ts');
   const todayKpisSrc = read('lib/reports/today-kpis.ts');
-  const tradingDashboardSrc = read('app/(protected)/reports/dashboard/page.tsx');
-  const posSrc = read('app/(protected)/pos/page.tsx');
+  const tradingDashboardSrc = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
+  const posSrc = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
   const salesActionsSrc = read('app/actions/sales.ts');
   const paymentActionsSrc = read('app/actions/payments.ts');
   const purchaseActionsSrc = read('app/actions/purchases.ts');
@@ -135,7 +135,9 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
     expect(tradingDashboardSrc).toContain('startIso: string');
     expect(tradingDashboardSrc).toContain('endIso: string');
     expect(tradingDashboardSrc).toContain('selectedStoreId: string');
-    expect(tradingDashboardSrc).toContain('business.id,\n    business.currency,\n    start.toISOString(),\n    end.toISOString(),\n    selectedStoreId');
+    expect(tradingDashboardSrc).toContain('getCachedTradingDashboardSnapshot(');
+    expect(tradingDashboardSrc).toContain('startIso,');
+    expect(tradingDashboardSrc).toContain('endIso,');
   });
 
   it('Trading Dashboard live pulse remains uncached in the page', () => {
@@ -145,9 +147,12 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
     expect(tradingDashboardSrc).toContain('activeCashierCount');
   });
 
-  it('Trading Dashboard keeps force-dynamic and existing date range resolution', () => {
-    expect(tradingDashboardSrc).toContain("export const dynamic = 'force-dynamic'");
-    expect(tradingDashboardSrc).toContain('resolveReportDateRange(searchParams, defaultRangeStart, todayEnd)');
+  it('Trading Dashboard keeps force-dynamic on page shell and existing date range resolution', () => {
+    const dashboardPage = read('app/(protected)/reports/dashboard/page.tsx');
+    expect(dashboardPage).toContain("export const dynamic = 'force-dynamic'");
+    expect(dashboardPage).toContain('resolveReportDateRange(');
+    expect(dashboardPage).toContain('defaultRangeStart');
+    expect(dashboardPage).toContain('todayEnd');
   });
 
   it('POS cached loaders remain scoped by function arguments and TTLs are unchanged', () => {

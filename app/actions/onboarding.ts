@@ -19,6 +19,7 @@ import {
   getStuckReasonMessage,
 } from '@/lib/activation-display';
 import type { ActivationReadinessStatus, ActivationStuckReason } from '@/lib/activation-readiness';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 export type ReadinessStep = {
   key: ActivationStepKey | string;
@@ -118,6 +119,10 @@ export async function resolveReadinessExpectedCashPence(input: {
  */
 export async function getReadiness(): Promise<ReadinessData> {
   const { user, business } = await requireBusiness(['OWNER']);
+
+  return measureServerOperation(
+    'page.onboarding.get-readiness',
+    async () => {
   const now = new Date();
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
@@ -335,6 +340,10 @@ export async function getReadiness(): Promise<ReadinessData> {
     lastShiftClosedAt: lastClosedShift?.closedAt?.toISOString() ?? null,
     lastReceiptId: lastReceipt?.id ?? null,
   };
+    },
+    { businessId: business.id, route: '/onboarding', role: 'OWNER' },
+    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
+  );
 }
 
 export async function completeOnboarding(): Promise<void> {

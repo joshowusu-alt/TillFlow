@@ -121,9 +121,10 @@ describe('TillFlow brand logo system', () => {
     const launchLoading = readSource('components/AppLaunchLoading.tsx');
     const topNav = readSource('components/TopNav.tsx');
 
-    expect(rootLoading).toContain('AppLaunchLoading');
-    expect(rootLoading).toContain('mode="launch"');
-    expect(rootLoading).toContain('shell="fullscreen"');
+    expect(rootLoading).toContain('RootLaunchLoading');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('AppLaunchLoading');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('mode="launch"');
+    expect(readSource('components/RootLaunchLoading.tsx')).toContain('shell="fullscreen"');
     expect(protectedLoading).not.toContain('AppLaunchLoading');
     expect(protectedLoading).not.toContain('mode="launch"');
     expect(protectedLoading).not.toContain('shell="launch"');
@@ -132,7 +133,12 @@ describe('TillFlow brand logo system', () => {
     expect(protectedLoading).not.toContain('Please wait while TillFlow gets this section ready.');
     expect(protectedLoading).not.toContain('Opening');
     expect(protectedLoading).not.toContain("Getting today's sales, stock, and cash ready.");
-    expect(commandCenterLoading).toContain('Skeleton');
+    expect(commandCenterLoading).not.toContain("import Skeleton from '@/components/Skeleton'");
+    expect(commandCenterLoading).not.toContain('Skeleton variant="card"');
+    expect(commandCenterLoading).not.toContain('lg:grid-cols-3');
+    expect(commandCenterLoading).not.toContain('lg:grid-cols-2');
+    expect(commandCenterLoading).toContain('grid-cols-2');
+    expect(commandCenterLoading).toContain('animate-pulse');
     expect(commandCenterLoading).not.toContain('AppLaunchLoading');
     expect(commandCenterLoading).not.toContain('Loading section...');
     expect(commandCenterLoading).not.toContain('Opening your reports workspace');
@@ -278,8 +284,9 @@ describe('TillFlow brand logo system', () => {
     const businessNameSaver = readSource('components/BusinessNameSaver.tsx');
     const launchSessionCompletion = readSource('components/LaunchSessionCompletion.tsx');
     const protectedLayout = readSource('app/(protected)/layout.tsx');
+    const onboardingPage = readSource('app/(protected)/onboarding/page.tsx');
     const onboardingClient = readSource('app/(protected)/onboarding/OnboardingClient.tsx');
-    const posPage = readSource('app/(protected)/pos/page.tsx');
+    const posPage = readSource('app/(protected)/pos/page.tsx') + '\n' + readSource('app/(protected)/pos/PosBoard.tsx');
 
     expect(layout).toContain('tillflow-initial-splash');
     expect(layout).toContain('position:fixed');
@@ -300,12 +307,14 @@ describe('TillFlow brand logo system', () => {
     expect(splashRemover).toContain('setTimeout');
     expect(businessNameSaver).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
-    expect(protectedLayout).not.toContain('LaunchSessionCompletion');
-    expect(onboardingClient).toContain('LaunchSessionCompletion');
+    expect(protectedLayout).toContain('LaunchSessionCompletion');
+    expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).toContain('ReadinessJourney');
+    expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(posPage).toContain('LaunchSessionCompletion');
     expect(posPage).toContain('PosWelcomeShelf');
-    expect(launchSessionCompletion).toContain('Mount this only inside real page content');
+    expect(launchSessionCompletion).toContain('protected shell');
+    expect(launchSessionCompletion).toContain('not after the full readiness body');
     expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
     expect(launchSessionCompletion).toContain("window.sessionStorage.removeItem('tillflow:launching')");
     expect(launchSessionCompletion).toContain('removeInitialSplash');

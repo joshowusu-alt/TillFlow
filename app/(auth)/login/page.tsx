@@ -1,17 +1,18 @@
-﻿import { login } from '@/app/actions/auth';
-import { getUser } from '@/lib/auth';
-import SubmitButton from '@/components/SubmitButton';
+﻿import { getUser } from '@/lib/auth';
 import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import LoginForm from '@/components/auth/LoginForm';
+import { parseLoginErrorParam } from '@/lib/auth/login-form-state';
 
 export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
   // If the user already has a valid session, send them to their landing page
   const user = await getUser();
   if (user) redirect(user.role === 'OWNER' ? '/onboarding' : '/pos');
 
-  const error = searchParams?.error;
+  const initialError = parseLoginErrorParam(searchParams?.error);
   const success = searchParams?.success;
+
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -24,52 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
           Your password has been reset. Please sign in with your new password.
         </div>
       )}
-      {error && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-          {error === 'missing'
-            ? 'Please enter your email and password.'
-            : error === 'locked'
-            ? 'Too many failed attempts. Please wait and try again.'
-            : error === 'otp_required'
-            ? 'This account requires a 2FA code from your authenticator app.'
-            : error === 'otp_invalid'
-            ? 'Invalid 2FA code. Please try again.'
-            : error === 'deactivated'
-            ? 'This business account has been deactivated. Contact your account manager.'
-            : error === 'server'
-            ? 'Unable to connect. Please try again in a moment.'
-            : 'Invalid credentials. Please try again.'}
-        </div>
-      )}
-      <form action={login} className="space-y-4">
-        <div>
-          <label className="label">Email</label>
-          <input name="email" type="email" className="input" placeholder="you@yourstore.com" required />
-        </div>
-        <div>
-          <label className="label">Password</label>
-          <input name="password" type="password" className="input" placeholder="••••••••" required />
-          <div className="mt-1 text-right">
-            <Link
-              href="/login/forgot-password"
-              className="inline-flex min-h-11 items-center text-xs text-accent underline-offset-4 hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
-        </div>
-        <div>
-          <label className="label">2FA Code (if enabled)</label>
-          <input
-            name="otp"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            className="input"
-            placeholder="123456"
-          />
-        </div>
-        <SubmitButton className="btn-primary min-h-11 w-full" loadingText="Signing in…">Sign in</SubmitButton>
-      </form>
+      <LoginForm initialError={initialError} />
       <div className="text-center space-y-2">
         <p className="text-sm text-black/50">
           Don&apos;t have an account?{' '}
@@ -86,4 +42,3 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
     </div>
   );
 }
-

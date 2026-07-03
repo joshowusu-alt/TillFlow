@@ -1,225 +1,34 @@
-import { prisma } from '@/lib/prisma';
+import { Suspense } from 'react';
 import { requireBusinessStore } from '@/lib/auth';
-import { unstable_cache } from 'next/cache';
-import PosClient from './PosClient';
-import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
+import PosBoard from './PosBoard';
+import PosBoardSkeleton from './PosBoardSkeleton';
 import LaunchSessionCompletion from '@/components/LaunchSessionCompletion';
-import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
-
-// ── Cached lookups for data that rarely changes ───────────────────
-// Revalidates every 60 s or when explicitly invalidated.
-const getCachedUnits = unstable_cache(
-  (_businessId: string) => prisma.unit.findMany({ select: { id: true, name: true } }),
-  ['pos-units'],
-  { revalidate: 300, tags: ['pos-units'] }
-);
-
-const getCachedCategories = unstable_cache(
-  (businessId: string) =>
-    prisma.category.findMany({
-      where: { businessId },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, colour: true },
-    }),
-  ['pos-categories'],
-  { revalidate: 120, tags: ['pos-categories'] }
-);
-
-const getCachedProducts = unstable_cache(
-  (businessId: string) =>
-    prisma.product.findMany({
-      where: { businessId, active: true },
-      select: {
-        id: true,
-        name: true,
-        barcode: true,
-        sellingPriceBasePence: true,
-        vatRateBps: true,
-        promoBuyQty: true,
-        promoGetQty: true,
-        categoryId: true,
-        imageUrl: true,
-        category: { select: { name: true } },
-        productUnits: {
-          select: {
-            unitId: true,
-            conversionToBase: true,
-            isBaseUnit: true,
-            sellingPricePence: true,
-            defaultCostPence: true,
-            unit: { select: { name: true, pluralName: true } },
-          },
-        },
-      },
-    }),
-  ['pos-products'],
-  { revalidate: 60, tags: ['pos-products'] }
-);
-
-const getCachedInventory = unstable_cache(
-  (storeId: string) =>
-    prisma.inventoryBalance.findMany({
-      where: { storeId },
-      select: { productId: true, qtyOnHandBase: true },
-    }),
-  ['pos-inventory'],
-  { revalidate: 30, tags: ['pos-inventory'] }
-);
-
-const getCachedTills = unstable_cache(
-  (storeId: string) =>
-    prisma.till.findMany({
-      where: { storeId, active: true },
-      select: { id: true, name: true },
-    }),
-  ['pos-tills'],
-  { revalidate: 300, tags: ['pos-tills'] }
-);
-
-const getCachedCustomers = unstable_cache(
-  (businessId: string) =>
-    prisma.customer.findMany({
-      where: { businessId },
-      select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ['pos-customers'],
-  { revalidate: 60, tags: ['pos-customers'] }
-);
-
-const getCachedShifts = unstable_cache(
-  (storeId: string) =>
-    prisma.shift.findMany({
-      where: { till: { storeId }, status: 'OPEN' },
-      select: { tillId: true },
-    }),
-  ['pos-shifts'],
-  { revalidate: 10, tags: ['pos-shifts'] }
-);
 
 export default async function PosPage({
   searchParams,
 }: {
   searchParams?: { customerId?: string };
 }) {
-  const { business, store: baseStore, user } = await requireBusinessStore();
+  // Auth/role gate stays blocking (cache-deduped from the protected layout) so
+  // access control is never deferred behind the streamed POS skeleton.
+  const { business, store, user } = await requireBusinessStore();
   if (!business) {
     return <div className="card p-6">Run the seed to initialize the business.</div>;
   }
 
-  // Layer 1 — cached (rarely-changing) + fast-TTL (session-sensitive) in parallel
   const requestedCustomerId = searchParams?.customerId?.trim() || undefined;
-
-  const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] = await measureServerOperation(
-    'page.pos.initial-data-load',
-    () => Promise.all([
-      // Short-lived cache: till/shift/inventory bust quickly or on-demand
-      getCachedTills(baseStore.id),
-      getCachedShifts(baseStore.id),
-      getCachedInventory(baseStore.id),
-      // Cached: products, units, categories change infrequently
-      getCachedProducts(business.id),
-      getCachedUnits(business.id),
-      getCachedCategories(business.id),
-      getCachedCustomers(business.id),
-      requestedCustomerId
-        ? prisma.customer.findFirst({
-            where: { id: requestedCustomerId, businessId: business.id },
-            select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-          })
-        : Promise.resolve(null),
-    ]),
-    {
-      businessId: business.id,
-      storeId: baseStore.id,
-      route: '/pos',
-      cacheState: 'cached-wrapper',
-    },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-  );
-
-  const userOpenShift = await measureServerOperation(
-    'page.pos.open-shift-load',
-    () => prisma.shift.findFirst({
-      where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
-      select: { till: { select: { name: true } } },
-    }),
-    {
-      businessId: business.id,
-      storeId: baseStore.id,
-      route: '/pos',
-      cacheState: 'uncached-page-load',
-    },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
-  );
-  const firstName = (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
-
-  const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-
-  const productDtos = products.map((product) => ({
-    id: product.id,
-    name: product.name,
-    barcode: product.barcode,
-    sellingPriceBasePence: product.sellingPriceBasePence,
-    vatRateBps: product.vatRateBps,
-    promoBuyQty: product.promoBuyQty,
-    promoGetQty: product.promoGetQty,
-    categoryId: product.categoryId,
-    categoryName: product.category?.name ?? null,
-    imageUrl: product.imageUrl,
-    units: product.productUnits.map((pu) => ({
-      id: pu.unitId,
-      name: pu.unit.name,
-      pluralName: pu.unit.pluralName,
-      conversionToBase: pu.conversionToBase,
-      isBaseUnit: pu.isBaseUnit,
-      sellingPricePence: pu.sellingPricePence,
-      defaultCostPence: pu.defaultCostPence,
-    })),
-    onHandBase: inventoryMap.get(product.id) ?? 0
-  }));
-
-  const customerOptions = requestedCustomer && !customers.some((customer) => customer.id === requestedCustomer.id)
-    ? [requestedCustomer, ...customers]
-    : customers;
 
   return (
     <>
       <LaunchSessionCompletion />
-      <PosWelcomeShelf
-        firstName={firstName}
-        storeName={baseStore.name}
-        hasOpenShift={!!userOpenShift}
-        openTillName={userOpenShift?.till?.name ?? null}
-        userKey={user.id}
-      />
-    <PosClient
-      business={{
-        id: business.id,
-        currency: business.currency,
-        vatEnabled: business.vatEnabled,
-        momoEnabled: (business as any).momoEnabled ?? false,
-        momoProvider: (business as any).momoProvider ?? null,
-        requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
-        discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
-        loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
-        loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
-        loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
-      }}
-      store={{ id: baseStore.id, name: baseStore.name }}
-      tills={tills.map((till) => ({ id: till.id, name: till.name }))}
-      openShiftTillIds={openShifts.map((shift) => shift.tillId)}
-      products={productDtos}
-      customers={customerOptions.map((customer) => ({
-        id: customer.id,
-        name: customer.name,
-        creditLimitPence: customer.creditLimitPence,
-        loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
-      }))}
-      units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
-      categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
-    />
+      <Suspense fallback={<PosBoardSkeleton />}>
+        <PosBoard
+          business={business}
+          store={store}
+          user={user}
+          requestedCustomerId={requestedCustomerId}
+        />
+      </Suspense>
     </>
   );
 }
