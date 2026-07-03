@@ -324,6 +324,14 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
 }
 
+.nav-mobile-panel-compact {
+  top: auto;
+  bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
+  left: max(0.75rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
+  right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
+  max-height: min(70dvh, calc(100dvh - var(--app-header-offset) - 1rem));
+}
+
 @media (min-width: 1024px) {
   html {
     scroll-padding-top: var(--app-header-offset-desktop);

@@ -144,19 +144,6 @@ describe('T4 role-based business launcher menu', () => {
     expect(tabs.some((tab) => tab.href === '/users')).toBe(false);
   });
 
-  it('keeps manager menu operational without owner-only admin', () => {
-    const sections = getManagerMenu(managerContext);
-    const hrefs = sections.flatMap((section) => section.items.map((item) => item.href));
-
-    expect(hrefs).toEqual(
-      expect.arrayContaining(['/pos', '/sales', '/inventory', '/purchases', '/products', '/reports', '/settings']),
-    );
-    expect(hrefs).not.toContain('/users');
-    expect(MANAGER_MENU_SECTIONS.flatMap((section) => section.items).some((item) => item.href === '/users')).toBe(
-      false,
-    );
-  });
-
   it('keeps cashier drawer short and role-specific', () => {
     const cashierItems = getCashierMenu(cashierContext, MOBILE_TAB_NAV_HREFS_BY_ROLE.CASHIER);
     const forbiddenDrawerHrefs = ['/products', '/inventory', '/purchases', '/reports', '/settings', '/users'];
@@ -166,10 +153,36 @@ describe('T4 role-based business launcher menu', () => {
     );
     expect(CASHIER_MENU_ITEMS.map((item) => item.href)).not.toContain('/products');
     expect(forbiddenDrawerHrefs.every((href) => !CASHIER_MENU_ITEMS.some((item) => item.href === href))).toBe(true);
-    expect(mobileMenu).toContain("user.role === 'CASHIER'");
+    expect(mobileMenu).toContain('isCashierCompactDrawer');
+    expect(mobileMenu).toContain('nav-mobile-panel-compact');
+    expect(mobileMenu).toContain("data-mobile-drawer-variant={isCashierCompactDrawer ? 'cashier-compact'");
+    expect(mobileMenu).toContain('renderCashierCompactBody');
     expect(mobileMenu).toContain('Help & support');
     expect(mobileMenu).toContain('Sign out');
+    expect(mobileMenu).not.toContain("user.role === 'CASHIER' ? (\n              <div className=\"grid gap-2\">");
     expect(mobileMenu).toContain("user.role === 'OWNER' && ownerMenu");
+  });
+
+  it('uses a compact content-height cashier drawer instead of an empty launcher body', () => {
+    expect(read('app/globals.css')).toContain('.nav-mobile-panel-compact');
+    expect(mobileMenu).toContain('Use the tabs below for POS, My Sales, My Shift, and Account');
+    expect(mobileMenu).toContain('renderCashierCompactBody()');
+    expect(mobileMenu).toContain("isCashierCompactDrawer ? 'flex flex-col' : 'flex h-full flex-col'");
+  });
+
+  it('keeps manager drawer operational without owner-only admin', () => {
+    const sections = getManagerMenu(managerContext);
+    const hrefs = sections.flatMap((section) => section.items.map((item) => item.href));
+
+    expect(hrefs).toEqual(
+      expect.arrayContaining(['/products', '/customers', '/suppliers', '/reports', '/settings', '/account']),
+    );
+    expect(hrefs).not.toContain('/users');
+    expect(hrefs).not.toContain('/help');
+    expect(mobileMenu).toContain("data-mobile-drawer-variant={isCashierCompactDrawer ? 'cashier-compact' : user.role === 'OWNER' ? 'owner-launcher' : 'manager-menu'}");
+    expect(MANAGER_MENU_SECTIONS.flatMap((section) => section.items).some((item) => item.href === '/users')).toBe(
+      false,
+    );
   });
 
   it('hides bottom-tab duplicates from the mobile drawer per role', () => {

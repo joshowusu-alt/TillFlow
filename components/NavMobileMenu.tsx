@@ -131,6 +131,9 @@ export default function NavMobileMenu({
 
   if (!mobileOpen) return null;
 
+  const isCashierCompactDrawer = user.role === 'CASHIER';
+  const panelClassName = isCashierCompactDrawer ? 'nav-mobile-panel-compact' : 'nav-mobile-panel';
+
   const handleNavigateStart = (href: string) => {
     onNavigateStart?.(href);
   };
@@ -285,11 +288,76 @@ export default function NavMobileMenu({
     );
   };
 
+  const renderDrawerFooter = () => (
+    <div className="shrink-0 space-y-1.5 border-t border-slate-200/80 bg-slate-50/90 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <Link
+        href="/help"
+        className="btn-ghost w-full py-2 text-sm"
+        onClick={() => {
+          handleNavigateStart('/help');
+          setMobileOpen(false);
+        }}
+      >
+        Help & support
+      </Link>
+      <form action={logout}>
+        <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
+          Sign out
+        </button>
+      </form>
+    </div>
+  );
+
+  const renderCashierCompactBody = () => (
+    <div className="space-y-3 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <p className="px-0.5 text-sm leading-5 text-black/55">
+        Use the tabs below for POS, My Sales, My Shift, and Account. Need help or ready to sign out?
+      </p>
+      {cashierItems.length > 0 ? (
+        <div className="grid gap-2">{cashierItems.map((item) => renderNavLink(item, 'compact'))}</div>
+      ) : null}
+      <div className="grid gap-2">
+        <Link
+          href="/help"
+          className="flex min-h-11 items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-sm font-medium text-ink"
+          onClick={() => {
+            handleNavigateStart('/help');
+            setMobileOpen(false);
+          }}
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <NavIcon iconKey="setup" className="h-[18px] w-[18px]" />
+          </span>
+          Help & support
+        </Link>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-left text-sm font-medium text-black/70"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <NavIcon iconKey="account" className="h-[18px] w-[18px]" />
+            </span>
+            Sign out
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const managerSectionLabel = (sectionId: string, fallback: string) => {
+    if (sectionId === 'operations') return 'More operations';
+    return fallback;
+  };
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
-      <div className="nav-mobile-panel fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden">
-        <div className="flex h-full flex-col">
+      <div
+        className={`${panelClassName} fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden`}
+        data-mobile-drawer-variant={isCashierCompactDrawer ? 'cashier-compact' : user.role === 'OWNER' ? 'owner-launcher' : 'manager-menu'}
+      >
+        <div className={isCashierCompactDrawer ? 'flex flex-col' : 'flex h-full flex-col'}>
           <div className="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-blue-50/60 px-4 py-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -305,74 +373,58 @@ export default function NavMobileMenu({
                 </div>
               </div>
             </div>
-            <div className="mt-3">
-              <InstallButton />
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3.5 pb-6">
-            {user.role === 'OWNER' && ownerMenu ? (
-              <div className="space-y-4">
-                <section>
-                  <div className="px-0.5 pb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                    Quick actions
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ownerMenu.quickActions.map((item) => renderQuickActionTile(item))}
-                  </div>
-                </section>
-
-                <section className="space-y-2">
-                  <div className="px-0.5 pb-0.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                    Browse by area
-                  </div>
-                  {ownerMenu.browseAreas.map((area) => renderBrowseArea(area))}
-                </section>
+            {!isCashierCompactDrawer ? (
+              <div className="mt-3">
+                <InstallButton />
               </div>
             ) : null}
+          </div>
 
-            {user.role === 'MANAGER' ? (
-              <div className="space-y-4">
-                <div className="px-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Operations</div>
-                {managerSections.map((section) => (
-                  <section key={section.id} className="space-y-2">
-                    {section.id !== 'operations' ? (
-                      <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-                        {section.label}
+          {isCashierCompactDrawer ? (
+            renderCashierCompactBody()
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3.5 pb-6">
+                {user.role === 'OWNER' && ownerMenu ? (
+                  <div className="space-y-4">
+                    <section>
+                      <div className="px-0.5 pb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                        Quick actions
                       </div>
-                    ) : null}
-                    <div className="grid gap-2">
-                      {section.items.map((item) => renderNavLink(item, 'compact'))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            ) : null}
+                      <div className="grid grid-cols-2 gap-2">
+                        {ownerMenu.quickActions.map((item) => renderQuickActionTile(item))}
+                      </div>
+                    </section>
 
-            {user.role === 'CASHIER' ? (
-              <div className="grid gap-2">
-                {cashierItems.map((item) => renderNavLink(item, 'compact'))}
-              </div>
-            ) : null}
-          </div>
+                    <section className="space-y-2">
+                      <div className="px-0.5 pb-0.5 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                        Browse by area
+                      </div>
+                      {ownerMenu.browseAreas.map((area) => renderBrowseArea(area))}
+                    </section>
+                  </div>
+                ) : null}
 
-          <div className="shrink-0 space-y-1.5 border-t border-slate-200/80 bg-slate-50/90 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-            <Link
-              href="/help"
-              className="btn-ghost w-full py-2 text-sm"
-              onClick={() => {
-                handleNavigateStart('/help');
-                setMobileOpen(false);
-              }}
-            >
-              Help & support
-            </Link>
-            <form action={logout}>
-              <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
-                Sign out
-              </button>
-            </form>
-          </div>
+                {user.role === 'MANAGER' ? (
+                  <div className="space-y-4">
+                    <div className="px-1 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">More</div>
+                    {managerSections.map((section) => (
+                      <section key={section.id} className="space-y-2">
+                        <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                          {managerSectionLabel(section.id, section.label)}
+                        </div>
+                        <div className="grid gap-2">
+                          {section.items.map((item) => renderNavLink(item, 'compact'))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {renderDrawerFooter()}
+            </>
+          )}
         </div>
       </div>
     </>

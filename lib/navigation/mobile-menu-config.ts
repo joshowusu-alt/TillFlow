@@ -160,7 +160,7 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
 export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
   {
     id: 'operations',
-    label: 'Operations',
+    label: 'More operations',
     items: [
       { href: '/pos', label: 'POS', iconKey: 'pos', roles: ['MANAGER'] },
       { href: '/sales', label: 'Sales', iconKey: 'sales', roles: ['MANAGER'] },
@@ -180,12 +180,11 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
   },
   {
     id: 'reports-settings',
-    label: 'Reports & settings',
+    label: 'Reports & account',
     items: [
       { href: '/reports', label: 'Reports Hub', iconKey: 'reportsHub', roles: ['MANAGER'] },
       { href: '/settings', label: 'Business settings', iconKey: 'settings', roles: ['MANAGER'] },
       { href: '/account', label: 'My Account', iconKey: 'account', roles: ['MANAGER'] },
-      { href: '/help', label: 'Help & support', iconKey: 'setup', roles: ['MANAGER'] },
     ],
   },
 ];
