@@ -54,6 +54,64 @@ export async function getOpenShiftForTill(
   });
 }
 
+export async function getOpenCashShiftForPayment(
+  tx: any,
+  input: {
+    businessId: string;
+    storeId: string;
+    userId?: string | null;
+    fallbackTillId?: string | null;
+  }
+) {
+  if (input.userId) {
+    const userShift = await tx.shift.findFirst({
+      where: {
+        status: 'OPEN',
+        userId: input.userId,
+        till: {
+          storeId: input.storeId,
+          store: { businessId: input.businessId },
+        },
+      },
+      select: { id: true, tillId: true },
+      orderBy: { openedAt: 'desc' },
+    });
+    if (userShift) return userShift;
+  }
+
+  if (!input.fallbackTillId) return null;
+  const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
+  return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
+}
+
+export type CashPurchasePaymentRef = {
+  id: string;
+  method: string;
+  amountPence: number;
+};
+
+export type CashDrawerEntryRef = {
+  entryType: string;
+  referenceType?: string | null;
+  referenceId?: string | null;
+};
+
+/** Detect CASH purchase payments missing a linked PAID_OUT_SUPPLIER drawer entry. */
+export function findOrphanCashPurchasePayments(
+  payments: CashPurchasePaymentRef[],
+  drawerEntries: CashDrawerEntryRef[]
+) {
+  return payments.filter((payment) => {
+    if (payment.method !== 'CASH' || payment.amountPence <= 0) return false;
+    return !drawerEntries.some(
+      (entry) =>
+        entry.entryType === 'PAID_OUT_SUPPLIER' &&
+        entry.referenceType === 'PURCHASE_PAYMENT' &&
+        entry.referenceId === payment.id
+    );
+  });
+}
+
 function toJson(value: unknown): string | null {
   if (value === undefined) return null;
   try {
