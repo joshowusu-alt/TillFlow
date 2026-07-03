@@ -107,8 +107,8 @@ export default function NavMobileMenu({
   );
 
   const cashierItems = useMemo(
-    () => (user.role === 'CASHIER' ? getCashierMenu(menuContext, hiddenTabHrefs) : []),
-    [hiddenTabHrefs, menuContext, user.role],
+    () => (user.role === 'CASHIER' ? getCashierMenu(menuContext) : []),
+    [menuContext, user.role],
   );
 
   useEffect(() => {
@@ -310,12 +310,10 @@ export default function NavMobileMenu({
 
   const renderCashierCompactBody = () => (
     <div className="space-y-3 px-3.5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-      <p className="px-0.5 text-sm leading-5 text-black/55">
-        Need help or ready to sign out?
-      </p>
       {cashierItems.length > 0 ? (
         <div className="grid gap-2">{cashierItems.map((item) => renderNavLink(item, 'compact'))}</div>
       ) : null}
+      <p className="px-0.5 text-sm leading-5 text-black/55">Need help or ready to sign out?</p>
       <div className="grid gap-2">
         <Link
           href="/help"

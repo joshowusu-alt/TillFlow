@@ -189,10 +189,24 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
   },
 ];
 
-/** Drawer-only cashier links (bottom-tab destinations are excluded via hidden hrefs). */
-export const CASHIER_MENU_ITEMS: MobileNavLink[] = CASHIER_HAS_MY_ACCOUNT_ROUTE
-  ? []
-  : [{ href: CASHIER_MY_ACCOUNT_HREF, label: 'My Account', iconKey: 'account', roles: ['CASHIER'] }];
+/** Cashier More sheet links — mirrors desktop Sell/Admin for cashiers when POS hides bottom tabs. */
+export const CASHIER_MENU_ITEMS: MobileNavLink[] = [
+  {
+    href: CASHIER_MY_SALES_ROUTE,
+    label: 'My Sales',
+    iconKey: 'sales',
+    roles: ['CASHIER'],
+  },
+  {
+    href: '/shifts',
+    label: 'My Shift',
+    iconKey: 'shifts',
+    roles: ['CASHIER'],
+  },
+  ...(CASHIER_HAS_MY_ACCOUNT_ROUTE
+    ? [{ href: CASHIER_MY_ACCOUNT_HREF, label: 'Account', iconKey: 'account' as NavIconKey, roles: ['CASHIER'] as AppRole[] }]
+    : [{ href: '/help', label: 'Help', iconKey: 'setup' as NavIconKey, roles: ['CASHIER'] as AppRole[] }]),
+];
 
 /** Bottom-tab routes duplicated in the mobile drawer for each role. */
 export const MOBILE_TAB_NAV_HREFS_BY_ROLE: Record<AppRole, readonly string[]> = {

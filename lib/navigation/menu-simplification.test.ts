@@ -145,11 +145,16 @@ describe('T4 role-based business launcher menu', () => {
   });
 
   it('keeps cashier drawer short and role-specific', () => {
-    const cashierItems = getCashierMenu(cashierContext, MOBILE_TAB_NAV_HREFS_BY_ROLE.CASHIER);
+    const cashierItems = getCashierMenu(cashierContext);
     const forbiddenDrawerHrefs = ['/products', '/inventory', '/purchases', '/reports', '/settings', '/users'];
 
+    expect(cashierItems.map((item) => item.label)).toEqual(
+      CASHIER_HAS_MY_ACCOUNT_ROUTE ? ['My Sales', 'My Shift', 'Account'] : ['My Sales', 'My Shift', 'Help'],
+    );
     expect(cashierItems.map((item) => item.href)).toEqual(
-      CASHIER_HAS_MY_ACCOUNT_ROUTE ? [] : [CASHIER_MY_ACCOUNT_HREF],
+      CASHIER_HAS_MY_ACCOUNT_ROUTE
+        ? [CASHIER_MY_SALES_ROUTE, '/shifts', CASHIER_MY_ACCOUNT_HREF]
+        : [CASHIER_MY_SALES_ROUTE, '/shifts', '/help'],
     );
     expect(CASHIER_MENU_ITEMS.map((item) => item.href)).not.toContain('/products');
     expect(forbiddenDrawerHrefs.every((href) => !CASHIER_MENU_ITEMS.some((item) => item.href === href))).toBe(true);
@@ -167,6 +172,9 @@ describe('T4 role-based business launcher menu', () => {
     expect(read('app/globals.css')).toContain('.nav-mobile-panel-compact');
     expect(mobileMenu).toContain('Need help or ready to sign out?');
     expect(mobileMenu).not.toContain('tabs below');
+    expect(read('lib/navigation/mobile-menu-config.ts')).toContain("label: 'My Sales'");
+    expect(read('lib/navigation/mobile-menu-config.ts')).toContain("label: 'My Shift'");
+    expect(mobileMenu).toContain('getCashierMenu(menuContext)');
     expect(mobileMenu).toContain('renderCashierCompactBody()');
     expect(mobileMenu).toContain("isCashierCompactDrawer ? 'flex flex-col' : 'flex h-full flex-col'");
   });
@@ -195,6 +203,8 @@ describe('T4 role-based business launcher menu', () => {
         : ['/pos', CASHIER_MY_SALES_ROUTE, '/shifts', '/help'],
     );
     expect(mobileMenu).toContain('MOBILE_TAB_NAV_HREFS_BY_ROLE');
+    expect(mobileMenu).toContain('getCashierMenu(menuContext)');
+    expect(bottomTabBar).toContain("'/pos'");
   });
 
   it('preserves desktop route permissions and POS logic', () => {
