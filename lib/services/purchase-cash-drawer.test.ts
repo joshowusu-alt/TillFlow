@@ -104,7 +104,16 @@ describe('purchase invoice cash drawer linkage', () => {
     prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
     prismaMock.$executeRaw.mockResolvedValue(1);
-    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    // Production code uses both Prisma $transaction forms: the interactive
+    // callback form (fn(tx) => ...) and the sequential array form
+    // ($transaction([...promises])) used by the SQLite inventory-upsert
+    // fallback in purchases.ts. Support both here.
+    prismaMock.$transaction.mockImplementation(async (arg: any) => {
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
+      }
+      return arg(prismaMock);
+    });
     recordCashDrawerEntryTxMock.mockResolvedValue({
       entry: { id: 'drawer-out-1' },
       shiftId: 'shift-1',
@@ -125,7 +134,10 @@ describe('purchase invoice cash drawer linkage', () => {
       userId,
     });
 
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    // 2 calls: (1) the interactive transaction wrapping invoice + payment +
+    // drawer entry creation, and (2) the SQLite inventory-upsert batch
+    // fallback, which uses the sequential array form of $transaction.
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         purchaseInvoiceId: 'inv-accra',
@@ -242,12 +254,11 @@ describe('purchase invoice cash drawer linkage', () => {
 
   it('rolls back when drawer entry creation fails', async () => {
     recordCashDrawerEntryTxMock.mockRejectedValue(new Error('drawer write failed'));
-    prismaMock.$transaction.mockImplementation(async (callback: any) => {
-      try {
-        return await callback(prismaMock);
-      } catch (error) {
-        throw error;
+    prismaMock.$transaction.mockImplementation(async (arg: any) => {
+      if (Array.isArray(arg)) {
+        return Promise.all(arg);
       }
+      return arg(prismaMock);
     });
 
     await expect(
