@@ -1,7 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { creditCashBankLines, splitPayments, type JournalLine } from './shared';
+import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+
+export const CASH_EXPENSE_SHIFT_REQUIRED_MSG =
+  'Open a shift before recording a cash expense from the till.';
 
 export type ExpenseInput = {
   businessId: string;
@@ -60,6 +64,24 @@ async function createExpenseImpl(input: ExpenseInput) {
           : 'PART_PAID';
 
   return prisma.$transaction(async (tx) => {
+    const method = input.method ?? 'CASH';
+    const split = splitPayments(
+      amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
+    );
+
+    const openShift =
+      split.cashPence > 0
+        ? await getOpenCashShiftForPayment(tx, {
+            businessId: input.businessId,
+            storeId: input.storeId,
+            userId: input.userId,
+          })
+        : null;
+
+    if (split.cashPence > 0 && !openShift) {
+      throw new Error(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
+    }
+
     const expense = await tx.expense.create({
       data: {
         businessId: input.businessId,
@@ -68,7 +90,7 @@ async function createExpenseImpl(input: ExpenseInput) {
         accountId: input.accountId,
         amountPence: input.amountPence,
         paymentStatus,
-        method: amountPaid > 0 ? input.method ?? 'CASH' : null,
+        method: amountPaid > 0 ? method : null,
         dueDate: input.dueDate ?? null,
         vendorName: input.vendorName ?? null,
         reference: input.reference ?? null,
@@ -82,7 +104,7 @@ async function createExpenseImpl(input: ExpenseInput) {
                     businessId: input.businessId,
                     storeId: input.storeId,
                     userId: input.userId,
-                    method: (input.method ?? 'CASH') as string,
+                    method: method as string,
                     amountPence: amountPaid,
                     reference: input.reference ?? null
                   }
@@ -90,13 +112,29 @@ async function createExpenseImpl(input: ExpenseInput) {
               }
             : undefined
       },
-      include: { account: true }
+      include: { account: true, payments: true }
     });
 
-    const method = input.method ?? 'CASH';
-    const split = splitPayments(
-      amountPaid > 0 ? [{ method, amountPence: amountPaid }] : []
-    );
+    if (split.cashPence > 0 && openShift) {
+      const cashPayment = expense.payments.find((p) => p.method === 'CASH');
+      if (cashPayment) {
+        await recordCashDrawerEntryTx(tx, {
+          businessId: input.businessId,
+          storeId: input.storeId,
+          tillId: openShift.tillId,
+          shiftId: openShift.id,
+          createdByUserId: input.userId,
+          cashierUserId: input.userId,
+          entryType: 'PAID_OUT_EXPENSE',
+          amountPence: -cashPayment.amountPence,
+          reasonCode: 'EXPENSE_PAYMENT',
+          reason: 'Cash paid out for expense',
+          referenceType: 'EXPENSE_PAYMENT',
+          referenceId: cashPayment.id,
+        });
+      }
+    }
+
     const apCredit = Math.max(input.amountPence - amountPaid, 0);
 
     await postJournalEntry({

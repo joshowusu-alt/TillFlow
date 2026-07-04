@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { derivePaymentStatus, creditCashBankLines, splitPayments, type JournalLine } from './shared';
-import { recordCashDrawerEntryTx } from './cash-drawer';
+import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import { CASH_EXPENSE_SHIFT_REQUIRED_MSG } from './expenses';
 
 export type ExpensePaymentInput = {
   businessId: string;
@@ -56,16 +57,25 @@ export async function recordExpensePayment(input: ExpensePaymentInput) {
     });
 
     if (input.method === 'CASH') {
-      const openShift = await tx.shift.findFirst({
-        where: {
-          status: 'OPEN',
-          till: { storeId: input.storeId },
-          userId: input.userId,
-        },
-        orderBy: { openedAt: 'desc' },
+      const openShift = await getOpenCashShiftForPayment(tx, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        userId: input.userId,
       });
 
-      if (openShift) {
+      if (!openShift) {
+        throw new Error(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
+      }
+
+      const existingDrawerEntry = await tx.cashDrawerEntry.findFirst({
+        where: {
+          referenceType: 'EXPENSE_PAYMENT',
+          referenceId: createdPayment.id,
+          entryType: 'PAID_OUT_EXPENSE',
+        },
+      });
+
+      if (!existingDrawerEntry) {
         await recordCashDrawerEntryTx(tx, {
           businessId: input.businessId,
           storeId: input.storeId,
