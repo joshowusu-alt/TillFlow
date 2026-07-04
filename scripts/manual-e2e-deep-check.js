@@ -18,6 +18,29 @@ async function screenshotStep(page, name) {
   } catch (_) { /* best effort */ }
 }
 
+/** Cash purchase payments and cash sales require an open till shift.
+ * Open one (idempotent — no-ops if a shift is already open) before any
+ * flow that records cash movements. */
+async function ensureOpenShift(page) {
+  await page.goto(`${BASE_URL}/shifts`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1500);
+  const openShiftButton = page.getByRole('button', { name: /^Open Shift$/i });
+  if ((await openShiftButton.count()) > 0) {
+    await page.locator('input[type="number"]').first().fill('0');
+    await openShiftButton.click();
+    await page.waitForTimeout(2000);
+  }
+}
+
+/** The purchases page keeps the "Receive stock" form inside a collapsible
+ * <details> panel (open by default on desktop, collapsed on mobile). Click
+ * the "Record purchase" summary to make sure it's expanded before
+ * interacting with fields inside it. */
+async function openRecordPurchasePanel(page) {
+  await page.getByRole('button', { name: /^Record purchase$/i }).first().click();
+  await page.waitForTimeout(300);
+}
+
 /** Poll page URL until it matches the pattern (30s timeout by default) */
 async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -157,6 +180,8 @@ async function run() {
     report.loginOwner = true;
     step('1/12 Login OK');
 
+    await ensureOpenShift(page);
+
     const stamp = Date.now();
     const e2eUserEmail = `e2e-user-${stamp}@store.com`;
     report.users.createdEmail = e2eUserEmail;
@@ -170,8 +195,11 @@ async function run() {
     await page.locator('input[name="password"]').fill('Pass1234!');
     await page.locator('select[name="role"]').selectOption('CASHIER');
     await page.getByRole('button', { name: /Create User/i }).click();
-    // Wait for the user to appear in the table (server action redirects on same page)
-    await page.getByText(e2eUserEmail).waitFor({ timeout: 30000 });
+    // Wait for the user to appear in the table (server action redirects on same page).
+    // Scoped to the desktop <table> because the Users page also renders a
+    // mobile card list with the same email text, which would otherwise
+    // resolve to 2 elements and violate Playwright's strict-mode locator.
+    await page.locator('table').getByText(e2eUserEmail).waitFor({ timeout: 30000 });
     report.users.create = true;
     step('2/12 Create user OK');
 
@@ -199,12 +227,25 @@ async function run() {
     step('5/12 Create purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await openRecordPurchasePanel(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
-    await page.getByRole('button', { name: /Receive Purchase/i }).click();
-    // Wait for the return link to appear (means purchase was created and page re-rendered)
-    await page.locator('a[href^="/purchases/return/"]').first().waitFor({ timeout: 30000 });
-    const purchaseReturnHref = await page.locator('a[href^="/purchases/return/"]').first().getAttribute('href');
+    // "Record purchase" also labels the header button that opens this panel,
+    // so scope to the submit button (last match) to avoid a strict-mode
+    // ambiguity between the two.
+    await page.getByRole('button', { name: /^Record purchase$/i }).last().click();
+    // Submitting redirects to the standalone invoice detail page
+    // (/purchases/[id]?created=1); go back to the list to find the
+    // return link, which only appears in the purchases table/cards.
+    await waitForURLPattern(page, /\/purchases\/[^/?]+\?created=1/, 30000);
+    await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1500);
+    // The purchases list renders both a mobile card list (hidden at desktop
+    // widths) and a desktop table with the same "Return" links — take the
+    // last (desktop table) match, which is the one actually visible at the
+    // default Chromium viewport used here.
+    await page.locator('a[href^="/purchases/return/"]').last().waitFor({ timeout: 30000 });
+    const purchaseReturnHref = await page.locator('a[href^="/purchases/return/"]').last().getAttribute('href');
     if (!purchaseReturnHref) {
       await screenshotStep(page, '05-purchase-no-return-link');
       throw new Error('Could not find purchase return link after creating purchase');
@@ -227,10 +268,11 @@ async function run() {
     step('6b/12 Create unpaid purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await openRecordPurchasePanel(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
-    await page.getByRole('button', { name: /Receive Purchase/i }).click();
+    await page.getByRole('button', { name: /^Record purchase$/i }).last().click();
     await page.waitForTimeout(5000);
     step('6b/12 Create unpaid purchase OK');
 

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>TillFlow Owner Mobile Navigation — Interactive Review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --brand: #2348B8;
+    --brand-dark: #102E92;
+    --green: #00875A;
+    --green-bg: #DDFBEA;
+    --amber-bg: #FFF8DE;
+    --amber-border: #F3D675;
+    --amber-text: #7A4B00;
+    --ink: #172033;
+    --muted: #747B8A;
+    --line: #E8ECF3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    background: #F3F5F9;
+    padding: 40px 24px 80px;
+    color: var(--ink);
+  }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 28px; font-size: 14px; }
+  .board {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 320px; }
+  .col h2 {
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--brand);
+    font-weight: 800;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .phone {
+    width: 320px;
+    height: 660px;
+    background: #fff;
+    border-radius: 34px;
+    box-shadow: 0 20px 50px rgba(16,24,40,0.16);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e5e9f2;
+  }
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 22px 0;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .screen { position: absolute; inset: 0; padding-top: 6px; }
+
+  /* HOME SCREEN */
+  .home-bg { background: linear-gradient(160deg, #F6F8FF, #EEF3FF); height: 100%; }
+  .brandrow { display:flex; align-items:center; justify-content:space-between; padding: 16px 20px 6px; }
+  .logo { font-weight: 900; font-size: 20px; color: var(--brand); }
+  .pillrow { display:flex; gap:8px; padding: 4px 20px 14px; }
+  .pill { padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; display:flex; align-items:center; gap:6px; }
+  .pill.branch { background:#fff; border:1px solid #e3e7ef; color:#555; }
+  .pill.sync { background: var(--green-bg); color: var(--green); letter-spacing: 1px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:var(--brand); display:inline-block; }
+  .hero {
+    margin: 6px 18px 16px;
+    padding: 22px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, var(--brand-dark), #2856D6);
+    color: #fff;
+    box-shadow: 0 12px 30px rgba(35,72,184,0.28);
+  }
+  .hero .eyebrow { font-size: 10px; letter-spacing: 2px; color: #BFD0FF; font-weight: 700; }
+  .hero h3 { margin: 6px 0 4px; font-size: 22px; line-height: 1.15; }
+  .hero .desc { font-size: 12px; color: #C8D6FF; margin-bottom: 12px; }
+  .attn-pill { display:inline-flex; align-items:center; gap:6px; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.25); padding: 6px 12px; border-radius: 16px; font-size: 11px; font-weight: 800; color: #FFE8A3; margin-bottom: 14px; }
+  .amber-dot { width:6px; height:6px; border-radius:50%; background:#F6C343; }
+  .kpi-card { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .kpi-card .lab { font-size: 9px; letter-spacing: 2px; color: #BFD0FF; font-weight: 700; }
+  .kpi-card .val { font-size: 20px; font-weight: 800; margin-top: 4px; }
+  .bottomnav {
+    position: absolute; left:0; right:0; bottom:0; height: 74px;
+    background: #fff; border-top: 1px solid #eee;
+    display:flex; align-items:center; justify-content:space-around;
+  }
+  .navitem { font-size: 11px; font-weight: 700; color: #8A94A6; text-align:center; cursor:pointer; padding: 6px 10px; border-radius: 10px; transition: 0.15s; }
+  .navitem.active { color: var(--brand); }
+  .navitem:hover { background: #F2F6FF; }
+
+  /* Hotspot */
+  .hotspot {
+    position: absolute;
+    background: var(--brand);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    border-radius: 14px;
+    padding: 6px 12px;
+    box-shadow: 0 6px 16px rgba(35,72,184,0.35);
+    cursor: pointer;
+    animation: pulse 1.8s infinite;
+    white-space: nowrap;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(35,72,184,0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(35,72,184,0); }
+    100% { box-shadow: 0 0 0 0 rgba(35,72,184,0); }
+  }
+
+  /* MENU SHEET */
+  .overlay-bg { background: #cfd6e4; height: 100%; filter: blur(1px); opacity: 0.6; }
+  .sheet {
+    position: absolute; left: 10px; right: 10px; bottom: 8px; top: 60px;
+    background: #fff; border-radius: 26px 26px 20px 20px;
+    box-shadow: 0 -10px 40px rgba(16,24,40,0.25);
+    padding: 14px 18px 16px;
+    overflow-y: auto;
+  }
+  .handle { width: 44px; height: 5px; border-radius: 3px; background: #d8dce4; margin: 0 auto 14px; }
+  .userrow { display:flex; align-items:center; gap: 12px; margin-bottom: 16px; }
+  .avatar { width: 42px; height: 42px; border-radius: 50%; background:#EAF0FF; color: var(--brand); font-weight: 900; font-size: 14px; display:flex; align-items:center; justify-content:center; }
+  .uname { font-weight: 800; font-size: 15px; }
+  .urole { font-size: 10px; letter-spacing: 1.5px; color: var(--muted); font-weight: 700; margin-top:2px; }
+  .online-pill { margin-left:auto; background: var(--green-bg); color: var(--green); font-size: 10px; font-weight: 900; padding: 5px 10px; border-radius: 12px; letter-spacing:1px; }
+  .sectionlabel { font-size: 10px; letter-spacing: 2px; color: var(--muted); font-weight: 800; margin: 14px 0 8px; }
+  .quickgrid { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .qcard { border-radius: 16px; padding: 14px; cursor: pointer; transition: transform 0.15s; }
+  .qcard:hover { transform: translateY(-2px); }
+  .qcard.primary { background: var(--brand); color: #fff; }
+  .qcard.amber { background: var(--amber-bg); border: 1px solid var(--amber-border); color: var(--amber-text); }
+  .qcard.plain { background: #fff; border: 1px solid var(--line); }
+  .qcard .qtitle { font-weight: 800; font-size: 13.5px; }
+  .qcard .qsub { font-size: 11px; margin-top: 3px; opacity: 0.85; }
+  .accordion-row {
+    display:flex; align-items:center; justify-content:space-between;
+    background: #F9FAFC; border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; transition: 0.15s;
+  }
+  .accordion-row:hover { background: #F2F6FF; }
+  .accordion-row.expanded { background: #F2F6FF; border-color: #BFD0FF; }
+  .accordion-row .atitle { font-weight: 700; font-size: 13.5px; }
+  .chevron { transition: transform 0.2s; color: var(--muted); font-weight: 700; }
+  .chevron.rot { transform: rotate(180deg); color: var(--brand); }
+  .child-panel { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; margin: -4px 0 4px; padding-left: 6px; }
+  .child-panel.open { max-height: 260px; }
+  .child-row { display:flex; align-items:center; justify-content:space-between; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: #2C3445; cursor:pointer; }
+  .child-row:hover { background: #EEF3FF; }
+  .badge { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: #EAF0FF; color: var(--brand); }
+  .badge.grey { background:#F1F5F9; color:#64748B; }
+  .recent-row { display:flex; align-items:center; justify-content:space-between; padding: 9px 4px; font-size: 13px; font-weight: 650; cursor:pointer; border-radius: 10px; }
+  .recent-row:hover { background: #F5F7FB; }
+  .signout { margin-top: 16px; width: 100%; padding: 13px; border-radius: 14px; border: 1px solid #f0d0d0; color: #C0392B; background: #fff; font-weight: 800; font-size: 13px; cursor: pointer; }
+  .note { max-width: 1040px; margin: 36px auto 0; font-size: 13px; color: var(--muted); text-align:center; line-height: 1.6; }
+  .note b { color: var(--ink); }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #172033; color: #fff; padding: 10px 18px; border-radius: 12px;
+    font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>TillFlow Owner Mobile Navigation — Interactive Review</h1>
+<p class="sub">Click through the phone below. Tap "More" to open the drawer, tap "Reports" to expand it, tap a report to see the click confirmation.</p>
+
+<div class="board">
+  <div class="col">
+    <h2>Live prototype — click me</h2>
+    <div class="phone" id="phone">
+
+      <!-- HOME SCREEN -->
+      <div class="screen" id="screen-home">
+        <div class="home-bg">
+          <div class="statusbar"><span>02:15</span><span>●●●○ 📶 🔋</span></div>
+          <div class="brandrow">
+            <div class="logo">TillFlow</div>
+          </div>
+          <div class="pillrow">
+            <span class="pill branch"><span class="dot"></span>Main Branch</span>
+            <span class="pill sync">SYNC READY</span>
+          </div>
+          <div class="hero">
+            <div class="eyebrow">GOOD MORNING, AKOSUA</div>
+            <h3>El-Shaddai<br/>Supermarket</h3>
+            <div class="desc">Command center is ready for follow-up.</div>
+            <div class="attn-pill"><span class="amber-dot"></span>4 items need attention</div>
+            <div class="kpi-card"><div class="lab">REVENUE</div><div class="val">GH¢0.00</div></div>
+            <div class="kpi-card"><div class="lab">TRANSACTIONS</div><div class="val">0</div></div>
+          </div>
+        </div>
+        <div class="bottomnav">
+          <div class="navitem active">Home</div>
+          <div class="navitem">POS</div>
+          <div class="navitem">Reports</div>
+          <div class="navitem active" id="btn-more" style="position:relative;">More</div>
+        </div>
+        <div class="hotspot" style="right: 14px; bottom: 84px;" id="hotspot-more" onclick="openMenu()">1 · Tap More</div>
+      </div>
+
+      <!-- MENU SCREEN -->
+      <div class="screen" id="screen-menu" style="display:none;">
+        <div class="overlay-bg"></div>
+        <div class="sheet">
+          <div class="handle"></div>
+          <div class="userrow">
+            <div class="avatar">AK</div>
+            <div>
+              <div class="uname">Akosua Mensah</div>
+              <div class="urole">OWNER · MAIN BRANCH</div>
+            </div>
+            <div class="online-pill">ONLINE</div>
+          </div>
+
+          <div class="sectionlabel">QUICK ACTIONS</div>
+          <div class="quickgrid">
+            <div class="qcard primary" onclick="toast('Opening POS…')">
+              <div class="qtitle">Open POS</div>
+              <div class="qsub">Start selling</div>
+            </div>
+            <div class="qcard amber" onclick="toast('Opening Command Center…')">
+              <div class="qtitle">4 issues</div>
+              <div class="qsub">Need attention</div>
+            </div>
+            <div class="qcard plain" onclick="toast('Opening Trading Report…')">
+              <div class="qtitle">Trading Report</div>
+              <div class="qsub">Sales &amp; profit</div>
+            </div>
+            <div class="qcard plain" onclick="toast('Opening Cash Drawer…')">
+              <div class="qtitle">Cash Drawer</div>
+              <div class="qsub">Till status</div>
+            </div>
+          </div>
+
+          <div class="sectionlabel">BROWSE BY AREA</div>
+
+          <div class="accordion-row" onclick="toast('Sell area (not expanded in demo)')">
+            <span class="atitle">Sell</span><span class="chevron">›</span>
+          </div>
+          <div class="accordion-row" onclick="toast('Stock area (not expanded in demo)')">
+            <span class="atitle">Stock</span><span class="chevron">›</span>
+          </div>
+          <div class="accordion-row" onclick="toast('Money area (not expanded in demo)')">
+            <span class="atitle">Money</span><span class="chevron">›</span>
+          </div>
+
+          <div class="accordion-row" id="reports-row" onclick="toggleReports()">
+            <span class="atitle">Reports</span><span class="chevron" id="reports-chevron">›</span>
+          </div>
+          <div class="child-panel" id="reports-panel">
+            <div class="child-row" onclick="toast('Opening Command Center…')">Command Center <span class="badge">Today</span></div>
+            <div class="child-row" onclick="toast('Opening Trading Report…')">Trading Report <span class="badge grey">7d</span></div>
+            <div class="child-row" onclick="toast('Opening Sales Analytics…')">Sales Analytics <span class="badge">90d</span></div>
+            <div class="child-row" onclick="toast('Opening Owner Brief…')">Owner Brief <span class="badge">Pro</span></div>
+            <div class="child-row" onclick="toast('Opening Balance Sheet…')">Balance Sheet <span class="badge grey">Finance</span></div>
+          </div>
+
+          <div class="accordion-row" onclick="toast('People & Admin area (not expanded in demo)')">
+            <span class="atitle">People &amp; Admin</span><span class="chevron">›</span>
+          </div>
+
+          <div class="sectionlabel">RECENT</div>
+          <div class="recent-row" onclick="toast('Opening Command Center…')"><span>Command Center</span><span class="badge">Today</span></div>
+          <div class="recent-row" onclick="toast('Opening Sales Analytics…')"><span>Sales Analytics</span><span class="badge grey">90d</span></div>
+          <div class="recent-row" onclick="toast('Opening Supplier Payments…')"><span>Supplier Payments</span><span class="badge">Due</span></div>
+
+          <button class="signout" onclick="toast('Signed out (demo only)')">Sign out</button>
+        </div>
+        <div class="hotspot" style="left: 50%; transform: translateX(-50%); top: 6px;" onclick="closeMenu()">✕ Close menu</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<p class="note">
+  <b>Design logic:</b> Home stays as the always-visible Owner Command Center (greeting, attention pill, headline KPIs).
+  The <b>More</b> drawer is the single navigation surface — quick actions first, grouped areas second, recent shortcuts last.
+  No KPI duplication inside the menu. The hamburger icon is removed to avoid two competing menus.
+</p>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  function openMenu() {
+    document.getElementById('screen-home').style.display = 'none';
+    document.getElementById('screen-menu').style.display = 'block';
+  }
+  function closeMenu() {
+    document.getElementById('screen-menu').style.display = 'none';
+    document.getElementById('screen-home').style.display = 'block';
+    document.getElementById('reports-panel').classList.remove('open');
+    document.getElementById('reports-row').classList.remove('expanded');
+    document.getElementById('reports-chevron').classList.remove('rot');
+  }
+  function toggleReports() {
+    const panel = document.getElementById('reports-panel');
+    const row = document.getElementById('reports-row');
+    const chev = document.getElementById('reports-chevron');
+    panel.classList.toggle('open');
+    row.classList.toggle('expanded');
+    chev.classList.toggle('rot');
+  }
+  let toastTimer;
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
+  }
+</script>
+
+</body>
+</html>

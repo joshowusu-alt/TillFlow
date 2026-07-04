@@ -41,7 +41,7 @@ describe('Authenticated Playwright QA setup', () => {
   it('documents approved launch handoff timings used during cold boot QA', () => {
     expect(LAUNCH_REDIRECT_DELAY_MS).toBe(160);
     expect(LAUNCH_COMPLETION_HOLD_MS).toBe(120);
-    expect(LAUNCH_SPLASH_FADE_MS).toBe(160);
+    expect(LAUNCH_SPLASH_FADE_MS).toBe(180);
   });
 
   it('does not commit auth storage paths in repo tree config', () => {
