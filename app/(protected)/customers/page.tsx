@@ -12,6 +12,7 @@ import { getCustomers } from '@/lib/services/customers';
 import { getBusinessStores } from '@/lib/services/stores';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
+import OperationalMetricCard from '@/components/OperationalMetricCard';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLimit: number }) {
@@ -25,13 +26,7 @@ function CreditStatusBadge({ balance, creditLimit }: { balance: number; creditLi
 }
 
 function CustomerStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
-      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">{label}</div>
-      <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{value}</div>
-      <div className="mt-1 text-xs text-black/50">{helper}</div>
-    </div>
-  );
+  return <OperationalMetricCard label={label} value={value} helper={helper} />;
 }
 
 function CustomersEmptyState({ q, balanceDue }: { q: string; balanceDue: boolean }) {
@@ -110,7 +105,7 @@ export default async function CustomersPage({
   const creditLimitCount = customers.filter((customer) => customer.creditLimitPence > 0).length;
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="operational-page space-y-4 sm:space-y-5">
       <PageHeader
         title="Customers"
         subtitle="Track what your customers owe you, set credit limits, and record payments."
@@ -119,7 +114,7 @@ export default async function CustomersPage({
 
       <p className="text-xs text-black/50">These are current customer balances across recorded sales and receipts, not limited to a date range.</p>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="operational-metric-grid operational-metric-grid--4">
         <CustomerStatCard
           label="Total customers"
           value={totalCount.toLocaleString('en-GH')}
@@ -143,12 +138,12 @@ export default async function CustomersPage({
       </div>
 
       {/* Search, branch filter, and debtor filter */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="w-full max-w-sm">
+      <div className="operational-filter-row">
+        <div className="operational-search-shell">
           <Suspense><SearchFilter placeholder="Search customers by name..." /></Suspense>
         </div>
         {business.customerScope === 'BRANCH' ? (
-          <form method="GET" className="flex items-end gap-3">
+          <form method="GET" className="flex min-w-0 w-full flex-wrap items-end gap-3 sm:w-auto">
             <div>
               <label className="label">Branch</label>
               <select className="input" name="storeId" defaultValue={selectedStoreId}>
@@ -162,7 +157,7 @@ export default async function CustomersPage({
             <button className="btn-secondary" type="submit">Apply</button>
           </form>
         ) : null}
-        <div className="flex items-center gap-2">
+        <div className="operational-filter-actions">
           {balanceDue ? (
             <Link
               href={`/customers?${q ? `q=${encodeURIComponent(q)}&` : ''}${business.customerScope === 'BRANCH' ? `storeId=${selectedStoreId}&` : ''}`}
@@ -179,7 +174,7 @@ export default async function CustomersPage({
             </Link>
           )}
           {balanceDue && (
-            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+            <span className="max-w-full break-words rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 [overflow-wrap:anywhere]">
               Showing customers with balance due
             </span>
           )}
@@ -244,7 +239,7 @@ export default async function CustomersPage({
         </div>
       </details>
 
-      <div className="card p-4 sm:p-5">
+      <div className="card min-w-0 max-w-full p-4 sm:p-5">
         {/* Mobile cards */}
         <div className="space-y-3 lg:hidden">
           {customers.length === 0 ? (

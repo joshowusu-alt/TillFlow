@@ -21,8 +21,18 @@ function loadEnv(path) {
 
 loadEnv('.playwright-qa.local.env');
 
+const QA_PROJECTS = [
+  'setup-auth',
+  'owner-chromium',
+  'cashier-chromium',
+  'manager-chromium',
+  'owner-cold-boot-chromium',
+];
+
 const args = process.argv.slice(2);
-const result = spawnSync('npx', ['playwright', 'test', ...args], {
+const result = spawnSync(
+  'npx',
+  ['playwright', 'test', ...QA_PROJECTS.flatMap((project) => ['--project', project]), ...args], {
   stdio: 'inherit',
   shell: true,
   env: process.env,

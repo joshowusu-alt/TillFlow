@@ -18,15 +18,10 @@ import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/comp
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import OperationalMetricCard from '@/components/OperationalMetricCard';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
-  return (
-    <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-sm">
-      <div className="text-xs uppercase tracking-[0.2em] text-black/40">{label}</div>
-      <div className="mt-1 text-2xl font-display font-semibold text-ink">{value}</div>
-      <div className="mt-1 text-xs text-black/45">{helper}</div>
-    </div>
-  );
+  return <OperationalMetricCard label={label} value={value} helper={helper} />;
 }
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
@@ -106,7 +101,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const activeTab = searchParams?.tab || 'products';
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="operational-page space-y-4 sm:space-y-5">
       <PageHeader
         title="Products"
         subtitle="Manage the items you sell, their prices, stock levels, and suppliers."
@@ -117,7 +112,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="operational-metric-grid operational-metric-grid--4">
         <ProductStatCard
           label="Total products"
           value={totalProductCount.toLocaleString('en-GH')}
@@ -174,8 +169,8 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
             </div>
           )}
           {/* Product search and actions */}
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-full max-w-sm">
+          <div className="operational-filter-row">
+            <div className="operational-search-shell">
               <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
             </div>
             {isManager ? (

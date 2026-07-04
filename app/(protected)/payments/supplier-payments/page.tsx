@@ -190,7 +190,7 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
         </section>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="operational-metric-grid operational-metric-grid--3">
         <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">What you owe</div>
           <div className={`mt-2 text-xl font-bold tabular-nums ${totalOutstanding > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>

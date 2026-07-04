@@ -32,7 +32,7 @@ export default function PageHeader({
 }: PageHeaderProps) {
   const hasActions = actions || primaryCta || secondaryCta;
   return (
-    <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card backdrop-blur-xl sm:rounded-[1.75rem] sm:px-5 sm:py-4 md:flex-row md:items-start md:justify-between md:px-6 md:py-5">
+    <div className="flex min-w-0 max-w-full flex-col gap-3 rounded-[1.5rem] border border-slate-200/80 bg-white/80 px-4 py-4 shadow-card backdrop-blur-xl sm:rounded-[1.75rem] sm:px-5 sm:py-4 md:flex-row md:items-start md:justify-between md:px-6 md:py-5">
       <div className="min-w-0">
         {eyebrow ? (
           <div className="mb-2 inline-flex items-center rounded-full border border-blue-100 bg-blue-50/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-accent">

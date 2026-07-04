@@ -35,12 +35,12 @@ export default function SearchFilter({ placeholder = 'Search…' }: { placeholde
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-card">
+    <div className="flex min-w-0 w-full items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-2.5 shadow-card">
       <svg className="h-4 w-4 flex-shrink-0 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M16 10.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0Z" />
       </svg>
       <input
-        className="w-full border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+        className="min-w-0 w-full flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         type="search"
         placeholder={placeholder}
         value={value}

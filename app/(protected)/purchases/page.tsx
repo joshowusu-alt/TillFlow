@@ -123,7 +123,7 @@ export default async function PurchasesPage({
   const unpaidCount = purchaseRows.filter((r) => ['UNPAID', 'PART_PAID'].includes(r.purchase.paymentStatus)).length;
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="operational-page space-y-4 sm:space-y-5">
       <PageHeader
         title="Purchases"
         subtitle="Record deliveries once — TillFlow updates stock, costs, and payables together."
@@ -164,7 +164,7 @@ export default async function PurchasesPage({
         </form>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="operational-metric-grid sm:max-w-xl">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Total invoices</div>
           <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{purchaseCount}</div>

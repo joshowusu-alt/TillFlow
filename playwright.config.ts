@@ -70,5 +70,17 @@ export default defineConfig({
       testMatch: /owner-cold-boot\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'mobile-overflow-owner',
+      dependencies: ['setup-auth'],
+      testMatch: /mobile-overflow-authenticated\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+        hasTouch: true,
+        storageState: 'playwright/.auth/owner.json',
+      },
+    },
   ],
 });

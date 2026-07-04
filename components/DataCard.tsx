@@ -45,9 +45,9 @@ export function DataCardHeader({ title, subtitle, aside }: DataCardHeaderProps) 
 
 export function DataCardField({ label, value, className = '', valueClassName = '' }: DataCardFieldProps) {
   return (
-    <div className={className}>
-      <div className="text-xs uppercase tracking-[0.16em] text-black/40">{label}</div>
-      <div className={`mt-1 ${valueClassName}`}>{value}</div>
+    <div className={`min-w-0 ${className}`.trim()}>
+      <div className="break-words text-xs uppercase tracking-[0.16em] text-black/40 [overflow-wrap:anywhere]">{label}</div>
+      <div className={`mt-1 min-w-0 break-words [overflow-wrap:anywhere] ${valueClassName}`.trim()}>{value}</div>
     </div>
   );
 }

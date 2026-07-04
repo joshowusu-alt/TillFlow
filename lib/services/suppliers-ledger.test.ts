@@ -51,6 +51,9 @@ describe('supplier list — payables filter and status', () => {
 
   it('renders the Suppliers stat strip using already-loaded page data', () => {
     expect(src).toContain('SupplierStatCard');
+    expect(src).toContain('OperationalMetricCard');
+    expect(src).toContain('operational-metric-grid');
+    expect(src).toContain('operational-filter-row');
     expect(src).toContain('Total suppliers');
     expect(src).toContain('Suppliers with balance');
     expect(src).toContain('What you owe suppliers');
