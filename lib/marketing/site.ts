@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 export const TILLFLOW_SITE_TITLE = 'TillFlow — POS, Stock & Reports for Ghanaian Businesses';
 
 export const TILLFLOW_SITE_DESCRIPTION =
-  'Sell faster, track stock, manage payments, follow up debtors, and see reports clearly — built for Ghanaian businesses.';
+  'TillFlow helps Ghanaian retail businesses sell at the counter, track stock, manage cash and MoMo, follow up credit and suppliers, and see clear owner reports — even when the internet is unreliable.';
 
 export const TILLFLOW_CANONICAL_WELCOME = 'https://www.tillflow.app/welcome';
 
