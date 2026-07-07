@@ -30,7 +30,7 @@ export function WhatsAppDemoButton({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex min-h-11 items-center justify-center gap-2 bg-emerald-600 font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-xl ${sizeClasses[size]} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-2 bg-accent font-bold text-white shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-xl hover:shadow-accent/30 ${sizeClasses[size]} ${className}`}
     >
       {WHATSAPP_ICON}
       Book demo on WhatsApp
@@ -62,7 +62,7 @@ export function FreeTrialLink({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/register"
-      className={`font-semibold text-black/55 underline-offset-4 transition hover:text-accent hover:underline ${className}`}
+      className={`font-semibold text-ink/55 underline-offset-4 transition hover:text-accent hover:underline ${className}`}
     >
       Start free trial
     </Link>
