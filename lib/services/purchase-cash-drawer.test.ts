@@ -104,7 +104,17 @@ describe('purchase invoice cash drawer linkage', () => {
     prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
     prismaMock.stockMovement.createMany.mockResolvedValue({ count: 1 });
     prismaMock.$executeRaw.mockResolvedValue(1);
-    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.$transaction.mockImplementation(async (operation: any) => {
+      if (typeof operation === 'function') {
+        return operation(prismaMock);
+      }
+
+      if (Array.isArray(operation)) {
+        return Promise.all(operation);
+      }
+
+      throw new TypeError('$transaction mock expected a callback or operation array');
+    });
     recordCashDrawerEntryTxMock.mockResolvedValue({
       entry: { id: 'drawer-out-1' },
       shiftId: 'shift-1',
