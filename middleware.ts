@@ -28,6 +28,7 @@ const PUBLIC_PATHS = [
   '/logo-dark.png',
   '/og-default-store',
   '/og',
+  '/marketing',
   '/shop-manifest.json',
   '/api/health',
   '/api/icon',

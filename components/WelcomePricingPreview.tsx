@@ -39,7 +39,9 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">Simple pricing</div>
           <div className="mt-2 text-sm leading-6 text-ink/50">
-            Switch between monthly and yearly billing. Yearly gives 2 months off.
+            {billingCycle === 'yearly'
+              ? "You're on yearly billing — 2 months free versus paying monthly."
+              : 'Switch to yearly and get 2 months off.'}
           </div>
           <div className="mt-1 text-xs leading-5 text-muted">
             Growth is best for most owner-led retail businesses.
@@ -69,6 +71,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
           const isYearly = billingCycle === 'yearly';
           const displayPrice = isYearly ? yearlyPrice(plan.monthlyPrice) : plan.monthlyPrice;
           const cadence = isYearly ? '/year' : '/month';
+          const ctaLabel = plan.featured ? 'Start Growth trial' : `Try ${plan.name}`;
 
           return (
             <div
@@ -90,14 +93,15 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
               </div>
 
               {isYearly ? (
-                <div className="mt-1 text-xs font-medium text-ink/55">
-                  Equivalent to {formatCedi(Math.round(yearlyPrice(plan.monthlyPrice) / 12))}/month
-                </div>
+                <>
+                  <div className="mt-1 text-xs font-medium text-ink/55">
+                    Equivalent to {formatCedi(Math.round(yearlyPrice(plan.monthlyPrice) / 12))}/month
+                  </div>
+                  <div className="mt-1 inline-flex rounded-full bg-accentSoft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
+                    Save {formatCedi(yearlySavings(plan.monthlyPrice))} yearly
+                  </div>
+                </>
               ) : null}
-
-              <div className="mt-1 inline-flex rounded-full bg-accentSoft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
-                Save {formatCedi(yearlySavings(plan.monthlyPrice))} yearly
-              </div>
 
               <div className="mt-3 text-xs font-medium text-ink/50">{plan.note}</div>
               <div className="mt-3 flex-1 space-y-1.5">
@@ -128,7 +132,7 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                     : 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all hover:border-accent/30 hover:text-accent'
                 }
               >
-                Start free trial
+                {ctaLabel}
               </Link>
             </div>
           );

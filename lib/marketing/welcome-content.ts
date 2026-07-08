@@ -1,7 +1,10 @@
+export const WELCOME_CATEGORY_LINE =
+  'POS, stock and cash control for Ghanaian retail businesses.';
+
 export const WELCOME_HEADLINE = 'Sell fast. Track stock. Know your money.';
 
 export const WELCOME_SUBHEADLINE =
-  'TillFlow helps Ghanaian retail businesses sell at the counter, track stock, manage cash and MoMo, follow up credit and suppliers, and see clear owner reports — even when the internet is unreliable.';
+  'Sell at the counter, track stock, manage cash, MoMo and credit, then close with the cash you expect.';
 
 export const TRUST_BADGES = [
   'Offline-ready selling',
@@ -10,95 +13,74 @@ export const TRUST_BADGES = [
   'Built for Ghana',
 ] as const;
 
-export const OUTCOME_CARDS = [
-  {
-    title: 'Sell at the counter',
-    desc: 'Fast POS for cash, MoMo, card, transfer and credit sales.',
-    icon: 'pos',
-  },
-  {
-    title: 'Control stock and suppliers',
-    desc: 'Track products, purchases, supplier payments and low stock.',
-    icon: 'stock',
-  },
-  {
-    title: 'Close with confidence',
-    desc: 'See cash in, cash out, expenses, refunds and expected cash.',
-    icon: 'close',
-  },
-] as const;
-
-export const PRODUCT_PROOF_POINTS: Array<{
-  title: string;
-  desc: string;
-}> = [
-  {
-    title: 'Counter sales stay fast',
-    desc: 'Search products, take mixed payments and see change without slowing the queue.',
-  },
-  {
-    title: 'Owners see the day clearly',
-    desc: 'Revenue, transactions, expected cash, low stock and follow-ups are visible in one view.',
-  },
-  {
-    title: 'Closing is controlled',
-    desc: 'Cash sales, supplier payments, refunds and till expenses roll into expected cash.',
-  },
-];
-
-export const GHANA_REALITY_BULLETS = [
-  'Cash and MoMo at the till',
+export const RETAIL_REALITY_BELT = [
+  'Cash',
+  'MoMo',
   'Credit customers',
   'Supplier payments',
   'Expenses paid from till',
-  'Staff shifts',
   'Expected cash',
+  'Stock alerts',
+  'Staff shifts',
   'Offline-ready selling',
-  'Stock in pieces, packs and cartons',
+  'Owner reports',
+  'Purchases',
+  'Low stock',
 ] as const;
 
-export const TESTIMONIALS = [
+export const PRODUCT_PROOF_PANELS = [
+  {
+    id: 'pos',
+    title: 'POS checkout',
+    benefit: 'Sell quickly with cash, MoMo, card, transfer or credit.',
+    visual: 'pos' as const,
+  },
+  {
+    id: 'stock',
+    title: 'Stock and suppliers',
+    benefit: 'Track products, purchases, supplier payments and low stock.',
+    visual: 'stock-suppliers' as const,
+  },
+  {
+    id: 'cash',
+    title: 'Cash drawer and shifts',
+    benefit: 'Know expected cash, cash paid out, expenses, refunds and variances.',
+    visual: 'shift-close' as const,
+  },
+  {
+    id: 'reports',
+    title: 'Reports and analytics',
+    benefit: 'See revenue, profit, top products and peak trading hours.',
+    visual: 'reports-analytics' as const,
+  },
+] as const;
+
+export const TRUST_PROOF = {
+  headline: 'Trusted in daily retail use.',
+  intro:
+    'EL-SHADDAI Supermarket uses TillFlow to run daily sales, staff shifts, stock tracking and cash control across 1,000+ products.',
+  business: 'EL-SHADDAI Supermarket',
+  person: 'Akosua Otchere',
+  useNamedProof: true,
+} as const;
+
+export const TRUST_PROOF_THEMES = [
   {
     title: 'Offline selling stayed calm',
     quote:
       'The network went off. TillFlow did not. We sold normally, and everything synced on its own when the network came back.',
+    featured: true,
   },
   {
     title: 'Closing became easier',
     quote:
       'We see what cash is expected to be there, and we close shifts with comments for any variance — which the owner sees.',
+    featured: false,
   },
   {
     title: 'Profit got clearer',
     quote:
       'It was difficult to track profitable products as we grew past 1,000 products. TillFlow made those decisions much easier.',
+    featured: false,
   },
-] as const;
-
-export const ROLE_CARDS = [
-  {
-    role: 'Cashier',
-    desc: 'Sell and see own sales',
-  },
-  {
-    role: 'Manager',
-    desc: 'Stock, purchases and reports',
-  },
-  {
-    role: 'Owner',
-    desc: 'Money, staff and control',
-  },
-] as const;
-
-export const FEATURE_LIST = [
-  'Fast POS',
-  'Stock control',
-  'Cash and MoMo',
-  'Credit and debtors',
-  'Suppliers and purchases',
-  'Expenses',
-  'Cash drawer and shifts',
-  'Owner reports',
-  'Staff roles',
-  'Offline-ready',
 ] as const;

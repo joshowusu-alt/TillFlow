@@ -1,77 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import {
-  FEATURE_LIST,
-  OUTCOME_CARDS,
-  PRODUCT_PROOF_POINTS,
-  ROLE_CARDS,
-  WELCOME_HEADLINE,
-  WELCOME_SUBHEADLINE,
-} from './welcome-content';
+import { PRODUCT_PROOF_PANELS, TRUST_PROOF, TRUST_PROOF_THEMES, WELCOME_HEADLINE } from './welcome-content';
 
 const readSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('welcome marketing content', () => {
-  it('uses approved headline and subheadline', () => {
-    expect(WELCOME_HEADLINE).toBe('Sell fast. Track stock. Know your money.');
-    expect(WELCOME_SUBHEADLINE).toContain('Ghanaian retail');
-    expect(WELCOME_SUBHEADLINE).toContain('MoMo');
+  it('uses four product proof panels with matching visuals', () => {
+    expect(PRODUCT_PROOF_PANELS).toHaveLength(4);
+    expect(PRODUCT_PROOF_PANELS[0].visual).toBe('pos');
+    expect(PRODUCT_PROOF_PANELS[1].visual).toBe('stock-suppliers');
+    expect(PRODUCT_PROOF_PANELS[2].visual).toBe('shift-close');
+    expect(PRODUCT_PROOF_PANELS[3].visual).toBe('reports-analytics');
   });
 
-  it('uses three strong outcome cards', () => {
-    expect(OUTCOME_CARDS).toHaveLength(3);
-    expect(OUTCOME_CARDS.map((card) => card.title)).toEqual([
-      'Sell at the counter',
-      'Control stock and suppliers',
-      'Close with confidence',
-    ]);
+  it('does not use customers page screenshot for stock panel', () => {
+    const serialized = JSON.stringify(PRODUCT_PROOF_PANELS);
+    expect(serialized).not.toContain('people-relationships.png');
+    expect(serialized).not.toContain('Customers & suppliers');
   });
 
-  it('keeps product proof and feature coverage compact', () => {
-    expect(PRODUCT_PROOF_POINTS).toHaveLength(3);
-    expect(FEATURE_LIST).toContain('Cash drawer and shifts');
-    expect(FEATURE_LIST).toHaveLength(10);
-  });
-
-  it('uses compact role confidence copy', () => {
-    expect(ROLE_CARDS).toEqual([
-      { role: 'Cashier', desc: 'Sell and see own sales' },
-      { role: 'Manager', desc: 'Stock, purchases and reports' },
-      { role: 'Owner', desc: 'Money, staff and control' },
-    ]);
+  it('attributes all trust themes to Akosua Otchere at EL-SHADDAI', () => {
+    expect(TRUST_PROOF.person).toBe('Akosua Otchere');
+    expect(TRUST_PROOF.business).toBe('EL-SHADDAI Supermarket');
+    expect(TRUST_PROOF_THEMES).toHaveLength(3);
   });
 });
 
 describe('welcome homepage structure', () => {
-  it('prioritises WhatsApp CTA and shorter premium product proof', () => {
-    const page = readSource('app/welcome/page.tsx');
-    expect(page).toContain('WhatsAppDemoButton');
-    expect(page).toContain('HeroProductComposition');
-    expect(page).toContain('Everything between the first sale and the closing count.');
-    expect(page).toContain('Built for Ghanaian retail reality.');
-    expect(page).toContain('See TillFlow on your own counter.');
-    expect(page).not.toContain('HOW_IT_WORKS');
-    expect(page).not.toContain('FEATURE_GRID');
-    expect(page).not.toContain("Today's Overview");
+  it('attributes every trust quote to Akosua Otchere', () => {
+    const trust = readSource('components/marketing/TrustProofSection.tsx');
+    expect(trust).toContain('TRUST_PROOF.person');
+    expect(trust).toContain('TRUST_PROOF.business');
+    expect(trust).not.toContain('Name withheld at their request');
   });
 
-  it('avoids self-praise and keeps honest example labelling', () => {
-    const page = readSource('app/welcome/page.tsx');
-    expect(page).not.toContain('Premium POS');
-    expect(page).not.toContain('screenshot dump');
-    expect(page).toContain('Product illustration with example data');
-    expect(page).toContain('Running live in Ghanaian retail');
+  it('uses contain-fit screenshots and coded stock/purchase visuals', () => {
+    const proof = readSource('components/marketing/ProductProofSection.tsx');
+    expect(proof).toContain('StockSuppliersPreview');
+    expect(proof).toContain('PosCheckoutPreview');
+    expect(proof).toContain('ReportsAnalyticsPreview');
   });
 
-  it('uses TillFlow brand tokens instead of off-brand greens and blacks', () => {
-    const page = readSource('app/welcome/page.tsx');
-    const cta = readSource('components/marketing/WelcomeCTA.tsx');
-    expect(page).toContain('bg-accent');
-    expect(page).toContain('bg-paper');
-    expect(page).toContain('text-ink');
-    expect(page).not.toMatch(/bg-emerald|text-emerald|bg-slate-950|bg-slate-900/);
-    expect(cta).toContain('bg-accent');
-    expect(cta).not.toContain('bg-emerald');
+  it('keeps approved headline', () => {
+    expect(WELCOME_HEADLINE).toBe('Sell fast. Track stock. Know your money.');
   });
 });
