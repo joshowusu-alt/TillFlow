@@ -14,7 +14,8 @@ export const DEMO_KPIS = {
   openIssues: '3',
   expectedCash: 'GH₵3,185',
   revenue: 'GH₵8,420',
-  grossProfit: 'GH₵2,105',
+  // 2,088 / 8,420 = 24.8% so the margin figure stays arithmetically honest.
+  grossProfit: 'GH₵2,088',
   transactions: '126',
   lowStock: '14',
 } as const;
@@ -36,8 +37,8 @@ export const DEMO_SHIFT_LINES = [
   { label: 'Cash sales', value: '+GH₵2,940', tone: 'neutral' as const },
   { label: 'Supplier payments', value: '−GH₵180', tone: 'negative' as const },
   { label: 'Expenses paid from till', value: '−GH₵75', tone: 'negative' as const },
-  { label: 'Refunds', value: '−GH₵0', tone: 'negative' as const },
-  { label: 'Cash added / adjustments', value: '+GH₵0', tone: 'neutral' as const },
+  { label: 'Refunds', value: 'GH₵0', tone: 'neutral' as const },
+  { label: 'Cash added / adjustments', value: 'GH₵0', tone: 'neutral' as const },
 ] as const;
 
 /** A different, in-progress transaction used only in the hero teaser so it never repeats the completed checkout shown in the Product Proof section. */
@@ -61,5 +62,6 @@ export const DEMO_PEOPLE = {
   customers: '248',
   suppliers: '36',
   customerPaymentsDue: 'GH₵960',
-  supplierPaymentsDue: 'GH₵1,240',
+  // Matches the two payables rows shown in StockSuppliersPreview (640 + 420).
+  supplierPaymentsDue: 'GH₵1,060',
 } as const;

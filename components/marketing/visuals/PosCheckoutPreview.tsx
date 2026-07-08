@@ -46,7 +46,7 @@ export function PosCheckoutPreview({ compact = false, className = '' }: { compac
           <div className="text-[10px] font-semibold uppercase tracking-widest text-black/40">Method</div>
           <div className="mt-1.5 flex flex-wrap gap-2">
             <span className="rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white">Cash</span>
-            <span className="rounded-full bg-yellow-500 px-3 py-1.5 text-xs font-semibold text-white">MoMo</span>
+            <span className="rounded-full bg-yellow-400 px-3 py-1.5 text-xs font-semibold text-yellow-950">MoMo</span>
             <span className="rounded-full bg-black/5 px-3 py-1.5 text-xs font-semibold text-black/50">Card</span>
             <span className="rounded-full bg-black/5 px-3 py-1.5 text-xs font-semibold text-black/50">Transfer</span>
           </div>
@@ -63,9 +63,10 @@ export function PosCheckoutPreview({ compact = false, className = '' }: { compac
           </div>
         </div>
 
-        <div className="mt-3 rounded-2xl bg-gradient-to-br from-accent to-accent/80 p-3 text-white shadow-lg ring-4 ring-accent/20">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-white/75">Change due</div>
-          <div className="mt-1 text-2xl font-bold tabular-nums">{DEMO_POS_TOTALS.change}</div>
+        {/* Soft treatment so the solid-blue Complete Sale button below stays the only button-looking element. */}
+        <div className="mt-3 rounded-2xl border border-accent/20 bg-accentSoft p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-accent/70">Change due</div>
+          <div className="mt-1 text-2xl font-bold tabular-nums text-accent">{DEMO_POS_TOTALS.change}</div>
         </div>
 
         <div className="btn-primary mt-3 w-full justify-center text-sm">Complete Sale — {DEMO_POS_TOTALS.amountDue}</div>

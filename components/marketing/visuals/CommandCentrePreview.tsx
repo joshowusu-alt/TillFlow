@@ -38,11 +38,12 @@ export function CommandCentrePreview({ compact = false }: { compact?: boolean })
         <span className="text-xs text-muted">· {DEMO_BUSINESS.owner}</span>
       </div>
 
-      <div className={`mt-4 grid gap-3 ${compact ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'}`}>
+      {/* Never exceed 3 columns: five columns cannot hold GH₵ figures at readable sizes inside the hero column. */}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {postureMetrics.map((metric) => (
-          <div key={metric.label} className={`rounded-2xl border p-3 shadow-card sm:p-4 ${metric.tone}`}>
+          <div key={metric.label} className={`min-w-0 rounded-2xl border p-3 shadow-card sm:p-4 ${metric.tone}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted sm:text-[11px]">{metric.label}</p>
-            <p className="mt-2 text-xl font-display font-bold tracking-tight text-ink tabular-nums sm:text-2xl">{metric.value}</p>
+            <p className="mt-2 break-words text-xl font-display font-bold tracking-tight text-ink tabular-nums sm:text-2xl lg:text-xl xl:text-2xl">{metric.value}</p>
             <p className="mt-1 text-[11px] text-slate-500">{metric.sub}</p>
           </div>
         ))}

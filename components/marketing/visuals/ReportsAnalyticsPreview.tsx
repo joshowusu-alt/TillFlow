@@ -39,6 +39,13 @@ export function ReportsAnalyticsPreview({ className = '' }: { className?: string
             />
           ))}
         </div>
+        <div className="mt-1.5 flex gap-1.5">
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => (
+            <span key={index} className="flex-1 text-center text-[9px] font-semibold uppercase text-emerald-900/40">
+              {day}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">

@@ -27,19 +27,20 @@ function LiveSaleTeaser() {
 }
 
 /**
- * A one-line trust badge — states the headline expected-cash figure without
- * repeating the full itemised shift breakdown shown in the Product Proof section.
+ * A shift-close proof badge. Deliberately shows the last-close variance rather
+ * than expected cash, which already headlines the dashboard card above — no
+ * figure is repeated twice in the hero.
  */
 function TillCheckTeaser() {
   return (
     <div className="card p-3 shadow-raised">
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Shift active</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-700">Shift close</span>
       </div>
-      <p className="mt-2 text-[11px] text-black/50">Till should hold</p>
-      <p className="mt-0.5 text-xl font-display font-bold text-emerald-700 tabular-nums">{DEMO_KPIS.expectedCash}</p>
-      <p className="mt-1 text-[11px] text-black/45">Counted within GH₵15 at last close</p>
+      <p className="mt-2 text-[11px] text-black/50">Last close variance</p>
+      <p className="mt-0.5 text-xl font-display font-bold text-amber-700 tabular-nums">−GH₵15</p>
+      <p className="mt-1 text-[11px] text-black/45">Caught and explained at close — not weeks later</p>
     </div>
   );
 }
