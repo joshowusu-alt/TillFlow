@@ -135,7 +135,7 @@ describe('purchase invoice cash drawer linkage', () => {
       userId,
     });
 
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         purchaseInvoiceId: 'inv-accra',
