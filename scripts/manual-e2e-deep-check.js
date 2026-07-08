@@ -171,7 +171,7 @@ async function run() {
     await page.locator('select[name="role"]').selectOption('CASHIER');
     await page.getByRole('button', { name: /Create User/i }).click();
     // Wait for the user to appear in the table (server action redirects on same page)
-    await page.getByText(e2eUserEmail).waitFor({ timeout: 30000 });
+    await page.getByText(e2eUserEmail).first().waitFor({ timeout: 30000 });
     report.users.create = true;
     step('2/12 Create user OK');
 
