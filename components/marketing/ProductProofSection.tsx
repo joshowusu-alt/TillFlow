@@ -25,14 +25,6 @@ function ProofVisual({ panel }: { panel: (typeof PRODUCT_PROOF_PANELS)[number] }
   return null;
 }
 
-function visualFrameClass(panel: (typeof PRODUCT_PROOF_PANELS)[number]) {
-  if (panel.visual === 'shift-close') {
-    return 'p-4 sm:p-5';
-  }
-
-  return 'max-h-[360px] overflow-hidden p-4 sm:max-h-none sm:p-5';
-}
-
 export default function ProductProofSection() {
   return (
     <section id="product-proof" className="scroll-mt-24 px-4 py-6 sm:px-6 sm:py-9">
@@ -55,7 +47,7 @@ export default function ProductProofSection() {
                   <h3 className="text-lg font-display font-bold text-ink">{panel.title}</h3>
                   <p className="mt-1 text-sm leading-6 text-ink/58">{panel.benefit}</p>
                 </div>
-                <div className={visualFrameClass(panel)}>
+                <div className="p-4 sm:p-5">
                   <ProofVisual panel={panel} />
                 </div>
               </article>
