@@ -105,6 +105,14 @@ async function completePaidSale(page) {
   return { receiptHref, invoiceId };
 }
 
+async function openPurchaseForm(page) {
+  const addLineButton = page.getByRole('button', { name: /^Add line$/i });
+  if (!(await addLineButton.isVisible().catch(() => false))) {
+    await page.locator('summary', { hasText: 'Record purchase' }).click();
+  }
+  await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
+}
+
 async function seedUnpaidExpense() {
   const owner = await prisma.user.findUnique({
     where: { email: OWNER_EMAIL },
@@ -199,6 +207,7 @@ async function run() {
     step('5/12 Create purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await openPurchaseForm(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.getByRole('button', { name: /Receive Purchase/i }).click();
@@ -227,6 +236,7 @@ async function run() {
     step('6b/12 Create unpaid purchase');
     await page.goto(`${BASE_URL}/purchases`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await openPurchaseForm(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
