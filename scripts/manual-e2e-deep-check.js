@@ -108,7 +108,9 @@ async function completePaidSale(page) {
 async function openPurchaseForm(page) {
   const addLineButton = page.getByRole('button', { name: /^Add line$/i });
   if (!(await addLineButton.isVisible().catch(() => false))) {
-    await page.locator('summary', { hasText: 'Record purchase' }).click();
+    await page.locator('#record-purchase-form').evaluate((details) => {
+      details.setAttribute('open', '');
+    });
   }
   await addLineButton.waitFor({ state: 'visible', timeout: 10000 });
 }
