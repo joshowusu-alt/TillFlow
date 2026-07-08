@@ -29,7 +29,7 @@ describe('TillFlow brand logo system', () => {
       'public/icons/tillflow-icon-180.png',
       'public/icons/tillflow-icon-192.png',
       'public/icons/tillflow-icon-512.png',
-      'public/og/tillflow-og.png',
+      'public/og/tillflow-og-v2.png',
       'public/splash/apple-splash-1290x2796.png',
       'public/splash/apple-splash-1170x2532.png',
       'public/splash/apple-splash-750x1334.png',
