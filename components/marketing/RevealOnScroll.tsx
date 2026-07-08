@@ -5,9 +5,11 @@ import { useEffect, useRef, type ReactNode } from 'react';
 export default function RevealOnScroll({
   children,
   className = '',
+  delayMs = 0,
 }: {
   children: ReactNode;
   className?: string;
+  delayMs?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -36,7 +38,11 @@ export default function RevealOnScroll({
   }, []);
 
   return (
-    <div ref={ref} className={`welcome-reveal ${className}`}>
+    <div
+      ref={ref}
+      className={`welcome-reveal ${className}`}
+      style={delayMs ? { animationDelay: `${delayMs}ms` } : undefined}
+    >
       {children}
     </div>
   );

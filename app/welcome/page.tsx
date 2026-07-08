@@ -3,6 +3,8 @@ import './welcome-marketing.css';
 import WelcomePricingPreview, { type WelcomePlanPreview } from '@/components/WelcomePricingPreview';
 import ProductProofSection from '@/components/marketing/ProductProofSection';
 import TrustProofSection from '@/components/marketing/TrustProofSection';
+import RetailRealityBelt from '@/components/marketing/RetailRealityBelt';
+import RevealOnScroll from '@/components/marketing/RevealOnScroll';
 import { HeroCTAGroup, LiveDemoButton, WhatsAppDemoButton } from '@/components/marketing/WelcomeCTA';
 import HeroProductComposition from '@/components/marketing/visuals/HeroProductComposition';
 import { Logo } from '@/components/Logo';
@@ -130,6 +132,7 @@ export default function WelcomePage() {
       </section>
 
       <EarlyTrustStrip />
+      <RetailRealityBelt />
       <ProductProofSection />
       <TrustProofSection />
 
@@ -154,28 +157,32 @@ export default function WelcomePage() {
         </div>
       </section>
 
-      <section className="border-y border-accent/20 bg-accent px-4 py-8 text-white sm:px-6 sm:py-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold font-display sm:text-4xl">Stop guessing what is in the till.</h2>
-          <p className="mt-3 text-white/70">
-            WhatsApp us for a 15-minute walkthrough. We will show the counter, the stockroom, cash close and owner reports.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <WhatsAppDemoButton />
-            <LiveDemoButton className="border-white/20 bg-white/10 text-white hover:border-white/30 hover:bg-white/15" />
+      <RevealOnScroll>
+        <section className="border-y border-accent/20 bg-accent px-4 py-8 text-white sm:px-6 sm:py-12">
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-3xl font-bold font-display sm:text-4xl">Stop guessing what is in the till.</h2>
+            <p className="mt-3 text-white/70">
+              WhatsApp us for a 15-minute walkthrough. We will show the counter, the stockroom, cash close and owner reports.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <WhatsAppDemoButton />
+              <LiveDemoButton className="border-white/20 bg-white/10 text-white hover:border-white/30 hover:bg-white/15" />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </RevealOnScroll>
 
-      <footer className="px-4 py-8 sm:px-6">
-        <div className="mx-auto max-w-6xl">
-          <Logo variant="lockup" size={22} alt="TillFlow" />
-          <p className="mt-2 text-xs leading-5 text-ink/45">
-            Built for Ghanaian retail · Works on phone, tablet and laptop
-          </p>
-          <p className="mt-2 text-[11px] text-muted">© 2026 TillFlow. A Tish Group product.</p>
-        </div>
-      </footer>
+      <RevealOnScroll>
+        <footer className="px-4 py-8 sm:px-6">
+          <div className="mx-auto max-w-6xl">
+            <Logo variant="lockup" size={22} alt="TillFlow" />
+            <p className="mt-2 text-xs leading-5 text-ink/45">
+              Built for Ghanaian retail · Works on phone, tablet and laptop
+            </p>
+            <p className="mt-2 text-[11px] text-muted">© 2026 TillFlow. A Tish Group product.</p>
+          </div>
+        </footer>
+      </RevealOnScroll>
     </div>
   );
 }

@@ -20,10 +20,30 @@ export const DEMO_KPIS = {
   lowStock: '14',
 } as const;
 
+/** Numeric twins of DEMO_KPIS used to drive count-up animation without re-parsing formatted strings. */
+export const DEMO_KPI_NUMBERS = {
+  todaySales: 8420,
+  grossMargin: 24.8,
+  todayReceipts: 126,
+  outstandingDebtors: 960,
+  openIssues: 3,
+  expectedCash: 3185,
+  revenue: 8420,
+  grossProfit: 2088,
+  transactions: 126,
+  lowStock: 14,
+} as const;
+
+export const DEMO_STOCK_SUMMARY = {
+  totalProducts: 1024,
+  lowStock: 14,
+  outOfStock: 2,
+} as const;
+
 export const DEMO_POS_CART = [
-  { name: 'Royal Aroma Rice 5kg', qty: 1, price: 'GH₵82.00' },
-  { name: 'Frytol Oil 1L', qty: 1, price: 'GH₵45.00' },
-  { name: 'Peak Milk Sachet', qty: 1, price: 'GH₵12.00' },
+  { name: 'Royal Aroma Rice 5kg', qty: 1, price: 'GH₵82.00', priceValue: 82 },
+  { name: 'Frytol Oil 1L', qty: 1, price: 'GH₵45.00', priceValue: 45 },
+  { name: 'Peak Milk Sachet', qty: 1, price: 'GH₵12.00', priceValue: 12 },
 ] as const;
 
 export const DEMO_POS_TOTALS = {

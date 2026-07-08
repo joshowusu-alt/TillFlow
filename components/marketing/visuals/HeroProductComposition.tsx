@@ -1,5 +1,6 @@
 import { CommandCentrePreview } from '@/components/marketing/visuals/CommandCentrePreview';
-import { DEMO_KPIS, DEMO_LIVE_SALE } from '@/lib/marketing/demo-metrics';
+import CountUp from '@/components/marketing/CountUp';
+import { DEMO_KPI_NUMBERS, DEMO_LIVE_SALE } from '@/lib/marketing/demo-metrics';
 
 /**
  * A lightweight "sale in progress" teaser — deliberately a different, smaller
@@ -47,10 +48,10 @@ function TillCheckTeaser() {
 
 function MobileHeroProof() {
   const metrics = [
-    { label: "Today's sales", value: DEMO_KPIS.todaySales },
-    { label: 'Expected cash', value: DEMO_KPIS.expectedCash },
-    { label: 'Receipts', value: DEMO_KPIS.todayReceipts },
-    { label: 'Low stock', value: DEMO_KPIS.lowStock },
+    { label: "Today's sales", value: <CountUp value={DEMO_KPI_NUMBERS.todaySales} prefix="GH₵" /> },
+    { label: 'Expected cash', value: <CountUp value={DEMO_KPI_NUMBERS.expectedCash} prefix="GH₵" /> },
+    { label: 'Receipts', value: <CountUp value={DEMO_KPI_NUMBERS.todayReceipts} /> },
+    { label: 'Low stock', value: <CountUp value={DEMO_KPI_NUMBERS.lowStock} /> },
   ];
 
   return (

@@ -18,9 +18,12 @@ const sizeClasses: Record<CtaSize, string> = {
 export function WhatsAppDemoButton({
   size = 'md',
   className = '',
+  pulseOnce = false,
 }: {
   size?: CtaSize;
   className?: string;
+  /** Plays a single subtle pulse after the hero settles. Use on exactly one instance per page. */
+  pulseOnce?: boolean;
 }) {
   const url = getTillflowWhatsAppUrl();
   if (!url) return null;
@@ -30,7 +33,9 @@ export function WhatsAppDemoButton({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex min-h-11 items-center justify-center gap-2 bg-accent font-bold text-white shadow-lg shadow-accent/25 transition hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-xl hover:shadow-accent/30 active:translate-y-0 active:scale-[0.98] ${sizeClasses[size]} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-2 bg-accent font-bold text-white shadow-lg shadow-accent/25 transition duration-150 hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-xl hover:shadow-accent/30 active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
+        pulseOnce ? 'welcome-cta-pulse-once' : ''
+      } ${sizeClasses[size]} ${className}`}
     >
       {WHATSAPP_ICON}
       Book demo on WhatsApp
@@ -48,7 +53,7 @@ export function LiveDemoButton({
   return (
     <Link
       href="/demo"
-      className={`inline-flex min-h-11 items-center justify-center gap-2 border-2 border-accent/25 bg-white font-bold text-accent shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md active:translate-y-0 active:scale-[0.98] ${sizeClasses[size]} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center gap-2 border-2 border-accent/25 bg-white font-bold text-accent shadow-sm transition duration-150 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md active:translate-y-0 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${sizeClasses[size]} ${className}`}
     >
       <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
@@ -62,7 +67,7 @@ export function FreeTrialLink({ className = '' }: { className?: string }) {
   return (
     <Link
       href="/register"
-      className={`font-semibold text-ink/55 underline-offset-4 transition hover:text-accent hover:underline ${className}`}
+      className={`rounded-md font-semibold text-ink/55 underline-offset-4 transition duration-150 hover:text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${className}`}
     >
       Start free trial
     </Link>
@@ -72,7 +77,7 @@ export function FreeTrialLink({ className = '' }: { className?: string }) {
 export function HeroCTAGroup({ className = '' }: { className?: string }) {
   return (
     <div className={`flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center ${className}`}>
-      <WhatsAppDemoButton className="w-full sm:w-auto" />
+      <WhatsAppDemoButton className="w-full sm:w-auto" pulseOnce />
       <LiveDemoButton className="w-full sm:w-auto" />
     </div>
   );

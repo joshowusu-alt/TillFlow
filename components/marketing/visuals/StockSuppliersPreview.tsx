@@ -1,4 +1,5 @@
-import { DEMO_BUSINESS } from '@/lib/marketing/demo-metrics';
+import CountUp from '@/components/marketing/CountUp';
+import { DEMO_BUSINESS, DEMO_STOCK_SUMMARY } from '@/lib/marketing/demo-metrics';
 import { MarketingEyebrow } from '@/components/marketing/visuals/CommandCentrePreview';
 
 const STOCK_ROWS = [
@@ -25,9 +26,9 @@ export function StockSuppliersPreview({ className = '' }: { className?: string }
 
       <div className="operational-metric-grid operational-metric-grid--3 grid grid-cols-3 gap-2">
         {[
-          { label: 'Total products', value: '1,024' },
-          { label: 'Low stock', value: '14' },
-          { label: 'Out of stock', value: '2' },
+          { label: 'Total products', value: <CountUp value={DEMO_STOCK_SUMMARY.totalProducts} /> },
+          { label: 'Low stock', value: <CountUp value={DEMO_STOCK_SUMMARY.lowStock} /> },
+          { label: 'Out of stock', value: <CountUp value={DEMO_STOCK_SUMMARY.outOfStock} /> },
         ].map((metric) => (
           <div key={metric.label} className="rounded-xl border border-black/5 bg-white p-3 shadow-sm">
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">{metric.label}</div>

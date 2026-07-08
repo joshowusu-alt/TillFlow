@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import StatCard from '@/components/StatCard';
-import { DEMO_BUSINESS, DEMO_KPIS } from '@/lib/marketing/demo-metrics';
+import CountUp from '@/components/marketing/CountUp';
+import { DEMO_BUSINESS, DEMO_KPI_NUMBERS, DEMO_KPIS } from '@/lib/marketing/demo-metrics';
 
 export function MarketingEyebrow({ children }: { children: ReactNode }) {
   return (
@@ -12,11 +13,36 @@ export function MarketingEyebrow({ children }: { children: ReactNode }) {
 
 export function CommandCentrePreview({ compact = false }: { compact?: boolean }) {
   const postureMetrics = [
-    { label: "Today's sales", value: DEMO_KPIS.todaySales, sub: 'Gross sales today', tone: 'border-slate-200/80 bg-white/95' },
-    { label: 'Gross margin', value: DEMO_KPIS.grossMargin, sub: 'After cost of goods', tone: 'border-emerald-100/70 bg-white/95' },
-    { label: "Today's receipts", value: DEMO_KPIS.todayReceipts, sub: 'Completed transactions', tone: 'border-slate-200/80 bg-white/95' },
-    { label: 'Outstanding debtors', value: DEMO_KPIS.outstandingDebtors, sub: 'Customer credit due', tone: 'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/50' },
-    { label: 'Open issues', value: DEMO_KPIS.openIssues, sub: 'Requiring attention', tone: 'border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/50' },
+    {
+      label: "Today's sales",
+      value: <CountUp value={DEMO_KPI_NUMBERS.todaySales} prefix="GH₵" />,
+      sub: 'Gross sales today',
+      tone: 'border-slate-200/80 bg-white/95',
+    },
+    {
+      label: 'Gross margin',
+      value: <CountUp value={DEMO_KPI_NUMBERS.grossMargin} suffix="%" decimals={1} />,
+      sub: 'After cost of goods',
+      tone: 'border-emerald-100/70 bg-white/95',
+    },
+    {
+      label: "Today's receipts",
+      value: <CountUp value={DEMO_KPI_NUMBERS.todayReceipts} />,
+      sub: 'Completed transactions',
+      tone: 'border-slate-200/80 bg-white/95',
+    },
+    {
+      label: 'Outstanding debtors',
+      value: <CountUp value={DEMO_KPI_NUMBERS.outstandingDebtors} prefix="GH₵" />,
+      sub: 'Customer credit due',
+      tone: 'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/50',
+    },
+    {
+      label: 'Open issues',
+      value: <CountUp value={DEMO_KPI_NUMBERS.openIssues} />,
+      sub: 'Requiring attention',
+      tone: 'border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/50',
+    },
   ];
 
   return (
@@ -50,7 +76,12 @@ export function CommandCentrePreview({ compact = false }: { compact?: boolean })
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <StatCard label="Expected cash" value={DEMO_KPIS.expectedCash} tone="success" helper="Cash that should be in the till now" />
+        <StatCard
+          label="Expected cash"
+          value={<CountUp value={DEMO_KPI_NUMBERS.expectedCash} prefix="GH₵" />}
+          tone="success"
+          helper="Cash that should be in the till now"
+        />
         <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
           <div className="flex items-start gap-3">
             <span className="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-amber-500" />

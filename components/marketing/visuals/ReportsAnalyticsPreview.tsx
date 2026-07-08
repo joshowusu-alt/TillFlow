@@ -1,11 +1,12 @@
-import { DEMO_ANALYTICS } from '@/lib/marketing/demo-metrics';
+import CountUp from '@/components/marketing/CountUp';
+import { DEMO_ANALYTICS, DEMO_KPI_NUMBERS } from '@/lib/marketing/demo-metrics';
 
 export function ReportsAnalyticsPreview({ className = '' }: { className?: string }) {
   const metrics = [
-    { label: 'Revenue', value: DEMO_ANALYTICS.revenue },
-    { label: 'Gross profit', value: DEMO_ANALYTICS.grossProfit },
-    { label: 'Margin', value: DEMO_ANALYTICS.margin },
-    { label: 'Transactions', value: DEMO_ANALYTICS.transactions },
+    { label: 'Revenue', value: <CountUp value={DEMO_KPI_NUMBERS.revenue} prefix="GH₵" /> },
+    { label: 'Gross profit', value: <CountUp value={DEMO_KPI_NUMBERS.grossProfit} prefix="GH₵" /> },
+    { label: 'Margin', value: <CountUp value={DEMO_KPI_NUMBERS.grossMargin} suffix="%" decimals={1} /> },
+    { label: 'Transactions', value: <CountUp value={DEMO_KPI_NUMBERS.transactions} /> },
   ];
 
   return (

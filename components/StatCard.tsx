@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
+
 type StatCardProps = {
   label: string;
-  value: string;
+  value: ReactNode;
   tone?: 'default' | 'accent' | 'danger' | 'success' | 'warn';
   helper?: string;
 };

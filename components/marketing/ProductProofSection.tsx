@@ -48,8 +48,8 @@ export default function ProductProofSection() {
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {PRODUCT_PROOF_PANELS.map((panel) => (
-            <RevealOnScroll key={panel.id}>
+          {PRODUCT_PROOF_PANELS.map((panel, index) => (
+            <RevealOnScroll key={panel.id} delayMs={index * 60}>
               <article className="overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white shadow-card">
                 <div className="border-b border-slate-200/80 px-4 py-3 sm:px-5 sm:py-4">
                   <h3 className="text-lg font-display font-bold text-ink">{panel.title}</h3>

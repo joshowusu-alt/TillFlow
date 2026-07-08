@@ -1,4 +1,5 @@
-import { DEMO_KPIS, DEMO_SHIFT_LINES } from '@/lib/marketing/demo-metrics';
+import CountUp from '@/components/marketing/CountUp';
+import { DEMO_KPI_NUMBERS, DEMO_SHIFT_LINES } from '@/lib/marketing/demo-metrics';
 
 export function ShiftClosePreview({ compact = false, className = '' }: { compact?: boolean; className?: string }) {
   return (
@@ -28,7 +29,7 @@ export function ShiftClosePreview({ compact = false, className = '' }: { compact
       <div className={`mt-4 rounded-xl border p-3 ${compact ? '' : 'sm:p-4'} border-black/10 bg-slate-50`}>
         <div className="text-[10px] font-semibold uppercase tracking-widest text-black/40">Expected cash</div>
         <div className="mt-1 text-xl font-display font-bold text-emerald-700 tabular-nums sm:text-2xl">
-          {DEMO_KPIS.expectedCash}
+          <CountUp value={DEMO_KPI_NUMBERS.expectedCash} prefix="GH₵" />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
           <div>
