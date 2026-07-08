@@ -171,12 +171,12 @@ async function run() {
     await page.locator('select[name="role"]').selectOption('CASHIER');
     await page.getByRole('button', { name: /Create User/i }).click();
     // Wait for the user to appear in the table (server action redirects on same page)
-    await page.getByText(e2eUserEmail).first().waitFor({ timeout: 30000 });
+    const createdUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
+    await createdUserRow.waitFor({ state: 'visible', timeout: 30000 });
     report.users.create = true;
     step('2/12 Create user OK');
 
     step('3/12 Edit user');
-    const createdUserRow = page.locator('tr', { hasText: e2eUserEmail }).first();
     await createdUserRow.getByRole('link', { name: /Edit/i }).click();
     // Wait for edit form to appear (name input gets populated)
     await page.waitForTimeout(2000);
