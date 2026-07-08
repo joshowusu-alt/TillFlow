@@ -212,7 +212,7 @@ async function run() {
     await openPurchaseForm(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
-    await page.getByRole('button', { name: /Receive Purchase/i }).click();
+    await page.getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     // Wait for the return link to appear (means purchase was created and page re-rendered)
     await page.locator('a[href^="/purchases/return/"]').first().waitFor({ timeout: 30000 });
     const purchaseReturnHref = await page.locator('a[href^="/purchases/return/"]').first().getAttribute('href');
@@ -242,7 +242,7 @@ async function run() {
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
-    await page.getByRole('button', { name: /Receive Purchase/i }).click();
+    await page.getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
     await page.waitForTimeout(5000);
     step('6b/12 Create unpaid purchase OK');
 
