@@ -56,7 +56,7 @@ export const PRODUCT_PROOF_PANELS = [
 ] as const;
 
 export const TRUST_PROOF = {
-  headline: 'Trusted in daily retail use.',
+  headline: 'Live retail proof from EL-SHADDAI Supermarket.',
   intro:
     'EL-SHADDAI Supermarket uses TillFlow to run daily sales, staff shifts, stock tracking and cash control across 1,000+ products.',
   business: 'EL-SHADDAI Supermarket',
