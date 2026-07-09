@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { requireBusiness, getFirstStore } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
 import { getBusinessPlan } from '@/lib/features';
 import TopNav from '@/components/TopNav';
 import BottomTabBar from '@/components/BottomTabBar';
@@ -119,21 +119,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   const { user, business, store } = await measureServerOperation(
     'app.protected.layout-gate',
-    async () => {
-      const auth = await measureServerOperation(
-        'app.protected.require-business',
-        () => requireBusiness(),
-        { route: pathname || 'protected-layout' },
-        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-      );
-      const firstStore = await measureServerOperation(
-        'app.protected.first-store',
-        () => getFirstStore(auth.business.id),
-        { businessId: auth.business.id, route: pathname || 'protected-layout' },
-        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
-      );
-      return { user: auth.user, business: auth.business, store: firstStore };
-    },
+    () => requireBusinessAndOptionalStore(),
     { route: pathname || 'protected-layout' },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );

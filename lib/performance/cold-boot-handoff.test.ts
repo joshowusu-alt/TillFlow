@@ -40,12 +40,15 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 
-  it('suppresses duplicate fullscreen root loading during an active launch handoff', () => {
+  it('renders branded root loading immediately on first paint', () => {
     expect(rootLoading).toContain('RootLaunchLoading');
-    expect(rootLaunchLoading).toContain('tillflow:launching');
-    expect(rootLaunchLoading).toContain('tillflow:launchSplashSeen');
     expect(rootLaunchLoading).toContain('AppLaunchLoading');
-    expect(rootLaunchLoading).toContain('return null');
+    expect(rootLaunchLoading).toContain('mode="launch"');
+    expect(rootLaunchLoading).toContain('shell="fullscreen"');
+    expect(rootLaunchLoading).toContain('Opening your business...');
+    expect(rootLaunchLoading).toContain('Checking your session and sync status');
+    expect(rootLaunchLoading).not.toContain('return null');
+    expect(rootLaunchLoading).not.toContain('useState<boolean | null>');
   });
 
   it('uses approved launch timing constants and performance marks', () => {
@@ -57,25 +60,23 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
 
     expect(launchRedirector).toContain('LAUNCH_REDIRECT_DELAY_MS');
     expect(launchCompletion).toContain('LAUNCH_COMPLETION_HOLD_MS');
-    expect(launchCompletion).toContain('LAUNCH_SPLASH_FADE_MS');
-    expect(launchCompletion).toContain('LAUNCH_SPLASH_TRANSITION_MS');
     expect(launchCompletion).toContain("'tillflow.launch.completion.mounted'");
-    expect(launchCompletion).toContain("'tillflow.launch.splash.remove.started'");
-    expect(launchCompletion).toContain("'tillflow.launch.splash.removed'");
+    expect(launchCompletion).toContain("'tillflow.launch.handoff.completed'");
     expect(launchCompletion).not.toContain(', 480');
   });
 
-  it('fades the pre-hydration splash with opacity only and removes it after the transition', () => {
-    expect(launchCompletion).toContain("el.style.transition = `opacity ${LAUNCH_SPLASH_TRANSITION_MS / 1000}s ease`");
-    expect(launchCompletion).toContain("el.style.opacity = '0'");
-    expect(launchCompletion).toContain("el.style.animation = 'none'");
-    expect(launchCompletion).toContain("el.style.transform = 'none'");
-    expect(launchCompletion).toContain("el.style.position = 'fixed'");
-    expect(launchCompletion).toContain("el.style.inset = '0'");
-    expect(launchCompletion).toContain("el.style.height = '100%'");
-    expect(launchCompletion).not.toContain('maxHeight');
-    expect(launchCompletion).not.toContain('scale');
-    expect(launchCompletion).toContain('LAUNCH_SPLASH_FADE_MS');
+  it('completes launch session flags from the protected shell', () => {
+    expect(launchCompletion).toContain('LAUNCH_COMPLETION_HOLD_MS');
+    expect(launchCompletion).toContain("'tillflow.launch.completion.mounted'");
+    expect(launchCompletion).toContain("'tillflow.launch.handoff.completed'");
+    expect(launchCompletion).not.toContain('tillflow-initial-splash');
+    expect(launchCompletion).not.toContain('removeInitialSplash');
+  });
+
+  it('parallelizes protected layout business and store gate', () => {
+    expect(protectedLayout).toContain('requireBusinessAndOptionalStore');
+    expect(protectedLayout).not.toContain('getFirstStore');
+    expect(protectedLayout).not.toContain('requireBusiness()');
   });
 
   it('preserves auth and role gates on owner onboarding', () => {

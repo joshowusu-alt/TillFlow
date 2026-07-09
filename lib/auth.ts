@@ -66,16 +66,16 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function findSessionWithP1017Retry<T>(findSession: () => Promise<T>) {
+async function withAuthReadP1017Retry<T>(operation: string, read: () => Promise<T>) {
   try {
-    return await findSession();
+    return await read();
   } catch (error) {
     if (!isPrismaP1017(error)) {
       throw error;
     }
 
     appLog('warn', 'db.connection.retry', {
-      operation: 'auth.session.findUnique',
+      operation,
       code: 'P1017',
       attempt: 1,
       operationType: 'read-auth',
@@ -84,18 +84,18 @@ async function findSessionWithP1017Retry<T>(findSession: () => Promise<T>) {
     await delay(150);
 
     try {
-      const session = await findSession();
+      const result = await read();
       appLog('info', 'db.connection.retry.success', {
-        operation: 'auth.session.findUnique',
+        operation,
         code: 'P1017',
         attempt: 1,
         operationType: 'read-auth',
       });
-      return session;
+      return result;
     } catch (retryError) {
       if (isPrismaP1017(retryError)) {
         appLog('error', 'db.connection.retry.failed', {
-          operation: 'auth.session.findUnique',
+          operation,
           code: 'P1017',
           attempt: 1,
           operationType: 'read-auth',
@@ -104,6 +104,10 @@ async function findSessionWithP1017Retry<T>(findSession: () => Promise<T>) {
       throw retryError;
     }
   }
+}
+
+async function findSessionWithP1017Retry<T>(findSession: () => Promise<T>) {
+  return withAuthReadP1017Retry('auth.session.findUnique', findSession);
 }
 
 function isMissingControlPlaneAuthError(error: unknown) {
@@ -286,10 +290,14 @@ export async function requireRole(roles: Role[]) {
  * called from both layout and page.
  */
 const _getBusiness = cache(async (businessId: string) => {
-  const [{ business, billingSchemaReady }, controlSubscription] = await Promise.all([
-    findBusinessForAuth(businessId),
-    findControlSubscriptionForAuth(businessId),
-  ]);
+  const [{ business, billingSchemaReady }, controlSubscription] = await withAuthReadP1017Retry(
+    'auth.business.findForAuth',
+    () =>
+      Promise.all([
+        findBusinessForAuth(businessId),
+        findControlSubscriptionForAuth(businessId),
+      ]),
+  );
 
   if (!business) return null;
 
@@ -335,10 +343,12 @@ const _getBusiness = cache(async (businessId: string) => {
  * Cached store lookup — only hits DB once per request.
  */
 const _getStore = cache(async (businessId: string) => {
-  return prisma.store.findFirst({
-    where: { businessId },
-    select: { id: true, name: true, address: true, businessId: true }
-  });
+  return withAuthReadP1017Retry('auth.store.findFirst', () =>
+    prisma.store.findFirst({
+      where: { businessId },
+      select: { id: true, name: true, address: true, businessId: true },
+    }),
+  );
 });
 
 /**
@@ -363,13 +373,22 @@ export async function requireBusiness(roles?: Role[]) {
  * Fetches business and store in parallel to reduce latency.
  */
 export async function requireBusinessStore(roles?: Role[]) {
+  const { user, business, store } = await requireBusinessAndOptionalStore(roles);
+  if (!store) redirect('/settings');
+  return { user, business, store };
+}
+
+/**
+ * Authenticate and return user + Business + first Store (store may be null).
+ * Fetches business and store in parallel for protected shell layout gates.
+ */
+export async function requireBusinessAndOptionalStore(roles?: Role[]) {
   const user = roles ? await requireRole(roles) : await requireUser();
   const [business, store] = await Promise.all([
     _getBusiness(user.businessId),
     _getStore(user.businessId),
   ]);
   if (!business) redirect('/login');
-  if (!store) redirect('/settings');
   return { user, business, store };
 }
 

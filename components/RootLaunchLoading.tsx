@@ -1,34 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import AppLaunchLoading from '@/components/AppLaunchLoading';
 
-function isActiveLaunchHandoff() {
-  try {
-    return (
-      window.sessionStorage.getItem('tillflow:launching') === '1' &&
-      window.sessionStorage.getItem('tillflow:launchSplashSeen') !== '1'
-    );
-  } catch {
-    return false;
-  }
-}
+export const ROOT_COLD_START_MESSAGE = 'Opening your business...';
+export const ROOT_COLD_START_DETAIL = 'Checking your session and sync status';
 
 /**
- * Root route loading. During an active launch handoff the inline
- * #tillflow-initial-splash already covers the screen — avoid stacking
- * another fullscreen launch layer on top.
+ * Root route loading. Renders branded cold-start feedback on the first paint
+ * (server and client) so authenticated cold opens never show a blank shell.
  */
 export default function RootLaunchLoading() {
-  const [showLaunchLoading, setShowLaunchLoading] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setShowLaunchLoading(!isActiveLaunchHandoff());
-  }, []);
-
-  if (showLaunchLoading !== true) {
-    return null;
-  }
-
-  return <AppLaunchLoading mode="launch" shell="fullscreen" />;
+  return (
+    <AppLaunchLoading
+      mode="launch"
+      shell="fullscreen"
+      message={ROOT_COLD_START_MESSAGE}
+      detail={ROOT_COLD_START_DETAIL}
+    />
+  );
 }

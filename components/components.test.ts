@@ -2,6 +2,10 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import AppLaunchLoading from '@/components/AppLaunchLoading';
+import RootLaunchLoading, {
+  ROOT_COLD_START_DETAIL,
+  ROOT_COLD_START_MESSAGE,
+} from '@/components/RootLaunchLoading';
 import { resolveDownloadFilename } from '@/components/DownloadLink';
 import ResponsiveModal from '@/components/ResponsiveModal';
 
@@ -90,6 +94,16 @@ describe('ResponsiveModal', () => {
 
         expect(document.body.style.overflow).toBe('');
         expect(document.documentElement.style.overflow).toBe('');
+    });
+});
+
+describe('RootLaunchLoading', () => {
+    it('renders branded cold-start copy on the first paint', () => {
+        render(React.createElement(RootLaunchLoading));
+
+        expect(screen.getByText(ROOT_COLD_START_MESSAGE)).toBeInTheDocument();
+        expect(screen.getByText(ROOT_COLD_START_DETAIL)).toBeInTheDocument();
+        expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();
     });
 });
 

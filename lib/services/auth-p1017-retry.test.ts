@@ -173,11 +173,13 @@ describe('Phase C8: auth P1017 session lookup retry', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('keeps P1017 retry scoped to auth session reads only', () => {
+  it('keeps P1017 retry scoped to auth reads in lib/auth only', () => {
     const auth = read('lib/auth.ts');
+    expect(auth).toContain('withAuthReadP1017Retry');
     expect(auth).toContain('findSessionWithP1017Retry');
-    expect(auth).toContain('prisma.session.findUnique({');
-    expect(auth).toContain("operation: 'auth.session.findUnique'");
+    expect(auth).toContain('auth.session.findUnique');
+    expect(auth).toContain('auth.business.findForAuth');
+    expect(auth).toContain('auth.store.findFirst');
 
     [
       'lib/services/sales.ts',
