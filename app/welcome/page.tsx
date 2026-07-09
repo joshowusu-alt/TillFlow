@@ -79,9 +79,9 @@ function EarlyTrustStrip() {
 
 export default function WelcomePage() {
   return (
-    <div className="welcome-page min-h-screen overflow-x-hidden bg-paper">
+    <div className="welcome-page min-h-screen overflow-x-clip bg-paper">
       <header
-        className="sticky top-0 z-50 border-b border-border bg-white/95 backdrop-blur-xl"
+        className="sticky top-0 z-50 border-b border-border bg-white/[0.98]"
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top, 0px))' }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-2.5 sm:gap-3 sm:px-6 sm:py-3">
