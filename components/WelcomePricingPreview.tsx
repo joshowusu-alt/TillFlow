@@ -10,6 +10,8 @@ export type WelcomePlanPreview = {
   name: string;
   monthlyPrice: number;
   note: string;
+  /** Stage-of-control identity shown above the plan name. */
+  maturity?: string;
   featured?: boolean;
   bullets: string[];
   addon?: {
@@ -38,14 +40,14 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
     <div className="mt-7 rounded-[1.75rem] border border-border bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">Simple pricing</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted">Stages of control</div>
           <div className="mt-2 text-sm leading-6 text-ink/50">
             {billingCycle === 'yearly'
               ? "You're on yearly billing — 2 months free versus paying monthly."
               : 'Switch to yearly and get 2 months off.'}
           </div>
           <div className="mt-1 text-xs leading-5 text-muted">
-            Growth is best for most owner-led retail businesses.
+            Growth is Owner View — see what is happening without standing at the counter all day.
           </div>
         </div>
 
@@ -80,10 +82,15 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
             <RevealOnScroll key={plan.name} delayMs={index * 60}>
               <div
                 data-testid={`plan-card-${plan.name.toLowerCase()}`}
-                className={`flex h-full flex-col rounded-2xl border bg-white px-4 py-4 text-left ${plan.featured ? 'border-accent/25 shadow-lg shadow-accent/10 ring-1 ring-accent/10' : 'border-border shadow-sm'}`}
+                className={`flex h-full flex-col rounded-2xl border bg-white px-4 py-4 text-left ${plan.featured ? 'border-accent/25 shadow-md ring-1 ring-accent/10' : 'border-border shadow-sm'}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-ink">{plan.name}</div>
+                  <div>
+                    {plan.maturity ? (
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">{plan.maturity}</div>
+                    ) : null}
+                    <div className={`text-sm font-semibold text-ink ${plan.maturity ? 'mt-1' : ''}`}>{plan.name}</div>
+                  </div>
                   {plan.featured ? (
                     <span className="rounded-full bg-accentSoft px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
                       Recommended
@@ -132,13 +139,10 @@ export default function WelcomePricingPreview({ plans }: { plans: WelcomePlanPre
                   </div>
                 ) : null}
 
+                {/* Secondary trial actions — visually quieter than the page WhatsApp primary. */}
                 <Link
                   href="/register"
-                  className={
-                    plan.featured
-                      ? 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-gradient-to-r from-accent to-accent/80 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-accent/25 transition-all duration-150 hover:shadow-xl hover:shadow-accent/30 hover:-translate-y-0.5 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2'
-                      : 'mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink transition-all duration-150 hover:border-accent/30 hover:text-accent active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2'
-                  }
+                  className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-semibold text-ink/70 transition-all duration-150 hover:border-accent/30 hover:text-accent active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   {ctaLabel}
                 </Link>

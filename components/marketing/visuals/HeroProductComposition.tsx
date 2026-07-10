@@ -93,6 +93,7 @@ export default function HeroProductComposition() {
     <div data-testid="hero-product-composition" className="welcome-hero-visual relative mx-auto w-full max-w-xl lg:max-w-none">
       <div className="lg:hidden">
         <MobileHeroProof />
+        <p className="mt-2 text-center text-[10px] text-muted">TillFlow demo · example data</p>
       </div>
 
       <div className="hidden lg:block">
@@ -107,7 +108,7 @@ export default function HeroProductComposition() {
           </div>
         </div>
 
-        <p className="mt-3 text-center text-[11px] text-muted">Product preview built from TillFlow app screens · example data</p>
+        <p className="mt-3 text-center text-[11px] text-muted">Product preview built from TillFlow app screens</p>
       </div>
     </div>
   );

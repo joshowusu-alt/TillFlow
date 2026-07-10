@@ -161,3 +161,8 @@
     transform: translateY(12px);
   }
 }
+
+/* Keep in-page nav targets clear of the sticky welcome header. */
+html {
+  scroll-padding-top: 8rem;
+}

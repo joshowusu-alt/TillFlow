@@ -51,7 +51,7 @@ export function CommandCentrePreview({ compact = false }: { compact?: boolean })
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <MarketingEyebrow>Operations today</MarketingEyebrow>
+          <MarketingEyebrow>Owner view</MarketingEyebrow>
           <span className="text-sm font-display font-semibold text-ink sm:text-base">Today&apos;s focus</span>
         </div>
         <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
@@ -59,13 +59,10 @@ export function CommandCentrePreview({ compact = false }: { compact?: boolean })
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-lg font-display font-bold text-ink sm:text-xl">{DEMO_BUSINESS.name}</h3>
-        <span className="text-xs text-muted">· {DEMO_BUSINESS.owner}</span>
-      </div>
+      <p className="mt-2 text-[10px] text-muted">TillFlow demo · example data</p>
 
       {/* Never exceed 3 columns: five columns cannot hold GH₵ figures at readable sizes inside the hero column. */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {postureMetrics.map((metric) => (
           <div key={metric.label} className={`min-w-0 rounded-2xl border p-3 shadow-card sm:p-4 ${metric.tone}`}>
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted sm:text-[11px]">{metric.label}</p>

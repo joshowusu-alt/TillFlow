@@ -1,9 +1,10 @@
 /** Demo-safe static figures for welcome marketing visuals only. */
+/** Public marketing visuals only — not a real customer name. */
 export const DEMO_BUSINESS = {
-  name: 'Adom Retail Demo',
+  name: 'TillFlow Demo Business',
   branch: 'Main Branch',
-  owner: 'Ama Owner',
-  cashier: 'Kwame Cashier',
+  owner: 'Owner',
+  cashier: 'Cashier',
 } as const;
 
 export const DEMO_KPIS = {

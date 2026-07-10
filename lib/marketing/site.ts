@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
-export const TILLFLOW_SITE_TITLE = 'TillFlow — POS, Stock & Cash Control for Ghanaian Retail';
+export const TILLFLOW_SITE_TITLE = 'TillFlow — Complete Control for Ghanaian Retail';
 
 export const TILLFLOW_SITE_DESCRIPTION =
-  'Sell at the counter, track stock, manage cash and MoMo, and know what should be in the till at closing.';
+  'Complete control over your business. Know before you count — expected cash, stock, MoMo and closing confidence for Ghanaian retail owners.';
 
 export const TILLFLOW_CANONICAL_WELCOME = 'https://www.tillflow.app/welcome';
 
@@ -68,7 +68,7 @@ export function buildTillflowPublicMetadata(options: PublicMetadataOptions = {})
           url: ogImage,
           width: TILLFLOW_OG_IMAGE_WIDTH,
           height: TILLFLOW_OG_IMAGE_HEIGHT,
-          alt: 'TillFlow — POS, stock and cash control for Ghanaian retail',
+          alt: 'TillFlow — complete business control for Ghanaian retail',
         },
       ],
     },

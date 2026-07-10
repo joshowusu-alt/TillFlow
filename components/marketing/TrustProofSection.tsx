@@ -2,17 +2,15 @@
 
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import RevealOnScroll from '@/components/marketing/RevealOnScroll';
-import { TRUST_PROOF, TRUST_PROOF_THEMES } from '@/lib/marketing/welcome-content';
+import { BUSINESS_STORIES, BUSINESS_STORIES_SECTION } from '@/lib/marketing/welcome-content';
 
-const AUTO_ADVANCE_MS = 4500;
+const AUTO_ADVANCE_MS = 5500;
 const TRANSITION_MS = 150;
 const SWIPE_THRESHOLD_PX = 40;
 
 /**
- * Compact proof carousel for a single named customer (EL-SHADDAI / Akosua).
- * Auto-advances between proof angles, pauses on hover/touch, stops advancing
- * permanently once the visitor navigates manually, and always keeps content
- * readable without waiting on the transition.
+ * Business-story carousel. Auto-advances between retailers, pauses on hover/touch,
+ * stops advancing permanently once the visitor navigates manually.
  */
 export default function TrustProofSection() {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -30,7 +28,7 @@ export default function TrustProofSection() {
     if (reducedMotionRef.current || hasInteractedRef.current || isPaused) return;
 
     const timer = window.setInterval(() => {
-      goTo((activeIndex + 1) % TRUST_PROOF_THEMES.length, { auto: true });
+      goTo((activeIndex + 1) % BUSINESS_STORIES.length, { auto: true });
     }, AUTO_ADVANCE_MS);
 
     return () => window.clearInterval(timer);
@@ -66,22 +64,22 @@ export default function TrustProofSection() {
     if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX) return;
 
     if (deltaX < 0) {
-      goTo((activeIndex + 1) % TRUST_PROOF_THEMES.length);
+      goTo((activeIndex + 1) % BUSINESS_STORIES.length);
     } else {
-      goTo((activeIndex - 1 + TRUST_PROOF_THEMES.length) % TRUST_PROOF_THEMES.length);
+      goTo((activeIndex - 1 + BUSINESS_STORIES.length) % BUSINESS_STORIES.length);
     }
   }
 
-  const active = TRUST_PROOF_THEMES[activeIndex];
+  const active = BUSINESS_STORIES[activeIndex];
 
   const dots = (
-    <div className="flex items-center justify-center gap-2" role="group" aria-label="Proof points">
-      {TRUST_PROOF_THEMES.map((theme, index) => (
+    <div className="flex items-center justify-center gap-2" role="group" aria-label="Business stories">
+      {BUSINESS_STORIES.map((story, index) => (
         <button
-          key={theme.title}
+          key={story.id}
           type="button"
           aria-current={index === activeIndex}
-          aria-label={`Show proof: ${theme.title}`}
+          aria-label={`Show story: ${story.business}`}
           onClick={() => goTo(index)}
           className={`h-2 rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
             index === activeIndex ? 'w-6 bg-accent' : 'w-2 bg-slate-300 hover:bg-slate-400'
@@ -92,43 +90,67 @@ export default function TrustProofSection() {
   );
 
   return (
-    <section id="trust" className="scroll-mt-24 px-4 py-6 sm:px-6 sm:py-9">
+    <section id="stories" className="scroll-mt-32 px-4 py-6 sm:px-6 sm:py-9">
       <RevealOnScroll>
         <div
           className="mx-auto max-w-6xl rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-card sm:p-6 lg:p-7"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
+            {BUSINESS_STORIES_SECTION.eyebrow}
+          </p>
+          <h2 className="mt-3 text-3xl font-bold font-display text-ink sm:text-4xl">
+            {BUSINESS_STORIES_SECTION.headline}
+          </h2>
+          <p className="mt-3 text-base leading-7 text-ink/58">{BUSINESS_STORIES_SECTION.intro}</p>
+
+          <div className="mt-5 grid gap-2 sm:grid-cols-3" aria-label="Business transformations">
+            {BUSINESS_STORIES.map((story, index) => (
+              <button
+                key={story.id}
+                type="button"
+                aria-pressed={index === activeIndex}
+                onClick={() => goTo(index)}
+                className={`rounded-xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
+                  index === activeIndex
+                    ? 'border-accent/25 bg-accentSoft/45'
+                    : 'border-slate-200/80 bg-slate-50/55 hover:border-accent/20'
+                }`}
+              >
+                <span className="block text-xs font-semibold text-ink">{story.business}</span>
+                <span className="mt-1 block text-xs leading-5 text-ink/60">{story.hook}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-5 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">Trusted in Ghana</p>
-              <h2 className="mt-3 text-3xl font-bold font-display text-ink sm:text-4xl">{TRUST_PROOF.headline}</h2>
-              <p className="mt-4 text-base leading-7 text-ink/58">{TRUST_PROOF.intro}</p>
-              <p className="mt-3 text-sm font-semibold text-ink/70">
-                {TRUST_PROOF.person}, {TRUST_PROOF.business}
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">Full story</p>
+              <p className="mt-2 text-base font-semibold text-ink">{active.business}</p>
+              <p className="mt-1 text-sm text-ink/55">
+                {active.person} · {active.focus}
               </p>
             </div>
 
             <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
               <div
-                className={`min-h-[168px] rounded-[1.25rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/70 p-4 transition-all duration-150 ease-out sm:min-h-[144px] sm:p-5 ${
+                className={`min-h-[280px] rounded-[1.25rem] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/70 p-4 transition-all duration-150 ease-out sm:min-h-[260px] sm:p-5 ${
                   isAnimating ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
                 }`}
                 aria-live="polite"
               >
-                <h3 className="text-base font-semibold font-display text-ink">{active.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-ink/70">&ldquo;{active.quote}&rdquo;</p>
-                <p className="mt-3 text-xs font-bold text-accent">
-                  {TRUST_PROOF.person}, {TRUST_PROOF.business}
-                </p>
+                <StoryBeat label="Before" text={active.before} />
+                <StoryBeat label="Problem" text={active.problem} className="mt-3" />
+                <StoryBeat label="Turning point" text={active.turningPoint} className="mt-3" />
+                <StoryBeat label="Life now" text={active.lifeNow} className="mt-3" emphasize />
               </div>
 
-              {/* Desktop: subtle arrows alongside dots. Mobile: dots only, swipe handles navigation. */}
               <div className="mt-4 hidden items-center justify-center gap-4 lg:flex">
                 <button
                   type="button"
-                  onClick={() => goTo((activeIndex - 1 + TRUST_PROOF_THEMES.length) % TRUST_PROOF_THEMES.length)}
-                  aria-label="Previous proof point"
+                  onClick={() => goTo((activeIndex - 1 + BUSINESS_STORIES.length) % BUSINESS_STORIES.length)}
+                  aria-label="Previous business story"
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-ink/40 shadow-sm transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   ‹
@@ -136,8 +158,8 @@ export default function TrustProofSection() {
                 {dots}
                 <button
                   type="button"
-                  onClick={() => goTo((activeIndex + 1) % TRUST_PROOF_THEMES.length)}
-                  aria-label="Next proof point"
+                  onClick={() => goTo((activeIndex + 1) % BUSINESS_STORIES.length)}
+                  aria-label="Next business story"
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-ink/40 shadow-sm transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   ›
@@ -149,5 +171,24 @@ export default function TrustProofSection() {
         </div>
       </RevealOnScroll>
     </section>
+  );
+}
+
+function StoryBeat({
+  label,
+  text,
+  className = '',
+  emphasize = false,
+}: {
+  label: string;
+  text: string;
+  className?: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className={className}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">{label}</p>
+      <p className={`mt-1 text-sm leading-6 ${emphasize ? 'font-semibold text-ink' : 'text-ink/70'}`}>{text}</p>
+    </div>
   );
 }

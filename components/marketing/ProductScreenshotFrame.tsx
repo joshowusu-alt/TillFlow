@@ -7,16 +7,30 @@ type ProductScreenshotFrameProps = {
   className?: string;
   imageClassName?: string;
   label?: string;
+  /** contain shows the full screenshot without edge clipping */
+  fit?: 'contain' | 'cover';
+  aspectRatio?: '4/3' | '16/10' | '16/11' | '16/12';
 };
+
+const aspectClasses = {
+  '4/3': 'aspect-[4/3]',
+  '16/10': 'aspect-[16/10]',
+  '16/11': 'aspect-[16/11]',
+  '16/12': 'aspect-[16/12]',
+} as const;
 
 export default function ProductScreenshotFrame({
   src,
   alt,
   priority = false,
   className = '',
-  imageClassName = 'object-top object-cover',
+  imageClassName = '',
   label,
+  fit = 'contain',
+  aspectRatio = '16/11',
 }: ProductScreenshotFrameProps) {
+  const fitClass = fit === 'contain' ? 'object-contain object-top p-2 sm:p-3' : 'object-cover object-top';
+
   return (
     <div
       className={`overflow-hidden rounded-2xl border border-black/8 bg-white shadow-lg shadow-black/10 ${className}`}
@@ -26,14 +40,14 @@ export default function ProductScreenshotFrame({
           {label}
         </div>
       ) : null}
-      <div className="relative aspect-[4/3] w-full bg-slate-100">
+      <div className={`relative w-full bg-slate-50 ${aspectClasses[aspectRatio]}`}>
         <Image
           src={src}
           alt={alt}
           fill
           priority={priority}
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className={imageClassName}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 50vw"
+          className={`${fitClass} ${imageClassName}`}
         />
       </div>
     </div>
