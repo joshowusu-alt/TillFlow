@@ -138,6 +138,18 @@ describe('welcome homepage structure', () => {
     expect(page).toContain('WELCOME_ANCHOR');
   });
 
+  it('uses relaxed mobile hero typography without changing desktop sizes', () => {
+    const page = readSource('app/welcome/page.tsx');
+    expect(page).toContain('text-[2.2rem]');
+    expect(page).toContain('leading-[1.08]');
+    expect(page).toContain('sm:text-5xl');
+    expect(page).toContain('lg:text-6xl');
+    expect(page).not.toContain('text-[2.55rem]');
+    expect(page).not.toContain('leading-[0.98]');
+    expect(page).toContain('text-ink/60');
+    expect(page).toMatch(/href="\/login"[\s\S]*?min-h-11/);
+  });
+
   it('keeps public marketing demo naming neutral', () => {
     const metrics = readSource('lib/marketing/demo-metrics.ts');
     const commandCentre = readSource('components/marketing/visuals/CommandCentrePreview.tsx');

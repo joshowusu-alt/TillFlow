@@ -219,7 +219,7 @@ export default function WelcomePage() {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <Link
               href="/login"
-              className="inline-flex whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-semibold text-ink/60 transition hover:text-ink sm:px-3 sm:text-sm"
+              className="inline-flex min-h-11 items-center whitespace-nowrap rounded-xl px-2.5 py-2 text-xs font-semibold text-ink/60 transition hover:text-ink sm:px-3 sm:text-sm"
             >
               Sign in
             </Link>
@@ -241,14 +241,14 @@ export default function WelcomePage() {
               For owners tired of guessing
             </div>
             <p className="welcome-hero-copy-delay text-sm font-bold text-ink/75 sm:text-base">{WELCOME_CATEGORY_LINE}</p>
-            <h1 className="welcome-hero-copy-delay mt-2 text-[2.55rem] font-bold font-display leading-[0.98] tracking-tight text-ink sm:text-5xl lg:text-6xl">
+            <h1 className="welcome-hero-copy-delay mt-2 text-[2.2rem] font-bold font-display leading-[1.08] tracking-tight text-ink sm:text-5xl lg:text-6xl">
               {WELCOME_HEADLINE}
             </h1>
-            <p className="welcome-hero-copy-delay mt-4 text-base leading-7 text-ink/62 sm:text-lg">{WELCOME_SUBHEADLINE}</p>
+            <p className="welcome-hero-copy-delay mt-3 text-base leading-7 text-ink/62 sm:text-lg">{WELCOME_SUBHEADLINE}</p>
             <p className="welcome-hero-copy-delay mt-3 text-base font-semibold text-ink sm:text-lg">{WELCOME_ANCHOR}</p>
 
             <HeroCTAGroup className="welcome-hero-cta mt-5" />
-            <p className="welcome-hero-cta mt-2 text-sm text-ink/50">
+            <p className="welcome-hero-cta mt-2 text-sm text-ink/60">
               {whatsappReady ? WELCOME_HERO_SUPPORT_WHATSAPP : WELCOME_HERO_SUPPORT_FALLBACK}
             </p>
           </div>
