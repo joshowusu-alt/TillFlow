@@ -6,6 +6,7 @@ import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { formatMoney, getMinorUnitLabel, getCurrencySymbol, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { createProductAction } from '@/app/actions/products';
@@ -17,6 +18,7 @@ import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
+import GenerateMissingBarcodesButton from '@/components/products/GenerateMissingBarcodesButton';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
 
@@ -24,7 +26,19 @@ function ProductStatCard({ label, value, helper }: { label: string; value: strin
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
 }
 
-export default async function ProductsPage({ searchParams }: { searchParams?: { error?: string; tab?: string; q?: string; page?: string; created?: string } }) {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams?: {
+    error?: string;
+    tab?: string;
+    q?: string;
+    page?: string;
+    created?: string;
+    barcodesGenerated?: string;
+    barcodesFailed?: string;
+  };
+}) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
@@ -40,7 +54,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   };
 
   // Run all data queries in parallel
-  const [totalProductCount, products, categories, units, suppliers] = await measureServerOperation(
+  const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount] = await measureServerOperation(
     'page.products.load',
     () => Promise.all([
       prisma.product.count({ where: productWhere }),
@@ -85,6 +99,13 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
         select: { id: true, name: true },
         orderBy: { name: 'asc' }
       }),
+      prisma.product.count({
+        where: {
+          businessId: business.id,
+          active: true,
+          OR: [{ barcode: null }, { barcode: '' }],
+        },
+      }),
     ]),
     {
       businessId: business.id,
@@ -99,6 +120,14 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
   const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
   const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  const canBulkGenerateBarcodes = isManager && features.advancedOps;
+  const barcodesGeneratedFlash = Math.max(0, parseInt(searchParams?.barcodesGenerated ?? '', 10) || 0);
+  const barcodesFailedFlash = Math.max(0, parseInt(searchParams?.barcodesFailed ?? '', 10) || 0);
+  const showBulkBarcodePanel =
+    canBulkGenerateBarcodes &&
+    activeTab === 'products' &&
+    (missingBarcodeCount > 0 || barcodesGeneratedFlash > 0 || barcodesFailedFlash > 0);
 
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
@@ -111,6 +140,16 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           </Link>
         }
       />
+
+      {showBulkBarcodePanel ? (
+        <Suspense fallback={null}>
+          <GenerateMissingBarcodesButton
+            missingCount={missingBarcodeCount}
+            initialGenerated={barcodesGeneratedFlash}
+            initialFailed={barcodesFailedFlash}
+          />
+        </Suspense>
+      ) : null}
 
       <div className="operational-metric-grid operational-metric-grid--4">
         <ProductStatCard

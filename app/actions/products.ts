@@ -298,41 +298,183 @@ export async function repairInflatedPricesAction(): Promise<ActionResult<{ fixed
   });
 }
 
+async function assertGrowthPlanForBarcodes(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { plan: true, mode: true, storeMode: true },
+  });
+  if (!business) throw new Error('Business not found.');
+  const { getFeatures } = await import('@/lib/features');
+  const features = getFeatures(
+    (business.plan as any) ?? (business.mode as any),
+    business.storeMode as any,
+  );
+  if (!features.advancedOps) {
+    return { allowed: false as const, error: 'Internal barcode generation is available on Growth and Pro.' };
+  }
+  return { allowed: true as const };
+}
+
+async function reserveInternalBarcodeSequence(businessId: string): Promise<number> {
+  const sequenceWhere = {
+    businessId_sequenceName: {
+      businessId,
+      sequenceName: 'internal_barcode' as const,
+    },
+  };
+
+  try {
+    const updated = await prisma.businessSequence.update({
+      where: sequenceWhere,
+      data: { nextVal: { increment: 1 } },
+      select: { nextVal: true },
+    });
+    return updated.nextVal;
+  } catch {
+    // Sequence row missing — create then retry
+  }
+
+  try {
+    await prisma.businessSequence.create({
+      data: {
+        businessId,
+        sequenceName: 'internal_barcode',
+        nextVal: 1,
+      },
+    });
+  } catch {
+    // Concurrent create — fall through to update
+  }
+
+  const updated = await prisma.businessSequence.update({
+    where: sequenceWhere,
+    data: { nextVal: { increment: 1 } },
+    select: { nextVal: true },
+  });
+  return updated.nextVal;
+}
+
+async function allocateUniqueInternalBarcode(businessId: string): Promise<string> {
+  const { formatInternalBarcode } = await import('@/lib/products/internal-barcode');
+  for (let attempts = 0; attempts < 20; attempts++) {
+    const sequence = await reserveInternalBarcodeSequence(businessId);
+    const candidate = formatInternalBarcode(businessId, sequence);
+    const conflict = await prisma.product.findUnique({
+      where: { barcode: candidate },
+      select: { id: true },
+    });
+    if (!conflict) return candidate;
+  }
+  throw new Error('Could not generate a unique internal barcode. Please try again.');
+}
+
 /**
- * Generate an EAN-13 barcode (GS1 internal prefix 200) for a product
- * and save it immediately.  Returns the new barcode string.
+ * Generate a TillFlow internal Code 128 barcode for a product and save it.
+ * Does not overwrite an existing barcode. Growth+ only. Manager/Owner only.
  */
 export async function generateBarcodeAction(productId: string): Promise<ActionResult<{ barcode: string }>> {
   return safeAction(async () => {
-    const { businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthPlanForBarcodes(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
 
-    // Verify product belongs to this business
     const existing = await prisma.product.findFirst({
       where: { id: productId, businessId },
-      select: { id: true },
+      select: { id: true, barcode: true, name: true },
     });
     if (!existing) throw new Error('Product not found.');
 
-    // Generate a unique EAN-13 (prefix 200 = internal use range)
-    let barcode = '';
-    for (let attempts = 0; attempts < 10; attempts++) {
-      const digits = '200' + String(Math.floor(Math.random() * 1_000_000_000)).padStart(9, '0');
-      const sum = digits
-        .split('')
-        .reduce((acc, d, i) => acc + parseInt(d, 10) * (i % 2 === 0 ? 1 : 3), 0);
-      const check = (10 - (sum % 10)) % 10;
-      const candidate = digits + check;
-      const conflict = await prisma.product.findUnique({ where: { barcode: candidate }, select: { id: true } });
-      if (!conflict) {
-        barcode = candidate;
-        break;
-      }
+    if (existing.barcode?.trim()) {
+      return {
+        success: false,
+        error: 'This product already has a barcode. Remove it first if you want to generate an internal barcode.',
+      };
     }
-    if (!barcode) throw new Error('Could not generate a unique barcode. Please try again.');
+
+    const barcode = await allocateUniqueInternalBarcode(businessId);
 
     await prisma.product.update({ where: { id: productId }, data: { barcode } });
+
+    await audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'BARCODE_GENERATE',
+      entity: 'Product',
+      entityId: productId,
+      details: { barcode, productName: existing.name, source: 'INTERNAL' },
+    }).catch((e) => console.error('[audit]', e));
+
     revalidateTag('pos-products');
     revalidatePath(`/products/${productId}`);
+    revalidatePath('/products');
     return ok({ barcode });
+  });
+}
+
+/**
+ * Generate internal barcodes for all active products that currently have none.
+ * Never overwrites existing barcodes. Growth+ / Manager+Owner only.
+ */
+export async function generateMissingBarcodesAction(): Promise<
+  ActionResult<{ generated: number; skipped: number; failed: number; sampleBarcodes: string[] }>
+> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthPlanForBarcodes(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
+
+    const missing = await prisma.product.findMany({
+      where: {
+        businessId,
+        active: true,
+        OR: [{ barcode: null }, { barcode: '' }],
+      },
+      select: { id: true, name: true, barcode: true },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+
+    let generated = 0;
+    let failed = 0;
+    const sampleBarcodes: string[] = [];
+
+    for (const product of missing) {
+      if (product.barcode?.trim()) continue;
+      try {
+        const barcode = await allocateUniqueInternalBarcode(businessId);
+        await prisma.product.update({
+          where: { id: product.id },
+          data: { barcode },
+        });
+        await audit({
+          businessId,
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          action: 'BARCODE_GENERATE',
+          entity: 'Product',
+          entityId: product.id,
+          details: { barcode, productName: product.name, source: 'INTERNAL', bulk: true },
+        }).catch(() => {});
+        generated++;
+        if (sampleBarcodes.length < 5) sampleBarcodes.push(barcode);
+      } catch {
+        failed++;
+      }
+    }
+
+    revalidateTag('pos-products');
+    // Intentionally skip revalidatePath('/products') here — the client sets
+    // ?barcodesGenerated= then router.refresh() so the success banner survives.
+    revalidatePath('/products/labels');
+
+    return ok({
+      generated,
+      skipped: 0,
+      failed,
+      sampleBarcodes,
+    });
   });
 }

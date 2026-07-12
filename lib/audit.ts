@@ -46,6 +46,7 @@ export type AuditAction =
   | 'DATA_RESET'
   | 'STOCKTAKE_CREATE'
   | 'STOCKTAKE_COMPLETE'
+  | 'BARCODE_GENERATE'
   | 'LABEL_EXPORT'
   | 'BACKUP_EXPORT'
   | 'BACKUP_IMPORT'

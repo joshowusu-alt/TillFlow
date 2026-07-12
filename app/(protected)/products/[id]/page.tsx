@@ -3,15 +3,16 @@ import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { formatMoney, getCurrencySymbol } from '@/lib/format';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { updateProductAction } from '@/app/actions/products';
 import DeleteProductButton from './DeleteProductButton';
-import BarcodeScanInput from '@/components/BarcodeScanInput';
 import BarcodeFieldWithGenerate from '@/components/BarcodeFieldWithGenerate';
 import ProductUnitPricingEditor from '@/components/ProductUnitPricingEditor';
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductHeroImage from './ProductHeroImage';
+import Link from 'next/link';
 
 export default async function ProductDetailPage({
   params,
@@ -23,6 +24,8 @@ export default async function ProductDetailPage({
   const { user, business, store } = await requireBusinessStore();
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
   const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  const canGenerateBarcode = user.role !== 'CASHIER' && features.advancedOps;
 
   const [product, units, categories, suppliers] = await Promise.all([
     prisma.product.findFirst({
@@ -165,7 +168,21 @@ export default async function ProductDetailPage({
             </div>
             <div>
               <label className="label">Barcode</label>
-              <BarcodeFieldWithGenerate productId={product.id} defaultValue={product.barcode ?? ''} />
+              <BarcodeFieldWithGenerate
+                productId={product.id}
+                defaultValue={product.barcode ?? ''}
+                canGenerate={canGenerateBarcode}
+              />
+              {product.barcode?.trim() ? (
+                <div className="mt-2">
+                  <Link
+                    href={`/products/labels?q=${encodeURIComponent(product.name)}`}
+                    className="text-xs font-semibold text-accent hover:underline"
+                  >
+                    Print label
+                  </Link>
+                </div>
+              ) : null}
             </div>
             <div>
               <div className="label">Product image</div>
