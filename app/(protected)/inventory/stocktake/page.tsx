@@ -1,6 +1,8 @@
 import PageHeader from '@/components/PageHeader';
+import AdvancedModeNotice from '@/components/AdvancedModeNotice';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
+import { getFeatures } from '@/lib/features';
 import { formatDateTime } from '@/lib/format';
 import Link from 'next/link';
 import StocktakeClient from './StocktakeClient';
@@ -9,6 +11,18 @@ export default async function StocktakePage() {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
+  }
+
+  const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
+  if (!features.advancedOps) {
+    return (
+      <AdvancedModeNotice
+        title="Stocktake is available on Growth and Pro"
+        description="Physical inventory counts with barcode scanning and variance posting are unlocked on businesses provisioned for Growth or Pro."
+        featureName="Stocktake"
+        minimumPlan="GROWTH"
+      />
+    );
   }
 
   const [inProgress, pastStocktakes, products] = await Promise.all([
@@ -55,7 +69,7 @@ export default async function StocktakePage() {
     <div className="space-y-6">
       <PageHeader
         title="Stocktake"
-        subtitle="Physical inventory count with variance reconciliation."
+        subtitle="Scan products, enter counts, and reconcile variances safely."
         actions={
           <Link className="btn-secondary w-full text-center text-xs sm:w-auto" href="/inventory">
             ← Back to Inventory
@@ -96,16 +110,15 @@ export default async function StocktakePage() {
         />
       ) : (
         <div className="card space-y-4 p-5 text-center sm:p-8">
-          <div className="rounded-full bg-accentSoft p-4 mx-auto w-fit">
+          <div className="mx-auto w-fit rounded-full bg-accentSoft p-4">
             <svg className="h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </div>
           <div>
             <h3 className="text-lg font-semibold">Start a Physical Count</h3>
-            <p className="text-sm text-black/50 mt-1">
-              This will snapshot the current system quantities for all {products.length} active products
-              so you can count and compare.
+            <p className="mt-1 text-sm text-black/50">
+              Snapshot system quantities for all {products.length} active products, then scan or search to count.
             </p>
           </div>
           <form action={async () => {
@@ -123,10 +136,9 @@ export default async function StocktakePage() {
         </div>
       )}
 
-      {/* Past stocktakes */}
       {pastStocktakes.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-black/50 uppercase tracking-wider">Past Stocktakes</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-black/50">Past Stocktakes</h3>
           <div className="space-y-3 lg:hidden">
             {pastStocktakes.map((st) => (
               <div key={st.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm">

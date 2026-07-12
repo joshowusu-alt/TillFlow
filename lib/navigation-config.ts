@@ -151,6 +151,7 @@ export const NAV_GROUPS: NavigationGroup[] = [
     label: 'Stock',
     items: [
       { href: '/inventory', label: 'Inventory', roles: ['MANAGER', 'OWNER'], iconKey: 'inventory', description: 'View stock levels and reorder needs.' },
+      { href: '/inventory/stocktake', label: 'Stocktake', roles: ['MANAGER', 'OWNER'], iconKey: 'inventory', description: 'Count stock with barcode scanning and variance posting.', minimumPlan: 'GROWTH' },
       { href: '/inventory/adjustments', label: 'Stock Adjustments', roles: ['MANAGER', 'OWNER'], iconKey: 'stockAdjustments', description: 'Correct stock counts safely.' },
       { href: '/reports/stock-movements', label: 'Stock Movements', roles: ['MANAGER', 'OWNER'], iconKey: 'stockMovements', description: 'Review stock in and out.' },
       { href: '/purchases', label: 'Purchases', roles: ['MANAGER', 'OWNER'], iconKey: 'purchases', description: 'Receive stock and supplier invoices.' },

@@ -289,6 +289,7 @@ describe('Reports navigation clarity', () => {
     expect(smallPanelClass).not.toContain('[scrollbar-gutter:stable]');
     expect(stock.items.map((item) => item.label)).toEqual([
       'Inventory',
+      'Stocktake',
       'Stock Adjustments',
       'Stock Movements',
       'Purchases',
@@ -325,6 +326,7 @@ describe('Reports navigation clarity', () => {
 
     expect(stock.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ href: '/inventory', label: 'Inventory', iconKey: 'inventory', description: 'View stock levels and reorder needs.' }),
+      expect.objectContaining({ href: '/inventory/stocktake', label: 'Stocktake', iconKey: 'inventory', description: 'Count stock with barcode scanning and variance posting.' }),
       expect.objectContaining({ href: '/purchases', label: 'Purchases', iconKey: 'purchases', description: 'Receive stock and supplier invoices.' }),
       expect.objectContaining({ href: '/products', label: 'Products', iconKey: 'products', description: 'Manage catalogue, prices, and barcodes.' }),
       expect.objectContaining({ href: '/products/labels', label: 'Product Labels', iconKey: 'labels', description: 'Print product and shelf labels.' }),
@@ -346,6 +348,7 @@ describe('Reports navigation clarity', () => {
     expect(new Set(allHrefs).size).toBe(allHrefs.length);
     expect(sell.items.find((item) => item.href === '/online-orders')?.requiresFeature).toBe('onlineStorefront');
     expect(stock.items.find((item) => item.href === '/products/labels')?.minimumPlan).toBe('GROWTH');
+    expect(stock.items.find((item) => item.href === '/inventory/stocktake')?.minimumPlan).toBe('GROWTH');
     expect(reports.items.find((item) => item.href === '/reports/owner')?.minimumPlan).toBe('PRO');
     expect(reports.items.find((item) => item.href === '/reports/audit-log')?.roles).toEqual(['OWNER']);
     expect(mobileNav).toContain('NavIcon');

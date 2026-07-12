@@ -1,12 +1,28 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
 import { createStockAdjustment } from '@/lib/services/inventory';
 import { audit } from '@/lib/audit';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
+import { getFeatures } from '@/lib/features';
+
+async function assertGrowthStocktake(businessId: string): Promise<{ allowed: true } | { allowed: false; error: string }> {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { plan: true, mode: true, storeMode: true },
+  });
+  if (!business) return { allowed: false, error: 'Business not found.' };
+  const features = getFeatures(
+    (business.plan as any) ?? (business.mode as any),
+    business.storeMode as any,
+  );
+  if (!features.advancedOps) {
+    return { allowed: false, error: 'Stocktake is available on Growth and Pro.' };
+  }
+  return { allowed: true };
+}
 
 /**
  * Start a new stocktake — snapshots current system quantities for all active
@@ -14,7 +30,9 @@ import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
  */
 export async function createStocktakeAction(): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { user, storeId, businessId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthStocktake(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
 
     // Prevent multiple in-progress stocktakes
     const existing = await prisma.stocktake.findFirst({
@@ -74,7 +92,9 @@ export async function saveStocktakeCountsAction(data: {
   counts: { lineId: string; countedBase: number }[];
 }): Promise<ActionResult> {
   return safeAction(async () => {
-    await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthStocktake(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
 
     const stocktake = await prisma.stocktake.findUnique({
       where: { id: data.stocktakeId },
@@ -102,14 +122,18 @@ export async function saveStocktakeCountsAction(data: {
 
 /**
  * Complete a stocktake — apply variances as stock adjustments.
+ * When any variance exists, a non-empty reason is required.
  */
 export async function completeStocktakeAction(data: {
   stocktakeId: string;
   counts: { lineId: string; countedBase: number }[];
+  reason?: string;
 }): Promise<ActionResult> {
   return safeAction(async () => {
     const { user, businessId, storeId } =
       await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthStocktake(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
 
     const stocktake = await prisma.stocktake.findUnique({
       where: { id: data.stocktakeId },
@@ -118,6 +142,25 @@ export async function completeStocktakeAction(data: {
     if (!stocktake || stocktake.status !== 'IN_PROGRESS') {
       return { success: false, error: 'Stocktake not found or already completed.' };
     }
+
+    const varianceCount = data.counts.reduce((sum, count) => {
+      const line = stocktake.lines.find((l) => l.id === count.lineId);
+      if (!line || line.adjusted) return sum;
+      return count.countedBase - line.expectedBase !== 0 ? sum + 1 : sum;
+    }, 0);
+
+    const reasonText = (data.reason ?? '').trim();
+    if (varianceCount > 0 && reasonText.length < 3) {
+      return {
+        success: false,
+        error: 'Enter a reason for the variance adjustment before completing this stocktake.',
+      };
+    }
+
+    const adjustmentReason =
+      reasonText.length >= 3
+        ? `Stocktake: ${reasonText.slice(0, 200)}`
+        : 'Stocktake count adjustment';
 
     // Wrap all mutations in a single transaction so a mid-loop crash cannot
     // leave inventory in a partially-adjusted state.  On retry the idempotency
@@ -156,7 +199,7 @@ export async function completeStocktakeAction(data: {
                   unitId: baseUnitId,
                   qtyInUnit: Math.abs(variance),
                   direction: variance > 0 ? 'INCREASE' : 'DECREASE',
-                  reason: `Stocktake count adjustment`,
+                  reason: adjustmentReason,
                   userId: user.id,
                 },
                 tx,
@@ -169,7 +212,11 @@ export async function completeStocktakeAction(data: {
 
         await tx.stocktake.update({
           where: { id: data.stocktakeId },
-          data: { status: 'COMPLETED', completedAt: new Date() },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            notes: reasonText.length >= 3 ? reasonText.slice(0, 500) : stocktake.notes,
+          },
         });
       },
       { timeout: 30000, maxWait: 5000 },
@@ -187,6 +234,7 @@ export async function completeStocktakeAction(data: {
       details: {
         totalLines: stocktake.lines.length,
         adjustedLines: adjustedCount,
+        reason: reasonText || null,
       },
     });
 
@@ -211,7 +259,9 @@ export async function cancelStocktakeAction(
   stocktakeId: string,
 ): Promise<ActionResult> {
   return safeAction(async () => {
-    await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const { businessId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
+    const plan = await assertGrowthStocktake(businessId);
+    if (!plan.allowed) return { success: false, error: plan.error };
 
     const stocktake = await prisma.stocktake.findUnique({
       where: { id: stocktakeId },
