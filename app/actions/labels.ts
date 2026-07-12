@@ -5,6 +5,7 @@ import { type ActionResult, err, ok, safeAction, withBusinessContext } from '@/l
 import { detectBarcodeFormat } from '@/lib/labels/detect-barcode-format';
 import { renderLabelsHtml } from '@/lib/labels/templates';
 import type { LabelData, LabelSize } from '@/lib/labels/types';
+import { isInternalBarcode } from '@/lib/products/internal-barcode';
 import { prisma } from '@/lib/prisma';
 
 const MAX_PRODUCTS_PER_REQUEST = 200;
@@ -122,6 +123,7 @@ export async function generateLabelsHtmlAction(
           price: `${currency} ${(product.sellingPriceBasePence / 100).toFixed(2)}`,
           barcode,
           barcodeFormat: detectBarcodeFormat(barcode),
+          isInternalBarcode: isInternalBarcode(barcode),
           sku: product.sku ?? undefined,
           unit: baseUnit?.symbol ?? baseUnit?.name ?? undefined,
           category: product.category?.name ?? undefined,

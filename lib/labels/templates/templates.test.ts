@@ -69,6 +69,18 @@ describe('renderProductSticker', () => {
     expect(html).toContain('2026-03-14');
     expect(html).toContain('SKU: 1234');
   });
+
+  it('shows a subtle Internal marker for generated barcodes', async () => {
+    const html = await renderProductSticker({
+      ...baseLabel,
+      barcode: 'TFABCDEX000001',
+      barcodeFormat: 'code128',
+      isInternalBarcode: true,
+    });
+
+    expect(html).toContain('Internal');
+    expect(html).toContain('src="data:image/png;base64,TEST_BARCODE"');
+  });
 });
 
 describe('renderA4Sheet', () => {

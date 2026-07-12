@@ -8,6 +8,8 @@ export interface LabelData {
   price: string;
   barcode?: string;
   barcodeFormat?: BarcodeFormat;
+  /** When true, printed sticker can show a subtle Internal marker. */
+  isInternalBarcode?: boolean;
   sku?: string;
   unit?: string;
   category?: string;

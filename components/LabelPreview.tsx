@@ -65,10 +65,21 @@ function BarcodeBars({ value }: { value?: string }) {
   );
 }
 
+function InternalChip() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-500">
+      Internal
+    </span>
+  );
+}
+
 function ShelfTagPreview({ data }: { data: LabelData }) {
   return (
     <div className="mx-auto flex min-h-[172px] w-full max-w-[320px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-base font-bold leading-tight text-slate-900">{data.productName}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-base font-bold leading-tight text-slate-900">{data.productName}</div>
+        {data.isInternalBarcode ? <InternalChip /> : null}
+      </div>
       <BarcodeBars value={data.barcode} />
       <div className="flex items-end gap-2">
         <div className="text-2xl font-black text-slate-900">{data.price}</div>
@@ -83,7 +94,12 @@ function ProductStickerPreview({ data }: { data: LabelData }) {
     <div className="mx-auto flex min-h-[208px] w-full max-w-[340px] flex-col justify-between rounded-2xl border border-dashed border-slate-300 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         {data.category ? <Badge tone="info">{data.category}</Badge> : <span />}
-        {data.sku ? <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">SKU {data.sku}</span> : null}
+        <div className="flex flex-col items-end gap-1">
+          {data.isInternalBarcode ? <InternalChip /> : null}
+          {data.sku ? (
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">SKU {data.sku}</span>
+          ) : null}
+        </div>
       </div>
       <div className="text-base font-bold leading-tight text-slate-900">{data.productName}</div>
       <BarcodeBars value={data.barcode} />
@@ -109,7 +125,10 @@ function A4SheetPreview({ data }: { data: LabelData }) {
           >
             {index === 0 ? (
               <div className="flex h-full min-h-[94px] flex-col justify-between">
-                <div className="text-[10px] font-bold leading-tight text-slate-900">{data.productName}</div>
+                <div className="flex items-start justify-between gap-1">
+                  <div className="text-[10px] font-bold leading-tight text-slate-900">{data.productName}</div>
+                  {data.isInternalBarcode ? <InternalChip /> : null}
+                </div>
                 <div className="rounded border border-slate-200 bg-white px-1.5 py-1">
                   <div className="flex h-5 items-end justify-center gap-px overflow-hidden">
                     {data.barcode

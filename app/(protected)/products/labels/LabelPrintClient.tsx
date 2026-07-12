@@ -14,6 +14,7 @@ import StatCard from '@/components/StatCard';
 import { formatMoney } from '@/lib/format';
 import { detectBarcodeFormat } from '@/lib/labels/detect-barcode-format';
 import type { LabelData, LabelPrintMode, LabelSize } from '@/lib/labels/types';
+import { isInternalBarcode } from '@/lib/products/internal-barcode';
 
 const PAGE_SIZE = 12;
 
@@ -77,6 +78,7 @@ function buildPreviewLabel(product: ClientProduct | undefined, currency: string)
     price: formatMoney(product.sellingPriceBasePence, currency),
     barcode: product.barcode ?? undefined,
     barcodeFormat: detectBarcodeFormat(product.barcode),
+    isInternalBarcode: isInternalBarcode(product.barcode),
     category: product.category?.name ?? undefined,
     unit: product.unit ?? undefined,
     sku: product.sku ?? undefined,

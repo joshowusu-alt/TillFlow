@@ -54,9 +54,14 @@ export async function renderProductStickerFragment(data: LabelData): Promise<str
   const unit = formatUnit(data.unit);
   const barcodeMarkup = await getBarcodeMarkup(data);
 
+  const internalMark = data.isInternalBarcode
+    ? `<span style="display:inline-flex;align-items:center;padding:0.4mm 1.4mm;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:6.5pt;font-weight:600;letter-spacing:0.02em;">Internal</span>`
+    : '';
+
   return `<article data-template="product-sticker" style="box-sizing:border-box;width:60mm;height:40mm;padding:2.5mm;border:0.3mm dashed #9ca3af;border-radius:1mm;background:#ffffff;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;break-inside:avoid;page-break-inside:avoid;">
-  <div style="display:flex;justify-content:flex-start;min-height:5mm;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1mm;min-height:5mm;">
     ${category ? `<span style="display:inline-flex;align-items:center;max-width:100%;padding:0.6mm 1.8mm;border-radius:999px;background:#e0f2fe;color:#075985;font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(category)}</span>` : '<span></span>'}
+    ${internalMark}
   </div>
   <div style="font-size:11pt;font-weight:700;line-height:1.2;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;min-height:calc(11pt * 1.2 * 2);max-height:calc(11pt * 1.2 * 2);word-break:break-word;">
     ${escapeHtml(data.productName)}
