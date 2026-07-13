@@ -2,6 +2,10 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES } from '@/lib/accounting';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  getIncompleteStockSnapshot,
+  incompleteStockDisclosureMessage,
+} from '@/lib/reports/incomplete-stock';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'EQUITY';
 
@@ -82,12 +86,17 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   const grossProfit = revenue - cogs;
 
+  const incomplete = await getIncompleteStockSnapshot(businessId);
+
   return {
     revenue,
     cogs,
     otherExpenses,
     grossProfit,
-    netProfit: grossProfit - otherExpenses
+    netProfit: grossProfit - otherExpenses,
+    stockValueIncomplete: incomplete.stockValueIncomplete,
+    profitMayBeIncomplete: incomplete.profitMayBeIncomplete,
+    incompleteStockMessage: incompleteStockDisclosureMessage(incomplete),
   };
 }
 

@@ -4,6 +4,7 @@
 
 import * as XLSX from 'xlsx';
 import { normaliseHeaderKey } from '@/lib/import/import-columns';
+import { spreadsheetHasPaymentStatusColumn } from '@/lib/import/import-mode';
 import {
   validateImportRow,
   type DuplicateAction,
@@ -46,7 +47,9 @@ function uniqueId() {
 }
 
 function parsePence(raw: string): number {
-  const n = parseFloat(raw.replace(/,/g, '').replace(/\s/g, '').trim());
+  const cleaned = raw.replace(/,/g, '').replace(/\s/g, '').trim();
+  if (!cleaned) return 0; // blank = unknown / zero (opening stock may omit cost)
+  const n = parseFloat(cleaned);
   if (Number.isNaN(n)) return -1;
   return Math.round(n * 100);
 }
@@ -174,9 +177,9 @@ function buildRow(raw: Record<string, string>, rowNumber: number, seen: { names:
   } satisfies ParsedImportRow;
 }
 
-function parseMatrix(matrix: string[][]): ParsedImportRow[] {
+function parseMatrix(matrix: string[][]): { rows: ParsedImportRow[]; headers: string[] } {
   const dataRows = matrix.filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
-  if (dataRows.length < 2) return [];
+  if (dataRows.length < 2) return { rows: [], headers: [] };
 
   let headerIdx = 0;
   while (headerIdx < dataRows.length) {
@@ -184,41 +187,58 @@ function parseMatrix(matrix: string[][]): ParsedImportRow[] {
     if (!first.startsWith('#')) break;
     headerIdx++;
   }
-  if (headerIdx >= dataRows.length - 1) return [];
+  if (headerIdx >= dataRows.length - 1) return { rows: [], headers: [] };
 
   const headers = dataRows[headerIdx].map((h) => normaliseHeaderKey(String(h ?? '')));
   const seen = { names: new Set<string>(), barcodes: new Set<string>() };
 
-  return dataRows.slice(headerIdx + 1).map((row, index) => {
+  const rows = dataRows.slice(headerIdx + 1).map((row, index) => {
     const raw: Record<string, string> = {};
     headers.forEach((h, i) => {
       raw[h] = String(row[i] ?? '');
     });
     return buildRow(raw, headerIdx + index + 2, seen);
   });
+  return { rows, headers };
 }
 
-async function parseCsv(file: File): Promise<ParsedImportRow[]> {
+async function parseCsv(file: File): Promise<{ rows: ParsedImportRow[]; headers: string[] }> {
   const text = await file.text();
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
   return parseMatrix(lines.map(splitCsvLine));
 }
 
-async function parseXlsx(file: File): Promise<ParsedImportRow[]> {
+async function parseXlsx(file: File): Promise<{ rows: ParsedImportRow[]; headers: string[] }> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
+  if (!sheetName) return { rows: [], headers: [] };
   const sheet = workbook.Sheets[sheetName];
   const matrix = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' });
   return parseMatrix(matrix as string[][]);
 }
 
-export async function parseStockFile(file: File): Promise<ParsedImportRow[]> {
+export type ParseStockFileResult = {
+  rows: ParsedImportRow[];
+  headers: string[];
+  hasPaymentStatusColumn: boolean;
+};
+
+export async function parseStockFileDetailed(file: File): Promise<ParseStockFileResult> {
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext === 'csv') return parseCsv(file);
-  if (ext === 'xlsx' || ext === 'xls') return parseXlsx(file);
-  throw new Error('Please upload a .csv or .xlsx file.');
+  let parsed: { rows: ParsedImportRow[]; headers: string[] };
+  if (ext === 'csv') parsed = await parseCsv(file);
+  else if (ext === 'xlsx' || ext === 'xls') parsed = await parseXlsx(file);
+  else throw new Error('Please upload a .csv or .xlsx file.');
+  return {
+    ...parsed,
+    hasPaymentStatusColumn: spreadsheetHasPaymentStatusColumn(parsed.headers),
+  };
+}
+
+export async function parseStockFile(file: File): Promise<ParsedImportRow[]> {
+  const detailed = await parseStockFileDetailed(file);
+  return detailed.rows;
 }
 
 export function enrichRowsWithCatalog(

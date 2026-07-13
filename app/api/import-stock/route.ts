@@ -17,6 +17,15 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as ImportStockBody | ConfirmedImportRow[];
     const rows = Array.isArray(body) ? body : body.rows;
     const meta = Array.isArray(body) ? undefined : body.meta;
+    if (!meta?.importMode) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Choose an import purpose first: Product catalogue, Opening stock, or Purchases.',
+        },
+        { status: 400 }
+      );
+    }
     const result = await importStockAction(rows, meta);
     return NextResponse.json(result);
   } catch (e: unknown) {

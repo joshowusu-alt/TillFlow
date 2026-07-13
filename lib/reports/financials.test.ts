@@ -12,6 +12,8 @@ const { prismaMock } = vi.hoisted(() => ({
     account: { findMany: vi.fn() },
     salesInvoiceLine: { findMany: vi.fn() },
     openingBalance: { findMany: vi.fn() },
+    store: { findMany: vi.fn() },
+    inventoryBalance: { findMany: vi.fn() },
   },
 }));
 
@@ -46,6 +48,8 @@ describe('getBalanceSheet asOf filtering', () => {
     prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
     prismaMock.salesInvoiceLine.findMany.mockResolvedValue([]);
     prismaMock.openingBalance.findMany.mockResolvedValue([]);
+    prismaMock.store.findMany.mockResolvedValue([]);
+    prismaMock.inventoryBalance.findMany.mockResolvedValue([]);
   });
 
   it('returns zero totals when no journal entries exist', async () => {

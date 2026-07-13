@@ -1,64 +1,112 @@
 /**
- * Stock import template — canonical columns and Ghana-friendly examples.
+ * Mode-specific stock import templates — Ghana-friendly examples.
  */
 
-import { TEMPLATE_HEADERS } from '@/lib/import/import-columns';
+import {
+  type ImportMode,
+  templateHeadersForMode,
+  CATALOGUE_TEMPLATE_HEADERS,
+  OPENING_STOCK_TEMPLATE_HEADERS,
+  PURCHASE_TEMPLATE_HEADERS,
+} from '@/lib/import/import-mode';
 
-export { TEMPLATE_HEADERS };
-export type TemplateColumn = (typeof TEMPLATE_HEADERS)[number];
+export { TEMPLATE_HEADERS } from '@/lib/import/import-columns';
+export type { TemplateColumn } from '@/lib/import/import-columns';
 
-/**
- * Example rows: piece, strip (medicine), bottle, carton, and weighed (kg).
- */
-const EXAMPLE_ROWS: string[][] = [
-  // Piece — simple stationery
-  ['Awake Water 500ml', 'BEV-001', '6001001001001', 'Drinks', '3.00', '2.20', '48', 'Piece', '', '', '', 'Aqua Pure Ltd', '12', 'yes', '', '', 'paid'],
-  // Strip — pharmacy
-  ['Paracetamol 500mg', 'MED-010', '6002002002002', 'Medicines & health', '8.00', '5.50', '20', 'Strip', '', '', '', 'Pharma Wholesalers', '5', 'no', '', '10 tablets per strip', 'unpaid'],
-  // Bottle
-  ['Dettol Antiseptic 500ml', 'HLTH-003', '6003003003003', 'Wellness', '28.00', '22.00', '24', 'Bottle', '', '', '', 'Unilever GH', '6', 'yes', '', '', 'paid'],
-  // Carton — qty counted in cartons (qty_in = Carton)
-  ['Gino Tomato Paste 70g', 'GRO-020', '6004004004004', 'Cooking essentials', '5.50', '4.20', '10', 'Tin', 'Carton', '48', 'Carton', 'Gino Foods', '2', 'yes', '', 'Cost is per Tin; 10 cartons on hand', 'unpaid'],
-  // Piece with pack option shown (qty in pieces)
-  ['Milo 400g', 'DRK-015', '6005005005005', 'Drinks', '18.00', '14.50', '36', 'Tin', 'Carton', '12', '', 'Nestlé GH', '8', 'yes', '', '', 'paid'],
-  // Weighed — kg base unit
-  ["Mama's Best Rice 5kg", 'RICE-01', '', 'Rice & staples', '65.00', '58.00', '25', 'kg', '', '', '', 'Local mill', '5', 'no', '', 'Sold by kg; opening stock in kg', 'unpaid'],
-  // Sachet / piece grocery
-  ['Indomie Onion Chicken', 'NOOD-007', '6006006006006', 'Pasta & noodles', '3.50', '2.80', '120', 'Piece', 'Carton', '40', '', 'Indofood', '24', 'yes', '', '', 'paid'],
-  // Baby — piece count
-  ['Baby Diapers Size 3 (8s)', 'BABY-02', '6007007007007', 'Diapers & wipes', '45.00', '38.00', '15', 'Pack', '', '', '', 'Pampers distributor', '4', 'yes', '', '', 'unpaid'],
+const CATALOGUE_EXAMPLES: string[][] = [
+  ['Awake Water 500ml', 'BEV-001', '6001001001001', 'Drinks', '3.00', '2.20', 'Piece', '', '', 'Aqua Pure Ltd', '12', 'yes', '', ''],
+  ['Paracetamol 500mg', 'MED-010', '6002002002002', 'Medicines & health', '8.00', '5.50', 'Strip', '', '', 'Pharma Wholesalers', '5', 'no', '', '10 tablets per strip'],
+  ['Milo 400g', 'DRK-015', '6005005005005', 'Drinks', '18.00', '14.50', 'Tin', 'Carton', '12', 'Nestlé GH', '8', 'yes', '', ''],
 ];
 
-const UNIT_GUIDE_LINES = [
-  '# TillFlow product import guide (delete these lines before upload)',
-  '#',
-  '# Unit types (base_unit): smallest unit you SELL — Piece, Bottle, Tin, Strip, Pack, kg',
-  '# pack_unit + pack_size: optional larger box (e.g. Carton with 48 Tins per carton)',
-  '# quantity + qty_in: how much stock you have NOW',
-  '#   - Leave qty_in blank → quantity is in base units (pieces, tins, kg)',
-  '#   - Set qty_in to Carton → quantity is number of cartons (system converts)',
-  '# opening stock = sellable units on your shelf today (not cartons unless qty_in says Carton)',
-  '#',
+const OPENING_EXAMPLES: string[][] = [
+  ['Awake Water 500ml', 'BEV-001', '6001001001001', 'Drinks', '3.00', '2.20', '48', 'Piece', '', '', '', 'Aqua Pure Ltd', '12', 'Already on shelf at cut-over'],
+  ['Paracetamol 500mg', 'MED-010', '6002002002002', 'Medicines & health', '8.00', '', '20', 'Strip', '', '', '', 'Pharma Wholesalers', '5', 'Qty known; cost to confirm later'],
+  ['Gino Tomato Paste 70g', 'GRO-020', '6004004004004', 'Cooking essentials', '5.50', '4.20', '10', 'Tin', 'Carton', '48', 'Carton', 'Gino Foods', '2', '10 cartons on hand'],
 ];
+
+const PURCHASE_EXAMPLES: string[][] = [
+  ['Awake Water 500ml', 'BEV-001', '6001001001001', 'Drinks', '3.00', '2.20', '48', 'Piece', '', '', '', 'Aqua Pure Ltd', '12', '', 'paid'],
+  ['Paracetamol 500mg', 'MED-010', '6002002002002', 'Medicines & health', '8.00', '5.50', '20', 'Strip', '', '', '', 'Pharma Wholesalers', '5', '', 'unpaid'],
+  ['Milo 400g', 'DRK-015', '6005005005005', 'Drinks', '18.00', '14.50', '36', 'Tin', 'Carton', '12', '', 'Nestlé GH', '8', '', 'paid'],
+];
+
+function guideLines(mode: ImportMode): string[] {
+  const common = [
+    `# TillFlow ${mode.toLowerCase().replace('_', ' ')} import guide (delete these lines before upload)`,
+    '#',
+    '# Unit types (base_unit): smallest unit you SELL — Piece, Bottle, Tin, Strip, Pack, kg',
+    '# pack_unit + pack_size: optional larger box (e.g. Carton with 48 Tins per carton)',
+  ];
+  if (mode === 'CATALOGUE') {
+    return [
+      ...common,
+      '# This template has NO quantity and NO payment_status — products only.',
+      '#',
+    ];
+  }
+  if (mode === 'OPENING_STOCK') {
+    return [
+      ...common,
+      '# quantity + qty_in: stock you already had on the TillFlow start date',
+      '# Leave cost_price blank when cost is unknown — quantity is recorded, value stays incomplete',
+      '# Do NOT use payment_status here — opening stock does not reduce cash',
+      '#',
+    ];
+  }
+  return [
+    ...common,
+    '# quantity: stock you are buying now (genuine purchase)',
+    '# payment_status: paid or unpaid (required for purchases)',
+    '# unpaid rows need supplier_name — creates supplier debt',
+    '#',
+  ];
+}
 
 function buildCsv(rows: string[][]): string {
   const escape = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   return rows.map((row) => row.map(escape).join(',')).join('\r\n');
 }
 
-/**
- * Triggers a browser download of the stock import CSV template.
- */
-export function downloadTemplate() {
-  const guideRows = UNIT_GUIDE_LINES.map((line) => [line]);
-  const csv = buildCsv([...guideRows, [...TEMPLATE_HEADERS], ...EXAMPLE_ROWS]);
+function examplesForMode(mode: ImportMode): string[][] {
+  switch (mode) {
+    case 'CATALOGUE':
+      return CATALOGUE_EXAMPLES;
+    case 'OPENING_STOCK':
+      return OPENING_EXAMPLES;
+    case 'PURCHASES':
+      return PURCHASE_EXAMPLES;
+  }
+}
+
+function fileNameForMode(mode: ImportMode): string {
+  switch (mode) {
+    case 'CATALOGUE':
+      return 'tillflow-catalogue-import-template.csv';
+    case 'OPENING_STOCK':
+      return 'tillflow-opening-stock-import-template.csv';
+    case 'PURCHASES':
+      return 'tillflow-purchase-import-template.csv';
+  }
+}
+
+/** Download the template for the selected import mode. */
+export function downloadTemplateForMode(mode: ImportMode) {
+  const headers = [...templateHeadersForMode(mode)];
+  const guideRows = guideLines(mode).map((line) => [line]);
+  const csv = buildCsv([...guideRows, headers, ...examplesForMode(mode)]);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'tillflow-product-import-template.csv';
+  a.download = fileNameForMode(mode);
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** @deprecated Prefer downloadTemplateForMode — kept for older call sites. */
+export function downloadTemplate() {
+  downloadTemplateForMode('OPENING_STOCK');
 }
 
 export const UNIT_HELPER_COPY = {
@@ -71,5 +119,11 @@ export const UNIT_HELPER_COPY = {
   sachet: 'Sachet: small single-serve packs.',
   kg: 'kg: weighed goods — cost and selling price are per kilogram.',
   openingStock:
-    'Opening stock: how many sellable units you have right now (pieces, tins, or kg — match qty_in).',
+    'Opening stock: how many sellable units you had on your TillFlow start date (pieces, tins, or kg — match qty_in).',
 } as const;
+
+export {
+  CATALOGUE_TEMPLATE_HEADERS,
+  OPENING_STOCK_TEMPLATE_HEADERS,
+  PURCHASE_TEMPLATE_HEADERS,
+};

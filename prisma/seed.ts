@@ -480,6 +480,7 @@ async function main() {
     { code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
     { code: '2100', name: 'VAT Payable', type: 'LIABILITY' },
     { code: '3000', name: 'Retained Earnings', type: 'EQUITY' },
+    { code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' },
     { code: '4000', name: 'Sales Revenue', type: 'INCOME' },
     { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
     { code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },

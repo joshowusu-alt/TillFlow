@@ -3,15 +3,23 @@
 import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
-import { downloadTemplate, UNIT_HELPER_COPY } from '@/lib/import/stock-template';
+import { downloadTemplateForMode, UNIT_HELPER_COPY } from '@/lib/import/stock-template';
 import {
-  parseStockFile,
+  parseStockFileDetailed,
   enrichRowsWithCatalog,
   type ParsedImportRow,
   type PaymentStatus,
 } from '@/lib/import/parse-stock-file';
 import { downloadErrorReport, issuesToReportRows } from '@/lib/import/error-report';
 import type { DuplicateAction } from '@/lib/import/import-validation';
+import {
+  IMPORT_MODES,
+  importModeExplanation,
+  importModeLabel,
+  type ImportMode,
+  type OpeningStockFunding,
+  type PurchasePaymentAccount,
+} from '@/lib/import/import-mode';
 import { getImportCatalogContext } from '@/app/actions/import-catalog';
 import type { ImportStockResult } from '@/app/actions/import-stock';
 import ResetPurchaseDataButton from '@/components/ResetPurchaseDataButton';
@@ -29,8 +37,10 @@ type PreviewRow = ParsedImportRow & {
   resolvedPackUnitId: string | null;
   /** Pack size override (user may edit inline) */
   resolvedPackSize: number;
-  /** Payment status (toggled per row) */
+  /** Payment status (toggled per row) — purchases mode only */
   resolvedPaymentStatus: PaymentStatus;
+  openingFunding: OpeningStockFunding;
+  paymentAccount: PurchasePaymentAccount;
 };
 
 type RowStatus = 'error' | 'warning' | 'ready';
@@ -51,6 +61,8 @@ function autoResolve(row: ParsedImportRow, units: UnitOption[]): PreviewRow {
     resolvedPackUnitId: row.packUnitName ? findUnit(units, row.packUnitName) : null,
     resolvedPackSize: row.packSize,
     resolvedPaymentStatus: row.paymentStatus,
+    openingFunding: 'EQUITY',
+    paymentAccount: 'CASH',
   };
 }
 
@@ -143,6 +155,30 @@ function PaymentPill({
   );
 }
 
+function FundingPill({
+  funding,
+  onChange,
+}: {
+  funding: OpeningStockFunding;
+  onChange: (f: OpeningStockFunding) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onChange(funding === 'EQUITY' ? 'SUPPLIER_CREDIT' : 'EQUITY')
+      }
+      className={`inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+        funding === 'EQUITY'
+          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+          : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+      }`}
+    >
+      {funding === 'EQUITY' ? 'Opening equity' : 'Supplier credit'}
+    </button>
+  );
+}
+
 function UnitSelector({
   value,
   unitName,
@@ -227,6 +263,9 @@ export default function ImportStockClient({
   currency: string;
 }) {
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
+  const [importMode, setImportMode] = useState<ImportMode | null>(null);
+  const [legacyPaymentStatusColumn, setLegacyPaymentStatusColumn] = useState(false);
+  const [clientImportKey] = useState(() => `imp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [parseError, setParseError] = useState<string | null>(null);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [result, setResult] = useState<ImportStockResult | null>(null);
@@ -238,27 +277,32 @@ export default function ImportStockClient({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const STEPS = ['Download template', 'Upload file', 'Review products', 'Confirm import', 'Done'] as const;
-  const stepIndex = stage === 'upload' ? 1 : stage === 'preview' ? 2 : 4;
+  const STEPS = ['Choose purpose', 'Download template', 'Upload file', 'Review', 'Done'] as const;
+  const stepIndex = !importMode ? 0 : stage === 'upload' ? 2 : stage === 'preview' ? 3 : 4;
 
   // ── File handling ────────────────────────────────────────────────────────
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (!importMode) {
+        setParseError('Choose an import purpose before uploading a file.');
+        return;
+      }
       setParseError(null);
       setFileName(file.name);
       try {
-        const parsed = await parseStockFile(file);
-        if (!parsed.length) {
+        const detailed = await parseStockFileDetailed(file);
+        if (!detailed.rows.length) {
           setParseError('The file had no product rows. Check the file and try again.');
           return;
         }
+        setLegacyPaymentStatusColumn(detailed.hasPaymentStatusColumn);
         setCatalogLoading(true);
         const catalogRes = await getImportCatalogContext();
         const enriched =
           catalogRes.success
-            ? enrichRowsWithCatalog(parsed, catalogRes.data)
-            : parsed;
+            ? enrichRowsWithCatalog(detailed.rows, catalogRes.data)
+            : detailed.rows;
         setPreviewRows(enriched.map((r) => autoResolve(r, units)));
         setStatusFilter('all');
         setStage('preview');
@@ -268,7 +312,7 @@ export default function ImportStockClient({
         setCatalogLoading(false);
       }
     },
-    [units]
+    [units, importMode]
   );
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -320,6 +364,10 @@ export default function ImportStockClient({
 
   const handleConfirm = async () => {
     if (isImporting) return;
+    if (!importMode) {
+      setConfirmError('Choose an import purpose first.');
+      return;
+    }
     setConfirmError(null);
     setIsImporting(true);
     const confirmedRows = previewRows
@@ -331,12 +379,12 @@ export default function ImportStockClient({
         category: r.suggestedCategory || r.category,
         sellingPricePence: r.sellingPricePence,
         costPricePence: r.costPricePence,
-        quantity: r.quantity,
+        quantity: importMode === 'CATALOGUE' ? 0 : r.quantity,
         baseUnitId: r.resolvedBaseUnitId!,
         packUnitId: r.packUnitName ? r.resolvedPackUnitId : null,
         packSize: r.resolvedPackSize,
         qtyInUnitId: effectiveQtyInUnitId(r) ?? r.resolvedBaseUnitId!,
-        paymentStatus: r.resolvedPaymentStatus,
+        paymentStatus: importMode === 'PURCHASES' ? r.resolvedPaymentStatus : undefined,
         duplicateAction: r.duplicateAction,
         supplierName: r.supplierName,
         reorderPointBase: r.reorderPoint,
@@ -344,6 +392,8 @@ export default function ImportStockClient({
         imageUrl: r.imageUrl,
         notes: r.notes,
         confirmBelowCost: r.confirmBelowCost,
+        openingFunding: importMode === 'OPENING_STOCK' ? r.openingFunding : undefined,
+        paymentAccount: importMode === 'PURCHASES' ? r.paymentAccount : undefined,
       }));
 
     const errorReport = issuesToReportRows(
@@ -356,17 +406,15 @@ export default function ImportStockClient({
     );
 
     try {
-      // IMPORTANT: do NOT call server actions inside startTransition in Next.js 14 /
-      // React 18. Next.js intercepts server action calls made inside startTransition
-      // to handle RSC cache invalidation, and in that path the return value is
-      // discarded — the client receives undefined instead of the ActionResult.
-      // Using plain await here guarantees we always get the typed return value.
       const httpRes = await fetch('/api/import-stock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rows: confirmedRows,
           meta: {
+            importMode,
+            legacyPaymentStatusColumn,
+            clientImportKey,
             fileName: fileName ?? undefined,
             rowsParsed: previewRows.length,
             rowsErrors: previewRows.filter((r) => rowStatus(r) === 'error').length,
@@ -409,15 +457,45 @@ export default function ImportStockClient({
     return (
       <div className="space-y-4">
         <ImportSteps steps={STEPS} activeIndex={stepIndex} />
+        <div className="card space-y-3 p-4 sm:p-6">
+          <h3 className="font-semibold text-sm">What are you importing?</h3>
+          <p className="text-xs text-black/55">
+            Choose one purpose before downloading a template or uploading a file. TillFlow will not guess from spreadsheet columns.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {IMPORT_MODES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setImportMode(mode)}
+                className={`rounded-xl border px-3 py-3 text-left transition ${
+                  importMode === mode
+                    ? 'border-accent bg-accentSoft/40 shadow-sm'
+                    : 'border-black/10 bg-white hover:border-accent/40'
+                }`}
+              >
+                <div className="text-sm font-semibold text-ink">{importModeLabel(mode)}</div>
+                <div className="mt-1 text-[11px] leading-snug text-black/55">{importModeExplanation(mode)}</div>
+              </button>
+            ))}
+          </div>
+          {!importMode ? (
+            <p className="text-xs font-medium text-amber-800">Select a purpose to continue.</p>
+          ) : null}
+        </div>
         <p className="text-xs text-black/50 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2">
           For large imports (50+ products), we recommend using a laptop. You can still upload from your phone for smaller lists.
         </p>
         {/* Drop zone */}
         <div
           className={`card flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
-            isDragging ? 'border-accent bg-accentSoft/30' : 'border-black/20'
+            !importMode
+              ? 'pointer-events-none opacity-50 border-black/10'
+              : isDragging
+                ? 'border-accent bg-accentSoft/30'
+                : 'border-black/20'
           }`}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragOver={(e) => { e.preventDefault(); if (importMode) setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={onDrop}
         >
@@ -469,10 +547,11 @@ export default function ImportStockClient({
             </div>
             <button
               type="button"
-              className="btn-ghost border border-black/10 shrink-0 text-sm w-full sm:w-auto"
-              onClick={downloadTemplate}
+              className="btn-ghost border border-black/10 shrink-0 text-sm w-full sm:w-auto disabled:opacity-40"
+              disabled={!importMode}
+              onClick={() => importMode && downloadTemplateForMode(importMode)}
             >
-              ↓ Download Template
+              ↓ Download {importMode ? importModeLabel(importMode) : ''} template
             </button>
           </div>
 
@@ -480,20 +559,36 @@ export default function ImportStockClient({
           <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 space-y-2 text-xs text-black/60">
             <p className="font-semibold text-black/70 mb-1">Column guide</p>
             <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-              {([
-                ['name *', 'Product name (required)'],
-                ['sku', 'Stock-keeping unit code (optional)'],
-                ['barcode', 'Barcode number (optional)'],
-                ['category', 'Category name — created automatically if new'],
-                ['selling_price *', 'Selling price, e.g. 12.00'],
-                ['cost_price *', 'Cost you paid per unit, e.g. 9.50'],
-                ['quantity', 'Opening stock count — blank or 0 means none on hand yet'],
-                ['base_unit *', 'Smallest unit you sell — e.g. Tin, Piece, kg'],
-                ['pack_unit', 'Container unit — e.g. Carton, Box (optional)'],
-                ['pack_size', 'Base units per pack — e.g. 12 (required if pack_unit set)'],
-                ['qty_in', 'Unit quantity is counted in — leave blank to use base_unit, or set to Carton/Box to enter pack counts'],
-                ['payment_status', '"paid" or "unpaid" — blank defaults to unpaid'],
-              ] as [string, string][]).map(([col, desc]) => (
+              {(
+                importMode === 'CATALOGUE'
+                  ? ([
+                      ['name *', 'Product name (required)'],
+                      ['sku / barcode', 'Optional codes'],
+                      ['selling_price *', 'Selling price, e.g. 12.00'],
+                      ['cost_price', 'Cost where known (optional)'],
+                      ['base_unit *', 'Smallest unit you sell'],
+                      ['category', 'Created automatically if new'],
+                    ] as [string, string][])
+                  : importMode === 'PURCHASES'
+                    ? ([
+                        ['name *', 'Product name (required)'],
+                        ['selling_price *', 'Selling price'],
+                        ['cost_price', 'Purchase cost per unit'],
+                        ['quantity *', 'Qty you are buying now'],
+                        ['supplier_name', 'Required for unpaid'],
+                        ['payment_status', 'paid or unpaid'],
+                        ['base_unit *', 'Smallest unit you sell'],
+                      ] as [string, string][])
+                    : ([
+                        ['name *', 'Product name (required)'],
+                        ['selling_price *', 'Selling price'],
+                        ['cost_price', 'Leave blank if unknown — value stays incomplete'],
+                        ['quantity *', 'Stock on hand at cut-over'],
+                        ['supplier_name', 'Only if you will mark supplier credit'],
+                        ['base_unit *', 'Smallest unit you sell'],
+                        ['(no payment_status)', 'Opening stock never reduces cash'],
+                      ] as [string, string][])
+              ).map(([col, desc]) => (
                 <div key={col} className="flex gap-1.5">
                   <code className="shrink-0 font-mono font-medium text-black/70">{col}</code>
                   <span>— {desc}</span>
@@ -550,7 +645,20 @@ export default function ImportStockClient({
           </div>
           <div>
             <h2 className="text-xl font-bold">Import complete!</h2>
-            <p className="text-sm text-black/50">Your stock catalogue and opening balances have been recorded.</p>
+            <p className="text-sm text-black/50">
+              {result.importMode === 'CATALOGUE'
+                ? 'Product catalogue updated — no stock or accounting entries were posted.'
+                : result.importMode === 'PURCHASES'
+                  ? 'Purchase import recorded.'
+                  : 'Opening stock recorded against Opening Balance Equity (or supplier credit where confirmed).'}
+            </p>
+            {result.accountingEffectSummary?.length ? (
+              <ul className="mt-2 list-disc pl-5 text-xs text-black/60 space-y-0.5">
+                {result.accountingEffectSummary.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
 
@@ -790,7 +898,36 @@ export default function ImportStockClient({
 
   return (
     <div className="space-y-4">
-      <ImportSteps steps={STEPS} activeIndex={2} />
+      <ImportSteps steps={STEPS} activeIndex={3} />
+      <div className="rounded-xl border border-accent/20 bg-accentSoft/30 px-4 py-3 text-sm text-ink space-y-1.5">
+        <p className="font-semibold">Import purpose: {importMode ? importModeLabel(importMode) : 'Not set'}</p>
+        {importMode === 'CATALOGUE' ? (
+          <>
+            <p className="text-xs text-black/60">Products only — quantities are ignored. No stock movement, journal, cash or supplier debt.</p>
+            <p className="text-xs text-black/60">payment_status is ignored in catalogue mode. To record quantities, switch to Opening Stock.</p>
+          </>
+        ) : null}
+        {importMode === 'OPENING_STOCK' ? (
+          <>
+            <p className="text-xs text-black/60">Current cash will not be reduced.</p>
+            <p className="text-xs text-black/60">Supplier debt is created only where you mark supplier credit with a named supplier.</p>
+            <p className="text-xs text-black/60">Remaining valued opening stock posts Dr Inventory / Cr Opening Balance Equity.</p>
+            {legacyPaymentStatusColumn ? (
+              <p className="text-xs font-medium text-amber-900">
+                This file includes payment_status. For opening stock that column is ignored — Paid will not reduce cash, and Unpaid will not create supplier debt automatically.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {importMode === 'PURCHASES' ? (
+          <p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP.</p>
+        ) : null}
+        <p className="text-xs text-black/55">
+          Ready {readyCount} · qty rows {previewRows.filter((r) => r.quantity > 0).length} · known cost{' '}
+          {previewRows.filter((r) => r.quantity > 0 && r.costPricePence > 0).length} · missing cost{' '}
+          {previewRows.filter((r) => r.quantity > 0 && r.costPricePence <= 0).length}
+        </p>
+      </div>
       {/* Header controls */}
       <div className="card p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -847,23 +984,47 @@ export default function ImportStockClient({
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-black/50">Mark all:</span>
-            <button
-              type="button"
-              className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
-              onClick={() => setAllPayment('PAID')}
-            >
-              Paid
-            </button>
-            <button
-              type="button"
-              className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-200"
-              onClick={() => setAllPayment('UNPAID')}
-            >
-              Unpaid
-            </button>
-          </div>
+          {importMode === 'PURCHASES' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-black/50">Mark all:</span>
+              <button
+                type="button"
+                className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                onClick={() => setAllPayment('PAID')}
+              >
+                Paid
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                onClick={() => setAllPayment('UNPAID')}
+              >
+                Unpaid
+              </button>
+            </div>
+          ) : importMode === 'OPENING_STOCK' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-black/50">Mark all funding:</span>
+              <button
+                type="button"
+                className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                onClick={() =>
+                  setPreviewRows((prev) => prev.map((r) => ({ ...r, openingFunding: 'EQUITY' })))
+                }
+              >
+                Opening equity
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-amber-100 px-3 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                onClick={() =>
+                  setPreviewRows((prev) => prev.map((r) => ({ ...r, openingFunding: 'SUPPLIER_CREDIT' })))
+                }
+              >
+                Supplier credit
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {errorCount > 0 && (
@@ -953,10 +1114,27 @@ export default function ImportStockClient({
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Category</div>
                   <div className="mt-1 text-black/65">{row.category || '—'}</div>
                 </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-black/40">Payment</div>
-                  <div className="mt-1"><PaymentPill status={row.resolvedPaymentStatus} onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })} /></div>
-                </div>
+                {importMode === 'PURCHASES' ? (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Payment</div>
+                    <div className="mt-1">
+                      <PaymentPill
+                        status={row.resolvedPaymentStatus}
+                        onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })}
+                      />
+                    </div>
+                  </div>
+                ) : importMode === 'OPENING_STOCK' ? (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Funding</div>
+                    <div className="mt-1">
+                      <FundingPill
+                        funding={row.openingFunding}
+                        onChange={(f) => updateRow(row._id, { openingFunding: f })}
+                      />
+                    </div>
+                  </div>
+                ) : null}
                 <div>
                   <div className="text-xs uppercase tracking-[0.16em] text-black/40">Sell</div>
                   <div className="mt-1">{row.sellingPricePence > 0 ? moneyCell(row.sellingPricePence, currency) : <span className="text-red-500 text-xs">missing</span>}</div>
@@ -1042,7 +1220,11 @@ export default function ImportStockClient({
                 <th className="px-3 py-2 text-right font-medium">Cost</th>
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
                 <th className="px-3 py-2 text-left font-medium min-w-[160px]">Unit</th>
-                <th className="px-3 py-2 text-left font-medium">Payment</th>
+                {importMode === 'PURCHASES' ? (
+                  <th className="px-3 py-2 text-left font-medium">Payment</th>
+                ) : importMode === 'OPENING_STOCK' ? (
+                  <th className="px-3 py-2 text-left font-medium">Funding</th>
+                ) : null}
                 <th className="px-3 py-2 text-right font-medium">Line Total</th>
                 <th className="px-3 py-2 text-left font-medium">Duplicate</th>
                 <th className="px-3 py-2 text-left font-medium">Status</th>
@@ -1159,12 +1341,21 @@ export default function ImportStockClient({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2">
-                      <PaymentPill
-                        status={row.resolvedPaymentStatus}
-                        onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })}
-                      />
-                    </td>
+                    {importMode === 'PURCHASES' ? (
+                      <td className="px-3 py-2">
+                        <PaymentPill
+                          status={row.resolvedPaymentStatus}
+                          onChange={(s) => updateRow(row._id, { resolvedPaymentStatus: s })}
+                        />
+                      </td>
+                    ) : importMode === 'OPENING_STOCK' ? (
+                      <td className="px-3 py-2">
+                        <FundingPill
+                          funding={row.openingFunding}
+                          onChange={(f) => updateRow(row._id, { openingFunding: f })}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-3 py-2 text-right">
                       {row.costPricePence > 0 && row.quantity > 0 ? (() => {
                         const cf =
@@ -1210,18 +1401,60 @@ export default function ImportStockClient({
       <div className="card sticky bottom-4 p-4 shadow-lg">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:gap-4">
-            <div>
-              <span className="text-black/50">Paid stock: </span>
-              <span className="font-semibold text-emerald-700">{formatMoney(paidValuePence, currency)}</span>
-            </div>
-            <div>
-              <span className="text-black/50">Owed to suppliers: </span>
-              <span className="font-semibold text-amber-700">{formatMoney(unpaidValuePence, currency)}</span>
-            </div>
-            <div>
-              <span className="text-black/50">Total: </span>
-              <span className="font-semibold">{formatMoney(paidValuePence + unpaidValuePence, currency)}</span>
-            </div>
+            {importMode === 'PURCHASES' ? (
+              <>
+                <div>
+                  <span className="text-black/50">Paid stock: </span>
+                  <span className="font-semibold text-emerald-700">{formatMoney(paidValuePence, currency)}</span>
+                </div>
+                <div>
+                  <span className="text-black/50">Owed to suppliers: </span>
+                  <span className="font-semibold text-amber-700">{formatMoney(unpaidValuePence, currency)}</span>
+                </div>
+                <div>
+                  <span className="text-black/50">Total: </span>
+                  <span className="font-semibold">{formatMoney(paidValuePence + unpaidValuePence, currency)}</span>
+                </div>
+              </>
+            ) : importMode === 'OPENING_STOCK' ? (
+              <>
+                <div>
+                  <span className="text-black/50">Opening equity: </span>
+                  <span className="font-semibold text-emerald-700">
+                    {formatMoney(
+                      calcValue(previewRows.filter((r) => r.openingFunding === 'EQUITY' && r.costPricePence > 0)),
+                      currency
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-black/50">Supplier credit (if confirmed): </span>
+                  <span className="font-semibold text-amber-700">
+                    {formatMoney(
+                      calcValue(
+                        previewRows.filter((r) => r.openingFunding === 'SUPPLIER_CREDIT' && r.costPricePence > 0)
+                      ),
+                      currency
+                    )}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-black/50">Cash change: </span>
+                  <span className="font-semibold">None</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span className="text-black/50">Catalogue rows: </span>
+                  <span className="font-semibold">{readyCount}</span>
+                </div>
+                <div>
+                  <span className="text-black/50">Stock / journal: </span>
+                  <span className="font-semibold">None</span>
+                </div>
+              </>
+            )}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             {confirmError && (
@@ -1255,10 +1488,20 @@ export default function ImportStockClient({
             </div>
           </div>
         </div>
-        <p className="mt-2 text-xs text-black/40">
-          Paid a deposit on some stock? Import as Unpaid, then record the partial payment under{' '}
-          <Link href="/purchases" className="underline">Purchases</Link>.
-        </p>
+        {importMode === 'PURCHASES' ? (
+          <p className="mt-2 text-xs text-black/40">
+            Paid a deposit on some stock? Import as Unpaid, then record the partial payment under{' '}
+            <Link href="/purchases" className="underline">Purchases</Link>.
+          </p>
+        ) : importMode === 'CATALOGUE' ? (
+          <p className="mt-2 text-xs text-black/40">
+            Need quantities on hand? Use Opening Stock mode — catalogue import never posts stock or journals.
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-black/40">
+            Opening stock never reduces cash. Supplier debt is only created when you explicitly mark supplier credit.
+          </p>
+        )}
       </div>
     </div>
   );

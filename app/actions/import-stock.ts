@@ -5,11 +5,20 @@ import { revalidateTag } from 'next/cache';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
+import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
 import { suggestImportCategoryName } from '@/lib/import/category-import';
 import type { DuplicateAction } from '@/lib/import/import-validation';
+import {
+  isImportMode,
+  type ImportMode,
+  type OpeningStockFunding,
+  type PurchasePaymentAccount,
+} from '@/lib/import/import-mode';
+import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
+import type { PaymentMethod } from '@/lib/services/shared/payment-utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,7 +36,8 @@ export type ConfirmedImportRow = {
   packUnitId: string | null;
   packSize: number;
   qtyInUnitId: string;
-  paymentStatus: 'PAID' | 'UNPAID';
+  /** Purchases mode only. Ignored for catalogue / opening stock. */
+  paymentStatus?: 'PAID' | 'UNPAID';
   duplicateAction?: DuplicateAction;
   supplierName?: string;
   reorderPointBase?: number;
@@ -35,6 +45,10 @@ export type ConfirmedImportRow = {
   imageUrl?: string;
   notes?: string;
   confirmBelowCost?: boolean;
+  /** Opening stock: EQUITY (default) or SUPPLIER_CREDIT (named supplier required). */
+  openingFunding?: OpeningStockFunding;
+  /** Purchases PAID: which GL payment account to credit. */
+  paymentAccount?: PurchasePaymentAccount;
 };
 
 export type ImportStockMeta = {
@@ -43,6 +57,11 @@ export type ImportStockMeta = {
   rowsErrors?: number;
   rowsWarnings?: number;
   errorReportJson?: string;
+  /** Required — never inferred from spreadsheet alone. */
+  importMode: ImportMode;
+  /** True when uploaded file still contains payment_status (legacy). */
+  legacyPaymentStatusColumn?: boolean;
+  clientImportKey?: string;
 };
 
 export type ImportSupplierLinkSupplierSummary = {
@@ -63,6 +82,7 @@ export type ImportSupplierLinkSummary = {
 
 export type ImportStockResult = {
   importId: string | null;
+  importMode: ImportMode;
   created: number;
   updated: number;
   skipped: number;
@@ -75,10 +95,16 @@ export type ImportStockResult = {
   stockUpdated: number;
   stockUpdatedValuePence: number;
   openingStockUnits: number;
+  openingEquityValuePence: number;
+  openingSupplierCreditValuePence: number;
+  missingCostCount: number;
+  costReviewProductIds: string[];
+  journalsPosted: number;
   suppliersMatched: number;
   suppliersCreated: number;
   categoriesCreated: number;
   warningsAcknowledged: number;
+  accountingEffectSummary: string[];
   supplierLinkSummary: ImportSupplierLinkSummary;
 };
 
@@ -92,19 +118,20 @@ function emptyImportSupplierLinkSummary(): ImportSupplierLinkSummary {
   };
 }
 
+function paymentAccountToMethod(account: PurchasePaymentAccount | undefined): PaymentMethod {
+  if (account === 'BANK') return 'TRANSFER';
+  if (account === 'MOBILE_MONEY') return 'MOBILE_MONEY';
+  return 'CASH';
+}
+
 // ---------------------------------------------------------------------------
 // Action
 // ---------------------------------------------------------------------------
 
 export async function importStockAction(
   rows: ConfirmedImportRow[],
-  meta?: ImportStockMeta
+  meta: ImportStockMeta
 ): Promise<ActionResult<ImportStockResult>> {
-  // ── Outermost safety net ────────────────────────────────────────────────
-  // This try/catch guarantees the function ALWAYS returns an ActionResult
-  // and NEVER lets anything (redirect errors, runtime errors, Prisma panics)
-  // escape unhandled. When a redirect/error escapes a Next.js 14 server action
-  // the client-side await resolves to `undefined` — causing the crash.
   try {
     return await _runImport(rows, meta);
   } catch (e: unknown) {
@@ -139,7 +166,7 @@ async function resolveSupplierId(
 
 async function _runImport(
   rows: ConfirmedImportRow[],
-  meta?: ImportStockMeta
+  meta: ImportStockMeta
 ): Promise<ActionResult<ImportStockResult>> {
   // Auth resolved OUTSIDE safeAction so a redirect() from withBusinessContext
   // is caught here and converted to a typed err() instead of escaping.
@@ -154,8 +181,21 @@ async function _runImport(
 
   return safeAction(async () => {
     if (!rows.length) return err('No rows to import.');
+    if (!meta?.importMode || !isImportMode(meta.importMode)) {
+      return err('Choose an import purpose first: Product catalogue, Opening stock, or Purchases.');
+    }
+    const importMode = meta.importMode;
+
+    // Legacy spreadsheets with payment_status must still pick a mode explicitly
+    // (UI enforces this). Opening stock ignores PAID/UNPAID entirely.
 
     const { user, businessId } = authContext;
+
+    // Catalogue mode never posts stock — strip quantities before processing.
+    const incomingRows: ConfirmedImportRow[] =
+      importMode === 'CATALOGUE'
+        ? rows.map((r) => ({ ...r, quantity: 0, paymentStatus: undefined, openingFunding: undefined }))
+        : rows;
 
     const store = await prisma.store.findFirst({
       where: { businessId },
@@ -167,7 +207,7 @@ async function _runImport(
     // The preview UI sets baseUnitId / packUnitId / qtyInUnitId to "new:Name"
     // when the owner chooses to create a previously unknown unit.
     const newUnitNames = new Set<string>();
-    for (const row of rows) {
+    for (const row of incomingRows) {
       [row.baseUnitId, row.packUnitId, row.qtyInUnitId].forEach((v) => {
         if (v && v.startsWith('new:')) newUnitNames.add(v.slice(4).trim());
       });
@@ -191,7 +231,7 @@ async function _runImport(
     };
 
     // Re-map all rows so real IDs are used downstream
-    const resolvedRows: ConfirmedImportRow[] = rows.map((row) => ({
+    const resolvedRows: ConfirmedImportRow[] = incomingRows.map((row) => ({
       ...row,
       baseUnitId: resolveUnitId(row.baseUnitId) ?? row.baseUnitId,
       packUnitId: resolveUnitId(row.packUnitId),
@@ -417,10 +457,9 @@ async function _runImport(
       // support: a single barcode/name collision kills the entire 614-row batch.
       // With skipDuplicates, any colliding row is silently skipped so the rest
       // still commit. We then fetch back the IDs with a single findMany.
-      const supportsSkipDuplicates =
-        !!process.env.POSTGRES_PRISMA_URL ||
-        !!process.env.POSTGRES_URL_NON_POOLING ||
-        process.env.DATABASE_URL?.startsWith('postgres') === true;
+      // skipDuplicates is Postgres-only. Local SQLite often still has POSTGRES_*
+      // env vars for deploy tooling, so gate on the active DATABASE_URL only.
+      const supportsSkipDuplicates = isPostgresDatabaseUrl(process.env.DATABASE_URL);
 
       const createManyArgs: { data: typeof productData; skipDuplicates?: boolean } = {
         data: productData,
@@ -516,10 +555,7 @@ async function _runImport(
       })
       .filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 
-    // -- Step 4: Create purchase invoices in chunks of 500 lines ----------
-    // Products are fully committed — no shared transaction needed.
-    // Chunking avoids an oversized IN (...) clause in the DB driver.
-    // Both newly-created and existing-with-stock items are included.
+    // -- Step 4: Mode-specific stock / purchase posting --------------------
     const INVOICE_CHUNK = 500;
     const updateWithStockItems = (
       await Promise.all(
@@ -544,42 +580,35 @@ async function _runImport(
     ).filter(Boolean) as { row: ConfirmedImportRow; productId: string }[];
 
     const allItems = [...createdItems, ...skippedWithStockItems, ...updateWithStockItems];
-    const paidItemsAll   = allItems.filter((c) => c.row.paymentStatus === 'PAID');
-    const unpaidItemsAll = allItems.filter((c) => c.row.paymentStatus === 'UNPAID');
+    const stockItems = allItems.filter((c) => c.row.quantity > 0);
+
     const groupLinesBySupplier = async (
       items: Array<{ row: ConfirmedImportRow; productId: string }>
     ) => {
       const groups = new Map<
         string,
-        { supplierId: string | null; supplierName: string | null; lines: ReturnType<typeof toPurchaseLine>[] }
+        {
+          supplierId: string | null;
+          supplierName: string | null;
+          lines: ReturnType<typeof toPurchaseLine>[];
+          rows: ConfirmedImportRow[];
+        }
       >();
       for (const item of items) {
         if (item.row.quantity <= 0) continue;
         const supplierId = await resolveSupplierIdForRow(item.row);
         const key = supplierId ?? '__NO_SUPPLIER__';
         const supplierName = supplierId ? (item.row.supplierName ?? '').trim() || null : null;
-        const group = groups.get(key) ?? { supplierId, supplierName, lines: [] };
+        const group = groups.get(key) ?? { supplierId, supplierName, lines: [], rows: [] };
         group.lines.push(toPurchaseLine(item.row, item.productId));
+        group.rows.push(item.row);
         groups.set(key, group);
       }
       return [...groups.values()];
     };
-    const paidLineGroups = await groupLinesBySupplier(paidItemsAll);
-    const unpaidLineGroups = await groupLinesBySupplier(unpaidItemsAll);
-    const paidLinesAll = paidLineGroups.flatMap((group) => group.lines);
-    const unpaidLinesAll = unpaidLineGroups.flatMap((group) => group.lines);
 
-    // Pre-seed the full chart of accounts ONCE before launching invoice
-    // creation. Without this, multiple createPurchase calls may each try
-    // to seed the AP account concurrently — a race that can cause silent
-    // failures on the Neon/PostgreSQL connection pool.
     await ensureChartOfAccounts(businessId);
 
-    // Run invoice chunks SEQUENTIALLY to avoid connection-pool contention.
-    // Each chunk is wrapped in try/catch so a transient failure on one chunk
-    // does NOT abort the remaining chunks — partial progress is preserved.
-    // Products are already committed above; losing an invoice chunk is far
-    // better than rolling back everything.
     const invoiceErrors: string[] = [];
     const supplierLinkSummary = emptyImportSupplierLinkSummary();
     const supplierSummaryMap = new Map<string, ImportSupplierLinkSupplierSummary>();
@@ -613,46 +642,194 @@ async function _runImport(
       supplierSummaryMap.set(group.supplierId, supplierSummary);
     };
 
-    let paidChunkCount = 0;
-    for (const group of paidLineGroups) {
-      for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
-        const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
-        try {
-          const invoice = await createPurchase({
-            businessId, storeId: store.id, supplierId: group.supplierId,
-            paymentStatus: 'PAID', dueDate: null, payments: [],
-            lines: chunk, userId: user.id,
-            stockMovementType: 'OPENING',
-            acknowledgeHighCost: true,
-          });
-          mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
-          paidChunkCount++;
-        } catch (chunkErr: unknown) {
-          const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-          console.error(`[importStock] paid chunk ${paidChunkCount + 1} failed:`, chunkErr);
-          invoiceErrors.push(`Paid chunk ${paidChunkCount + 1}: ${msg}`);
+    let paidCount = 0;
+    let unpaidCount = 0;
+    let paidValuePence = 0;
+    let unpaidValuePence = 0;
+    let openingStockUnits = 0;
+    let openingEquityValuePence = 0;
+    let openingSupplierCreditValuePence = 0;
+    let missingCostCount = 0;
+    let journalsPosted = 0;
+    const costReviewProductIds: string[] = [];
+    const accountingEffectSummary: string[] = [];
+    const clientImportKey = meta.clientImportKey?.trim() || `import-${Date.now()}`;
+
+    if (importMode === 'CATALOGUE') {
+      accountingEffectSummary.push('Catalogue only — no stock movements, journals, cash or supplier payables.');
+    }
+
+    if (importMode === 'OPENING_STOCK' && stockItems.length > 0) {
+      const equityItems = stockItems.filter((i) => (i.row.openingFunding ?? 'EQUITY') !== 'SUPPLIER_CREDIT');
+      const creditItems = stockItems.filter((i) => i.row.openingFunding === 'SUPPLIER_CREDIT');
+
+      for (const item of creditItems) {
+        if (!(item.row.supplierName ?? '').trim()) {
+          return err(`Opening stock on supplier credit requires a named supplier (${item.row.name}).`);
         }
       }
-    }
-    let unpaidChunkCount = 0;
-    for (const group of unpaidLineGroups) {
-      for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
-        const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
-        try {
-          const invoice = await createPurchase({
-            businessId, storeId: store.id, supplierId: group.supplierId,
-            paymentStatus: 'UNPAID', dueDate: null, payments: [],
-            lines: chunk, userId: user.id,
-            stockMovementType: 'OPENING',
-            acknowledgeHighCost: true,
-          });
-          mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
-          unpaidChunkCount++;
-        } catch (chunkErr: unknown) {
-          const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-          console.error(`[importStock] unpaid chunk ${unpaidChunkCount + 1} failed:`, chunkErr);
-          invoiceErrors.push(`Unpaid chunk ${unpaidChunkCount + 1}: ${msg}`);
+
+      if (equityItems.length > 0) {
+        const openingResult = await recordOpeningInventory({
+          businessId,
+          storeId: store.id,
+          userId: user.id,
+          referenceId: `${clientImportKey}-equity`,
+          description: 'Opening stock import — Opening Balance Equity',
+          lines: equityItems.map(({ row, productId }) => {
+            const isPack =
+              !!row.packUnitId &&
+              row.qtyInUnitId === row.packUnitId &&
+              row.packSize > 1;
+            return {
+              productId,
+              unitId: row.baseUnitId,
+              qtyInUnit: isPack ? row.quantity * row.packSize : row.quantity,
+              unitCostBasePence: row.costPricePence > 0 ? row.costPricePence : 0,
+            };
+          }),
+        });
+        openingEquityValuePence += openingResult.valuedPence;
+        openingStockUnits += openingResult.valuedUnits + openingResult.unvaluedUnits;
+        missingCostCount += openingResult.costReviewProductIds.length;
+        costReviewProductIds.push(...openingResult.costReviewProductIds);
+        if (openingResult.journalPosted) journalsPosted += 1;
+        accountingEffectSummary.push(
+          `Opening stock (owner-funded / equity): Dr Inventory / Cr Opening Balance Equity ${openingResult.valuedPence}p.`
+        );
+        if (openingResult.unvaluedUnits > 0) {
+          accountingEffectSummary.push(
+            `${openingResult.unvaluedUnits} unit(s) recorded without cost — stock value and profit remain incomplete.`
+          );
         }
+        if (meta.legacyPaymentStatusColumn) {
+          accountingEffectSummary.push(
+            'Legacy payment_status column ignored for opening stock — cash was not reduced.'
+          );
+        }
+      }
+
+      if (creditItems.length > 0) {
+        const creditGroups = await groupLinesBySupplier(creditItems);
+        for (const group of creditGroups) {
+          if (!group.supplierId) {
+            return err('Opening stock on supplier credit requires a named supplier.');
+          }
+          for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
+            const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
+            try {
+              const invoice = await createPurchase({
+                businessId,
+                storeId: store.id,
+                supplierId: group.supplierId,
+                paymentStatus: 'UNPAID',
+                dueDate: null,
+                payments: [],
+                lines: chunk,
+                userId: user.id,
+                stockMovementType: 'OPENING',
+                acknowledgeHighCost: true,
+              });
+              mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
+              const chunkValue = chunk.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
+              openingSupplierCreditValuePence += chunkValue;
+              unpaidValuePence += chunkValue;
+              unpaidCount += chunk.length;
+              openingStockUnits += chunk.reduce((s, l) => s + l.qtyInUnit, 0);
+              journalsPosted += 1;
+            } catch (chunkErr: unknown) {
+              const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+              invoiceErrors.push(`Opening supplier-credit chunk: ${msg}`);
+            }
+          }
+        }
+        accountingEffectSummary.push(
+          `Opening stock (supplier credit): Dr Inventory / Cr Accounts Payable ${openingSupplierCreditValuePence}p.`
+        );
+      }
+    }
+
+    if (importMode === 'PURCHASES' && stockItems.length > 0) {
+      const paidItemsAll = stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') === 'PAID');
+      const unpaidItemsAll = stockItems.filter((c) => (c.row.paymentStatus ?? 'UNPAID') !== 'PAID');
+
+      for (const item of unpaidItemsAll) {
+        if (!(item.row.supplierName ?? '').trim()) {
+          return err(`Unpaid purchases require a named supplier (${item.row.name}).`);
+        }
+      }
+
+      const paidLineGroups = await groupLinesBySupplier(paidItemsAll);
+      const unpaidLineGroups = await groupLinesBySupplier(unpaidItemsAll);
+
+      for (const group of paidLineGroups) {
+        for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
+          const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
+          const chunkTotal = chunk.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
+          const method = paymentAccountToMethod(group.rows[0]?.paymentAccount);
+          try {
+            const invoice = await createPurchase({
+              businessId,
+              storeId: store.id,
+              supplierId: group.supplierId,
+              paymentStatus: 'PAID',
+              dueDate: null,
+              payments: chunkTotal > 0 ? [{ method, amountPence: chunkTotal }] : [],
+              lines: chunk,
+              userId: user.id,
+              stockMovementType: 'PURCHASE',
+              acknowledgeHighCost: true,
+              skipCashDrawerRequirement: true,
+            });
+            mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
+            paidValuePence += chunkTotal;
+            paidCount += chunk.length;
+            openingStockUnits += chunk.reduce((s, l) => s + l.qtyInUnit, 0);
+            journalsPosted += 1;
+          } catch (chunkErr: unknown) {
+            const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+            invoiceErrors.push(`Paid purchase chunk: ${msg}`);
+          }
+        }
+      }
+
+      for (const group of unpaidLineGroups) {
+        if (!group.supplierId) {
+          return err('Unpaid purchases require a named supplier.');
+        }
+        for (let i = 0; i < group.lines.length; i += INVOICE_CHUNK) {
+          const chunk = group.lines.slice(i, i + INVOICE_CHUNK);
+          try {
+            const invoice = await createPurchase({
+              businessId,
+              storeId: store.id,
+              supplierId: group.supplierId,
+              paymentStatus: 'UNPAID',
+              dueDate: null,
+              payments: [],
+              lines: chunk,
+              userId: user.id,
+              stockMovementType: 'PURCHASE',
+              acknowledgeHighCost: true,
+            });
+            mergeSupplierProductLinkSummary((invoice as any).supplierProductLinkSummary, group);
+            const chunkValue = chunk.reduce((s, l) => s + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
+            unpaidValuePence += chunkValue;
+            unpaidCount += chunk.length;
+            openingStockUnits += chunk.reduce((s, l) => s + l.qtyInUnit, 0);
+            journalsPosted += 1;
+          } catch (chunkErr: unknown) {
+            const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
+            invoiceErrors.push(`Unpaid purchase chunk: ${msg}`);
+          }
+        }
+      }
+
+      if (paidValuePence > 0) {
+        accountingEffectSummary.push(`Paid purchases: Dr Inventory / Cr selected payment account ${paidValuePence}p.`);
+      }
+      if (unpaidValuePence > 0) {
+        accountingEffectSummary.push(`Unpaid purchases: Dr Inventory / Cr Accounts Payable ${unpaidValuePence}p.`);
       }
     }
 
@@ -662,29 +839,32 @@ async function _runImport(
     supplierLinkSummary.supplierSummaries = [...supplierSummaryMap.values()].sort((a, b) =>
       a.supplierName.localeCompare(b.supplierName),
     );
-    console.log(`[importStock] ${paidChunkCount} paid chunk(s) + ${unpaidChunkCount} unpaid chunk(s) complete — paid lines: ${paidLinesAll.length}, unpaid lines: ${unpaidLinesAll.length}`);
 
-    const paidValuePence   = paidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
-    const unpaidValuePence = unpaidLinesAll.reduce((sum, l) => sum + (l.unitCostPence ?? 0) * l.qtyInUnit, 0);
     const stockUpdatedValuePence =
-      [...skippedWithStockItems, ...updateWithStockItems].reduce(
-        (sum, { row }) => sum + rowToBaseCost(row),
-        0
-      );
-    const openingStockUnits = paidLinesAll.reduce((s, l) => s + l.qtyInUnit, 0)
-      + unpaidLinesAll.reduce((s, l) => s + l.qtyInUnit, 0);
+      importMode === 'CATALOGUE'
+        ? 0
+        : [...skippedWithStockItems, ...updateWithStockItems].reduce(
+            (sum, { row }) => sum + rowToBaseCost(row),
+            0
+          );
 
     const summary = {
+      importMode,
       created: createdItems.length,
       updated: updatedCount,
       skipped: skippedNames.length,
-      stockUpdated: skippedWithStockItems.length + updateWithStockItems.length,
-      paidCount: paidLinesAll.length,
-      unpaidCount: unpaidLinesAll.length,
+      stockUpdated: importMode === 'CATALOGUE' ? 0 : skippedWithStockItems.length + updateWithStockItems.length,
+      paidCount,
+      unpaidCount,
+      openingEquityValuePence,
+      openingSupplierCreditValuePence,
+      missingCostCount,
+      journalsPosted,
       suppliersMatched: supplierStats.matched,
       suppliersCreated: supplierStats.created,
       categoriesCreated,
       openingStockUnits,
+      accountingEffectSummary,
     };
 
     const importRecord = await prisma.productImport.create({
@@ -693,7 +873,7 @@ async function _runImport(
         uploadedByUserId: user.id,
         fileName: meta?.fileName ?? null,
         status: invoiceErrors.length > 0 ? 'PARTIAL' : 'COMPLETED',
-        rowsParsed: meta?.rowsParsed ?? rows.length,
+        rowsParsed: meta?.rowsParsed ?? incomingRows.length,
         rowsImported: createdItems.length,
         rowsUpdated: updatedCount,
         rowsSkipped: skippedNames.length,
@@ -724,22 +904,29 @@ async function _runImport(
 
     return ok<ImportStockResult>({
       importId: importRecord.id,
+      importMode,
       created: createdItems.length,
       updated: updatedCount,
       skipped: skippedNames.length,
       skippedNames: skippedNames.slice(0, 200),
       barcodesCleared,
-      paidCount: paidLinesAll.length,
-      unpaidCount: unpaidLinesAll.length,
+      paidCount,
+      unpaidCount,
       paidValuePence,
       unpaidValuePence,
-      stockUpdated: skippedWithStockItems.length + updateWithStockItems.length,
+      stockUpdated: importMode === 'CATALOGUE' ? 0 : skippedWithStockItems.length + updateWithStockItems.length,
       stockUpdatedValuePence,
       openingStockUnits,
+      openingEquityValuePence,
+      openingSupplierCreditValuePence,
+      missingCostCount,
+      costReviewProductIds: [...new Set(costReviewProductIds)],
+      journalsPosted,
       suppliersMatched: supplierStats.matched,
       suppliersCreated: supplierStats.created,
       categoriesCreated,
-      warningsAcknowledged: rows.filter((r) => r.confirmBelowCost).length,
+      warningsAcknowledged: incomingRows.filter((r) => r.confirmBelowCost).length,
+      accountingEffectSummary,
       supplierLinkSummary,
     });
   });

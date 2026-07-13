@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
+import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import {
   filterPositivePayments,
   splitPayments,
@@ -40,6 +41,11 @@ export type CreatePurchaseInput = {
   acknowledgeHighCost?: boolean;
   /** Opening stock from import/setup uses OPENING in the stock ledger. */
   stockMovementType?: 'OPENING' | 'PURCHASE';
+  /**
+   * Import / bulk paths post Cash to GL without requiring an open till.
+   * Cash drawer PAID_OUT entries are still recorded when a shift is open.
+   */
+  skipCashDrawerRequirement?: boolean;
 };
 
 export type SupplierProductLinkSkippedProduct = {
@@ -192,6 +198,7 @@ async function createPurchaseInvoicePayments(
     payments: PaymentInput[];
     recordedByUserId?: string | null;
     supplierName?: string | null;
+    skipCashDrawerRequirement?: boolean;
   }
 ) {
   if (input.payments.length === 0) return;
@@ -206,7 +213,11 @@ async function createPurchaseInvoicePayments(
         })
       : null;
 
-  if (cashSplit.cashPence > 0 && (!input.recordedByUserId || !openShift)) {
+  if (
+    cashSplit.cashPence > 0 &&
+    !input.skipCashDrawerRequirement &&
+    (!input.recordedByUserId || !openShift)
+  ) {
     throw new Error('Open shift is required before recording cash supplier payments.');
   }
 
@@ -453,6 +464,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         payments,
         recordedByUserId: input.userId ?? null,
         supplierName: supplier?.name ?? null,
+        skipCashDrawerRequirement: input.skipCashDrawerRequirement,
       });
     }
 
@@ -510,7 +522,7 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       // 1 round-trip for any number of products. On SQLite (dev), fall back
       // to sub-batched $transaction with generous timeout.
       if (upsertArgs.length > 0) {
-        const isPostgres = !!(process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL_NON_POOLING);
+        const isPostgres = isPostgresDatabaseUrl(process.env.DATABASE_URL);
 
         if (isPostgres) {
           const sid = store.id;

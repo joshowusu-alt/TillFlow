@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PrismaClient } from '@prisma/client';
-import { isPostgresRuntimeEnv, isSqliteRuntimeEnv } from '@/lib/database-runtime';
+import { isPostgresDatabaseUrl, isSqliteDatabaseUrl } from '@/lib/database-runtime';
 
 export const ACCOUNT_CODES = {
   cash: '1000',
@@ -12,6 +12,8 @@ export const ACCOUNT_CODES = {
   ap: '2000',
   vatPayable: '2100',
   equity: '3000',
+  /** Cut-over / opening-stock equity offset — not day-to-day retained earnings. */
+  openingBalanceEquity: '3200',
   sales: '4000',
   cogs: '5000',
   operatingExpenses: '6000'
@@ -27,6 +29,7 @@ export const CHART_OF_ACCOUNTS = [
   { code: '2000', name: 'Accounts Payable',       type: 'LIABILITY' as const },
   { code: '2100', name: 'VAT Payable',            type: 'LIABILITY' as const },
   { code: '3000', name: 'Retained Earnings',      type: 'EQUITY' as const },
+  { code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' as const },
   { code: '4000', name: 'Sales Revenue',          type: 'INCOME' as const },
   { code: '5000', name: 'Cost of Goods Sold',     type: 'EXPENSE' as const },
   { code: '6000', name: 'Operating Expenses',     type: 'EXPENSE' as const },
@@ -39,11 +42,13 @@ export const CHART_OF_ACCOUNTS = [
 ];
 
 function isSqliteRuntime() {
-  return isSqliteRuntimeEnv(process.env);
+  // Match the connection Prisma actually uses. Local .env often keeps
+  // POSTGRES_* URLs for Vercel while DATABASE_URL points at sqlite.
+  return isSqliteDatabaseUrl(process.env.DATABASE_URL);
 }
 
 function isPostgresRuntime() {
-  return isPostgresRuntimeEnv(process.env);
+  return isPostgresDatabaseUrl(process.env.DATABASE_URL);
 }
 
 /**

@@ -88,6 +88,16 @@ export default async function IncomeStatementPage({
         Sales and product costs come from your recorded sales. Expenses come from recorded business costs. Sales figures include credit sales not yet collected — this report shows profit performance, not cash in the bank.
       </div>
 
+      {statement.incompleteStockMessage ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Stock value is incomplete</p>
+          <p className="mt-1">{statement.incompleteStockMessage}</p>
+          {statement.profitMayBeIncomplete ? (
+            <p className="mt-1">Profit may also be incomplete until those costs are confirmed.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {!hasData ? (
         <EmptyState
           icon="chart"
