@@ -182,20 +182,26 @@ describe('ReadinessJourney Phase 1 setup', () => {
 
     const startButtons = screen.getAllByRole('button', { name: /^Start selling$/i });
     expect(startButtons).toHaveLength(1);
+    // Eyebrow + heading both read "Ready to sell" (eyebrow is uppercase via CSS).
+    expect(screen.getAllByText(/^Ready to sell$/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/^Setup$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Your business is ready\. Make your first successful sale/i)).toBeInTheDocument();
     expect(screen.getByText(/Make your first sale/i)).toBeInTheDocument();
     expect(screen.getByText(/^Up next$/i)).toBeInTheDocument();
     expect(screen.getByText(/Legacy Supplements/)).toBeInTheDocument();
     expect(screen.getByText(/Pharmacy/)).toBeInTheDocument();
-    expect(
-      screen.getAllByText(/Opening the POS does not finish onboarding\. Your first successful sale does\./i)
-    ).toHaveLength(1);
+    const reassurance = screen.getByText(
+      /Opening the POS does not finish onboarding\. Your first successful sale does\./i
+    );
+    expect(reassurance).toBeInTheDocument();
+    expect(reassurance.className).toMatch(/text-black\/65/);
     expect(screen.queryByText(/Skip to POS/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/% complete/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Stuck$/i)).not.toBeInTheDocument();
 
     fireEvent.click(startButtons[0]);
     expect(pushMock).toHaveBeenCalledWith('/pos');
+    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 });
 

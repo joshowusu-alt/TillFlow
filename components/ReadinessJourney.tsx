@@ -704,7 +704,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
       <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
         <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
           <div className="mb-6 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Setup</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Ready to sell</p>
             <h1 className="mt-1 text-2xl font-bold text-ink">Ready to sell</h1>
             <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
               Your business is ready. Make your first successful sale to finish onboarding.
@@ -718,7 +718,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           >
             Start selling
           </button>
-          <p className="mt-3 text-center text-[11px] text-black/40">
+          <p className="mt-3 text-center text-[11px] leading-snug text-black/65">
             Opening the POS does not finish onboarding. Your first successful sale does.
           </p>
 
