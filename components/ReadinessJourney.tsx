@@ -697,6 +697,102 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     );
   }
 
+  // Ready to sell: one primary CTA + compact progress (no duplicated Start selling).
+  if (readyToSell) {
+    const stages = data.stages ?? [];
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
+        <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
+          <div className="mb-6 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Setup</p>
+            <h1 className="mt-1 text-2xl font-bold text-ink">Ready to sell</h1>
+            <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
+              Your business is ready. Make your first successful sale to finish onboarding.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleStartSelling}
+            className="btn-primary w-full py-3.5 text-base shadow-lg shadow-accent/20"
+          >
+            Start selling
+          </button>
+          <p className="mt-3 text-center text-[11px] text-black/40">
+            Opening the POS does not finish onboarding. Your first successful sale does.
+          </p>
+
+          <div className="mt-8 space-y-2">
+            <p className="px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">Your path</p>
+            {stages.map((stage) => {
+              if (stage.key === 'selling') {
+                return (
+                  <div
+                    key={stage.key}
+                    id={stage.key}
+                    className="flex items-center gap-3 rounded-xl border border-accent/20 bg-white px-3 py-2.5 shadow-sm"
+                  >
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent/10 text-[11px] font-bold text-accent">
+                      4
+                    </span>
+                    <p className="min-w-0 flex-1 text-sm font-medium text-ink">Make your first sale</p>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-accent">
+                      Up next
+                    </span>
+                  </div>
+                );
+              }
+
+              if (stage.key === 'business') {
+                return (
+                  <div
+                    key={stage.key}
+                    id={stage.key}
+                    className="rounded-xl border border-black/5 bg-white/80 px-3 py-2.5"
+                  >
+                    <div className="mb-1.5 flex items-center gap-3">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckIcon />
+                      </span>
+                      <p className="flex-1 text-sm font-medium text-ink/70">{stage.title}</p>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        Done
+                      </span>
+                    </div>
+                    <div className="pl-9">
+                      <BusinessProfileEditor
+                        compact
+                        businessName={data.businessName}
+                        businessCategory={data.businessCategory}
+                        businessCategoryLabel={data.businessCategoryLabel}
+                        onSaved={() => router.refresh()}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={stage.key}
+                  className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/80 px-3 py-2.5"
+                >
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <CheckIcon />
+                  </span>
+                  <p className="min-w-0 flex-1 text-sm font-medium text-ink/70">{stage.title}</p>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                    Done
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
       <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
@@ -713,15 +809,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">Up next</p>
             <h2 className="mt-1 text-lg font-bold text-ink">{upNext.title}</h2>
             <p className="mt-1 text-sm text-muted">{upNext.explanation}</p>
-            {upNext.isStartSelling || readyToSell ? (
-              <button
-                type="button"
-                onClick={handleStartSelling}
-                className="btn-primary mt-3 w-full py-3 text-sm"
-              >
-                Start selling
-              </button>
-            ) : upNext.href.startsWith('/onboarding#') ? (
+            {upNext.href.startsWith('/onboarding#') ? (
               <a href={upNext.href} className="btn-primary mt-3 block w-full py-2.5 text-center text-sm">
                 Continue
               </a>
@@ -745,7 +833,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                     id={stage.key}
                     className="scroll-mt-[calc(var(--app-header-offset,4rem)+0.75rem)] scroll-mb-[var(--mobile-bottom-nav-clearance)] rounded-xl border border-black/5 bg-white/80 px-3 py-2.5"
                   >
-                    <div className="mb-2 flex items-center gap-3">
+                    <div className="mb-1.5 flex items-center gap-3">
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                         <CheckIcon />
                       </span>
@@ -754,12 +842,15 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                         Done
                       </span>
                     </div>
-                    <BusinessProfileEditor
-                      businessName={data.businessName}
-                      businessCategory={data.businessCategory}
-                      businessCategoryLabel={data.businessCategoryLabel}
-                      onSaved={() => router.refresh()}
-                    />
+                    <div className="pl-9">
+                      <BusinessProfileEditor
+                        compact
+                        businessName={data.businessName}
+                        businessCategory={data.businessCategory}
+                        businessCategoryLabel={data.businessCategoryLabel}
+                        onSaved={() => router.refresh()}
+                      />
+                    </div>
                   </div>
                 );
               }
@@ -773,9 +864,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                     <CheckIcon />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink/70 line-through decoration-black/20">
-                      {stage.title}
-                    </p>
+                    <p className="text-sm font-medium text-ink/70">{stage.title}</p>
                   </div>
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
                     Done
@@ -860,34 +949,10 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
                     </p>
                   </div>
                 ) : null}
-
-                {stage.key === 'selling' && readyToSell ? (
-                  <button
-                    type="button"
-                    onClick={handleStartSelling}
-                    className="btn-primary mt-3 w-full py-3 text-sm"
-                  >
-                    Start selling
-                  </button>
-                ) : null}
               </div>
             );
           })}
         </div>
-
-        {readyToSell ? (
-          <button
-            type="button"
-            onClick={handleStartSelling}
-            className="btn-primary w-full py-3.5 text-base shadow-lg shadow-accent/20"
-          >
-            Start selling
-          </button>
-        ) : null}
-
-        <p className="mt-4 text-center text-[11px] text-black/40">
-          Opening POS does not finish setup. Your first successful sale does.
-        </p>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
@@ -16,10 +16,13 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const pushMock = vi.fn();
+const refreshMock = vi.fn();
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
-    refresh: vi.fn(),
+    push: pushMock,
+    refresh: refreshMock,
   }),
 }));
 
@@ -140,10 +143,12 @@ function renderDashboard(overrides: Partial<ReadinessData> = {}) {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  pushMock.mockClear();
+  refreshMock.mockClear();
 });
 
 describe('ReadinessJourney Phase 1 setup', () => {
-  it('shows Start selling without Skip to POS, Stuck, or percent complete', () => {
+  it('shows exactly one Start selling CTA on Ready to sell without duplicates', () => {
     const readyJourney = {
       ...completedJourney,
       status: 'READY_TO_SELL' as const,
@@ -164,6 +169,9 @@ describe('ReadinessJourney Phase 1 setup', () => {
       onboardingComplete: false,
       onboardingCompletedAt: null,
       saleCount: 0,
+      businessName: 'Legacy Supplements',
+      businessCategory: 'PHARMACY',
+      businessCategoryLabel: 'Pharmacy',
       activationStatus: 'READY_TO_SELL',
       activationStatusLabel: 'Ready to sell',
       journey: readyJourney,
@@ -172,10 +180,22 @@ describe('ReadinessJourney Phase 1 setup', () => {
       optionalImprovements: [],
     });
 
-    expect(screen.getAllByRole('button', { name: /Start selling/i }).length).toBeGreaterThan(0);
+    const startButtons = screen.getAllByRole('button', { name: /^Start selling$/i });
+    expect(startButtons).toHaveLength(1);
+    expect(screen.getByText(/Your business is ready\. Make your first successful sale/i)).toBeInTheDocument();
+    expect(screen.getByText(/Make your first sale/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Up next$/i)).toBeInTheDocument();
+    expect(screen.getByText(/Legacy Supplements/)).toBeInTheDocument();
+    expect(screen.getByText(/Pharmacy/)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Opening the POS does not finish onboarding\. Your first successful sale does\./i)
+    ).toHaveLength(1);
     expect(screen.queryByText(/Skip to POS/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/% complete/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Stuck$/i)).not.toBeInTheDocument();
+
+    fireEvent.click(startButtons[0]);
+    expect(pushMock).toHaveBeenCalledWith('/pos');
   });
 });
 
