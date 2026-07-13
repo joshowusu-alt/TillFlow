@@ -1,45 +1,49 @@
 import type { ActivationReadinessStatus, ActivationStuckReason } from './activation-readiness';
 import type { ActivationStepStatus } from './activation-steps';
+import type { OnboardingJourneyStatus } from './onboarding-journey';
+import { getOnboardingJourneyStatusLabel } from './onboarding-journey';
 
-/** Owner-facing labels — no technical jargon. */
+/** Owner-facing labels — Phase 1 four statuses. */
 export function getActivationStatusLabel(status: ActivationReadinessStatus): string {
   switch (status) {
     case 'GETTING_STARTED':
-      return 'Getting started';
     case 'SETUP_IN_PROGRESS':
-      return 'Setup in progress';
+      return getOnboardingJourneyStatusLabel('GETTING_READY');
     case 'READY_TO_SELL':
-      return 'Ready to sell';
+      return getOnboardingJourneyStatusLabel('READY_TO_SELL');
     case 'ACTIVE_BUSINESS':
-      return 'Active business';
+      return getOnboardingJourneyStatusLabel('IMPROVING_RECORDS');
     case 'NEEDS_HELP':
-      return 'Needs help';
+      return 'Needs attention';
     case 'STUCK':
-      return 'Stuck';
+      // Should not appear in owner UX after Phase 1.
+      return getOnboardingJourneyStatusLabel('GETTING_READY');
     default:
-      return 'Setup in progress';
+      return getOnboardingJourneyStatusLabel('GETTING_READY');
+  }
+}
+
+export function getJourneyStatusLabelFromActivation(
+  status: ActivationReadinessStatus
+): OnboardingJourneyStatus {
+  switch (status) {
+    case 'READY_TO_SELL':
+      return 'READY_TO_SELL';
+    case 'ACTIVE_BUSINESS':
+      return 'IMPROVING_RECORDS';
+    default:
+      return 'GETTING_READY';
   }
 }
 
 export function getStuckReasonMessage(reason: ActivationStuckReason | null | undefined): string | null {
   if (!reason) return null;
+  // Only billing/support messages reach owner surfaces.
   switch (reason) {
-    case 'STUCK_NO_PRODUCTS':
-      return 'Add your products so you can start selling.';
-    case 'STUCK_NO_STOCK':
-      return 'Add opening stock so TillFlow knows what you have.';
-    case 'STUCK_NO_SALE':
-      return 'Make your first sale to confirm the till is ready.';
-    case 'STUCK_NO_REPORT':
-      return 'Open your dashboard to see today’s sales and stock.';
-    case 'STUCK_TRIAL_LOW_USAGE':
-      return 'Your free trial is ending soon. Make a few more sales or contact us for setup help.';
     case 'PAYMENT_OVERDUE':
-      return 'Your account needs payment to keep selling. Open Billing in Settings.';
+      return 'Your account needs payment to keep selling. Open Billing.';
     case 'SUPPORT_ISSUE_UNRESOLVED':
       return 'We are helping with your support request. Reply on WhatsApp if you need us.';
-    case 'CHURN_RISK':
-      return 'We noticed low activity. Open TillFlow or contact us if you need help.';
     default:
       return null;
   }
@@ -73,30 +77,31 @@ export function getSetupBannerCopy(input: {
   const stuck = getStuckReasonMessage(input.stuckReason);
   if (stuck) {
     return {
-      title: 'Start properly',
+      title: 'Account needs attention',
       detail: stuck,
-      cta: input.setupProgressPercent > 0 ? 'Continue setup' : 'Begin setup',
+      cta: 'Open setup',
     };
   }
 
-  if (input.setupProgressPercent >= 100) {
+  if (input.activationStatus === 'READY_TO_SELL') {
     return {
-      title: 'Start properly',
-      detail: 'Finish the last setup step to close your checklist.',
-      cta: 'Complete setup',
+      title: 'Ready to sell',
+      detail: 'Open POS and make your first successful sale when you can.',
+      cta: 'Start selling',
     };
   }
 
-  const statusDetail =
-    input.activationStatus === 'READY_TO_SELL'
-      ? 'You are almost ready — make your first sale when you can.'
-      : input.activationStatus === 'NEEDS_HELP'
-        ? input.ownerMessage
-        : `Business setup: ${input.setupProgressPercent}% complete.`;
+  if (input.activationStatus === 'ACTIVE_BUSINESS') {
+    return {
+      title: 'First sale complete',
+      detail: 'Improve your records anytime — staff, stock, and reports stay optional.',
+      cta: 'Open setup',
+    };
+  }
 
   return {
-    title: 'Start properly',
-    detail: statusDetail,
+    title: 'Getting ready',
+    detail: input.ownerMessage || 'Tell us about your business, add what you sell, then start selling.',
     cta: input.setupProgressPercent > 0 ? 'Continue setup' : 'Begin setup',
   };
 }

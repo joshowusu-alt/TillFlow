@@ -1,7 +1,5 @@
 import {
   ACTIVATION_STEP_DEFINITIONS,
-  MIN_PRODUCTS_FOR_ACTIVATION,
-  MIN_PRODUCTS_FOR_PROGRESS,
   MIN_SALES_FOR_HEALTHY_WEEK,
   type ActivationStepDefinition,
   type ActivationStepKey,
@@ -12,6 +10,17 @@ import {
   type BillingAccessState,
   type SubscriptionInput,
 } from './subscription-lifecycle';
+import {
+  computeOnboardingJourney,
+  getJourneyProgressPercent,
+  hasBusinessName,
+  hasBusinessType,
+  hasFirstSale,
+  hasSellableProduct,
+  hasValidProduct,
+  isReadyToSell,
+  type OnboardingJourneySnapshot,
+} from './onboarding-journey';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -24,6 +33,7 @@ export type ActivationReadinessStatus =
   | 'NEEDS_HELP'
   | 'STUCK';
 
+/** Stuck reasons remain for Control/billing alerts — never primary owner onboarding UX. */
 export type ActivationStuckReason =
   | 'STUCK_NO_PRODUCTS'
   | 'STUCK_NO_STOCK'
@@ -80,6 +90,10 @@ export type ActivationBusinessSnapshot = {
   ownerLastReportViewAt: Date | null;
   trialAcknowledgedAt: Date | null;
   productCount: number;
+  /** Active + sellingPriceBasePence > 0 */
+  validProductCount: number;
+  /** Valid + on-hand qty > 0 */
+  sellableProductCount: number;
   inventoryOnHandBase: number;
   staffCount: number;
   purchaseCount: number;
@@ -101,88 +115,39 @@ function daysSince(from: Date, now: Date) {
   return hoursSince(from, now) / 24;
 }
 
-function hasProfileComplete(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.name?.trim() && (snapshot.address?.trim() || snapshot.phone?.trim()));
-}
-
-function hasBusinessType(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.businessCategory?.trim());
-}
-
-function hasPlan(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.selectedPlan?.trim());
-}
-
-function hasStaff(snapshot: ActivationBusinessSnapshot) {
-  return snapshot.staffCount > 1;
-}
-
-function hasProducts(snapshot: ActivationBusinessSnapshot) {
-  return snapshot.productCount >= MIN_PRODUCTS_FOR_PROGRESS;
-}
-
-function hasOpeningStock(snapshot: ActivationBusinessSnapshot) {
-  return (
-    snapshot.openingCapitalPence > 0 ||
-    snapshot.purchaseCount > 0 ||
-    snapshot.inventoryOnHandBase > 0
-  );
-}
-
-function hasPaymentsConfigured(snapshot: ActivationBusinessSnapshot) {
-  return (snapshot.momoEnabled && Boolean(snapshot.momoNumber?.trim())) || snapshot.saleCount > 0;
-}
-
-function hasFirstPurchase(snapshot: ActivationBusinessSnapshot) {
-  return snapshot.purchaseCount > 0;
-}
-
-function hasFirstSale(snapshot: ActivationBusinessSnapshot) {
-  return snapshot.saleCount > 0;
-}
-
-function hasFirstReport(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.ownerLastDashboardViewAt || snapshot.ownerLastReportViewAt);
-}
-
-function hasTrialPaymentAck(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.trialAcknowledgedAt);
-}
-
-function hasSetupComplete(snapshot: ActivationBusinessSnapshot) {
-  return Boolean(snapshot.onboardingCompletedAt);
+function toJourneySnapshot(snapshot: ActivationBusinessSnapshot): OnboardingJourneySnapshot {
+  return {
+    name: snapshot.name,
+    businessCategory: snapshot.businessCategory,
+    validProductCount: snapshot.validProductCount,
+    sellableProductCount: snapshot.sellableProductCount,
+    productCount: snapshot.productCount,
+    saleCount: snapshot.saleCount,
+    onboardingCompletedAt: snapshot.onboardingCompletedAt,
+  };
 }
 
 function evaluateStep(
   key: ActivationStepKey,
   snapshot: ActivationBusinessSnapshot
 ): { done: boolean; status: ActivationStepStatus } {
+  const journey = toJourneySnapshot(snapshot);
   const doneByKey: Record<ActivationStepKey, boolean> = {
-    profile: hasProfileComplete(snapshot),
-    'business-type': hasBusinessType(snapshot),
-    plan: hasPlan(snapshot),
-    staff: hasStaff(snapshot),
-    products: hasProducts(snapshot),
-    'opening-stock': hasOpeningStock(snapshot),
-    payments: hasPaymentsConfigured(snapshot),
-    'first-purchase': hasFirstPurchase(snapshot),
-    'first-sale': hasFirstSale(snapshot),
-    'first-report': hasFirstReport(snapshot),
-    'trial-payment': hasTrialPaymentAck(snapshot),
-    complete: hasSetupComplete(snapshot),
+    business: hasBusinessName(journey) && hasBusinessType(journey),
+    products: hasValidProduct(journey),
+    stock: hasSellableProduct(journey),
+    selling: hasFirstSale(journey),
+    complete: Boolean(snapshot.onboardingCompletedAt) || hasFirstSale(journey),
   };
 
   const done = doneByKey[key];
   if (done) return { done: true, status: 'done' };
 
   const startedHints: Partial<Record<ActivationStepKey, boolean>> = {
-    profile: Boolean(snapshot.phone || snapshot.address),
-    'business-type': false,
-    products: snapshot.productCount > 0 && snapshot.productCount < MIN_PRODUCTS_FOR_PROGRESS,
-    'opening-stock': snapshot.productCount > 0 && !hasOpeningStock(snapshot),
-    staff: snapshot.staffCount === 1,
-    payments: snapshot.momoEnabled && !snapshot.momoNumber,
-    'first-sale': hasOpeningStock(snapshot) && !hasFirstSale(snapshot),
+    business: hasBusinessName(journey) || hasBusinessType(journey),
+    products: snapshot.productCount > 0 && !hasValidProduct(journey),
+    stock: hasValidProduct(journey) && !hasSellableProduct(journey),
+    selling: isReadyToSell(journey) && !hasFirstSale(journey),
   };
 
   if (startedHints[key]) return { done: false, status: 'in_progress' };
@@ -213,16 +178,16 @@ export function getSetupProgressPercent(steps: ActivationStepResult[]): number {
   return Math.round((doneCount / counted.length) * 100);
 }
 
+/**
+ * Control-plane / billing alerts only. Owner onboarding UI must not show "Stuck".
+ */
 export function detectStuckReason(
   snapshot: ActivationBusinessSnapshot,
-  steps: ActivationStepResult[],
+  _steps: ActivationStepResult[],
   billingAccessState: BillingAccessState,
   now: Date
 ): ActivationStuckReason {
-  if (snapshot.hasCriticalSupportIssue) {
-    return 'SUPPORT_ISSUE_UNRESOLVED';
-  }
-  if (snapshot.openSupportIssueCount > 0) {
+  if (snapshot.hasCriticalSupportIssue || snapshot.openSupportIssueCount > 0) {
     return 'SUPPORT_ISSUE_UNRESOLVED';
   }
 
@@ -232,26 +197,16 @@ export function detectStuckReason(
     return 'PAYMENT_OVERDUE';
   }
 
+  // Soft operational signals for Control — not owner checklist blockers.
   const ageHours = hoursSince(snapshot.createdAt, now);
-
-  if (ageHours >= 24 && snapshot.productCount === 0) {
+  if (ageHours >= 24 && snapshot.validProductCount === 0) {
     return 'STUCK_NO_PRODUCTS';
   }
-
-  const productsDone = steps.find((s) => s.key === 'products')?.done;
-  if (productsDone && ageHours >= 24 && !hasOpeningStock(snapshot)) {
+  if (snapshot.validProductCount > 0 && ageHours >= 24 && snapshot.sellableProductCount === 0) {
     return 'STUCK_NO_STOCK';
   }
-
-  if (hasOpeningStock(snapshot) && ageHours >= 48 && !hasFirstSale(snapshot)) {
+  if (snapshot.sellableProductCount > 0 && ageHours >= 48 && snapshot.saleCount === 0) {
     return 'STUCK_NO_SALE';
-  }
-
-  if (hasFirstSale(snapshot)) {
-    const firstSaleAgeDays = snapshot.lastSaleAt ? daysSince(snapshot.lastSaleAt, now) : 0;
-    if (firstSaleAgeDays >= 3 && !hasFirstReport(snapshot)) {
-      return 'STUCK_NO_REPORT';
-    }
   }
 
   const billing = computeBillingAccessState(snapshot.subscription, now);
@@ -282,35 +237,23 @@ export function computeChurnRisk(
   const noSales7d =
     snapshot.lastSaleAt == null ||
     (snapshot.lastSaleAt != null && daysSince(snapshot.lastSaleAt, now) >= 7);
-  const lowWeeklySales = snapshot.salesLast7Days < MIN_SALES_FOR_HEALTHY_WEEK && snapshot.saleCount > 0;
+  const lowWeeklySales =
+    snapshot.salesLast7Days < MIN_SALES_FOR_HEALTHY_WEEK && snapshot.saleCount > 0;
   const trialEndingSoon =
     billingAccessState === 'TRIAL_DUE_SOON' || billingAccessState === 'TRIAL_DUE_TODAY';
   const lowUsageTrial = trialEndingSoon && snapshot.saleCount < 5;
-  const importIncomplete = snapshot.productCount > 0 && snapshot.productCount < MIN_PRODUCTS_FOR_ACTIVATION;
-  const noDashboard =
-    !snapshot.ownerLastDashboardViewAt ||
-    daysSince(snapshot.ownerLastDashboardViewAt, now) >= 7;
 
   return (
     noLogin7d ||
     (noSales7d && snapshot.saleCount > 0) ||
     lowWeeklySales ||
     lowUsageTrial ||
-    importIncomplete ||
-    noDashboard ||
     snapshot.hasCriticalSupportIssue
   );
 }
 
 export function isBusinessActivated(snapshot: ActivationBusinessSnapshot): boolean {
-  return (
-    hasProfileComplete(snapshot) &&
-    snapshot.productCount >= MIN_PRODUCTS_FOR_ACTIVATION &&
-    hasOpeningStock(snapshot) &&
-    hasStaff(snapshot) &&
-    hasFirstSale(snapshot) &&
-    hasFirstReport(snapshot)
-  );
+  return hasFirstSale(toJourneySnapshot(snapshot)) || Boolean(snapshot.onboardingCompletedAt);
 }
 
 export function isBusinessHealthy(
@@ -322,44 +265,32 @@ export function isBusinessHealthy(
   }
   if (snapshot.hasCriticalSupportIssue) return false;
   if (snapshot.salesLast7Days < MIN_SALES_FOR_HEALTHY_WEEK) return false;
-  if (snapshot.productCount < MIN_PRODUCTS_FOR_ACTIVATION) return false;
-  if (!snapshot.ownerLastDashboardViewAt) return false;
-  const now = snapshot.now ?? new Date();
-  if (daysSince(snapshot.ownerLastDashboardViewAt, now) >= 7) return false;
+  if (!hasFirstSale(toJourneySnapshot(snapshot))) return false;
   return true;
 }
 
 export function resolveActivationStatus(
   snapshot: ActivationBusinessSnapshot,
-  steps: ActivationStepResult[],
+  _steps: ActivationStepResult[],
   stuckReason: ActivationStuckReason,
-  billingAccessState: BillingAccessState,
+  _billingAccessState: BillingAccessState,
   setupProgressPercent: number
 ): ActivationReadinessStatus {
-  if (stuckReason && stuckReason !== 'CHURN_RISK') {
-    return 'STUCK';
-  }
-
-  if (isBusinessActivated(snapshot) && snapshot.saleCount >= MIN_SALES_FOR_HEALTHY_WEEK) {
-    return 'ACTIVE_BUSINESS';
-  }
-
-  if (isBusinessActivated(snapshot)) {
-    return 'ACTIVE_BUSINESS';
-  }
-
-  if (stuckReason === 'CHURN_RISK' || snapshot.openSupportIssueCount > 0) {
+  // Billing/support only — never surface STUCK for ordinary setup gaps.
+  if (stuckReason === 'PAYMENT_OVERDUE' || stuckReason === 'SUPPORT_ISSUE_UNRESOLVED') {
     return 'NEEDS_HELP';
   }
 
-  if (hasOpeningStock(snapshot) && hasProducts(snapshot) && !hasFirstSale(snapshot)) {
+  const journey = toJourneySnapshot(snapshot);
+  if (hasFirstSale(journey) || snapshot.onboardingCompletedAt) {
+    return 'ACTIVE_BUSINESS';
+  }
+  if (isReadyToSell(journey)) {
     return 'READY_TO_SELL';
   }
-
-  if (setupProgressPercent > 0 && setupProgressPercent < 100) {
+  if (setupProgressPercent > 0) {
     return 'SETUP_IN_PROGRESS';
   }
-
   return 'GETTING_STARTED';
 }
 
@@ -368,56 +299,50 @@ function stuckReasonCopy(reason: ActivationStuckReason): { next: string; control
     case 'STUCK_NO_PRODUCTS':
       return {
         next: 'Help add or import products',
-        control: 'No products 24h after signup — call owner about import.',
-        owner: 'Add your products to start selling. You can import a spreadsheet from Settings.',
+        control: 'No valid products 24h after signup.',
+        owner: 'Add or import at least one product with a selling price.',
       };
     case 'STUCK_NO_STOCK':
       return {
-        next: 'Help record opening stock',
-        control: 'Products added but no opening stock after 24h.',
-        owner: 'Record opening stock so TillFlow knows what is on your shelf.',
+        next: 'Help add stock to one product',
+        control: 'Products added but none sellable after 24h.',
+        owner: 'Add stock to at least one product to make your first sale. You can complete the rest later.',
       };
     case 'STUCK_NO_SALE':
       return {
         next: 'Help complete first sale',
-        control: 'Stock recorded but no sale after 48h.',
-        owner: 'Make your first sale on the till to see stock and money update.',
-      };
-    case 'STUCK_NO_REPORT':
-      return {
-        next: 'Show owner the dashboard',
-        control: 'Sales started but owner has not viewed dashboard in 3+ days.',
-        owner: 'Open your dashboard to see today’s sales and stock alerts.',
+        control: 'Sellable stock present but no sale after 48h.',
+        owner: 'Open POS and make your first successful sale when you are ready.',
       };
     case 'STUCK_TRIAL_LOW_USAGE':
       return {
         next: 'Trial ending — low usage follow-up',
         control: 'Trial ending within 3 days with fewer than 5 sales.',
-        owner: 'Your trial is ending soon. Make a few more sales or call us for setup help.',
+        owner: 'Your trial is ending soon. Make a few more sales or contact us for setup help.',
       };
     case 'PAYMENT_OVERDUE':
       return {
         next: 'Confirm payment or extend grace',
         control: 'Billing restricted or overdue — payment follow-up required.',
-        owner: 'Your account needs payment to keep selling. Open Billing in Settings.',
+        owner: 'Your account needs payment to keep selling. Open Billing.',
       };
     case 'SUPPORT_ISSUE_UNRESOLVED':
       return {
         next: 'Resolve open support issue',
         control: 'Open support issue — prioritise resolution.',
-        owner: 'We are helping with your support request. Reply on WhatsApp if you need us.',
+        owner: 'We are helping with your support request.',
       };
     case 'CHURN_RISK':
       return {
         next: 'Proactive retention check-in',
         control: 'Churn risk flags raised — schedule owner call.',
-        owner: 'We noticed low activity. Open TillFlow or WhatsApp us if you need help.',
+        owner: 'We noticed low activity. Open TillFlow if you need help.',
       };
     default:
       return {
         next: 'Continue setup',
         control: 'Onboarding in progress.',
-        owner: 'Continue your setup checklist to get ready to sell.',
+        owner: 'Continue the four setup stages to get ready to sell.',
       };
   }
 }
@@ -428,7 +353,9 @@ export function computeActivationReadiness(
   const now = snapshot.now ?? new Date();
   const billing = computeBillingAccessState(snapshot.subscription, now);
   const steps = buildActivationSteps(snapshot);
-  const setupProgressPercent = getSetupProgressPercent(steps);
+  const journeySnap = toJourneySnapshot(snapshot);
+  const journey = computeOnboardingJourney(journeySnap);
+  const setupProgressPercent = getJourneyProgressPercent(journeySnap);
   const stuckReason = detectStuckReason(snapshot, steps, billing.accessState, now);
   const activationStatus = resolveActivationStatus(
     snapshot,
@@ -442,17 +369,21 @@ export function computeActivationReadiness(
   const missingSteps = steps.filter((s) => !s.done && s.key !== 'complete').map((s) => s.key);
   const nextStep = steps.find((s) => !s.done && s.key !== 'complete') ?? null;
 
-  const copy = stuckReason
-    ? stuckReasonCopy(stuckReason)
-    : nextStep
-      ? {
-          next: nextStep.title,
-          control: `Next setup step: ${nextStep.title}`,
-          owner: nextStep.explanation,
-        }
-      : stuckReasonCopy(null);
+  // Persist full stuckReason for Control. Owner UI filters via getStuckReasonMessage / banner.
+  const copy = journey.upNext
+    ? {
+        next: journey.upNext.title,
+        control: stuckReason
+          ? stuckReasonCopy(stuckReason).control
+          : `Next setup step: ${journey.upNext.title}`,
+        owner:
+          stuckReason === 'PAYMENT_OVERDUE' || stuckReason === 'SUPPORT_ISSUE_UNRESOLVED'
+            ? stuckReasonCopy(stuckReason).owner
+            : journey.upNext.explanation,
+      }
+    : stuckReasonCopy(stuckReason);
 
-  const onboardingStage = resolveOnboardingStageFixed(snapshot, steps, billing.accessState);
+  const onboardingStage = resolveOnboardingStageFixed(snapshot, billing.accessState);
   const churnRisk = computeChurnRisk(snapshot, billing.accessState, now);
 
   return {
@@ -463,7 +394,7 @@ export function computeActivationReadiness(
     steps,
     stuckReason,
     nextAction: copy.next,
-    controlMessage: copy.control,
+    controlMessage: stuckReason ? stuckReasonCopy(stuckReason).control : copy.control,
     ownerMessage: copy.owner,
     onboardingStage,
     isActivated: isBusinessActivated(snapshot),
@@ -476,21 +407,16 @@ export function computeActivationReadiness(
 
 function resolveOnboardingStageFixed(
   snapshot: ActivationBusinessSnapshot,
-  steps: ActivationStepResult[],
   billingAccessState: BillingAccessState
 ): string {
   if (billingAccessState === 'PAID_ACTIVE') return 'paid_active';
   const billing = computeBillingAccessState(snapshot.subscription, snapshot.now ?? new Date());
   if (billing.firstPaymentAt) return 'paid_active';
 
-  if (!hasProfileComplete(snapshot)) return 'signed_up';
-  if (!hasBusinessType(snapshot)) return 'profile_completed';
-  if (!hasProducts(snapshot)) return 'profile_completed';
-  if (!hasOpeningStock(snapshot)) return 'products_added';
-  if (!hasFirstSale(snapshot)) return 'stock_added';
-  if (!hasFirstReport(snapshot)) return 'first_sale_completed';
-  if (!hasTrialPaymentAck(snapshot)) return 'first_report_viewed';
-  return 'ready_to_pay';
+  const journey = toJourneySnapshot(snapshot);
+  if (!hasBusinessName(journey) || !hasBusinessType(journey)) return 'signed_up';
+  if (!hasValidProduct(journey)) return 'profile_completed';
+  if (!hasSellableProduct(journey)) return 'products_added';
+  if (!hasFirstSale(journey)) return 'stock_added';
+  return 'first_sale_completed';
 }
-
-// Remove broken resolveOnboardingStage and fix computeChurnRisk isDemo

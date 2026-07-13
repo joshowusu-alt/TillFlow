@@ -30,8 +30,9 @@ vi.mock('@/components/ToastProvider', () => ({
 }));
 
 vi.mock('@/app/actions/onboarding', () => ({
-  completeOnboarding: vi.fn(),
+  markOnboardingCompleteAfterFirstSale: vi.fn(),
   toggleGuidedSetup: vi.fn(),
+  updateOnboardingBusinessProfile: vi.fn(),
 }));
 
 vi.mock('@/app/actions/nav-kpis', () => ({
@@ -44,27 +45,79 @@ vi.mock('@/app/actions/demo-day', () => ({
   clearSampleData: vi.fn(),
 }));
 
+const completedJourney = {
+  status: 'IMPROVING_RECORDS' as const,
+  statusLabel: 'Improving your records',
+  stages: [
+    {
+      key: 'business' as const,
+      title: 'Tell us about your business',
+      explanation: '',
+      done: true,
+      href: '/onboarding#business',
+    },
+    {
+      key: 'products' as const,
+      title: 'Add or import what you sell',
+      explanation: '',
+      done: true,
+      href: '/onboarding#products',
+    },
+    {
+      key: 'stock' as const,
+      title: 'Add stock now or later',
+      explanation: '',
+      done: true,
+      href: '/onboarding#stock',
+    },
+    {
+      key: 'selling' as const,
+      title: 'Start selling',
+      explanation: '',
+      done: true,
+      href: '/pos',
+    },
+  ],
+  upNext: null,
+  stockDeferredMessage: null,
+  zeroStockBlockMessage: null,
+  optionalImprovements: [],
+  hasBusinessName: true,
+  hasBusinessType: true,
+  hasValidProduct: true,
+  hasSellableProduct: true,
+  hasFirstSale: true,
+  onboardingComplete: true,
+};
+
 const baseReadinessData: ReadinessData = {
   businessName: 'Demo Supermarket',
   userName: 'Ama Owner',
   currency: 'GHS',
   pct: 100,
   activationStatus: 'ACTIVE_BUSINESS',
-  activationStatusLabel: 'Active business',
+  activationStatusLabel: 'Improving your records',
   stuckReason: null,
   stuckMessage: null,
   ownerMessage: 'Your business is active.',
   nextAction: 'Open POS',
   businessCategory: 'SUPERMARKET',
+  businessCategoryLabel: 'Supermarket',
+  journey: completedJourney,
+  stages: completedJourney.stages,
+  upNext: null,
+  optionalImprovements: [],
   steps: [],
   nextStep: null,
   hasDemoData: false,
   hasSeedData: false,
   productCount: 120,
+  validProductCount: 120,
+  sellableProductCount: 100,
   staffCount: 4,
   saleCount: 50,
   onboardingComplete: true,
-  onboardingCompletedAt: null,
+  onboardingCompletedAt: new Date('2026-01-01'),
   guidedSetup: false,
   todayRevenuePence: 46_750,
   yesterdayRevenuePence: 700_000,
@@ -87,6 +140,43 @@ function renderDashboard(overrides: Partial<ReadinessData> = {}) {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+});
+
+describe('ReadinessJourney Phase 1 setup', () => {
+  it('shows Start selling without Skip to POS, Stuck, or percent complete', () => {
+    const readyJourney = {
+      ...completedJourney,
+      status: 'READY_TO_SELL' as const,
+      statusLabel: 'Ready to sell',
+      onboardingComplete: false,
+      hasFirstSale: false,
+      upNext: {
+        key: 'start-selling' as const,
+        title: 'Start selling',
+        explanation: 'Open POS and make your first successful sale.',
+        href: '/pos',
+        isStartSelling: true,
+      },
+      optionalImprovements: [],
+    };
+
+    renderDashboard({
+      onboardingComplete: false,
+      onboardingCompletedAt: null,
+      saleCount: 0,
+      activationStatus: 'READY_TO_SELL',
+      activationStatusLabel: 'Ready to sell',
+      journey: readyJourney,
+      stages: readyJourney.stages.map((s) => (s.key === 'selling' ? { ...s, done: false } : s)),
+      upNext: readyJourney.upNext,
+      optionalImprovements: [],
+    });
+
+    expect(screen.getAllByRole('button', { name: /Start selling/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Skip to POS/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/% complete/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Stuck$/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('ReadinessJourney home stats', () => {

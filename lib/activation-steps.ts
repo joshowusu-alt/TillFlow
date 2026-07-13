@@ -1,20 +1,13 @@
 /**
- * Phase 6: canonical activation steps for "Start properly" onboarding.
- * Completion rules are evaluated in activation-readiness.ts.
+ * Phase 1 activation steps — four stages to the first successful sale.
+ * Optional business features stay available later under "Improve your records".
  */
 
 export const ACTIVATION_STEP_KEYS = [
-  'profile',
-  'business-type',
-  'plan',
-  'staff',
+  'business',
   'products',
-  'opening-stock',
-  'payments',
-  'first-purchase',
-  'first-sale',
-  'first-report',
-  'trial-payment',
+  'stock',
+  'selling',
   'complete',
 ] as const;
 
@@ -27,99 +20,53 @@ export type ActivationStepDefinition = {
   title: string;
   explanation: string;
   href: string;
-  /** Steps counted toward setup progress % (all except optional complete marker). */
+  /** Steps counted toward internal setup progress (not shown as owner %). */
   countsTowardProgress: boolean;
 };
 
 export const ACTIVATION_STEP_DEFINITIONS: ActivationStepDefinition[] = [
   {
-    key: 'profile',
-    title: 'Confirm business profile',
-    explanation: 'Add your business name, phone, and address so receipts and reports look right.',
-    href: '/settings',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'business-type',
-    title: 'Choose business type',
-    explanation: 'Tell us what kind of business you run so TillFlow fits your daily work.',
-    href: '/settings',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'plan',
-    title: 'Select your plan',
-    explanation: 'Your trial plan is already chosen — review billing when you are ready.',
-    href: '/settings/billing',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'staff',
-    title: 'Add staff',
-    explanation: 'Invite cashiers or managers who will use the till.',
-    href: '/users',
+    key: 'business',
+    title: 'Tell us about your business',
+    explanation: 'Add your business name and type so receipts and setup look right. Phone and address can wait.',
+    href: '/onboarding#business',
     countsTowardProgress: true,
   },
   {
     key: 'products',
-    title: 'Add your products',
-    explanation: 'Start with the items you sell — add one by one or upload a spreadsheet.',
-    href: '/products?from=setup',
+    title: 'Add or import what you sell',
+    explanation: 'Add a product manually or import a catalogue. Purchases mode is not part of onboarding.',
+    href: '/onboarding#products',
     countsTowardProgress: true,
   },
   {
-    key: 'opening-stock',
-    title: 'Add opening stock',
-    explanation: 'Record what is already on the shelf and in the drawer before you start selling.',
-    href: '/setup/opening-stock',
+    key: 'stock',
+    title: 'Add stock now or later',
+    explanation:
+      'A full stock count is not required. At least one sellable product is needed before Ready to sell.',
+    href: '/onboarding#stock',
     countsTowardProgress: true,
   },
   {
-    key: 'payments',
-    title: 'Configure payment methods',
-    explanation: 'Set up MoMo and how you take cash, card, or credit at the till.',
-    href: '/settings',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'first-purchase',
-    title: 'Record first purchase',
-    explanation: 'Enter stock you bought from a supplier so costs and stock stay accurate.',
-    href: '/purchases',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'first-sale',
-    title: 'Make your first sale',
-    explanation: 'Open the till, sell something real, and see stock and money update.',
+    key: 'selling',
+    title: 'Start selling',
+    explanation: 'Open POS and make your first successful sale. Opening the till does not finish setup.',
     href: '/pos',
     countsTowardProgress: true,
   },
   {
-    key: 'first-report',
-    title: 'View your first report',
-    explanation: 'Open your dashboard to see today’s sales and what needs attention.',
-    href: '/',
-    countsTowardProgress: true,
-  },
-  {
-    key: 'trial-payment',
-    title: 'Confirm trial and payment date',
-    explanation: 'See when your free trial ends and how to pay to stay active.',
-    href: '/settings/billing',
-    countsTowardProgress: true,
-  },
-  {
     key: 'complete',
-    title: 'Complete setup',
-    explanation: 'Finish setup when the main steps are done — you can always come back here.',
+    title: 'First sale complete',
+    explanation: 'Onboarding completes after your first genuine successful sale.',
     href: '/onboarding',
     countsTowardProgress: false,
   },
 ];
 
-export const MIN_PRODUCTS_FOR_ACTIVATION = 10;
-export const MIN_PRODUCTS_FOR_PROGRESS = 3;
+/** @deprecated Phase 1 no longer uses a 10-product activation gate for owner readiness. */
+export const MIN_PRODUCTS_FOR_ACTIVATION = 1;
+/** @deprecated Phase 1 needs one valid product, not three. */
+export const MIN_PRODUCTS_FOR_PROGRESS = 1;
 export const MIN_SALES_FOR_HEALTHY_WEEK = 5;
 
 export const BUSINESS_CATEGORIES = [

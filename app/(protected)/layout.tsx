@@ -73,40 +73,28 @@ async function OwnerSetupBanner({
   if (pathname.includes('/onboarding')) return null;
 
   const setupBanner = await getOwnerSetupBannerState(businessId);
-  const readinessPct = setupBanner?.setupProgressPercent ?? 0;
 
   return (
     <div className="border-b border-blue-200/70 bg-gradient-to-r from-blue-50 via-white to-indigo-50/80 px-4 py-3 sm:px-6">
       <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 text-accent">
-          <div className="flex items-center gap-2 rounded-full border border-blue-200/70 bg-white/80 px-3 py-2 shadow-sm">
-            <div className="h-2 w-16 overflow-hidden rounded-full bg-accent/10">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-500"
-                style={{ width: `${readinessPct}%` }}
-              />
-            </div>
-            <span className="text-xs font-bold tabular-nums text-accent">{readinessPct}%</span>
+        <div className="min-w-0 text-accent">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
+            {setupBanner?.title ?? 'Getting ready'}
           </div>
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent/70">
-              {setupBanner?.title ?? 'Start properly'}
-            </div>
-            <span className="text-sm font-medium text-accent">
-              {setupBanner?.detail ?? `Business setup: ${readinessPct}% complete`}
+          <span className="text-sm font-medium text-accent">
+            {setupBanner?.detail ?? 'Tell us about your business, add what you sell, then start selling.'}
+          </span>
+          {setupBanner?.activationStatus ? (
+            <span className="mt-0.5 block text-[11px] text-accent/70">
+              {getActivationStatusLabel(setupBanner.activationStatus)}
             </span>
-            {setupBanner?.activationStatus ? (
-              <span className="mt-0.5 block text-[11px] text-accent/70">
-                {getActivationStatusLabel(setupBanner.activationStatus)}
-              </span>
-            ) : null}
-          </div>
+          ) : null}
         </div>
         <Link
           href="/onboarding"
           className="inline-flex w-full flex-shrink-0 items-center justify-center rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-accent/90 sm:ml-4 sm:w-auto sm:text-sm"
         >
-          {setupBanner?.cta ?? (readinessPct > 0 ? 'Continue setup' : 'Begin setup')} &rarr;
+          {setupBanner?.cta ?? 'Continue setup'} &rarr;
         </Link>
       </div>
     </div>

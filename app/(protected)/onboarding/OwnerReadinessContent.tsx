@@ -1,4 +1,5 @@
-import { getReadiness, completeOnboarding } from '@/app/actions/onboarding';
+import { getReadiness, markOnboardingCompleteAfterFirstSale } from '@/app/actions/onboarding';
+import { requireBusiness } from '@/lib/auth';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OnboardingClient from './OnboardingClient';
 
@@ -10,10 +11,10 @@ export default async function OwnerReadinessContent() {
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
 
-  // Auto-mark onboarding done when all required steps are complete so the
-  // "Complete your setup" banner stops appearing on every admin page.
-  if (readiness.pct === 100 && !readiness.onboardingCompletedAt) {
-    await completeOnboarding();
+  // Phase 1: complete only after a genuine successful sale — never from Start selling alone.
+  if (readiness.saleCount > 0 && !readiness.onboardingCompletedAt) {
+    const { business } = await requireBusiness(['OWNER']);
+    await markOnboardingCompleteAfterFirstSale(business.id);
   }
 
   return <OnboardingClient readiness={readiness} />;

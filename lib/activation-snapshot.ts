@@ -63,9 +63,30 @@ export async function loadActivationSnapshot(
 
   const since7d = sevenDaysAgo(now);
 
-  const [productCount, inventoryOnHandAgg, staffCount, purchaseCount, saleCount, salesLast7Days, lastSale] =
+  const [
+    productCount,
+    validProductCount,
+    sellableProductCount,
+    inventoryOnHandAgg,
+    staffCount,
+    purchaseCount,
+    saleCount,
+    salesLast7Days,
+    lastSale,
+  ] =
     await Promise.all([
       prisma.product.count({ where: { businessId } }),
+      prisma.product.count({
+        where: { businessId, active: true, sellingPriceBasePence: { gt: 0 } },
+      }),
+      prisma.product.count({
+        where: {
+          businessId,
+          active: true,
+          sellingPriceBasePence: { gt: 0 },
+          inventoryBalances: { some: { qtyOnHandBase: { gt: 0 } } },
+        },
+      }),
       prisma.inventoryBalance.aggregate({
         where: { product: { businessId } },
         _sum: { qtyOnHandBase: true },
@@ -136,6 +157,8 @@ export async function loadActivationSnapshot(
     ownerLastReportViewAt: business.ownerLastReportViewAt,
     trialAcknowledgedAt: business.trialAcknowledgedAt,
     productCount,
+    validProductCount,
+    sellableProductCount,
     inventoryOnHandBase: inventoryOnHandAgg._sum.qtyOnHandBase ?? 0,
     staffCount,
     purchaseCount,

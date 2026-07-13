@@ -41,6 +41,7 @@ const AUTH_LEGACY_SELECT = {
   minimumMarginThresholdBps: true,
   isDemo: true,
   onboardingCompletedAt: true,
+  businessCategory: true,
   hasDemoData: true,
   guidedSetup: true,
   createdAt: true,

@@ -188,6 +188,8 @@ export async function createSaleAction(formData: FormData): Promise<void> {
       await measureServerOperation(
         'action.checkout.revalidate',
         async () => {
+          const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
+          await markOnboardingCompleteAfterFirstSale(businessId);
           revalidateTag(`today-sales-${businessId}`);
           revalidateTag(`readiness-${businessId}`);
           revalidateTag('reports');
@@ -381,6 +383,8 @@ export async function completeSaleAction(data: {
     await measureServerOperation(
       'action.checkout.revalidate',
       async () => {
+        const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
+        await markOnboardingCompleteAfterFirstSale(businessId);
         revalidateTag(`today-sales-${businessId}`);
         revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');

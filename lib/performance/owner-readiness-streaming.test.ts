@@ -26,7 +26,8 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(ownerContent).toContain('export default async function OwnerReadinessContent');
     expect(ownerContent).toContain('page.onboarding.owner-readiness');
     expect(ownerContent).toContain('getReadiness()');
-    expect(ownerContent).toContain('completeOnboarding()');
+    expect(ownerContent).toContain('markOnboardingCompleteAfterFirstSale');
+    expect(ownerContent).not.toContain('completeOnboarding()');
     expect(ownerContent).toContain('<OnboardingClient readiness={readiness} />');
   });
 

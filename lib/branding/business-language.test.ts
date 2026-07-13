@@ -18,8 +18,8 @@ describe('Owner-facing business language', () => {
   });
 
   it('uses business wording in activation guidance', () => {
-    expect(activationSteps).toContain('Add your business name, phone, and address');
-    expect(activationSteps).toContain('what kind of business you run');
+    expect(activationSteps).toContain('Add your business name and type');
+    expect(activationSteps).toContain('Tell us about your business');
     expect(activationSteps).not.toContain('your shop name');
     expect(activationSteps).not.toContain('kind of shop you run');
   });

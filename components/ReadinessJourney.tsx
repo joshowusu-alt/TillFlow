@@ -1,16 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { ReadinessData, ReadinessStep } from '@/app/actions/onboarding';
-import { completeOnboarding, toggleGuidedSetup } from '@/app/actions/onboarding';
-import { acknowledgeTrialBilling } from '@/app/actions/activation';
+import type { ReadinessData } from '@/app/actions/onboarding';
 import { clearSampleData, generateDemoDay } from '@/app/actions/demo-day';
 import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import { formatMoney } from '@/lib/format';
-import BusinessCategoryPicker from '@/components/onboarding/BusinessCategoryPicker';
+import BusinessProfileEditor from '@/components/onboarding/BusinessProfileEditor';
 import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
@@ -83,119 +81,6 @@ const CheckIcon = () => (
     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
   </svg>
 );
-
-/* ────────────────────────────── Progress Ring ────────────────────── */
-function ReadinessRing({ pct, statusLabel }: { pct: number; statusLabel: string }) {
-  const r = 54;
-  const c = 2 * Math.PI * r;
-  const offset = c - (pct / 100) * c;
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg className="h-28 w-28 -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" className="text-black/5" strokeWidth="8" />
-        <circle
-          cx="60" cy="60" r={r} fill="none"
-          stroke="url(#ring-grad)" strokeWidth="8" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={offset}
-          className="transition-all duration-700 ease-out"
-        />
-        <defs>
-          <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#06b6d4" />
-            <stop offset="60%" stopColor="#2563eb" />
-            <stop offset="100%" stopColor="#10b981" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute flex flex-col items-center">
-        <span className="text-2xl font-black tabular-nums text-ink">{pct}%</span>
-        <span className="text-[9px] font-bold uppercase tracking-widest text-black/30 mt-0.5 text-center leading-tight max-w-[5rem]">
-          {statusLabel}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────── Step Card ────────────────────────── */
-function StepStatusChip({ statusLabel, done }: { statusLabel: string; done: boolean }) {
-  const tone = done
-    ? 'bg-success/10 text-success'
-    : statusLabel === 'In progress'
-      ? 'bg-amber-50 text-amber-800'
-      : 'bg-black/5 text-muted';
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`}>
-      {statusLabel}
-    </span>
-  );
-}
-
-function StepCard({ step, index }: { step: ReadinessStep; index: number }) {
-  const isCompleteStep = step.key === 'complete';
-  const inner = (
-    <div
-      className={`group flex items-start gap-4 rounded-2xl border p-4 transition-all duration-200 ${
-        step.done
-          ? 'border-success/20 bg-success/5'
-          : 'border-black/5 bg-white hover:border-accent/30 hover:shadow-md hover:shadow-accent/5'
-      }`}
-      style={{ animationDelay: `${index * 0.07}s` }}
-    >
-      {/* Icon */}
-      <div className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
-        step.done ? 'bg-success/10 text-success' : 'bg-accentSoft text-accent'
-      }`}>
-        {step.done ? <CheckIcon /> : StepIcons[step.icon]}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className={`text-sm font-semibold ${step.done ? 'text-success' : 'text-ink'}`}>
-            {step.title}
-          </h3>
-          <StepStatusChip statusLabel={step.statusLabel} done={step.done} />
-        </div>
-        <p className="mt-0.5 text-xs text-muted">{step.explanation || step.subtitle}</p>
-        <div className="mt-2 flex flex-wrap gap-3">
-          <a
-            href={step.helpHref}
-            target={step.helpHref.startsWith('http') ? '_blank' : undefined}
-            rel={step.helpHref.startsWith('http') ? 'noopener noreferrer' : undefined}
-            onClick={(e) => e.stopPropagation()}
-            className="text-[11px] font-medium text-accent underline-offset-2 hover:underline"
-          >
-            Need help?
-          </a>
-          <a
-            href="/help/setup"
-            onClick={(e) => e.stopPropagation()}
-            className="text-[11px] font-medium text-black/50 underline-offset-2 hover:text-accent hover:underline"
-          >
-            Setup guide
-          </a>
-        </div>
-      </div>
-
-      {!step.done && !isCompleteStep ? (
-        <svg className="mt-3 h-4 w-4 flex-shrink-0 text-black/20 transition-transform group-hover:translate-x-1 group-hover:text-accent" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-        </svg>
-      ) : null}
-    </div>
-  );
-
-  if (isCompleteStep) {
-    return inner;
-  }
-
-  return (
-    <Link href={step.href} className="block">
-      {inner}
-    </Link>
-  );
-}
 
 /* ────────────────────────────── Demo Day Section ──────────────────── */
 function DemoDaySection({ hasDemoData, hasSeedData, onGenerate, onWipe, isPending }: {
@@ -282,53 +167,6 @@ function DemoDaySection({ hasDemoData, hasSeedData, onGenerate, onWipe, isPendin
           <p className="text-center text-[10px] text-muted">Removed with one click — your real setup is never affected</p>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ────────────────────────────── Guided Setup Toggle ─────────────── */
-function GuidedToggle({ initial }: { initial: boolean }) {
-  const [enabled, setEnabled] = useState(initial);
-  const [, startTransition] = useTransition();
-
-  const handleToggle = () => {
-    const next = !enabled;
-    setEnabled(next);
-    startTransition(async () => {
-      await toggleGuidedSetup(next);
-    });
-  };
-
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      onClick={handleToggle}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
-        enabled ? 'bg-accent' : 'bg-black/15'
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-          enabled ? 'translate-x-6' : 'translate-x-1'
-        }`}
-      />
-    </button>
-  );
-}
-
-/* ────────────────────────────── Micro-Win Toast ──────────────────── */
-function MicroWin({ message, show }: { message: string; show: boolean }) {
-  if (!show) return null;
-  return (
-    <div className="safe-floating-bottom fixed left-1/2 z-50 -translate-x-1/2 animate-fade-in-up">
-      <div className="flex items-center gap-2 rounded-xl bg-ink px-5 py-3 shadow-xl shadow-black/20">
-        <svg className="h-5 w-5 text-success animate-check-draw" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-        </svg>
-        <span className="text-sm font-medium text-white">{message}</span>
-      </div>
     </div>
   );
 }
@@ -810,35 +648,15 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     }
   };
 
-  const handleAcknowledgeTrial = async () => {
-    setIsBusy(true);
-    try {
-      await acknowledgeTrialBilling();
-      showToast('Billing date saved', 'success');
-      router.refresh();
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  const handleComplete = async () => {
-    setIsBusy(true);
-    try {
-      await completeOnboarding();
-      if (data.onboardingComplete || data.pct === 100) {
-        setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 3000);
-      }
-      router.push('/pos');
-    } finally {
-      setIsBusy(false);
-    }
+  const handleStartSelling = () => {
+    // Phase 1: navigate only — does not set onboardingCompletedAt.
+    router.push('/pos');
   };
 
   const allDone = data.onboardingComplete;
-  const showBusinessTypePicker = !data.businessCategory;
+  const upNext = data.upNext;
+  const readyToSell = data.journey?.status === 'READY_TO_SELL';
 
-  // ── When setup is complete, show the premium welcome experience ──
   if (allDone) {
     return (
       <>
@@ -849,173 +667,227 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           onWipeDemo={handleWipeDemo}
           isBusy={isBusy}
         />
+        {data.optionalImprovements?.length ? (
+          <div className="mx-auto max-w-3xl px-4 pb-10">
+            <div className="rounded-2xl border border-black/8 bg-white p-4 sm:p-5">
+              <h2 className="text-sm font-bold text-ink">Improve your records</h2>
+              <p className="mt-1 text-xs text-muted">
+                Optional — these never block selling. Complete them when you have time.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {data.optionalImprovements.map((item) => (
+                  <li key={item.key}>
+                    <Link
+                      href={item.href}
+                      className="flex items-start justify-between gap-3 rounded-xl border border-black/5 px-3 py-2.5 hover:border-accent/30"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-ink">{item.title}</p>
+                        <p className="text-xs text-muted">{item.explanation}</p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-accent">Open</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
       </>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
-      <CelebrationOverlay show={showCelebration} />
-
-      <div className="mx-auto max-w-xl px-4 py-8 sm:py-12">
-        {/* Header */}
-        <div className="animate-fade-in-up text-center mb-6">
-          <div className="mb-4">
-            <ReadinessRing pct={data.pct} statusLabel={data.activationStatusLabel} />
-          </div>
-          <h1 className="text-2xl font-bold text-ink">Start properly</h1>
-          <p className="mt-1 text-sm font-semibold text-ink">
-            Business setup: {data.pct}% complete
-          </p>
-          <p className="mt-1.5 text-sm text-muted max-w-sm mx-auto">
+      <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
+        <div className="mb-5 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Setup</p>
+          <h1 className="mt-1 text-2xl font-bold text-ink">{data.activationStatusLabel}</h1>
+          <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted">
             {data.stuckMessage ?? data.ownerMessage}
           </p>
         </div>
 
-        <div className="animate-fade-in-up mb-6 rounded-2xl border border-accent/15 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-left">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Your status</p>
-              <p className="mt-1 text-sm font-bold text-ink">{data.activationStatusLabel}</p>
-            </div>
-            <div className="h-2 w-24 overflow-hidden rounded-full bg-accent/10">
-              <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${data.pct}%` }} />
-            </div>
-          </div>
-        </div>
-
-        {showBusinessTypePicker ? (
-          <div className="mb-6">
-            <BusinessCategoryPicker
-              initialCategory={data.businessCategory}
-              onSaved={() => router.refresh()}
-            />
+        {upNext ? (
+          <div className="mb-5 rounded-2xl border-2 border-accent/25 bg-white p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">Up next</p>
+            <h2 className="mt-1 text-lg font-bold text-ink">{upNext.title}</h2>
+            <p className="mt-1 text-sm text-muted">{upNext.explanation}</p>
+            {upNext.isStartSelling || readyToSell ? (
+              <button
+                type="button"
+                onClick={handleStartSelling}
+                className="btn-primary mt-3 w-full py-3 text-sm"
+              >
+                Start selling
+              </button>
+            ) : upNext.href.startsWith('/onboarding#') ? (
+              <a href={upNext.href} className="btn-primary mt-3 block w-full py-2.5 text-center text-sm">
+                Continue
+              </a>
+            ) : (
+              <Link href={upNext.href} className="btn-primary mt-3 block w-full py-2.5 text-center text-sm">
+                Continue
+              </Link>
+            )}
           </div>
         ) : null}
 
-        {/* Next Best Action — only when not complete */}
-        {data.nextStep && !allDone && (
-          <div className="animate-fade-in-up mb-6" style={{ animationDelay: '.1s' }}>
-            <div className="rounded-2xl border-2 border-accent/20 bg-white p-5 shadow-lg shadow-accent/5">
-              <div className="flex items-center gap-1.5 mb-2">
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white text-[10px] font-black">→</span>
-                <span className="text-xs font-bold uppercase tracking-wider text-accent">Up next</span>
-              </div>
-              <h2 className="text-lg font-bold text-ink">{data.nextStep.title}</h2>
-              <p className="mt-0.5 text-sm text-muted">{data.nextStep.subtitle}</p>
-              {data.nextStep.key === 'trial-payment' ? (
-                <div className="mt-3 flex flex-col gap-2">
-                  <Link href="/settings/billing" className="btn-primary w-full py-2.5 text-center text-sm">
-                    View billing
-                  </Link>
+        <div className="mb-5 space-y-2">
+          <p className="px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-black/35">Your path</p>
+          {(data.stages ?? []).map((stage, index) => {
+            const isCurrent = !stage.done && data.stages.slice(0, index).every((s) => s.done);
+            if (stage.done && !isCurrent) {
+              if (stage.key === 'business') {
+                return (
+                  <div
+                    key={stage.key}
+                    id={stage.key}
+                    className="scroll-mt-[calc(var(--app-header-offset,4rem)+0.75rem)] scroll-mb-[var(--mobile-bottom-nav-clearance)] rounded-xl border border-black/5 bg-white/80 px-3 py-2.5"
+                  >
+                    <div className="mb-2 flex items-center gap-3">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckIcon />
+                      </span>
+                      <p className="flex-1 text-sm font-medium text-ink/70">{stage.title}</p>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                        Done
+                      </span>
+                    </div>
+                    <BusinessProfileEditor
+                      businessName={data.businessName}
+                      businessCategory={data.businessCategory}
+                      businessCategoryLabel={data.businessCategoryLabel}
+                      onSaved={() => router.refresh()}
+                    />
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={stage.key}
+                  className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/80 px-3 py-2.5"
+                >
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <CheckIcon />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink/70 line-through decoration-black/20">
+                      {stage.title}
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                    Done
+                  </span>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={stage.key}
+                id={stage.key}
+                className={`scroll-mt-[calc(var(--app-header-offset,4rem)+0.75rem)] scroll-mb-[var(--mobile-bottom-nav-clearance)] rounded-2xl border px-4 py-3 ${
+                  isCurrent ? 'border-accent/30 bg-white shadow-sm' : 'border-black/8 bg-white/70'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/5 text-[11px] font-bold text-ink">
+                    {index + 1}
+                  </span>
+                  <h3 className="text-sm font-bold text-ink">{stage.title}</h3>
+                </div>
+                <p className="mt-1 text-xs text-muted">{stage.explanation}</p>
+
+                {stage.key === 'business' ? (
+                  <div className="mt-3">
+                    <BusinessProfileEditor
+                      businessName={data.businessName}
+                      businessCategory={data.businessCategory}
+                      businessCategoryLabel={data.businessCategoryLabel}
+                      onSaved={() => router.refresh()}
+                    />
+                  </div>
+                ) : null}
+
+                {stage.key === 'products' && isCurrent ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <Link href="/products/new" className="btn-primary py-2.5 text-center text-sm">
+                      Add a product manually
+                    </Link>
+                    <Link
+                      href="/settings/import-stock"
+                      className="btn-ghost border border-black/10 py-2.5 text-center text-sm"
+                    >
+                      Import products
+                    </Link>
+                    <p className="text-[11px] text-muted sm:col-span-2">
+                      Use Catalogue for product lists without stock. Use Opening Stock when you already have
+                      quantities and costs. Purchases mode is not part of setup.
+                    </p>
+                  </div>
+                ) : null}
+
+                {stage.key === 'stock' && isCurrent ? (
+                  <div className="mt-3 space-y-2">
+                    {data.journey?.zeroStockBlockMessage ? (
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                        {data.journey.zeroStockBlockMessage}
+                      </p>
+                    ) : null}
+                    {data.journey?.stockDeferredMessage ? (
+                      <p className="rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2 text-xs text-muted">
+                        {data.journey.stockDeferredMessage}
+                      </p>
+                    ) : null}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Link
+                        href="/settings/import-stock"
+                        className="btn-ghost border border-black/10 py-2.5 text-center text-sm"
+                      >
+                        Import opening stock
+                      </Link>
+                      <Link
+                        href="/setup/opening-stock"
+                        className="btn-ghost border border-black/10 py-2.5 text-center text-sm"
+                      >
+                        Add stock to products
+                      </Link>
+                    </div>
+                    <p className="rounded-xl border border-dashed border-black/12 px-3 py-2 text-center text-xs text-muted">
+                      Complete the rest later — a full stock count is not required before your first sale.
+                    </p>
+                  </div>
+                ) : null}
+
+                {stage.key === 'selling' && readyToSell ? (
                   <button
                     type="button"
-                    onClick={handleAcknowledgeTrial}
-                    disabled={isBusy}
-                    className="btn-ghost w-full py-2 text-sm border border-black/10 disabled:opacity-50"
+                    onClick={handleStartSelling}
+                    className="btn-primary mt-3 w-full py-3 text-sm"
                   >
-                    I have seen my trial dates
+                    Start selling
                   </button>
-                </div>
-              ) : data.nextStep.key === 'business-type' && showBusinessTypePicker ? (
-                <p className="mt-2 text-xs text-muted">Choose your business type above first.</p>
-              ) : (
-                <Link
-                  href={data.nextStep.href}
-                  className="btn-primary mt-3 block w-full py-2.5 text-center text-sm"
-                >
-                  {data.nextStep.title} &rarr;
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Step List */}
-        <div className="space-y-2.5 stagger-children mb-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/35 px-1">Your setup steps</p>
-          {data.steps.map((step, i) => (
-            <StepCard key={step.key} step={step} index={i} />
-          ))}
-        </div>
-
-        {/* First Win — shown when setup is complete */}
-        {allDone && (
-          <div className="animate-fade-in-up mb-6 rounded-2xl border border-success/20 bg-success/5 p-5" style={{ animationDelay: '.35s' }}>
-            <div className="mb-4 flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-success text-white">
-                <CheckIcon />
-              </span>
-              <h2 className="text-base font-bold text-ink">Your next operational checks</h2>
-            </div>
-            <div className="space-y-2.5">
-              {([
-                { label: 'Add your first product', href: '/products', cta: 'Go to products' },
-                { label: 'Receive your first purchase', href: '/purchases', cta: 'Record purchase' },
-                { label: 'Complete your first live sale', href: '/pos', cta: 'Open POS' },
-              ] as const).map(({ label, href, cta }, index) => (
-                <div key={href} className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-white px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">{index + 1}</span>
-                    <span className="text-sm font-medium text-ink">{label}</span>
-                  </div>
-                  <Link href={href} className="flex-shrink-0 text-xs font-semibold text-accent hover:underline">
-                    {cta} &rarr;
-                  </Link>
-                </div>
-              ))}
-            </div>
-            {/* Guided Setup Toggle */}
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3">
-              <div>
-                <p className="text-sm font-medium text-ink">Guided Setup Tips</p>
-                <p className="text-xs text-muted">Keep gentle prompts visible while your team learns the flow</p>
+                ) : null}
               </div>
-              <GuidedToggle initial={data.guidedSetup} />
-            </div>
-          </div>
-        )}
-
-        {/* CTA */}
-        <div className="animate-fade-in-up text-center space-y-3" style={{ animationDelay: '.4s' }}>
-          {data.pct === 100 && !data.onboardingCompletedAt ? (
-            <button
-              type="button"
-              onClick={handleComplete}
-              disabled={isBusy}
-              className="btn-primary w-full py-3.5 text-sm disabled:opacity-50"
-            >
-              Complete setup
-            </button>
-          ) : null}
-          {allDone ? (
-            <button
-              onClick={handleComplete}
-              className="btn-primary w-full py-4 text-base shadow-xl shadow-blue-800/20 flex items-center justify-center gap-2"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.58-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-              </svg>
-              Open POS and start trading
-            </button>
-          ) : (
-            <button
-              onClick={handleComplete}
-              className="text-sm text-black/30 hover:text-black/50 transition"
-            >
-              Skip to POS
-            </button>
-          )}
-
-          {/* Quick links */}
-          <div className="flex items-center justify-center gap-4 text-xs text-muted">
-            <Link href="/settings" className="hover:text-accent transition">Settings</Link>
-            <span className="text-black/10">|</span>
-            <Link href="/pos" className="hover:text-accent transition">POS</Link>
-            <span className="text-black/10">|</span>
-            <Link href="/reports/dashboard" className="hover:text-accent transition">Reports</Link>
-          </div>
+            );
+          })}
         </div>
+
+        {readyToSell ? (
+          <button
+            type="button"
+            onClick={handleStartSelling}
+            className="btn-primary w-full py-3.5 text-base shadow-lg shadow-accent/20"
+          >
+            Start selling
+          </button>
+        ) : null}
+
+        <p className="mt-4 text-center text-[11px] text-black/40">
+          Opening POS does not finish setup. Your first successful sale does.
+        </p>
       </div>
     </div>
   );
