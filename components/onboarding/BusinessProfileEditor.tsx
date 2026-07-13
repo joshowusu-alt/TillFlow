@@ -10,6 +10,8 @@ type Props = {
   businessCategory: string | null;
   businessCategoryLabel: string | null;
   onSaved?: () => void;
+  /** One-line summary (Name · Type) with quiet Edit — for completed journey rows. */
+  compact?: boolean;
 };
 
 export default function BusinessProfileEditor({
@@ -17,6 +19,7 @@ export default function BusinessProfileEditor({
   businessCategory,
   businessCategoryLabel,
   onSaved,
+  compact = false,
 }: Props) {
   const [editing, setEditing] = useState(!businessName.trim() || !businessCategory);
   const [name, setName] = useState(businessName);
@@ -74,18 +77,39 @@ export default function BusinessProfileEditor({
     });
   };
 
+  const categoryLabel =
+    displayCategoryLabel ?? BUSINESS_CATEGORY_LABELS[displayCategory ?? ''] ?? displayCategory;
+
   if (!editing && savedComplete) {
+    if (compact) {
+      return (
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm text-ink">
+            <span className="font-medium">{displayName}</span>
+            {categoryLabel ? <span className="text-muted"> · {categoryLabel}</span> : null}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setName(displayName);
+              setCategory(displayCategory ?? '');
+              setEditing(true);
+            }}
+            className="shrink-0 text-xs font-medium text-black/45 underline-offset-2 hover:text-ink hover:underline"
+          >
+            Edit
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-2xl border border-black/8 bg-white px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black/40">Your business</p>
             <p className="mt-1 text-sm font-semibold text-ink">{displayName}</p>
-            <p className="mt-0.5 text-xs text-muted">
-              {displayCategoryLabel ??
-                BUSINESS_CATEGORY_LABELS[displayCategory ?? ''] ??
-                displayCategory}
-            </p>
+            <p className="mt-0.5 text-xs text-muted">{categoryLabel}</p>
           </div>
           <button
             type="button"
