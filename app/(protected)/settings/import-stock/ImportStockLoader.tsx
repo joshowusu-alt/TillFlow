@@ -13,6 +13,7 @@
  */
 
 import dynamic from 'next/dynamic';
+import type { ImportMode } from '@/lib/import/import-mode';
 
 const ImportStockClient = dynamic(() => import('./ImportStockClient'), {
   ssr: false,
@@ -24,8 +25,9 @@ const ImportStockClient = dynamic(() => import('./ImportStockClient'), {
 interface Props {
   units: Array<{ id: string; name: string; pluralName: string }>;
   currency: string;
+  initialMode?: ImportMode | null;
 }
 
-export default function ImportStockLoader({ units, currency }: Props) {
-  return <ImportStockClient units={units} currency={currency} />;
+export default function ImportStockLoader({ units, currency, initialMode = null }: Props) {
+  return <ImportStockClient units={units} currency={currency} initialMode={initialMode} />;
 }

@@ -21,6 +21,7 @@ import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEn
 import GenerateMissingBarcodesButton from '@/components/products/GenerateMissingBarcodesButton';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
+import { getIncompleteStockSnapshot } from '@/lib/reports/incomplete-stock';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
@@ -37,6 +38,7 @@ export default async function ProductsPage({
     created?: string;
     barcodesGenerated?: string;
     barcodesFailed?: string;
+    missingCost?: string;
   };
 }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
@@ -46,11 +48,22 @@ export default async function ProductsPage({
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
+  const missingCostFilter = searchParams?.missingCost === '1';
+
+  const incompleteStock = missingCostFilter
+    ? await getIncompleteStockSnapshot(business.id)
+    : null;
+  const missingCostIds = incompleteStock?.allMissingCostProductIds ?? [];
 
   const productWhere = {
     businessId: business.id,
     active: true,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+    ...(missingCostFilter
+      ? {
+          id: missingCostIds.length > 0 ? { in: missingCostIds } : { in: ['__none__'] },
+        }
+      : {}),
   };
 
   // Run all data queries in parallel
@@ -207,6 +220,19 @@ export default async function ProductsPage({
               </Link>
             </div>
           )}
+          {missingCostFilter ? (
+            <div className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Products missing cost</p>
+                <p className="text-xs text-amber-800/80">
+                  Showing {totalProductCount} product{totalProductCount === 1 ? '' : 's'} stocked or sold without a reliable cost. Profit stays incomplete until costs are set.
+                </p>
+              </div>
+              <Link href="/products" className="shrink-0 text-xs font-semibold text-accent hover:underline">
+                Clear filter
+              </Link>
+            </div>
+          ) : null}
           {/* Product search and actions */}
           <div className="operational-filter-row">
             <div className="operational-search-shell">
@@ -532,7 +558,16 @@ export default async function ProductsPage({
                 </tbody>
               </table>
             </div>
-            <Pagination currentPage={page} totalPages={totalProductPages} basePath="/products" searchParams={{ q: q || undefined, tab: 'products' }} />
+            <Pagination
+              currentPage={page}
+              totalPages={totalProductPages}
+              basePath="/products"
+              searchParams={{
+                q: q || undefined,
+                tab: 'products',
+                missingCost: missingCostFilter ? '1' : undefined,
+              }}
+            />
           </div>
         </>
       )}

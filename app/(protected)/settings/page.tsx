@@ -11,6 +11,7 @@ import { isQzSigningConfigured } from '@/lib/qz-signing.server';
 import { prisma } from '@/lib/prisma';
 import HelpRequestCard from '@/components/help/HelpRequestCard';
 import Link from 'next/link';
+import HashScroll from '@/components/HashScroll';
 
 export default async function SettingsPage({ searchParams }: { searchParams?: { error?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
@@ -82,6 +83,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
 
   return (
     <div className="space-y-6">
+      <HashScroll />
       <PageHeader title="Business Settings" subtitle="Business profile, receipts, VAT configuration, and system controls." />
       <div className="card p-4 sm:p-6">
         <FormError error={searchParams?.error} />
@@ -375,7 +377,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </div>
           </div>
 
-          <div className="md:col-span-2 pt-2">
+          <div className="md:col-span-2 pt-2" id="payments">
             <h2 className="text-base font-display font-semibold">Contacts & payments</h2>
             <p className="mt-1 text-sm text-black/55">Phone, address, and Mobile Money details used across receipts and payment flows.</p>
           </div>

@@ -8,15 +8,23 @@ import { prisma } from '@/lib/prisma';
 import { listProductImports } from '@/app/actions/import-catalog';
 import ImportHistoryPanel from './ImportHistoryPanel';
 import ImportStockLoader from './ImportStockLoader';
+import { isImportMode } from '@/lib/import/import-mode';
 
 // Server actions called from this route (importStockAction) can take up to
 // 60 s for large catalogues — raise the Vercel function timeout accordingly.
 // Without this, Vercel enforces a 10 s default and kills the action mid-import.
 export const maxDuration = 60;
 
-export default async function ImportStockPage() {
+export default async function ImportStockPage({
+  searchParams,
+}: {
+  searchParams?: { mode?: string };
+}) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
+
+  const initialMode =
+    searchParams?.mode && isImportMode(searchParams.mode) ? searchParams.mode : null;
 
   const [units, importHistory] = await Promise.all([
     prisma.unit.findMany({
@@ -46,7 +54,7 @@ export default async function ImportStockPage() {
           <div className="mt-1 text-2xl font-display font-semibold text-amber-800">{business.currency}</div>
         </div>
       </div>
-      <ImportStockLoader units={units} currency={business.currency} />
+      <ImportStockLoader units={units} currency={business.currency} initialMode={initialMode} />
       <ImportHistoryPanel
         imports={importHistory.success ? importHistory.data : []}
       />

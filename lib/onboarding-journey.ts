@@ -233,61 +233,15 @@ export function resolveOnboardingUpNext(snapshot: OnboardingJourneySnapshot): On
   };
 }
 
+/**
+ * Phase 2: static optional checklist removed.
+ * Improve Your Records recommendations come from lib/improve-records.ts
+ * via getReadiness — outcome-based, not a permanent seven-item list.
+ */
 export function buildOptionalImprovements(
-  snapshot: OnboardingJourneySnapshot
+  _snapshot: OnboardingJourneySnapshot
 ): OptionalImprovement[] {
-  if (!hasFirstSale(snapshot) && !snapshot.onboardingCompletedAt) {
-    return [];
-  }
-
-  const items: OptionalImprovement[] = [
-    {
-      key: 'more-products',
-      title: 'Add more products',
-      explanation: 'Grow your catalogue as you go.',
-      href: '/products/new',
-    },
-    {
-      key: 'import-stock',
-      title: 'Import remaining opening stock',
-      explanation: 'Bring in quantities and costs when you are ready.',
-      href: '/settings/import-stock',
-    },
-    {
-      key: 'staff',
-      title: 'Add staff',
-      explanation: 'Invite cashiers or managers when you need them.',
-      href: '/users',
-    },
-    {
-      key: 'suppliers',
-      title: 'Add suppliers',
-      explanation: 'Optional — helps purchases and payables later.',
-      href: '/suppliers',
-    },
-    {
-      key: 'payments',
-      title: 'Configure MoMo details',
-      explanation: 'Cash already works at the till. Add MoMo when you want it on receipts.',
-      href: '/settings#payments',
-    },
-    {
-      key: 'reports',
-      title: 'View reports',
-      explanation: hasFirstSale(snapshot)
-        ? 'See sales and stock from your real transactions.'
-        : 'Reports become meaningful after you record sales.',
-      href: '/reports/dashboard',
-    },
-    {
-      key: 'billing',
-      title: 'Review billing',
-      explanation: 'Trial and payment stay on the billing banner — not onboarding readiness.',
-      href: '/settings/billing',
-    },
-  ];
-
-  return items;
+  return [];
 }
 
 export function computeOnboardingJourney(

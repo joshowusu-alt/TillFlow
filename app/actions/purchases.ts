@@ -64,6 +64,8 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     revalidateTag('pos-products');
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
+    revalidatePath('/onboarding');
+    revalidatePath('/purchases');
 
     const summary = (invoice as any).supplierProductLinkSummary as
       | {

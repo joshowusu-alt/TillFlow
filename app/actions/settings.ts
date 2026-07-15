@@ -138,6 +138,8 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
 
     revalidateTag(`readiness-${businessId}`);
     revalidateTag('checkout-context');
+    revalidatePath('/onboarding');
+    revalidatePath('/settings');
 
     redirect('/settings');
   }, '/settings');

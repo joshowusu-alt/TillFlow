@@ -36,8 +36,9 @@ export function useRouterRefreshOnVisibility(
 
     const onFocus = () => refresh();
 
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) refresh(true);
+    const onPageShow = () => {
+      // Always refresh on pageshow (including Back/forward), not only bfcache restores.
+      refresh(true);
     };
 
     document.addEventListener('visibilitychange', onVisibilityChange);

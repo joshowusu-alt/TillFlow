@@ -152,6 +152,9 @@ describe('incomplete stock disclosure', () => {
         productsWithUnvaluedQty: 2,
         unvaluedQtyBase: 12,
         costReviewProductIds: ['a', 'b'],
+        soldWithoutCostProductIds: [],
+        allMissingCostProductIds: ['a', 'b'],
+        missingCostProductCount: 2,
         stockValueIncomplete: true,
         profitMayBeIncomplete: true,
       })

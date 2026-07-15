@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry, ensureChartOfAccounts } from '@/lib/accounting';
 import { requireRole } from '@/lib/auth';
 import { safeAction, ok, err, UserError, type ActionResult } from '@/lib/action-utils';
-import { revalidateTag } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,6 +130,8 @@ export async function saveCashBankOpeningBalances(
     });
 
     revalidateTag('reports');
+    revalidatePath('/onboarding');
+    revalidatePath('/settings');
     return ok();
   });
 }
@@ -241,6 +243,8 @@ export async function saveOpeningAR(
     });
 
     revalidateTag('reports');
+    revalidatePath('/onboarding');
+    revalidatePath('/settings');
     return ok();
   });
 }
@@ -353,6 +357,8 @@ export async function saveOpeningAP(
     });
 
     revalidateTag('reports');
+    revalidatePath('/onboarding');
+    revalidatePath('/settings');
     return ok();
   });
 }

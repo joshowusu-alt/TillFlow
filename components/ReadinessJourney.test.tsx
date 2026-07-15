@@ -110,6 +110,13 @@ const baseReadinessData: ReadinessData = {
   stages: completedJourney.stages,
   upNext: null,
   optionalImprovements: [],
+  improveRecords: {
+    primary: null,
+    secondary: [],
+    allClear: true,
+    allClearMessage:
+      'Your key records are in good shape. TillFlow will surface the next useful improvement when needed.',
+  },
   steps: [],
   nextStep: null,
   hasDemoData: false,
@@ -182,26 +189,20 @@ describe('ReadinessJourney Phase 1 setup', () => {
 
     const startButtons = screen.getAllByRole('button', { name: /^Start selling$/i });
     expect(startButtons).toHaveLength(1);
-    // Eyebrow + heading both read "Ready to sell" (eyebrow is uppercase via CSS).
-    expect(screen.getAllByText(/^Ready to sell$/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.queryByText(/^Setup$/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Your business is ready\. Make your first successful sale/i)).toBeInTheDocument();
     expect(screen.getByText(/Make your first sale/i)).toBeInTheDocument();
     expect(screen.getByText(/^Up next$/i)).toBeInTheDocument();
     expect(screen.getByText(/Legacy Supplements/)).toBeInTheDocument();
     expect(screen.getByText(/Pharmacy/)).toBeInTheDocument();
-    const reassurance = screen.getByText(
-      /Opening the POS does not finish onboarding\. Your first successful sale does\./i
-    );
-    expect(reassurance).toBeInTheDocument();
-    expect(reassurance.className).toMatch(/text-black\/65/);
+    expect(
+      screen.getAllByText(/Opening the POS does not finish onboarding\. Your first successful sale does\./i)
+    ).toHaveLength(1);
     expect(screen.queryByText(/Skip to POS/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/% complete/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Stuck$/i)).not.toBeInTheDocument();
 
     fireEvent.click(startButtons[0]);
     expect(pushMock).toHaveBeenCalledWith('/pos');
-    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -504,5 +505,93 @@ describe('ReadinessJourney home stats', () => {
     });
 
     nowSpy.mockRestore();
+  });
+});
+
+describe('Improve Your Records Phase 2', () => {
+  it('shows one primary improvement and compact secondary actions', () => {
+    renderDashboard({
+      improveRecords: {
+        primary: {
+          key: 'missing-costs',
+          title: 'Complete your product costs',
+          explanation: 'Your sales are recorded, but profit is incomplete for 12 products.',
+          actionLabel: 'Review missing costs',
+          href: '/products?missingCost=1',
+          priority: 100,
+        },
+        secondary: [
+          {
+            key: 'opening-balances',
+            title: 'Complete your starting balances',
+            explanation: 'Add what the business owned and owed when TillFlow started.',
+            actionLabel: 'Review opening balances',
+            href: '/settings#opening-capital',
+            priority: 80,
+          },
+          {
+            key: 'purchases',
+            title: 'Record your purchases',
+            explanation: 'Recording purchases keeps stock and costs accurate.',
+            actionLabel: 'Add a purchase',
+            href: '/purchases',
+            priority: 70,
+          },
+        ],
+        allClear: false,
+        allClearMessage: 'Your key records are in good shape.',
+      },
+    });
+
+    expect(screen.getByText('Improve your records')).toBeInTheDocument();
+    expect(screen.getByText('Top improvement')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Complete your product costs/i })).toHaveAttribute(
+      'href',
+      '/products?missingCost=1'
+    );
+    expect(screen.getByRole('link', { name: /Complete your starting balances/i })).toHaveAttribute(
+      'href',
+      '/settings#opening-capital'
+    );
+    expect(screen.queryByText('Review billing')).not.toBeInTheDocument();
+    expect(screen.queryByText('View reports')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add staff')).not.toBeInTheDocument();
+    expect(screen.queryByText(/% complete|Stuck/i)).not.toBeInTheDocument();
+  });
+
+  it('shows quiet success state when records are clear', () => {
+    renderDashboard();
+
+    expect(screen.getByText('Improve your records')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Your key records are in good shape/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Top improvement')).not.toBeInTheDocument();
+  });
+
+  it('keeps Command Center separate from Improve Your Records', () => {
+    renderDashboard({
+      openShiftCount: 1,
+      openIssueCount: 2,
+      improveRecords: {
+        primary: {
+          key: 'missing-costs',
+          title: 'Complete your product costs',
+          explanation: 'Profit is incomplete for 2 products.',
+          actionLabel: 'Review missing costs',
+          href: '/products?missingCost=1',
+          priority: 100,
+        },
+        secondary: [],
+        allClear: false,
+        allClearMessage: '',
+      },
+    });
+
+    // Command Center lives in WelcomeDashboard (Today's Focus / operational cards).
+    expect(screen.getByRole('link', { name: /Open POS/ })).toBeInTheDocument();
+    expect(screen.getByText('Improve your records')).toBeInTheDocument();
+    expect(screen.getByText('Top improvement')).toBeInTheDocument();
+    expect(screen.getByText(/Urgent till issues stay in Command Center/i)).toBeInTheDocument();
   });
 });

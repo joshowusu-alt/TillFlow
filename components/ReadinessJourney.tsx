@@ -573,7 +573,11 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     setData(initial);
   }, [initial]);
 
-  useRouterRefreshOnVisibility(router, { enabled: data.onboardingComplete });
+  useRouterRefreshOnVisibility(router, {
+    enabled: data.onboardingComplete,
+    // Improve Your Records must refresh promptly when the owner returns from a task.
+    throttleMs: 1_500,
+  });
 
   const refreshLiveTodayKpis = useCallback(async (force = false) => {
     const now = Date.now();
@@ -667,32 +671,60 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
           onWipeDemo={handleWipeDemo}
           isBusy={isBusy}
         />
-        {data.optionalImprovements?.length ? (
-          <div className="mx-auto max-w-3xl px-4 pb-10">
-            <div className="rounded-2xl border border-black/8 bg-white p-4 sm:p-5">
-              <h2 className="text-sm font-bold text-ink">Improve your records</h2>
-              <p className="mt-1 text-xs text-muted">
-                Optional — these never block selling. Complete them when you have time.
+        <div className="mx-auto max-w-3xl px-4 pb-10">
+          <div className="rounded-2xl border border-black/8 bg-white p-4 sm:p-5">
+            <h2 className="text-sm font-bold text-ink">Improve your records</h2>
+            <p className="mt-1 text-xs text-muted">
+              Optional coaching — never blocks selling. Urgent till issues stay in Command Center.
+            </p>
+            {data.improveRecords?.primary ? (
+              <div className="mt-3 space-y-2">
+                <Link
+                  href={data.improveRecords.primary.href}
+                  className="block rounded-xl border border-accent/25 bg-accentSoft/40 px-3.5 py-3 hover:border-accent/50"
+                >
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-accent">
+                    Top improvement
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">
+                    {data.improveRecords.primary.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {data.improveRecords.primary.explanation}
+                  </p>
+                  <span className="mt-2 inline-block text-xs font-semibold text-accent">
+                    {data.improveRecords.primary.actionLabel} →
+                  </span>
+                </Link>
+                {data.improveRecords.secondary.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {data.improveRecords.secondary.map((item) => (
+                      <li key={item.key}>
+                        <Link
+                          href={item.href}
+                          className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 hover:bg-black/[0.03]"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-ink">{item.title}</p>
+                            <p className="truncate text-[11px] text-muted">{item.explanation}</p>
+                          </div>
+                          <span className="shrink-0 text-[11px] font-semibold text-accent">
+                            {item.actionLabel}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-muted">
+                {data.improveRecords?.allClearMessage ??
+                  'Your key records are in good shape. TillFlow will surface the next useful improvement when needed.'}
               </p>
-              <ul className="mt-3 space-y-2">
-                {data.optionalImprovements.map((item) => (
-                  <li key={item.key}>
-                    <Link
-                      href={item.href}
-                      className="flex items-start justify-between gap-3 rounded-xl border border-black/5 px-3 py-2.5 hover:border-accent/30"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-ink">{item.title}</p>
-                        <p className="text-xs text-muted">{item.explanation}</p>
-                      </div>
-                      <span className="shrink-0 text-xs font-semibold text-accent">Open</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            )}
           </div>
-        ) : null}
+        </div>
       </>
     );
   }

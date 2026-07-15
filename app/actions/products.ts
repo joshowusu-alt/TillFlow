@@ -221,6 +221,8 @@ export async function updateProductAction(formData: FormData): Promise<void> {
     revalidateTag('pos-products');
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
+    revalidatePath('/onboarding');
+    revalidatePath('/products');
     redirect(`/products/${productId}`);
   }, '/products');
 }

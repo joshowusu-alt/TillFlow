@@ -97,6 +97,7 @@ describe('Mobile dashboard sales consistency', () => {
     expect(hook).toContain("document.visibilityState === 'visible'");
     expect(hook).toContain("window.addEventListener('focus'");
     expect(hook).toContain("window.addEventListener('pageshow'");
-    expect(hook).toContain('event.persisted');
+    // Always refresh on pageshow so Improve Your Records / dashboard stats update after Back.
+    expect(hook).toContain('refresh(true)');
   });
 });

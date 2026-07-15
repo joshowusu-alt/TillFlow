@@ -226,9 +226,8 @@ describe('Phase 1 onboarding journey', () => {
         onboardingCompletedAt: new Date(),
       })
     );
-    expect(afterSale.optionalImprovements.map((i) => i.key)).toEqual(
-      expect.arrayContaining(['staff', 'suppliers', 'payments', 'reports', 'billing'])
-    );
+    // Phase 2: static optional checklist removed — recommendations live in improve-records.
+    expect(afterSale.optionalImprovements).toEqual([]);
     expect(afterSale.status).toBe('IMPROVING_RECORDS');
   });
 

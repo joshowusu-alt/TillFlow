@@ -258,12 +258,14 @@ function DuplicateActionSelect({
 export default function ImportStockClient({
   units,
   currency,
+  initialMode = null,
 }: {
   units: UnitOption[];
   currency: string;
+  initialMode?: ImportMode | null;
 }) {
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
-  const [importMode, setImportMode] = useState<ImportMode | null>(null);
+  const [importMode, setImportMode] = useState<ImportMode | null>(initialMode);
   const [legacyPaymentStatusColumn, setLegacyPaymentStatusColumn] = useState(false);
   const [clientImportKey] = useState(() => `imp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [parseError, setParseError] = useState<string | null>(null);

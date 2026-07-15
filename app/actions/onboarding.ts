@@ -28,6 +28,8 @@ import {
 } from '@/lib/onboarding-journey';
 import { BUSINESS_CATEGORIES } from '@/lib/activation-steps';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { loadImproveRecordsResult } from '@/lib/improve-records-load';
+import type { ImproveRecordsResult } from '@/lib/improve-records';
 
 export type ReadinessStep = {
   key: ActivationStepKey | string;
@@ -63,7 +65,10 @@ export type ReadinessData = {
   journey: OnboardingJourneyResult;
   stages: OnboardingStageResult[];
   upNext: OnboardingUpNext | null;
+  /** @deprecated Phase 2 — always empty; use improveRecords. */
   optionalImprovements: OptionalImprovement[];
+  /** Data-driven Improve Your Records coaching (post first sale). */
+  improveRecords: ImproveRecordsResult;
   hasDemoData: boolean;
   hasSeedData: boolean;
   productCount: number;
@@ -220,6 +225,28 @@ export async function getReadiness(): Promise<ReadinessData> {
         onboardingCompletedAt: business.onboardingCompletedAt ?? snapshot.onboardingCompletedAt,
       });
 
+      const biz = business as {
+        momoEnabled?: boolean;
+        momoNumber?: string | null;
+        momoProvider?: string | null;
+      };
+
+      const improveRecords = await loadImproveRecordsResult({
+        businessId: business.id,
+        onboardingComplete: journey.onboardingComplete,
+        saleCount: snapshot.saleCount,
+        productCount: snapshot.productCount,
+        validProductCount: snapshot.validProductCount,
+        sellableProductCount: snapshot.sellableProductCount,
+        staffCount: snapshot.staffCount,
+        momoEnabled: Boolean(biz.momoEnabled),
+        momoNumber: biz.momoNumber ?? null,
+        momoProvider: biz.momoProvider ?? null,
+        planOrMode: business.plan ?? null,
+        storeMode: business.storeMode ?? null,
+        role: 'OWNER',
+      });
+
       const steps: ReadinessStep[] = activation.steps
         .filter((step) => step.key !== 'complete')
         .map((step) => ({
@@ -283,7 +310,8 @@ export async function getReadiness(): Promise<ReadinessData> {
         journey,
         stages: journey.stages,
         upNext: journey.upNext,
-        optionalImprovements: journey.optionalImprovements,
+        optionalImprovements: [],
+        improveRecords,
         hasDemoData: business.hasDemoData,
         hasSeedData: seedProductCount > 0,
         productCount: snapshot.productCount,
