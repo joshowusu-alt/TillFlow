@@ -1,14 +1,29 @@
 /**
  * Server-side signal loader for Improve Your Records.
  * Pure recommendation logic lives in improve-records.ts.
+ *
+ * Branch behaviour (documented):
+ * Stock recommendations are **business-wide**. A product is treated as already
+ * stocked if ANY store has an InventoryBalance row. Multi-branch: stocking at
+ * any valid branch prevents “never stocked” classification. The UI does not
+ * name a branch because the signal is business-scoped.
  */
 
 import { prisma } from '@/lib/prisma';
 import { getIncompleteStockSnapshot } from '@/lib/reports/incomplete-stock';
 import { getBusinessPlan, type BusinessPlan } from '@/lib/features';
+import { resolveOpeningBalancesStatus } from '@/lib/opening-balances-status';
 import {
-  resolveOpeningBalancesStatus,
-} from '@/lib/opening-balances-status';
+  UNUSED_CATALOGUE_AGE_DAYS,
+  PURCHASE_PAYABLE_STATUSES,
+  OPENING_STOCK_MOVEMENT_TYPES,
+  OPENING_STOCK_REFERENCE_TYPES,
+} from '@/lib/improve-records-constants';
+import {
+  classifyNoBalanceProduct,
+  isOpeningStockMovement,
+  purchaseNeedsSupplierLink,
+} from '@/lib/improve-records-classify';
 import {
   computeImproveRecords,
   type ImproveRecordsResult,
@@ -33,25 +48,182 @@ type LoadInput = {
   role: ImproveRecordsRole;
 };
 
+export type StockGapCounts = {
+  productsNeedingOpeningQtyCount: number;
+  soldWithoutConfirmedQtyCount: number;
+  unusedCatalogueProductCount: number;
+};
+
 /**
- * Active priced products with no inventory balance row = opening qty never entered.
- * Excludes inactive, unpriced, and products that already have a balance (incl. qty 0 / OOS).
+ * Classify active priced products with no InventoryBalance into genuine stock
+ * gap vs aged unused catalogue. See classifyNoBalanceProduct for rules.
  */
-export async function countProductsNeedingOpeningQty(businessId: string): Promise<number> {
-  return prisma.product.count({
+export async function countStockGapSignals(
+  businessId: string,
+  now = new Date()
+): Promise<StockGapCounts> {
+  const stores = await prisma.store.findMany({
+    where: { businessId },
+    select: { id: true },
+  });
+  const storeIds = stores.map((s) => s.id);
+
+  const candidates = await prisma.product.findMany({
     where: {
       businessId,
       active: true,
       sellingPriceBasePence: { gt: 0 },
       inventoryBalances: { none: {} },
     },
+    select: {
+      id: true,
+      createdAt: true,
+    },
   });
+
+  if (candidates.length === 0) {
+    return {
+      productsNeedingOpeningQtyCount: 0,
+      soldWithoutConfirmedQtyCount: 0,
+      unusedCatalogueProductCount: 0,
+    };
+  }
+
+  const productIds = candidates.map((p) => p.id);
+
+  const [soldProductRows, inboundHistoryRows, purchaseLineRows] = await Promise.all([
+    prisma.salesInvoiceLine.findMany({
+      where: {
+        productId: { in: productIds },
+        salesInvoice: {
+          businessId,
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+        },
+      },
+      select: { productId: true },
+      distinct: ['productId'],
+    }),
+    storeIds.length === 0
+      ? Promise.resolve([] as { productId: string }[])
+      : prisma.stockMovement.findMany({
+          where: {
+            productId: { in: productIds },
+            storeId: { in: storeIds },
+            OR: [
+              { type: { in: [...OPENING_STOCK_MOVEMENT_TYPES, 'PURCHASE', 'TRANSFER_IN'] } },
+              {
+                referenceType: {
+                  in: [
+                    ...OPENING_STOCK_REFERENCE_TYPES,
+                    'PURCHASE_INVOICE',
+                    'STOCK_ADJUSTMENT',
+                    'STOCKTAKE',
+                  ],
+                },
+              },
+              { type: { in: ['ADJUSTMENT', 'ADJUSTMENT_IN', 'STOCKTAKE', 'STOCK_TAKE'] } },
+            ],
+          },
+          select: { productId: true },
+          distinct: ['productId'],
+        }),
+    prisma.purchaseInvoiceLine.findMany({
+      where: {
+        productId: { in: productIds },
+        purchaseInvoice: { businessId },
+      },
+      select: { productId: true },
+      distinct: ['productId'],
+    }),
+  ]);
+
+  const soldIds = new Set(soldProductRows.map((r) => r.productId));
+  const inboundIds = new Set(inboundHistoryRows.map((r) => r.productId));
+  const purchasedIds = new Set(purchaseLineRows.map((r) => r.productId));
+
+  let genuine = 0;
+  let soldWithout = 0;
+  let unusedCatalogue = 0;
+
+  for (const product of candidates) {
+    const hasSales = soldIds.has(product.id);
+    const hasConfirmedQuantityHistory =
+      inboundIds.has(product.id) || purchasedIds.has(product.id);
+    const klass = classifyNoBalanceProduct(
+      {
+        createdAt: product.createdAt,
+        hasSales,
+        hasConfirmedQuantityHistory,
+      },
+      now
+    );
+    if (klass === 'genuine-gap') {
+      genuine += 1;
+      if (hasSales) soldWithout += 1;
+    } else if (klass === 'unused-catalogue') {
+      unusedCatalogue += 1;
+    }
+  }
+
+  return {
+    productsNeedingOpeningQtyCount: genuine,
+    soldWithoutConfirmedQtyCount: soldWithout,
+    unusedCatalogueProductCount: unusedCatalogue,
+  };
+}
+
+/** @deprecated Prefer countStockGapSignals */
+export async function countProductsNeedingOpeningQty(businessId: string): Promise<number> {
+  const counts = await countStockGapSignals(businessId);
+  return counts.productsNeedingOpeningQtyCount;
 }
 
 /**
- * Detect stock replenishment activity without purchase invoices
- * (e.g. PURCHASE/ADJUSTMENT_IN/TRANSFER_IN movements while purchaseCount is 0).
+ * Count genuine PURCHASE invoices that need a supplier for payable tracking.
+ * Excludes opening-stock invoices, void/cancel, QA/demo, and paid-in-full cash.
  */
+export async function countPurchasesNeedingSupplier(businessId: string): Promise<number> {
+  const invoices = await prisma.purchaseInvoice.findMany({
+    where: {
+      businessId,
+      supplierId: null,
+      paymentStatus: { in: [...PURCHASE_PAYABLE_STATUSES] },
+      OR: [{ qaTag: null }, { qaTag: { notIn: ['DEMO_DAY', 'QA', 'DEMO'] } }],
+    },
+    select: { id: true, paymentStatus: true, qaTag: true, supplierId: true },
+  });
+
+  if (invoices.length === 0) return 0;
+
+  const invoiceIds = invoices.map((i) => i.id);
+  const openingLinked = await prisma.stockMovement.findMany({
+    where: {
+      referenceId: { in: invoiceIds },
+      OR: [
+        { type: { in: [...OPENING_STOCK_MOVEMENT_TYPES] } },
+        { referenceType: { in: [...OPENING_STOCK_REFERENCE_TYPES] } },
+      ],
+    },
+    select: { referenceId: true, type: true, referenceType: true },
+  });
+
+  const openingIds = new Set<string>();
+  for (const m of openingLinked) {
+    if (m.referenceId && isOpeningStockMovement(m)) {
+      openingIds.add(m.referenceId);
+    }
+  }
+
+  return invoices.filter((inv) =>
+    purchaseNeedsSupplierLink({
+      supplierId: inv.supplierId,
+      paymentStatus: inv.paymentStatus,
+      qaTag: inv.qaTag,
+      hasOpeningStockMovement: openingIds.has(inv.id),
+    })
+  ).length;
+}
+
 export async function detectReplenishmentWithoutPurchase(
   businessId: string,
   purchaseCount: number
@@ -81,9 +253,9 @@ export async function loadImproveRecordsSnapshot(
     openingBalanceRows,
     purchaseCount,
     supplierCount,
-    purchasesWithoutSupplierCount,
+    purchasesNeedingSupplierCount,
     momoPaymentCount,
-    productsNeedingOpeningQtyCount,
+    stockGaps,
     liveSaleCount,
   ] = await Promise.all([
     getIncompleteStockSnapshot(input.businessId),
@@ -93,9 +265,7 @@ export async function loadImproveRecordsSnapshot(
     }),
     prisma.purchaseInvoice.count({ where: { businessId: input.businessId } }),
     prisma.supplier.count({ where: { businessId: input.businessId } }),
-    prisma.purchaseInvoice.count({
-      where: { businessId: input.businessId, supplierId: null },
-    }),
+    countPurchasesNeedingSupplier(input.businessId),
     prisma.salesPayment
       .count({
         where: {
@@ -104,8 +274,7 @@ export async function loadImproveRecordsSnapshot(
         },
       })
       .catch(() => 0),
-    countProductsNeedingOpeningQty(input.businessId),
-    // Prefer live sale count over possibly stale activation snapshot.
+    countStockGapSignals(input.businessId),
     prisma.salesInvoice.count({
       where: {
         businessId: input.businessId,
@@ -135,13 +304,15 @@ export async function loadImproveRecordsSnapshot(
     validProductCount: input.validProductCount,
     sellableProductCount: input.sellableProductCount,
     missingCostProductCount: incompleteStock.missingCostProductCount,
-    productsNeedingOpeningQtyCount,
+    productsNeedingOpeningQtyCount: stockGaps.productsNeedingOpeningQtyCount,
+    soldWithoutConfirmedQtyCount: stockGaps.soldWithoutConfirmedQtyCount,
+    unusedCatalogueProductCount: stockGaps.unusedCatalogueProductCount,
     stockValueIncomplete: incompleteStock.stockValueIncomplete,
     openingBalancesStatus,
     purchaseCount,
     replenishmentWithoutPurchaseDetected,
     supplierCount,
-    purchasesWithoutSupplierCount,
+    purchasesNeedingSupplierCount,
     staffCount: input.staffCount,
     pendingStaffInviteCount: 0,
     momoEnabled: input.momoEnabled,
@@ -165,12 +336,14 @@ function emptySnapshot(
     sellableProductCount: 0,
     missingCostProductCount: 0,
     productsNeedingOpeningQtyCount: 0,
+    soldWithoutConfirmedQtyCount: 0,
+    unusedCatalogueProductCount: 0,
     stockValueIncomplete: false,
     openingBalancesStatus: 'not_started',
     purchaseCount: 0,
     replenishmentWithoutPurchaseDetected: false,
     supplierCount: 0,
-    purchasesWithoutSupplierCount: 0,
+    purchasesNeedingSupplierCount: 0,
     staffCount: 1,
     pendingStaffInviteCount: 0,
     momoEnabled: false,
@@ -192,3 +365,5 @@ export async function loadImproveRecordsResult(
   const snapshot = await loadImproveRecordsSnapshot(input);
   return computeImproveRecords(snapshot);
 }
+
+export { UNUSED_CATALOGUE_AGE_DAYS };

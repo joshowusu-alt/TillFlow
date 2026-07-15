@@ -135,6 +135,7 @@ export async function changePurchaseProductSupplierLinkAction(formData: FormData
 
     revalidateTag('pos-products');
     revalidateTag('reports');
+    revalidatePath('/onboarding');
     revalidatePath('/reports/sales-by-supplier');
     revalidatePath('/products');
     revalidatePath(`/products/${productId}`);
@@ -216,6 +217,8 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
     revalidateTag('pos-products');
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
+    revalidatePath('/onboarding');
+    revalidatePath('/purchases');
 
     return ok();
   });

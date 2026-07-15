@@ -159,6 +159,8 @@ export async function createOpeningStockAction(
     revalidateTag('pos-products');
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
+    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
+    revalidateImproveRecordsHome();
 
     return ok<OpeningStockResult>({
       inventoryValuePence,

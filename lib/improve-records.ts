@@ -16,6 +16,7 @@ export type ImproveRecordsItemKey =
   | 'opening-balances'
   | 'purchases'
   | 'catalogue'
+  | 'unused-catalogue'
   | 'suppliers'
   | 'staff'
   | 'momo';
@@ -42,17 +43,30 @@ export type ImproveRecordsSnapshot = {
    */
   missingCostProductCount: number;
   /**
-   * Active priced products with no inventory balance row yet
-   * (opening quantity never entered). Excludes OOS-after-setup.
+   * Genuine stock-setup gap: active priced products with no confirmed quantity
+   * and evidence the business intends to carry them (recent or sold without stock).
+   * Business-wide: any branch InventoryBalance excludes the product.
+   * Excludes OOS-after-setup and aged never-traded catalogue.
    */
   productsNeedingOpeningQtyCount: number;
+  /** Subset of genuine gap that has sales but no confirmed quantity (wording). */
+  soldWithoutConfirmedQtyCount: number;
+  /**
+   * Aged unused catalogue: active priced, older than threshold, never stocked,
+   * never sold, never purchased, never moved. Not unfinished opening stock.
+   */
+  unusedCatalogueProductCount: number;
   stockValueIncomplete: boolean;
   openingBalancesStatus: OpeningBalancesStatus;
   purchaseCount: number;
   /** Stock increased via non-opening movements without matching purchases. */
   replenishmentWithoutPurchaseDetected: boolean;
   supplierCount: number;
-  purchasesWithoutSupplierCount: number;
+  /**
+   * Genuine unpaid/partial PURCHASE invoices missing a supplier.
+   * Excludes opening-stock invoices and paid cash with no payable.
+   */
+  purchasesNeedingSupplierCount: number;
   staffCount: number;
   pendingStaffInviteCount: number;
   momoEnabled: boolean;
@@ -88,9 +102,33 @@ function canAccess(key: ImproveRecordsItemKey, role: ImproveRecordsRole): boolea
   return true;
 }
 
+function stockGapExplanation(snapshot: ImproveRecordsSnapshot): string {
+  const n = snapshot.productsNeedingOpeningQtyCount;
+  const sold = snapshot.soldWithoutConfirmedQtyCount;
+  if (sold > 0 && sold === n) {
+    return `${n} active product${n === 1 ? ' was' : 's were'} sold without a confirmed stock quantity.`;
+  }
+  if (sold > 0) {
+    return `${n} active product${n === 1 ? '' : 's'} still need${n === 1 ? 's' : ''} a confirmed stock quantity (${sold} already sold without one).`;
+  }
+  return `${n} active product${n === 1 ? '' : 's'} still need${n === 1 ? 's' : ''} a confirmed stock quantity.`;
+}
+
+function supplierExplanation(n: number): string {
+  if (n === 1) {
+    return '1 unpaid purchase is missing a supplier, so the amount owed cannot be tracked clearly.';
+  }
+  return `${n} unpaid purchases are missing a supplier, so amounts owed cannot be tracked clearly.`;
+}
+
 /**
  * Build candidate improvements from real outcomes. Order follows the approved
  * priority ladder; callers take the first eligible as primary.
+ *
+ * Priority (business impact, not raw count):
+ * 1 missing costs → 2 genuine stock gap → 3 opening balances → 4 next purchase
+ * → 5 thin catalogue → 6 genuine supplier gaps → 7 unused catalogue cleanup
+ * → 8 staff → 9 MoMo
  */
 export function buildImproveRecordsCandidates(
   snapshot: ImproveRecordsSnapshot
@@ -113,11 +151,10 @@ export function buildImproveRecordsCandidates(
   }
 
   if (snapshot.productsNeedingOpeningQtyCount > 0 && snapshot.saleCount > 0) {
-    const n = snapshot.productsNeedingOpeningQtyCount;
     items.push({
       key: 'stock-completeness',
       title: 'Finish your stock records',
-      explanation: `${n} active product${n === 1 ? '' : 's'} still need${n === 1 ? 's' : ''} an opening quantity.`,
+      explanation: stockGapExplanation(snapshot),
       actionLabel: 'Continue opening stock',
       href: '/settings/import-stock?mode=OPENING_STOCK',
       priority: 90,
@@ -168,21 +205,28 @@ export function buildImproveRecordsCandidates(
     });
   }
 
-  if (
-    snapshot.purchaseCount > 0 &&
-    (snapshot.supplierCount === 0 || snapshot.purchasesWithoutSupplierCount > 0)
-  ) {
-    const missing = snapshot.purchasesWithoutSupplierCount;
+  if (snapshot.purchasesNeedingSupplierCount > 0) {
+    const n = snapshot.purchasesNeedingSupplierCount;
     items.push({
       key: 'suppliers',
-      title: 'Link your suppliers',
-      explanation:
-        missing > 0
-          ? `${missing} purchase${missing === 1 ? '' : 's'} need${missing === 1 ? 's' : ''} a supplier so payables stay clear.`
-          : 'Purchases are recorded. Add suppliers so debts and deliveries are easier to track.',
-      actionLabel: 'Manage suppliers',
-      href: '/suppliers',
-      priority: 50,
+      title: 'Link a supplier',
+      explanation: supplierExplanation(n),
+      actionLabel: 'Review purchases',
+      href: '/purchases',
+      priority: 55,
+    });
+  }
+
+  // Below genuine supplier gaps — large unused-catalogue counts must not outrank payables.
+  if (snapshot.unusedCatalogueProductCount > 0 && snapshot.saleCount > 0) {
+    const n = snapshot.unusedCatalogueProductCount;
+    items.push({
+      key: 'unused-catalogue',
+      title: 'Review unused catalogue products',
+      explanation: `${n} product${n === 1 ? ' has' : 's have'} never been stocked or sold. Confirm whether you still intend to carry ${n === 1 ? 'it' : 'them'}.`,
+      actionLabel: 'Review catalogue',
+      href: '/products',
+      priority: 45,
     });
   }
 
@@ -235,3 +279,10 @@ export function computeImproveRecords(
 
 /** Keys that must never appear (billing/reports belong elsewhere). */
 export const FORBIDDEN_IMPROVE_KEYS = ['billing', 'reports', 'view-reports', 'review-billing'] as const;
+
+export {
+  UNUSED_CATALOGUE_AGE_DAYS,
+  PURCHASE_PAYABLE_STATUSES,
+  OPENING_STOCK_MOVEMENT_TYPES,
+  OPENING_STOCK_REFERENCE_TYPES,
+} from '@/lib/improve-records-constants';

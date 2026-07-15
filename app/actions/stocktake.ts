@@ -239,6 +239,8 @@ export async function completeStocktakeAction(data: {
     });
 
     revalidateTag('pos-products');
+    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
+    revalidateImproveRecordsHome();
 
     if (affectedProductIds.size > 0) {
       void checkAndSendLowStockAlert({

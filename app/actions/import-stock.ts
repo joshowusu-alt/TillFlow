@@ -901,6 +901,8 @@ async function _runImport(
     revalidateTag(`readiness-${businessId}`);
     revalidateTag('control-portfolio');
     revalidateTag('scale-cockpit');
+    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
+    revalidateImproveRecordsHome();
 
     return ok<ImportStockResult>({
       importId: importRecord.id,

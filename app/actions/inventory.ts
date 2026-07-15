@@ -50,6 +50,8 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     revalidateTag('pos-products');
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
+    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
+    revalidateImproveRecordsHome();
 
     redirect('/inventory/adjustments');
   }, '/inventory');
@@ -150,6 +152,8 @@ export async function reverseStockAdjustmentAction(formData: FormData): Promise<
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory');
     revalidatePath('/inventory/adjustments');
+    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
+    revalidateImproveRecordsHome();
 
     redirect('/inventory/adjustments?reversed=1');
   }, '/inventory/adjustments');

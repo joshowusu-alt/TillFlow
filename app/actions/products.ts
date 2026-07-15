@@ -261,6 +261,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     revalidateTag('pos-products');
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
+    revalidatePath('/onboarding');
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
 }

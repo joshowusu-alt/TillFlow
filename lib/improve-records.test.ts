@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FORBIDDEN_IMPROVE_KEYS,
   IMPROVE_RECORDS_ALL_CLEAR_MESSAGE,
+  UNUSED_CATALOGUE_AGE_DAYS,
   buildImproveRecordsCandidates,
   computeImproveRecords,
   type ImproveRecordsSnapshot,
@@ -20,12 +21,14 @@ function base(overrides: Partial<ImproveRecordsSnapshot> = {}): ImproveRecordsSn
     sellableProductCount: 20,
     missingCostProductCount: 0,
     productsNeedingOpeningQtyCount: 0,
+    soldWithoutConfirmedQtyCount: 0,
+    unusedCatalogueProductCount: 0,
     stockValueIncomplete: false,
     openingBalancesStatus: 'complete',
     purchaseCount: 2,
     replenishmentWithoutPurchaseDetected: false,
     supplierCount: 1,
-    purchasesWithoutSupplierCount: 0,
+    purchasesNeedingSupplierCount: 0,
     staffCount: 1,
     pendingStaffInviteCount: 0,
     momoEnabled: false,
@@ -63,6 +66,10 @@ describe('Opening balances status', () => {
 });
 
 describe('Improve Your Records recommendation engine', () => {
+  it('exports a named unused-catalogue age threshold', () => {
+    expect(UNUSED_CATALOGUE_AGE_DAYS).toBe(14);
+  });
+
   it('1. Missing product costs are primary with filtered deep link and clear wording', () => {
     const result = computeImproveRecords(
       base({ missingCostProductCount: 12, openingBalancesStatus: 'not_started' })
@@ -76,7 +83,6 @@ describe('Improve Your Records recommendation engine', () => {
   });
 
   it('sold-out missing-cost products still surface via missingCostProductCount', () => {
-    // Loader unions sold + stocked; engine only needs the count.
     const result = computeImproveRecords(
       base({
         missingCostProductCount: 3,
@@ -87,18 +93,37 @@ describe('Improve Your Records recommendation engine', () => {
     expect(result.primary?.key).toBe('missing-costs');
   });
 
-  it('2. Stock incompleteness uses opening-qty gap, not valid-sellable delta', () => {
+  it('2. Genuine stock gap uses confirmed-qty wording', () => {
     const result = computeImproveRecords(
       base({
         productsNeedingOpeningQtyCount: 18,
+        soldWithoutConfirmedQtyCount: 0,
         sellableProductCount: 4,
-        // Old heuristic would have used zeroQty = valid - sellable; engine must ignore that.
         validProductCount: 20,
       })
     );
     expect(result.primary?.key).toBe('stock-completeness');
-    expect(result.primary?.explanation).toContain('18 active products still need an opening quantity');
+    expect(result.primary?.explanation).toContain(
+      '18 active products still need a confirmed stock quantity'
+    );
     expect(result.primary?.href).toBe('/settings/import-stock?mode=OPENING_STOCK');
+  });
+
+  it('Connys-shaped: sold without confirmed quantity keeps genuine stock coaching', () => {
+    const result = computeImproveRecords(
+      base({
+        productsNeedingOpeningQtyCount: 3,
+        soldWithoutConfirmedQtyCount: 3,
+        unusedCatalogueProductCount: 0,
+        openingBalancesStatus: 'complete',
+        purchaseCount: 0,
+        saleCount: 30,
+      })
+    );
+    expect(result.primary?.key).toBe('stock-completeness');
+    expect(result.primary?.explanation).toContain(
+      'sold without a confirmed stock quantity'
+    );
   });
 
   it('genuinely out-of-stock products (no opening-qty gap) do not trigger stock-completeness', () => {
@@ -111,6 +136,109 @@ describe('Improve Your Records recommendation engine', () => {
       })
     ).map((i) => i.key);
     expect(keys).not.toContain('stock-completeness');
+  });
+
+  it('sold-out / balance-zero / purchase-history / stocktake / opening history stay out of stock gap', () => {
+    // Engine receives loader counts already filtered; zero gap must not invent stock coaching.
+    const keys = buildImproveRecordsCandidates(
+      base({
+        productsNeedingOpeningQtyCount: 0,
+        soldWithoutConfirmedQtyCount: 0,
+        unusedCatalogueProductCount: 0,
+        sellableProductCount: 0,
+        validProductCount: 50,
+      })
+    ).map((i) => i.key);
+    expect(keys).not.toContain('stock-completeness');
+  });
+
+  it('aged unused catalogue is not described as unfinished opening stock', () => {
+    const result = computeImproveRecords(
+      base({
+        productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 594,
+        openingBalancesStatus: 'complete',
+        purchasesNeedingSupplierCount: 0,
+        purchaseCount: 10,
+      })
+    );
+    expect(result.primary?.key).toBe('unused-catalogue');
+    expect(result.primary?.title).toBe('Review unused catalogue products');
+    expect(result.primary?.explanation).toContain('never been stocked or sold');
+    expect(result.primary?.explanation).not.toContain('opening quantity');
+    expect(result.primary?.href).toBe('/products');
+  });
+
+  it('EL-SHADDAI-shaped: unused catalogue does not outrank genuine unpaid supplier', () => {
+    const result = computeImproveRecords(
+      base({
+        productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 594,
+        purchasesNeedingSupplierCount: 1,
+        purchaseCount: 244,
+        supplierCount: 65,
+        openingBalancesStatus: 'complete',
+        saleCount: 8000,
+      })
+    );
+    expect(result.primary?.key).toBe('suppliers');
+    expect(result.primary?.title).toBe('Link a supplier');
+    expect(result.primary?.explanation).toBe(
+      '1 unpaid purchase is missing a supplier, so the amount owed cannot be tracked clearly.'
+    );
+    expect(result.secondary.some((s) => s.key === 'unused-catalogue')).toBe(true);
+  });
+
+  it('paid cash / opening-stock null suppliers do not trigger supplier coaching (count=0)', () => {
+    const keys = buildImproveRecordsCandidates(
+      base({
+        purchaseCount: 18,
+        supplierCount: 65,
+        purchasesNeedingSupplierCount: 0,
+        unusedCatalogueProductCount: 0,
+      })
+    ).map((i) => i.key);
+    expect(keys).not.toContain('suppliers');
+  });
+
+  it('Steffi-shaped: opening-stock invoices must not produce supplier coaching', () => {
+    const keys = buildImproveRecordsCandidates(
+      base({
+        purchaseCount: 2,
+        supplierCount: 0,
+        purchasesNeedingSupplierCount: 0,
+        productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 0,
+        openingBalancesStatus: 'complete',
+        saleCount: 2,
+      })
+    ).map((i) => i.key);
+    expect(keys).not.toContain('suppliers');
+  });
+
+  it('JoCon-shaped: partially paid purchase without supplier remains visible', () => {
+    const result = computeImproveRecords(
+      base({
+        purchaseCount: 1,
+        supplierCount: 0,
+        purchasesNeedingSupplierCount: 1,
+        productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 0,
+        openingBalancesStatus: 'complete',
+        saleCount: 6,
+      })
+    );
+    expect(result.primary?.key).toBe('suppliers');
+    expect(result.primary?.explanation).toContain('1 unpaid purchase');
+  });
+
+  it('supplier plural wording is grammatically correct', () => {
+    const result = computeImproveRecords(
+      base({ purchasesNeedingSupplierCount: 3, purchaseCount: 5 })
+    );
+    expect(result.primary?.explanation).toBe(
+      '3 unpaid purchases are missing a supplier, so amounts owed cannot be tracked clearly.'
+    );
   });
 
   it('3. Opening balances not started vs in progress copy', () => {
@@ -175,7 +303,7 @@ describe('Improve Your Records recommendation engine', () => {
     expect(keys).not.toContain('purchases');
   });
 
-  it('6. Suppliers only when purchases exist without useful supplier records', () => {
+  it('6. Suppliers only for genuine unpaid payable gaps', () => {
     const hidden = buildImproveRecordsCandidates(
       base({ purchaseCount: 0, supplierCount: 0, saleCount: 2 })
     ).map((i) => i.key);
@@ -185,7 +313,7 @@ describe('Improve Your Records recommendation engine', () => {
       base({
         purchaseCount: 4,
         supplierCount: 0,
-        purchasesWithoutSupplierCount: 4,
+        purchasesNeedingSupplierCount: 2,
       })
     );
     expect(shown.primary?.key).toBe('suppliers');
@@ -263,7 +391,8 @@ describe('Improve Your Records recommendation engine', () => {
         purchaseCount: 0,
         saleCount: 10,
         validProductCount: 3,
-        supplierCount: 0,
+        purchasesNeedingSupplierCount: 2,
+        unusedCatalogueProductCount: 40,
         momoEnabled: true,
         pendingStaffInviteCount: 1,
       })
@@ -278,9 +407,11 @@ describe('Improve Your Records recommendation engine', () => {
       base({
         missingCostProductCount: 0,
         productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 0,
         openingBalancesStatus: 'complete',
         purchaseCount: 5,
         supplierCount: 2,
+        purchasesNeedingSupplierCount: 0,
         validProductCount: 20,
       })
     );
@@ -350,6 +481,7 @@ describe('Improve Your Records recommendation engine', () => {
         saleCount: 0,
         missingCostProductCount: 99,
         productsNeedingOpeningQtyCount: 40,
+        unusedCatalogueProductCount: 500,
       })
     );
     expect(result.primary).toBeNull();
