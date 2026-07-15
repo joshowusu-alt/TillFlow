@@ -110,11 +110,12 @@ export default async function PurchasesPage({
         payments: { select: { amountPence: true } },
         _count: { select: { lines: true } },
         lines: {
-          take: 1,
+          take: missingSupplierIssue ? 5 : 1,
           select: {
             qtyBase: true,
             product: {
               select: {
+                name: true,
                 productUnits: {
                   select: {
                     isBaseUnit: true,
@@ -151,12 +152,49 @@ export default async function PurchasesPage({
           packagingConversion: packaging?.conversionToBase,
         })
       : '-';
-    const lineLabel = lineCount > 1 ? `${lineCount} lines` : qtyLabel;
+    const lineSummaries = purchase.lines.map((purchaseLine) => {
+      const lineBaseUnit = purchaseLine.product.productUnits.find((unit) => unit.isBaseUnit);
+      const linePackaging = getPrimaryPackagingUnit(
+        purchaseLine.product.productUnits.map((pu) => ({
+          conversionToBase: pu.conversionToBase,
+          unit: pu.unit,
+        }))
+      );
+      const qty = formatMixedUnit({
+        qtyBase: purchaseLine.qtyBase,
+        baseUnit: lineBaseUnit?.unit.name ?? 'unit',
+        baseUnitPlural: lineBaseUnit?.unit.pluralName,
+        packagingUnit: linePackaging?.unit.name,
+        packagingUnitPlural: linePackaging?.unit.pluralName,
+        packagingConversion: linePackaging?.conversionToBase,
+      });
+      return `${purchaseLine.product.name} — ${qty}`;
+    });
+    const remaining = Math.max(0, lineCount - lineSummaries.length);
+    const itemSummary =
+      lineSummaries.length === 0
+        ? ''
+        : remaining > 0
+          ? `${lineSummaries.slice(0, 2).join(', ')} and ${remaining} more item${remaining === 1 ? '' : 's'}`
+          : lineSummaries.length === 1
+            ? lineSummaries[0]
+            : lineSummaries.length === 2
+              ? lineSummaries.join(', ')
+              : `${lineSummaries.slice(0, 2).join(', ')} and ${lineSummaries.length - 2} more item${lineSummaries.length - 2 === 1 ? '' : 's'}`;
+    const lineLabel =
+      missingSupplierIssue && itemSummary
+        ? itemSummary
+        : lineCount > 1
+          ? `${lineCount} lines`
+          : qtyLabel;
     const outstandingPence = purchase.totalPence - purchase.payments.reduce((sum, payment) => sum + payment.amountPence, 0);
+    const purchaseReference = `#${purchase.id.slice(0, 8)}`;
 
     return {
       purchase,
       lineLabel,
+      itemSummary,
+      purchaseReference,
       outstandingPence,
     };
   });
@@ -326,11 +364,11 @@ export default async function PurchasesPage({
                 </div>
               </div>
             ) : (
-              purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => (
+              purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => (
                 <div key={purchase.id} className="rounded-2xl border border-black/5 bg-white px-4 py-4 shadow-sm transition-transform duration-150 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-semibold text-ink">#{purchase.id.slice(0, 8)}</div>
+                      <div className="font-semibold text-ink">{purchaseReference}</div>
                       {purchase.supplier?.name
                         ? <div className="mt-1 text-sm text-black/60">{purchase.supplier.name}</div>
                         : <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -346,7 +384,7 @@ export default async function PurchasesPage({
                       <div className="mt-1 text-black/70">{formatDateTime(purchase.createdAt)}</div>
                     </div>
                     <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-black/40">Lines</div>
+                      <div className="text-xs uppercase tracking-[0.16em] text-black/40">Items</div>
                       <div className="mt-1 text-black/70">{lineLabel}</div>
                     </div>
                     <div>
@@ -363,6 +401,10 @@ export default async function PurchasesPage({
                     {missingSupplierIssue && !purchase.supplier?.name ? (
                       <LinkPurchaseSupplierForm
                         purchaseId={purchase.id}
+                        purchaseReference={purchaseReference}
+                        outstandingPence={outstandingPence}
+                        currency={business.currency}
+                        itemSummary={itemSummary}
                         suppliers={suppliers}
                         returnTo={returnToIssue}
                       />
@@ -424,10 +466,10 @@ export default async function PurchasesPage({
                     </td>
                   </tr>
                 )}
-                {purchaseRows.map(({ purchase, lineLabel, outstandingPence }) => {
+                {purchaseRows.map(({ purchase, lineLabel, outstandingPence, itemSummary, purchaseReference }) => {
                   return (
                     <tr key={purchase.id} className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none">
-                      <td className="px-3 py-3 text-sm">{purchase.id.slice(0, 8)}</td>
+                      <td className="px-3 py-3 text-sm">{purchaseReference.replace(/^#/, '')}</td>
                       <td className="px-3 py-3 text-sm">
                         {purchase.supplier?.name
                           ? purchase.supplier.name
@@ -451,6 +493,10 @@ export default async function PurchasesPage({
                           {missingSupplierIssue && !purchase.supplier?.name ? (
                             <LinkPurchaseSupplierForm
                               purchaseId={purchase.id}
+                              purchaseReference={purchaseReference}
+                              outstandingPence={outstandingPence}
+                              currency={business.currency}
+                              itemSummary={itemSummary}
                               suppliers={suppliers}
                               returnTo={returnToIssue}
                             />

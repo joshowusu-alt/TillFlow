@@ -95,6 +95,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 /**
  * Link (or create-and-link) a supplier on a payable purchase missing one.
  * Enforces the same MISSING_SUPPLIER rule as Improve Your Records.
+ * Requires a deliberate supplier choice — never defaults the first list entry.
  */
 export async function linkPurchaseSupplierAction(
   formData: FormData
@@ -110,6 +111,16 @@ export async function linkPurchaseSupplierAction(
 
     if (!purchaseInvoiceId) return err('Purchase not found.');
 
+    if (existingSupplierId && newSupplierName) {
+      return err('Choose either an existing supplier or a new supplier name, not both.');
+    }
+    if (!existingSupplierId && !newSupplierName) {
+      return err('Select a supplier or enter a new name.');
+    }
+    if (newSupplierName !== null && !newSupplierName) {
+      return err('Enter a valid supplier name.');
+    }
+
     const invoice = await prisma.purchaseInvoice.findFirst({
       where: { id: purchaseInvoiceId, businessId },
       select: {
@@ -117,10 +128,14 @@ export async function linkPurchaseSupplierAction(
         supplierId: true,
         paymentStatus: true,
         qaTag: true,
+        totalPence: true,
       },
     });
     if (!invoice) return err('Purchase not found.');
     if (invoice.supplierId) return err('This purchase already has a supplier.');
+    if (['VOID', 'CANCELLED', 'RETURNED'].includes(invoice.paymentStatus)) {
+      return err('This purchase can no longer be linked to a supplier.');
+    }
 
     const openingLinked = await prisma.stockMovement.findFirst({
       where: {
@@ -149,6 +164,18 @@ export async function linkPurchaseSupplierAction(
 
     let supplierId = existingSupplierId || null;
     if (newSupplierName) {
+      const existingSuppliers = await prisma.supplier.findMany({
+        where: { businessId },
+        select: { id: true, name: true },
+      });
+      const duplicate = existingSuppliers.find(
+        (s) => s.name.trim().toLowerCase() === newSupplierName.toLowerCase()
+      );
+      if (duplicate) {
+        return err(
+          `"${duplicate.name}" already exists. Select the existing supplier instead of creating a duplicate.`
+        );
+      }
       const created = await createSupplier(businessId, { name: newSupplierName });
       supplierId = created.id;
     }
@@ -160,6 +187,15 @@ export async function linkPurchaseSupplierAction(
       select: { id: true, name: true },
     });
     if (!supplier) return err('Supplier not found for this business.');
+
+    // Re-check just before write in case another session linked it.
+    const stillMissing = await prisma.purchaseInvoice.findFirst({
+      where: { id: invoice.id, businessId, supplierId: null },
+      select: { id: true },
+    });
+    if (!stillMissing) {
+      return err('This purchase already has a supplier.');
+    }
 
     await prisma.purchaseInvoice.update({
       where: { id: invoice.id },
@@ -174,13 +210,22 @@ export async function linkPurchaseSupplierAction(
       action: 'PURCHASE_LINK_SUPPLIER',
       entity: 'PurchaseInvoice',
       entityId: invoice.id,
-      details: { supplierId: supplier.id, supplierName: supplier.name },
+      details: {
+        previousSupplierId: null,
+        previousSupplierValue: null,
+        newSupplierId: supplier.id,
+        newSupplierValue: supplier.name,
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        purchaseInvoiceId: invoice.id,
+      },
     }).catch((e) => console.error('[audit]', e));
 
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidateImproveRecordsHome();
     revalidatePath('/purchases');
+    revalidatePath('/purchases?issue=MISSING_SUPPLIER');
     revalidatePath(`/purchases/${invoice.id}`);
     revalidatePath(`/suppliers/${supplier.id}`);
     revalidatePath('/payments/supplier-aging');
