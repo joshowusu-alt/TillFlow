@@ -1,6 +1,7 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
 import SubmitButton from '@/components/SubmitButton';
+import HashScroll from '@/components/HashScroll';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
@@ -87,6 +88,7 @@ export default async function ProductDetailPage({
 
   return (
     <div className="space-y-6">
+      <HashScroll />
       <PageHeader title={product.name} subtitle="Product detail and unit breakdown." secondaryCta={{ label: '← Back to products', href: '/products' }} />
 
       {/* Hero row with image + summary */}
@@ -225,7 +227,7 @@ export default async function ProductDetailPage({
               />
               <div className="mt-1 text-xs text-black/50">Price per base unit, e.g. 5.00 for {getCurrencySymbol(business.currency)}5.00.</div>
             </div>
-            <div>
+            <div id="cost" className="scroll-mt-24">
               <label className="label">Base Cost ({getCurrencySymbol(business.currency)})</label>
               <input
                 className="input"

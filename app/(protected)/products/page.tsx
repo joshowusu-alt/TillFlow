@@ -4,6 +4,8 @@ import { AdminProductImage } from '@/components/AdminProductImage';
 import SubmitButton from '@/components/SubmitButton';
 import SearchFilter from '@/components/SearchFilter';
 import Pagination from '@/components/Pagination';
+import IssueResolutionBanner from '@/components/IssueResolutionBanner';
+import DeactivateProductIssueButton from '@/components/DeactivateProductIssueButton';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { getFeatures } from '@/lib/features';
@@ -22,6 +24,12 @@ import GenerateMissingBarcodesButton from '@/components/products/GenerateMissing
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
 import { getIncompleteStockSnapshot } from '@/lib/reports/incomplete-stock';
+import { listStockGapSignals } from '@/lib/improve-records-load';
+import {
+  IMPROVE_RECORDS_ISSUE_DEFS,
+  resolveProductsIssueParam,
+  type ImproveRecordsIssueKey,
+} from '@/lib/improve-records-issues';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
@@ -39,29 +47,53 @@ export default async function ProductsPage({
     barcodesGenerated?: string;
     barcodesFailed?: string;
     missingCost?: string;
+    issue?: string;
   };
 }) {
   const { user, business } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const defaultMarginThresholdPercent = ((business.minimumMarginThresholdBps ?? 1500) / 100).toFixed(2);
   const fileUploadEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN) || (process.env.VERCEL !== '1' && process.env.VERCEL !== 'true');
+  const isManager = user.role !== 'CASHIER';
 
   const q = searchParams?.q?.trim() ?? '';
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
-  const missingCostFilter = searchParams?.missingCost === '1';
+  const requestedIssue = resolveProductsIssueParam({
+    issue: searchParams?.issue,
+    missingCost: searchParams?.missingCost,
+  });
+  const rawIssueRequested = Boolean(searchParams?.issue?.trim() || searchParams?.missingCost === '1');
+  // Cashiers cannot open owner/manager issue queues.
+  const issueDenied = Boolean(requestedIssue || rawIssueRequested) && !isManager;
+  const invalidIssue =
+    !issueDenied &&
+    Boolean(searchParams?.issue?.trim()) &&
+    !requestedIssue;
+  const issueKey: ImproveRecordsIssueKey | null =
+    issueDenied || invalidIssue ? null : requestedIssue;
+  const issueActive = Boolean(issueKey) || issueDenied || invalidIssue;
 
-  const incompleteStock = missingCostFilter
-    ? await getIncompleteStockSnapshot(business.id)
-    : null;
-  const missingCostIds = incompleteStock?.allMissingCostProductIds ?? [];
+  let issueProductIds: string[] | null = null;
+  if (issueKey === 'MISSING_COST') {
+    const incompleteStock = await getIncompleteStockSnapshot(business.id);
+    issueProductIds = incompleteStock.allMissingCostProductIds;
+  } else if (issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP') {
+    const gaps = await listStockGapSignals(business.id);
+    issueProductIds =
+      issueKey === 'UNUSED_CATALOGUE'
+        ? gaps.unusedCatalogueProductIds
+        : gaps.genuineGapProductIds;
+  } else if (invalidIssue || issueDenied) {
+    issueProductIds = [];
+  }
 
   const productWhere = {
     businessId: business.id,
     active: true,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
-    ...(missingCostFilter
+    ...(issueProductIds
       ? {
-          id: missingCostIds.length > 0 ? { in: missingCostIds } : { in: ['__none__'] },
+          id: issueProductIds.length > 0 ? { in: issueProductIds } : { in: ['__none__'] },
         }
       : {}),
   };
@@ -131,10 +163,9 @@ export default async function ProductsPage({
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
   );
   const totalProductPages = Math.max(1, Math.ceil(totalProductCount / DEFAULT_PAGE_SIZE));
-  const isManager = user.role !== 'CASHIER';
   const activeTab = searchParams?.tab || 'products';
   const features = getFeatures((business as any).plan ?? (business.mode as any), (business as any).storeMode as any);
-  const canBulkGenerateBarcodes = isManager && features.advancedOps;
+  const canBulkGenerateBarcodes = isManager && features.advancedOps && !issueActive;
   const barcodesGeneratedFlash = Math.max(0, parseInt(searchParams?.barcodesGenerated ?? '', 10) || 0);
   const barcodesFailedFlash = Math.max(0, parseInt(searchParams?.barcodesFailed ?? '', 10) || 0);
   const showBulkBarcodePanel =
@@ -142,17 +173,79 @@ export default async function ProductsPage({
     activeTab === 'products' &&
     (missingBarcodeCount > 0 || barcodesGeneratedFlash > 0 || barcodesFailedFlash > 0);
 
+  const issueDef = issueKey ? IMPROVE_RECORDS_ISSUE_DEFS[issueKey] : null;
+  const issueResolved = issueActive && totalProductCount === 0;
+  const issueQueryValue =
+    issueKey === 'MISSING_COST'
+      ? 'MISSING_COST'
+      : issueKey === 'UNUSED_CATALOGUE'
+        ? 'UNUSED_CATALOGUE'
+        : issueKey === 'STOCK_SETUP_GAP'
+          ? 'STOCK_SETUP_GAP'
+          : undefined;
+  const issueReturnHref = issueQueryValue
+    ? `/products?issue=${issueQueryValue}`
+    : '/products';
+  const pageTitle = issueDef && !issueResolved ? issueDef.heading : 'Products';
+  const pageSubtitle =
+    issueDef && !issueResolved
+      ? issueDef.explanation
+      : 'Manage the items you sell, their prices, stock levels, and suppliers.';
+
   return (
     <div className="operational-page space-y-4 sm:space-y-5">
       <PageHeader
-        title="Products"
-        subtitle="Manage the items you sell, their prices, stock levels, and suppliers."
+        title={pageTitle}
+        subtitle={pageSubtitle}
         actions={
-          <Link href="/products/labels" className="btn-secondary justify-center text-sm">
-            Print Labels
-          </Link>
+          issueActive ? undefined : (
+            <Link href="/products/labels" className="btn-secondary justify-center text-sm">
+              Print Labels
+            </Link>
+          )
         }
       />
+
+      {issueActive ? (
+        <IssueResolutionBanner
+          heading={
+            issueDenied
+              ? 'Owner or manager access required'
+              : invalidIssue
+                ? 'Unknown recommendation'
+                : issueDef!.heading
+          }
+          explanation={
+            issueDenied
+              ? 'This review list is only available to owners and managers.'
+              : invalidIssue
+                ? 'This recommendation link is no longer valid.'
+                : issueDef!.explanation
+          }
+          affectedCount={issueDenied || invalidIssue ? 0 : totalProductCount}
+          homeHref="/onboarding"
+          clearHref="/products"
+          resolved={!issueDenied && (issueResolved || invalidIssue)}
+          accessDenied={issueDenied}
+        >
+          {issueKey === 'STOCK_SETUP_GAP' && totalProductCount > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/settings/import-stock?mode=OPENING_STOCK&issue=STOCK_SETUP_GAP&count=${totalProductCount}`}
+                className="btn-secondary text-xs"
+              >
+                Import opening stock ({totalProductCount})
+              </Link>
+              <Link
+                href={`/setup/opening-stock?issue=STOCK_SETUP_GAP`}
+                className="btn-secondary text-xs"
+              >
+                Add quantities for affected products
+              </Link>
+            </div>
+          ) : null}
+        </IssueResolutionBanner>
+      ) : null}
 
       {showBulkBarcodePanel ? (
         <Suspense fallback={null}>
@@ -164,49 +257,53 @@ export default async function ProductsPage({
         </Suspense>
       ) : null}
 
-      <div className="operational-metric-grid operational-metric-grid--4">
-        <ProductStatCard
-          label="Total products"
-          value={totalProductCount.toLocaleString('en-GH')}
-          helper={q ? 'Matching current search' : 'Active catalogue items'}
-        />
-        <ProductStatCard
-          label="Visible products"
-          value={products.length.toLocaleString('en-GH')}
-          helper="Shown on this page"
-        />
-        <ProductStatCard
-          label="Categories"
-          value={categories.length.toLocaleString('en-GH')}
-          helper="Available product groups"
-        />
-        <ProductStatCard
-          label="Suppliers available"
-          value={suppliers.length.toLocaleString('en-GH')}
-          helper="Ready for preferred supplier links"
-        />
-      </div>
+      {!issueActive ? (
+        <div className="operational-metric-grid operational-metric-grid--4">
+          <ProductStatCard
+            label="Total products"
+            value={totalProductCount.toLocaleString('en-GH')}
+            helper={q ? 'Matching current search' : 'Active catalogue items'}
+          />
+          <ProductStatCard
+            label="Visible products"
+            value={products.length.toLocaleString('en-GH')}
+            helper="Shown on this page"
+          />
+          <ProductStatCard
+            label="Categories"
+            value={categories.length.toLocaleString('en-GH')}
+            helper="Available product groups"
+          />
+          <ProductStatCard
+            label="Suppliers available"
+            value={suppliers.length.toLocaleString('en-GH')}
+            helper="Ready for preferred supplier links"
+          />
+        </div>
+      ) : null}
 
       {/* Tab switcher */}
-      <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">
-        <Link
-          href="/products?tab=products"
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
-        >
-          Products ({totalProductCount})
-        </Link>
-        <Link
-          href="/products?tab=categories"
-          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
-        >
-          Categories ({categories.length})
-        </Link>
-      </div>
+      {!issueActive ? (
+        <div className="flex gap-1 rounded-xl bg-black/5 p-1 w-fit">
+          <Link
+            href="/products?tab=products"
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'products' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+          >
+            Products ({totalProductCount})
+          </Link>
+          <Link
+            href="/products?tab=categories"
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'categories' ? 'bg-white shadow-sm text-black' : 'text-black/50 hover:text-black'}`}
+          >
+            Categories ({categories.length})
+          </Link>
+        </div>
+      ) : null}
 
       {/* ───── Products Tab ───── */}
-      {activeTab === 'products' && (
+      {(activeTab === 'products' || issueActive) && !issueResolved && (
         <>
-          {searchParams?.created === '1' && (
+          {searchParams?.created === '1' && !issueActive && (
             <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/5 px-5 py-3.5">
               <svg className="h-5 w-5 flex-shrink-0 text-success" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
@@ -220,25 +317,12 @@ export default async function ProductsPage({
               </Link>
             </div>
           )}
-          {missingCostFilter ? (
-            <div className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-amber-900">Products missing cost</p>
-                <p className="text-xs text-amber-800/80">
-                  Showing {totalProductCount} product{totalProductCount === 1 ? '' : 's'} stocked or sold without a reliable cost. Profit stays incomplete until costs are set.
-                </p>
-              </div>
-              <Link href="/products" className="shrink-0 text-xs font-semibold text-accent hover:underline">
-                Clear filter
-              </Link>
-            </div>
-          ) : null}
           {/* Product search and actions */}
           <div className="operational-filter-row">
             <div className="operational-search-shell">
-              <Suspense><SearchFilter placeholder="Search products…" /></Suspense>
+              <Suspense><SearchFilter placeholder={issueActive ? 'Search within affected products…' : 'Search products…'} /></Suspense>
             </div>
-            {isManager ? (
+            {isManager && !issueActive ? (
               <div className="flex flex-wrap gap-2">
                 <a href="#product-create" className="btn-secondary text-sm">
                   Add product
@@ -251,7 +335,7 @@ export default async function ProductsPage({
           </div>
 
           {/* Add product */}
-          {isManager ? (
+          {isManager && !issueActive ? (
             <details className="group">
               <summary id="product-create" className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -452,9 +536,46 @@ export default async function ProductsPage({
                       <DataCardField label="Unit display" value={<span className="text-black/65">{preview}</span>} className="col-span-2" />
                     </div>
                     <DataCardActions>
-                      <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
-                        Open product
-                      </Link>
+                      {issueKey ? (
+                        <>
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                            {issueDef?.recordStatusLabel}
+                          </span>
+                          {issueKey === 'MISSING_COST' ? (
+                            <Link href={`/products/${product.id}#cost`} className="btn-primary text-xs">
+                              Edit cost
+                            </Link>
+                          ) : null}
+                          {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
+                            <>
+                              <Link
+                                href={
+                                  issueKey === 'STOCK_SETUP_GAP'
+                                    ? `/setup/opening-stock?issue=STOCK_SETUP_GAP&productId=${product.id}`
+                                    : `/setup/opening-stock?productId=${product.id}`
+                                }
+                                className="btn-primary text-xs"
+                              >
+                                Add stock
+                              </Link>
+                              <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                                Edit product
+                              </Link>
+                              {issueKey === 'UNUSED_CATALOGUE' ? (
+                                <DeactivateProductIssueButton
+                                  productId={product.id}
+                                  productName={product.name}
+                                  returnTo={issueReturnHref}
+                                />
+                              ) : null}
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                          Open product
+                        </Link>
+                      )}
                     </DataCardActions>
                   </DataCard>
                 );
@@ -471,18 +592,23 @@ export default async function ProductsPage({
                     <th>Base Price</th>
                     <th className="hidden lg:table-cell">Default Cost</th>
                     <th className="hidden xl:table-cell">Preferred Supplier</th>
-                    <th className="hidden lg:table-cell">Unit Display</th>
+                    <th className="hidden lg:table-cell">{issueKey ? 'Status' : 'Unit Display'}</th>
+                    {issueKey ? <th>Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {products.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-10 text-center">
-                        <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : 'No products yet.'}</div>
+                      <td colSpan={issueKey ? 8 : 7} className="px-3 py-10 text-center">
+                        <div className="text-sm font-semibold text-ink">{q ? `No products matching "${q}".` : issueKey ? 'No matching products in this issue.' : 'No products yet.'}</div>
                         <div className="mt-1 text-sm text-black/55">
-                          {q ? 'Try a different search term or clear the search.' : 'Add your first product so you can start selling, tracking stock, and seeing clear reports.'}
+                          {q
+                            ? 'Try a different search term or clear the search.'
+                            : issueKey
+                              ? 'This issue is clear for your business.'
+                              : 'Add your first product so you can start selling, tracking stock, and seeing clear reports.'}
                         </div>
-                        {!q && isManager ? (
+                        {!q && isManager && !issueActive ? (
                           <div className="mt-4 flex justify-center gap-2">
                             <a href="#product-create" className="btn-primary text-xs px-3 py-1.5">Add first product</a>
                             <Link href="/settings/import-stock" className="btn-ghost border border-black/10 rounded-lg px-3 py-1.5 text-xs">
@@ -551,7 +677,50 @@ export default async function ProductsPage({
                             <span className="text-black/30">—</span>
                           )}
                         </td>
-                        <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">{preview}</td>
+                        <td className="hidden lg:table-cell px-3 py-3 text-sm text-black/60">
+                          {issueKey ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                              {issueDef?.recordStatusLabel}
+                            </span>
+                          ) : (
+                            preview
+                          )}
+                        </td>
+                        {issueKey ? (
+                          <td className="px-3 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              {issueKey === 'MISSING_COST' ? (
+                                <Link href={`/products/${product.id}#cost`} className="btn-primary text-xs">
+                                  Edit cost
+                                </Link>
+                              ) : null}
+                              {issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP' ? (
+                                <>
+                                  <Link
+                                    href={
+                                      issueKey === 'STOCK_SETUP_GAP'
+                                        ? `/setup/opening-stock?issue=STOCK_SETUP_GAP&productId=${product.id}`
+                                        : `/setup/opening-stock?productId=${product.id}`
+                                    }
+                                    className="btn-primary text-xs"
+                                  >
+                                    Add stock
+                                  </Link>
+                                  <Link href={`/products/${product.id}`} className="btn-ghost text-xs">
+                                    Edit
+                                  </Link>
+                                  {issueKey === 'UNUSED_CATALOGUE' ? (
+                                    <DeactivateProductIssueButton
+                                      productId={product.id}
+                                      productName={product.name}
+                                      returnTo={issueReturnHref}
+                                    />
+                                  ) : null}
+                                </>
+                              ) : null}
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })}
@@ -564,8 +733,10 @@ export default async function ProductsPage({
               basePath="/products"
               searchParams={{
                 q: q || undefined,
-                tab: 'products',
-                missingCost: missingCostFilter ? '1' : undefined,
+                tab: issueActive ? undefined : 'products',
+                issue: issueQueryValue,
+                missingCost:
+                  !issueQueryValue && searchParams?.missingCost === '1' ? '1' : undefined,
               }}
             />
           </div>
@@ -573,7 +744,7 @@ export default async function ProductsPage({
       )}
 
       {/* ───── Categories Tab ───── */}
-      {activeTab === 'categories' && (
+      {activeTab === 'categories' && !issueActive && (
         <>
           {isManager ? (
             <div className="card p-4 sm:p-5">

@@ -75,7 +75,7 @@ describe('Improve Your Records recommendation engine', () => {
       base({ missingCostProductCount: 12, openingBalancesStatus: 'not_started' })
     );
     expect(result.primary?.key).toBe('missing-costs');
-    expect(result.primary?.href).toBe('/products?missingCost=1');
+    expect(result.primary?.href).toBe('/products?issue=MISSING_COST');
     expect(result.primary?.explanation).toContain(
       'stocked or sold without a reliable cost'
     );
@@ -106,7 +106,7 @@ describe('Improve Your Records recommendation engine', () => {
     expect(result.primary?.explanation).toContain(
       '18 active products still need a confirmed stock quantity'
     );
-    expect(result.primary?.href).toBe('/settings/import-stock?mode=OPENING_STOCK');
+    expect(result.primary?.href).toBe('/products?issue=STOCK_SETUP_GAP');
   });
 
   it('Connys-shaped: sold without confirmed quantity keeps genuine stock coaching', () => {
@@ -166,7 +166,7 @@ describe('Improve Your Records recommendation engine', () => {
     expect(result.primary?.title).toBe('Review unused catalogue products');
     expect(result.primary?.explanation).toContain('never been stocked or sold');
     expect(result.primary?.explanation).not.toContain('opening quantity');
-    expect(result.primary?.href).toBe('/products');
+    expect(result.primary?.href).toBe('/products?issue=UNUSED_CATALOGUE');
   });
 
   it('EL-SHADDAI-shaped: unused catalogue does not outrank genuine unpaid supplier', () => {
@@ -280,7 +280,19 @@ describe('Improve Your Records recommendation engine', () => {
     expect(result.primary?.key).toBe('purchases');
     expect(result.primary?.title).toBe('Record your next stock delivery');
     expect(result.primary?.explanation).toContain('When new stock arrives');
-    expect(result.primary?.href).toBe('/purchases');
+    expect(result.primary?.href).toBe('/purchases#record-purchase-form');
+  });
+
+  it('supplier deep link is the filtered MISSING_SUPPLIER queue', () => {
+    const result = computeImproveRecords(
+      base({
+        purchasesNeedingSupplierCount: 1,
+        purchaseCount: 10,
+        openingBalancesStatus: 'complete',
+      })
+    );
+    expect(result.primary?.key).toBe('suppliers');
+    expect(result.primary?.href).toBe('/purchases?issue=MISSING_SUPPLIER');
   });
 
   it('replenishment without purchase prioritises purchase guidance earlier', () => {
@@ -466,10 +478,10 @@ describe('Improve Your Records recommendation engine', () => {
         })
       ).map((i) => [i.key, i.href])
     );
-    expect(hrefs['missing-costs']).toBe('/products?missingCost=1');
-    expect(hrefs['stock-completeness']).toBe('/settings/import-stock?mode=OPENING_STOCK');
+    expect(hrefs['missing-costs']).toBe('/products?issue=MISSING_COST');
+    expect(hrefs['stock-completeness']).toBe('/products?issue=STOCK_SETUP_GAP');
     expect(hrefs['opening-balances']).toBe('/settings#opening-capital');
-    expect(hrefs['purchases']).toBe('/purchases');
+    expect(hrefs['purchases']).toBe('/purchases#record-purchase-form');
     expect(hrefs['staff']).toBe('/users');
     expect(hrefs['momo']).toBe('/settings#payments');
   });

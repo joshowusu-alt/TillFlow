@@ -1,15 +1,22 @@
 'use server';
 
 import { createPurchase } from '@/lib/services/purchases';
+import { createSupplier } from '@/lib/services/suppliers';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { toPence, formString, formInt, formDate } from '@/lib/form-helpers';
+import { toPence, formString, formInt, formDate, formOptionalString } from '@/lib/form-helpers';
 import { PaymentStatusEnum } from '@/lib/validation/enums';
 import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
+import {
+  OPENING_STOCK_MOVEMENT_TYPES,
+  OPENING_STOCK_REFERENCE_TYPES,
+} from '@/lib/improve-records-constants';
+import { revalidateImproveRecordsHome } from '@/lib/improve-records-revalidate';
 
 export async function createPurchaseAction(formData: FormData): Promise<void> {
   return formAction(async () => {
@@ -83,6 +90,103 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 
     redirect(`/purchases/${invoice.id}?${params.toString()}`);
   }, '/purchases');
+}
+
+/**
+ * Link (or create-and-link) a supplier on a payable purchase missing one.
+ * Enforces the same MISSING_SUPPLIER rule as Improve Your Records.
+ */
+export async function linkPurchaseSupplierAction(
+  formData: FormData
+): Promise<ActionResult<{ redirectTo: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+
+    const purchaseInvoiceId = formString(formData, 'purchaseInvoiceId');
+    const existingSupplierId = formOptionalString(formData, 'supplierId');
+    const newSupplierName = formOptionalString(formData, 'newSupplierName')?.trim() || null;
+    const returnTo =
+      formOptionalString(formData, 'returnTo') || '/purchases?issue=MISSING_SUPPLIER';
+
+    if (!purchaseInvoiceId) return err('Purchase not found.');
+
+    const invoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseInvoiceId, businessId },
+      select: {
+        id: true,
+        supplierId: true,
+        paymentStatus: true,
+        qaTag: true,
+      },
+    });
+    if (!invoice) return err('Purchase not found.');
+    if (invoice.supplierId) return err('This purchase already has a supplier.');
+
+    const openingLinked = await prisma.stockMovement.findFirst({
+      where: {
+        referenceId: invoice.id,
+        OR: [
+          { type: { in: [...OPENING_STOCK_MOVEMENT_TYPES] } },
+          { referenceType: { in: [...OPENING_STOCK_REFERENCE_TYPES] } },
+        ],
+      },
+      select: { type: true, referenceType: true },
+    });
+    const hasOpeningStockMovement = Boolean(
+      openingLinked && isOpeningStockMovement(openingLinked)
+    );
+
+    if (
+      !purchaseNeedsSupplierLink({
+        supplierId: invoice.supplierId,
+        paymentStatus: invoice.paymentStatus,
+        qaTag: invoice.qaTag,
+        hasOpeningStockMovement,
+      })
+    ) {
+      return err('This purchase does not need a supplier link for payable tracking.');
+    }
+
+    let supplierId = existingSupplierId || null;
+    if (newSupplierName) {
+      const created = await createSupplier(businessId, { name: newSupplierName });
+      supplierId = created.id;
+    }
+
+    if (!supplierId) return err('Select a supplier or enter a new name.');
+
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: supplierId, businessId },
+      select: { id: true, name: true },
+    });
+    if (!supplier) return err('Supplier not found for this business.');
+
+    await prisma.purchaseInvoice.update({
+      where: { id: invoice.id },
+      data: { supplierId: supplier.id },
+    });
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PURCHASE_LINK_SUPPLIER',
+      entity: 'PurchaseInvoice',
+      entityId: invoice.id,
+      details: { supplierId: supplier.id, supplierName: supplier.name },
+    }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('reports');
+    revalidateOwnerDashboardCache();
+    revalidateImproveRecordsHome();
+    revalidatePath('/purchases');
+    revalidatePath(`/purchases/${invoice.id}`);
+    revalidatePath(`/suppliers/${supplier.id}`);
+    revalidatePath('/payments/supplier-aging');
+
+    return ok({ redirectTo: returnTo });
+  });
 }
 
 export async function changePurchaseProductSupplierLinkAction(formData: FormData): Promise<void> {

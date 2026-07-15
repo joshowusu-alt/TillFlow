@@ -9,6 +9,13 @@ import { listProductImports } from '@/app/actions/import-catalog';
 import ImportHistoryPanel from './ImportHistoryPanel';
 import ImportStockLoader from './ImportStockLoader';
 import { isImportMode } from '@/lib/import/import-mode';
+import IssueResolutionBanner from '@/components/IssueResolutionBanner';
+import { listStockGapSignals } from '@/lib/improve-records-load';
+import {
+  IMPROVE_RECORDS_ISSUE_DEFS,
+  parseImproveRecordsIssue,
+} from '@/lib/improve-records-issues';
+import Link from 'next/link';
 
 // Server actions called from this route (importStockAction) can take up to
 // 60 s for large catalogues — raise the Vercel function timeout accordingly.
@@ -18,13 +25,20 @@ export const maxDuration = 60;
 export default async function ImportStockPage({
   searchParams,
 }: {
-  searchParams?: { mode?: string };
+  searchParams?: { mode?: string; issue?: string; count?: string };
 }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
 
   const initialMode =
     searchParams?.mode && isImportMode(searchParams.mode) ? searchParams.mode : null;
+
+  const issueKey = parseImproveRecordsIssue(searchParams?.issue);
+  const stockGapIssue = issueKey === 'STOCK_SETUP_GAP';
+  const gapCount = stockGapIssue
+    ? (await listStockGapSignals(business.id)).productsNeedingOpeningQtyCount
+    : 0;
+  const statedCount = Math.max(0, parseInt(searchParams?.count ?? '', 10) || gapCount);
 
   const [units, importHistory] = await Promise.all([
     prisma.unit.findMany({
@@ -34,12 +48,28 @@ export default async function ImportStockPage({
     listProductImports(8),
   ]);
 
+  const issueDef = IMPROVE_RECORDS_ISSUE_DEFS.STOCK_SETUP_GAP;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Import Stock"
         subtitle="Bulk-create your product catalogue and record opening stock from a CSV or Excel file."
       />
+      {stockGapIssue ? (
+        <IssueResolutionBanner
+          heading={issueDef.heading}
+          explanation={`${issueDef.explanation} Import mode is set to Opening Stock for the ${statedCount} product${statedCount === 1 ? '' : 's'} that still need a confirmed quantity.`}
+          affectedCount={gapCount}
+          homeHref="/onboarding"
+          clearHref="/settings/import-stock"
+          resolved={gapCount === 0}
+        >
+          <Link href="/products?issue=STOCK_SETUP_GAP" className="text-xs font-semibold text-accent hover:underline">
+            Review the exact affected products →
+          </Link>
+        </IssueResolutionBanner>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3">
           <div className="text-xs uppercase tracking-[0.2em] text-black/40">Available units</div>
@@ -54,7 +84,11 @@ export default async function ImportStockPage({
           <div className="mt-1 text-2xl font-display font-semibold text-amber-800">{business.currency}</div>
         </div>
       </div>
-      <ImportStockLoader units={units} currency={business.currency} initialMode={initialMode} />
+      <ImportStockLoader
+        units={units}
+        currency={business.currency}
+        initialMode={stockGapIssue ? 'OPENING_STOCK' : initialMode}
+      />
       <ImportHistoryPanel
         imports={importHistory.success ? importHistory.data : []}
       />

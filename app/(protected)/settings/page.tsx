@@ -282,7 +282,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <input className="input" name="tinNumber" defaultValue={(business as any).tinNumber ?? ''} placeholder="e.g. C0012345678" />
             <div className="mt-1 text-xs text-black/50">Ghana Revenue Authority Tax Identification Number.</div>
           </div>
-          <div id="opening-capital" className="md:col-span-2">
+          <div id="opening-capital" className="md:col-span-2 scroll-mt-24">
             <h2 className="text-base font-display font-semibold">Opening Balances</h2>
             <p className="mt-1 text-sm text-black/55">
               Record your financial position when you started using TillFlow. These appear on your Balance Sheet.
@@ -377,7 +377,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             </div>
           </div>
 
-          <div className="md:col-span-2 pt-2" id="payments">
+          <div className="md:col-span-2 pt-2 scroll-mt-24" id="payments">
             <h2 className="text-base font-display font-semibold">Contacts & payments</h2>
             <p className="mt-1 text-sm text-black/55">Phone, address, and Mobile Money details used across receipts and payment flows.</p>
           </div>

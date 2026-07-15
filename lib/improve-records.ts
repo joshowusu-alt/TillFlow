@@ -6,6 +6,7 @@
 
 import type { OpeningBalancesStatus } from '@/lib/opening-balances-status';
 import { openingBalancesNeedsAttention } from '@/lib/opening-balances-status';
+import { IMPROVE_RECORDS_ISSUE_DEFS } from '@/lib/improve-records-issues';
 
 export type ImproveRecordsRole = 'OWNER' | 'MANAGER' | 'CASHIER';
 export type ImproveRecordsPlan = 'STARTER' | 'GROWTH' | 'PRO';
@@ -145,7 +146,7 @@ export function buildImproveRecordsCandidates(
       title: 'Complete your product costs',
       explanation: `Profit is incomplete for ${n} product${n === 1 ? '' : 's'} that ${verb} been stocked or sold without a reliable cost.`,
       actionLabel: 'Review missing costs',
-      href: '/products?missingCost=1',
+      href: IMPROVE_RECORDS_ISSUE_DEFS.MISSING_COST.href,
       priority: 100,
     });
   }
@@ -155,8 +156,8 @@ export function buildImproveRecordsCandidates(
       key: 'stock-completeness',
       title: 'Finish your stock records',
       explanation: stockGapExplanation(snapshot),
-      actionLabel: 'Continue opening stock',
-      href: '/settings/import-stock?mode=OPENING_STOCK',
+      actionLabel: 'Review stock gaps',
+      href: IMPROVE_RECORDS_ISSUE_DEFS.STOCK_SETUP_GAP.href,
       priority: 90,
     });
   }
@@ -184,7 +185,7 @@ export function buildImproveRecordsCandidates(
       explanation:
         'When new stock arrives, record the purchase so quantities, costs and supplier balances stay accurate.',
       actionLabel: 'Add a purchase',
-      href: '/purchases',
+      href: '/purchases#record-purchase-form',
       priority: snapshot.replenishmentWithoutPurchaseDetected ? 75 : 70,
     });
   }
@@ -212,7 +213,7 @@ export function buildImproveRecordsCandidates(
       title: 'Link a supplier',
       explanation: supplierExplanation(n),
       actionLabel: 'Review purchases',
-      href: '/purchases',
+      href: IMPROVE_RECORDS_ISSUE_DEFS.MISSING_SUPPLIER.href,
       priority: 55,
     });
   }
@@ -225,7 +226,7 @@ export function buildImproveRecordsCandidates(
       title: 'Review unused catalogue products',
       explanation: `${n} product${n === 1 ? ' has' : 's have'} never been stocked or sold. Confirm whether you still intend to carry ${n === 1 ? 'it' : 'them'}.`,
       actionLabel: 'Review catalogue',
-      href: '/products',
+      href: IMPROVE_RECORDS_ISSUE_DEFS.UNUSED_CATALOGUE.href,
       priority: 45,
     });
   }

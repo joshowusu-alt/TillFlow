@@ -54,14 +54,30 @@ export type StockGapCounts = {
   unusedCatalogueProductCount: number;
 };
 
+export type StockGapIdLists = StockGapCounts & {
+  genuineGapProductIds: string[];
+  soldWithoutConfirmedQtyIds: string[];
+  unusedCatalogueProductIds: string[];
+};
+
 /**
+ * Shared stock-gap classification: same IDs for Home counts and landing filters.
  * Classify active priced products with no InventoryBalance into genuine stock
  * gap vs aged unused catalogue. See classifyNoBalanceProduct for rules.
  */
-export async function countStockGapSignals(
+export async function listStockGapSignals(
   businessId: string,
   now = new Date()
-): Promise<StockGapCounts> {
+): Promise<StockGapIdLists> {
+  const empty: StockGapIdLists = {
+    productsNeedingOpeningQtyCount: 0,
+    soldWithoutConfirmedQtyCount: 0,
+    unusedCatalogueProductCount: 0,
+    genuineGapProductIds: [],
+    soldWithoutConfirmedQtyIds: [],
+    unusedCatalogueProductIds: [],
+  };
+
   const stores = await prisma.store.findMany({
     where: { businessId },
     select: { id: true },
@@ -81,13 +97,7 @@ export async function countStockGapSignals(
     },
   });
 
-  if (candidates.length === 0) {
-    return {
-      productsNeedingOpeningQtyCount: 0,
-      soldWithoutConfirmedQtyCount: 0,
-      unusedCatalogueProductCount: 0,
-    };
-  }
+  if (candidates.length === 0) return empty;
 
   const productIds = candidates.map((p) => p.id);
 
@@ -141,9 +151,9 @@ export async function countStockGapSignals(
   const inboundIds = new Set(inboundHistoryRows.map((r) => r.productId));
   const purchasedIds = new Set(purchaseLineRows.map((r) => r.productId));
 
-  let genuine = 0;
-  let soldWithout = 0;
-  let unusedCatalogue = 0;
+  const genuineGapProductIds: string[] = [];
+  const soldWithoutConfirmedQtyIds: string[] = [];
+  const unusedCatalogueProductIds: string[] = [];
 
   for (const product of candidates) {
     const hasSales = soldIds.has(product.id);
@@ -158,17 +168,32 @@ export async function countStockGapSignals(
       now
     );
     if (klass === 'genuine-gap') {
-      genuine += 1;
-      if (hasSales) soldWithout += 1;
+      genuineGapProductIds.push(product.id);
+      if (hasSales) soldWithoutConfirmedQtyIds.push(product.id);
     } else if (klass === 'unused-catalogue') {
-      unusedCatalogue += 1;
+      unusedCatalogueProductIds.push(product.id);
     }
   }
 
   return {
-    productsNeedingOpeningQtyCount: genuine,
-    soldWithoutConfirmedQtyCount: soldWithout,
-    unusedCatalogueProductCount: unusedCatalogue,
+    productsNeedingOpeningQtyCount: genuineGapProductIds.length,
+    soldWithoutConfirmedQtyCount: soldWithoutConfirmedQtyIds.length,
+    unusedCatalogueProductCount: unusedCatalogueProductIds.length,
+    genuineGapProductIds,
+    soldWithoutConfirmedQtyIds,
+    unusedCatalogueProductIds,
+  };
+}
+
+export async function countStockGapSignals(
+  businessId: string,
+  now = new Date()
+): Promise<StockGapCounts> {
+  const lists = await listStockGapSignals(businessId, now);
+  return {
+    productsNeedingOpeningQtyCount: lists.productsNeedingOpeningQtyCount,
+    soldWithoutConfirmedQtyCount: lists.soldWithoutConfirmedQtyCount,
+    unusedCatalogueProductCount: lists.unusedCatalogueProductCount,
   };
 }
 
@@ -179,10 +204,11 @@ export async function countProductsNeedingOpeningQty(businessId: string): Promis
 }
 
 /**
- * Count genuine PURCHASE invoices that need a supplier for payable tracking.
- * Excludes opening-stock invoices, void/cancel, QA/demo, and paid-in-full cash.
+ * List genuine PURCHASE invoices that need a supplier for payable tracking.
+ * Same rule as Home recommendation count — excludes opening-stock, void/cancel,
+ * QA/demo, and paid-in-full cash.
  */
-export async function countPurchasesNeedingSupplier(businessId: string): Promise<number> {
+export async function listPurchasesNeedingSupplier(businessId: string): Promise<string[]> {
   const invoices = await prisma.purchaseInvoice.findMany({
     where: {
       businessId,
@@ -191,9 +217,10 @@ export async function countPurchasesNeedingSupplier(businessId: string): Promise
       OR: [{ qaTag: null }, { qaTag: { notIn: ['DEMO_DAY', 'QA', 'DEMO'] } }],
     },
     select: { id: true, paymentStatus: true, qaTag: true, supplierId: true },
+    orderBy: { createdAt: 'desc' },
   });
 
-  if (invoices.length === 0) return 0;
+  if (invoices.length === 0) return [];
 
   const invoiceIds = invoices.map((i) => i.id);
   const openingLinked = await prisma.stockMovement.findMany({
@@ -214,14 +241,21 @@ export async function countPurchasesNeedingSupplier(businessId: string): Promise
     }
   }
 
-  return invoices.filter((inv) =>
-    purchaseNeedsSupplierLink({
-      supplierId: inv.supplierId,
-      paymentStatus: inv.paymentStatus,
-      qaTag: inv.qaTag,
-      hasOpeningStockMovement: openingIds.has(inv.id),
-    })
-  ).length;
+  return invoices
+    .filter((inv) =>
+      purchaseNeedsSupplierLink({
+        supplierId: inv.supplierId,
+        paymentStatus: inv.paymentStatus,
+        qaTag: inv.qaTag,
+        hasOpeningStockMovement: openingIds.has(inv.id),
+      })
+    )
+    .map((inv) => inv.id);
+}
+
+export async function countPurchasesNeedingSupplier(businessId: string): Promise<number> {
+  const ids = await listPurchasesNeedingSupplier(businessId);
+  return ids.length;
 }
 
 export async function detectReplenishmentWithoutPurchase(
@@ -274,7 +308,7 @@ export async function loadImproveRecordsSnapshot(
         },
       })
       .catch(() => 0),
-    countStockGapSignals(input.businessId),
+    listStockGapSignals(input.businessId),
     prisma.salesInvoice.count({
       where: {
         businessId: input.businessId,

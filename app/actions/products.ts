@@ -8,6 +8,7 @@ import {
   formAction,
   safeAction,
   ok,
+  err,
   type ActionResult,
 } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
@@ -262,6 +263,54 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
     revalidatePath('/onboarding');
+    revalidatePath('/products');
+    return ok({ message: `"${product.name}" has been deactivated.` });
+  });
+}
+
+/**
+ * Deactivate from the unused-catalogue issue queue only if the product still
+ * qualifies under the shared unused-catalogue rule (stale-page safe).
+ */
+export async function deactivateUnusedCatalogueProductAction(
+  productId: string
+): Promise<ActionResult<{ message: string }>> {
+  return safeAction(async () => {
+    const { user, businessId } = await withBusinessContext(['OWNER']);
+
+    if (!productId) return err('Product not found.');
+
+    const { listStockGapSignals } = await import('@/lib/improve-records-load');
+    const gaps = await listStockGapSignals(businessId);
+    if (!gaps.unusedCatalogueProductIds.includes(productId)) {
+      return err(
+        'This product no longer qualifies as unused catalogue. Refresh the list — it may already be stocked, sold, or inactive.'
+      );
+    }
+
+    const product = await softDeleteProduct(productId, businessId);
+
+    audit({
+      businessId,
+      userId: user.id,
+      userName: user.name,
+      userRole: user.role,
+      action: 'PRODUCT_DELETE',
+      entity: 'Product',
+      entityId: productId,
+      details: {
+        name: product.name,
+        reason: 'UNUSED_CATALOGUE_ISSUE',
+        issue: 'UNUSED_CATALOGUE',
+      },
+    }).catch((e) => console.error('[audit]', e));
+
+    revalidateTag('pos-products');
+    revalidateOwnerDashboardCache();
+    revalidatePath('/inventory', 'layout');
+    revalidatePath('/onboarding');
+    revalidatePath('/products');
+    revalidatePath('/products?issue=UNUSED_CATALOGUE');
     return ok({ message: `"${product.name}" has been deactivated.` });
   });
 }
