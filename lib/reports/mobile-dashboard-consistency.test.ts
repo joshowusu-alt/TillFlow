@@ -40,7 +40,7 @@ describe('Mobile dashboard sales consistency', () => {
     expect(mobileMenu).not.toContain('Today sales · all branches');
     expect(mobileMenu).not.toContain('Transactions · all branches');
     expect(mobileMenu).toContain('Quick actions');
-    expect(readiness).toContain('Today · all branches');
+    expect(readiness).toContain('Today · All branches');
   });
 
   it('home hero live revenue and transaction stats refresh from the same action as the top nav', () => {

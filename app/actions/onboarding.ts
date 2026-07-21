@@ -30,6 +30,7 @@ import { BUSINESS_CATEGORIES } from '@/lib/activation-steps';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { loadImproveRecordsResult } from '@/lib/improve-records-load';
 import type { ImproveRecordsResult } from '@/lib/improve-records';
+import { getBusinessPlan, type BusinessPlan } from '@/lib/features';
 
 export type ReadinessStep = {
   key: ActivationStepKey | string;
@@ -86,11 +87,15 @@ export type ReadinessData = {
   openIssueCount: number;
   openShiftCount: number;
   openShiftSalesCount: number;
+  /** Earliest open-shift `openedAt` (ISO), for Home wording only. */
+  openShiftOpenedAt: string | null;
   reorderNeededCount: number;
   overdueSupplierInvoiceCount: number;
   expectedCashPence: number;
   lastShiftClosedAt: string | null;
   lastReceiptId: string | null;
+  /** Plan used only for Home presentation gates (e.g. Growth reorder link). */
+  plan: BusinessPlan;
 };
 
 const STEP_ICONS: Record<string, ReadinessStep['icon']> = {
@@ -167,6 +172,7 @@ export async function getReadiness(): Promise<ReadinessData> {
           },
           select: {
             id: true,
+            openedAt: true,
             expectedCashPence: true,
             _count: {
               select: {
@@ -329,11 +335,23 @@ export async function getReadiness(): Promise<ReadinessData> {
         openIssueCount,
         openShiftCount: openShifts.length,
         openShiftSalesCount: openShifts.reduce((sum, shift) => sum + shift._count.salesInvoices, 0),
+        openShiftOpenedAt: openShifts.length
+          ? openShifts
+              .map((shift) => shift.openedAt)
+              .sort((a, b) => a.getTime() - b.getTime())[0]
+              ?.toISOString() ?? null
+          : null,
         reorderNeededCount: todayKpis?.urgentReorderCount ?? 0,
         overdueSupplierInvoiceCount,
         expectedCashPence,
         lastShiftClosedAt: lastClosedShift?.closedAt?.toISOString() ?? null,
         lastReceiptId: lastReceipt?.id ?? null,
+        plan: getBusinessPlan(
+          business.plan,
+          business.storeMode === 'MULTI_STORE' || business.storeMode === 'SINGLE_STORE'
+            ? business.storeMode
+            : null,
+        ),
       };
     },
     { businessId: business.id, route: '/onboarding', role: 'OWNER' },

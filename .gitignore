@@ -35,4 +35,7 @@ perf.db-journal
 /prisma/perf.db
 /prisma/perf.db-journal
 
+# Local visual QA evidence (never commit)
+/tmp/home-qa/
+
 .env*.local

@@ -136,11 +136,13 @@ const baseReadinessData: ReadinessData = {
   openIssueCount: 0,
   openShiftCount: 0,
   openShiftSalesCount: 0,
+  openShiftOpenedAt: null,
   reorderNeededCount: 0,
   overdueSupplierInvoiceCount: 0,
   expectedCashPence: 125_000,
   lastShiftClosedAt: null,
   lastReceiptId: 'receipt-1',
+  plan: 'GROWTH',
 };
 
 function renderDashboard(overrides: Partial<ReadinessData> = {}) {
@@ -218,12 +220,11 @@ describe('ReadinessJourney home stats', () => {
     );
     const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
 
-    expect(revenueCard.parentElement).toHaveClass('grid-cols-1');
+    expect(revenueCard.parentElement).toHaveClass('grid-cols-2');
     expect(revenueCard).toHaveClass('min-w-0');
-    expect(revenueCard).not.toHaveClass('col-span-2');
+    expect(revenueCard).toHaveClass('col-span-2');
     expect(revenueValue).toHaveClass('whitespace-nowrap');
     expect(revenueValue).toHaveClass('tabular-nums');
-    expect(revenueValue).toHaveClass('text-sm');
     expect(revenueValue).toHaveClass('leading-tight');
     expect(revenueValue).not.toHaveClass('truncate');
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -244,7 +245,7 @@ describe('ReadinessJourney home stats', () => {
     for (const label of [revenueLabel, transactionsLabel, expectedCashLabel]) {
       expect(label).toHaveClass('uppercase');
       expect(label).toHaveClass('tracking-wider');
-      expect(label).toHaveClass('opacity-75');
+      expect(label).toHaveClass('text-blue-100/80');
       expect(label).toHaveClass('whitespace-nowrap');
     }
 
@@ -253,6 +254,7 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByText('Open Issues')).not.toBeInTheDocument();
     expect(transactionsCard).not.toHaveClass('col-span-2');
     expect(expectedCashCard).not.toHaveClass('col-span-2');
+    expect(screen.getByRole('link', { name: /Today's Revenue:/ })).toHaveClass('col-span-2');
   });
 
   it('drops very long revenue values to the smallest stat size', () => {
@@ -265,8 +267,7 @@ describe('ReadinessJourney home stats', () => {
       element?.textContent?.replace(/\u00a0/g, ' ') === 'GH₵1,234,567.89'
     );
 
-    expect(revenueValue).toHaveClass('text-xs');
-    expect(revenueValue).toHaveClass('sm:text-sm');
+    expect(revenueValue).toHaveClass('text-sm');
     expect(revenueValue).not.toHaveClass('truncate');
   });
 
@@ -318,15 +319,17 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
   });
 
-  it('shows quick access operational cards and admin links on the home dashboard', () => {
+  it('keeps Open POS as the only permanent primary Home action', () => {
     renderDashboard();
 
-    expect(screen.getByRole('link', { name: /Open POS/ })).toHaveAttribute('href', '/pos');
-    expect(screen.getByRole('link', { name: /Purchases/ })).toHaveAttribute('href', '/purchases');
-    expect(screen.getByRole('link', { name: /People/ })).toHaveAttribute('href', '/users');
-    expect(screen.getByRole('link', { name: /Billing/ })).toHaveAttribute('href', '/settings/billing');
-    expect(screen.getByRole('link', { name: /System Health/ })).toHaveAttribute('href', '/settings/system-health');
-    expect(screen.getByText('Secure. Reliable. Built for Ghanaian businesses.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open POS Serve customers/i })).toHaveAttribute('href', '/pos');
+    expect(screen.queryByText('Quick access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Purchases$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^People$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^Billing$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^System Health$/ })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Secure. Reliable. Built for Ghanaian businesses.')).toHaveLength(1);
   });
 
   it('does not present the last closed shift as current expected cash', () => {
@@ -347,7 +350,7 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    expect(screen.getAllByText('Today · all branches').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Today · All branches').length).toBeGreaterThanOrEqual(1);
     expect(useRouterRefreshOnVisibility).toHaveBeenCalled();
   });
 
@@ -403,9 +406,13 @@ describe('ReadinessJourney home stats', () => {
       expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
     });
 
-    expect(screen.getByText('4 items need attention')).toBeInTheDocument();
-    expect(screen.getAllByText(/85 sales recorded/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Supplier payments due/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('status')).toHaveTextContent('4 actions need attention today');
+    expect(screen.getAllByText('4 actions need attention today.')).toHaveLength(1); // Today's attention only
+    expect(screen.getByText(/85 sales in this open shift/)).toBeInTheDocument();
+    expect(screen.getByText(/Supplier payments due/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /4 issues in Command Center/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Supplier payments due/)).toHaveLength(1);
+    expect(screen.queryByText('Follow up before close')).not.toBeInTheDocument();
   });
 
   it('keeps initial readiness values visible if the live KPI action fails', async () => {
@@ -588,10 +595,262 @@ describe('Improve Your Records Phase 2', () => {
       },
     });
 
-    // Command Center lives in WelcomeDashboard (Today's Focus / operational cards).
-    expect(screen.getByRole('link', { name: /Open POS/ })).toBeInTheDocument();
+    // Command Center lives in WelcomeDashboard (Today's attention / operational cards).
+    expect(screen.getByRole('link', { name: /Open POS Serve customers/i })).toBeInTheDocument();
     expect(screen.getByText('Improve your records')).toBeInTheDocument();
     expect(screen.getByText('Top improvement')).toBeInTheDocument();
-    expect(screen.getByText(/Urgent till issues stay in Command Center/i)).toBeInTheDocument();
+    expect(
+      screen.getByText('Optional improvements that make your records and reports more reliable.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /2 issues in Command Center/i })).toBeInTheDocument();
+  });
+});
+
+describe('Owner Home Phase 1 control centre', () => {
+  it('removes the Home directory and admin cards', () => {
+    renderDashboard();
+
+    for (const label of [
+      'Dashboard',
+      'Products',
+      'Sales History',
+      'Inventory',
+      'Purchases',
+      'People',
+      'Settings',
+      'Billing',
+      'System Health',
+    ]) {
+      expect(screen.queryByRole('link', { name: new RegExp(`^${label}\\b`, 'i') })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByText('Quick access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('Today focus')).not.toBeInTheDocument();
+  });
+
+  it('renders one Today\'s attention surface and conditional actions', () => {
+    renderDashboard({
+      openShiftCount: 1,
+      openShiftSalesCount: 3,
+      openShiftOpenedAt: '2026-02-17T08:15:00.000Z',
+      openIssueCount: 5,
+      overdueSupplierInvoiceCount: 1,
+      reorderNeededCount: 2,
+      plan: 'GROWTH',
+    });
+
+    expect(screen.getAllByRole('region', { name: /Today'?s attention/i })).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('4 actions need attention today');
+    expect(screen.getAllByText('4 actions need attention today.')).toHaveLength(1); // attention line only — pill is the sole hero summary
+    expect(screen.getByRole('link', { name: /Close Shift/i })).toHaveAttribute('href', '/shifts');
+    expect(screen.getByText(/Open since .+ · 3 sales in this open shift/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /5 issues in Command Center/i })).toHaveAttribute(
+      'href',
+      '/reports/command-center'
+    );
+    expect(screen.getByRole('link', { name: /Supplier payments due/i })).toHaveAttribute(
+      'href',
+      '/payments/supplier-payments'
+    );
+    expect(screen.getByRole('link', { name: /Reorder needed/i })).toHaveAttribute(
+      'href',
+      '/reports/reorder-suggestions'
+    );
+    expect(screen.queryByText('Follow up before close')).not.toBeInTheDocument();
+  });
+
+  it('hides reorder attention when the Growth report is unavailable', () => {
+    renderDashboard({
+      reorderNeededCount: 4,
+      openIssueCount: 1,
+      plan: 'STARTER',
+    });
+
+    expect(screen.queryByRole('link', { name: /Reorder needed/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /1 issue in Command Center/i })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('1 action needs attention today');
+    expect(screen.getAllByText('1 action needs attention today.')).toHaveLength(1);
+  });
+
+  it('shows a quiet attention state without All systems active when records need work', () => {
+    renderDashboard({
+      openIssueCount: 0,
+      improveRecords: {
+        primary: {
+          key: 'missing-costs',
+          title: 'Complete your product costs',
+          explanation: 'Profit is incomplete for 2 products.',
+          actionLabel: 'Review missing costs',
+          href: '/products?missingCost=1',
+          priority: 100,
+        },
+        secondary: [],
+        allClear: false,
+        allClearMessage: '',
+      },
+    });
+
+    expect(screen.getByText('No urgent issues need your attention today.')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Records can be improved');
+    expect(
+      screen.queryByText('No urgent issues today. Some records can still be improved.')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('All systems active')).not.toBeInTheDocument();
+    expect(screen.getByText('Improve your records')).toBeInTheDocument();
+    expect(screen.getByText('Top improvement')).toBeInTheDocument();
+  });
+
+  it('keeps Improve Your Records recommendation hrefs unchanged and stacks secondary actions on mobile', () => {
+    const { container } = renderDashboard({
+      improveRecords: {
+        primary: {
+          key: 'missing-costs',
+          title: 'Complete your product costs',
+          explanation: 'Your sales are recorded, but profit is incomplete for 12 products.',
+          actionLabel: 'Review missing costs',
+          href: '/products?missingCost=1',
+          priority: 100,
+        },
+        secondary: [
+          {
+            key: 'stock-completeness',
+            title: 'Review stock gaps',
+            explanation: 'Some products need opening stock.',
+            actionLabel: 'Review stock gaps',
+            href: '/products?issue=STOCK_SETUP_GAP',
+            priority: 90,
+          },
+          {
+            key: 'opening-balances',
+            title: 'Complete your starting balances',
+            explanation: 'Add opening capital details.',
+            actionLabel: 'Review opening balances',
+            href: '/settings#opening-capital',
+            priority: 80,
+          },
+          {
+            key: 'purchases',
+            title: 'Record your purchases',
+            explanation: 'Keep stock and costs accurate.',
+            actionLabel: 'Review purchases',
+            href: '/purchases',
+            priority: 70,
+          },
+        ],
+        allClear: false,
+        allClearMessage: '',
+      },
+    });
+
+    expect(screen.getByRole('link', { name: /Complete your product costs/i })).toHaveAttribute(
+      'href',
+      '/products?missingCost=1'
+    );
+    expect(screen.getByRole('link', { name: /Review stock gaps/i })).toHaveAttribute(
+      'href',
+      '/products?issue=STOCK_SETUP_GAP'
+    );
+    expect(screen.getByRole('link', { name: /Review opening balances/i })).toHaveAttribute(
+      'href',
+      '/settings#opening-capital'
+    );
+    expect(screen.getByRole('link', { name: /Review purchases/i })).toHaveAttribute(
+      'href',
+      '/purchases'
+    );
+    expect(
+      screen.getByText('Optional improvements that make your records and reports more reliable.')
+    ).toBeInTheDocument();
+    const secondaryLink = screen.getByRole('link', { name: /Review stock gaps/i });
+    expect(secondaryLink).toHaveClass('flex-col');
+    expect(container.querySelector('.min-h-screen')).toBeNull();
+    expect(screen.getAllByText('Secure. Reliable. Built for Ghanaian businesses.')).toHaveLength(1);
+  });
+
+  it('keeps the status pill as the only hero attention summary and ends with the brand tagline once', () => {
+    const { container } = renderDashboard({
+      openShiftCount: 1,
+      openIssueCount: 2,
+      overdueSupplierInvoiceCount: 1,
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('3 actions need attention today');
+    expect(screen.getAllByText('3 actions need attention today.')).toHaveLength(1);
+    const tagline = screen.getByText('Secure. Reliable. Built for Ghanaian businesses.');
+    expect(tagline).toHaveClass('text-center');
+    expect(container.textContent?.trim().endsWith('Secure. Reliable. Built for Ghanaian businesses.')).toBe(
+      true
+    );
+  });
+
+  it('shows Last Receipt only when a receipt id exists', () => {
+    const { unmount } = renderDashboard({ lastReceiptId: 'receipt-99' });
+    expect(screen.getByRole('link', { name: /Last receipt/i })).toHaveAttribute('href', '/receipts/receipt-99');
+    unmount();
+
+    renderDashboard({ lastReceiptId: null });
+    expect(screen.queryByRole('link', { name: /Last receipt/i })).not.toBeInTheDocument();
+  });
+
+  it('renders live preview / demo content once without a competing Open POS', () => {
+    renderDashboard({
+      saleCount: 3,
+      hasDemoData: true,
+      hasSeedData: false,
+    });
+
+    expect(screen.getAllByText('Live preview mode')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Explore sample data/i })).toHaveAttribute(
+      'href',
+      '/reports/dashboard'
+    );
+    expect(screen.getAllByRole('link', { name: /Open POS/i })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Open POS Serve customers/i })).toHaveAttribute('href', '/pos');
+  });
+
+  it('keeps established leftover sample data as a quiet notice, not a second demo hero', () => {
+    renderDashboard({
+      saleCount: 40,
+      hasDemoData: true,
+      hasSeedData: false,
+    });
+
+    expect(screen.queryByText('Live preview mode')).not.toBeInTheDocument();
+    expect(screen.getByText(/Sample trading data is still on this account/i)).toBeInTheDocument();
+  });
+
+  it('shows Growth reorder attention and hides it on Starter', () => {
+    const { unmount } = renderDashboard({
+      plan: 'GROWTH',
+      reorderNeededCount: 3,
+      openIssueCount: 1,
+    });
+    expect(screen.getByRole('link', { name: /Reorder needed/i })).toHaveAttribute(
+      'href',
+      '/reports/reorder-suggestions'
+    );
+    unmount();
+
+    renderDashboard({
+      plan: 'STARTER',
+      reorderNeededCount: 3,
+      openIssueCount: 1,
+    });
+    expect(screen.queryByRole('link', { name: /Reorder needed/i })).not.toBeInTheDocument();
+  });
+
+  it('uses honest operational all-clear status when records are also clear', () => {
+    renderDashboard({ openIssueCount: 0, openShiftCount: 0 });
+
+    expect(screen.getByText('No urgent issues today')).toBeInTheDocument();
+    expect(screen.getByText('No urgent issues need your attention today.')).toBeInTheDocument();
+    expect(screen.queryByText('All systems active')).not.toBeInTheDocument();
+  });
+
+  it('does not show Close Shift when no till is open', () => {
+    renderDashboard({ openShiftCount: 0, expectedCashPence: 0 });
+
+    expect(screen.queryByRole('link', { name: /Close Shift/i })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText('No open till')).toBeInTheDocument();
   });
 });

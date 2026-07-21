@@ -38,12 +38,30 @@ const PUBLIC_PATHS = [
   '/api/notifications/webhook/meta',
 ];
 
+function isDevHarnessAllowed(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' ||
+    process.env.ALLOW_OWNER_HOME_PREVIEW === 'true'
+  );
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestId = request.headers.get('x-request-id') ?? crypto.randomUUID();
 
   const csrfRejection = enforceCsrf(request);
   if (csrfRejection) return csrfRejection;
+
+  // Dev-only harness routes must 404 outside development (no login redirect, no fixtures).
+  if (pathname.startsWith('/dev/') && !isDevHarnessAllowed()) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    });
+  }
 
   // Root route should never appear as an empty shell in the browser.
   // Redirect immediately to the correct landing page and let downstream

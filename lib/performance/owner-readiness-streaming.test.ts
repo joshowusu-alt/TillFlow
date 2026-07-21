@@ -66,9 +66,9 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     const skeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
     const loading = read('app/(protected)/onboarding/loading.tsx');
 
-    expect(skeleton).toContain('Your business today');
+    expect(skeleton).toContain('Preparing owner home');
+    expect(skeleton).toContain('grid-cols-2');
     expect(skeleton).not.toContain('Today in your shop');
-    expect(skeleton).toContain("Preparing today");
     expect(skeleton).not.toContain('min-h-[70vh]');
     expect(skeleton).not.toContain('tillflow-logo');
     expect(loading).toContain('OwnerReadinessSkeleton');
