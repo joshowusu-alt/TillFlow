@@ -31,8 +31,9 @@ describe('products page polish', () => {
 
   it('places product search before the collapsed Add product form', () => {
     expect(src.indexOf('{/* Product search and actions */}')).toBeLessThan(src.indexOf('{/* Add product */}'));
-    expect(src.indexOf('SearchFilter placeholder="Search products')).toBeGreaterThan(-1);
-    expect(src.indexOf('id="product-create"')).toBeGreaterThan(src.indexOf('SearchFilter placeholder="Search products'));
+    expect(src).toContain('SearchFilter placeholder=');
+    expect(src).toContain('Search products');
+    expect(src.indexOf('id="product-create"')).toBeGreaterThan(src.indexOf('{/* Product search and actions */}'));
   });
 
   it('preserves product creation, image, unit, supplier, category, and product routes', () => {

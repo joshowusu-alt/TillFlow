@@ -9,7 +9,7 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
   const ownerDashboardSrc = read('lib/reports/owner-dashboard.ts');
   const todayKpisSrc = read('lib/reports/today-kpis.ts');
   const tradingDashboardSrc = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-  const posSrc = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
+  const posSrc = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx') + '\n' + read('app/(protected)/pos/PosDeferredSection.tsx');
   const salesActionsSrc = read('app/actions/sales.ts');
   const paymentActionsSrc = read('app/actions/payments.ts');
   const purchaseActionsSrc = read('app/actions/purchases.ts');
@@ -158,9 +158,9 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
   it('POS cached loaders remain scoped by function arguments and TTLs are unchanged', () => {
     expect(posSrc).toContain('getCachedProducts(business.id)');
     expect(posSrc).toContain('getCachedInventory(baseStore.id)');
-    expect(posSrc).toContain('getCachedCustomers(business.id)');
-    expect(posSrc).toContain('getCachedTills(baseStore.id)');
-    expect(posSrc).toContain('getCachedShifts(baseStore.id)');
+    expect(posSrc).toContain('getCachedCustomers(businessId)');
+    expect(posSrc).toContain('getCachedTills(storeId)');
+    expect(posSrc).toContain('getCachedShifts(storeId)');
     expect(posSrc).toContain('revalidate: 60');
     expect(posSrc).toContain('revalidate: 30');
     expect(posSrc).toContain('revalidate: 10');
