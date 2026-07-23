@@ -22,9 +22,10 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(onboardingPage).not.toContain('await getReadiness');
   });
 
-  it('loads heavy readiness in a child async server component', () => {
+  it('loads critical shell first; full readiness only for incomplete journeys', () => {
     expect(ownerContent).toContain('export default async function OwnerReadinessContent');
-    expect(ownerContent).toContain('page.onboarding.owner-readiness');
+    expect(ownerContent).toContain('getOwnerHomeCriticalShell');
+    expect(ownerContent).toContain('OwnerHomeCompletedStream');
     expect(ownerContent).toContain('getReadiness()');
     expect(ownerContent).toContain('markOnboardingCompleteAfterFirstSale');
     expect(ownerContent).not.toContain('completeOnboarding()');
@@ -37,7 +38,7 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(onboardingPage).toContain("redirect('/pos')");
   });
 
-  it('keeps getReadiness and getTodayKPIs calculation logic unchanged', () => {
+  it('keeps getReadiness calculation sources for the incomplete journey path', () => {
     expect(onboardingAction).toContain('page.onboarding.get-readiness');
     expect(onboardingAction).toContain('getTodayKPIs(business.id)');
     expect(onboardingAction).toContain('todayRevenuePence: todayKpis?.totalSalesPence ?? 0');
@@ -48,18 +49,26 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(todayKpis).toContain('report.today-kpis.snapshot');
   });
 
-  it('preserves hero live KPI refresh and protected-shell launch completion', () => {
+  it('completed Home streams identity/Open POS; TopNav owns live header KPIs', () => {
     const readinessJourney = read('components/ReadinessJourney.tsx');
     const protectedLayout = read('app/(protected)/layout.tsx');
+    const completedStream = read('components/owner-home/OwnerHomeCompletedStream.tsx');
+    const ownerRefresh = read('components/owner-home/OwnerHomeRefresh.tsx');
 
+    expect(ownerRefresh).toContain("'tillflow.launch.protected-content.mounted'");
     expect(onboardingClient).toContain("'tillflow.launch.protected-content.mounted'");
     expect(protectedLayout).toContain('LaunchSessionCompletion');
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
 
-    expect(readinessJourney).toContain('getNavTodaySales');
-    expect(readinessJourney).toContain('todayRevenuePence: fresh.totalPence');
-    expect(readinessJourney).toContain('todayTransactionCount: fresh.txCount');
+    expect(completedStream).toContain('Open POS');
+    expect(completedStream).toContain('shell.businessName');
+    expect(completedStream).toContain('<Suspense');
+    expect(completedStream).toContain('HomePerformanceSlot');
+    expect(completedStream).toContain('HomeImproveRecordsSlot');
+
+    expect(readinessJourney).not.toMatch(/import \{ getNavTodaySales \}/);
     expect(readinessJourney).toContain('useRouterRefreshOnVisibility');
+    expect(readinessJourney).toContain('HOME_RESUME_STALE_MS');
   });
 
   it('uses a compact owner-dashboard skeleton fallback', () => {

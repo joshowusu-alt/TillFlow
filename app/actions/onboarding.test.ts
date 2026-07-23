@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveReadinessExpectedCashPence } from './onboarding';
+import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 
 describe('resolveReadinessExpectedCashPence', () => {
   it('uses open shift expected cash as the source of truth', async () => {

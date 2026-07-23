@@ -5,7 +5,7 @@
 export default function OwnerReadinessSkeleton() {
   return (
     <div
-      className="bg-[#f0f2f5] px-0 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] lg:px-6 lg:pb-8"
+      className="bg-[#f0f2f5] px-0 pb-4 lg:px-6 lg:pb-8"
       role="status"
       aria-live="polite"
       aria-label="Preparing owner home"

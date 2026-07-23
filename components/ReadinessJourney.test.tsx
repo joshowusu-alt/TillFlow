@@ -6,6 +6,7 @@ import type { ReadinessData } from '@/app/actions/onboarding';
 
 vi.mock('@/hooks/useRouterRefreshOnVisibility', () => ({
   useRouterRefreshOnVisibility: vi.fn(),
+  HOME_RESUME_STALE_MS: 20_000,
 }));
 
 vi.mock('next/link', () => ({
@@ -354,15 +355,8 @@ describe('ReadinessJourney home stats', () => {
     expect(useRouterRefreshOnVisibility).toHaveBeenCalled();
   });
 
-  it('patches stale hero revenue and transactions from the shared live nav KPI action on mount', async () => {
+  it('renders SSR hero revenue and transactions without a duplicate Home live KPI fetch', async () => {
     const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
-    vi.mocked(getNavTodaySales).mockResolvedValueOnce({
-      totalPence: 1_223_850,
-      txCount: 114,
-      currency: 'GHS',
-      onlineOrdersCount: 0,
-      userRole: 'OWNER',
-    });
 
     renderDashboard({
       todayRevenuePence: 959_300,
@@ -373,25 +367,11 @@ describe('ReadinessJourney home stats', () => {
 
     expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Today's Transactions: 85/ })).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
-    });
-
     expect(screen.getByRole('link', { name: /Expected Cash: GH₵8,919.00/ })).toBeInTheDocument();
+    expect(getNavTodaySales).not.toHaveBeenCalled();
   });
 
-  it('keeps readiness task data while live KPI refresh updates only hero sales values', async () => {
-    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
-    vi.mocked(getNavTodaySales).mockResolvedValueOnce({
-      totalPence: 1_223_850,
-      txCount: 114,
-      currency: 'GHS',
-      onlineOrdersCount: 0,
-      userRole: 'OWNER',
-    });
-
+  it('keeps readiness attention data while displaying SSR hero sales values', async () => {
     renderDashboard({
       todayRevenuePence: 959_300,
       todayTransactionCount: 85,
@@ -402,10 +382,7 @@ describe('ReadinessJourney home stats', () => {
       openShiftSalesCount: 85,
     });
 
-    await waitFor(() => {
-      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
-    });
-
+    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('4 actions need attention today');
     expect(screen.getAllByText('4 actions need attention today.')).toHaveLength(1); // Today's attention only
     expect(screen.getByText(/85 sales in this open shift/)).toBeInTheDocument();
@@ -415,103 +392,21 @@ describe('ReadinessJourney home stats', () => {
     expect(screen.queryByText('Follow up before close')).not.toBeInTheDocument();
   });
 
-  it('keeps initial readiness values visible if the live KPI action fails', async () => {
-    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
-    vi.mocked(getNavTodaySales).mockRejectedValueOnce(new Error('network unavailable'));
+  it('wires resume refresh with HOME_RESUME_STALE_MS and no mount refresh', async () => {
+    const { useRouterRefreshOnVisibility, HOME_RESUME_STALE_MS } = await import(
+      '@/hooks/useRouterRefreshOnVisibility'
+    );
 
-    renderDashboard({
-      todayRevenuePence: 959_300,
-      todayTransactionCount: 85,
-    });
+    renderDashboard();
 
-    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalled());
-
-    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Today's Transactions: 85/ })).toBeInTheDocument();
-  });
-
-  it('refreshes hero live KPIs when the dashboard regains focus', async () => {
-    const nowSpy = vi.spyOn(Date, 'now');
-    nowSpy.mockReturnValueOnce(1_000).mockReturnValue(9_001);
-    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
-    vi.mocked(getNavTodaySales)
-      .mockResolvedValueOnce({
-        totalPence: 959_300,
-        txCount: 85,
-        currency: 'GHS',
-        onlineOrdersCount: 0,
-        userRole: 'OWNER',
-      })
-      .mockResolvedValueOnce({
-        totalPence: 1_223_850,
-        txCount: 114,
-        currency: 'GHS',
-        onlineOrdersCount: 0,
-        userRole: 'OWNER',
-      });
-
-    renderDashboard({
-      todayRevenuePence: 959_300,
-      todayTransactionCount: 85,
-    });
-
-    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalledTimes(1));
-
-    act(() => {
-      window.dispatchEvent(new FocusEvent('focus'));
-    });
-
-    await waitFor(() => {
-      expect(getNavTodaySales).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
-    });
-
-    nowSpy.mockRestore();
-  });
-
-  it('refreshes hero live KPIs when the dashboard becomes visible again', async () => {
-    const nowSpy = vi.spyOn(Date, 'now');
-    nowSpy.mockReturnValueOnce(1_000).mockReturnValue(9_001);
-    const { getNavTodaySales } = await import('@/app/actions/nav-kpis');
-    vi.mocked(getNavTodaySales)
-      .mockResolvedValueOnce({
-        totalPence: 959_300,
-        txCount: 85,
-        currency: 'GHS',
-        onlineOrdersCount: 0,
-        userRole: 'OWNER',
-      })
-      .mockResolvedValueOnce({
-        totalPence: 1_223_850,
-        txCount: 114,
-        currency: 'GHS',
-        onlineOrdersCount: 0,
-        userRole: 'OWNER',
-      });
-
-    renderDashboard({
-      todayRevenuePence: 959_300,
-      todayTransactionCount: 85,
-    });
-
-    await waitFor(() => expect(getNavTodaySales).toHaveBeenCalledTimes(1));
-
-    act(() => {
-      Object.defineProperty(document, 'visibilityState', {
-        configurable: true,
-        get: () => 'visible',
-      });
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
-
-    await waitFor(() => {
-      expect(getNavTodaySales).toHaveBeenCalledTimes(2);
-      expect(screen.getByRole('link', { name: /Today's Revenue: GH₵12,238.50/ })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Today's Transactions: 114/ })).toBeInTheDocument();
-    });
-
-    nowSpy.mockRestore();
+    expect(HOME_RESUME_STALE_MS).toBe(20_000);
+    expect(useRouterRefreshOnVisibility).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        staleThresholdMs: HOME_RESUME_STALE_MS,
+        refreshOnMount: false,
+      }),
+    );
   });
 });
 

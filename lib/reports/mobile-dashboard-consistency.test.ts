@@ -6,16 +6,18 @@ const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
 
 describe('Mobile dashboard sales consistency', () => {
-  it('shares getTodayKPIs across nav, operations, and home readiness surfaces', () => {
+  it('shares sales totals: slim Home summary for nav; getTodayKPIs for Command Center / incomplete readiness', () => {
     const navKpis = read('app/actions/nav-kpis.ts');
     const onboarding = read('app/actions/onboarding.ts');
     const commandCenter = read('app/(protected)/reports/command-center/page.tsx');
+    const homeSummary = read('lib/reports/home-performance-kpis.ts');
 
-    expect(navKpis).toContain("import { getTodayKPIs } from '@/lib/reports/today-kpis'");
-    expect(navKpis).toContain('getTodayKPIs(business.id)');
-    expect(navKpis).toContain('totalPence: kpis.totalSalesPence');
-    expect(navKpis).toContain('txCount: kpis.txCount');
+    expect(navKpis).toContain('getHomePerformanceSummary');
+    expect(navKpis).toContain('totalPence: summary.todayRevenuePence');
+    expect(navKpis).toContain('txCount: summary.todayTransactionCount');
+    expect(navKpis).not.toContain('getTodayKPIs');
 
+    expect(homeSummary).toContain('paymentStatus: { notIn: [\'RETURNED\', \'VOID\']');
     expect(onboarding).toContain("import { getTodayKPIs } from '@/lib/reports/today-kpis'");
     expect(onboarding).toContain('getTodayKPIs(business.id)');
     expect(onboarding).toContain('todayRevenuePence: todayKpis?.totalSalesPence ?? 0');
@@ -43,18 +45,18 @@ describe('Mobile dashboard sales consistency', () => {
     expect(readiness).toContain('Today · All branches');
   });
 
-  it('home hero live revenue and transaction stats refresh from the same action as the top nav', () => {
+  it('top nav owns live sales refresh; Home uses SSR / streamed values only', () => {
     const topNav = read('components/TopNav.tsx');
     const readiness = read('components/ReadinessJourney.tsx');
+    const navKpis = read('app/actions/nav-kpis.ts');
 
     expect(topNav).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
     expect(topNav).toContain('const fresh = await getNavTodaySales()');
     expect(topNav).toContain('NAV_KPI_REFRESH_EVENT');
 
-    expect(readiness).toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
-    expect(readiness).toContain('const fresh = await getNavTodaySales()');
-    expect(readiness).toContain('todayRevenuePence: fresh.totalPence');
-    expect(readiness).toContain('todayTransactionCount: fresh.txCount');
+    expect(navKpis).toContain('getHomePerformanceSummary');
+    expect(readiness).not.toContain("import { getNavTodaySales } from '@/app/actions/nav-kpis'");
+    expect(readiness).toContain('TopNav owns live header sales');
     expect(readiness).toContain('displayData');
     expect(readiness).toContain('expectedCashPence');
   });
@@ -97,7 +99,9 @@ describe('Mobile dashboard sales consistency', () => {
     expect(hook).toContain("document.visibilityState === 'visible'");
     expect(hook).toContain("window.addEventListener('focus'");
     expect(hook).toContain("window.addEventListener('pageshow'");
-    // Always refresh on pageshow so Improve Your Records / dashboard stats update after Back.
-    expect(hook).toContain('refresh(true)');
+    // bfcache restores force refresh; normal resumes respect HOME_RESUME_STALE_MS.
+    expect(hook).toContain('event.persisted');
+    expect(hook).toContain('HOME_RESUME_STALE_MS');
+    expect(hook).toContain('resumeRefresh');
   });
 });

@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from '@/components/ToastProvider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ReadinessData } from '@/app/actions/onboarding';
 import { clearSampleData, generateDemoDay } from '@/app/actions/demo-day';
-import { getNavTodaySales } from '@/app/actions/nav-kpis';
 import { formatMoney } from '@/lib/format';
 import { hasPlanAccess } from '@/lib/features';
 import type { ImproveRecordsResult } from '@/lib/improve-records';
@@ -18,7 +17,10 @@ import {
   formatHomeAttentionActionSummary,
 } from '@/lib/home-attention-presentation';
 import BusinessProfileEditor from '@/components/onboarding/BusinessProfileEditor';
-import { useRouterRefreshOnVisibility } from '@/hooks/useRouterRefreshOnVisibility';
+import {
+  HOME_RESUME_STALE_MS,
+  useRouterRefreshOnVisibility,
+} from '@/hooks/useRouterRefreshOnVisibility';
 
 /* ────────────────────────────── Icons ────────────────────────────── */
 const StepIcons: Record<string, React.ReactNode> = {
@@ -542,7 +544,7 @@ function WelcomeDashboard({
   ] as Array<HomeAction | null>).filter((action): action is HomeAction => action !== null);
 
   return (
-    <div className="bg-[#f0f2f5] px-0 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] lg:px-6 lg:pb-8">
+    <div className="bg-[#f0f2f5] px-0 pb-4 lg:px-6 lg:pb-8">
       <div className="lg:mx-auto lg:max-w-[90rem]">
         <div
           className="relative overflow-hidden lg:mt-4 lg:rounded-[1.25rem] lg:shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
@@ -687,13 +689,8 @@ function WelcomeDashboard({
 export default function ReadinessJourney({ initial }: { initial: ReadinessData }) {
   const router = useRouter();
   const [data, setData] = useState(initial);
-  const [liveTodayKpis, setLiveTodayKpis] = useState({
-    todayRevenuePence: initial.todayRevenuePence,
-    todayTransactionCount: initial.todayTransactionCount,
-  });
   const [isBusy, setIsBusy] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const lastLiveKpiRefreshAtRef = useRef(0);
   const { toast: showToast } = useToast();
 
   useEffect(() => {
@@ -702,56 +699,14 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
   useRouterRefreshOnVisibility(router, {
     enabled: data.onboardingComplete,
-    // Improve Your Records must refresh promptly when the owner returns from a task.
     throttleMs: 1_500,
+    staleThresholdMs: HOME_RESUME_STALE_MS,
+    refreshOnMount: false,
   });
 
-  const refreshLiveTodayKpis = useCallback(async (force = false) => {
-    const now = Date.now();
-    if (!force && now - lastLiveKpiRefreshAtRef.current < 8_000) return;
-    lastLiveKpiRefreshAtRef.current = now;
-
-    try {
-      const fresh = await getNavTodaySales();
-      setLiveTodayKpis({
-        todayRevenuePence: fresh.totalPence,
-        todayTransactionCount: fresh.txCount,
-      });
-    } catch {
-      // Keep the readiness snapshot values if the small live KPI refresh fails.
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!data.onboardingComplete) return;
-    // Local Home preview fixtures must keep seeded KPI values for visual QA.
-    if (typeof window !== 'undefined' && window.location.pathname.includes('/dev/owner-home-preview')) {
-      return;
-    }
-
-    void refreshLiveTodayKpis(true);
-
-    const handleFocus = () => void refreshLiveTodayKpis(false);
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') void refreshLiveTodayKpis(false);
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [data.onboardingComplete, initial, refreshLiveTodayKpis]);
-
-  const displayData: ReadinessData = data.onboardingComplete
-    ? {
-        ...data,
-        todayRevenuePence: liveTodayKpis.todayRevenuePence,
-        todayTransactionCount: liveTodayKpis.todayTransactionCount,
-      }
-    : data;
+  // Server-streamed / SSR readiness values are the Home KPI source of truth.
+  // TopNav owns live header sales — Home must not duplicate that client fetch.
+  const displayData = data;
 
   const handleGenerateDemo = async () => {
     setIsBusy(true);
@@ -811,7 +766,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
     const stages = data.stages ?? [];
     return (
       <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
-        <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
+        <div className="mx-auto max-w-xl px-4 py-8 pb-4 sm:py-10">
           <div className="mb-6 text-center">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Ready to sell</p>
             <h1 className="mt-1 text-2xl font-bold text-ink">Ready to sell</h1>
@@ -904,7 +859,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper">
-      <div className="mx-auto max-w-xl px-4 py-8 pb-[calc(var(--mobile-bottom-nav-clearance)+1rem)] sm:py-10">
+      <div className="mx-auto max-w-xl px-4 py-8 pb-4 sm:py-10">
         <div className="mb-5 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Setup</p>
           <h1 className="mt-1 text-2xl font-bold text-ink">{data.activationStatusLabel}</h1>

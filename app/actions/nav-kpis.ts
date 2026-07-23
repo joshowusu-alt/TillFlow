@@ -1,20 +1,23 @@
 'use server';
 
 import { requireBusiness } from '@/lib/auth';
-import { getTodayKPIs } from '@/lib/reports/today-kpis';
+import { getHomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
 import { countOnlineOrdersNeedingAttention } from '@/lib/services/online-orders-attention';
 
-/** Nav/header today sales — same business-wide source as Operations Today and home readiness. */
+/**
+ * Nav/header today sales — slim Home summary for revenue/tx (not full Command Center KPIs).
+ * Online-orders badge remains a separate lightweight count.
+ */
 export async function getNavTodaySales() {
   const { business, user } = await requireBusiness(['CASHIER', 'MANAGER', 'OWNER']);
-  const [kpis, onlineOrdersCount] = await Promise.all([
-    getTodayKPIs(business.id),
+  const [summary, onlineOrdersCount] = await Promise.all([
+    getHomePerformanceSummary(business.id),
     countOnlineOrdersNeedingAttention(business.id).catch(() => 0),
   ]);
 
   return {
-    totalPence: kpis.totalSalesPence,
-    txCount: kpis.txCount,
+    totalPence: summary.todayRevenuePence,
+    txCount: summary.todayTransactionCount,
     currency: business.currency,
     onlineOrdersCount,
     userRole: user.role,

@@ -68,6 +68,54 @@ describe('useRouterRefreshOnVisibility', () => {
     expect(refresh).toHaveBeenCalledTimes(2);
   });
 
+  it('skips resume refresh while within HOME_RESUME_STALE_MS after mount', () => {
+    renderHook(() =>
+      useRouterRefreshOnVisibility(router, {
+        staleThresholdMs: 20_000,
+        refreshOnMount: false,
+        throttleMs: 1_000,
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('refreshes after the stale window elapses', () => {
+    renderHook(() =>
+      useRouterRefreshOnVisibility(router, {
+        staleThresholdMs: 20_000,
+        refreshOnMount: false,
+        throttleMs: 1_000,
+      }),
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(20_000);
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('deduplicates pageshow and visibilitychange in the same resume burst', () => {
+    renderHook(() => useRouterRefreshOnVisibility(router, { throttleMs: 8_000 }));
+
+    act(() => {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false }));
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it('does not attach listeners when disabled', () => {
     const addSpy = vi.spyOn(window, 'addEventListener');
 

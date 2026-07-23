@@ -52,7 +52,7 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
   });
 
   it('uses approved launch timing constants and performance marks', () => {
-    expect(LAUNCH_REDIRECT_DELAY_MS).toBe(160);
+    expect(LAUNCH_REDIRECT_DELAY_MS).toBe(0);
     expect(LAUNCH_COMPLETION_HOLD_MS).toBeLessThan(480);
     expect(LAUNCH_COMPLETION_HOLD_MS).toBe(120);
     expect(LAUNCH_SPLASH_TRANSITION_MS).toBe(180);

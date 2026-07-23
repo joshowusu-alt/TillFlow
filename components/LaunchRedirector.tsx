@@ -42,18 +42,27 @@ export default function LaunchRedirector() {
     let timeoutId: number | null = null;
     let firstFrame = 0;
     let secondFrame = 0;
+    let cancelled = false;
+
+    const startRedirect = () => {
+      if (cancelled) return;
+      markTillflowPerformance('tillflow.launch.redirect.started');
+      router.replace('/onboarding');
+    };
 
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         markTillflowPerformance('tillflow.launch.redirect.scheduled');
-        timeoutId = window.setTimeout(() => {
-          markTillflowPerformance('tillflow.launch.redirect.started');
-          router.push('/onboarding');
-        }, LAUNCH_REDIRECT_DELAY_MS);
+        if (LAUNCH_REDIRECT_DELAY_MS > 0) {
+          timeoutId = window.setTimeout(startRedirect, LAUNCH_REDIRECT_DELAY_MS);
+        } else {
+          startRedirect();
+        }
       });
     });
 
     return () => {
+      cancelled = true;
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
       if (timeoutId) {

@@ -6,10 +6,10 @@ import { requireBusiness } from '@/lib/auth';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import { DEMO_SKUS } from '@/lib/demo-data-constants';
 import {
-  computeActivationForBusiness,
   loadActivationSnapshot,
   persistActivationSnapshot,
 } from '@/lib/activation-snapshot';
+import { computeActivationReadiness } from '@/lib/activation-readiness';
 import type { ActivationStepKey, ActivationStepStatus } from '@/lib/activation-steps';
 import {
   getActivationStatusLabel,
@@ -31,6 +31,8 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import { loadImproveRecordsResult } from '@/lib/improve-records-load';
 import type { ImproveRecordsResult } from '@/lib/improve-records';
 import { getBusinessPlan, type BusinessPlan } from '@/lib/features';
+import { countCommandCenterIssueFlags } from '@/lib/reports/home-issue-count';
+import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 
 export type ReadinessStep = {
   key: ActivationStepKey | string;
@@ -114,15 +116,6 @@ const STEP_ESTIMATED_MINUTES: Record<string, number> = {
   complete: 1,
 };
 
-export async function resolveReadinessExpectedCashPence(input: {
-  openShiftExpectedCashPence: number[];
-}) {
-  if (input.openShiftExpectedCashPence.length > 0) {
-    return input.openShiftExpectedCashPence.reduce((sum, value) => sum + value, 0);
-  }
-  return 0;
-}
-
 /**
  * Owner setup guide — Phase 1 four-stage journey.
  */
@@ -141,8 +134,14 @@ export async function getReadiness(): Promise<ReadinessData> {
 
       const helpHref = getSetupHelpHref();
 
+      // One activation snapshot read for the incomplete journey path.
+      const snapshot = await loadActivationSnapshot(business.id, now);
+      if (!snapshot) {
+        throw new Error('Unable to load setup progress');
+      }
+      const activation = computeActivationReadiness(snapshot);
+
       const [
-        activation,
         todayKpis,
         yesterdaySalesAgg,
         openShifts,
@@ -150,9 +149,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         lastClosedShift,
         lastReceipt,
         seedProductCount,
-        snapshot,
       ] = await Promise.all([
-        computeActivationForBusiness(business.id, now),
         getTodayKPIs(business.id).catch(() => null),
         prisma.salesInvoice.aggregate({
           where: {
@@ -211,14 +208,30 @@ export async function getReadiness(): Promise<ReadinessData> {
           select: { id: true },
         }),
         prisma.product.count({ where: { businessId: business.id, sku: { in: DEMO_SKUS } } }),
-        loadActivationSnapshot(business.id, now),
       ]);
 
-      if (!activation || !snapshot) {
-        throw new Error('Unable to load setup progress');
-      }
+      const storedActivation = await prisma.business.findUnique({
+        where: { id: business.id },
+        select: {
+          activationStatus: true,
+          setupProgressPct: true,
+          activationStuckReason: true,
+          activationNextAction: true,
+        },
+      });
 
-      const synced = await persistActivationSnapshot(business.id, now);
+      const synced = await persistActivationSnapshot(business.id, now, {
+        readiness: activation,
+        snapshot,
+        previousStored: storedActivation
+          ? {
+              activationStatus: storedActivation.activationStatus,
+              setupProgressPct: storedActivation.setupProgressPct,
+              activationStuckReason: storedActivation.activationStuckReason,
+              activationNextAction: storedActivation.activationNextAction,
+            }
+          : null,
+      });
       const setupProgressPercent = synced?.setupProgressPercent ?? activation.setupProgressPercent;
 
       const journey = computeOnboardingJourney({
@@ -280,19 +293,7 @@ export async function getReadiness(): Promise<ReadinessData> {
         (business as { businessCategory?: string | null }).businessCategory ??
         null;
 
-      const openIssueCount = todayKpis
-        ? [
-            todayKpis.stockoutImminentCount > 0,
-            todayKpis.urgentReorderCount > 0,
-            todayKpis.arOver60Pence > 0,
-            todayKpis.outstandingAPPence > 0,
-            todayKpis.cashVarianceTotalPence > 0,
-            todayKpis.momoPendingCount > 0,
-            todayKpis.negativeMarginProductCount > 0,
-            todayKpis.discountOverrideCount > 0,
-            todayKpis.openHighAlerts > 0,
-          ].filter(Boolean).length
-        : 0;
+      const openIssueCount = todayKpis ? countCommandCenterIssueFlags(todayKpis) : 0;
 
       const expectedCashPence = await resolveReadinessExpectedCashPence({
         openShiftExpectedCashPence: openShifts.map((shift) => shift.expectedCashPence),

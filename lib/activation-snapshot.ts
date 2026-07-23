@@ -6,6 +6,7 @@ import {
 } from '@/lib/activation-readiness';
 import type { SubscriptionInput } from '@/lib/subscription-lifecycle';
 import { revalidateTag } from 'next/cache';
+import { markActivationSnapshotRead } from '@/lib/performance/home-perf-instrumentation';
 
 const demoSaleExclusion = {
   OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
@@ -19,6 +20,7 @@ export async function loadActivationSnapshot(
   businessId: string,
   now = new Date()
 ): Promise<ActivationBusinessSnapshot | null> {
+  markActivationSnapshotRead();
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: {
@@ -175,22 +177,59 @@ export async function loadActivationSnapshot(
 
 export async function computeActivationForBusiness(
   businessId: string,
-  now = new Date()
+  now = new Date(),
+  preloadedSnapshot?: ActivationBusinessSnapshot | null
 ): Promise<ActivationReadinessResult | null> {
-  const snapshot = await loadActivationSnapshot(businessId, now);
+  const snapshot =
+    preloadedSnapshot === undefined
+      ? await loadActivationSnapshot(businessId, now)
+      : preloadedSnapshot;
   if (!snapshot) return null;
   return computeActivationReadiness(snapshot);
 }
 
+export type PersistActivationOptions = {
+  /** Reuse an already-loaded snapshot + readiness — avoids duplicate reads. */
+  readiness?: ActivationReadinessResult | null;
+  snapshot?: ActivationBusinessSnapshot | null;
+  /** Persist only when status/pct/stuck/nextAction changed vs last stored values. */
+  previousStored?: {
+    activationStatus: string | null;
+    setupProgressPct: number | null;
+    activationStuckReason: string | null;
+    activationNextAction: string | null;
+  } | null;
+};
+
 export async function persistActivationSnapshot(
   businessId: string,
-  now = new Date()
+  now = new Date(),
+  options?: PersistActivationOptions
 ): Promise<ActivationReadinessResult | null> {
-  const readiness = await computeActivationForBusiness(businessId, now);
+  let snapshot = options?.snapshot ?? null;
+  let readiness = options?.readiness ?? null;
+
+  if (!snapshot) {
+    snapshot = await loadActivationSnapshot(businessId, now);
+  }
+  if (!snapshot) return readiness;
+
+  if (!readiness) {
+    readiness = computeActivationReadiness(snapshot);
+  }
   if (!readiness) return null;
 
-  const snapshot = await loadActivationSnapshot(businessId, now);
-  if (!snapshot) return readiness;
+  const prev = options?.previousStored;
+  const unchanged =
+    prev &&
+    prev.activationStatus === readiness.activationStatus &&
+    prev.setupProgressPct === readiness.setupProgressPercent &&
+    prev.activationStuckReason === readiness.stuckReason &&
+    prev.activationNextAction === readiness.nextAction;
+
+  if (unchanged) {
+    return readiness;
+  }
 
   await prisma.business.update({
     where: { id: businessId },
