@@ -127,7 +127,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen w-full max-w-full">
-      <BusinessNameSaver name={business.name} />
+      <BusinessNameSaver name={business.name} businessId={business.id} />
       <ProtectedBusinessScope businessId={business.id} storeId={store?.id ?? null} />
       <PullToRefresh />
       <TopNav

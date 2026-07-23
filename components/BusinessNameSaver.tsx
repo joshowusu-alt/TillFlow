@@ -1,12 +1,18 @@
 'use client';
-import { useEffect } from 'react';
 
-export default function BusinessNameSaver({ name }: { name: string }) {
+import { useEffect } from 'react';
+import { syncLaunchBusinessIdentity } from '@/lib/launch/business-identity';
+
+export default function BusinessNameSaver({
+  name,
+  businessId,
+}: {
+  name: string;
+  businessId: string;
+}) {
   useEffect(() => {
-    if (name) {
-      localStorage.setItem('tillflow:lastBusinessName', name);
-    }
-  }, [name]);
+    syncLaunchBusinessIdentity(name, businessId);
+  }, [name, businessId]);
 
   return null;
 }

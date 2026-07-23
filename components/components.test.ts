@@ -105,6 +105,13 @@ describe('RootLaunchLoading', () => {
         expect(screen.getByText(ROOT_COLD_START_DETAIL)).toBeInTheDocument();
         expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();
     });
+
+    it('keeps personalised launch copy when a safe business name is cached', async () => {
+        window.localStorage.setItem('tillflow:lastBusinessName', 'EL-SHADDAI');
+        render(React.createElement(RootLaunchLoading));
+        expect(await screen.findByText('Opening EL-SHADDAI...')).toBeInTheDocument();
+        expect(screen.queryByText(ROOT_COLD_START_MESSAGE)).not.toBeInTheDocument();
+    });
 });
 
 describe('AppLaunchLoading', () => {

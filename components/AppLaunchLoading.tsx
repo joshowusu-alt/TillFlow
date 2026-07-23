@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { Logo } from './Logo';
+import {
+  getLaunchCopy,
+  readLaunchBusinessName,
+} from '@/lib/launch/business-identity';
 
 type AppLaunchLoadingProps = {
   businessName?: string | null;
@@ -14,16 +18,6 @@ type AppLaunchLoadingProps = {
 
 const INTERNAL_MESSAGE = 'Loading section...';
 const INTERNAL_DETAIL = 'Please wait while TillFlow gets this section ready.';
-const LAUNCH_MESSAGE = 'Opening your business...';
-const LAUNCH_DETAIL = 'Checking your session and sync status';
-
-function readLastBusinessName() {
-  try {
-    return window.localStorage.getItem('tillflow:lastBusinessName')?.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 function readLaunchMode() {
   try {
@@ -44,36 +38,33 @@ export default function AppLaunchLoading({
   shell = 'content',
   showProgress = true,
 }: AppLaunchLoadingProps) {
-  const [lastBusinessName, setLastBusinessName] = useState<string | null>(businessName?.trim() || null);
+  const allowPersonalOnMount = mode === 'launch' && shell === 'fullscreen';
+  const [lastBusinessName, setLastBusinessName] = useState<string | null>(() =>
+    businessName?.trim() || (allowPersonalOnMount ? readLaunchBusinessName() : null),
+  );
   const [launchMode, setLaunchMode] = useState(false);
-  const shouldReadLaunchSession = mode === 'launch' || shell === 'launch';
+  const shouldReadLaunchSession = mode === 'launch' || shell === 'launch' || shell === 'fullscreen';
 
   useEffect(() => {
     const nextLaunchMode = shouldReadLaunchSession ? readLaunchMode() : false;
     setLaunchMode(nextLaunchMode);
-    setLastBusinessName(
-      businessName?.trim() ||
-      (mode === 'launch' && (nextLaunchMode || shell === 'fullscreen') ? readLastBusinessName() : null)
-    );
+    const allowPersonal =
+      mode === 'launch' && (nextLaunchMode || shell === 'fullscreen');
+    setLastBusinessName(businessName?.trim() || (allowPersonal ? readLaunchBusinessName() : null));
   }, [businessName, mode, shell, shouldReadLaunchSession]);
 
   const fullscreen = shell === 'fullscreen' || (shell === 'launch' && launchMode);
   const useLaunchCopy = mode === 'launch' && (launchMode || shell === 'fullscreen');
-  const cleanBusinessName = (businessName?.trim() || lastBusinessName?.trim()) ?? '';
-  const loadingMessage =
-    message ??
-    (useLaunchCopy
-      ? cleanBusinessName
-        ? `Opening ${cleanBusinessName}...`
-        : LAUNCH_MESSAGE
-      : INTERNAL_MESSAGE);
-  const loadingDetail =
-    detail ??
-    (useLaunchCopy && cleanBusinessName
-      ? "Getting today's sales, stock, and cash ready."
-      : useLaunchCopy
-        ? LAUNCH_DETAIL
-        : INTERNAL_DETAIL);
+  const launchCopy = getLaunchCopy(businessName?.trim() || lastBusinessName);
+
+  // Shared launch contract: never force generic when a safe personalised name exists.
+  // Explicit message/detail only apply for internal mode, or as generic fallback.
+  const loadingMessage = useLaunchCopy
+    ? launchCopy.message
+    : message ?? INTERNAL_MESSAGE;
+  const loadingDetail = useLaunchCopy
+    ? launchCopy.detail
+    : detail ?? INTERNAL_DETAIL;
 
   return (
     <div
@@ -87,8 +78,12 @@ export default function AppLaunchLoading({
         <div className="flex justify-center">
           <Logo variant="lockup" size={42} />
         </div>
-        <p className="mt-6 text-sm font-semibold text-slate-700">{loadingMessage}</p>
-        <p className="mt-1 text-xs text-slate-500">{loadingDetail}</p>
+        <p className="mt-6 text-sm font-semibold text-slate-700" suppressHydrationWarning>
+          {loadingMessage}
+        </p>
+        <p className="mt-1 text-xs text-slate-500" suppressHydrationWarning>
+          {loadingDetail}
+        </p>
 
         {showProgress ? (
           <div className="mx-auto mt-6 h-1 w-40 overflow-hidden rounded-full bg-blue-100" aria-hidden="true">

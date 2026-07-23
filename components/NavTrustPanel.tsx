@@ -1,6 +1,6 @@
 'use client';
 
-import { logout } from '@/app/actions/auth';
+import LogoutForm from '@/components/LogoutForm';
 import { formatMoney } from '@/lib/format';
 import type { TopNavUser } from './TopNav';
 
@@ -46,11 +46,11 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
           </div>
         </div>
 
-        <form action={logout}>
+        <LogoutForm>
           <button type="submit" className="inline-flex h-9 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
             Sign out
           </button>
-        </form>
+        </LogoutForm>
       </div>
 
       {/* Trust panel: compact tablet variant */}
@@ -76,11 +76,11 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         ) : null}
       </div>
 
-      <form action={logout} className="hidden sm:block xl:hidden">
+      <LogoutForm className="hidden sm:block xl:hidden">
         <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
           Sign out
         </button>
-      </form>
+      </LogoutForm>
     </>
   );
 }

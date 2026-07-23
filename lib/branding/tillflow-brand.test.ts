@@ -152,11 +152,11 @@ describe('TillFlow brand logo system', () => {
     expect(launchLoading).toContain('INTERNAL_MESSAGE');
     expect(launchLoading).toContain('const useLaunchCopy');
     expect(launchLoading).toContain("mode === 'launch'");
-    expect(launchLoading).toContain('Opening ${cleanBusinessName}...');
-    expect(launchLoading).toContain('Opening your business...');
-    expect(launchLoading).toContain('Checking your session and sync status');
-    expect(launchLoading).toContain("Getting today's sales, stock, and cash ready.");
-    expect(launchLoading).toContain("window.localStorage.getItem('tillflow:lastBusinessName')");
+    expect(launchLoading).toContain('getLaunchCopy');
+    expect(readSource('lib/launch/business-identity.ts')).toContain('Opening your business...');
+    expect(readSource('lib/launch/business-identity.ts')).toContain('Checking your session and sync status');
+    expect(readSource('lib/launch/business-identity.ts')).toContain("Getting today's sales, stock, and cash ready.");
+    expect(launchLoading).toContain('readLaunchBusinessName');
     expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launching')");
     expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launchSplashSeen')");
     expect(launchLoading).toContain("shell === 'launch' && launchMode");
@@ -194,7 +194,7 @@ describe('TillFlow brand logo system', () => {
     expect(protectedLayout).not.toContain('onlineOrdersCount={');
     expect(protectedLayout).toContain('Suspense fallback={null}');
     expect(protectedLayout).toContain('OwnerSetupBanner');
-    expect(navKpisAction).toContain('getTodayKPIs');
+    expect(navKpisAction).toContain('getHomePerformanceSummary');
     expect(navKpisAction).toContain('countOnlineOrdersNeedingAttention');
     expect(topNav).toContain('setLiveOnlineOrdersCount');
     expect(topNav).toContain('void refreshNavKpis(!todaySales)');
@@ -240,7 +240,8 @@ describe('TillFlow brand logo system', () => {
     expect(mobileMenu).toContain('setMobileOpen(false)');
     expect(mobileMenu).toContain('data-mobile-nav-pending');
     expect(mobileMenu).not.toContain('Opening');
-    expect(topNav).toContain('data-route-transition="true"');
+    expect(topNav).not.toContain('data-route-transition="true"');
+    expect(topNav).not.toContain('fixed inset-0 z-[25] bg-paper');
     expect(mobileMenu).not.toContain('AppLaunchLoading');
     expect(mobileMenu).not.toContain('Opening your business workspace');
     expect(mobileMenu).not.toContain('Today sales · all branches');
@@ -294,17 +295,21 @@ describe('TillFlow brand logo system', () => {
     expect(layout).not.toContain('tillflow-initial-splash');
     expect(layout).not.toContain('SplashRemover');
     expect(rootLaunchLoading).toContain('AppLaunchLoading');
-    expect(rootLaunchLoading).toContain('Opening your business...');
-    expect(rootLaunchLoading).toContain('Checking your session and sync status');
-    expect(businessNameSaver).toContain('tillflow:lastBusinessName');
+    expect(rootLaunchLoading).toContain('ROOT_COLD_START_MESSAGE');
+    expect(rootLaunchLoading).toContain('LAUNCH_GENERIC_MESSAGE');
+    expect(rootLaunchLoading).not.toContain('message={ROOT_COLD_START_MESSAGE}');
+    expect(businessNameSaver).toContain('syncLaunchBusinessIdentity');
+    expect(readSource('lib/launch/business-identity.ts')).toContain('tillflow:lastBusinessName');
     expect(protectedLayout).toContain('BusinessNameSaver');
+    expect(protectedLayout).toContain('businessId={business.id}');
     expect(protectedLayout).toContain('LaunchSessionCompletion');
     expect(protectedLayout).toContain('requireBusinessAndOptionalStore');
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).toContain('ReadinessJourney');
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(posPage).toContain('LaunchSessionCompletion');
-    expect(posPage).toContain('PosWelcomeShelf');
+    expect(posPage).toContain('PosProgressiveShell');
+    expect(readSource('app/(protected)/pos/PosDeferredSection.tsx')).toContain('PosWelcomeShelf');
     expect(launchSessionCompletion).toContain('protected shell');
     expect(launchSessionCompletion).toContain('not after the full readiness body');
     expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
@@ -327,15 +332,12 @@ describe('TillFlow brand logo system', () => {
     expect(launchPage).toContain('/brand/tillflow-logo-blue.png');
     expect(launchPage).toContain('LaunchRedirector');
     expect(launchPage).not.toContain('Opening TillFlow');
-    expect(launchRedirector).toContain('tillflow:lastBusinessName');
+    expect(launchRedirector).toContain('getLaunchCopy');
     expect(launchRedirector).toContain("window.sessionStorage.setItem('tillflow:launching', '1')");
     expect(launchRedirector).toContain("window.sessionStorage.removeItem('tillflow:launchSplashSeen')");
-    expect(launchRedirector).toContain('Opening ${cleanName}...');
-    expect(launchRedirector).toContain('Opening your business workspace...');
-    expect(launchRedirector).toContain("Getting today's sales, stock, and cash ready.");
-    expect(launchRedirector).toContain('Getting sales, stock, and cash ready.');
+    expect(launchRedirector).not.toContain('Opening your business workspace');
     expect(launchRedirector).not.toContain("window.location.replace");
-    expect(launchRedirector).toContain("router.push('/onboarding')");
+    expect(launchRedirector).toContain("router.replace('/onboarding')");
     expect(launchRedirector).toContain("useRouter");
     expect(launchRedirector).toContain('requestAnimationFrame');
     expect(launchRedirector).not.toContain('Opening TillFlow');
@@ -350,13 +352,17 @@ describe('TillFlow brand logo system', () => {
       readSource('components/RootLaunchLoading.tsx'),
       readSource('components/AppLaunchLoading.tsx'),
       readSource('components/BusinessNameSaver.tsx'),
+      readSource('lib/launch/business-identity.ts'),
     ].join('\n');
 
     expect(sources).toContain('tillflow:launching');
     expect(sources).toContain('tillflow:launchSplashSeen');
     expect(sources).toContain('tillflow:lastBusinessName');
     expect(sources).toContain('sessionStorage');
-    expect(readSource('components/BusinessNameSaver.tsx')).toContain("localStorage.setItem('tillflow:lastBusinessName'");
+    expect(readSource('lib/launch/business-identity.ts')).toContain('localStorage.setItem(LAUNCH_BUSINESS_NAME_KEY');
+    expect(readSource('components/BusinessNameSaver.tsx')).toContain('syncLaunchBusinessIdentity');
+    expect(readSource('components/LogoutForm.tsx')).toContain('clearLaunchBusinessIdentity');
+    expect(readSource('app/(auth)/login/page.tsx')).toContain('ClearLaunchIdentityOnAuthEntry');
     expect(sources).not.toContain("localStorage.setItem('tillflow:launchSplashSeen'");
     expect(sources).not.toContain("localStorage.getItem('tillflow:launchSplashSeen'");
     expect(sources).not.toContain('Preparing your dashboard');
