@@ -419,19 +419,29 @@ export default function PosClient({
     }
   }, [lastReceiptStorageKey, setLastReceiptId]);
 
-  // Restore saved till from localStorage on mount (skipped when URL param already set)
+  // Resolve till selection when deferred tills/shifts arrive (or on remount).
+  // Progressive POS starts with empty tills, so the initial useState fallback
+  // cannot pick tills[0] until checkout extras are applied.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (tills.length === 0) return;
+
     const urlTillId = searchParams?.get('tillId');
-    if (urlTillId) return; // URL param takes precedence
-    if (
-      business.requireOpenTillForSales &&
-      openShiftTillIds.length === 1 &&
-      tills.some((t) => t.id === openShiftTillIds[0])
-    ) {
-      setTillId(openShiftTillIds[0]);
+    if (urlTillId && tills.some((t) => t.id === urlTillId)) {
+      setTillId(urlTillId);
       return;
     }
+
+    const singleOpenTillId =
+      openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])
+        ? openShiftTillIds[0]
+        : '';
+
+    if (business.requireOpenTillForSales && singleOpenTillId) {
+      setTillId(singleOpenTillId);
+      return;
+    }
+
     const saved = window.localStorage.getItem(tillStorageKey);
     if (
       saved &&
@@ -439,9 +449,27 @@ export default function PosClient({
       (!business.requireOpenTillForSales || openShiftTillIds.includes(saved))
     ) {
       setTillId(saved);
+      return;
     }
+
+    setTillId((current) => {
+      if (current && tills.some((t) => t.id === current)) {
+        if (!business.requireOpenTillForSales || openShiftTillIds.includes(current)) {
+          return current;
+        }
+      }
+      if (singleOpenTillId) return singleOpenTillId;
+      if (!business.requireOpenTillForSales) return tills[0]?.id ?? '';
+      const firstOpen = openShiftTillIds.find((id) => tills.some((t) => t.id === id));
+      return firstOpen ?? '';
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tillStorageKey, business.requireOpenTillForSales, openShiftTillIds.join('|')]);
+  }, [
+    tillStorageKey,
+    business.requireOpenTillForSales,
+    openShiftTillIds.join('|'),
+    tills.map((t) => t.id).join('|'),
+  ]);
 
   // Persist till selection to localStorage whenever it changes
   useEffect(() => {
@@ -885,9 +913,11 @@ export default function PosClient({
   //   const momoReady = !needsMomoConfirmation || momoConfirmed;
   const momoReady = true;
   const checkoutLoading = !checkoutExtrasReady && !checkoutUnavailable;
+  const tillSelected = Boolean(tillId) && tills.some((t) => t.id === tillId);
   const tillReady =
     checkoutExtrasReady &&
     !checkoutUnavailable &&
+    tillSelected &&
     (!business.requireOpenTillForSales || openShiftTillIds.includes(tillId));
   const canSubmit = Boolean(
     checkoutExtrasReady &&
@@ -920,6 +950,8 @@ export default function PosClient({
     }
     if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
       issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
+    } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
+      issues.push({ tone: 'warning', message: 'Preparing checkout…' });
     } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
       issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
     }
@@ -933,7 +965,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
     }
     return issues;
-  }, [checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady, tills.length]);
+  }, [checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady, tillSelected, tills.length]);
   const confidenceTone = !cart.length
     ? 'neutral'
     : canSubmit
