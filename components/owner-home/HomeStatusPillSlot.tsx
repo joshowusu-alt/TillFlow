@@ -28,7 +28,11 @@ export default async function HomeStatusPillSlot({
   ]);
 
   if (attentionResult.status === 'rejected') {
+    console.error('[home.status-pill] attention data failed to load', attentionResult.reason);
     return <HomeStatusUnavailable />;
+  }
+  if (improveResult.status === 'rejected') {
+    console.error('[home.status-pill] improve-records data failed to load', improveResult.reason);
   }
 
   const attention = attentionResult.value;

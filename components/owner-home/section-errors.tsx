@@ -3,18 +3,45 @@
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 
-function RetryButton({ label = 'Try again' }: { label?: string }) {
+/**
+ * Home retry control. `tone="onDark"` is required on the hero gradient card —
+ * the default (light-surface) tone is unreadable there, which previously made
+ * retry effectively invisible on "Could not load today's figures".
+ */
+function RetryButton({
+  label = 'Try again',
+  tone = 'light',
+}: {
+  label?: string;
+  tone?: 'light' | 'onDark';
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  const toneClasses =
+    tone === 'onDark'
+      ? 'border-white/40 bg-white/15 text-white hover:bg-white/25 focus-visible:outline-white'
+      : 'border-black/10 bg-white text-accent hover:bg-accentSoft focus-visible:outline-accent';
 
   return (
     <button
       type="button"
       disabled={pending}
       onClick={() => startTransition(() => router.refresh())}
-      className="mt-2 text-xs font-semibold text-accent hover:text-accent/80 disabled:opacity-50"
+      aria-label={pending ? 'Retrying…' : `${label} — reload this section`}
+      className={`mt-2.5 inline-flex min-h-8 items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${toneClasses}`}
     >
-      {pending ? 'Refreshing…' : label}
+      {pending ? (
+        <>
+          <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Refreshing…
+        </>
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -35,7 +62,7 @@ export function HomePerformanceUnavailable() {
         <p className="mt-0.5 text-[11px] text-blue-100/70">
           Open POS still works. Pull to refresh or try again.
         </p>
-        <RetryButton />
+        <RetryButton tone="onDark" />
       </div>
     </div>
   );

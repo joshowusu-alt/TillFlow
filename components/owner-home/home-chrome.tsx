@@ -220,8 +220,7 @@ export function HomeActionCard({
   );
 }
 
-export function getStatValueSize(value: string, primary: boolean) {
-  if (value.length > 11) return primary ? 'text-sm sm:text-sm lg:text-base' : 'text-xs sm:text-sm lg:text-base';
-  if (value.length > 8) return primary ? 'text-base sm:text-lg lg:text-lg' : 'text-sm lg:text-lg';
-  return primary ? 'text-xl sm:text-2xl lg:text-2xl' : 'text-base sm:text-lg lg:text-2xl';
-}
+// getStatValueSize moved to lib/owner-home/stat-value-size.ts — it is a plain
+// function called from the Server Component HomePerformanceSlot, and every
+// export of a 'use client' module (this file) becomes a client reference,
+// which is not callable directly from server-rendered code.

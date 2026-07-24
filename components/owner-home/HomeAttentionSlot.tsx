@@ -21,7 +21,8 @@ export default async function HomeAttentionSlot({
   let data: OwnerHomeAttentionData;
   try {
     data = await attentionPromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.attention] failed to load today\'s attention items', error);
     return <HomeAttentionUnavailable />;
   }
   const canAccessReorder = hasPlanAccess(plan, 'GROWTH');

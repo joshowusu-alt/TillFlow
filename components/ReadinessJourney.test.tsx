@@ -383,8 +383,8 @@ describe('ReadinessJourney home stats', () => {
     });
 
     expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('4 actions need attention today');
-    expect(screen.getAllByText('4 actions need attention today.')).toHaveLength(1); // Today's attention only
+    expect(screen.getByRole('status')).toHaveTextContent('4 areas need your attention today');
+    expect(screen.getAllByText('4 areas need your attention today.')).toHaveLength(1); // Today's attention only
     expect(screen.getByText(/85 sales in this open shift/)).toBeInTheDocument();
     expect(screen.getByText(/Supplier payments due/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /4 issues in Command Center/i })).toBeInTheDocument();
@@ -535,8 +535,8 @@ describe('Owner Home Phase 1 control centre', () => {
     });
 
     expect(screen.getAllByRole('region', { name: /Today'?s attention/i })).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('4 actions need attention today');
-    expect(screen.getAllByText('4 actions need attention today.')).toHaveLength(1); // attention line only — pill is the sole hero summary
+    expect(screen.getByRole('status')).toHaveTextContent('4 areas need your attention today');
+    expect(screen.getAllByText('4 areas need your attention today.')).toHaveLength(1); // attention line only — pill is the sole hero summary
     expect(screen.getByRole('link', { name: /Close Shift/i })).toHaveAttribute('href', '/shifts');
     expect(screen.getByText(/Open since .+ · 3 sales in this open shift/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /5 issues in Command Center/i })).toHaveAttribute(
@@ -563,8 +563,8 @@ describe('Owner Home Phase 1 control centre', () => {
 
     expect(screen.queryByRole('link', { name: /Reorder needed/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /1 issue in Command Center/i })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('1 action needs attention today');
-    expect(screen.getAllByText('1 action needs attention today.')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('1 area needs your attention today');
+    expect(screen.getAllByText('1 area needs your attention today.')).toHaveLength(1);
   });
 
   it('shows a quiet attention state without All systems active when records need work', () => {
@@ -669,8 +669,8 @@ describe('Owner Home Phase 1 control centre', () => {
       overdueSupplierInvoiceCount: 1,
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('3 actions need attention today');
-    expect(screen.getAllByText('3 actions need attention today.')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('3 areas need your attention today');
+    expect(screen.getAllByText('3 areas need your attention today.')).toHaveLength(1);
     const tagline = screen.getByText('Secure. Reliable. Built for Ghanaian businesses.');
     expect(tagline).toHaveClass('text-center');
     expect(container.textContent?.trim().endsWith('Secure. Reliable. Built for Ghanaian businesses.')).toBe(

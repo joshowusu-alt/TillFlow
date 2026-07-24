@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { formatMoney } from '@/lib/format';
 import type { HomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
-import { getStatValueSize } from '@/components/owner-home/home-chrome';
+import { getStatValueSize } from '@/lib/owner-home/stat-value-size';
 import { HomePerformanceUnavailable } from '@/components/owner-home/section-errors';
 
 export default async function HomePerformanceSlot({
@@ -16,7 +16,8 @@ export default async function HomePerformanceSlot({
   let data: HomePerformanceSummary;
   try {
     data = await performancePromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.performance] failed to load today\'s figures', error);
     return <HomePerformanceUnavailable />;
   }
 

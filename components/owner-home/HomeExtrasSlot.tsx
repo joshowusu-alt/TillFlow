@@ -15,7 +15,8 @@ export async function HomeLastCloseSlot({
   let extras: OwnerHomeExtrasData;
   try {
     extras = await extrasPromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.last-close] failed to load last-close data', error);
     return <HomeLastCloseUnavailable />;
   }
   const lastCloseText = extras.lastShiftClosedAt
@@ -40,7 +41,8 @@ export default async function HomeExtrasSlot({
   let extras: OwnerHomeExtrasData;
   try {
     extras = await extrasPromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.extras] failed to load extras data', error);
     return <HomeExtrasUnavailable />;
   }
   const isNewAccount = saleCount < 10;

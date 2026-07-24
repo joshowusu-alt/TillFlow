@@ -18,10 +18,10 @@ describe('home attention presentation', () => {
       canAccessReorder: true,
     };
     expect(countHomeAttentionActions(flags)).toBe(3);
-    expect(formatHomeAttentionActionSummary(3)).toBe('3 actions need attention today.');
+    expect(formatHomeAttentionActionSummary(3)).toBe('3 areas need your attention today.');
     expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Command Center');
     expect(formatHeroAttentionSubtitle({ actionCount: 3, hasRecordImprovements: true })).toBe(
-      '3 actions need attention today.'
+      '3 areas need your attention today.'
     );
   });
 
@@ -35,7 +35,7 @@ describe('home attention presentation', () => {
         canAccessReorder: true,
       })
     ).toBe(1);
-    expect(formatHomeAttentionActionSummary(1)).toBe('1 action needs attention today.');
+    expect(formatHomeAttentionActionSummary(1)).toBe('1 area needs your attention today.');
     expect(formatHeroStatusPill({ actionCount: 1, openShiftCount: 1, hasRecordImprovements: false })).toBe(
       'Your open shift needs closing'
     );
@@ -73,8 +73,25 @@ describe('home attention presentation', () => {
       canAccessReorder: true,
     });
     expect(actionCount).toBe(1);
-    expect(formatHomeAttentionActionSummary(actionCount)).toBe('1 action needs attention today.');
+    expect(formatHomeAttentionActionSummary(actionCount)).toBe('1 area needs your attention today.');
     expect(formatCommandCenterActionLabel(5)).toBe('5 issues in Command Center');
+  });
+
+  it('"areas" wording never overstates a bundled Command Center issue count as a flat total', () => {
+    // 1 Home "area" (Command Center) can bundle many underlying issues — the
+    // summary must say "1 area", not "1 action"/"1 issue", to avoid implying
+    // there is exactly one problem when there may be several.
+    const flags = {
+      openShiftCount: 0,
+      openIssueCount: 4,
+      reorderNeededCount: 0,
+      overdueSupplierInvoiceCount: 0,
+      canAccessReorder: true,
+    };
+    const actionCount = countHomeAttentionActions(flags);
+    expect(actionCount).toBe(1);
+    expect(formatHomeAttentionActionSummary(actionCount)).toBe('1 area needs your attention today.');
+    expect(formatCommandCenterActionLabel(flags.openIssueCount)).toBe('4 issues in Command Center');
   });
 
   it('formats Close Shift copy for today, previous day, zero sales, and missing open time', () => {

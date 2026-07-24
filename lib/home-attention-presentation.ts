@@ -21,10 +21,17 @@ export function countHomeAttentionActions(flags: HomeAttentionFlags): number {
   return count;
 }
 
+/**
+ * actionCount is a count of distinct attention *categories* (open shift,
+ * Command Center issues, reorder, overdue suppliers) — not individual issues.
+ * One category (Command Center) can itself bundle several issues, so the
+ * copy says "areas", never "issues" or "actions", to avoid implying the
+ * number is a flat issue tally.
+ */
 export function formatHomeAttentionActionSummary(actionCount: number): string {
   if (actionCount <= 0) return 'No urgent issues need your attention today.';
-  if (actionCount === 1) return '1 action needs attention today.';
-  return `${actionCount} actions need attention today.`;
+  if (actionCount === 1) return '1 area needs your attention today.';
+  return `${actionCount} areas need your attention today.`;
 }
 
 export function formatHeroAttentionSubtitle(input: {

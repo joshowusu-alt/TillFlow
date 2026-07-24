@@ -22,8 +22,9 @@ export default class HomeSectionErrorBoundary extends Component<Props, State> {
     return { hasError: true };
   }
 
-  componentDidCatch() {
-    // Intentionally no owner-facing detail; server logs may still capture RSC errors.
+  componentDidCatch(error: Error) {
+    // No owner-facing detail is rendered — log server/browser-side so failures are diagnosable.
+    console.error(`[home.section-error-boundary] section="${this.props.section ?? 'unknown'}" render failed`, error);
   }
 
   render() {

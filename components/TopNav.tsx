@@ -49,6 +49,9 @@ export default function TopNav({
   onlineOrdersCount?: number;
 }){
   const pathname = usePathname() ?? '';
+  // '/onboarding' is Home once setup is complete (and the Setup Guide entry point
+  // beforehand). Either way it should read as "Home" here, not "Admin".
+  const isHomeRoute = pathname === '/onboarding';
   const features = getFeatures(plan ?? 'STARTER', storeMode ?? 'SINGLE_STORE', { onlineStorefront: addonOnlineStorefront });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -244,9 +247,23 @@ export default function TopNav({
               }
             }}
           >
+            {user.role === 'OWNER' ? (
+              <Link
+                href="/onboarding"
+                aria-current={isHomeRoute ? 'page' : undefined}
+                className={isHomeRoute ? 'shell-nav-trigger shell-nav-trigger-active' : 'shell-nav-trigger'}
+              >
+                Home
+              </Link>
+            ) : null}
             {visibleGroups.map((group) => {
+              // '/onboarding' also lives under Admin > Setup Guide for discoverability,
+              // but it renders as Home once setup is complete — the dedicated Home link
+              // above owns the active state for it so Admin does not also light up.
               const isActive = group.items.some(
-                (item) => pathname === item.href || pathname.startsWith(item.href + '/')
+                (item) =>
+                  item.href !== '/onboarding' &&
+                  (pathname === item.href || pathname.startsWith(item.href + '/'))
               );
               const groupHasOnlineOrders = group.items.some((i) => i.href === '/online-orders');
               const showGroupBadge = groupHasOnlineOrders && liveOnlineOrdersCount > 0;
