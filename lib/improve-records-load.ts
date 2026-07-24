@@ -7,6 +7,14 @@
  * stocked if ANY store has an InventoryBalance row. Multi-branch: stocking at
  * any valid branch prevents “never stocked” classification. The UI does not
  * name a branch because the signal is business-scoped.
+ *
+ * Two mutually exclusive no-balance buckets (same candidate query):
+ * - genuine-gap → Home “confirmed stock quantity” wording (recent and/or sold)
+ * - unused-catalogue → Home “no confirmed stock quantity and no sales” wording
+ *   (aged > UNUSED_CATALOGUE_AGE_DAYS, never sold, no confirmed quantity history)
+ *
+ * Confirmed-zero stock (InventoryBalance with qty 0) is NOT a candidate — the
+ * product already has a balance row.
  */
 
 import { prisma } from '@/lib/prisma';

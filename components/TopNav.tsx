@@ -19,6 +19,7 @@ import NavMobileMenu from './NavMobileMenu';
 import NavIcon from './navigation/NavIcon';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
 import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
+import { mobileReportingScopeLabel } from '@/lib/navigation/mobile-scope-label';
 
 export type TopNavUser = {
   name: string;
@@ -115,6 +116,13 @@ export default function TopNav({
 
   const showMobileSalesPulse = Boolean(liveTodaySales) && !pathname.startsWith('/onboarding');
   const mobileSales = showMobileSalesPulse ? liveTodaySales : undefined;
+  // Home KPIs are always business-wide. Never show the operational store name
+  // as if it filtered Home ("Main Branch" beside "Today · All branches").
+  const mobileScopeLabel = mobileReportingScopeLabel({
+    pathname,
+    storeName,
+    showingBusinessWideSalesPulse: Boolean(mobileSales),
+  });
 
   useEffect(() => {
     setLiveTodaySales(todaySales);
@@ -503,9 +511,16 @@ export default function TopNav({
 
         <div className="border-t border-slate-200/60 bg-white/80 px-4 py-2 lg:hidden sm:px-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="metric-chip">
+            <span
+              className="metric-chip"
+              title={
+                mobileScopeLabel === 'All branches'
+                  ? 'Figures shown in this header are across all branches'
+                  : 'Operational branch for this session'
+              }
+            >
               <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-              {mobileSales ? 'All branches' : (storeName || 'Main branch')}
+              {mobileScopeLabel}
             </span>
             <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
               {isOnline ? 'Sync ready' : 'Offline mode'}

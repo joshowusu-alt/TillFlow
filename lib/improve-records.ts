@@ -7,6 +7,7 @@
 import type { OpeningBalancesStatus } from '@/lib/opening-balances-status';
 import { openingBalancesNeedsAttention } from '@/lib/opening-balances-status';
 import { IMPROVE_RECORDS_ISSUE_DEFS } from '@/lib/improve-records-issues';
+import { UNUSED_CATALOGUE_AGE_DAYS } from '@/lib/improve-records-constants';
 
 export type ImproveRecordsRole = 'OWNER' | 'MANAGER' | 'CASHIER';
 export type ImproveRecordsPlan = 'STARTER' | 'GROWTH' | 'PRO';
@@ -224,7 +225,11 @@ export function buildImproveRecordsCandidates(
     items.push({
       key: 'unused-catalogue',
       title: 'Review unused catalogue products',
-      explanation: `${n} product${n === 1 ? ' has' : 's have'} never been stocked or sold. Confirm whether you still intend to carry ${n === 1 ? 'it' : 'them'}.`,
+      // Wording matches the proven loader rule: active + priced + no InventoryBalance
+      // anywhere + no confirmed quantity history + no non-voided sales + older than
+      // UNUSED_CATALOGUE_AGE_DAYS. Do not say "never stocked" alone — that overclaims
+      // relative to "no confirmed stock quantity recorded".
+      explanation: `${n} active product${n === 1 ? '' : 's'} older than ${UNUSED_CATALOGUE_AGE_DAYS} days ${n === 1 ? 'has' : 'have'} no confirmed stock quantity and no sales. Confirm whether you still intend to carry ${n === 1 ? 'it' : 'them'}.`,
       actionLabel: 'Review catalogue',
       href: IMPROVE_RECORDS_ISSUE_DEFS.UNUSED_CATALOGUE.href,
       priority: 45,

@@ -48,6 +48,17 @@ describe('classifyNoBalanceProduct', () => {
     ).toBe('unused-catalogue');
   });
 
+  it('keeps confirmed-zero / balance-present products out of this classifier entirely', () => {
+    // InventoryBalance rows (including qty 0) are excluded by the loader candidate query
+    // (inventoryBalances: { none: {} }). This classifier only sees no-balance products.
+    expect(
+      classifyNoBalanceProduct(
+        { createdAt: aged, hasSales: false, hasConfirmedQuantityHistory: false },
+        now
+      )
+    ).not.toBe('exclude');
+  });
+
   it('uses the named age threshold', () => {
     const cutoff = catalogueCutoffDate(now);
     const justInside = new Date(cutoff.getTime() + 60_000);

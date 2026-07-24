@@ -38,7 +38,8 @@ describe('Mobile dashboard sales consistency', () => {
 
     expect(commandCenter).toContain('All branches');
     expect(commandCenter).not.toContain("store?.name ?? 'Main branch'");
-    expect(topNav).toContain("mobileSales ? 'All branches'");
+    expect(topNav).toContain('mobileReportingScopeLabel');
+    expect(topNav).toContain('mobileScopeLabel');
     expect(mobileMenu).not.toContain('Today sales · all branches');
     expect(mobileMenu).not.toContain('Transactions · all branches');
     expect(mobileMenu).toContain('Quick actions');
