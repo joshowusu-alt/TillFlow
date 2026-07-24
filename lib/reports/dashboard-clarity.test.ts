@@ -305,6 +305,8 @@ describe('Reports navigation clarity', () => {
     expect(styles).toContain('.shell-nav-card-link');
     expect(styles).toContain('.shell-nav-icon-badge');
     expect(styles).toContain('.shell-nav-trigger-active:hover');
+    // Home is an <a>; group labels are <button>. Shared flex centering keeps text baselines aligned.
+    expect(styles).toMatch(/\.shell-nav-trigger\s*\{[\s\S]*?inline-flex[\s\S]*?items-center/);
     expect(styles).toContain('text-blue-900');
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)');
   });

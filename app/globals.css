@@ -627,7 +627,9 @@ html:has(input:focus, textarea:focus, select:focus) .safe-floating-bottom {
   }
 
   .shell-nav-trigger {
-    @apply h-9 rounded-xl px-3 py-0 text-sm font-semibold text-gray-600;
+    /* inline-flex + items-center keeps <a Home> and <button> group labels on the
+       same vertical centre — links were display:block and sat high in the pill. */
+    @apply inline-flex h-9 items-center justify-center rounded-xl px-3 py-0 text-sm font-semibold leading-none text-gray-600;
     transition: color var(--motion-fast) ease, background-color var(--motion-fast) ease, box-shadow var(--motion-base) var(--ease-executive), transform var(--motion-fast) ease;
   }
 
