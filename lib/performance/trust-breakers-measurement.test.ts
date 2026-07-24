@@ -18,8 +18,7 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
 
   it('instruments protected layout auth and store gates', () => {
     expect(layout).toContain('app.protected.layout-gate');
-    expect(layout).toContain('app.protected.require-business');
-    expect(layout).toContain('app.protected.first-store');
+    expect(layout).toContain('requireBusinessAndOptionalStore');
     expect(layout).toContain('measureServerOperation');
   });
 
@@ -41,34 +40,37 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
 
     expect(launchCompletion).toContain('markTillflowPerformance');
     expect(launchCompletion).toContain("'tillflow.launch.completion.mounted'");
-    expect(launchCompletion).toContain("'tillflow.launch.splash.remove.started'");
-    expect(launchCompletion).toContain("'tillflow.launch.splash.removed'");
+    expect(launchCompletion).toContain("'tillflow.launch.handoff.completed'");
     expect(launchCompletion).toContain('LAUNCH_COMPLETION_HOLD_MS');
     expect(launchCompletion).not.toContain(', 480');
 
     expect(onboardingClient).toContain("'tillflow.launch.protected-content.mounted'");
   });
 
-  it('instruments POS data stages while preserving Promise.all parallelism', () => {
-    expect(posPage).toContain('page.pos.total-load');
-    expect(posPage).toContain('page.pos.initial-data-load');
-    expect(posPage).toContain('page.pos.tills-load');
-    expect(posPage).toContain('page.pos.shifts-load');
-    expect(posPage).toContain('page.pos.inventory-load');
-    expect(posPage).toContain('page.pos.products-load');
-    expect(posPage).toContain('page.pos.units-load');
-    expect(posPage).toContain('page.pos.categories-load');
-    expect(posPage).toContain('page.pos.customers-load');
-    expect(posPage).toContain('page.pos.requested-customer-load');
-    expect(posPage).toContain('page.pos.open-shift-load');
-    expect(posPage).toContain('page.pos.dto-map');
+  it('instruments POS critical then deferred data stages', () => {
+    const board = read('app/(protected)/pos/PosBoard.tsx');
+    const deferred = read('app/(protected)/pos/PosDeferredSection.tsx');
+    expect(board).toContain('page.pos.total-load');
+    expect(board).toContain('page.pos.initial-data-load');
+    expect(board).toContain('page.pos.inventory-load');
+    expect(board).toContain('page.pos.products-load');
+    expect(board).toContain('page.pos.dto-map');
+    expect(deferred).toContain('page.pos.deferred-data-load');
+    expect(deferred).toContain('page.pos.tills-load');
+    expect(deferred).toContain('page.pos.shifts-load');
+    expect(deferred).toContain('page.pos.units-load');
+    expect(deferred).toContain('page.pos.categories-load');
+    expect(deferred).toContain('page.pos.customers-load');
+    expect(deferred).toContain('page.pos.open-shift-load');
 
-    const initialLoadBlock = posPage.slice(
-      posPage.indexOf('page.pos.initial-data-load'),
-      posPage.indexOf('page.pos.open-shift-load'),
+    const initialLoadBlock = board.slice(
+      board.indexOf('page.pos.initial-data-load'),
+      board.indexOf('page.pos.dto-map'),
     );
     expect(initialLoadBlock).toContain('Promise.all([');
-    expect(initialLoadBlock).not.toMatch(/await measurePosFetch[\s\S]*await measurePosFetch/);
+    expect(initialLoadBlock).toContain('page.pos.products-load');
+    expect(initialLoadBlock).toContain('page.pos.inventory-load');
+    expect(initialLoadBlock).not.toContain('page.pos.customers-load');
   });
 
   it('does not change checkout, sale creation, cache TTLs, or schema', () => {
@@ -79,7 +81,9 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
 
     expect(posPage).toContain("{ revalidate: 60, tags: ['pos-products'] }");
     expect(posPage).toContain("{ revalidate: 30, tags: ['pos-inventory'] }");
-    expect(posPage).toContain("{ revalidate: 10, tags: ['pos-shifts'] }");
+    expect(read('app/(protected)/pos/PosDeferredSection.tsx')).toContain(
+      "{ revalidate: 10, tags: ['pos-shifts'] }",
+    );
 
     expect(read('prisma/schema.prisma')).toMatch(/provider\s+=\s+"sqlite"/);
     expect(read('prisma/schema.postgres.prisma')).toMatch(/provider\s+=\s+"postgresql"/);

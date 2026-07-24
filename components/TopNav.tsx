@@ -501,16 +501,16 @@ export default function TopNav({
           ) : null}
         </div>
         {pendingMobileHref ? (
-          <div
-            className="h-1 overflow-hidden bg-blue-50 lg:hidden"
-            role="status"
-            aria-live="polite"
-            aria-label="Loading selected section"
-            data-mobile-route-progress="true"
-          >
-            <div className="h-full w-1/2 rounded-r-full bg-gradient-to-r from-blue-700 via-blue-400 to-blue-700 bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none" />
-          </div>
-        ) : null}
+        <div
+          className="h-1 overflow-hidden bg-blue-50 lg:hidden"
+          role="status"
+          aria-live="polite"
+          aria-label="Loading selected section"
+          data-mobile-route-progress="true"
+        >
+          <div className="h-full w-1/2 rounded-r-full bg-gradient-to-r from-blue-700 via-blue-400 to-blue-700 bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none" />
+        </div>
+      ) : null}
       </header>
 
       <NavMobileMenu
@@ -529,13 +529,6 @@ export default function TopNav({
         onlineOrdersCount={liveOnlineOrdersCount}
         momoEnabled={momoEnabled !== false}
       />
-      {pendingMobileHref ? (
-        <div
-          aria-hidden="true"
-          data-route-transition="true"
-          className="fixed inset-0 z-[25] bg-paper lg:hidden"
-        />
-      ) : null}
     </>
   );
 }

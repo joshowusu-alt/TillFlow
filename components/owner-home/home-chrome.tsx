@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState, useTransition } from 'react';
 
 export type HomeAction = {
   label: string;
@@ -150,16 +153,34 @@ export function HomeActionCard({
   className?: string;
   compact?: boolean;
 }) {
+  const [pending, setPending] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const showPending = pending || isPending;
+  const isPos = action.href === '/pos' || action.href.startsWith('/pos?');
+
+  useEffect(() => {
+    if (!showPending) return;
+    const timer = window.setTimeout(() => setPending(false), 8_000);
+    return () => window.clearTimeout(timer);
+  }, [showPending]);
+
   return (
     <Link
       href={action.href}
+      prefetch={isPos ? true : undefined}
+      aria-busy={showPending || undefined}
+      data-nav-pending={showPending ? 'true' : undefined}
+      onClick={() => {
+        setPending(true);
+        startTransition(() => undefined);
+      }}
       className={`group relative flex items-center gap-4 rounded-2xl px-4 py-4 shadow-sm transition hover:-translate-y-0.5 active:scale-[0.985] ${
         action.primary
           ? 'bg-accent text-white shadow-md shadow-accent/25 hover:shadow-xl hover:shadow-accent/30 lg:bg-gradient-to-r lg:from-accent lg:to-blue-600'
           : action.urgent
             ? 'border border-amber-200 bg-amber-50 text-ink hover:border-amber-300'
             : 'border border-black/[0.06] bg-white text-ink hover:border-black/10 hover:shadow-md'
-      } ${compact ? 'px-3.5 py-3.5' : ''} ${className}`}
+      } ${compact ? 'px-3.5 py-3.5' : ''} ${showPending ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-transparent' : ''} ${className}`}
     >
       <div
         className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition ${
@@ -173,19 +194,21 @@ export function HomeActionCard({
         {action.icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-bold ${action.primary ? 'text-white' : 'text-ink'}`}>{action.label}</p>
+        <p className={`text-sm font-bold ${action.primary ? 'text-white' : 'text-ink'}`}>
+          {showPending && isPos ? 'Opening POS…' : action.label}
+        </p>
         <p
           className={`mt-0.5 text-xs ${
             action.primary ? 'text-white/65' : action.urgent ? 'text-amber-800/70' : 'text-muted'
           }`}
         >
-          {action.desc}
+          {showPending && isPos ? 'Loading sell screen' : action.desc}
         </p>
       </div>
       <svg
         className={`h-4 w-4 flex-shrink-0 transition group-hover:translate-x-0.5 ${
           action.primary ? 'text-white/40' : 'text-black/20 group-hover:text-accent/50'
-        }`}
+        } ${showPending ? 'animate-pulse' : ''}`}
         fill="none"
         viewBox="0 0 24 24"
         strokeWidth={2.5}

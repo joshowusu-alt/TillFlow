@@ -3,6 +3,7 @@ import { Logo } from '@/components/Logo';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import LoginForm from '@/components/auth/LoginForm';
+import ClearLaunchIdentityOnAuthEntry from '@/components/ClearLaunchIdentityOnAuthEntry';
 import { parseLoginErrorParam } from '@/lib/auth/login-form-state';
 
 export default async function LoginPage({ searchParams }: { searchParams: { error?: string; success?: string } }) {
@@ -15,6 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: { erro
 
   return (
     <div className="space-y-6">
+      <ClearLaunchIdentityOnAuthEntry />
       <div className="text-center">
         <Logo variant="lockup" size={62} className="mx-auto mb-4 justify-center" alt="TillFlow" />
         <p className="mt-2 text-xs uppercase tracking-[0.2em] text-black/40">Sales made simple</p>

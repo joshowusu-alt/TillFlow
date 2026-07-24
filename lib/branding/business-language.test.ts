@@ -13,8 +13,9 @@ describe('Owner-facing business language', () => {
   const categoryPicker = read('components/onboarding/BusinessCategoryPicker.tsx');
 
   it('uses business wording on the owner readiness skeleton', () => {
-    expect(skeleton).toContain('Your business today');
+    expect(skeleton).toContain('Preparing owner home');
     expect(skeleton).not.toContain('Today in your shop');
+    expect(skeleton).not.toContain('your shop');
   });
 
   it('uses business wording in activation guidance', () => {

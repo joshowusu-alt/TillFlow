@@ -4,20 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { markTillflowPerformance } from '@/lib/performance/client-performance-marks';
 import { LAUNCH_REDIRECT_DELAY_MS } from '@/lib/performance/launch-handoff-timing';
-
-const LAST_BUSINESS_NAME_KEY = 'tillflow:lastBusinessName';
-const FALLBACK_MESSAGE = 'Opening your business workspace...';
-const FALLBACK_DETAIL = 'Getting sales, stock, and cash ready.';
-
-function getLaunchMessage(name: string | null) {
-  const cleanName = name?.trim();
-  return cleanName ? `Opening ${cleanName}...` : FALLBACK_MESSAGE;
-}
+import { getLaunchCopy } from '@/lib/launch/business-identity';
 
 export default function LaunchRedirector() {
   const router = useRouter();
-  const [message, setMessage] = useState(FALLBACK_MESSAGE);
-  const [detail, setDetail] = useState(FALLBACK_DETAIL);
+  const initialCopy = getLaunchCopy();
+  const [message, setMessage] = useState(initialCopy.message);
+  const [detail, setDetail] = useState(initialCopy.detail);
 
   useEffect(() => {
     markTillflowPerformance('tillflow.launch.mounted');
@@ -26,17 +19,13 @@ export default function LaunchRedirector() {
       window.sessionStorage.setItem('tillflow:launching', '1');
       window.sessionStorage.removeItem('tillflow:launchSplashSeen');
 
-      const businessName = window.localStorage.getItem(LAST_BUSINESS_NAME_KEY);
-      const cleanName = businessName?.trim();
-      setMessage(getLaunchMessage(cleanName ?? null));
-      setDetail(
-        cleanName
-          ? "Getting today's sales, stock, and cash ready."
-          : FALLBACK_DETAIL
-      );
+      const copy = getLaunchCopy();
+      setMessage(copy.message);
+      setDetail(copy.detail);
     } catch {
-      setMessage(FALLBACK_MESSAGE);
-      setDetail(FALLBACK_DETAIL);
+      const copy = getLaunchCopy(null);
+      setMessage(copy.message);
+      setDetail(copy.detail);
     }
 
     let timeoutId: number | null = null;
@@ -76,12 +65,14 @@ export default function LaunchRedirector() {
       <p
         id="tillflow-launch-message"
         className="mt-6 text-sm font-semibold text-slate-700"
+        suppressHydrationWarning
       >
         {message}
       </p>
       <p
         id="tillflow-launch-detail"
         className="mt-1 text-xs text-slate-500"
+        suppressHydrationWarning
       >
         {detail}
       </p>

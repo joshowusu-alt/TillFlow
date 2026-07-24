@@ -212,14 +212,25 @@ async function run() {
     await openPurchaseForm(page);
     await page.getByRole('button', { name: /^Add line$/i }).click();
     await page.waitForTimeout(500);
+    // Default paymentStatus is PAID with no payment amounts entered, which the
+    // server auto-fills as a full cash payment - that requires an open till
+    // shift (none is opened in this flow). Select Unpaid first, same as the
+    // working 6b/12 purchase below, so the purchase is created without a
+    // cash-drawer dependency.
+    await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
-    // Wait for the return link to appear (means purchase was created and page re-rendered)
-    await page.locator('a[href^="/purchases/return/"]').first().waitFor({ timeout: 30000 });
-    const purchaseReturnHref = await page.locator('a[href^="/purchases/return/"]').first().getAttribute('href');
-    if (!purchaseReturnHref) {
+    // On success, createPurchaseAction redirects to the invoice detail page
+    // (/purchases/{id}?created=1), not back to the list page, so wait for
+    // that navigation and derive the return link from the invoice id rather
+    // than looking for a return link element (the detail page doesn't render
+    // one - only the /purchases list page does).
+    await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
+    const createdInvoiceId = new URL(page.url()).pathname.split('/').pop();
+    if (!createdInvoiceId) {
       await screenshotStep(page, '05-purchase-no-return-link');
-      throw new Error('Could not find purchase return link after creating purchase');
+      throw new Error('Could not determine invoice id after creating purchase');
     }
+    const purchaseReturnHref = `/purchases/return/${createdInvoiceId}`;
     report.purchases.create = true;
     report.purchases.returnPath = purchaseReturnHref;
     step('5/12 Create purchase OK');
@@ -268,10 +279,7 @@ async function run() {
     step('7b/12 Open receipt OK');
 
     step('8/12 Amend sale');
-    await page.goto(`${BASE_URL}/sales`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
-    const amendRow = page.locator('tr', { hasText: paidSale.invoiceId.slice(0, 8) }).first();
-    await amendRow.getByRole('link', { name: /Amend/i }).click();
+    await page.goto(`${BASE_URL}/sales/amend/${paidSale.invoiceId}`, { waitUntil: 'networkidle' });
     await waitForURLPattern(page, /\/sales\/amend\//);
     await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /^Remove$/i }).first().click();

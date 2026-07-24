@@ -111,6 +111,12 @@ type PosClientProps = {
   customers: PosCustomerOption[];
   units: { id: string; name: string }[];
   categories: CategoryDto[];
+  /** False until deferred checkout extras (tills/shifts) have loaded. */
+  checkoutExtrasReady?: boolean;
+  /** True when customer list failed — cash sales remain usable. */
+  customersUnavailable?: boolean;
+  /** True when tills/shifts failed to load (distinct from still loading). */
+  checkoutUnavailable?: boolean;
 };
 
 type CartLine = {
@@ -146,6 +152,9 @@ export default function PosClient({
   customers,
   units,
   categories,
+  checkoutExtrasReady = true,
+  customersUnavailable = false,
+  checkoutUnavailable = false,
 }: PosClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -410,19 +419,29 @@ export default function PosClient({
     }
   }, [lastReceiptStorageKey, setLastReceiptId]);
 
-  // Restore saved till from localStorage on mount (skipped when URL param already set)
+  // Resolve till selection when deferred tills/shifts arrive (or on remount).
+  // Progressive POS starts with empty tills, so the initial useState fallback
+  // cannot pick tills[0] until checkout extras are applied.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (tills.length === 0) return;
+
     const urlTillId = searchParams?.get('tillId');
-    if (urlTillId) return; // URL param takes precedence
-    if (
-      business.requireOpenTillForSales &&
-      openShiftTillIds.length === 1 &&
-      tills.some((t) => t.id === openShiftTillIds[0])
-    ) {
-      setTillId(openShiftTillIds[0]);
+    if (urlTillId && tills.some((t) => t.id === urlTillId)) {
+      setTillId(urlTillId);
       return;
     }
+
+    const singleOpenTillId =
+      openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])
+        ? openShiftTillIds[0]
+        : '';
+
+    if (business.requireOpenTillForSales && singleOpenTillId) {
+      setTillId(singleOpenTillId);
+      return;
+    }
+
     const saved = window.localStorage.getItem(tillStorageKey);
     if (
       saved &&
@@ -430,9 +449,27 @@ export default function PosClient({
       (!business.requireOpenTillForSales || openShiftTillIds.includes(saved))
     ) {
       setTillId(saved);
+      return;
     }
+
+    setTillId((current) => {
+      if (current && tills.some((t) => t.id === current)) {
+        if (!business.requireOpenTillForSales || openShiftTillIds.includes(current)) {
+          return current;
+        }
+      }
+      if (singleOpenTillId) return singleOpenTillId;
+      if (!business.requireOpenTillForSales) return tills[0]?.id ?? '';
+      const firstOpen = openShiftTillIds.find((id) => tills.some((t) => t.id === id));
+      return firstOpen ?? '';
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tillStorageKey, business.requireOpenTillForSales, openShiftTillIds.join('|')]);
+  }, [
+    tillStorageKey,
+    business.requireOpenTillForSales,
+    openShiftTillIds.join('|'),
+    tills.map((t) => t.id).join('|'),
+  ]);
 
   // Persist till selection to localStorage whenever it changes
   useEffect(() => {
@@ -875,26 +912,47 @@ export default function PosClient({
   // providers are connected, flip this back to:
   //   const momoReady = !needsMomoConfirmation || momoConfirmed;
   const momoReady = true;
+  const checkoutLoading = !checkoutExtrasReady && !checkoutUnavailable;
+  const tillSelected = Boolean(tillId) && tills.some((t) => t.id === tillId);
   const tillReady =
-    !business.requireOpenTillForSales || openShiftTillIds.includes(tillId);
+    checkoutExtrasReady &&
+    !checkoutUnavailable &&
+    tillSelected &&
+    (!business.requireOpenTillForSales || openShiftTillIds.includes(tillId));
   const canSubmit = Boolean(
+    checkoutExtrasReady &&
+    !checkoutUnavailable &&
     cart.length > 0 &&
     fullyPaid &&
     !hasPaymentError &&
     momoReady &&
     discountApprovalReady &&
     tillReady &&
-    (!requiresCustomer || customerId)
+    (!requiresCustomer || customerId) &&
+    !(requiresCustomer && customersUnavailable)
   );
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
-    if (requiresCustomer && !customerId) {
+    if (checkoutLoading) {
+      issues.push({ tone: 'warning', message: 'Preparing checkout…' });
+    }
+    if (checkoutUnavailable) {
+      issues.push({ tone: 'warning', message: 'Checkout information could not be loaded. Try refreshing.' });
+    }
+    if (requiresCustomer && customersUnavailable) {
+      issues.push({ tone: 'warning', message: 'Customer list unavailable. Cash sales still work.' });
+    }
+    if (requiresCustomer && !customerId && !customersUnavailable) {
       issues.push({ tone: 'warning', message: 'Select a customer for credit or part-paid sales.' });
     }
     if (hasPaymentError) {
       issues.push({ tone: 'warning', message: 'Card, transfer, or MoMo cannot exceed the total due.' });
     }
-    if (!tillReady) {
+    if (checkoutExtrasReady && !checkoutUnavailable && tills.length === 0) {
+      issues.push({ tone: 'warning', message: 'No tills are configured for this store.' });
+    } else if (checkoutExtrasReady && !checkoutUnavailable && tills.length > 0 && !tillSelected) {
+      issues.push({ tone: 'warning', message: 'Preparing checkout…' });
+    } else if (checkoutExtrasReady && !checkoutUnavailable && !tillReady) {
       issues.push({ tone: 'warning', message: 'Open this till shift before recording sales.' });
     }
     if (needsMomoConfirmation && !momoConfirmed) {
@@ -907,7 +965,7 @@ export default function PosClient({
       issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
     }
     return issues;
-  }, [customerId, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady]);
+  }, [checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady, tillSelected, tills.length]);
   const confidenceTone = !cart.length
     ? 'neutral'
     : canSubmit
@@ -1595,14 +1653,63 @@ export default function PosClient({
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className="label">Till</label>
-                <select className="input" name="tillId" value={tillId} onChange={(e) => setTillId(e.target.value)}>
-                  {tills.map((till) => (<option key={till.id} value={till.id}>{till.name}</option>))}
+                <select
+                  className="input"
+                  name="tillId"
+                  value={tillId}
+                  disabled={checkoutLoading || checkoutUnavailable || tills.length === 0}
+                  onChange={(e) => setTillId(e.target.value)}
+                  aria-busy={checkoutLoading || undefined}
+                  data-checkout-till-state={
+                    checkoutLoading
+                      ? 'loading'
+                      : checkoutUnavailable
+                        ? 'failed'
+                        : tills.length === 0
+                          ? 'empty'
+                          : tillReady
+                            ? 'ready'
+                            : 'closed'
+                  }
+                >
+                  {checkoutLoading ? (
+                    <option value="">Preparing checkout…</option>
+                  ) : checkoutUnavailable ? (
+                    <option value="">Checkout unavailable</option>
+                  ) : tills.length === 0 ? (
+                    <option value="">No tills configured</option>
+                  ) : (
+                    tills.map((till) => (
+                      <option key={till.id} value={till.id}>
+                        {till.name}
+                      </option>
+                    ))
+                  )}
                 </select>
-                {business.requireOpenTillForSales ? (
-                  <div className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}>
+                {checkoutLoading ? (
+                  <div className="mt-1 text-xs text-slate-600" data-checkout-state="loading">
+                    Preparing checkout…
+                  </div>
+                ) : checkoutUnavailable ? (
+                  <div className="mt-1 text-xs text-rose" data-checkout-state="failed">
+                    Checkout information could not be loaded
+                  </div>
+                ) : tills.length === 0 ? (
+                  <div className="mt-1 text-xs text-amber-800" data-checkout-state="empty">
+                    No tills are configured for this store
+                  </div>
+                ) : business.requireOpenTillForSales ? (
+                  <div
+                    className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}
+                    data-checkout-state={tillReady ? 'ready' : 'closed'}
+                  >
                     {tillReady ? 'Till is open' : 'Till is not open'}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-1 text-xs text-emerald-700" data-checkout-state="ready">
+                    Till ready
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Payment Status</label>

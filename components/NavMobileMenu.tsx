@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { logout } from '@/app/actions/auth';
+import LogoutForm from '@/components/LogoutForm';
 import { getFeatures, hasPlanAccess, type BusinessPlan } from '@/lib/features';
 import { getFeatureLockLabel, type FeatureKey } from '@/lib/navigation-config';
 import {
@@ -300,11 +300,11 @@ export default function NavMobileMenu({
       >
         Help & support
       </Link>
-      <form action={logout}>
+      <LogoutForm>
         <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
           Sign out
         </button>
-      </form>
+      </LogoutForm>
     </div>
   );
 
@@ -328,7 +328,7 @@ export default function NavMobileMenu({
           </span>
           Help & support
         </Link>
-        <form action={logout}>
+        <LogoutForm>
           <button
             type="submit"
             className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-left text-sm font-medium text-black/70"
@@ -338,7 +338,7 @@ export default function NavMobileMenu({
             </span>
             Sign out
           </button>
-        </form>
+        </LogoutForm>
       </div>
     </div>
   );

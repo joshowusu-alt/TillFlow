@@ -227,7 +227,7 @@ describe('Phase C3: performance observability baseline', () => {
     const ownerDashboard = read('lib/reports/owner-dashboard.ts');
     const todayKpis = read('lib/reports/today-kpis.ts');
     const tradingDashboard = read('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    const pos = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx');
+    const pos = read('app/(protected)/pos/page.tsx') + '\n' + read('app/(protected)/pos/PosBoard.tsx') + '\n' + read('app/(protected)/pos/PosDeferredSection.tsx');
 
     expect(ownerDashboard).toContain("['report-owner-dashboard']");
     expect(ownerDashboard).toContain("{ revalidate: 60, tags: ['owner-dashboard'] }");

@@ -1,28 +1,13 @@
+import { Suspense } from 'react';
 import { prisma } from '@/lib/prisma';
 import type { requireBusinessStore } from '@/lib/auth';
 import { unstable_cache } from 'next/cache';
-import PosClient from './PosClient';
-import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
+import {
+  PosDeferredLoadingHint,
+  PosProgressiveShell,
+} from '@/components/pos/PosProgressiveShell';
+import PosDeferredSection from './PosDeferredSection';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
-
-// ── Cached lookups for data that rarely changes ───────────────────
-// Revalidates every 60 s or when explicitly invalidated.
-const getCachedUnits = unstable_cache(
-  (_businessId: string) => prisma.unit.findMany({ select: { id: true, name: true } }),
-  ['pos-units'],
-  { revalidate: 300, tags: ['pos-units'] }
-);
-
-const getCachedCategories = unstable_cache(
-  (businessId: string) =>
-    prisma.category.findMany({
-      where: { businessId },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, colour: true },
-    }),
-  ['pos-categories'],
-  { revalidate: 120, tags: ['pos-categories'] }
-);
 
 const getCachedProducts = unstable_cache(
   (businessId: string) =>
@@ -52,7 +37,7 @@ const getCachedProducts = unstable_cache(
       },
     }),
   ['pos-products'],
-  { revalidate: 60, tags: ['pos-products'] }
+  { revalidate: 60, tags: ['pos-products'] },
 );
 
 const getCachedInventory = unstable_cache(
@@ -62,39 +47,7 @@ const getCachedInventory = unstable_cache(
       select: { productId: true, qtyOnHandBase: true },
     }),
   ['pos-inventory'],
-  { revalidate: 30, tags: ['pos-inventory'] }
-);
-
-const getCachedTills = unstable_cache(
-  (storeId: string) =>
-    prisma.till.findMany({
-      where: { storeId, active: true },
-      select: { id: true, name: true },
-    }),
-  ['pos-tills'],
-  { revalidate: 300, tags: ['pos-tills'] }
-);
-
-const getCachedCustomers = unstable_cache(
-  (businessId: string) =>
-    prisma.customer.findMany({
-      where: { businessId },
-      select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ['pos-customers'],
-  { revalidate: 60, tags: ['pos-customers'] }
-);
-
-const getCachedShifts = unstable_cache(
-  (storeId: string) =>
-    prisma.shift.findMany({
-      where: { till: { storeId }, status: 'OPEN' },
-      select: { tillId: true },
-    }),
-  ['pos-shifts'],
-  { revalidate: 10, tags: ['pos-shifts'] }
+  { revalidate: 30, tags: ['pos-inventory'] },
 );
 
 type RequireBusinessStoreResult = Awaited<ReturnType<typeof requireBusinessStore>>;
@@ -107,12 +60,15 @@ type PosBoardProps = {
 };
 
 /**
- * Heavy POS data loader — rendered inside a Suspense boundary so the POS shell
- * and skeleton paint immediately while the catalog, inventory, customers, tills
- * and shifts stream in. The auth/role gate stays in the page (blocking) so
- * access control is never deferred behind the skeleton.
+ * Critical POS loader — products + inventory only so search/scan/add can start
+ * before customers, tills, categories, and checkout extras finish loading.
  */
-export default async function PosBoard({ business, store: baseStore, user, requestedCustomerId }: PosBoardProps) {
+export default async function PosBoard({
+  business,
+  store: baseStore,
+  user,
+  requestedCustomerId,
+}: PosBoardProps) {
   const posRouteMeta = {
     businessId: business.id,
     storeId: baseStore.id,
@@ -138,60 +94,22 @@ export default async function PosBoard({ business, store: baseStore, user, reque
           posRouteTiming,
         );
 
-      const [tills, openShifts, inventory, products, units, categories, customers, requestedCustomer] =
-        await measureServerOperation(
-          'page.pos.initial-data-load',
-          () =>
-            Promise.all([
-              measurePosFetch('page.pos.tills-load', () => getCachedTills(baseStore.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.shifts-load', () => getCachedShifts(baseStore.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.inventory-load', () => getCachedInventory(baseStore.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.products-load', () => getCachedProducts(business.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.units-load', () => getCachedUnits(business.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.categories-load', () => getCachedCategories(business.id), 'cached-wrapper'),
-              measurePosFetch('page.pos.customers-load', () => getCachedCustomers(business.id), 'cached-wrapper'),
-              requestedCustomerId
-                ? measurePosFetch(
-                    'page.pos.requested-customer-load',
-                    () =>
-                      prisma.customer.findFirst({
-                        where: { id: requestedCustomerId, businessId: business.id },
-                        select: {
-                          id: true,
-                          name: true,
-                          creditLimitPence: true,
-                          loyaltyPointsBalance: true,
-                        },
-                      }),
-                    'uncached-page-load',
-                  )
-                : Promise.resolve(null),
-            ]),
-          { ...posRouteMeta, cacheState: 'cached-wrapper' },
-          posRouteTiming,
-        );
-
-      const userOpenShift = await measureServerOperation(
-        'page.pos.open-shift-load',
+      const [inventory, products] = await measureServerOperation(
+        'page.pos.initial-data-load',
         () =>
-          prisma.shift.findFirst({
-            where: { userId: user.id, till: { storeId: baseStore.id }, closedAt: null },
-            select: { till: { select: { name: true } } },
-          }),
-        {
-          ...posRouteMeta,
-          cacheState: 'uncached-page-load',
-        },
-        { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
+          Promise.all([
+            measurePosFetch('page.pos.inventory-load', () => getCachedInventory(baseStore.id), 'cached-wrapper'),
+            measurePosFetch('page.pos.products-load', () => getCachedProducts(business.id), 'cached-wrapper'),
+          ]),
+        { ...posRouteMeta, cacheState: 'cached-wrapper' },
+        posRouteTiming,
       );
 
-      const { firstName, productDtos, customerOptions } = await measureServerOperation(
+      const productDtos = await measureServerOperation(
         'page.pos.dto-map',
         async () => {
-          const resolvedFirstName =
-            (user.name ?? '').trim().split(/\s+/)[0] || user.email.split('@')[0] || 'there';
           const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-          const mappedProducts = products.map((product) => ({
+          return products.map((product) => ({
             id: product.id,
             name: product.name,
             barcode: product.barcode,
@@ -213,57 +131,40 @@ export default async function PosBoard({ business, store: baseStore, user, reque
             })),
             onHandBase: inventoryMap.get(product.id) ?? 0,
           }));
-          const resolvedCustomers =
-            requestedCustomer && !customers.some((customer) => customer.id === requestedCustomer.id)
-              ? [requestedCustomer, ...customers]
-              : customers;
-
-          return {
-            firstName: resolvedFirstName,
-            productDtos: mappedProducts,
-            customerOptions: resolvedCustomers,
-          };
         },
         { ...posRouteMeta, cacheState: 'cpu-map', rowCount: products.length },
         { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
       );
 
       return (
-        <>
-          <PosWelcomeShelf
-            firstName={firstName}
-            storeName={baseStore.name}
-            hasOpenShift={!!userOpenShift}
-            openTillName={userOpenShift?.till?.name ?? null}
-            userKey={user.id}
-          />
-          <PosClient
-            business={{
-              id: business.id,
-              currency: business.currency,
-              vatEnabled: business.vatEnabled,
-              momoEnabled: (business as any).momoEnabled ?? false,
-              momoProvider: (business as any).momoProvider ?? null,
-              requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
-              discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
-              loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
-              loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
-              loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
-            }}
-            store={{ id: baseStore.id, name: baseStore.name }}
-            tills={tills.map((till) => ({ id: till.id, name: till.name }))}
-            openShiftTillIds={openShifts.map((shift) => shift.tillId)}
-            products={productDtos}
-            customers={customerOptions.map((customer) => ({
-              id: customer.id,
-              name: customer.name,
-              creditLimitPence: customer.creditLimitPence,
-              loyaltyPointsBalance: customer.loyaltyPointsBalance ?? 0,
-            }))}
-            units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
-            categories={categories.map((cat) => ({ id: cat.id, name: cat.name, colour: cat.colour }))}
-          />
-        </>
+        <PosProgressiveShell
+          business={{
+            id: business.id,
+            currency: business.currency,
+            vatEnabled: business.vatEnabled,
+            momoEnabled: (business as any).momoEnabled ?? false,
+            momoProvider: (business as any).momoProvider ?? null,
+            requireOpenTillForSales: (business as any).requireOpenTillForSales ?? false,
+            discountApprovalThresholdBps: (business as any).discountApprovalThresholdBps ?? 1500,
+            loyaltyEnabled: (business as any).loyaltyEnabled ?? false,
+            loyaltyPointsPerGhsPence: (business as any).loyaltyPointsPerGhsPence ?? 1,
+            loyaltyGhsPerHundredPoints: (business as any).loyaltyGhsPerHundredPoints ?? 100,
+          }}
+          store={{ id: baseStore.id, name: baseStore.name }}
+          products={productDtos}
+        >
+          <Suspense fallback={<PosDeferredLoadingHint />}>
+            <PosDeferredSection
+              businessId={business.id}
+              storeId={baseStore.id}
+              storeName={baseStore.name}
+              userId={user.id}
+              userName={user.name}
+              userEmail={user.email}
+              requestedCustomerId={requestedCustomerId}
+            />
+          </Suspense>
+        </PosProgressiveShell>
       );
     },
     posRouteMeta,

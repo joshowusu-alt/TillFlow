@@ -35,8 +35,10 @@ describe('Authenticated Playwright QA setup', () => {
     expect(read('app/(protected)/onboarding/page.tsx')).not.toContain('LaunchSessionCompletion');
     expect(read('app/(protected)/onboarding/page.tsx')).toContain('OwnerReadinessSkeleton');
     expect(read('app/(protected)/loading.tsx')).toContain('ProtectedRouteLoading');
-    expect(read('components/RootLaunchLoading.tsx')).toContain('Opening your business...');
+    expect(read('components/RootLaunchLoading.tsx')).toContain('LAUNCH_GENERIC_MESSAGE');
+    expect(read('components/RootLaunchLoading.tsx')).toContain('ROOT_COLD_START_MESSAGE');
     expect(read('components/RootLaunchLoading.tsx')).not.toContain('return null');
+    expect(read('components/RootLaunchLoading.tsx')).not.toContain('message={');
   });
 
   it('documents approved launch handoff timings used during cold boot QA', () => {

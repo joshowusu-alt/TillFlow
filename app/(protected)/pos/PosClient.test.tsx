@@ -172,4 +172,47 @@ describe('PosClient desktop layout', () => {
 
     expect(screen.getByText('Tap a basket to recall it without losing your place.')).toBeInTheDocument();
   });
+
+  it('shows preparing checkout while deferred tills are unresolved, not a false no-till state', () => {
+    render(<PosClient {...baseProps} tills={[]} openShiftTillIds={[]} checkoutExtrasReady={false} />);
+
+    const tillSelect = document.querySelector('select[name="tillId"]') as HTMLSelectElement;
+    expect(tillSelect).toHaveAttribute('data-checkout-till-state', 'loading');
+    expect(screen.getAllByText('Preparing checkout…').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No tills are configured/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Complete Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it('selects the first till when deferred checkout extras arrive with empty initial till state', async () => {
+    const { rerender } = render(
+      <PosClient {...baseProps} tills={[]} openShiftTillIds={[]} checkoutExtrasReady={false} />,
+    );
+
+    expect(document.querySelector('select[name="tillId"]')).toHaveValue('');
+
+    rerender(
+      <PosClient
+        {...baseProps}
+        tills={[{ id: 'till-1', name: 'Front Till' }]}
+        openShiftTillIds={['till-1']}
+        checkoutExtrasReady
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector('select[name="tillId"]')).toHaveValue('till-1');
+    });
+    expect(screen.queryByText(/No tills are configured/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps a genuine empty-till configuration distinct from loading', () => {
+    render(
+      <PosClient {...baseProps} tills={[]} openShiftTillIds={[]} checkoutExtrasReady customersUnavailable={false} />,
+    );
+
+    const tillSelect = document.querySelector('select[name="tillId"]') as HTMLSelectElement;
+    expect(tillSelect).toHaveAttribute('data-checkout-till-state', 'empty');
+    expect(screen.getAllByText(/No tills are configured for this store/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Complete Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
+  });
 });

@@ -71,6 +71,24 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'phase1-launch-chromium',
+      testMatch: /tap-to-sell-phase1-launch\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'phase1-pos-chromium',
+      testMatch: /tap-to-sell-phase1-pos\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'playwright/.auth/owner.json',
+      },
+    },
+    {
+      name: 'phase1-auth-chromium',
+      testMatch: /tap-to-sell-phase1-auth\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'mobile-overflow-owner',
       dependencies: ['setup-auth'],
       testMatch: /mobile-overflow-authenticated\.spec\.ts/,

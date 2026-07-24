@@ -45,8 +45,9 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(rootLaunchLoading).toContain('AppLaunchLoading');
     expect(rootLaunchLoading).toContain('mode="launch"');
     expect(rootLaunchLoading).toContain('shell="fullscreen"');
-    expect(rootLaunchLoading).toContain('Opening your business...');
-    expect(rootLaunchLoading).toContain('Checking your session and sync status');
+    expect(rootLaunchLoading).toContain('ROOT_COLD_START_MESSAGE');
+    expect(rootLaunchLoading).toContain('LAUNCH_GENERIC_MESSAGE');
+    expect(rootLaunchLoading).not.toContain('message={');
     expect(rootLaunchLoading).not.toContain('return null');
     expect(rootLaunchLoading).not.toContain('useState<boolean | null>');
   });
@@ -96,5 +97,14 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
 
     expect(read('prisma/schema.prisma')).toMatch(/provider\s+=\s+"sqlite"/);
     expect(read('prisma/schema.postgres.prisma')).toMatch(/provider\s+=\s+"postgresql"/);
+  });
+});
+
+describe('Trust Breakers T2b: progressive POS critical path', () => {
+  it('keeps product/inventory on the critical POS path', () => {
+    const board = read('app/(protected)/pos/PosBoard.tsx');
+    expect(board).toContain('page.pos.products-load');
+    expect(board).toContain('page.pos.inventory-load');
+    expect(board).toContain('PosProgressiveShell');
   });
 });
