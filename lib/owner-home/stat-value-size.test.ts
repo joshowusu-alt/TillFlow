@@ -23,14 +23,27 @@ describe('getStatValueSize', () => {
 
 describe('regression: Home hero stats must not import a client-boundary function into a Server Component', () => {
   /**
-   * Root cause of "Could not load today's figures" on every load: this
-   * helper used to live in components/owner-home/home-chrome.tsx, which is
-   * marked 'use client'. Every export of a 'use client' module becomes a
-   * client reference — calling one directly from a Server Component (as
-   * HomePerformanceSlot does, during render, not via JSX/props) throws
-   * "<name> is not a function" in production builds. Keeping this pure
-   * helper in a plain module (no 'use client') and asserting the import
-   * site here prevents the bug from being silently reintroduced.
+   * Single root cause of TWO production symptoms, both proven by a
+   * controlled local production-build A/B (same build, same demo data):
+   *
+   *  1. "Could not load today's figures" on every Home load (all widths).
+   *  2. A full-page React #310 crash to app/global-error.tsx on
+   *     iPhone/Android-width viewports (22/22 deterministic on repeat
+   *     navigation; 0/22 once fixed). Desktop showed symptom 1 only.
+   *
+   * This helper used to live in components/owner-home/home-chrome.tsx,
+   * which is marked 'use client'. Every export of a 'use client' module
+   * becomes a client reference — calling one directly from a Server
+   * Component (as HomePerformanceSlot does, during render, not via
+   * JSX/props) throws "<name> is not a function" in production builds
+   * (dev does NOT enforce this boundary, which is why it only reproduced
+   * in a production build). The Server Component throw is normally caught
+   * by the section error boundary (→ symptom 1), but at narrow width the
+   * failed RSC stream desynchronises hook order in the Next.js App Router
+   * during hydration, surfacing as React #310 above the section boundary
+   * (→ symptom 2). Keeping this pure helper in a plain module (no
+   * 'use client') and asserting the import site here prevents both from
+   * being silently reintroduced.
    */
   it('stat-value-size.ts is not a client module', () => {
     const source = read('lib/owner-home/stat-value-size.ts');
