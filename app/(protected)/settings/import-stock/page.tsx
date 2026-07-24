@@ -10,7 +10,7 @@ import ImportHistoryPanel from './ImportHistoryPanel';
 import ImportStockLoader from './ImportStockLoader';
 import { isImportMode } from '@/lib/import/import-mode';
 import IssueResolutionBanner from '@/components/IssueResolutionBanner';
-import { listStockGapSignals } from '@/lib/improve-records-load';
+import { countStockGapSignals } from '@/lib/improve-records-load';
 import {
   IMPROVE_RECORDS_ISSUE_DEFS,
   parseImproveRecordsIssue,
@@ -36,7 +36,7 @@ export default async function ImportStockPage({
   const issueKey = parseImproveRecordsIssue(searchParams?.issue);
   const stockGapIssue = issueKey === 'STOCK_SETUP_GAP';
   const gapCount = stockGapIssue
-    ? (await listStockGapSignals(business.id)).productsNeedingOpeningQtyCount
+    ? (await countStockGapSignals(business.id)).productsNeedingOpeningQtyCount
     : 0;
   const statedCount = Math.max(0, parseInt(searchParams?.count ?? '', 10) || gapCount);
 

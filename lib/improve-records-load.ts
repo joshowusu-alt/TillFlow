@@ -28,10 +28,16 @@ import {
   OPENING_STOCK_REFERENCE_TYPES,
 } from '@/lib/improve-records-constants';
 import {
-  classifyNoBalanceProduct,
   isOpeningStockMovement,
   purchaseNeedsSupplierLink,
 } from '@/lib/improve-records-classify';
+import {
+  soldWithoutConfirmedQtyProductWhere,
+  stockGapIssueProductWhere,
+  stockSetupGapProductWhere,
+  unusedCatalogueProductWhere,
+  type StockGapIssueFilter,
+} from '@/lib/improve-records-stock-gap-where';
 import {
   computeImproveRecords,
   type ImproveRecordsResult,
@@ -69,119 +75,59 @@ export type StockGapIdLists = StockGapCounts & {
 };
 
 /**
- * Shared stock-gap classification: same IDs for Home counts and landing filters.
- * Classify active priced products with no InventoryBalance into genuine stock
- * gap vs aged unused catalogue. See classifyNoBalanceProduct for rules.
+ * Shared stock-gap eligibility: Home counts and Products destination filters
+ * use the same Prisma WHERE builders in improve-records-stock-gap-where.ts.
+ *
+ * Prefer countStockGapSignals / stockGapIssueProductWhere for large catalogues.
+ * listStockGapSignals materialises IDs and is reserved for small admin flows
+ * that still need the full ID set (tests, single-product checks via includes).
  */
+export async function countStockGapSignals(
+  businessId: string,
+  now = new Date()
+): Promise<StockGapCounts> {
+  const [productsNeedingOpeningQtyCount, soldWithoutConfirmedQtyCount, unusedCatalogueProductCount] =
+    await Promise.all([
+      prisma.product.count({ where: stockSetupGapProductWhere(businessId, now) }),
+      prisma.product.count({ where: soldWithoutConfirmedQtyProductWhere(businessId) }),
+      prisma.product.count({ where: unusedCatalogueProductWhere(businessId, now) }),
+    ]);
+
+  return {
+    productsNeedingOpeningQtyCount,
+    soldWithoutConfirmedQtyCount,
+    unusedCatalogueProductCount,
+  };
+}
+
 export async function listStockGapSignals(
   businessId: string,
   now = new Date()
 ): Promise<StockGapIdLists> {
-  const empty: StockGapIdLists = {
-    productsNeedingOpeningQtyCount: 0,
-    soldWithoutConfirmedQtyCount: 0,
-    unusedCatalogueProductCount: 0,
-    genuineGapProductIds: [],
-    soldWithoutConfirmedQtyIds: [],
-    unusedCatalogueProductIds: [],
-  };
-
-  const stores = await prisma.store.findMany({
-    where: { businessId },
-    select: { id: true },
-  });
-  const storeIds = stores.map((s) => s.id);
-
-  const candidates = await prisma.product.findMany({
-    where: {
-      businessId,
-      active: true,
-      sellingPriceBasePence: { gt: 0 },
-      inventoryBalances: { none: {} },
-    },
-    select: {
-      id: true,
-      createdAt: true,
-    },
-  });
-
-  if (candidates.length === 0) return empty;
-
-  const productIds = candidates.map((p) => p.id);
-
-  const [soldProductRows, inboundHistoryRows, purchaseLineRows] = await Promise.all([
-    prisma.salesInvoiceLine.findMany({
-      where: {
-        productId: { in: productIds },
-        salesInvoice: {
-          businessId,
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      select: { productId: true },
-      distinct: ['productId'],
-    }),
-    storeIds.length === 0
-      ? Promise.resolve([] as { productId: string }[])
-      : prisma.stockMovement.findMany({
-          where: {
-            productId: { in: productIds },
-            storeId: { in: storeIds },
-            OR: [
-              { type: { in: [...OPENING_STOCK_MOVEMENT_TYPES, 'PURCHASE', 'TRANSFER_IN'] } },
-              {
-                referenceType: {
-                  in: [
-                    ...OPENING_STOCK_REFERENCE_TYPES,
-                    'PURCHASE_INVOICE',
-                    'STOCK_ADJUSTMENT',
-                    'STOCKTAKE',
-                  ],
-                },
-              },
-              { type: { in: ['ADJUSTMENT', 'ADJUSTMENT_IN', 'STOCKTAKE', 'STOCK_TAKE'] } },
-            ],
-          },
-          select: { productId: true },
-          distinct: ['productId'],
-        }),
-    prisma.purchaseInvoiceLine.findMany({
-      where: {
-        productId: { in: productIds },
-        purchaseInvoice: { businessId },
-      },
-      select: { productId: true },
-      distinct: ['productId'],
-    }),
-  ]);
-
-  const soldIds = new Set(soldProductRows.map((r) => r.productId));
-  const inboundIds = new Set(inboundHistoryRows.map((r) => r.productId));
-  const purchasedIds = new Set(purchaseLineRows.map((r) => r.productId));
-
-  const genuineGapProductIds: string[] = [];
-  const soldWithoutConfirmedQtyIds: string[] = [];
-  const unusedCatalogueProductIds: string[] = [];
-
-  for (const product of candidates) {
-    const hasSales = soldIds.has(product.id);
-    const hasConfirmedQuantityHistory =
-      inboundIds.has(product.id) || purchasedIds.has(product.id);
-    const klass = classifyNoBalanceProduct(
-      {
-        createdAt: product.createdAt,
-        hasSales,
-        hasConfirmedQuantityHistory,
-      },
-      now
-    );
-    if (klass === 'genuine-gap') {
-      genuineGapProductIds.push(product.id);
-      if (hasSales) soldWithoutConfirmedQtyIds.push(product.id);
-    } else if (klass === 'unused-catalogue') {
-      unusedCatalogueProductIds.push(product.id);
-    }
-  }
+  const [genuineGapProductIds, soldWithoutConfirmedQtyIds, unusedCatalogueProductIds] =
+    await Promise.all([
+      prisma.product
+        .findMany({
+          where: stockSetupGapProductWhere(businessId, now),
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        })
+        .then((rows) => rows.map((r) => r.id)),
+      prisma.product
+        .findMany({
+          where: soldWithoutConfirmedQtyProductWhere(businessId),
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        })
+        .then((rows) => rows.map((r) => r.id)),
+      prisma.product
+        .findMany({
+          where: unusedCatalogueProductWhere(businessId, now),
+          select: { id: true },
+          orderBy: { id: 'asc' },
+        })
+        .then((rows) => rows.map((r) => r.id)),
+    ]);
 
   return {
     productsNeedingOpeningQtyCount: genuineGapProductIds.length,
@@ -193,16 +139,42 @@ export async function listStockGapSignals(
   };
 }
 
-export async function countStockGapSignals(
+/** Destination / setup filters — same eligibility as Home counts. */
+export function getStockGapIssueProductWhere(
   businessId: string,
+  issue: StockGapIssueFilter,
   now = new Date()
-): Promise<StockGapCounts> {
-  const lists = await listStockGapSignals(businessId, now);
-  return {
-    productsNeedingOpeningQtyCount: lists.productsNeedingOpeningQtyCount,
-    soldWithoutConfirmedQtyCount: lists.soldWithoutConfirmedQtyCount,
-    unusedCatalogueProductCount: lists.unusedCatalogueProductCount,
-  };
+) {
+  return stockGapIssueProductWhere(businessId, issue, now);
+}
+
+/** Single-product check for deactivate / resolve flows (no full-ID scan). */
+export async function isUnusedCatalogueProduct(
+  businessId: string,
+  productId: string,
+  now = new Date()
+): Promise<boolean> {
+  const match = await prisma.product.count({
+    where: {
+      id: productId,
+      ...unusedCatalogueProductWhere(businessId, now),
+    },
+  });
+  return match > 0;
+}
+
+export async function isStockSetupGapProduct(
+  businessId: string,
+  productId: string,
+  now = new Date()
+): Promise<boolean> {
+  const match = await prisma.product.count({
+    where: {
+      id: productId,
+      ...stockSetupGapProductWhere(businessId, now),
+    },
+  });
+  return match > 0;
 }
 
 /** @deprecated Prefer countStockGapSignals */
@@ -316,7 +288,7 @@ export async function loadImproveRecordsSnapshot(
         },
       })
       .catch(() => 0),
-    listStockGapSignals(input.businessId),
+    countStockGapSignals(input.businessId),
     prisma.salesInvoice.count({
       where: {
         businessId: input.businessId,

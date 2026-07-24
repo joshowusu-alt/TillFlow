@@ -24,12 +24,13 @@ import GenerateMissingBarcodesButton from '@/components/products/GenerateMissing
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
 import { getIncompleteStockSnapshot } from '@/lib/reports/incomplete-stock';
-import { listStockGapSignals } from '@/lib/improve-records-load';
+import { getStockGapIssueProductWhere } from '@/lib/improve-records-load';
 import {
   IMPROVE_RECORDS_ISSUE_DEFS,
   resolveProductsIssueParam,
   type ImproveRecordsIssueKey,
 } from '@/lib/improve-records-issues';
+import type { Prisma } from '@prisma/client';
 
 function ProductStatCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return <OperationalMetricCard label={label} value={value} helper={helper} />;
@@ -73,30 +74,24 @@ export default async function ProductsPage({
     issueDenied || invalidIssue ? null : requestedIssue;
   const issueActive = Boolean(issueKey) || issueDenied || invalidIssue;
 
-  let issueProductIds: string[] | null = null;
+  let issueProductWhere: Prisma.ProductWhereInput | null = null;
   if (issueKey === 'MISSING_COST') {
     const incompleteStock = await getIncompleteStockSnapshot(business.id);
-    issueProductIds = incompleteStock.allMissingCostProductIds;
+    const ids = incompleteStock.allMissingCostProductIds;
+    issueProductWhere = { id: ids.length > 0 ? { in: ids } : { in: ['__none__'] } };
   } else if (issueKey === 'UNUSED_CATALOGUE' || issueKey === 'STOCK_SETUP_GAP') {
-    const gaps = await listStockGapSignals(business.id);
-    issueProductIds =
-      issueKey === 'UNUSED_CATALOGUE'
-        ? gaps.unusedCatalogueProductIds
-        : gaps.genuineGapProductIds;
+    // Shared DB-side eligibility with Home counts — no full-ID materialisation.
+    issueProductWhere = getStockGapIssueProductWhere(business.id, issueKey);
   } else if (invalidIssue || issueDenied) {
-    issueProductIds = [];
+    issueProductWhere = { id: { in: ['__none__'] } };
   }
 
   const productWhere = {
     businessId: business.id,
     active: true,
     ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
-    ...(issueProductIds
-      ? {
-          id: issueProductIds.length > 0 ? { in: issueProductIds } : { in: ['__none__'] },
-        }
-      : {}),
-  };
+    ...(issueProductWhere ?? {}),
+  } as Prisma.ProductWhereInput;
 
   // Run all data queries in parallel
   const [totalProductCount, products, categories, units, suppliers, missingBarcodeCount] = await measureServerOperation(

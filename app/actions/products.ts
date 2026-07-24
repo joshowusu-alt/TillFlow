@@ -280,9 +280,8 @@ export async function deactivateUnusedCatalogueProductAction(
 
     if (!productId) return err('Product not found.');
 
-    const { listStockGapSignals } = await import('@/lib/improve-records-load');
-    const gaps = await listStockGapSignals(businessId);
-    if (!gaps.unusedCatalogueProductIds.includes(productId)) {
+    const { isUnusedCatalogueProduct } = await import('@/lib/improve-records-load');
+    if (!(await isUnusedCatalogueProduct(businessId, productId))) {
       return err(
         'This product no longer qualifies as unused catalogue. Refresh the list — it may already be stocked, sold, or inactive.'
       );

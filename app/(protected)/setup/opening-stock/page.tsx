@@ -4,11 +4,15 @@ import { requireBusiness } from '@/lib/auth';
 import PageHeader from '@/components/PageHeader';
 import OpeningStockClient from './OpeningStockClient';
 import IssueResolutionBanner from '@/components/IssueResolutionBanner';
-import { listStockGapSignals } from '@/lib/improve-records-load';
+import {
+  getStockGapIssueProductWhere,
+  isStockSetupGapProduct,
+} from '@/lib/improve-records-load';
 import {
   IMPROVE_RECORDS_ISSUE_DEFS,
   parseImproveRecordsIssue,
 } from '@/lib/improve-records-issues';
+import type { Prisma } from '@prisma/client';
 
 export default async function OpeningStockPage({
   searchParams,
@@ -35,33 +39,26 @@ export default async function OpeningStockPage({
   const stockGapIssue = issueKey === 'STOCK_SETUP_GAP';
   const invalidIssue = Boolean(searchParams?.issue?.trim()) && !stockGapIssue;
 
-  const gapIds = stockGapIssue
-    ? (await listStockGapSignals(business.id)).genuineGapProductIds
-    : null;
-
   let productIdFilter: string | undefined;
   if (searchParams?.productId) {
-    if (!stockGapIssue || (gapIds?.includes(searchParams.productId) ?? false)) {
+    if (
+      !stockGapIssue ||
+      (await isStockSetupGapProduct(business.id, searchParams.productId))
+    ) {
       productIdFilter = searchParams.productId;
     }
   }
 
-  const productWhere = {
-    businessId: business.id,
-    active: true,
-    ...(stockGapIssue
-      ? {
-          id:
-            productIdFilter
-              ? productIdFilter
-              : gapIds && gapIds.length > 0
-                ? { in: gapIds }
-                : { in: ['__none__'] },
-        }
-      : productIdFilter
-        ? { id: productIdFilter }
-        : {}),
-  };
+  const productWhere: Prisma.ProductWhereInput = stockGapIssue
+    ? {
+        ...getStockGapIssueProductWhere(business.id, 'STOCK_SETUP_GAP'),
+        ...(productIdFilter ? { id: productIdFilter } : {}),
+      }
+    : {
+        businessId: business.id,
+        active: true,
+        ...(productIdFilter ? { id: productIdFilter } : {}),
+      };
 
   const products = invalidIssue
     ? []

@@ -82,7 +82,7 @@ describe('stale unused-catalogue deactivation guard', () => {
     vi.resetModules();
   });
 
-  it('rejects deactivation when product is no longer in unusedCatalogueProductIds', async () => {
+  it('rejects deactivation when product is no longer unused-catalogue eligible', async () => {
     vi.doMock('@/lib/action-utils', async () => {
       const actual = await vi.importActual<typeof import('@/lib/action-utils')>('@/lib/action-utils');
       return {
@@ -94,14 +94,7 @@ describe('stale unused-catalogue deactivation guard', () => {
       };
     });
     vi.doMock('@/lib/improve-records-load', () => ({
-      listStockGapSignals: vi.fn(async () => ({
-        productsNeedingOpeningQtyCount: 0,
-        soldWithoutConfirmedQtyCount: 0,
-        unusedCatalogueProductCount: 0,
-        genuineGapProductIds: [],
-        soldWithoutConfirmedQtyIds: [],
-        unusedCatalogueProductIds: ['still-unused'],
-      })),
+      isUnusedCatalogueProduct: vi.fn(async () => false),
     }));
     vi.doMock('@/lib/services/products', () => ({
       softDeleteProduct: vi.fn(async () => ({ name: 'Should not delete' })),
