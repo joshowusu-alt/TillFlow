@@ -9,7 +9,7 @@ import { assertIsolatedPreviewDb } from './assert-preview-db.mjs';
 
 const preview = assertIsolatedPreviewDb();
 const PRODUCT_COUNT = Number(process.argv.find((a) => a.startsWith('--products='))?.split('=')[1] || 2500);
-const CHUNK = 200;
+const CHUNK = Number(process.argv.find((a) => a.startsWith('--chunk='))?.split('=')[1] || 10);
 
 const env = {
   ...process.env,

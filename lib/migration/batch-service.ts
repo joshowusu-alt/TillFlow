@@ -297,7 +297,7 @@ export async function validateMigrationChunk(input: {
       exceptions,
       validRows,
     };
-  });
+  }, { maxWait: 20_000, timeout: 120_000 });
 }
 
 export async function finalizeMigrationValidation(input: {
@@ -509,7 +509,7 @@ export async function importMigrationChunk(input: {
         chunkIndex: input.chunkIndex,
         ...result,
       };
-    });
+    }, { maxWait: 20_000, timeout: 120_000 });
   } catch (e) {
     // Unique violation on receipt = concurrent winner already completed the chunk.
     const msg = e instanceof Error ? e.message : String(e);

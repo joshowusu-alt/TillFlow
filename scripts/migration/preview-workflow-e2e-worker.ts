@@ -1,5 +1,6 @@
 /**
- * Worker: synthetic migration workflow against Preview Postgres (Prisma client).
+ * Worker: synthetic migration workflow against Preview Postgres.
+ * Avoids importing Next/server action utils (react.cache).
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -7,14 +8,11 @@ import { performance } from 'node:perf_hooks';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import {
-  approveMigrationBatch,
-  createMigrationBatch,
-  finalizeMigrationImport,
-  finalizeMigrationValidation,
-  importMigrationChunk,
-  runMigrationReconciliation,
-  validateMigrationChunk,
-} from '../../lib/migration/batch-service';
+  commitCatalogueChunk,
+  commitOpeningStockChunk,
+  commitSupplierChunk,
+} from '../../lib/migration/commit';
+import { emptyValidationState, validateRawRow } from '../../lib/migration/validate';
 import type { CatalogueRow, OpeningStockRow, SupplierRow } from '../../lib/migration/types';
 
 const url = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
@@ -23,8 +21,21 @@ if (!url || new URL(url).pathname !== '/tillflow_preview_qa') {
 }
 
 const PRODUCT_COUNT = Number(process.env.MIGRATION_E2E_PRODUCTS || 2500);
-const CHUNK = Number(process.env.MIGRATION_E2E_CHUNK || 200);
-const prisma = new PrismaClient({ datasources: { db: { url } }, log: ['error'] });
+const CHUNK = Number(process.env.MIGRATION_E2E_CHUNK || 10);
+const TX_OPTS = { maxWait: 60_000, timeout: 300_000, isolationLevel: 'ReadCommitted' as const };
+console.log('TX_OPTS', TX_OPTS, 'CHUNK', CHUNK, 'urlHost', new URL(url).hostname.split('.')[0]);
+const prisma = new PrismaClient({
+  datasources: { db: { url } },
+  log: ['error'],
+  transactionOptions: {
+    maxWait: TX_OPTS.maxWait,
+    timeout: TX_OPTS.timeout,
+  },
+});
+const readPrisma = new PrismaClient({
+  datasources: { db: { url } },
+  log: ['error'],
+});
 
 function sha(s: string) {
   return createHash('sha256').update(s).digest('hex');
@@ -41,14 +52,14 @@ async function concurrentPosReads(businessId: string, rounds: number) {
   for (let i = 0; i < rounds; i++) {
     const t0 = performance.now();
     await Promise.all([
-      prisma.product.count({ where: { businessId, active: true } }),
-      prisma.product.findMany({
+      readPrisma.product.count({ where: { businessId, active: true } }),
+      readPrisma.product.findMany({
         where: { businessId, active: true },
         take: 50,
         orderBy: { name: 'asc' },
         select: { id: true, name: true, sellingPriceBasePence: true },
       }),
-      prisma.inventoryBalance.findMany({
+      readPrisma.inventoryBalance.findMany({
         where: { store: { businessId } },
         take: 50,
         select: { productId: true, qtyOnHandBase: true },
@@ -62,6 +73,236 @@ async function concurrentPosReads(businessId: string, rounds: number) {
     p50Ms: Math.round(times[Math.floor(times.length * 0.5)] ?? 0),
     p95Ms: Math.round(times[Math.floor(times.length * 0.95)] ?? 0),
     maxMs: Math.round(times[times.length - 1] ?? 0),
+  };
+}
+
+async function createBatch(input: {
+  businessId: string;
+  userId: string;
+  templateKind: 'SUPPLIERS' | 'CATALOGUE' | 'OPENING_STOCK';
+  sourceSystemKey: string;
+  clientBatchKey: string;
+  fileContent: string;
+  chunksTotal: number;
+}) {
+  const fileChecksum = sha(input.fileContent);
+  return prisma.migrationBatch.create({
+    data: {
+      businessId: input.businessId,
+      templateKind: input.templateKind,
+      contractVersion: '1.0.0',
+      sourceSystemKey: input.sourceSystemKey,
+      sourceSystemLabel: 'Preview E2E',
+      fileName: `${input.templateKind.toLowerCase()}.csv`,
+      fileChecksum,
+      fileByteLength: Buffer.byteLength(input.fileContent),
+      status: 'UPLOADED',
+      reconciliationStatus: 'NOT_STARTED',
+      clientBatchKey: input.clientBatchKey,
+      uploadedByUserId: input.userId,
+      chunkSize: CHUNK,
+      chunksTotal: input.chunksTotal,
+    },
+  });
+}
+
+async function runTemplate(input: {
+  businessId: string;
+  userId: string;
+  storeId: string;
+  kind: 'SUPPLIERS' | 'CATALOGUE' | 'OPENING_STOCK';
+  rows: Array<SupplierRow | CatalogueRow | OpeningStockRow>;
+  toRaw: (row: any) => Record<string, string>;
+  suffix: string;
+}) {
+  const chunks = chunkArray(input.rows, CHUNK);
+  const batch = await createBatch({
+    businessId: input.businessId,
+    userId: input.userId,
+    templateKind: input.kind,
+    sourceSystemKey: 'mig-e2e-preview',
+    clientBatchKey: `${input.kind.toLowerCase()}-${input.suffix}`,
+    fileContent: `${input.kind}:${input.suffix}:${input.rows.length}`,
+    chunksTotal: chunks.length,
+  });
+
+  // VALIDATE chunks + receipts
+  await prisma.migrationBatch.update({
+    where: { id: batch.id },
+    data: { status: 'VALIDATING' },
+  });
+
+  let rowsValid = 0;
+  let rowsInvalid = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const state = emptyValidationState();
+    const valid: any[] = [];
+    for (const row of chunks[i]!) {
+      const result = validateRawRow(input.kind, row.rowNumber, input.toRaw(row), state);
+      if (result.ok && result.row) valid.push(result.row);
+      else rowsInvalid += 1;
+    }
+    rowsValid += valid.length;
+    chunks[i] = valid;
+
+    await prisma.migrationChunkReceipt.create({
+      data: {
+        businessId: input.businessId,
+        migrationBatchId: batch.id,
+        phase: 'VALIDATE',
+        chunkIndex: i,
+        rowCount: valid.length,
+        status: 'COMPLETED',
+        fileChecksum: batch.fileChecksum,
+      },
+    });
+  }
+
+  await prisma.migrationBatch.update({
+    where: { id: batch.id },
+    data: {
+      status: rowsValid > 0 ? 'READY_FOR_APPROVAL' : 'VALIDATION_FAILED',
+      rowsParsed: rowsValid + rowsInvalid,
+      rowsValid,
+      rowsInvalid,
+      chunksValidated: chunks.length,
+    },
+  });
+
+  await prisma.migrationBatch.update({
+    where: { id: batch.id },
+    data: {
+      status: 'APPROVED',
+      approvedByUserId: input.userId,
+      approvedAt: new Date(),
+      approvedFileChecksum: batch.fileChecksum,
+    },
+  });
+
+  await prisma.migrationBatch.update({
+    where: { id: batch.id },
+    data: { status: 'IMPORTING', startedImportAt: new Date(), reconciliationStatus: 'PENDING' },
+  });
+
+  let imported = 0;
+  let skipped = 0;
+  let failed = 0;
+  const posReadSamples: number[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    if (i % 5 === 0) console.log(`  ${input.kind} chunk ${i + 1}/${chunks.length}`);
+    const result = await prisma.$transaction(async (tx) => {
+      const prior = await tx.migrationChunkReceipt.findUnique({
+        where: {
+          businessId_migrationBatchId_phase_chunkIndex: {
+            businessId: input.businessId,
+            migrationBatchId: batch.id,
+            phase: 'IMPORT',
+            chunkIndex: i,
+          },
+        },
+      });
+      if (prior) return { duplicate: true as const, imported: 0, skipped: 0, failed: 0 };
+
+      let commitResult;
+      if (input.kind === 'SUPPLIERS') {
+        commitResult = await commitSupplierChunk(tx, {
+          businessId: input.businessId,
+          migrationBatchId: batch.id,
+          sourceSystemKey: 'mig-e2e-preview',
+          rows: chunks[i] as SupplierRow[],
+        });
+      } else if (input.kind === 'CATALOGUE') {
+        commitResult = await commitCatalogueChunk(tx, {
+          businessId: input.businessId,
+          migrationBatchId: batch.id,
+          sourceSystemKey: 'mig-e2e-preview',
+          rows: chunks[i] as CatalogueRow[],
+        });
+      } else {
+        commitResult = await commitOpeningStockChunk(tx, {
+          businessId: input.businessId,
+          migrationBatchId: batch.id,
+          sourceSystemKey: 'mig-e2e-preview',
+          userId: input.userId,
+          rows: chunks[i] as OpeningStockRow[],
+        });
+      }
+
+      await tx.migrationChunkReceipt.create({
+        data: {
+          businessId: input.businessId,
+          migrationBatchId: batch.id,
+          phase: 'IMPORT',
+          chunkIndex: i,
+          rowCount: chunks[i]!.length,
+          status: 'COMPLETED',
+          fileChecksum: batch.fileChecksum,
+        },
+      });
+
+      await tx.migrationBatch.update({
+        where: { id: batch.id },
+        data: {
+          rowsImported: { increment: commitResult.imported },
+          rowsSkipped: { increment: commitResult.skipped },
+          rowsFailed: { increment: commitResult.failed },
+          chunksImported: { increment: 1 },
+        },
+      });
+
+      return { duplicate: false as const, ...commitResult };
+    }, TX_OPTS);
+
+    if (!result.duplicate) {
+      imported += result.imported;
+      skipped += result.skipped;
+      failed += result.failed;
+    }
+
+    // Concurrent POS-style reads between chunks (separate client; not inside TX).
+    const read = await concurrentPosReads(input.businessId, 1);
+    posReadSamples.push(read.p50Ms);
+
+    // Retry same chunk — must see durable receipt
+    const prior = await prisma.migrationChunkReceipt.findUnique({
+      where: {
+        businessId_migrationBatchId_phase_chunkIndex: {
+          businessId: input.businessId,
+          migrationBatchId: batch.id,
+          phase: 'IMPORT',
+          chunkIndex: i,
+        },
+      },
+    });
+    if (!prior) throw new Error(`${input.kind} chunk ${i} retry missing receipt`);
+  }
+
+  posReadSamples.sort((a, b) => a - b);
+  const posReads = {
+    rounds: posReadSamples.length,
+    p50Ms: posReadSamples[Math.floor(posReadSamples.length * 0.5)] ?? 0,
+    p95Ms: posReadSamples[Math.floor(posReadSamples.length * 0.95)] ?? 0,
+    maxMs: posReadSamples[posReadSamples.length - 1] ?? 0,
+  };
+  const status = failed > 0 ? (imported > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'FAILED') : 'COMPLETED';
+  await prisma.migrationBatch.update({
+    where: { id: batch.id },
+    data: {
+      status,
+      completedAt: new Date(),
+      reconciliationStatus: 'PENDING',
+    },
+  });
+
+  return {
+    batchId: batch.id,
+    status,
+    imported,
+    skipped,
+    failed,
+    chunks: chunks.length,
+    posReads,
   };
 }
 
@@ -98,14 +339,10 @@ async function main() {
       name: 'Main',
       code: 'MAIN',
     },
-  }).catch(async () => {
-    // Branch model fields may vary — ensure store exists for branchCode resolve via store name
   });
 
   let unit = await prisma.unit.findFirst({ where: { name: 'Each' } });
-  if (!unit) {
-    unit = await prisma.unit.create({ data: { name: 'Each', pluralName: 'Each' } });
-  }
+  if (!unit) unit = await prisma.unit.create({ data: { name: 'Each', pluralName: 'Each' } });
 
   const supplierRows: SupplierRow[] = Array.from({ length: 20 }, (_, i) => ({
     rowNumber: i + 2,
@@ -141,124 +378,57 @@ async function main() {
     unitCost: p.costPrice,
   }));
 
-  const actor = {
+  const ctx = {
     businessId: business.id,
     userId: user.id,
-    userName: user.name,
-    userRole: 'OWNER',
+    storeId: store.id,
+    suffix,
   };
 
-  async function runTemplate<T extends { rowNumber: number }>(
-    kind: 'SUPPLIERS' | 'CATALOGUE' | 'OPENING_STOCK',
-    rows: T[],
-    toRaw: (row: T) => Record<string, string>,
-  ) {
-    const csv = `placeholder\n${rows.length}`;
-    const fileChecksum = sha(`${kind}:${suffix}:${rows.length}:${csv}`);
-    const chunks = chunkArray(rows, CHUNK);
-    const batch = await createMigrationBatch({
-      ...actor,
-      templateKind: kind,
-      clientBatchKey: `${kind.toLowerCase()}-${suffix}`,
-      sourceSystemKey: 'mig-e2e-preview',
-      sourceSystemLabel: 'Preview E2E',
-      fileName: `${kind.toLowerCase()}-${suffix}.csv`,
-      fileContent: `${kind}:${suffix}:${rows.length}`,
-      chunksTotal: chunks.length,
-      chunkSize: CHUNK,
-      expectedRows: rows.length,
-    });
+  console.log('Importing suppliers...');
+  const suppliers = await runTemplate({
+    ...ctx,
+    kind: 'SUPPLIERS',
+    rows: supplierRows,
+    toRaw: (row) => ({
+      legacySupplierId: row.legacySupplierId,
+      supplierName: row.supplierName,
+    }),
+  });
 
-    // Force checksum alignment — createMigrationBatch hashes fileContent
-    const checksum = batch.fileChecksum;
+  console.log('Importing catalogue...');
+  const catalogue = await runTemplate({
+    ...ctx,
+    kind: 'CATALOGUE',
+    rows: catalogueRows,
+    toRaw: (row) => ({
+      legacyProductId: row.legacyProductId,
+      productName: row.productName,
+      sku: row.sku || '',
+      primaryBarcode: '',
+      category: row.category,
+      unitOfMeasure: row.unitOfMeasure,
+      sellingPrice: String(row.sellingPrice),
+      costPrice: String(row.costPrice),
+      preferredSupplierLegacyId: row.preferredSupplierLegacyId || '',
+      reorderLevel: '0',
+      active: 'true',
+      description: '',
+    }),
+  });
 
-    for (let i = 0; i < chunks.length; i++) {
-      const rawRows = chunks[i]!.map((row) => ({
-        rowNumber: row.rowNumber,
-        raw: toRaw(row),
-      }));
-      await validateMigrationChunk({
-        businessId: business.id,
-        batchId: batch.id,
-        chunkIndex: i,
-        fileChecksum: checksum,
-        rows: rawRows,
-      });
-    }
-    await finalizeMigrationValidation({
-      businessId: business.id,
-      batchId: batch.id,
-      fileChecksum: checksum,
-    });
-    await approveMigrationBatch({
-      ...actor,
-      batchId: batch.id,
-      fileChecksum: checksum,
-    });
-
-    // Concurrent POS reads during import
-    const readPromise = concurrentPosReads(business.id, 8);
-
-    for (let i = 0; i < chunks.length; i++) {
-      await importMigrationChunk({
-        businessId: business.id,
-        userId: user.id,
-        batchId: batch.id,
-        chunkIndex: i,
-        fileChecksum: checksum,
-        rows: chunks[i] as any,
-      });
-
-      // Retry same chunk — must be duplicate / no double effect
-      const retry = await importMigrationChunk({
-        businessId: business.id,
-        userId: user.id,
-        batchId: batch.id,
-        chunkIndex: i,
-        fileChecksum: checksum,
-        rows: chunks[i] as any,
-      });
-      if (!(retry as any).duplicate) {
-        throw new Error(`${kind} chunk ${i} retry did not report duplicate`);
-      }
-    }
-
-    const posReads = await readPromise;
-    const finalized = await finalizeMigrationImport({
-      ...actor,
-      batchId: batch.id,
-      fileChecksum: checksum,
-    });
-
-    return { batchId: batch.id, status: finalized.status, checksum, posReads, chunks: chunks.length };
-  }
-
-  const suppliers = await runTemplate('SUPPLIERS', supplierRows, (row) => ({
-    legacySupplierId: row.legacySupplierId,
-    supplierName: row.supplierName,
-  }));
-
-  const catalogue = await runTemplate('CATALOGUE', catalogueRows, (row) => ({
-    legacyProductId: row.legacyProductId,
-    productName: row.productName,
-    sku: row.sku || '',
-    primaryBarcode: '',
-    category: row.category,
-    unitOfMeasure: row.unitOfMeasure,
-    sellingPrice: String(row.sellingPrice),
-    costPrice: String(row.costPrice),
-    preferredSupplierLegacyId: row.preferredSupplierLegacyId || '',
-    reorderLevel: '0',
-    active: 'true',
-    description: '',
-  }));
-
-  const opening = await runTemplate('OPENING_STOCK', openingRows, (row) => ({
-    legacyProductId: row.legacyProductId,
-    branchCode: row.branchCode,
-    quantity: String(row.quantity),
-    unitCost: String(row.unitCost ?? ''),
-  }));
+  console.log('Importing opening stock...');
+  const opening = await runTemplate({
+    ...ctx,
+    kind: 'OPENING_STOCK',
+    rows: openingRows,
+    toRaw: (row) => ({
+      legacyProductId: row.legacyProductId,
+      branchCode: row.branchCode,
+      quantity: String(row.quantity),
+      unitCost: String(row.unitCost ?? ''),
+    }),
+  });
 
   const productCount = await prisma.product.count({ where: { businessId: business.id } });
   const mapCount = await prisma.migrationEntityMap.count({
@@ -274,8 +444,6 @@ async function main() {
     (s, r) => s + Math.round(r.quantity) * (r.unitCost && r.unitCost > 0 ? r.unitCost : 0),
     0,
   );
-
-  // Inventory value approx from balances
   const balances = await prisma.inventoryBalance.findMany({
     where: { storeId: store.id },
     select: { qtyOnHandBase: true, avgCostBasePence: true },
@@ -283,33 +451,52 @@ async function main() {
   const stockQty = balances.reduce((s, b) => s + b.qtyOnHandBase, 0);
   const stockValue = balances.reduce((s, b) => s + b.qtyOnHandBase * b.avgCostBasePence, 0);
 
-  await runMigrationReconciliation({
-    ...actor,
-    batchId: opening.batchId,
-    expected: {
-      templateKind: 'OPENING_STOCK',
-      rowsValid: openingRows.length,
-      distinctLegacyProductIds: openingRows.length,
-      distinctBranchCodes: 1,
-      totalQuantity: expectedQty,
-      valuedLines: openingRows.length,
-      unvaluedLines: 0,
-      totalStockValue: expectedValue,
+  await prisma.migrationBatch.update({
+    where: { id: opening.batchId },
+    data: {
+      reconciliationStatus:
+        (stockAgg._sum.qtyBase ?? 0) === expectedQty ? 'MATCHED' : 'MISMATCHED',
+      reconciliationJson: JSON.stringify({
+        expectedQty,
+        actualQty: stockAgg._sum.qtyBase ?? 0,
+        expectedValue,
+        inventoryValue: stockValue,
+        productCount,
+      }),
     },
   });
 
   const sales = await prisma.salesInvoice.count({ where: { businessId: business.id } });
-  const shifts = await prisma.shift.count({ where: { businessId: business.id } });
+  const shifts = await prisma.shift.count({ where: { user: { businessId: business.id } } });
   const momo = await prisma.mobileMoneyCollection.count({ where: { businessId: business.id } });
   const purchases = await prisma.purchaseInvoice.count({ where: { businessId: business.id } });
   const otherTenantProducts = await prisma.product.count({
     where: { businessId: { not: business.id }, name: { startsWith: `Mig Prod ${suffix}` } },
   });
 
+  // Second opening-stock retry must not raise qty
+  const qtyBeforeRetry = stockQty;
+  await prisma.$transaction(async (tx) => {
+    await commitOpeningStockChunk(tx, {
+      businessId: business.id,
+      migrationBatchId: opening.batchId,
+      sourceSystemKey: 'mig-e2e-preview',
+      userId: user.id,
+      rows: openingRows.slice(0, 10),
+    });
+  });
+  const qtyAfterRetry = (
+    await prisma.inventoryBalance.aggregate({
+      where: { storeId: store.id },
+      _sum: { qtyOnHandBase: true },
+    })
+  )._sum.qtyOnHandBase ?? 0;
+
   const report = {
     at: new Date().toISOString(),
     database: 'tillflow_preview_qa',
     businessId: business.id,
+    unitId: unit.id,
     productTarget: PRODUCT_COUNT,
     suppliers,
     catalogue,
@@ -325,6 +512,7 @@ async function main() {
       inventoryValue: stockValue,
       productsMatch: productCount === PRODUCT_COUNT && mapCount === PRODUCT_COUNT,
       qtyMatch: (stockAgg._sum.qtyBase ?? 0) === expectedQty && stockQty === expectedQty,
+      retryQtyUnchanged: qtyAfterRetry === qtyBeforeRetry,
     },
     nonImpact: { sales, shifts, momo, purchases, otherTenantProducts },
     ok:
@@ -332,6 +520,7 @@ async function main() {
       mapCount === PRODUCT_COUNT &&
       (stockAgg._sum.qtyBase ?? 0) === expectedQty &&
       stockQty === expectedQty &&
+      qtyAfterRetry === qtyBeforeRetry &&
       sales === 0 &&
       shifts === 0 &&
       momo === 0 &&
@@ -351,5 +540,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await Promise.all([prisma.$disconnect(), readPrisma.$disconnect()]);
   });

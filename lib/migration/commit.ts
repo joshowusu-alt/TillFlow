@@ -54,9 +54,18 @@ async function upsertEntityMap(
 
 async function resolveUnitId(tx: Tx, unitName: string): Promise<string> {
   const trimmed = unitName.trim();
+  try {
+    const hit = await tx.unit.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (hit) return hit.id;
+  } catch {
+    // SQLite local client may not support mode: 'insensitive'
+  }
   const all = await tx.unit.findMany({ select: { id: true, name: true } });
-  const hit = all.find((u: { name: string }) => u.name.toLowerCase() === trimmed.toLowerCase());
-  if (hit) return hit.id;
+  const legacy = all.find((u: { name: string }) => u.name.toLowerCase() === trimmed.toLowerCase());
+  if (legacy) return legacy.id;
   const created = await tx.unit.create({
     data: { name: trimmed, pluralName: trimmed.endsWith('s') ? trimmed : `${trimmed}s` },
     select: { id: true },
