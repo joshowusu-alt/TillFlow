@@ -126,3 +126,20 @@ describe('isUnusedCatalogueProduct', () => {
     expect(where.inventoryBalances).toEqual({ none: {} });
   });
 });
+
+describe('hot-path APIs do not require full-ID materialisation', () => {
+  it('exports count and where helpers used by Home and Products', async () => {
+    const mod = await import('@/lib/improve-records-load');
+    expect(typeof mod.countStockGapSignals).toBe('function');
+    expect(typeof mod.getStockGapIssueProductWhere).toBe('function');
+    expect(typeof mod.listStockGapSignals).toBe('function');
+  });
+
+  it('countStockGapSignals never calls product.findMany', async () => {
+    const { prisma } = await import('@/lib/prisma');
+    const { countStockGapSignals } = await import('@/lib/improve-records-load');
+    vi.mocked(prisma.product.count).mockResolvedValue(0);
+    await countStockGapSignals('biz-1');
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+  });
+});

@@ -63,6 +63,11 @@ export default async function OpeningStockPage({
   const products = invalidIssue
     ? []
     : await prisma.product.findMany({
+        // CAPACITY LIMITATION (not solved in this candidate): issue-mode still
+        // loads every STOCK_SETUP_GAP match into memory for the opening-stock
+        // form. Primary large-catalogue path is /products?issue=STOCK_SETUP_GAP
+        // (server-paginated). Do not route high-volume businesses here without
+        // a follow-up that adds server-side pagination / take bounds.
         where: productWhere,
         select: {
           id: true,
