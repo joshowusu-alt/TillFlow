@@ -164,9 +164,43 @@ describe('Improve Your Records recommendation engine', () => {
     );
     expect(result.primary?.key).toBe('unused-catalogue');
     expect(result.primary?.title).toBe('Review unused catalogue products');
-    expect(result.primary?.explanation).toContain('never been stocked or sold');
+    expect(result.primary?.explanation).toContain('no confirmed stock quantity and no sales');
+    expect(result.primary?.explanation).toContain('older than 14 days');
+    expect(result.primary?.explanation).not.toContain('never been stocked or sold');
     expect(result.primary?.explanation).not.toContain('opening quantity');
     expect(result.primary?.href).toBe('/products?issue=UNUSED_CATALOGUE');
+  });
+
+  it('Preview-vs-production card split: recent no-balance → stock-completeness; aged → unused-catalogue', () => {
+    // Same conceptual population (active priced, no InventoryBalance) lands in
+    // different Home cards based on age/sales — explaining why Preview showed
+    // "600 … confirmed stock quantity" while production showed an unused-catalogue count.
+    const recentGap = computeImproveRecords(
+      base({
+        productsNeedingOpeningQtyCount: 600,
+        unusedCatalogueProductCount: 0,
+        openingBalancesStatus: 'complete',
+        purchasesNeedingSupplierCount: 0,
+        purchaseCount: 10,
+      })
+    );
+    expect(recentGap.primary?.key).toBe('stock-completeness');
+    expect(recentGap.primary?.explanation).toContain(
+      '600 active products still need a confirmed stock quantity'
+    );
+
+    const agedUnused = computeImproveRecords(
+      base({
+        productsNeedingOpeningQtyCount: 0,
+        unusedCatalogueProductCount: 592,
+        openingBalancesStatus: 'complete',
+        purchasesNeedingSupplierCount: 0,
+        purchaseCount: 10,
+      })
+    );
+    expect(agedUnused.primary?.key).toBe('unused-catalogue');
+    expect(agedUnused.primary?.explanation).toContain('592 active products older than 14 days');
+    expect(agedUnused.primary?.explanation).toContain('no confirmed stock quantity and no sales');
   });
 
   it('EL-SHADDAI-shaped: unused catalogue does not outrank genuine unpaid supplier', () => {

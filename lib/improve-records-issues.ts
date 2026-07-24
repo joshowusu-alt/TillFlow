@@ -42,9 +42,9 @@ export const IMPROVE_RECORDS_ISSUE_DEFS: Record<
     key: 'UNUSED_CATALOGUE',
     heading: 'Unused catalogue products',
     explanation:
-      'These products have never been stocked or sold. Review whether you still intend to carry them.',
+      'These active products are older than 14 days, have no confirmed stock quantity and no sales. Review whether you still intend to carry them.',
     href: '/products?issue=UNUSED_CATALOGUE',
-    recordStatusLabel: 'Never stocked or sold',
+    recordStatusLabel: 'No stock quantity or sales',
     homeReturnHref: HOME_RETURN,
   },
   MISSING_COST: {
