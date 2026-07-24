@@ -17,12 +17,16 @@ npx tsx scripts/perf/catalogue-scale-bench.ts --sizes=50000 --iters=3
 
 # Seed only
 npx tsx scripts/perf/catalogue-scale-bench.ts --sizes=1000 --seed-only
+
+# Isolated Preview Postgres (requires tmp/preview-db-restricted.env → tillflow_preview_qa)
+node scripts/perf/run-catalogue-scale-preview-pg.mjs --sizes=1000,10000,50000 --iters=5
 ```
 
-Results write to `tmp/catalogue-scale-bench-*.json` (gitignored via `tmp/`).
+Results write to `tmp/catalogue-scale-*.json` (gitignored via `tmp/`).
 
 ## Notes
 
-- Uses synthetic tenants (`scale.*.@tillflow-test.invalid`), never production data.
-- Local timings are SQLite-only; do not describe them as Ghana-network or Preview evidence.
-- Re-run against isolated Preview Postgres after deploy for hosting-class numbers.
+- Uses synthetic tenants (`scale.*.@tillflow-test.invalid` / `pg.scale.*`), never production data.
+- Local timings are SQLite-only; do not describe them as Ghana-network evidence.
+- Preview Postgres timings are hosting-class for the isolated QA database only.
+- Opening-stock `?issue=STOCK_SETUP_GAP` remains unbounded (fetch-all); primary path is `/products?issue=…`.
