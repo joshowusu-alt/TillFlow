@@ -443,6 +443,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <a href="/settings/organization" className="btn-secondary text-sm">Organization</a>
             <a href="/settings/billing" className="btn-secondary text-sm">Billing</a>
             <a href="/settings/import-stock" className="btn-secondary text-sm">Import Stock</a>
+            <a href="/settings/migration" className="btn-secondary text-sm">Business migration</a>
             <a href="/settings/data-repair" className="btn-secondary text-sm">Data Repair</a>
           </div>
         </div>

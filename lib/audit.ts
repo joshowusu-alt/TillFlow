@@ -62,7 +62,8 @@ export type AuditAction =
   | 'CUSTOMER_DELETE'
   | 'SUPPLIER_DELETE'
   | 'CATEGORY_DELETE'
-  | 'CATEGORY_UPDATE';
+  | 'CATEGORY_UPDATE'
+  | 'MIGRATION_BATCH';
 
 /**
  * Write an entry to the audit trail — best-effort, never throws, must not block callers.
