@@ -175,9 +175,13 @@ model Business {
   customers              Customer[]
   suppliers              Supplier[]
   categories             Category[]
-  products               Product[]
-  productImports         ProductImport[]
-  accounts               Account[]
+  products                      Product[]
+  productImports                ProductImport[]
+  migrationBatches              MigrationBatch[]
+  migrationEntityMaps           MigrationEntityMap[]
+  migrationChunkReceipts        MigrationChunkReceipt[]
+  migrationOpeningStockPostings MigrationOpeningStockPosting[]
+  accounts                      Account[]
   journalEntries         JournalEntry[]
   expenses               Expense[]
   expensePayments        ExpensePayment[]
@@ -522,6 +526,9 @@ model User {
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
   productImports             ProductImport[]
+  migrationBatchesUploaded   MigrationBatch[]        @relation("MigrationBatchUploadedBy")
+  migrationBatchesApproved   MigrationBatch[]        @relation("MigrationBatchApprovedBy")
+  migrationBatchesReconciled MigrationBatch[]        @relation("MigrationBatchReconciledBy")
 
   @@index([businessId, active])
 }
@@ -713,6 +720,135 @@ model ProductImport {
   uploadedBy User?    @relation(fields: [uploadedByUserId], references: [id])
 
   @@index([businessId, createdAt])
+}
+
+/// Source-neutral migration batch (Phase 1). External systems transform into
+/// TillFlow templates before upload — no vendor-specific columns here.
+/// Allowed values for string columns are enforced by SQL CHECK constraints
+/// (repo convention: statuses are strings, not Prisma enums).
+model MigrationBatch {
+  id                   String    @id @default(cuid())
+  businessId           String
+  /// CATALOGUE | SUPPLIERS | OPENING_STOCK (CHECK-constrained)
+  templateKind         String
+  contractVersion      String
+  /// Stable normalized source namespace (immutable after create). Not a vendor enum.
+  sourceSystemKey      String
+  /// Optional free-text display label only — never used as identity.
+  sourceSystemLabel    String?
+  fileName             String?
+  /// SHA-256 hex of uploaded bytes (server-computed). Immutable after create.
+  fileChecksum         String
+  fileByteLength       Int       @default(0)
+  /// Lifecycle status (CHECK-constrained)
+  status               String    @default("UPLOADED")
+  /// Separate from import completion (CHECK-constrained)
+  reconciliationStatus String    @default("NOT_STARTED")
+  clientBatchKey       String
+  uploadedByUserId     String?
+  approvedByUserId     String?
+  approvedAt           DateTime?
+  /// Checksum frozen at approval — must match fileChecksum for commit.
+  approvedFileChecksum String?
+  reconciledByUserId   String?
+  reconciledAt         DateTime?
+  startedImportAt      DateTime?
+  completedAt          DateTime?
+  rowsParsed           Int       @default(0)
+  rowsValid            Int       @default(0)
+  rowsInvalid          Int       @default(0)
+  rowsImported         Int       @default(0)
+  rowsSkipped          Int       @default(0)
+  rowsFailed           Int       @default(0)
+  chunkSize            Int       @default(200)
+  chunksTotal          Int       @default(0)
+  chunksValidated      Int       @default(0)
+  chunksImported       Int       @default(0)
+  reconciliationJson   String?
+  exceptionReportJson  String?
+  summaryJson          String?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  business        Business                       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploadedBy      User?                          @relation("MigrationBatchUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  approvedBy      User?                          @relation("MigrationBatchApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  reconciledBy    User?                          @relation("MigrationBatchReconciledBy", fields: [reconciledByUserId], references: [id], onDelete: SetNull)
+  entityMaps      MigrationEntityMap[]
+  chunkReceipts   MigrationChunkReceipt[]
+  openingPostings MigrationOpeningStockPosting[]
+
+  /// Tenant-aware composite target for child FKs.
+  @@unique([businessId, id])
+  @@unique([businessId, clientBatchKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, sourceSystemKey])
+  @@index([businessId, fileChecksum])
+}
+
+model MigrationEntityMap {
+  id               String   @id @default(cuid())
+  businessId       String
+  migrationBatchId String
+  /// Same namespace as the originating batch (denormalised for independent lookup).
+  sourceSystemKey  String
+  /// PRODUCT | SUPPLIER | CATEGORY (CHECK-constrained)
+  entityType       String
+  sourceReference  String
+  /// Polymorphic TillFlow id — no FK (target model depends on entityType).
+  targetId         String
+  createdAt        DateTime @default(now())
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    MigrationBatch @relation(fields: [businessId, migrationBatchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, sourceSystemKey, entityType, sourceReference])
+  @@index([businessId, entityType, targetId])
+  @@index([businessId, migrationBatchId])
+}
+
+model MigrationChunkReceipt {
+  id               String   @id @default(cuid())
+  businessId       String
+  migrationBatchId String
+  /// VALIDATE | IMPORT (CHECK-constrained)
+  phase            String
+  chunkIndex       Int
+  rowCount         Int      @default(0)
+  /// COMPLETED only — receipt rows are created when the chunk TX commits successfully.
+  status           String   @default("COMPLETED")
+  fileChecksum     String
+  createdAt        DateTime @default(now())
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    MigrationBatch @relation(fields: [businessId, migrationBatchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, migrationBatchId, phase, chunkIndex])
+  @@index([businessId, migrationBatchId])
+}
+
+/// Row-level durable claim for opening-stock migration posts (equity path only).
+model MigrationOpeningStockPosting {
+  id                String   @id @default(cuid())
+  businessId        String
+  migrationBatchId  String
+  sourceSystemKey   String
+  sourceReference   String
+  storeId           String
+  productId         String
+  referenceId       String
+  qtyBase           Int
+  unitCostBasePence Int?
+  createdAt         DateTime @default(now())
+
+  business Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  batch    MigrationBatch @relation(fields: [businessId, migrationBatchId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, migrationBatchId, storeId, productId])
+  @@unique([businessId, referenceId])
+  @@index([businessId, sourceSystemKey, sourceReference])
+  @@index([storeId, productId])
 }
 
 model Unit {

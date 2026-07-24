@@ -8,6 +8,11 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, ensureChartOfAccounts, postJournalEntry } from '@/lib/accounting';
 import { fetchInventoryMap, incrementInventoryBalance } from '@/lib/services/shared/inventory-utils';
+import type { PrismaClient } from '@prisma/client';
+
+type PrismaOrTx =
+  | PrismaClient
+  | Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
 export type OpeningInventoryLine = {
   productId: string;
@@ -24,6 +29,7 @@ export type RecordOpeningInventoryResult = {
   costReviewProductIds: string[];
   journalPosted: boolean;
   referenceId: string;
+  alreadyPosted: boolean;
 };
 
 function weightedAvgCost(beforeQty: number, beforeCost: number, addQty: number, addCost: number): number {
@@ -42,7 +48,10 @@ export async function recordOpeningInventory(input: {
   /** Stable id for journal / movement reference — also used as idempotency key. */
   referenceId: string;
   description?: string;
+  /** When provided, writes join the caller's transaction (no nested $transaction). */
+  prismaClient?: PrismaOrTx;
 }): Promise<RecordOpeningInventoryResult> {
+  const client = (input.prismaClient ?? prisma) as PrismaOrTx;
   const lines = input.lines.filter((l) => l.productId && l.unitId && l.qtyInUnit > 0);
   if (lines.length === 0) {
     return {
@@ -52,11 +61,12 @@ export async function recordOpeningInventory(input: {
       costReviewProductIds: [],
       journalPosted: false,
       referenceId: input.referenceId,
+      alreadyPosted: false,
     };
   }
 
   // Idempotency: if this reference already posted opening movements, do not double-apply.
-  const existing = await prisma.stockMovement.findFirst({
+  const existing = await (client as any).stockMovement.findFirst({
     where: {
       storeId: input.storeId,
       referenceType: 'OPENING_BALANCE_INVENTORY',
@@ -72,11 +82,12 @@ export async function recordOpeningInventory(input: {
       costReviewProductIds: [],
       journalPosted: false,
       referenceId: input.referenceId,
+      alreadyPosted: true,
     };
   }
 
   const unitIds = [...new Set(lines.map((l) => l.unitId))];
-  const productUnits = await prisma.productUnit.findMany({
+  const productUnits = await (client as any).productUnit.findMany({
     where: {
       productId: { in: [...new Set(lines.map((l) => l.productId))] },
       unitId: { in: unitIds },
@@ -88,17 +99,17 @@ export async function recordOpeningInventory(input: {
       product: { select: { id: true, businessId: true, defaultCostBasePence: true } },
     },
   });
-  const puMap = new Map(productUnits.map((pu) => [`${pu.productId}:${pu.unitId}`, pu]));
+  const puMap = new Map(productUnits.map((pu: any) => [`${pu.productId}:${pu.unitId}`, pu]));
 
   for (const line of lines) {
-    const pu = puMap.get(`${line.productId}:${line.unitId}`);
+    const pu = puMap.get(`${line.productId}:${line.unitId}`) as any;
     if (!pu || pu.product.businessId !== input.businessId) {
       throw new Error('Product unit not found for this business.');
     }
   }
 
   const productIds = [...new Set(lines.map((l) => l.productId))];
-  const inventoryMap = await fetchInventoryMap(input.storeId, productIds);
+  const inventoryMap = await fetchInventoryMap(input.storeId, productIds, client as any);
 
   type Applied = {
     productId: string;
@@ -116,7 +127,7 @@ export async function recordOpeningInventory(input: {
   let unvaluedUnits = 0;
 
   for (const line of lines) {
-    const pu = puMap.get(`${line.productId}:${line.unitId}`)!;
+    const pu = puMap.get(`${line.productId}:${line.unitId}`) as any;
     const qtyBase = Math.round(line.qtyInUnit * pu.conversionToBase);
     if (qtyBase <= 0) continue;
 
@@ -151,17 +162,13 @@ export async function recordOpeningInventory(input: {
     }
   }
 
-  await ensureChartOfAccounts(input.businessId);
+  if (!input.prismaClient) {
+    await ensureChartOfAccounts(input.businessId);
+  }
 
-  await prisma.$transaction(async (tx) => {
+  const run = async (tx: any) => {
     for (const row of applied) {
-      await incrementInventoryBalance(
-        tx,
-        input.storeId,
-        row.productId,
-        row.qtyBase,
-        row.newAvgCost
-      );
+      await incrementInventoryBalance(tx, input.storeId, row.productId, row.qtyBase, row.newAvgCost);
     }
 
     if (applied.length > 0) {
@@ -192,7 +199,13 @@ export async function recordOpeningInventory(input: {
         prismaClient: tx as any,
       });
     }
-  });
+  };
+
+  if (input.prismaClient) {
+    await run(client);
+  } else {
+    await prisma.$transaction(async (tx) => run(tx));
+  }
 
   return {
     valuedUnits,
@@ -201,5 +214,6 @@ export async function recordOpeningInventory(input: {
     costReviewProductIds: [...new Set(costReviewProductIds)],
     journalPosted: valuedPence > 0,
     referenceId: input.referenceId,
+    alreadyPosted: false,
   };
 }
