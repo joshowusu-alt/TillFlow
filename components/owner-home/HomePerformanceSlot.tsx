@@ -16,7 +16,8 @@ export default async function HomePerformanceSlot({
   let data: HomePerformanceSummary;
   try {
     data = await performancePromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.performance] failed to load today\'s figures', error);
     return <HomePerformanceUnavailable />;
   }
 

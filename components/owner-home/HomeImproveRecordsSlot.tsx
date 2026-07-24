@@ -10,7 +10,8 @@ export default async function HomeImproveRecordsSlot({
   let improveRecords: ImproveRecordsResult;
   try {
     improveRecords = await improvePromise;
-  } catch {
+  } catch (error) {
+    console.error('[home.iyr] failed to load improve-your-records data', error);
     return <HomeImproveRecordsUnavailable />;
   }
 
