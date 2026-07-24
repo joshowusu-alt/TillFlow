@@ -279,10 +279,7 @@ async function run() {
     step('7b/12 Open receipt OK');
 
     step('8/12 Amend sale');
-    await page.goto(`${BASE_URL}/sales`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
-    const amendRow = page.locator('tr', { hasText: paidSale.invoiceId.slice(0, 8) }).first();
-    await amendRow.getByRole('link', { name: /Amend/i }).click();
+    await page.goto(`${BASE_URL}/sales/amend/${paidSale.invoiceId}`, { waitUntil: 'networkidle' });
     await waitForURLPattern(page, /\/sales\/amend\//);
     await page.waitForTimeout(2000);
     await page.getByRole('button', { name: /^Remove$/i }).first().click();
