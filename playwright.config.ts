@@ -84,6 +84,14 @@ export default defineConfig({
       },
     },
     {
+      name: 'pos-option-b-chromium',
+      testMatch: /pos-checkout-option-b\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'playwright/.auth/owner.json',
+      },
+    },
+    {
       name: 'phase1-auth-chromium',
       testMatch: /tap-to-sell-phase1-auth\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },

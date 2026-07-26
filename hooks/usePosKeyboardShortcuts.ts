@@ -6,11 +6,12 @@ type UsePosKeyboardShortcutsOptions = {
   canSubmit: boolean;
   cartLength: number;
   cashRef: RefObject<HTMLInputElement>;
-  formRef: RefObject<HTMLFormElement>;
+  isCompletingSale?: boolean;
   lastCartLineId: string | null;
   lastReceiptId: string;
   productSearchRef: RefObject<HTMLInputElement>;
   onCloseKeyboardHelp: () => void;
+  onCompleteSale?: () => void;
   onOpenParkModal: () => void;
   onRemoveLine: (lineId: string) => void;
   onToggleKeyboardHelp: () => void;
@@ -23,11 +24,12 @@ export function usePosKeyboardShortcuts({
   canSubmit,
   cartLength,
   cashRef,
-  formRef,
+  isCompletingSale = false,
   lastCartLineId,
   lastReceiptId,
   productSearchRef,
   onCloseKeyboardHelp,
+  onCompleteSale,
   onOpenParkModal,
   onRemoveLine,
   onToggleKeyboardHelp,
@@ -74,10 +76,10 @@ export function usePosKeyboardShortcuts({
         barcodeRef.current?.focus();
         return;
       }
-      if (event.ctrlKey && event.key === 'Enter') {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
-        if (canSubmit) {
-          formRef.current?.requestSubmit();
+        if (canSubmit && !isCompletingSale) {
+          onCompleteSale?.();
         }
         return;
       }
@@ -123,10 +125,11 @@ export function usePosKeyboardShortcuts({
     canSubmit,
     cartLength,
     cashRef,
-    formRef,
+    isCompletingSale,
     lastCartLineId,
     lastReceiptId,
     onCloseKeyboardHelp,
+    onCompleteSale,
     onOpenParkModal,
     onRemoveLine,
     onToggleKeyboardHelp,

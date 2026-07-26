@@ -643,17 +643,44 @@ describe('createSale — payments & stock', () => {
   it('executes consolidated shift/cash-drawer CTE when cash payment with open shift', async () => {
     const shift = { id: 'shift-1', expectedCashPence: 5000 };
     getOpenShiftForTillMock.mockResolvedValue(shift);
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/tillflow';
 
-    await createSale(makeBaseInput({
-      payments: [{ method: 'CASH', amountPence: 500 }],
-      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
-    }));
+    try {
+      await createSale(makeBaseInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
 
-    // C11: shift + cash drawer are consolidated into one $queryRaw CTE call.
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
-    // The old two-call path must not be used.
-    expect((prismaMock as any).cashDrawerEntry.create).not.toHaveBeenCalled();
-    expect((prismaMock as any).shift.update).not.toHaveBeenCalled();
+      // C11: shift + cash drawer are consolidated into one $queryRaw CTE call.
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      // The old two-call path must not be used on Postgres.
+      expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+      expect((prismaMock as any).cashDrawerEntry?.create).not.toHaveBeenCalled();
+      expect((prismaMock as any).shift?.update).not.toHaveBeenCalled();
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+  });
+
+  it('uses typed cash-drawer helper on SQLite local runtime', async () => {
+    const shift = { id: 'shift-1', expectedCashPence: 5000 };
+    getOpenShiftForTillMock.mockResolvedValue(shift);
+    recordCashDrawerEntryTxMock.mockResolvedValue({ id: 'cde-1' });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'file:./dev.db';
+
+    try {
+      await createSale(makeBaseInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+
+      expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
   });
 
   it('skips shift/cash-drawer CTE when no cash payment', async () => {
@@ -724,6 +751,77 @@ describe('createSale — payments & stock', () => {
         customerId: undefined,
       }))
     ).rejects.toThrow('Customer is required');
+  });
+
+  it('rejects Unpaid sales that still carry tender amounts', async () => {
+    prismaMock.customer.findFirst.mockResolvedValue({
+      id: 'cust-1',
+      storeId: STORE_ID,
+      creditLimitPence: 0,
+      loyaltyPointsBalance: 0,
+    });
+
+    await expect(
+      createSale(makeBaseInput({
+        paymentStatus: 'UNPAID',
+        customerId: 'cust-1',
+        payments: [{ method: 'CASH', amountPence: 100 }],
+      })),
+    ).rejects.toThrow(/Unpaid sales cannot include payments/i);
+  });
+
+  it('persists cash tendered and change without treating change as revenue', async () => {
+    await createSale(makeBaseInput({
+      paymentStatus: 'PAID',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+      cashReceivedPence: 1000,
+      changeDuePence: 500,
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+    }));
+
+    const createCall = (prismaMock as any).salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.cashReceivedPence).toBe(1000);
+    expect(createCall.data.changeDuePence).toBe(500);
+    expect(createCall.data.totalPence).toBe(500);
+    expect(createCall.data.payments.create).toEqual([
+      expect.objectContaining({ method: 'CASH', amountPence: 500 }),
+    ]);
+  });
+
+  it('returns the existing invoice for a duplicate externalRef instead of creating another sale', async () => {
+    const existing = {
+      id: 'inv-existing',
+      totalPence: 500,
+      transactionNumber: 'INV-000001',
+      externalRef: 'POS_ONLINE:attempt-1',
+    };
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce(existing);
+
+    const result = await createSale(makeBaseInput({
+      externalRef: 'POS_ONLINE:attempt-1',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }));
+
+    expect(result).toEqual(existing);
+    expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('preserves Card and Bank Transfer references on payment rows', async () => {
+    await createSale(makeBaseInput({
+      payments: [
+        { method: 'CARD', amountPence: 200, reference: 'CARD-9' },
+        { method: 'TRANSFER', amountPence: 300, reference: 'BT-22' },
+      ],
+      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+    }));
+
+    const createCall = (prismaMock as any).salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.payments.create).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: 'CARD', reference: 'CARD-9' }),
+        expect.objectContaining({ method: 'TRANSFER', reference: 'BT-22' }),
+      ]),
+    );
   });
 });
 

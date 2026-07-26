@@ -28,6 +28,7 @@ import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { unstable_cache } from 'next/cache';
 
 // Account codes fetched on every checkout — extracted to module level so the
@@ -328,6 +329,10 @@ export type CreateSaleInput = {
   bypassOpenTillRequirement?: boolean;
   /** Points to redeem at checkout (requires customerId). */
   loyaltyPointsToRedeem?: number;
+  /** Actual cash tendered (may exceed applied cash when change is due). */
+  cashReceivedPence?: number | null;
+  /** Calculated change for cash tender; never treated as sales revenue. */
+  changeDuePence?: number | null;
   lines: SaleLineInput[];
 };
 
@@ -423,6 +428,19 @@ async function createSaleImpl(input: CreateSaleInput) {
     { stage: 'validate', rowCount: input.lines.length },
     CHECKOUT_STAGE_THRESHOLDS_MS.validate,
   );
+
+  // Idempotent retry: return the original committed invoice for the same externalRef.
+  if (input.externalRef) {
+    const existingByRef = await prisma.salesInvoice.findFirst({
+      where: {
+        businessId: input.businessId,
+        externalRef: input.externalRef,
+      },
+    });
+    if (existingByRef) {
+      return existingByRef;
+    }
+  }
 
   // Pre-compute values available from input (no DB dependency)
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
@@ -702,9 +720,26 @@ async function createSaleImpl(input: CreateSaleInput) {
   const finalStatus =
     balanceDue === 0 ? 'PAID' : totalPaid === 0 ? 'UNPAID' : 'PART_PAID';
 
+  // Keep UI intent aligned with tender so stale hidden fields cannot rewrite status.
+  if (input.paymentStatus === 'UNPAID' && totalPaid > 0) {
+    throw new UserError('Unpaid sales cannot include payments. Clear payment amounts or choose Part Paid.');
+  }
+  if (input.paymentStatus === 'PART_PAID' && (totalPaid <= 0 || balanceDue <= 0)) {
+    throw new UserError('Part-paid sales require a payment greater than zero and below the total.');
+  }
+  if (input.paymentStatus === 'PAID' && finalStatus !== 'PAID') {
+    throw new UserError('Full payment is required for paid sales.');
+  }
+
   if (finalStatus !== 'PAID' && !input.customerId) {
     throw new UserError('Customer is required for credit or part-paid sales');
   }
+
+  const cashReceivedPence = Math.max(0, Math.round(input.cashReceivedPence ?? cashPence));
+  const changeDuePence = Math.max(
+    0,
+    Math.round(input.changeDuePence ?? Math.max(cashReceivedPence - cashPence, 0)),
+  );
 
   // When a confirmed MoMo collection exists, attach it; otherwise treat
   // MoMo as a manually-recorded payment (staff verify the receipt visually
@@ -794,7 +829,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       cashierUserId: input.cashierUserId,
       customerId: input.customerId || null,
       paymentStatus: finalStatus,
-      dueDate: input.dueDate || null,
+      dueDate: finalStatus === 'PAID' ? null : input.dueDate || null,
       subtotalPence: subtotal,
       vatPence: vatTotal,
       totalPence: total,
@@ -806,6 +841,8 @@ async function createSaleImpl(input: CreateSaleInput) {
       discountOverrideReason: input.discountOverrideReason ?? null,
       discountApprovedByUserId,
       grossMarginPence: grossMarginEstimate,
+      cashReceivedPence: cashPence > 0 ? cashReceivedPence : 0,
+      changeDuePence: cashPence > 0 ? changeDuePence : 0,
       externalRef: input.externalRef ?? null,
       createdAt: input.createdAt ?? undefined,
       lines: {
@@ -829,7 +866,10 @@ async function createSaleImpl(input: CreateSaleInput) {
           method: payment.method,
           amountPence: payment.amountPence,
           branchId,
-          reference: payment.reference ?? input.externalRef ?? null,
+          // Prefer explicit payment refs. Offline sync stamps OFFLINE_SYNC refs on
+          // each payment before createSale; do not overwrite online POS refs with the
+          // invoice externalRef (POS_ONLINE:…) used only for idempotency.
+          reference: payment.reference ?? null,
           network: payment.network ?? null,
           payerMsisdn: payment.payerMsisdn ?? null,
           provider: payment.provider ?? null,
@@ -916,6 +956,25 @@ async function createSaleImpl(input: CreateSaleInput) {
           'action.checkout.shift-update',
           input,
           async () => {
+            // Local SQLite cannot execute the Postgres CTE (UPDATE … UPDATE … FROM … NOW()).
+            // Keep the production RTT consolidation on Postgres; use the typed drawer helper locally.
+            if (isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+              return recordCashDrawerEntryTx(tx, {
+                businessId: input.businessId,
+                storeId: input.storeId,
+                tillId: till.id,
+                shiftId: openShift.id,
+                createdByUserId: input.cashierUserId,
+                cashierUserId: input.cashierUserId,
+                entryType: 'CASH_SALE',
+                amountPence: cashPence,
+                reasonCode: 'SALE',
+                reason: 'Cash sale collected',
+                referenceType: 'SALES_INVOICE',
+                referenceId: created.id,
+              });
+            }
+
             const entryId = randomUUID();
             // Single CTE: atomically updates Shift.expectedCashPence and inserts
             // CashDrawerEntry in one DB round-trip. The RETURNING clause supplies

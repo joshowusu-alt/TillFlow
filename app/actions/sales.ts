@@ -227,6 +227,8 @@ export async function completeSaleAction(data: {
   paymentStatus: string;
   customerId: string;
   dueDate: string;
+  /** Required for Part Paid / Unpaid: 'none' | 'date'. Ignored for Paid. */
+  dueDateDecision?: 'unset' | 'none' | 'date';
   orderDiscountType: string;
   orderDiscountValue: string;
   cashPaid: number;
@@ -234,6 +236,11 @@ export async function completeSaleAction(data: {
   transferPaid: number;
   momoPaid?: number;
   momoRef?: string;
+  cardRef?: string;
+  transferRef?: string;
+  cashReceivedPence?: number;
+  changeDuePence?: number;
+  externalRef?: string;
   momoCollectionId?: string;
   momoPayerMsisdn?: string;
   momoNetwork?: string;
@@ -251,7 +258,25 @@ export async function completeSaleAction(data: {
       return { success: false, error: completePsValidation.error.issues[0].message };
     }
     const customerId = data.customerId || null;
-    const dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    let dueDate: Date | null = null;
+    if (paymentStatus === 'PAID') {
+      dueDate = null;
+    } else {
+      const decision = data.dueDateDecision ?? 'unset';
+      if (decision === 'none') {
+        dueDate = null;
+      } else if (decision === 'date') {
+        if (!data.dueDate?.trim()) {
+          return { success: false, error: 'Select a due date or choose No due date.' };
+        }
+        dueDate = new Date(data.dueDate);
+        if (Number.isNaN(dueDate.getTime())) {
+          return { success: false, error: 'Due date is invalid.' };
+        }
+      } else {
+        return { success: false, error: 'Choose a due date or No due date for credit sales.' };
+      }
+    }
     const orderDiscountType = (data.orderDiscountType || 'NONE') as DiscountType;
     const orderDiscountValue = parseDiscountValue(orderDiscountType, data.orderDiscountValue);
     const momoPaid = Math.max(0, data.momoPaid ?? 0);
@@ -312,16 +337,30 @@ export async function completeSaleAction(data: {
       return { success: false, error: 'Select a customer for credit or part-paid sales.' };
     }
 
+    // Unpaid credit must not carry tender amounts even if the client is stale.
+    const cashPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, data.cashPaid);
+    const cardPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, data.cardPaid);
+    const transferPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, data.transferPaid);
+    const momoPaidSafe = paymentStatus === 'UNPAID' ? 0 : momoPaid;
+
     const salePayments = [
-      { method: 'CASH' as const, amountPence: data.cashPaid },
-      { method: 'CARD' as const, amountPence: data.cardPaid },
-      { method: 'TRANSFER' as const, amountPence: data.transferPaid },
+      { method: 'CASH' as const, amountPence: cashPaid },
+      {
+        method: 'CARD' as const,
+        amountPence: cardPaid,
+        reference: paymentStatus === 'UNPAID' ? null : (data.cardRef?.trim() || null),
+      },
+      {
+        method: 'TRANSFER' as const,
+        amountPence: transferPaid,
+        reference: paymentStatus === 'UNPAID' ? null : (data.transferRef?.trim() || null),
+      },
       {
         method: 'MOBILE_MONEY' as const,
-        amountPence: momoPaid,
-        reference: data.momoRef ?? null,
-        payerMsisdn: data.momoPayerMsisdn ?? null,
-        network: data.momoNetwork ?? null,
+        amountPence: momoPaidSafe,
+        reference: paymentStatus === 'UNPAID' ? null : (data.momoRef ?? null),
+        payerMsisdn: paymentStatus === 'UNPAID' ? null : (data.momoPayerMsisdn ?? null),
+        network: paymentStatus === 'UNPAID' ? null : (data.momoNetwork ?? null),
       },
     ];
     const checkoutTimingMetadata = checkoutActionTimingMetadata({
@@ -333,6 +372,11 @@ export async function completeSaleAction(data: {
       paymentStatus,
       hasDiscount: Boolean(orderDiscountType && orderDiscountType !== 'NONE') || orderDiscountValue > 0,
     });
+
+    const externalRef = data.externalRef?.trim() || null;
+    if (externalRef && !externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:')) {
+      return { success: false, error: 'Invalid sale attempt reference.' };
+    }
 
     const invoice = await createSale({
       businessId,
@@ -349,6 +393,9 @@ export async function completeSaleAction(data: {
       discountApprovedByUserId,
       momoCollectionId: data.momoCollectionId || null,
       loyaltyPointsToRedeem: Math.max(0, Math.floor(data.loyaltyPointsToRedeem ?? 0)),
+      cashReceivedPence: paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(data.cashReceivedPence ?? cashPaid)),
+      changeDuePence: paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(data.changeDuePence ?? 0)),
+      externalRef,
       payments: salePayments,
       lines,
     });
@@ -377,10 +424,8 @@ export async function completeSaleAction(data: {
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.auditLog, operationType: 'action' },
     ).catch(() => {});
 
-    // Keep owner/reporting surfaces fresh after a sale lands. This is a single
-    // lightweight tag invalidation, so the dashboard reflects new tickets
-    // promptly without a manual refresh cycle.
-    await measureServerOperation(
+    // Do not block the success response on cache revalidation — sale is already committed.
+    void measureServerOperation(
       'action.checkout.revalidate',
       async () => {
         const { markOnboardingCompleteAfterFirstSale } = await import('@/app/actions/onboarding');
@@ -393,7 +438,7 @@ export async function completeSaleAction(data: {
       },
       { ...checkoutTimingMetadata, stage: 'revalidate' },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },
-    );
+    ).catch(() => {});
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });

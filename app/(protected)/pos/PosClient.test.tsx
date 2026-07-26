@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
 import { getParkedCartsStorageKey } from '@/lib/business-scope';
+import { completeSaleAction } from '@/app/actions/sales';
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -22,6 +23,8 @@ vi.mock('@/app/actions/mobile-money', () => ({
   initiateMomoCollectionAction: vi.fn(),
 }));
 vi.mock('@/lib/offline', () => ({ queueOfflineSale: vi.fn() }));
+
+const mockedCompleteSaleAction = vi.mocked(completeSaleAction);
 
 vi.mock('./components/SummarySidebar', () => ({
   default: () => <div data-testid="summary-sidebar">Summary Sidebar</div>,
@@ -180,7 +183,7 @@ describe('PosClient desktop layout', () => {
     expect(tillSelect).toHaveAttribute('data-checkout-till-state', 'loading');
     expect(screen.getAllByText('Preparing checkout…').length).toBeGreaterThan(0);
     expect(screen.queryByText(/No tills are configured/i)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Complete Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.getAllByRole('button', { name: /Complete (Cash )?Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
   });
 
   it('selects the first till when deferred checkout extras arrive with empty initial till state', async () => {
@@ -213,6 +216,174 @@ describe('PosClient desktop layout', () => {
     const tillSelect = document.querySelector('select[name="tillId"]') as HTMLSelectElement;
     expect(tillSelect).toHaveAttribute('data-checkout-till-state', 'empty');
     expect(screen.getAllByText(/No tills are configured for this store/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: /Complete Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
+    expect(screen.getAllByRole('button', { name: /Complete (Cash )?Sale/i }).every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it('defaults to Paid + Cash and labels TRANSFER as Bank Transfer', () => {
+    render(<PosClient {...baseProps} />);
+    expect(screen.getByLabelText(/payment status/i)).toHaveValue('PAID');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Bank Transfer' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^due date$/i)).not.toBeInTheDocument();
+  });
+
+  it('treats ordinary method clicks as mutually exclusive outside Split', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+
+    fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByLabelText(/cash tendered/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Confirm that payment has been received/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/transaction ref/i), { target: { value: 'MOMO-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByPlaceholderText(/transaction ref/i)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/card ref/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/card ref/i), { target: { value: 'CARD-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bank Transfer' }));
+
+    expect(screen.getByRole('button', { name: 'Bank Transfer' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByPlaceholderText(/card ref/i)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/transfer ref/i)).toBeInTheDocument();
+
+    // Selecting a second method without Split still replaces, never accumulates.
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Bank Transfer' })).toHaveAttribute('aria-pressed', 'false');
+    const cashTendered = document.querySelector('#pos-cash-tendered') as HTMLInputElement | null;
+    expect(cashTendered).not.toBeNull();
+    expect(cashTendered?.value ?? '').toBe('');
+  });
+
+  it('allows multiple methods only after explicit Split and clears them when leaving Split', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
+    expect(screen.getByRole('button', { name: 'Split…' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Split payment — select every method/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
+    expect(screen.getByRole('button', { name: 'Split…' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/Split payment — select every method/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps a sticky desktop complete action and mobile sticky checkout chrome', async () => {
+    render(<PosClient {...baseProps} />);
+    const summarySidebar = screen.getByTestId('summary-sidebar');
+    expect(summarySidebar.parentElement?.className).toContain('app-desktop-sidebar-sticky');
+    expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
+    expect(document.querySelector('.keyboard-safe-fixed-bottom')).toBeNull();
+
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('.keyboard-safe-fixed-bottom')).not.toBeNull();
+    });
+    expect(screen.getAllByRole('button', { name: /Complete Cash Sale/i }).length).toBeGreaterThan(0);
+  });
+
+  it('hides due date for Paid and requires an explicit decision for Unpaid', async () => {
+    render(<PosClient {...baseProps} />);
+    fireEvent.change(screen.getByLabelText(/payment status/i), { target: { value: 'UNPAID' } });
+    expect(screen.getByRole('button', { name: /no due date/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/choose a due date or no due date/i).length).toBeGreaterThan(0);
+  });
+
+  async function addCocaColaToCart() {
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+  }
+
+  it('completes an exact-cash sale with one primary action and only resets after success', async () => {
+    mockedCompleteSaleAction.mockResolvedValue({
+      success: true,
+      data: { receiptId: 'inv-1', totalPence: 250, transactionNumber: 'INV-1' },
+    });
+
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+
+    const completeButtons = screen.getAllByRole('button', { name: /Complete Cash Sale/i });
+    expect(completeButtons.some((btn) => !(btn as HTMLButtonElement).disabled)).toBe(true);
+
+    fireEvent.click(completeButtons.find((btn) => !(btn as HTMLButtonElement).disabled)!);
+
+    await waitFor(() => {
+      expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1);
+    });
+
+    const payload = mockedCompleteSaleAction.mock.calls[0][0];
+    expect(payload.paymentStatus).toBe('PAID');
+    expect(payload.cashPaid).toBe(250);
+    expect(payload.cashReceivedPence).toBe(250);
+    expect(payload.changeDuePence).toBe(0);
+    expect(payload.dueDate).toBe('');
+    expect(payload.externalRef).toMatch(/^POS_ONLINE:/);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Sale Complete/i)).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the cart when completion is rejected', async () => {
+    mockedCompleteSaleAction.mockResolvedValue({
+      success: false,
+      error: 'Till is not open',
+    });
+
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    const completeButtons = screen.getAllByRole('button', { name: /Complete Cash Sale/i });
+    fireEvent.click(completeButtons.find((btn) => !(btn as HTMLButtonElement).disabled)!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Till is not open')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Coca Cola')).toBeInTheDocument();
+    expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears tender state when switching to Unpaid', async () => {
+    render(<PosClient {...baseProps} />);
+    await addCocaColaToCart();
+    fireEvent.change(screen.getByLabelText(/cash tendered/i), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText(/payment status/i), { target: { value: 'UNPAID' } });
+    expect(screen.queryByLabelText(/cash tendered/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/no payment is recorded/i)).toBeInTheDocument();
   });
 });

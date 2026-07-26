@@ -259,12 +259,18 @@ export function buildEscPosReceipt(data: ReceiptData) {
   appendLine(buffer, formatLine('Paid (cash)', formatMoney(cashPaid, data.business.currency), width));
   if (cardPaid > 0) {
     appendLine(buffer, formatLine('Paid (card)', formatMoney(cardPaid, data.business.currency), width));
+    for (const payment of data.payments.filter((p) => p.method === 'CARD' && p.reference)) {
+      appendLine(buffer, `    Ref: ${sanitize(payment.reference ?? '')}`);
+    }
   }
   if (transferPaid > 0) {
     appendLine(
       buffer,
-      formatLine('Paid (transfer)', formatMoney(transferPaid, data.business.currency), width)
+      formatLine('Paid (Bank Transfer)', formatMoney(transferPaid, data.business.currency), width)
     );
+    for (const payment of data.payments.filter((p) => p.method === 'TRANSFER' && p.reference)) {
+      appendLine(buffer, `    Ref: ${sanitize(payment.reference ?? '')}`);
+    }
   }
   if (momoPaid > 0) {
     appendLine(buffer, formatLine('Paid (MoMo)', formatMoney(momoPaid, data.business.currency), width));
