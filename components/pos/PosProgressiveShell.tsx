@@ -93,6 +93,8 @@ export function PosProgressiveShell({ business, store, products, children }: Pos
 
   return (
     <PosDeferredContext.Provider value={value}>
+      {/* Welcome / deferred loading hint above the till so mobile does not bury them under checkout padding. */}
+      {children}
       <PosClient
         business={business}
         store={store}
@@ -106,7 +108,6 @@ export function PosProgressiveShell({ business, store, products, children }: Pos
         customersUnavailable={Boolean(extras.customersUnavailable)}
         checkoutUnavailable={checkoutUnavailable}
       />
-      {children}
     </PosDeferredContext.Provider>
   );
 }
@@ -124,13 +125,17 @@ export function PosDeferredApply({ payload }: { payload: PosDeferredPayload }) {
 export function PosDeferredLoadingHint() {
   return (
     <div
-      className="mx-auto mb-3 max-w-5xl px-4 sm:px-6"
+      className="mb-2"
       role="status"
       aria-live="polite"
       data-pos-deferred-loading="true"
     >
-      <div className="rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-xs text-slate-600 shadow-sm">
-        Preparing customers, till, and checkout options…
+      <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200/80 bg-white/90 px-2.5 py-1.5 text-xs text-slate-600 shadow-sm">
+        <span
+          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-accent motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+        Preparing checkout…
       </div>
     </div>
   );

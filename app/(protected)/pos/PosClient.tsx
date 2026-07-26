@@ -15,6 +15,7 @@ import {
   type MomoCollectionState,
 } from '@/hooks/usePosMomoPayment';
 import { usePosOrderDiscount } from '@/hooks/usePosOrderDiscount';
+import { useMatchMedia } from '@/hooks/useMatchMedia';
 import { usePosProductDropdownViewport } from '@/hooks/usePosProductDropdownViewport';
 import { usePosSaleResult } from '@/hooks/usePosSaleResult';
 import { usePosScannerBuffer } from '@/hooks/usePosScannerBuffer';
@@ -276,6 +277,8 @@ export default function PosClient({
     viewport: productDropdownViewport,
     recompute: recomputeProductDropdownViewport,
   } = usePosProductDropdownViewport(productDropdownOpen, productSearchShellRef);
+  /** Phone widths only — tablet (768+) keeps denser desktop-adjacent chrome. */
+  const isPhoneViewport = useMatchMedia('(max-width: 767px)');
   const [showQuickCustomer, setShowQuickCustomer] = useState(false);
   const {
     customerOptions,
@@ -1215,6 +1218,18 @@ export default function PosClient({
   }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
+  const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
+  const showNoTillBlock =
+    checkoutExtrasReady &&
+    !checkoutUnavailable &&
+    (tills.length === 0 ||
+      (Boolean(business.requireOpenTillForSales) && openShiftTillIds.length === 0) ||
+      (Boolean(business.requireOpenTillForSales) &&
+        tillSelected &&
+        !openShiftTillIds.includes(tillId)));
+  // Phone empty-cart keeps checkout collapsed; loading uses the compact till chip instead of the full panel.
+  const showCheckoutPanel =
+    !isPhoneViewport || cart.length > 0 || checkoutUnavailable;
 
   usePosKeyboardShortcuts({
     activeLineId,
@@ -1287,11 +1302,16 @@ export default function PosClient({
   }, [isCompletingSale, saleIdentity]);
 
   return (
-    <div className="grid gap-6 pb-36 lg:grid-cols-[3fr_1fr] lg:items-start lg:pb-0">
-      <div className="space-y-4">
+    <div
+      className={`grid gap-4 lg:grid-cols-[3fr_1fr] lg:items-start lg:gap-6 lg:pb-0 ${
+        cart.length > 0 ? 'pb-[calc(var(--pos-mobile-bottom-clearance)+1rem)]' : 'pb-4'
+      }`}
+      data-pos-mobile-phase="1"
+    >
+      <div className="space-y-3 sm:space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
-        <div className="card p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="card scroll-mt-[calc(var(--app-header-offset)+0.5rem)] p-3 sm:p-4" data-pos-search-card="true">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <div className="w-full sm:min-w-[200px] sm:flex-1">
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
@@ -1300,7 +1320,7 @@ export default function PosClient({
                   </svg>
                 </div>
                 <input
-                  className="input pl-10 pr-11 text-lg font-mono tracking-wider"
+                  className="input pl-10 pr-11 text-base font-mono tracking-wider sm:text-lg"
                   ref={barcodeRef}
                   autoFocus
                   value={barcode}
@@ -1309,12 +1329,14 @@ export default function PosClient({
                   onFocus={(event) => event.currentTarget.select()}
                   autoComplete="off"
                   placeholder="Scan barcode…"
+                  aria-label="Scan barcode"
                 />
                 <button
                   type="button"
                   onClick={() => setCameraOpen(true)}
-                  className="absolute inset-y-0 right-2 flex items-center px-1 text-black/40 hover:text-accent transition"
+                  className="absolute inset-y-0 right-1 flex min-h-11 min-w-11 items-center justify-center px-1 text-black/40 transition hover:text-accent"
                   title="Scan with camera"
+                  aria-label="Scan with camera"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -1327,13 +1349,13 @@ export default function PosClient({
             <div className="hidden text-center text-xs font-semibold text-black/30 sm:block">OR</div>
 
             <div ref={productSearchShellRef} className="relative w-full sm:min-w-[200px] sm:flex-1">
-              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center z-10">
+              <div className="pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center">
                 <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
               <input
-                className="input pl-10 text-lg"
+                className="input pl-10 text-base sm:text-lg"
                 ref={productSearchRef}
                 value={productSearch}
                 onChange={(event) => {
@@ -1350,6 +1372,7 @@ export default function PosClient({
                 }}
                 placeholder="Type product name…"
                 autoComplete="off"
+                aria-label="Search products"
               />
               {productDropdownOpen && productSearch.trim() && (
                 <div
@@ -1379,7 +1402,9 @@ export default function PosClient({
                             >
                               Create new product
                             </button>
-                            <span className="rounded-full bg-black/5 px-2.5 py-1 text-black/45">F2 returns to barcode</span>
+                            {!isPhoneViewport ? (
+                              <span className="rounded-full bg-black/5 px-2.5 py-1 text-black/45">F2 returns to barcode</span>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1388,7 +1413,11 @@ export default function PosClient({
                     <>
                     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35 backdrop-blur">
                       <span>{productSearchMatches} of {productOptions.length} products</span>
-                      <span className="normal-case tracking-normal text-black/35">Enter adds • F2 scan</span>
+                      {!isPhoneViewport ? (
+                        <span className="normal-case tracking-normal text-black/35">Enter adds • F2 scan</span>
+                      ) : (
+                        <span className="normal-case tracking-normal text-black/35">Tap to add</span>
+                      )}
                     </div>
                     {filteredProducts.map((product) => {
                       const baseUnitId = getProductBaseUnitId(product);
@@ -1458,25 +1487,30 @@ export default function PosClient({
               {canUndo && (
                 <button
                   type="button"
-                  className="flex items-center gap-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold hover:bg-black/5 transition"
+                  className="flex items-center gap-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold transition hover:bg-black/5"
                   onClick={handleUndo}
                   title="Undo last action"
+                  aria-label="Undo last action"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                 </button>
               )}
-              <button
-                type="button"
-                className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold hover:bg-black/5 transition"
-                onClick={() => setShowKeyboardHelp(true)}
-                title="Keyboard shortcuts"
-              >
-                <svg className="h-4 w-4 text-black/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
+              {!isPhoneViewport ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold transition hover:bg-black/5"
+                  onClick={() => setShowKeyboardHelp(true)}
+                  title="Keyboard shortcuts"
+                  aria-label="Keyboard help"
+                  data-pos-desktop-shortcut="keyboard-help"
+                >
+                  <svg className="h-4 w-4 text-black/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -1513,7 +1547,11 @@ export default function PosClient({
                 <div className="font-semibold">Ready for next customer</div>
                 <div className="text-xs text-emerald-700">Scanner focus is back on the till. Keep serving.</div>
               </div>
-              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">F2 barcode</span>
+              {!isPhoneViewport ? (
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                  F2 barcode
+                </span>
+              ) : null}
             </div>
           ) : null}
           {parkedCarts.length > 0 ? (
@@ -1740,8 +1778,33 @@ export default function PosClient({
             </div>
           ) : null}
 
-          <div className="card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-black/5">
+          {showNoTillBlock ? (
+            <div
+              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-950 shadow-sm"
+              role="alert"
+              data-pos-till-block="true"
+            >
+              <div className="font-semibold">
+                {tills.length === 0 ? 'No tills are configured for this store' : 'Open a till before completing sales'}
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-rose-900/80">
+                {tills.length === 0
+                  ? 'Ask an owner or manager to configure a till for this store.'
+                  : 'Sales stay blocked until a till shift is open. Open or select a till, then return here.'}
+              </p>
+              {tills.length > 0 ? (
+                <Link
+                  href="/shifts"
+                  className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-rose-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-800"
+                >
+                  Open till
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="card overflow-hidden" data-pos-cart-card="true">
+            <div className="flex items-center justify-between border-b border-black/5 px-3 py-2.5 sm:px-4 sm:py-3">
               <div className="flex items-center gap-3">
                 <svg className="h-5 w-5 text-black/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1751,12 +1814,12 @@ export default function PosClient({
               </div>
               <div className="flex items-center gap-3">
                 {cartRestored && (
-                  <span className="text-xs text-accent font-medium">Restored from last session</span>
+                  <span className="text-xs font-medium text-accent">Restored from last session</span>
                 )}
                 {cart.length > 0 && (
                   <button
                     type="button"
-                    className="text-xs text-rose-500 hover:text-rose-700 font-medium"
+                    className="text-xs font-medium text-rose-500 hover:text-rose-700"
                     onClick={() => { if (confirm('Clear the entire cart?')) { pushUndo(cart); setCart([]); clearSavedCart(); } }}
                   >
                     Clear all
@@ -1766,37 +1829,52 @@ export default function PosClient({
             </div>
 
             {cartDetails.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="rounded-full bg-black/5 p-4 mb-3">
-                  <svg className="h-8 w-8 text-black/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
+              <div
+                className="flex flex-col items-center justify-center px-3 py-4 text-center sm:py-12"
+                data-pos-empty-cart="true"
+              >
+                {!isPhoneViewport ? (
+                  <div className="mb-3 rounded-full bg-black/5 p-4">
+                    <svg className="h-8 w-8 text-black/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                  </div>
+                ) : null}
+                <div className="text-sm font-semibold text-black/60">
+                  {isPhoneViewport ? 'Cart is empty' : 'Scan a barcode or search a product'}
                 </div>
-                <div className="text-sm font-semibold text-black/60">Scan a barcode or search a product</div>
-                <div className="mt-1 text-xs text-black/35">This till is clear and ready. Items will appear here instantly.</div>
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
-                    onClick={() => barcodeRef.current?.focus()}
-                  >
-                    F2 focus barcode
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
-                    onClick={() => setShowKeyboardHelp(true)}
-                  >
-                    ? keyboard help
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                    onClick={() => setCameraOpen(true)}
-                  >
-                    Scan with camera
-                  </button>
-                </div>
+                {!isPhoneViewport ? (
+                  <div className="mt-1 text-xs text-black/35">
+                    This till is clear and ready. Items will appear here instantly.
+                  </div>
+                ) : null}
+                {!isPhoneViewport ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
+                      onClick={() => barcodeRef.current?.focus()}
+                      data-pos-desktop-shortcut="f2-focus-barcode"
+                    >
+                      F2 focus barcode
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/60 transition hover:bg-black/5"
+                      onClick={() => setShowKeyboardHelp(true)}
+                      data-pos-desktop-shortcut="keyboard-help"
+                    >
+                      ? keyboard help
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                      onClick={() => setCameraOpen(true)}
+                    >
+                      Scan with camera
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="divide-y divide-black/5 overflow-y-auto max-h-[38vh] md:max-h-[42vh] lg:max-h-[45vh] scroll-smooth">
@@ -1940,8 +2018,67 @@ export default function PosClient({
           )}
 
           {/* ── Compact checkout ─────────────────────────────── */}
-          <div className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] space-y-3 p-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)] sm:p-4 lg:pb-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_1fr] sm:items-end">
+          <div
+            className={`card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] space-y-3 p-3 sm:p-4 lg:pb-4 ${
+              cart.length > 0
+                ? 'pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)]'
+                : 'pb-3'
+            }`}
+            data-pos-checkout-card="true"
+          >
+            {isPhoneViewport && checkoutLoading ? (
+              <div
+                className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600"
+                role="status"
+                data-checkout-state="loading"
+                data-pos-till-compact="loading"
+              >
+                <span
+                  className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-accent motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+                Preparing checkout…
+                <select
+                  id="pos-till-select"
+                  className="sr-only"
+                  name="tillId"
+                  value={tillId}
+                  disabled
+                  aria-busy="true"
+                  data-checkout-till-state="loading"
+                >
+                  <option value="">Preparing checkout…</option>
+                </select>
+              </div>
+            ) : isPhoneViewport && tillReady ? (
+              <div
+                className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2"
+                data-pos-till-compact="ready"
+              >
+                <span className="inline-flex h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
+                <span className="text-xs font-semibold text-emerald-900">
+                  {selectedTillName ?? 'Till'} · {business.requireOpenTillForSales ? 'Open' : 'Ready'}
+                </span>
+                <label className="sr-only" htmlFor="pos-till-select">Till</label>
+                <select
+                  id="pos-till-select"
+                  className="input ml-auto max-w-[10rem] py-1.5 text-xs"
+                  name="tillId"
+                  value={tillId}
+                  disabled={checkoutUnavailable || tills.length === 0}
+                  onChange={(e) => setTillId(e.target.value)}
+                  data-checkout-till-state="ready"
+                  data-checkout-state="ready"
+                >
+                  {tills.map((till) => (
+                    <option key={till.id} value={till.id}>
+                      {till.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_1fr] sm:items-end" data-pos-till-form="expanded">
               <div>
                 <label className="label" htmlFor="pos-till-select">Till</label>
                 <select
@@ -2003,6 +2140,80 @@ export default function PosClient({
                   </div>
                 )}
               </div>
+              {!isPhoneViewport || cart.length > 0 ? (
+                <details className="rounded-xl border border-black/10 bg-black/[.02] px-3 py-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-black/55">
+                    Order discount {orderDiscountType !== 'NONE' ? '· active' : ''}
+                  </summary>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">
+                    <select
+                      className="input w-full"
+                      value={orderDiscountType}
+                      onChange={(e) => orderDiscountForm.setType(e.target.value as DiscountType)}
+                    >
+                      <option value="NONE">None</option>
+                      <option value="PERCENT">%</option>
+                      <option value="AMOUNT">Amount</option>
+                    </select>
+                    <input
+                      className="input w-full"
+                      type="number"
+                      min={0}
+                      step={orderDiscountType === 'PERCENT' ? '1' : '0.01'}
+                      inputMode="decimal"
+                      value={orderDiscountInput}
+                      onChange={(e) => orderDiscountForm.setInput(e.target.value)}
+                      disabled={orderDiscountType === 'NONE'}
+                      onFocus={(e) => e.currentTarget.select()}
+                      placeholder={orderDiscountType === 'PERCENT' ? '10' : '0.00'}
+                    />
+                  </div>
+                  {requiresDiscountApproval ? (
+                    <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                        Manager Approval Required
+                      </div>
+                      <div className="mt-1 text-xs text-amber-700">
+                        Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
+                        {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-3">
+                        <select
+                          className="input"
+                          value={discountReasonCode}
+                          onChange={(e) => orderDiscountForm.setReasonCode(e.target.value)}
+                        >
+                          <option value="">Select reason code</option>
+                          {DISCOUNT_REASON_CODES.map((code) => (
+                            <option key={code} value={code}>
+                              {code.replace(/_/g, ' ')}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          className="input"
+                          value={discountReason}
+                          onChange={(e) => orderDiscountForm.setReason(e.target.value)}
+                          placeholder="Reason details"
+                        />
+                        <input
+                          className="input"
+                          type="password"
+                          value={discountManagerPin}
+                          onChange={(e) => orderDiscountForm.setManagerPin(e.target.value)}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="Manager PIN"
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                </details>
+              ) : null}
+            </div>
+            )}
+
+            {isPhoneViewport && (tillReady || checkoutLoading) && cart.length > 0 ? (
               <details className="rounded-xl border border-black/10 bg-black/[.02] px-3 py-2">
                 <summary className="cursor-pointer text-xs font-semibold text-black/55">
                   Order discount {orderDiscountType !== 'NONE' ? '· active' : ''}
@@ -2030,49 +2241,11 @@ export default function PosClient({
                     placeholder={orderDiscountType === 'PERCENT' ? '10' : '0.00'}
                   />
                 </div>
-                {requiresDiscountApproval ? (
-                  <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                      Manager Approval Required
-                    </div>
-                    <div className="mt-1 text-xs text-amber-700">
-                      Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
-                      {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
-                    </div>
-                    <div className="mt-3 grid gap-2 md:grid-cols-3">
-                      <select
-                        className="input"
-                        value={discountReasonCode}
-                        onChange={(e) => orderDiscountForm.setReasonCode(e.target.value)}
-                      >
-                        <option value="">Select reason code</option>
-                        {DISCOUNT_REASON_CODES.map((code) => (
-                          <option key={code} value={code}>
-                            {code.replace(/_/g, ' ')}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="input"
-                        value={discountReason}
-                        onChange={(e) => orderDiscountForm.setReason(e.target.value)}
-                        placeholder="Reason details"
-                      />
-                      <input
-                        className="input"
-                        type="password"
-                        value={discountManagerPin}
-                        onChange={(e) => orderDiscountForm.setManagerPin(e.target.value)}
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        placeholder="Manager PIN"
-                      />
-                    </div>
-                  </div>
-                ) : null}
               </details>
-            </div>
+            ) : null}
 
+            {showCheckoutPanel ? (
+              <>
             <CustomerSelector
               requiresCustomer={requiresCustomer}
               customerId={customerId}
@@ -2149,7 +2322,17 @@ export default function PosClient({
                 setDueDateDecision(value ? 'date' : 'unset');
               }}
               showAmountInputs
+              compactDenominations={totalDue <= 0}
             />
+              </>
+            ) : (
+              <div
+                className="rounded-xl border border-black/5 bg-black/[.02] px-3 py-2 text-xs text-black/55"
+                data-pos-checkout-collapsed="true"
+              >
+                Paid · Cash ready — add an item to open checkout.
+              </div>
+            )}
 
             {checkoutIssues.length > 0 ? (
               <div className="space-y-1.5">
@@ -2183,7 +2366,7 @@ export default function PosClient({
               >
                 {completeLabel}
               </button>
-              {cart.length > 0 && (
+              {cart.length > 0 && !isPhoneViewport ? (
                 <button
                   type="button"
                   className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:w-auto"
@@ -2195,7 +2378,7 @@ export default function PosClient({
                   </svg>
                   <span>Park Sale</span>
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         </form>
@@ -2325,7 +2508,10 @@ export default function PosClient({
 
       {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
       {cart.length > 0 && (
-        <div className="fixed inset-x-0 z-30 lg:hidden border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom hide-when-keyboard-open">
+        <div
+          className="fixed inset-x-0 z-30 border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom lg:hidden"
+          data-pos-mobile-checkout-bar="true"
+        >
           <div className="space-y-3">
             <div className={`rounded-2xl px-3 py-2 text-xs font-medium ${canSubmit ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>
               {canSubmit

@@ -52,13 +52,18 @@ export default function PosWelcomeShelf({ firstName, storeName, hasOpenShift, op
   if (!visible) return null;
 
   return (
-    <div className="mb-3 flex items-start gap-3 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-white px-4 py-3 shadow-card sm:items-center sm:px-5 sm:py-3.5">
+    <div
+      className="mb-2 flex items-center gap-2 rounded-xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-white px-3 py-2 shadow-card sm:mb-3 sm:items-center sm:gap-3 sm:rounded-2xl sm:px-5 sm:py-3.5"
+      data-pos-welcome-shelf="true"
+    >
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">{storeName}</p>
-        <p className="mt-1 text-base font-display font-bold text-ink sm:text-lg">
+        <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-accent sm:text-[11px] sm:tracking-[0.22em]">
+          {storeName}
+        </p>
+        <p className="mt-0.5 text-sm font-display font-bold text-ink sm:mt-1 sm:text-lg">
           {greeting}, {firstName}
         </p>
-        <p className="mt-0.5 text-xs leading-relaxed text-slate-600 sm:text-sm">
+        <p className="mt-0.5 text-[11px] leading-snug text-slate-600 sm:text-sm sm:leading-relaxed">
           {hasOpenShift
             ? openTillName
               ? `Your shift is open at ${openTillName}. Ready when you are.`

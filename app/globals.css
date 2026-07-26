@@ -96,13 +96,15 @@ select:-webkit-autofill {
   --safe-area-top: env(safe-area-inset-top, 0px);
   --keyboard-safe-bottom: 0px;
   --visual-viewport-height: 100vh;
-  --app-header-height-mobile: 7.5rem;
+  --app-header-height-mobile: 5.75rem;
   --app-header-height-desktop: 5.75rem;
   --app-header-offset: calc(var(--safe-area-top) + var(--app-header-height-mobile));
   --app-header-offset-desktop: calc(var(--safe-area-top) + var(--app-header-height-desktop));
   --mobile-bottom-nav-content-height: 5rem;
   --mobile-bottom-nav-height: calc(var(--mobile-bottom-nav-content-height) + env(safe-area-inset-bottom, 0px));
   --mobile-bottom-nav-clearance: calc(var(--mobile-bottom-nav-height) + 4rem);
+  /* POS hides the bottom tab bar; reserve room for the sticky checkout chrome only. */
+  --pos-mobile-bottom-clearance: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 html {
@@ -261,6 +263,18 @@ textarea {
 .app-main-shell {
   padding-bottom: var(--mobile-bottom-nav-clearance);
   overflow-x: clip;
+}
+
+.app-main-shell[data-route-shell='pos'] {
+  padding-bottom: calc(var(--pos-mobile-bottom-clearance) + 1rem);
+}
+
+.app-shell-header-pos .metric-chip,
+.app-shell-header-pos .status-badge-online,
+.app-shell-header-pos .status-badge-offline {
+  min-height: 1.75rem;
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
 }
 
 .operational-page {

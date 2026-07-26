@@ -387,3 +387,135 @@ describe('PosClient desktop layout', () => {
     expect(screen.getByText(/no payment is recorded/i)).toBeInTheDocument();
   });
 });
+
+function mockPhoneViewport(isPhone: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => {
+      const matches = isPhone && query.includes('max-width: 767px');
+      return {
+        matches,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+    }),
+  });
+}
+
+describe('PosClient mobile phase 1 layout', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    mockPhoneViewport(true);
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    mockPhoneViewport(false);
+  });
+
+  it('hides desktop-only shortcut controls on phone widths', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /F2 focus barcode/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /\? keyboard help/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Keyboard help')).not.toBeInTheDocument();
+    // Camera remains on the primary barcode field; only the empty-cart duplicate is removed.
+    expect(screen.getByLabelText('Scan with camera')).toBeInTheDocument();
+    expect(document.querySelector('[data-pos-desktop-shortcut]')).toBeNull();
+  });
+
+  it('keeps desktop shortcut controls available off phone widths', () => {
+    mockPhoneViewport(false);
+    render(<PosClient {...baseProps} />);
+    expect(screen.getByRole('button', { name: /F2 focus barcode/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\? keyboard help/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Keyboard help')).toBeInTheDocument();
+  });
+
+  it('uses a compact empty-cart and open-till presentation without duplicated scan guidance', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-empty-cart="true"]')).not.toBeNull();
+      expect(document.querySelector('[data-pos-till-compact="ready"]')).not.toBeNull();
+    });
+    expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    expect(screen.queryByText(/Scan a barcode or search a product/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Use search or the barcode field above/i)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-pos-checkout-collapsed="true"]')).not.toBeNull();
+    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+  });
+
+  it('keeps loading feedback compact and does not claim a false no-till state', async () => {
+    render(<PosClient {...baseProps} tills={[]} openShiftTillIds={[]} checkoutExtrasReady={false} />);
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-till-compact="loading"]')).not.toBeNull();
+    });
+    expect(screen.getAllByText('Preparing checkout…').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No tills are configured/i)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-pos-empty-cart="true"]')).not.toBeNull();
+    // Compact loading chip — not the former oversized blank checkout stack.
+    const loadingChip = document.querySelector('[data-pos-till-compact="loading"]');
+    expect(loadingChip?.textContent).toMatch(/Preparing checkout/);
+    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+  });
+
+  it('surfaces a clear no-open-till blocking action on phone', async () => {
+    render(
+      <PosClient
+        {...baseProps}
+        business={{ ...baseProps.business, requireOpenTillForSales: true }}
+        openShiftTillIds={[]}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-till-block="true"]')).not.toBeNull();
+    });
+    expect(screen.getByRole('link', { name: /Open till/i })).toHaveAttribute('href', '/shifts');
+    expect(screen.getByText(/Open a till before completing sales/i)).toBeInTheDocument();
+  });
+
+  it('keeps Option B defaults and mutual exclusivity after adding an item on phone', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    });
+
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
+    });
+    expect(screen.getByLabelText(/payment status/i)).toHaveValue('PAID');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
+
+    const sticky = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
+    expect(sticky).not.toBeNull();
+    expect(sticky?.className).toContain('keyboard-safe-fixed-bottom');
+    expect(sticky?.className).toContain('safe-area-inset-bottom');
+    expect(sticky?.className).not.toContain('hide-when-keyboard-open');
+  });
+});

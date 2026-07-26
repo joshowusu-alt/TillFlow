@@ -50,6 +50,8 @@ type PosCheckoutPanelProps = {
   onDueDateDecisionChange: (decision: DueDateDecision) => void;
   onDueDateChange: (value: string) => void;
   showAmountInputs: boolean;
+  /** Hide quick-cash denomination grid (e.g. empty cart / zero due). */
+  compactDenominations?: boolean;
 };
 
 export default function PosCheckoutPanel({
@@ -90,6 +92,7 @@ export default function PosCheckoutPanel({
   onDueDateDecisionChange,
   onDueDateChange,
   showAmountInputs,
+  compactDenominations = false,
 }: PosCheckoutPanelProps) {
   const hasMethod = (method: PosPaymentMethod) => paymentMethods.includes(method);
   const isUnpaid = paymentStatus === 'UNPAID';
@@ -225,7 +228,8 @@ export default function PosCheckoutPanel({
             onFocus={(e) => e.currentTarget.select()}
             placeholder={paymentStatus === 'PAID' ? 'Exact' : '0.00'}
           />
-          <div className="mt-1.5 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
+          {!compactDenominations ? (
+          <div className="mt-1.5 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-1.5" data-pos-cash-denominations="true">
             {POS_QUICK_CASH_DENOMINATIONS_GHS.map((amount) => (
               <button
                 key={amount}
@@ -244,6 +248,7 @@ export default function PosCheckoutPanel({
               Exact
             </button>
           </div>
+          ) : null}
           {changeDue > 0 ? (
             <div className="mt-2 text-sm font-semibold text-accent">
               Change {formatMoney(changeDue, currency)}

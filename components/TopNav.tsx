@@ -77,6 +77,8 @@ export default function TopNav({
     setPendingMobileHref(currentRoute ? null : href);
   };
   const navRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const isPosRoute = pathname === '/pos' || pathname.startsWith('/pos/');
   const planGatedLinks = useMemo(() => {
     const desktopGates = NAV_GROUPS.flatMap((group) =>
       group.items
@@ -222,11 +224,36 @@ export default function TopNav({
     return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, handleOpen);
   }, []);
 
+  // Keep sticky/scroll offsets aligned with the real header height so POS
+  // content never starts underneath an opaque sticky banner.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const publishOffset = () => {
+      const height = Math.ceil(header.getBoundingClientRect().height);
+      if (height <= 0) return;
+      document.documentElement.style.setProperty('--app-header-offset', `${height}px`);
+      document.documentElement.style.setProperty('--app-header-height-mobile', `${height}px`);
+    };
+
+    publishOffset();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publishOffset) : null;
+    observer?.observe(header);
+    window.addEventListener('orientationchange', publishOffset);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('orientationchange', publishOffset);
+    };
+  }, [pathname, mobileOpen, pendingMobileHref, liveTodaySales, isOnline]);
+
   return (
     <>
       <header
-        className="app-shell-header border-b border-slate-200/80 bg-white/96 backdrop-blur-2xl shadow-nav"
+        ref={headerRef}
+        className={`app-shell-header border-b border-slate-200/80 bg-white/96 backdrop-blur-2xl shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
         role="banner"
+        data-pos-compact-header={isPosRoute ? 'true' : undefined}
         style={{ position: 'sticky', top: 0, zIndex: 30 }}
       >
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
@@ -509,8 +536,12 @@ export default function TopNav({
           </div>
         </div>
 
-        <div className="border-t border-slate-200/60 bg-white/80 px-4 py-2 lg:hidden sm:px-6">
-          <div className="flex flex-wrap items-center gap-2">
+        <div
+          className={`border-t border-slate-200/60 bg-white/80 px-4 lg:hidden sm:px-6 ${
+            isPosRoute ? 'py-1.5' : 'py-2'
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span
               className="metric-chip"
               title={
@@ -525,12 +556,19 @@ export default function TopNav({
             <span className={isOnline ? 'status-badge-online' : 'status-badge-offline'}>
               {isOnline ? 'Sync ready' : 'Offline mode'}
             </span>
+            {mobileSales ? (
+              <span
+                className="text-xs font-semibold tabular-nums text-ink"
+                title="Today sales across all branches"
+              >
+                {formatMoney(mobileSales.totalPence, mobileSales.currency)}
+                <span className="font-medium text-black/45">
+                  {' '}
+                  · {mobileSales.txCount} txn{mobileSales.txCount !== 1 ? 's' : ''}
+                </span>
+              </span>
+            ) : null}
           </div>
-          {mobileSales ? (
-            <div className="mt-1 text-xs font-semibold tabular-nums text-ink" title="Today sales across all branches">
-              {formatMoney(mobileSales.totalPence, mobileSales.currency)} · {mobileSales.txCount} txn{mobileSales.txCount !== 1 ? 's' : ''} today
-            </div>
-          ) : null}
         </div>
         {pendingMobileHref ? (
         <div

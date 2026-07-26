@@ -86,6 +86,15 @@ test.describe('POS Option B checkout', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await gotoPos(page);
 
+      const isPhone = viewport.width < 768;
+      if (isPhone) {
+        // Phase 1: phone empty-cart collapses the full payment panel; defaults apply once an item is added.
+        await expect(page.locator('[data-pos-checkout-collapsed="true"]')).toBeVisible();
+        await expect(page.getByLabel(/payment status/i)).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /F2 focus barcode/i })).toHaveCount(0);
+        await addFirstProduct(page);
+      }
+
       await expect(page.getByLabel(/payment status/i)).toHaveValue('PAID');
       await expect(page.getByRole('button', { name: 'Cash', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await expect(page.getByRole('button', { name: 'Bank Transfer', exact: true })).toBeVisible();
@@ -94,7 +103,7 @@ test.describe('POS Option B checkout', () => {
       const completeButtons = page.locator('button', { hasText: /Complete Cash Sale/i });
       // Empty cart: any mounted Complete CTA must stay disabled.
       // Mobile may hide sticky duplicates until items exist; count can be 0+.
-      if ((await completeButtons.count()) > 0) {
+      if (!isPhone && (await completeButtons.count()) > 0) {
         await expect(completeButtons.first()).toBeDisabled();
       }
 
