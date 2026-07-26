@@ -43,6 +43,10 @@ interface Props {
   onToggleParkedPanel: () => void;
   onRecallParked: (id: string) => void;
   onDeleteParked: (id: string) => void;
+  completeLabel?: string;
+  canSubmit?: boolean;
+  isCompletingSale?: boolean;
+  onCompleteSale?: () => void;
 }
 
 function SummarySidebar({
@@ -64,6 +68,10 @@ function SummarySidebar({
   onToggleParkedPanel,
   onRecallParked,
   onDeleteParked,
+  completeLabel,
+  canSubmit = false,
+  isCompletingSale = false,
+  onCompleteSale,
 }: Props) {
   return (
     <div className="space-y-4">
@@ -143,6 +151,17 @@ function SummarySidebar({
           </div>
         </div>
       )}
+
+      {onCompleteSale && cartItemCount > 0 ? (
+        <button
+          type="button"
+          className="btn-primary w-full py-3 text-base font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          disabled={!canSubmit || isCompletingSale}
+          onClick={onCompleteSale}
+        >
+          {completeLabel ?? 'Complete Sale'}
+        </button>
+      ) : null}
 
       {/* ── Parked Sales ─────────────────────────────── */}
       {parkedCarts.length > 0 && (

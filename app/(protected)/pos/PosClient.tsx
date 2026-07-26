@@ -28,6 +28,15 @@ import LoyaltyRedemptionPanel from './components/LoyaltyRedemptionPanel';
 import { computeDiscount } from '@/lib/payments/pos-checkout';
 import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
+import {
+  applyPaidSingleMethodDefaults,
+  buildOnlineSaleExternalRef,
+  nextSaleAttemptId,
+  paymentMethodLabel,
+  primaryCheckoutLabel,
+  resolveDueDateForSubmit,
+  type DueDateDecision,
+} from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import { completeSaleAction } from '@/app/actions/sales';
@@ -50,6 +59,7 @@ import QuickAddCustomer from './components/QuickAddCustomer';
 import CameraScanner from './components/CameraScanner';
 import CustomerSelector from './components/CustomerSelector';
 import CustomerCreditWarning from './components/CustomerCreditWarning';
+import PosCheckoutPanel from './components/PosCheckoutPanel';
 
 function formatRelativeTime(timestamp: string) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -180,6 +190,14 @@ export default function PosClient({
   const [cashTendered, setCashTendered] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
+  const [cardRef, setCardRef] = useState('');
+  const [transferRef, setTransferRef] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [dueDateDecision, setDueDateDecision] = useState<DueDateDecision>('unset');
+  const [showSplitPanel, setShowSplitPanel] = useState(false);
+  const [saleAttemptId, setSaleAttemptId] = useState(nextSaleAttemptId);
+  const [ambiguousFailure, setAmbiguousFailure] = useState(false);
+  const saleIdentityRef = useRef<string>('');
   const {
     momoPaid,
     setMomoPaid,
@@ -506,7 +524,83 @@ export default function PosClient({
 
   const hasMethod = (method: PaymentMethod) => paymentMethods.includes(method);
 
+  const clearCashFields = useCallback(() => {
+    setCashTendered('');
+  }, []);
+
+  const clearCardFields = useCallback(() => {
+    setCardPaid('');
+    setCardRef('');
+  }, []);
+
+  const clearTransferFields = useCallback(() => {
+    setTransferPaid('');
+    setTransferRef('');
+  }, []);
+
+  const clearDueDateState = useCallback(() => {
+    setDueDate('');
+    setDueDateDecision('unset');
+  }, []);
+
+  const handlePaymentStatusChange = useCallback((nextStatus: 'PAID' | 'PART_PAID' | 'UNPAID') => {
+    setPaymentStatus(nextStatus);
+    setAmbiguousFailure(false);
+    if (nextStatus === 'PAID') {
+      clearDueDateState();
+      if (paymentMethods.length === 0) {
+        setPaymentMethods(['CASH']);
+      }
+      return;
+    }
+    if (nextStatus === 'UNPAID') {
+      clearCashFields();
+      clearCardFields();
+      clearTransferFields();
+      resetMomoPaymentFields();
+      setPaymentMethods([]);
+      setShowSplitPanel(false);
+      return;
+    }
+    // PART_PAID — keep methods but ensure at least one for receiving payment
+    if (paymentMethods.length === 0) {
+      setPaymentMethods(['CASH']);
+    }
+  }, [
+    clearCashFields,
+    clearCardFields,
+    clearDueDateState,
+    clearTransferFields,
+    paymentMethods.length,
+    resetMomoPaymentFields,
+  ]);
+
+  const clearFieldsForAbsentMethods = useCallback((next: PaymentMethod[]) => {
+    if (!next.includes('CASH')) clearCashFields();
+    if (!next.includes('CARD')) clearCardFields();
+    if (!next.includes('TRANSFER')) clearTransferFields();
+    if (!next.includes('MOBILE_MONEY')) resetMomoPaymentFields();
+  }, [clearCashFields, clearCardFields, clearTransferFields, resetMomoPaymentFields]);
+
+  const isSplitMode = showSplitPanel || paymentMethods.length > 1;
+
   const togglePaymentMethod = (method: PaymentMethod) => {
+    if (paymentStatus === 'UNPAID') return;
+
+    // Outside explicit Split mode, methods are mutually exclusive — a normal
+    // method click replaces Cash (or any prior single method) and never implies split.
+    if (!isSplitMode) {
+      if (paymentMethods.length === 1 && paymentMethods[0] === method) {
+        return;
+      }
+      const next: PaymentMethod[] = [method];
+      clearFieldsForAbsentMethods(next);
+      setShowSplitPanel(false);
+      setPaymentMethods(next);
+      return;
+    }
+
+    // Split mode: allow additive multi-method selection.
     const exists = paymentMethods.includes(method);
     let next = exists
       ? paymentMethods.filter((current) => current !== method)
@@ -514,15 +608,34 @@ export default function PosClient({
     if (next.length === 0) {
       next = ['CASH'];
     }
-    if (!next.includes(method) && exists) {
-      if (method === 'CASH') setCashTendered('');
-      if (method === 'CARD') setCardPaid('');
-      if (method === 'TRANSFER') setTransferPaid('');
-      if (method === 'MOBILE_MONEY') {
-        resetMomoPaymentFields();
-      }
+    if (exists) {
+      if (method === 'CASH') clearCashFields();
+      if (method === 'CARD') clearCardFields();
+      if (method === 'TRANSFER') clearTransferFields();
+      if (method === 'MOBILE_MONEY') resetMomoPaymentFields();
+    }
+    if (next.length === 1) {
+      clearFieldsForAbsentMethods(next);
     }
     setPaymentMethods(next);
+  };
+
+  const handleToggleSplitPanel = () => {
+    if (showSplitPanel || paymentMethods.length > 1) {
+      // Leave Split: collapse to one method and drop stale split-only amounts/refs.
+      const keep = paymentMethods[0] ?? 'CASH';
+      const next: PaymentMethod[] = [keep];
+      clearFieldsForAbsentMethods(next);
+      // Reset kept non-cash amounts so single-method Paid defaults re-apply the full due.
+      if (keep === 'CARD') setCardPaid('');
+      if (keep === 'TRANSFER') setTransferPaid('');
+      if (keep === 'MOBILE_MONEY') setMomoPaid('');
+      if (keep === 'CASH') clearCashFields();
+      setPaymentMethods(next);
+      setShowSplitPanel(false);
+      return;
+    }
+    setShowSplitPanel(true);
   };
 
   const filteredProducts = useMemo(() => {
@@ -660,11 +773,14 @@ export default function PosClient({
     setCart([]);
     clearSavedCart();
     setCustomerId('');
-    setCashTendered('');
-    setCardPaid('');
-    setTransferPaid('');
+    clearCashFields();
+    clearCardFields();
+    clearTransferFields();
     resetMomoPaymentFields();
+    clearDueDateState();
     setPaymentMethods(['CASH']);
+    setShowSplitPanel(false);
+    setAmbiguousFailure(false);
     orderDiscountForm.reset();
     loyaltyRedemption.reset();
     setQtyDrafts({});
@@ -676,7 +792,11 @@ export default function PosClient({
       playBeep(true);
     }
   }, [
+    clearCashFields,
+    clearCardFields,
+    clearDueDateState,
     clearSavedCart,
+    clearTransferFields,
     clearUndoStack,
     loyaltyRedemption,
     orderDiscountForm,
@@ -687,25 +807,82 @@ export default function PosClient({
     setQtyDrafts,
   ]);
 
-  const checkoutSummary = useMemo(() => calculateCheckoutSummary({
-    totals,
-    orderDiscountType,
-    orderDiscountInput,
-    loyaltyDiscountPence: loyaltyRedemption.loyaltyDiscountPence,
-    vatEnabled: business.vatEnabled,
-    discountApprovalThresholdBps: business.discountApprovalThresholdBps,
-    discountManagerPin,
-    discountReasonCode,
-    discountReason,
-    paymentMethods,
-    cashTendered,
-    cardPaid,
-    transferPaid,
-    momoPaid,
-    momoNetwork,
-    momoPayerMsisdn,
-    momoCollectionStatus,
-  }), [
+  const checkoutSummary = useMemo(() => {
+    const effectiveMethods = paymentStatus === 'UNPAID' ? [] : paymentMethods;
+    const preliminary = calculateCheckoutSummary({
+      totals,
+      orderDiscountType,
+      orderDiscountInput,
+      loyaltyDiscountPence: loyaltyRedemption.loyaltyDiscountPence,
+      vatEnabled: business.vatEnabled,
+      discountApprovalThresholdBps: business.discountApprovalThresholdBps,
+      discountManagerPin,
+      discountReasonCode,
+      discountReason,
+      paymentMethods: effectiveMethods.length ? effectiveMethods : (paymentStatus === 'UNPAID' ? [] : ['CASH']),
+      cashTendered: paymentStatus === 'UNPAID' ? '' : cashTendered,
+      cardPaid: paymentStatus === 'UNPAID' ? '' : cardPaid,
+      transferPaid: paymentStatus === 'UNPAID' ? '' : transferPaid,
+      momoPaid: paymentStatus === 'UNPAID' ? '' : momoPaid,
+      momoNetwork,
+      momoPayerMsisdn,
+      momoCollectionStatus,
+    });
+
+    // Empty paymentMethods is only valid for UNPAID; calculateCheckoutSummary needs a list.
+    if (paymentStatus === 'UNPAID') {
+      return {
+        ...preliminary,
+        cashTenderedValue: 0,
+        cardPaidValue: 0,
+        transferPaidValue: 0,
+        momoPaidValue: 0,
+        nonCashOverpay: false,
+        totalPaid: 0,
+        balanceRemaining: preliminary.totalDue,
+        cashApplied: 0,
+        changeDue: 0,
+        needsMomoConfirmation: false,
+        momoConfirmed: false,
+        usedExactCashDefault: false,
+      };
+    }
+
+    const defaults = applyPaidSingleMethodDefaults({
+      paymentStatus,
+      paymentMethods: effectiveMethods,
+      totalDuePence: preliminary.totalDue,
+      cashTendered,
+      cardPaid,
+      transferPaid,
+      momoPaid,
+    });
+
+    const withDefaults = calculateCheckoutSummary({
+      totals,
+      orderDiscountType,
+      orderDiscountInput,
+      loyaltyDiscountPence: loyaltyRedemption.loyaltyDiscountPence,
+      vatEnabled: business.vatEnabled,
+      discountApprovalThresholdBps: business.discountApprovalThresholdBps,
+      discountManagerPin,
+      discountReasonCode,
+      discountReason,
+      paymentMethods: effectiveMethods,
+      cashTendered: defaults.cashTendered,
+      cardPaid: defaults.cardPaid,
+      transferPaid: defaults.transferPaid,
+      momoPaid: defaults.momoPaid,
+      momoNetwork,
+      momoPayerMsisdn,
+      momoCollectionStatus,
+    });
+
+    return {
+      ...withDefaults,
+      usedExactCashDefault: defaults.usedExactCashDefault,
+    };
+  }, [
     totals,
     orderDiscountType,
     orderDiscountInput,
@@ -716,6 +893,7 @@ export default function PosClient({
     discountReasonCode,
     discountReason,
     paymentMethods,
+    paymentStatus,
     cashTendered,
     cardPaid,
     transferPaid,
@@ -770,7 +948,19 @@ export default function PosClient({
 
   const handleCompleteSale = async () => {
     if (!canSubmit || isCompletingSale) return;
+
+    const dueResolved = resolveDueDateForSubmit({
+      paymentStatus,
+      dueDateDecision,
+      dueDate,
+    });
+    if (!dueResolved.ok) {
+      setSaleError(dueResolved.error);
+      return;
+    }
+
     beginCompletion();
+    setAmbiguousFailure(false);
 
     const saleSnapshot = createSaleCompletionSnapshot<CartLine, ProductDto, 'PAID' | 'PART_PAID' | 'UNPAID', PaymentMethod, DiscountType, CollectionNetwork, MomoCollectionState>({
       productOptions,
@@ -799,12 +989,12 @@ export default function PosClient({
       undoStack,
     });
 
-    const stockDecrements = buildOptimisticStockDecrements(cart, productOptions);
-    setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
-
     const loyaltyPointsToRedeem = loyaltyRedemption.pointsToRedeem;
-    resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
-    barcodeRef.current?.focus();
+    const externalRef = buildOnlineSaleExternalRef(saleAttemptId);
+    const submitCashPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(cashApplied));
+    const submitCardPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(cardPaidValue));
+    const submitTransferPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(transferPaidValue));
+    const submitMomoPaid = paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(momoPaidValue));
 
     try {
       const result = await completeSaleAction({
@@ -813,21 +1003,32 @@ export default function PosClient({
         cart: JSON.stringify(saleSnapshot.cart),
         paymentStatus,
         customerId: saleSnapshot.customerId,
-        dueDate: formRef.current?.querySelector<HTMLInputElement>('input[name="dueDate"]')?.value ?? '',
+        dueDate: dueResolved.dueDate,
+        dueDateDecision: paymentStatus === 'PAID' ? 'unset' : dueDateDecision,
         ...orderDiscountForm.toServicePayload(),
         loyaltyPointsToRedeem,
-        cashPaid: Math.max(0, Math.round(cashApplied)),
-        cardPaid: Math.max(0, Math.round(cardPaidValue)),
-        transferPaid: Math.max(0, Math.round(transferPaidValue)),
-        momoPaid: Math.max(0, Math.round(momoPaidValue)),
-        momoRef: momoRef.trim() || undefined,
+        cashPaid: submitCashPaid,
+        cardPaid: submitCardPaid,
+        transferPaid: submitTransferPaid,
+        momoPaid: submitMomoPaid,
+        momoRef: paymentStatus === 'UNPAID' ? undefined : (momoRef.trim() || undefined),
+        cardRef: paymentStatus === 'UNPAID' ? undefined : (cardRef.trim() || undefined),
+        transferRef: paymentStatus === 'UNPAID' ? undefined : (transferRef.trim() || undefined),
+        cashReceivedPence: paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(cashTenderedValue)),
+        changeDuePence: paymentStatus === 'UNPAID' ? 0 : Math.max(0, Math.round(changeDue)),
+        externalRef,
         momoCollectionId: momoCollectionId || undefined,
-        momoPayerMsisdn: momoPayerMsisdn.trim() || undefined,
+        momoPayerMsisdn: paymentStatus === 'UNPAID' ? undefined : (momoPayerMsisdn.trim() || undefined),
         momoNetwork,
       });
 
       if (result.success) {
         const { receiptId, totalPence, transactionNumber } = result.data;
+        const stockDecrements = buildOptimisticStockDecrements(saleSnapshot.cart, saleSnapshot.productOptions);
+        setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
+        resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
+        setSaleAttemptId(nextSaleAttemptId());
+        barcodeRef.current?.focus();
         setLastReceiptId(receiptId);
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(lastReceiptStorageKey, receiptId);
@@ -835,7 +1036,7 @@ export default function PosClient({
         showSaleSuccess({ receiptId, totalPence, transactionNumber }, 3000);
         dispatchNavKpiRefresh();
       } else {
-        restoreSaleSnapshot(saleSnapshot, result.error);
+        setSaleError(result.error);
       }
     } catch (err) {
       if (!navigator.onLine || (err instanceof TypeError && err.message.includes('fetch'))) {
@@ -855,17 +1056,29 @@ export default function PosClient({
               discountType: l.discountType ?? 'NONE',
               discountValue: l.discountValue ?? '',
             })),
-            payments: buildOfflinePayments({ cashApplied, cardPaidValue, transferPaidValue, momoPaidValue }),
+            payments: buildOfflinePayments({
+              cashApplied: submitCashPaid,
+              cardPaidValue: submitCardPaid,
+              transferPaidValue: submitTransferPaid,
+              momoPaidValue: submitMomoPaid,
+            }),
             orderDiscountType,
             orderDiscountValue: orderDiscountInput,
             createdAt: new Date().toISOString(),
           });
+          const stockDecrements = buildOptimisticStockDecrements(saleSnapshot.cart, saleSnapshot.productOptions);
+          setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));
+          resetActiveSale({ resetPaymentStatus: true, playSuccessTone: true });
+          setSaleAttemptId(nextSaleAttemptId());
+          barcodeRef.current?.focus();
           showSaleSuccess({ receiptId: offlineId, totalPence: totalDue, transactionNumber: '(Queued offline)' }, 4000);
         } catch {
-          restoreSaleSnapshot(saleSnapshot, 'Offline queue failed. Please try again.');
+          setAmbiguousFailure(true);
+          setSaleError('Could not confirm this sale. The cart was kept — retry carefully to avoid a duplicate.');
         }
       } else {
-        restoreSaleSnapshot(saleSnapshot, 'Something went wrong. Please try again.');
+        setAmbiguousFailure(true);
+        setSaleError('Sale outcome is unclear. The cart was kept. Retry only if the receipt was not created.');
       }
     } finally {
       endCompletion();
@@ -882,10 +1095,8 @@ export default function PosClient({
   });
 
   const activePaymentMethodLabels = useMemo(
-    () => paymentMethods.map((method) =>
-      method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'
-    ),
-    [paymentMethods]
+    () => (paymentStatus === 'UNPAID' ? ['Credit'] : paymentMethods.map((method) => paymentMethodLabel(method))),
+    [paymentMethods, paymentStatus]
   );
   const latestParkedCart = useMemo(
     () => parkedCarts[parkedCarts.length - 1] ?? null,
@@ -906,7 +1117,20 @@ export default function PosClient({
 
   const requiresCustomer = paymentStatus !== 'PAID';
   const fullyPaid = paymentStatus === 'PAID' ? totalPaid >= totalDue : true;
-  const hasPaymentError = nonCashOverpay;
+  const partPaidValid =
+    paymentStatus !== 'PART_PAID' || (totalPaid > 0 && balanceRemaining > 0 && totalPaid < totalDue);
+  const unpaidValid = paymentStatus !== 'UNPAID' || totalPaid === 0;
+  const dueDateReady =
+    paymentStatus === 'PAID' ||
+    dueDateDecision === 'none' ||
+    (dueDateDecision === 'date' && Boolean(dueDate.trim()));
+  const hasPaymentError = nonCashOverpay || (paymentStatus === 'PAID' && cashTendered.trim() !== '' && Number(cashTendered) < 0);
+  const tenderMalformed =
+    [cashTendered, cardPaid, transferPaid, momoPaid].some((value) => {
+      if (!value.trim()) return false;
+      const parsed = Number(String(value).replace(/,/g, ''));
+      return !Number.isFinite(parsed) || parsed < 0;
+    });
   // MoMo collection API not yet integrated — allow sales with MoMo as a
   // manually-recorded payment method (same as cash/card/transfer).  Once
   // providers are connected, flip this back to:
@@ -924,13 +1148,24 @@ export default function PosClient({
     !checkoutUnavailable &&
     cart.length > 0 &&
     fullyPaid &&
+    partPaidValid &&
+    unpaidValid &&
+    dueDateReady &&
     !hasPaymentError &&
+    !tenderMalformed &&
     momoReady &&
     discountApprovalReady &&
     tillReady &&
     (!requiresCustomer || customerId) &&
-    !(requiresCustomer && customersUnavailable)
+    !(requiresCustomer && customersUnavailable) &&
+    (paymentStatus === 'UNPAID' || paymentMethods.length > 0)
   );
+  const completeLabel = primaryCheckoutLabel({
+    paymentStatus,
+    paymentMethods: paymentMethods.length ? paymentMethods : ['CASH'],
+    isCompletingSale,
+    totalLabel: formatMoney(totalDue, business.currency),
+  });
   const checkoutIssues = useMemo(() => {
     const issues: Array<{ tone: 'warning' | 'success'; message: string }> = [];
     if (checkoutLoading) {
@@ -964,15 +1199,20 @@ export default function PosClient({
     if (paymentStatus === 'PAID' && !fullyPaid) {
       issues.push({ tone: 'warning', message: 'Full payment required. Enter enough cash or switch to Part Paid/Unpaid.' });
     }
+    if (paymentStatus === 'PART_PAID' && !partPaidValid) {
+      issues.push({ tone: 'warning', message: 'Part-paid sales need an amount greater than zero and below the total.' });
+    }
+    if (!dueDateReady) {
+      issues.push({ tone: 'warning', message: 'Choose a due date or No due date for credit sales.' });
+    }
+    if (ambiguousFailure) {
+      issues.push({ tone: 'warning', message: 'Previous submission was unclear. Confirm before retrying.' });
+    }
+    if (tenderMalformed) {
+      issues.push({ tone: 'warning', message: 'Payment amounts cannot be negative or invalid.' });
+    }
     return issues;
-  }, [checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, paymentStatus, requiresCustomer, requiresDiscountApproval, tillReady, tillSelected, tills.length]);
-  const confidenceTone = !cart.length
-    ? 'neutral'
-    : canSubmit
-      ? 'ready'
-      : checkoutIssues.some((issue) => issue.tone === 'warning')
-        ? 'attention'
-        : 'neutral';
+  }, [ambiguousFailure, checkoutExtrasReady, checkoutLoading, checkoutUnavailable, customerId, customersUnavailable, discountApprovalReady, dueDateReady, fullyPaid, hasPaymentError, momoConfirmed, needsMomoConfirmation, partPaidValid, paymentStatus, requiresCustomer, requiresDiscountApproval, tenderMalformed, tillReady, tillSelected, tills.length]);
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
 
@@ -982,11 +1222,12 @@ export default function PosClient({
     canSubmit,
     cartLength: cart.length,
     cashRef,
-    formRef,
+    isCompletingSale,
     lastCartLineId: cart[cart.length - 1]?.id ?? null,
     lastReceiptId,
     productSearchRef,
     onCloseKeyboardHelp: () => setShowKeyboardHelp(false),
+    onCompleteSale: handleCompleteSale,
     onOpenParkModal: () => setShowParkModal(true),
     onRemoveLine: removeLine,
     onToggleKeyboardHelp: () => setShowKeyboardHelp((prev) => !prev),
@@ -997,6 +1238,53 @@ export default function PosClient({
     barcodeRef,
     onScan: handleBarcodeScan,
   });
+
+  // Rotate the online idempotency key when the cashier changes the sale identity.
+  // Unchanged retries after an ambiguous failure keep the same key.
+  const saleIdentity = useMemo(
+    () =>
+      JSON.stringify({
+        cart,
+        customerId,
+        paymentStatus,
+        paymentMethods,
+        cashTendered,
+        cardPaid,
+        transferPaid,
+        momoPaid,
+        cardRef,
+        transferRef,
+        momoRef,
+        dueDate,
+        dueDateDecision,
+      }),
+    [
+      cart,
+      customerId,
+      paymentStatus,
+      paymentMethods,
+      cashTendered,
+      cardPaid,
+      transferPaid,
+      momoPaid,
+      cardRef,
+      transferRef,
+      momoRef,
+      dueDate,
+      dueDateDecision,
+    ],
+  );
+
+  useEffect(() => {
+    if (!saleIdentityRef.current) {
+      saleIdentityRef.current = saleIdentity;
+      return;
+    }
+    if (saleIdentityRef.current === saleIdentity || isCompletingSale) return;
+    saleIdentityRef.current = saleIdentity;
+    setSaleAttemptId(nextSaleAttemptId());
+    setAmbiguousFailure(false);
+  }, [isCompletingSale, saleIdentity]);
 
   return (
     <div className="grid gap-6 pb-36 lg:grid-cols-[3fr_1fr] lg:items-start lg:pb-0">
@@ -1347,7 +1635,14 @@ export default function PosClient({
         )}
 
         {/* ── Cart ──────────────────────────────────────────── */}
-        <form onSubmit={(e) => { e.preventDefault(); handleCompleteSale(); }} className="space-y-4" ref={formRef}>
+        <form
+          onSubmit={(e) => {
+            // Enter inside inputs must not complete the sale — only Ctrl+Enter / explicit CTA.
+            e.preventDefault();
+          }}
+          className="space-y-4"
+          ref={formRef}
+        >
 
           {/* Success toast */}
           {saleSuccess && (
@@ -1644,16 +1939,13 @@ export default function PosClient({
             </div>
           )}
 
-          {/* ── Payment section ─────────────────────────────── */}
-          <div
-            id="pos-payment-panel"
-            className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)] space-y-4 lg:pb-4"
-            tabIndex={-1}
-          >
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* ── Compact checkout ─────────────────────────────── */}
+          <div className="card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] space-y-3 p-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)] sm:p-4 lg:pb-4">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_1fr] sm:items-end">
               <div>
-                <label className="label">Till</label>
+                <label className="label" htmlFor="pos-till-select">Till</label>
                 <select
+                  id="pos-till-select"
                   className="input"
                   name="tillId"
                   value={tillId}
@@ -1711,33 +2003,74 @@ export default function PosClient({
                   </div>
                 )}
               </div>
-              <div>
-                <label className="label">Payment Status</label>
-                <select className="input" name="paymentStatus" value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as any)}>
-                  <option value="PAID">Paid</option>
-                  <option value="PART_PAID">Part Paid</option>
-                  <option value="UNPAID">Unpaid (Credit)</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Method</label>
-                <div className="mt-1.5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                  {availablePaymentMethods.map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => togglePaymentMethod(method)}
-                      className={`rounded-full px-3 py-2 text-sm font-semibold transition sm:px-4 ${hasMethod(method) ? (method === 'MOBILE_MONEY' ? 'bg-yellow-500 text-white' : 'bg-accent text-white') : 'bg-black/5 text-black/50 hover:bg-black/10'}`}
-                    >
-                      {method === 'CASH' ? 'Cash' : method === 'CARD' ? 'Card' : method === 'TRANSFER' ? 'Transfer' : 'MoMo'}
-                    </button>
-                  ))}
+              <details className="rounded-xl border border-black/10 bg-black/[.02] px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold text-black/55">
+                  Order discount {orderDiscountType !== 'NONE' ? '· active' : ''}
+                </summary>
+                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">
+                  <select
+                    className="input w-full"
+                    value={orderDiscountType}
+                    onChange={(e) => orderDiscountForm.setType(e.target.value as DiscountType)}
+                  >
+                    <option value="NONE">None</option>
+                    <option value="PERCENT">%</option>
+                    <option value="AMOUNT">Amount</option>
+                  </select>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min={0}
+                    step={orderDiscountType === 'PERCENT' ? '1' : '0.01'}
+                    inputMode="decimal"
+                    value={orderDiscountInput}
+                    onChange={(e) => orderDiscountForm.setInput(e.target.value)}
+                    disabled={orderDiscountType === 'NONE'}
+                    onFocus={(e) => e.currentTarget.select()}
+                    placeholder={orderDiscountType === 'PERCENT' ? '10' : '0.00'}
+                  />
                 </div>
-              </div>
-              <div>
-                <label className="label">Due Date</label>
-                <input className="input" name="dueDate" type="date" />
-              </div>
+                {requiresDiscountApproval ? (
+                  <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                      Manager Approval Required
+                    </div>
+                    <div className="mt-1 text-xs text-amber-700">
+                      Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
+                      {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <select
+                        className="input"
+                        value={discountReasonCode}
+                        onChange={(e) => orderDiscountForm.setReasonCode(e.target.value)}
+                      >
+                        <option value="">Select reason code</option>
+                        {DISCOUNT_REASON_CODES.map((code) => (
+                          <option key={code} value={code}>
+                            {code.replace(/_/g, ' ')}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="input"
+                        value={discountReason}
+                        onChange={(e) => orderDiscountForm.setReason(e.target.value)}
+                        placeholder="Reason details"
+                      />
+                      <input
+                        className="input"
+                        type="password"
+                        value={discountManagerPin}
+                        onChange={(e) => orderDiscountForm.setManagerPin(e.target.value)}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="Manager PIN"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </details>
             </div>
 
             <CustomerSelector
@@ -1750,11 +2083,13 @@ export default function PosClient({
               onCustomerChange={setCustomerId}
               onQuickAdd={() => setShowQuickCustomer(true)}
             />
-            <CustomerCreditWarning
-              customerId={customerId}
-              totalDuePence={totalDue}
-              currency={business.currency}
-            />
+            {requiresCustomer || customerId ? (
+              <CustomerCreditWarning
+                customerId={customerId}
+                totalDuePence={totalDue}
+                currency={business.currency}
+              />
+            ) : null}
 
             {loyaltyRedemption.active ? (
               <LoyaltyRedemptionPanel
@@ -1770,242 +2105,88 @@ export default function PosClient({
               />
             ) : null}
 
-            {/* Order discount */}
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_9rem] sm:items-end">
-              <label className="label whitespace-nowrap">Order Discount</label>
-              <select
-                className="input w-full"
-                value={orderDiscountType}
-                onChange={(e) => orderDiscountForm.setType(e.target.value as DiscountType)}
-              >
-                <option value="NONE">None</option>
-                <option value="PERCENT">%</option>
-                <option value="AMOUNT">Amount</option>
-              </select>
-              <input
-                className="input w-full"
-                type="number"
-                min={0}
-                step={orderDiscountType === 'PERCENT' ? '1' : '0.01'}
-                inputMode="decimal"
-                value={orderDiscountInput}
-                onChange={(e) => orderDiscountForm.setInput(e.target.value)}
-                disabled={orderDiscountType === 'NONE'}
-                onFocus={(e) => e.currentTarget.select()}
-                placeholder={orderDiscountType === 'PERCENT' ? '10' : '0.00'}
-              />
-            </div>
+            <PosCheckoutPanel
+              currency={business.currency}
+              paymentStatus={paymentStatus}
+              onPaymentStatusChange={handlePaymentStatusChange}
+              availablePaymentMethods={availablePaymentMethods}
+              paymentMethods={paymentMethods}
+              onTogglePaymentMethod={togglePaymentMethod}
+              showSplitPanel={showSplitPanel}
+              onToggleSplitPanel={handleToggleSplitPanel}
+              cashTendered={cashTendered}
+              onCashTenderedChange={setCashTendered}
+              cashRef={cashRef}
+              cardPaid={cardPaid}
+              onCardPaidChange={setCardPaid}
+              transferPaid={transferPaid}
+              onTransferPaidChange={setTransferPaid}
+              momoPaid={momoPaid}
+              onMomoPaidChange={setMomoPaid}
+              cardRefValue={cardRef}
+              onCardRefChange={setCardRef}
+              transferRefValue={transferRef}
+              onTransferRefChange={setTransferRef}
+              momoRef={momoRef}
+              onMomoRefChange={setMomoRef}
+              momoNetwork={momoNetwork}
+              onMomoNetworkChange={setMomoNetwork}
+              momoPayerMsisdn={momoPayerMsisdn}
+              onMomoPayerMsisdnChange={setMomoPayerMsisdn}
+              momoGuidance={momoGuidance}
+              totalDue={totalDue}
+              totalPaid={totalPaid}
+              balanceRemaining={balanceRemaining}
+              changeDue={changeDue}
+              dueDateDecision={dueDateDecision}
+              dueDate={dueDate}
+              onDueDateDecisionChange={(decision) => {
+                setDueDateDecision(decision);
+                if (decision !== 'date') setDueDate('');
+              }}
+              onDueDateChange={(value) => {
+                setDueDate(value);
+                setDueDateDecision(value ? 'date' : 'unset');
+              }}
+              showAmountInputs
+            />
 
-            {requiresDiscountApproval ? (
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
-                  Manager Approval Required
-                </div>
-                <div className="mt-1 text-xs text-amber-700">
-                  Discount is {(discountBps / 100).toFixed(2)}% and exceeds threshold{' '}
-                  {((business.discountApprovalThresholdBps ?? 1500) / 100).toFixed(2)}%.
-                </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-3">
-                  <select
-                    className="input"
-                    value={discountReasonCode}
-                    onChange={(e) => orderDiscountForm.setReasonCode(e.target.value)}
+            {checkoutIssues.length > 0 ? (
+              <div className="space-y-1.5">
+                {checkoutIssues.map((issue) => (
+                  <div
+                    key={issue.message}
+                    className={`rounded-xl px-3 py-2 text-xs font-medium ${
+                      issue.tone === 'success'
+                        ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+                        : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
+                    }`}
                   >
-                    <option value="">Select reason code</option>
-                    {DISCOUNT_REASON_CODES.map((code) => (
-                      <option key={code} value={code}>
-                        {code.replace(/_/g, ' ')}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="input"
-                    value={discountReason}
-                    onChange={(e) => orderDiscountForm.setReason(e.target.value)}
-                    placeholder="Reason details"
-                  />
-                  <input
-                    className="input"
-                    type="password"
-                    value={discountManagerPin}
-                    onChange={(e) => orderDiscountForm.setManagerPin(e.target.value)}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    placeholder="Manager PIN"
-                  />
-                </div>
+                    {issue.tone === 'success' ? '✓ ' : '• '}{issue.message}
+                  </div>
+                ))}
+              </div>
+            ) : cart.length > 0 ? (
+              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+                ✓ Ready — {activePaymentMethodLabels.join(' + ')}
               </div>
             ) : null}
 
-            {/* Cash / Card / Transfer inputs */}
-            <div className="grid gap-3 sm:grid-cols-3">
-              {hasMethod('CASH') && (
-                <div>
-                  <label className="label">Cash Tendered</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    inputMode="decimal"
-                    ref={cashRef}
-                    value={cashTendered}
-                    onChange={(e) => setCashTendered(e.target.value)}
-                    onFocus={(e) => e.currentTarget.select()}
-                  />
-                  <div className="mt-1.5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1.5">
-                    {[1, 2, 5, 10, 20, 50, 100, 200].map((amount) => (
-                      <button
-                        key={amount}
-                        type="button"
-                        className="rounded-md border border-black/10 bg-white px-3 py-2 text-center text-xs font-semibold hover:bg-black/5"
-                        onClick={() => setCashTendered(String(amount))}
-                      >
-                        {formatMoney(amount * 100, business.currency)}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700 hover:bg-emerald-100 sm:min-w-[5rem]"
-                      onClick={() => setCashTendered(String(totalDue / 100))}
-                    >
-                      Exact
-                    </button>
-                  </div>
-                </div>
-              )}
-              {hasMethod('CARD') && (
-                <div>
-                  <label className="label">Card Amount</label>
-                  <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={cardPaid} onChange={(e) => setCardPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} />
-                </div>
-              )}
-              {hasMethod('TRANSFER') && (
-                <div>
-                  <label className="label">Transfer Amount</label>
-                  <input className="input" type="number" min={0} step="0.01" inputMode="decimal" value={transferPaid} onChange={(e) => setTransferPaid(e.target.value)} onFocus={(e) => e.currentTarget.select()} />
-                </div>
-              )}
-              {hasMethod('MOBILE_MONEY') && (
-                <div>
-                  <label className="label flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full bg-yellow-500"></span>
-                    MoMo Amount
-                  </label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    inputMode="decimal"
-                    value={momoPaid}
-                    onChange={(e) => setMomoPaid(e.target.value)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    placeholder="0.00"
-                  />
-                  <select
-                    className="input mt-1.5"
-                    value={momoNetwork}
-                    onChange={(e) => setMomoNetwork(e.target.value as CollectionNetwork)}
-                  >
-                    <option value="MTN">MTN</option>
-                    <option value="TELECEL">Telecel</option>
-                    <option value="AIRTELTIGO">AirtelTigo</option>
-                  </select>
-                  <input
-                    className="input mt-1.5"
-                    type="tel"
-                    value={momoPayerMsisdn}
-                    onChange={(e) => setMomoPayerMsisdn(e.target.value)}
-                    placeholder="Payer number (e.g. 024xxxxxxx)"
-                  />
-                  {momoCollectionStatus === 'IDLE' ? (
-                    <div className="mt-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-[11px] text-emerald-800">
-                      {momoGuidance}
-                    </div>
-                  ) : null}
-                  <input
-                    className="input mt-1.5"
-                    type="text"
-                    value={momoRef}
-                    onChange={(e) => setMomoRef(e.target.value)}
-                    placeholder="Transaction ref (optional)"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className={`rounded-2xl border px-4 py-3 shadow-sm transition ${confidenceTone === 'ready'
-              ? 'border-emerald-200 bg-emerald-50/80'
-              : confidenceTone === 'attention'
-                ? 'border-amber-200 bg-amber-50/80'
-                : 'border-black/10 bg-black/[.02]'
-              }`}>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${confidenceTone === 'ready'
-                      ? 'bg-emerald-600 text-white'
-                      : confidenceTone === 'attention'
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-black/10 text-black/55'
-                      }`}>{paymentStatus.replace('_', ' ')}</span>
-                    {activePaymentMethodLabels.map((label) => (
-                      <span key={label} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-black/60 ring-1 ring-black/10">{label}</span>
-                    ))}
-                    {cart.length === 0 ? <span className="rounded-full bg-white px-2.5 py-1 text-xs text-black/45 ring-1 ring-black/10">Next customer standby</span> : null}
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35">Payment check</div>
-                    <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1">
-                      <div>
-                        <div className="text-[11px] text-black/40">Due</div>
-                        <div className="text-lg font-bold text-ink">{formatMoney(totalDue, business.currency)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] text-black/40">Tendered</div>
-                        <div className="text-sm font-semibold text-black/70">{formatMoney(totalPaid, business.currency)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] text-black/40">Balance</div>
-                        <div className={`text-sm font-semibold ${balanceRemaining > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{formatMoney(balanceRemaining, business.currency)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] text-black/40">Change</div>
-                        <div className={`text-sm font-semibold ${changeDue > 0 ? 'text-accent' : 'text-black/55'}`}>{formatMoney(changeDue, business.currency)}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="min-w-0 lg:max-w-sm">
-                  {checkoutIssues.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {checkoutIssues.map((issue) => (
-                        <div key={issue.message} className={`rounded-xl px-3 py-2 text-xs font-medium ${issue.tone === 'success'
-                          ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
-                          : 'bg-white text-amber-900 ring-1 ring-amber-200'
-                          }`}>
-                          {issue.tone === 'success' ? '✓ ' : '• '}{issue.message}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                      ✓ Payment and till checks are clear. This sale is ready to complete.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <div className="flex flex-col gap-2 md:flex-row">
-              <button className="btn-primary hidden flex-1 py-3 text-lg md:inline-flex md:items-center md:justify-center" type="submit" disabled={!canSubmit || isCompletingSale}>
-                {isCompletingSale ? 'Processing…' : `Complete Sale — ${formatMoney(totalDue, business.currency)}`}
+              <button
+                className={`btn-primary hidden flex-1 py-3 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent md:inline-flex md:items-center md:justify-center ${
+                  paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
+                }`}
+                type="button"
+                disabled={!canSubmit || isCompletingSale}
+                onClick={handleCompleteSale}
+              >
+                {completeLabel}
               </button>
               {cart.length > 0 && (
                 <button
                   type="button"
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 md:w-auto"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 md:w-auto"
                   onClick={() => setShowParkModal(true)}
                   title="Park this sale and serve another customer"
                 >
@@ -2059,6 +2240,10 @@ export default function PosClient({
           onToggleParkedPanel={() => setShowParkedPanel(!showParkedPanel)}
           onRecallParked={(id) => { handleRecallParkedCart(id); setShowParkedPanel(false); }}
           onDeleteParked={deleteParkedCart}
+          completeLabel={completeLabel}
+          canSubmit={canSubmit}
+          isCompletingSale={isCompletingSale}
+          onCompleteSale={handleCompleteSale}
         />
       </div>
 
@@ -2189,11 +2374,13 @@ export default function PosClient({
               </button>
               <button
                 type="button"
-                className="btn-primary flex-1 px-5 py-3 text-sm font-bold"
+                className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
+                }`}
                 disabled={!canSubmit || isCompletingSale}
                 onClick={handleCompleteSale}
               >
-                {isCompletingSale ? 'Processing…' : 'Complete Sale →'}
+                {completeLabel}
               </button>
             </div>
           </div>
