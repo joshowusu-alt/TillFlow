@@ -781,6 +781,7 @@ async function createSaleImpl(input: CreateSaleInput) {
   }
 
   let stockMovementInventoryMap = inventoryMap;
+  let idempotentExternalRefReplay = false;
 
   const invoice = await measureCheckoutStage(
     'action.checkout.transaction.total',
@@ -879,6 +880,8 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
     };
 
+    let idempotentReplayInvoice: { id: string; externalRef?: string | null } | null = null;
+
     const created = await (async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
         const sequenceValue = await measureCheckoutStage(
@@ -904,6 +907,20 @@ async function createSaleImpl(input: CreateSaleInput) {
             CHECKOUT_STAGE_THRESHOLDS_MS.invoiceCreate,
           );
         } catch (error) {
+          // Concurrent retry with the same externalRef: the loser must return the
+          // winner's invoice and MUST NOT re-apply stock, drawer, or journal effects.
+          if (input.externalRef && isPrismaUniqueConstraintOn(error, ['businessId', 'externalRef'])) {
+            const existingByRef = await tx.salesInvoice.findFirst({
+              where: {
+                businessId: input.businessId,
+                externalRef: input.externalRef,
+              },
+            });
+            if (existingByRef) {
+              idempotentReplayInvoice = existingByRef;
+              return existingByRef;
+            }
+          }
           if (!isPrismaUniqueConstraintOn(error, ['businessId', 'transactionNumber'])) {
             throw error;
           }
@@ -912,6 +929,11 @@ async function createSaleImpl(input: CreateSaleInput) {
 
       throw new Error('Failed to allocate a unique invoice number for this sale.');
     })();
+
+    if (idempotentReplayInvoice) {
+      idempotentExternalRefReplay = true;
+      return idempotentReplayInvoice;
+    }
 
     // Parallelise: MoMo, cash-drawer, inventory updates and stock movements
     const txPromises: Promise<any>[] = [];
@@ -1124,8 +1146,9 @@ async function createSaleImpl(input: CreateSaleInput) {
     CHECKOUT_STAGE_THRESHOLDS_MS.transactionTotal,
   );
 
-  // Post-tx: stock movement audit trail — non-critical, fire-and-forget
-  if (shouldApplyInventoryMovements) {
+  // Post-tx: stock movement audit trail — non-critical, fire-and-forget.
+  // Skip on idempotent externalRef replay — the winning request already applied effects.
+  if (shouldApplyInventoryMovements && !idempotentExternalRefReplay) {
     void measureCheckoutStage(
       'action.checkout.stock-movements',
       input,
@@ -1153,23 +1176,25 @@ async function createSaleImpl(input: CreateSaleInput) {
   }
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale
-  detectExcessiveDiscountRisk({
-    businessId: input.businessId,
-    storeId: input.storeId,
-    cashierUserId: input.cashierUserId,
-    salesInvoiceId: invoice.id,
-    discountPence: totalDiscountPence,
-    grossSalesPence,
-    thresholdBps: business.discountApprovalThresholdBps,
-  }).catch(() => {});
+  if (!idempotentExternalRefReplay) {
+    detectExcessiveDiscountRisk({
+      businessId: input.businessId,
+      storeId: input.storeId,
+      cashierUserId: input.cashierUserId,
+      salesInvoiceId: invoice.id,
+      discountPence: totalDiscountPence,
+      grossSalesPence,
+      thresholdBps: business.discountApprovalThresholdBps,
+    }).catch(() => {});
 
-  detectNegativeMarginRisk({
-    businessId: input.businessId,
-    storeId: input.storeId,
-    cashierUserId: input.cashierUserId,
-    salesInvoiceId: invoice.id,
-    grossMarginPence: grossMarginEstimate,
-  }).catch(() => {});
+    detectNegativeMarginRisk({
+      businessId: input.businessId,
+      storeId: input.storeId,
+      cashierUserId: input.cashierUserId,
+      salesInvoiceId: invoice.id,
+      grossMarginPence: grossMarginEstimate,
+    }).catch(() => {});
+  }
 
   return invoice;
 }

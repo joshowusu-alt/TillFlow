@@ -806,6 +806,51 @@ describe('createSale — payments & stock', () => {
     expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
   });
 
+  it('returns the winner invoice when a concurrent externalRef create races on P2002', async () => {
+    const existing = {
+      id: 'inv-race-winner',
+      totalPence: 500,
+      transactionNumber: 'INV-000042',
+      externalRef: 'POS_ONLINE:race-1',
+    };
+    prismaMock.salesInvoice.findFirst
+      .mockResolvedValueOnce(null) // pre-create idempotency miss
+      .mockResolvedValueOnce(existing); // post-P2002 lookup
+    (prismaMock as any).salesInvoice.create.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: ['businessId', 'externalRef'] },
+    });
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 0 });
+
+    const result = await createSale(makeBaseInput({
+      externalRef: 'POS_ONLINE:race-1',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }));
+
+    expect(result).toEqual(existing);
+    // Loser must not re-apply stock or cash-drawer effects.
+    expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.createMany).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+  });
+
+  it('does not treat an unrelated uniqueness conflict as an idempotent sale', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce(null);
+    (prismaMock as any).salesInvoice.create.mockRejectedValue({
+      code: 'P2002',
+      meta: { target: ['businessId', 'someOtherField'] },
+    });
+
+    await expect(
+      createSale(makeBaseInput({
+        externalRef: 'POS_ONLINE:other-1',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      })),
+    ).rejects.toBeTruthy();
+    expect(batchDecrementInventoryBalanceMock).not.toHaveBeenCalled();
+  });
+
   it('preserves Card and Bank Transfer references on payment rows', async () => {
     await createSale(makeBaseInput({
       payments: [

@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { deferServiceWorkerReload, isLoginSubmitting } from '@/lib/pwa/login-submit-guard';
+import {
+  deferPosServiceWorkerReload,
+  isPosTransactionActive,
+} from '@/lib/pwa/transaction-activity-guard';
 
 type BackgroundSyncRegistration = ServiceWorkerRegistration & {
   sync?: {
@@ -50,8 +54,14 @@ export default function ServiceWorkerRegistration() {
     };
 
     const handleControllerChange = () => {
+      // Never hard-reload mid-login or mid-POS transaction: a remount regenerates
+      // saleAttemptId and can turn an uncertain submission into a duplicate sale.
       if (isLoginSubmitting()) {
         deferServiceWorkerReload(performReload);
+        return;
+      }
+      if (isPosTransactionActive()) {
+        deferPosServiceWorkerReload(performReload);
         return;
       }
       performReload();

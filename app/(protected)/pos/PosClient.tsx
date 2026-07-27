@@ -30,6 +30,11 @@ import { computeDiscount } from '@/lib/payments/pos-checkout';
 import { applyOptimisticStock, buildOfflinePayments, buildOptimisticStockDecrements, createSaleCompletionSnapshot, type PosCompletionSnapshot } from '@/lib/payments/pos-completion';
 import { calculateCheckoutSummary } from '@/lib/payments/pos-checkout';
 import {
+  buildPosSaleAttemptStorageKey,
+  readPersistedSaleAttempt,
+} from '@/lib/payments/pos-persistence';
+import { notifyPosTransactionActive } from '@/lib/pwa/transaction-activity-guard';
+import {
   applyPaidSingleMethodDefaults,
   buildOnlineSaleExternalRef,
   nextSaleAttemptId,
@@ -198,9 +203,15 @@ export default function PosClient({
   const [dueDate, setDueDate] = useState('');
   const [dueDateDecision, setDueDateDecision] = useState<DueDateDecision>('unset');
   const [showSplitPanel, setShowSplitPanel] = useState(false);
+  const saleAttemptStorageKey = useMemo(
+    () => buildPosSaleAttemptStorageKey(business.id, store.id),
+    [business.id, store.id]
+  );
   const [saleAttemptId, setSaleAttemptId] = useState(nextSaleAttemptId);
   const [ambiguousFailure, setAmbiguousFailure] = useState(false);
   const saleIdentityRef = useRef<string>('');
+  const saleAttemptRestoredRef = useRef(false);
+  const [saleAttemptReady, setSaleAttemptReady] = useState(false);
   const {
     momoPaid,
     setMomoPaid,
@@ -324,6 +335,7 @@ export default function PosClient({
     customerId,
     setCustomerId,
     cartRestored,
+    cartHydrated,
     clearSavedCart,
   } = usePersistedPosCart<CartLine>({
     productExists,
@@ -502,6 +514,58 @@ export default function PosClient({
       window.localStorage.setItem(tillStorageKey, tillId);
     }
   }, [tillId, tillStorageKey]);
+
+  // Restore the last online idempotency identity after a remount (e.g. SW reload).
+  // Apply after cart hydrate so the sale-identity rotator does not immediately replace it.
+  useEffect(() => {
+    if (!cartHydrated || saleAttemptRestoredRef.current) return;
+    saleAttemptRestoredRef.current = true;
+    if (typeof window === 'undefined') {
+      setSaleAttemptReady(true);
+      return;
+    }
+    try {
+      const restored = readPersistedSaleAttempt(window.sessionStorage.getItem(saleAttemptStorageKey));
+      if (restored) {
+        setSaleAttemptId(restored.attemptId);
+        setAmbiguousFailure(restored.ambiguousFailure);
+      }
+    } catch {
+      // Storage errors must not crash POS — continue with a fresh attempt id.
+    }
+    setSaleAttemptReady(true);
+  }, [cartHydrated, saleAttemptStorageKey]);
+
+  // Keep the idempotency identity available across soft remounts while a cart or
+  // uncertain outcome is active; clear it once the terminal becomes idle.
+  // Wait for cart hydration so we do not wipe a restored attempt before it loads.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !cartHydrated || !saleAttemptReady) return;
+    const shouldPersist = cart.length > 0 || ambiguousFailure || isCompletingSale;
+    try {
+      if (!shouldPersist) {
+        window.sessionStorage.removeItem(saleAttemptStorageKey);
+        return;
+      }
+      window.sessionStorage.setItem(
+        saleAttemptStorageKey,
+        JSON.stringify({ attemptId: saleAttemptId, ambiguousFailure })
+      );
+    } catch {
+      // Ignore quota / private-mode failures.
+    }
+  }, [ambiguousFailure, cart.length, cartHydrated, isCompletingSale, saleAttemptId, saleAttemptReady, saleAttemptStorageKey]);
+
+  // Block SW hard-reload and POS pull-to-refresh while a live transaction exists.
+  useEffect(() => {
+    const active = cart.length > 0 || isCompletingSale || ambiguousFailure;
+    notifyPosTransactionActive(active);
+    return () => {
+      // Unmount must not flush a deferred SW reload — a remount may still own
+      // an active cart. Clear the signal only; the next mount re-asserts active.
+      notifyPosTransactionActive(false, { flushOnInactive: false });
+    };
+  }, [ambiguousFailure, cart.length, isCompletingSale]);
 
   const restoreSaleSnapshot = useCallback((snapshot: SaleCompletionSnapshot, errorMessage: string) => {
     setProductOptions(snapshot.productOptions);
@@ -1151,6 +1215,7 @@ export default function PosClient({
     tillSelected &&
     (!business.requireOpenTillForSales || openShiftTillIds.includes(tillId));
   const canSubmit = Boolean(
+    saleAttemptReady &&
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     cart.length > 0 &&
@@ -1270,6 +1335,8 @@ export default function PosClient({
 
   // Rotate the online idempotency key when the cashier changes the sale identity.
   // Unchanged retries after an ambiguous failure keep the same key.
+  // Wait until persisted cart restore finishes so a remount does not treat cart
+  // hydration as a cashier edit (which would mint a new attempt id).
   const saleIdentity = useMemo(
     () =>
       JSON.stringify({
@@ -1305,6 +1372,7 @@ export default function PosClient({
   );
 
   useEffect(() => {
+    if (!cartHydrated) return;
     if (!saleIdentityRef.current) {
       saleIdentityRef.current = saleIdentity;
       return;
@@ -1313,7 +1381,7 @@ export default function PosClient({
     saleIdentityRef.current = saleIdentity;
     setSaleAttemptId(nextSaleAttemptId());
     setAmbiguousFailure(false);
-  }, [isCompletingSale, saleIdentity]);
+  }, [cartHydrated, isCompletingSale, saleIdentity]);
 
   return (
     <div

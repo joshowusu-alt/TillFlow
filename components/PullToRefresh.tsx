@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { refreshCurrentView } from '@/app/actions/refresh';
+import { isPosTransactionActive } from '@/lib/pwa/transaction-activity-guard';
 
 const TRIGGER_DISTANCE = 68;
 const MAX_PULL_DISTANCE = 112;
@@ -12,6 +13,13 @@ const ROUTER_REFRESH_ONLY_PREFIXES = ['/pos', '/offline/sales', '/receipts'];
 function shouldIgnoreTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [data-pull-refresh-ignore="true"]'));
+}
+
+function isProtectedPosRefresh() {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname;
+  if (!(path === '/pos' || path.startsWith('/pos/'))) return false;
+  return isPosTransactionActive();
 }
 
 function shouldForceRouteRefresh(pathname: string) {
@@ -50,6 +58,9 @@ export default function PullToRefresh() {
 
     const onTouchStart = (event: TouchEvent) => {
       if (refreshingRef.current || shouldIgnoreTarget(event.target)) return;
+      // Block pull-to-refresh while a POS cart / checkout / uncertain sale is active.
+      // Soft refresh can remount the Suspense POS tree and wipe in-memory checkout state.
+      if (isProtectedPosRefresh()) return;
       if (getScrollTop() > 4) return;
       const touch = event.touches[0];
       if (!touch) return;

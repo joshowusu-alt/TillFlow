@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { parsePersistedCart, restorePersistedCart, type PersistedCartLine } from './pos-persistence';
+import {
+  buildPosSaleAttemptStorageKey,
+  parsePersistedCart,
+  readPersistedSaleAttempt,
+  restorePersistedCart,
+  type PersistedCartLine,
+} from './pos-persistence';
 
 type CartLine = PersistedCartLine & {
   id: string;
@@ -42,5 +48,23 @@ describe('pos-persistence helpers', () => {
     });
 
     expect(restored).toEqual({ cart: [], customerId: '', restored: false });
+  });
+});
+
+describe('pos sale attempt persistence', () => {
+  it('builds a scoped storage key', () => {
+    expect(buildPosSaleAttemptStorageKey('biz', 'store')).toBe('pos.saleAttempt:biz:store');
+  });
+
+  it('parses a valid persisted attempt', () => {
+    expect(
+      readPersistedSaleAttempt(JSON.stringify({ attemptId: 'abc', ambiguousFailure: true })),
+    ).toEqual({ attemptId: 'abc', ambiguousFailure: true });
+  });
+
+  it('rejects malformed payloads', () => {
+    expect(readPersistedSaleAttempt(null)).toBeNull();
+    expect(readPersistedSaleAttempt('{')).toBeNull();
+    expect(readPersistedSaleAttempt(JSON.stringify({ ambiguousFailure: true }))).toBeNull();
   });
 });

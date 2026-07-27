@@ -77,7 +77,9 @@ async function chooseNoDueDate(page: Page) {
 }
 
 test.describe('POS Option B checkout', () => {
-  test.use({ storageState: 'playwright/.auth/owner.json' });
+  test.use({
+    storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
+  });
 
   for (const viewport of [
     { name: 'desktop-large', width: 1920, height: 1080 },

@@ -88,7 +88,7 @@ export default defineConfig({
       testMatch: /pos-checkout-option-b\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'playwright/.auth/owner.json',
+        storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
       },
     },
     {
@@ -96,7 +96,16 @@ export default defineConfig({
       testMatch: /pos-mobile-phase2\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'playwright/.auth/owner.json',
+        storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
+      },
+    },
+    {
+      name: 'pos-mobile-p0-chromium',
+      testMatch: /pos-mobile-p0-safety\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        hasTouch: true,
+        storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
       },
     },
     {
