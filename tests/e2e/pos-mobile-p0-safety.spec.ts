@@ -42,9 +42,7 @@ async function addPerfSku(page: Page) {
 }
 
 test.describe('POS mobile P0 transaction safety', () => {
-  test.use({
-    storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
-  });
+  test.use({ storageState: 'playwright/.auth/owner.json' });
 
   test('active cart marks txn guard and survives soft visibility without auto-sale @390', async ({
     page,

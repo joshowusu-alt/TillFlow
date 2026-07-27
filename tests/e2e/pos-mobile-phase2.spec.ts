@@ -42,9 +42,7 @@ async function addPerfSku(page: Page) {
 }
 
 test.describe('POS mobile Phase 2 cart bar + sheet', () => {
-  test.use({
-    storageState: process.env.PLAYWRIGHT_STORAGE_STATE ?? 'playwright/.auth/owner.json',
-  });
+  test.use({ storageState: 'playwright/.auth/owner.json' });
 
   for (const viewport of [
     { name: 'phone-390', width: 390, height: 844, phone: true },

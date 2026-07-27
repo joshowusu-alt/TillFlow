@@ -55,4 +55,15 @@ describe('Authenticated Playwright QA setup', () => {
     expect(authPaths).toContain("path.resolve(process.cwd(), 'playwright', '.auth')");
     expect(config).not.toContain('storageState: process.env');
   });
+
+  it('keeps POS Playwright specs on the maintained owner auth storage path', () => {
+    const optionB = read('tests/e2e/pos-checkout-option-b.spec.ts');
+    const phase2 = read('tests/e2e/pos-mobile-phase2.spec.ts');
+    const p0 = read('tests/e2e/pos-mobile-p0-safety.spec.ts');
+    for (const source of [optionB, phase2, p0]) {
+      expect(source).toContain("storageState: 'playwright/.auth/owner.json'");
+      expect(source).not.toContain('PLAYWRIGHT_STORAGE_STATE');
+      expect(source).not.toContain('storageState: process.env');
+    }
+  });
 });
