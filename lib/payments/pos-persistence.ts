@@ -1,5 +1,32 @@
 export const POS_CART_STORAGE_KEY = 'pos.savedCart';
 export const POS_CART_CUSTOMER_STORAGE_KEY = 'pos.savedCustomer';
+export const POS_SALE_ATTEMPT_STORAGE_KEY_PREFIX = 'pos.saleAttempt';
+
+export type PersistedSaleAttempt = {
+  attemptId: string;
+  ambiguousFailure: boolean;
+};
+
+export function buildPosSaleAttemptStorageKey(businessId: string, storeId: string) {
+  return `${POS_SALE_ATTEMPT_STORAGE_KEY_PREFIX}:${businessId}:${storeId}`;
+}
+
+export function readPersistedSaleAttempt(raw: string | null): PersistedSaleAttempt | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const attemptId = (parsed as { attemptId?: unknown }).attemptId;
+    const ambiguousFailure = (parsed as { ambiguousFailure?: unknown }).ambiguousFailure;
+    if (typeof attemptId !== 'string' || !attemptId) return null;
+    return {
+      attemptId,
+      ambiguousFailure: ambiguousFailure === true,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export type PersistedCartLine = {
   productId: string;

@@ -100,6 +100,15 @@ export default defineConfig({
       },
     },
     {
+      name: 'pos-mobile-p0-chromium',
+      testMatch: /pos-mobile-p0-safety\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        hasTouch: true,
+        storageState: 'playwright/.auth/owner.json',
+      },
+    },
+    {
       name: 'phase1-auth-chromium',
       testMatch: /tap-to-sell-phase1-auth\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },

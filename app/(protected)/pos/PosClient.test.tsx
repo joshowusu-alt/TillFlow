@@ -720,3 +720,168 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     expect(document.querySelector('[data-pos-cart-card="true"]')).not.toBeNull();
   });
 });
+
+describe('PosClient P0 transaction safety', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    vi.clearAllMocks();
+    mockPhoneViewport(true);
+    document.documentElement.removeAttribute('data-pos-txn-active');
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    mockPhoneViewport(false);
+    document.documentElement.removeAttribute('data-pos-txn-active');
+  });
+
+  it('marks an active POS transaction while the cart has items', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    expect(document.documentElement.getAttribute('data-pos-txn-active')).toBeNull();
+
+    await addCocaColaOnPhone();
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-pos-txn-active')).toBe('true');
+    });
+  });
+
+  it('preserves cart, sheet, payment values and does not submit when product props refresh', async () => {
+    const { rerender } = render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+    fireEvent.click(screen.getByRole('button', { name: 'Card' }));
+    fireEvent.change(screen.getByPlaceholderText(/card ref/i), { target: { value: 'CARD-SAFE' } });
+
+    const refreshedProduct = {
+      ...product,
+      sellingPriceBasePence: 9999,
+      onHandBase: 1,
+    };
+    rerender(<PosClient {...baseProps} products={[refreshedProduct]} />);
+
+    expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByPlaceholderText(/card ref/i)).toHaveValue('CARD-SAFE');
+    expect(screen.getByText('Coca Cola')).toBeInTheDocument();
+    // productOptions are owned by PosClient state — catalogue prop refresh must not
+    // silently reprice an open cart line or fire a sale.
+    expect(screen.getAllByText(/GH₵2\.50/).length).toBeGreaterThan(0);
+    expect(mockedCompleteSaleAction).not.toHaveBeenCalled();
+  });
+
+  it('blocks repeated completion taps while a sale is pending', async () => {
+    let resolveSale: ((value: {
+      success: true;
+      data: { receiptId: string; totalPence: number; transactionNumber: string };
+    }) => void) | null = null;
+    mockedCompleteSaleAction.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSale = resolve;
+        }),
+    );
+
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+
+    const complete = document.querySelector(
+      '[data-pos-mobile-sheet-footer="true"] button.btn-primary',
+    ) as HTMLButtonElement | null;
+    expect(complete).toBeTruthy();
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+
+    fireEvent.click(complete!);
+    fireEvent.click(complete!);
+    fireEvent.click(complete!);
+
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
+    expect(complete!.disabled).toBe(true);
+
+    resolveSale!({
+      success: true,
+      data: { receiptId: 'inv-lock', totalPence: 250, transactionNumber: 'TX-LOCK' },
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps cart state and the same idempotency key after an uncertain submission', async () => {
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('network reset after accept'));
+
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+
+    const complete = document.querySelector(
+      '[data-pos-mobile-sheet-footer="true"] button.btn-primary',
+    ) as HTMLButtonElement | null;
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+    fireEvent.click(complete!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Sale outcome is unclear/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
+    expect(screen.getByText('Coca Cola')).toBeInTheDocument();
+    expect(screen.getByText(/Previous submission was unclear/i)).toBeInTheDocument();
+
+    const firstRef = mockedCompleteSaleAction.mock.calls[0][0].externalRef as string;
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true,
+      data: { receiptId: 'inv-retry', totalPence: 250, transactionNumber: 'TX-RETRY' },
+    });
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+    fireEvent.click(complete!);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(2));
+    expect(mockedCompleteSaleAction.mock.calls[1][0].externalRef).toBe(firstRef);
+  });
+
+  it('restores the persisted sale attempt id after remount with an active cart', async () => {
+    const { getPosCartStorageKey } = await import('@/lib/business-scope');
+    const key = `pos.saleAttempt:${baseProps.business.id}:${baseProps.store.id}`;
+    window.sessionStorage.setItem(
+      key,
+      JSON.stringify({ attemptId: 'restored-attempt-id', ambiguousFailure: true }),
+    );
+    window.localStorage.setItem(
+      getPosCartStorageKey({
+        businessId: baseProps.business.id,
+        storeId: baseProps.store.id,
+      }),
+      JSON.stringify([{ id: 'prod-1:bottle', productId: 'prod-1', unitId: 'bottle', qtyInUnit: 1 }]),
+    );
+
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+    await waitFor(() => {
+      expect(screen.getByText(/Previous submission was unclear/i)).toBeInTheDocument();
+    });
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true,
+      data: { receiptId: 'inv-restored', totalPence: 250, transactionNumber: 'TX-R' },
+    });
+    const complete = document.querySelector(
+      '[data-pos-mobile-sheet-footer="true"] button.btn-primary',
+    ) as HTMLButtonElement | null;
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+    fireEvent.click(complete!);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
+    expect(mockedCompleteSaleAction.mock.calls[0][0].externalRef).toBe('POS_ONLINE:restored-attempt-id');
+  });
+});

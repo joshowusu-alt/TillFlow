@@ -31,6 +31,7 @@ export function usePersistedPosCart<TCartLine extends PersistedCartLine>(
   const [cart, setCart] = useState<TCartLine[]>([]);
   const [customerId, setCustomerId] = useState('');
   const [cartRestored, setCartRestored] = useState(false);
+  const [cartHydrated, setCartHydrated] = useState(false);
   const cartInitialized = useRef(false);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function usePersistedPosCart<TCartLine extends PersistedCartLine>(
     if (restored.customerId) {
       setCustomerId(restored.customerId);
     }
+    setCartHydrated(true);
   }, [cartStorageKey, customerStorageKey, customerExists, productExists, restoredBannerMs]);
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export function usePersistedPosCart<TCartLine extends PersistedCartLine>(
     customerId,
     setCustomerId,
     cartRestored,
+    cartHydrated,
     clearSavedCart,
   };
 }
