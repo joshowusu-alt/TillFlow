@@ -9,6 +9,11 @@ const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || 'Pass1234!';
 const ARTIFACT_DIR = path.join(process.cwd(), '.playwright-mcp');
 const prisma = new PrismaClient();
 
+/** Current POS CTAs: Complete Cash/Part-Paid/Credit Sale — /Complete Sale/i does not match these. */
+const COMPLETE_CASH_SALE = /Complete Cash Sale/i;
+const COMPLETE_CREDIT_SALE = /Complete Credit Sale/i;
+const COMPLETE_PART_PAID_SALE = /Complete Part-Paid Sale/i;
+
 function step(msg) { console.log(`[deep-e2e] ${msg}`); }
 
 async function screenshotStep(page, name) {
@@ -43,8 +48,7 @@ async function ensureOwnerPassword() {
 
 async function login(page, email, password) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-  // Wait for hydration before interacting with the form
-  await page.waitForTimeout(5000);
+  await page.locator('input[name="email"]').waitFor({ state: 'visible', timeout: 15000 });
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: /sign in/i }).click();
@@ -70,33 +74,151 @@ async function login(page, email, password) {
   }
 }
 
-async function addProductFromSearch(page, query) {
-  const searchInput = page.getByPlaceholder(/type product name/i);
-  await searchInput.fill(query);
-  await page.waitForTimeout(500);
-  await page.getByRole('button', { name: new RegExp(query, 'i') }).first().click();
+async function waitForTillReady(page) {
+  const tillSelect = page.locator('#pos-till-select');
+  await tillSelect.waitFor({ state: 'attached', timeout: 20000 });
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    const state = await tillSelect.getAttribute('data-checkout-till-state').catch(() => null);
+    if (state === 'ready') return;
+    const checkoutReady = await page.locator('[data-checkout-state="ready"]').count().catch(() => 0);
+    if (checkoutReady > 0 && state && state !== 'loading' && state !== 'failed' && state !== 'empty') {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  await screenshotStep(page, 'till-not-ready');
+  throw new Error(
+    `Till did not become ready. tillState=${await tillSelect.getAttribute('data-checkout-till-state').catch(() => null)}`,
+  );
+}
 
-  // Products with multiple units now stage for unit selection.
-  // Race between the staging "Add to Cart" button (multi-unit) and the
-  // "Exact" qty button (single-unit, product already in cart).
+async function clickActionableCompleteSale(page, saleTypeRegex, label) {
+  const candidates = page.getByRole('button', { name: saleTypeRegex });
+  const deadline = Date.now() + 20000;
+  let completeHandle = null;
+  while (Date.now() < deadline) {
+    const handles = await candidates.elementHandles();
+    for (const handle of handles) {
+      const meta = await handle.evaluate((el) => {
+        const node = /** @type {HTMLButtonElement} */ (el);
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        return {
+          disabled: node.disabled,
+          display: style.display,
+          visibility: style.visibility,
+          width: rect.width,
+          height: rect.height,
+          text: (node.textContent || '').replace(/\s+/g, ' ').trim(),
+        };
+      });
+      const actionable =
+        !meta.disabled &&
+        meta.display !== 'none' &&
+        meta.visibility !== 'hidden' &&
+        meta.width > 0 &&
+        meta.height > 0;
+      if (actionable) {
+        completeHandle = handle;
+        break;
+      }
+      await handle.dispose().catch(() => undefined);
+    }
+    if (completeHandle) {
+      for (const handle of handles) {
+        if (handle !== completeHandle) await handle.dispose().catch(() => undefined);
+      }
+      break;
+    }
+    for (const handle of handles) {
+      await handle.dispose().catch(() => undefined);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (!completeHandle) {
+    await screenshotStep(page, `complete-unavailable-${label.replace(/\s+/g, '-').toLowerCase()}`);
+    throw new Error(`${label} control not visible and enabled (stale /Complete Sale/i does not match current POS labels)`);
+  }
+  // Submit exactly once.
+  await completeHandle.click();
+  await completeHandle.dispose().catch(() => undefined);
+}
+
+async function addProductFromSearch(page, query) {
+  await waitForTillReady(page);
+  const searchInput = page.getByPlaceholder(/type product name/i);
+  await searchInput.waitFor({ state: 'visible', timeout: 15000 });
+  await searchInput.click();
+  await searchInput.fill(query);
+  const productButton = page.locator('button:not([disabled])', { hasText: new RegExp(query, 'i') });
+  await productButton.first().waitFor({ state: 'visible', timeout: 10000 });
+  // Autocomplete can remount while filtering; re-query immediately before click.
+  try {
+    await productButton.first().click({ timeout: 10000 });
+  } catch {
+    await searchInput.fill('');
+    await searchInput.fill(query);
+    await productButton.first().waitFor({ state: 'visible', timeout: 10000 });
+    await productButton.first().click({ timeout: 10000 });
+  }
+
+  // Multi-unit products stage; single-unit may add immediately. Do not race cash Exact.
   const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
-  const exactBtn = page.getByRole('button', { name: /^Exact$/ });
+  const readyHint = page.getByText(/Ready —|Ready to complete/i).first();
   const outcome = await Promise.race([
     addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
-    exactBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
+    readyHint.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
   ]).catch(() => 'timeout');
 
   if (outcome === 'staged') {
     await addToCartBtn.click();
   }
-  await page.waitForTimeout(300);
+
+  // Prove the product is evidenced in the POS surface after add.
+  await page
+    .getByText(new RegExp(query, 'i'))
+    .first()
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .catch(async () => {
+      await screenshotStep(page, `product-missing-${query}`);
+      throw new Error(`Product "${query}" was not evidenced in cart/POS after add (outcome=${outcome})`);
+    });
 }
 
 async function completePaidSale(page) {
-  await page.getByRole('button', { name: /^Exact$/ }).click();
-  await page.waitForTimeout(300);
-  const completeSaleButton = page.getByRole('button', { name: /Complete Sale/i });
-  await completeSaleButton.click();
+  await waitForTillReady(page);
+
+  const paymentStatus = page.getByLabel(/payment status/i);
+  if ((await paymentStatus.count()) > 0) {
+    const current = await paymentStatus.inputValue().catch(() => '');
+    if (current && current !== 'PAID') {
+      await paymentStatus.selectOption('PAID');
+    }
+  }
+  const cashMethod = page.getByRole('button', { name: 'Cash', exact: true });
+  if ((await cashMethod.count()) > 0) {
+    const pressed = await cashMethod.first().getAttribute('aria-pressed').catch(() => null);
+    if (pressed !== 'true') {
+      await cashMethod.first().click();
+    }
+  }
+
+  const exactCash = page.locator('[data-pos-cash-denominations="true"]').getByRole('button', { name: /^Exact$/ });
+  if ((await exactCash.count()) > 0) {
+    await exactCash.first().click();
+  }
+
+  await page
+    .getByText(/Ready — Cash|Ready to complete • Cash/i)
+    .first()
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .catch(async () => {
+      await screenshotStep(page, 'paid-cash-not-ready');
+      throw new Error('Paid cash checkout was not ready before Complete Cash Sale');
+    });
+
+  await clickActionableCompleteSale(page, COMPLETE_CASH_SALE, 'Complete Cash Sale');
   await page.getByText(/Sale Complete!/i).waitFor({ timeout: 30000 });
   const receiptHref = await page.getByRole('link', { name: /Reprint last receipt/i }).getAttribute('href');
   if (!receiptHref) throw new Error('Missing receipt link after sale');
@@ -146,7 +268,11 @@ async function seedUnpaidExpense() {
 
 async function run() {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ acceptDownloads: true });
+  // Desktop POS: Complete Sale CTAs live in checkout panel + sidebar (not phone sheet).
+  const context = await browser.newContext({
+    acceptDownloads: true,
+    viewport: { width: 1280, height: 720 },
+  });
   const page = await context.newPage();
 
   const report = {
@@ -297,8 +423,16 @@ async function run() {
     await addProductFromSearch(page, 'Coca');
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('select[name="customerId"]').selectOption({ index: 1 });
-    const unpaidSaleButton = page.getByRole('button', { name: /Complete Sale/i });
-    await unpaidSaleButton.click();
+    await page.getByRole('button', { name: /no due date/i }).click();
+    await page
+      .getByText(/Ready —|Ready to complete/i)
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .catch(async () => {
+        await screenshotStep(page, 'credit-not-ready');
+        throw new Error('Credit checkout was not ready before Complete Credit Sale');
+      });
+    await clickActionableCompleteSale(page, COMPLETE_CREDIT_SALE, 'Complete Credit Sale');
     await page.getByText(/Sale Complete!/i).waitFor({ timeout: 30000 });
     const unpaidReceiptHref = await page.getByRole('link', { name: /Reprint last receipt/i }).getAttribute('href');
     if (!unpaidReceiptHref) throw new Error('Missing receipt link for unpaid sale');
@@ -312,11 +446,20 @@ async function run() {
       .locator('label:has-text(\"Reason Code\")')
       .locator('xpath=following-sibling::select[1]')
       .selectOption('OTHER');
-    await page.locator('input[placeholder=\"Enter manager PIN\"]').fill('1234');
+    // Owners self-approve without PIN; managers still see the PIN field.
+    const managerPin = page.locator('input[placeholder="Enter manager PIN"]');
+    if ((await managerPin.count()) > 0) {
+      await managerPin.fill('1234');
+    } else {
+      await page.getByText(/Owner approval — no PIN required/i).waitFor({ state: 'visible', timeout: 10000 });
+    }
     await page.getByRole('button', { name: /Void Sale|Process Return/i }).click();
-    await page.waitForTimeout(1000);
-    await page.getByRole('button', { name: /Confirm Return|Void Sale/i }).last().click();
-    await page.waitForTimeout(5000);
+    const confirmOverlay = page.locator('.overlay-shell');
+    await confirmOverlay.waitFor({ state: 'visible', timeout: 10000 });
+    // Confirm CTA lives in the overlay (also labelled Void Sale for voids) — do not click the page button behind it.
+    await confirmOverlay.getByRole('button', { name: /^(Void Sale|Confirm Return)$/ }).click();
+    await confirmOverlay.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => undefined);
+    await page.waitForTimeout(2000);
     report.sales.return = true;
     step('9/12 Create unpaid sale + return OK');
 
@@ -327,11 +470,17 @@ async function run() {
     await addProductFromSearch(page, 'Coca');
     await page.locator('select[name="paymentStatus"]').selectOption('PART_PAID');
     await page.locator('select[name="customerId"]').selectOption({ index: 1 });
+    await page.getByRole('button', { name: /no due date/i }).click();
+    await page.locator('#pos-cash-tendered').fill('0.50');
     await page
-      .locator('label:has-text("Cash Tendered")')
-      .locator('xpath=following-sibling::input[1]')
-      .fill('0.50');
-    await page.getByRole('button', { name: /Complete Sale/i }).click();
+      .getByText(/Ready —|Ready to complete/i)
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .catch(async () => {
+        await screenshotStep(page, 'part-paid-not-ready');
+        throw new Error('Part-paid checkout was not ready before Complete Part-Paid Sale');
+      });
+    await clickActionableCompleteSale(page, COMPLETE_PART_PAID_SALE, 'Complete Part-Paid Sale');
     await page.getByText(/Sale Complete!/i).waitFor({ timeout: 30000 });
 
     await page.goto(`${BASE_URL}/payments/customer-receipts`, { waitUntil: 'networkidle' });
