@@ -61,6 +61,8 @@ import CameraScanner from './components/CameraScanner';
 import CustomerSelector from './components/CustomerSelector';
 import CustomerCreditWarning from './components/CustomerCreditWarning';
 import PosCheckoutPanel from './components/PosCheckoutPanel';
+import PosMobileCartBar from './components/PosMobileCartBar';
+import PosMobileCartCheckoutSheet from './components/PosMobileCartCheckoutSheet';
 
 function formatRelativeTime(timestamp: string) {
   const diffMs = Date.now() - new Date(timestamp).getTime();
@@ -291,6 +293,8 @@ export default function PosClient({
   // Park/hold state
   const [showParkModal, setShowParkModal] = useState(false);
   const [showParkedPanel, setShowParkedPanel] = useState(false);
+  const [phoneCheckoutSheetOpen, setPhoneCheckoutSheetOpen] = useState(false);
+  const mobileCartBarRef = useRef<HTMLButtonElement>(null);
   const storageScope = useMemo(
     () => ({ businessId: business.id, storeId: store.id }),
     [business.id, store.id]
@@ -1230,6 +1234,16 @@ export default function PosClient({
   // Phone empty-cart keeps checkout collapsed; loading uses the compact till chip instead of the full panel.
   const showCheckoutPanel =
     !isPhoneViewport || cart.length > 0 || checkoutUnavailable;
+  /** Phone + non-empty cart: catalogue primary; cart/checkout live in the sheet. */
+  const phoneCatalogueMode = isPhoneViewport && cart.length > 0;
+  const closePhoneCheckoutSheet = useCallback(() => {
+    if (isCompletingSale) return;
+    setPhoneCheckoutSheetOpen(false);
+  }, [isCompletingSale]);
+
+  useEffect(() => {
+    if (!phoneCatalogueMode) setPhoneCheckoutSheetOpen(false);
+  }, [phoneCatalogueMode]);
 
   usePosKeyboardShortcuts({
     activeLineId,
@@ -1304,9 +1318,13 @@ export default function PosClient({
   return (
     <div
       className={`grid gap-4 lg:grid-cols-[3fr_1fr] lg:items-start lg:gap-6 lg:pb-0 ${
-        cart.length > 0 ? 'pb-[calc(var(--pos-mobile-bottom-clearance)+1rem)]' : 'pb-4'
+        phoneCatalogueMode
+          ? 'pb-[calc(var(--pos-mobile-cart-bar-clearance)+1rem)]'
+          : cart.length > 0
+            ? 'pb-[calc(var(--pos-mobile-bottom-clearance)+1rem)]'
+            : 'pb-4'
       }`}
-      data-pos-mobile-phase="1"
+      data-pos-mobile-phase="2"
     >
       <div className="space-y-3 sm:space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
@@ -1754,13 +1772,17 @@ export default function PosClient({
               )
           )}
 
-          {/* Sale error */}
-          {saleError && (
-            <div className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose flex items-center justify-between">
+          {/* Sale error — stay on the page when the phone sheet is closed; open sheet owns its own banner. */}
+          {saleError && !(phoneCatalogueMode && phoneCheckoutSheetOpen) ? (
+            <div
+              className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose flex items-center justify-between"
+              role="alert"
+              data-pos-sale-error="true"
+            >
               <span>{saleError}</span>
               <button type="button" className="text-xs font-semibold ml-2" onClick={dismissSaleError}>✕</button>
             </div>
-          )}
+          ) : null}
 
           {errorParam ? (
             <div className="rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">
@@ -1803,6 +1825,9 @@ export default function PosClient({
             </div>
           ) : null}
 
+          {(() => {
+            const activeSalePanel = (
+              <>
           <div className="card overflow-hidden" data-pos-cart-card="true">
             <div className="flex items-center justify-between border-b border-black/5 px-3 py-2.5 sm:px-4 sm:py-3">
               <div className="flex items-center gap-3">
@@ -1877,7 +1902,13 @@ export default function PosClient({
                 ) : null}
               </div>
             ) : (
-              <div className="divide-y divide-black/5 overflow-y-auto max-h-[38vh] md:max-h-[42vh] lg:max-h-[45vh] scroll-smooth">
+              <div
+                className={`divide-y divide-black/5 scroll-smooth ${
+                  isPhoneViewport
+                    ? ''
+                    : 'max-h-[38vh] overflow-y-auto md:max-h-[42vh] lg:max-h-[45vh]'
+                }`}
+              >
                 {cartDetails.map((line, index) => {
                   const isActive = activeLineId === line.id;
                   const availBase = availableBaseMap.get(line.productId) ?? getAvailableBase(line.productId, line.id);
@@ -2020,7 +2051,7 @@ export default function PosClient({
           {/* ── Compact checkout ─────────────────────────────── */}
           <div
             className={`card scroll-mt-[calc(var(--app-header-offset)+0.75rem)] space-y-3 p-3 sm:p-4 lg:pb-4 ${
-              cart.length > 0
+              cart.length > 0 && !isPhoneViewport
                 ? 'pb-[calc(1rem+env(safe-area-inset-bottom,0px)+5.5rem)]'
                 : 'pb-3'
             }`}
@@ -2381,6 +2412,78 @@ export default function PosClient({
               ) : null}
             </div>
           </div>
+              </>
+            );
+            return (
+              <>
+                {!phoneCatalogueMode ? activeSalePanel : null}
+                {phoneCatalogueMode ? (
+                  <PosMobileCartCheckoutSheet
+                    open={phoneCheckoutSheetOpen}
+                    onClose={closePhoneCheckoutSheet}
+                    dismissible={!isCompletingSale}
+                    banner={
+                      saleError ? (
+                        <div
+                          className="mt-2 flex items-center justify-between rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose"
+                          role="alert"
+                          data-pos-mobile-sheet-sale-error="true"
+                        >
+                          <span>{saleError}</span>
+                          <button
+                            type="button"
+                            className="ml-2 text-xs font-semibold"
+                            onClick={dismissSaleError}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : null
+                    }
+                    footer={
+                      <div className="space-y-2" data-pos-mobile-sheet-footer="true">
+                        <div
+                          className={`rounded-2xl px-3 py-2 text-xs font-medium ${
+                            canSubmit
+                              ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
+                              : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'
+                          }`}
+                        >
+                          {canSubmit
+                            ? `Ready to complete • ${activePaymentMethodLabels.join(' + ')} • ${formatMoney(totalDue, business.currency)}`
+                            : primaryCheckoutIssue?.message ??
+                              `Review checkout before completing this ${formatMoney(totalDue, business.currency)} sale.`}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                            onClick={() => setShowParkModal(true)}
+                            disabled={isCompletingSale}
+                            title="Park this sale"
+                          >
+                            Park
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                              paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
+                            }`}
+                            disabled={!canSubmit || isCompletingSale}
+                            onClick={handleCompleteSale}
+                          >
+                            {completeLabel}
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  >
+                    {phoneCheckoutSheetOpen ? activeSalePanel : null}
+                  </PosMobileCartCheckoutSheet>
+                ) : null}
+              </>
+            );
+          })()}
         </form>
 
         {/* Park modal */}
@@ -2458,7 +2561,11 @@ export default function PosClient({
       {showParkedPanel && parkedCarts.length > 0 ? (
         <div
           className="fixed inset-x-4 z-20 max-h-[45vh] overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl lg:hidden hide-when-keyboard-open"
-          style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom) + 7rem)' }}
+          style={{
+            bottom: phoneCatalogueMode
+              ? 'calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom) + var(--pos-mobile-cart-bar-clearance))'
+              : 'calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom) + 7rem)',
+          }}
         >
           <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
             <div>
@@ -2506,8 +2613,35 @@ export default function PosClient({
         </div>
       ) : null}
 
-      {/* ── Mobile sticky bottom bar (total + checkout) ──── */}
-      {cart.length > 0 && (
+      {/* ── Phone cart bar (Phase 2) ─────────────────────── */}
+      {phoneCatalogueMode ? (
+        <>
+          {parkedCarts.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowParkedPanel((prev) => !prev)}
+              className="fixed right-3 z-30 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700 shadow-sm lg:hidden"
+              style={{
+                bottom:
+                  'calc(env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom) + var(--pos-mobile-cart-bar-clearance) + 0.35rem)',
+              }}
+              data-pos-mobile-parked-chip="true"
+            >
+              {parkedCarts.length} parked
+            </button>
+          ) : null}
+          <PosMobileCartBar
+            ref={mobileCartBarRef}
+            itemCount={cartDetails.length}
+            totalPence={totalDue}
+            currency={business.currency}
+            onOpen={() => setPhoneCheckoutSheetOpen(true)}
+          />
+        </>
+      ) : null}
+
+      {/* ── Tablet sticky checkout (Phase 1; phone uses sheet) ─ */}
+      {!isPhoneViewport && cart.length > 0 ? (
         <div
           className="fixed inset-x-0 z-30 border-t border-black/10 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-[0_-4px_20px_rgba(0,0,0,0.08)] keyboard-safe-fixed-bottom lg:hidden"
           data-pos-mobile-checkout-bar="true"
@@ -2571,7 +2705,7 @@ export default function PosClient({
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

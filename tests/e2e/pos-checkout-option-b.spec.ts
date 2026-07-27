@@ -15,7 +15,7 @@ async function waitForCatalogue(page: Page) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     await search.click();
     await search.fill('Perf SKU');
-    const result = page.locator('button').filter({ hasText: /Perf SKU/i }).first();
+    const result = page.locator('button:not([disabled])').filter({ hasText: /Perf SKU/i }).first();
     if (await result.isVisible().catch(() => false)) {
       await search.fill('');
       await page.keyboard.press('Escape').catch(() => undefined);
@@ -47,14 +47,17 @@ async function addFirstProduct(page: Page) {
   const search = page.getByPlaceholder(/type product name/i);
   await search.click();
   await search.fill('Perf SKU');
-  const result = page.locator('button').filter({ hasText: /Perf SKU/i }).first();
+  const result = page.locator('button:not([disabled])').filter({ hasText: /Perf SKU/i }).first();
   await expect(result).toBeVisible({ timeout: 15_000 });
   await result.click();
-  await expect(page.locator('.card').filter({ hasText: /^Cart/i }).or(page.getByText(/Cart\s+\d/i)).first()).toBeVisible({
-    timeout: 10_000,
-  }).catch(async () => {
-    await expect(page.getByText(/Perf SKU/i).first()).toBeVisible();
-  });
+  // Phone Phase 2: cart moves behind the persistent bar; tablet/desktop keep the cart card.
+  await expect(
+    page
+      .locator('[data-pos-mobile-cart-bar="true"]')
+      .or(page.locator('[data-pos-cart-card="true"]'))
+      .or(page.getByText(/Perf SKU/i))
+      .first(),
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 async function selectCustomer(page: Page, name: string) {
@@ -88,11 +91,15 @@ test.describe('POS Option B checkout', () => {
 
       const isPhone = viewport.width < 768;
       if (isPhone) {
-        // Phase 1: phone empty-cart collapses the full payment panel; defaults apply once an item is added.
+        // Phase 1/2: phone empty-cart collapses payment; Phase 2 opens checkout via cart sheet.
         await expect(page.locator('[data-pos-checkout-collapsed="true"]')).toBeVisible();
         await expect(page.getByLabel(/payment status/i)).toHaveCount(0);
         await expect(page.getByRole('button', { name: /F2 focus barcode/i })).toHaveCount(0);
+        await expect(page.locator('[data-pos-mobile-cart-bar="true"]')).toHaveCount(0);
         await addFirstProduct(page);
+        await expect(page.locator('[data-pos-mobile-cart-bar="true"]')).toBeVisible();
+        await page.getByRole('button', { name: /View cart/i }).click();
+        await expect(page.getByRole('dialog', { name: /Cart & checkout/i })).toBeVisible();
       }
 
       await expect(page.getByLabel(/payment status/i)).toHaveValue('PAID');
@@ -358,10 +365,18 @@ test.describe('POS Option B checkout', () => {
 
     // Return to Paid exact cash and hammer complete.
     await page.getByLabel(/payment status/i).selectOption('PAID');
-    const complete = page.getByRole('button', { name: /Complete Cash Sale/i }).first();
+    // Prefer the desktop sidebar CTA — the inline md: button can be obscured mid-layout.
+    const complete = page
+      .locator('.app-desktop-sidebar-sticky button.btn-primary')
+      .filter({ hasText: /Complete Cash Sale/i });
     await expect(complete).toBeEnabled();
 
-    await Promise.all([complete.click(), complete.click(), complete.click()]);
+    // Concurrent completes: the first click submits and disables the CTA; later clicks must not hang the suite.
+    await Promise.allSettled([
+      complete.click({ force: true }),
+      complete.click({ force: true }),
+      complete.click({ force: true }),
+    ]);
     await expect(page.getByText(/Sale Complete|Ready for next customer/i).first()).toBeVisible({
       timeout: 30_000,
     });

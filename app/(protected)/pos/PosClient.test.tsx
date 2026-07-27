@@ -498,6 +498,15 @@ describe('PosClient mobile phase 1 layout', () => {
     fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
 
     await waitFor(() => {
+      expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
+    });
+    // Phase 2: checkout stays in the sheet — not inline under the catalogue.
+    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    expect(document.querySelector('[data-pos-mobile-checkout-bar="true"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
       expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
     });
     expect(screen.getByLabelText(/payment status/i)).toHaveValue('PAID');
@@ -512,10 +521,202 @@ describe('PosClient mobile phase 1 layout', () => {
     expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Card' })).toHaveAttribute('aria-pressed', 'true');
 
-    const sticky = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
-    expect(sticky).not.toBeNull();
-    expect(sticky?.className).toContain('keyboard-safe-fixed-bottom');
-    expect(sticky?.className).toContain('safe-area-inset-bottom');
-    expect(sticky?.className).not.toContain('hide-when-keyboard-open');
+    const cartBar = document.querySelector('[data-pos-mobile-cart-bar="true"]');
+    expect(cartBar).not.toBeNull();
+    expect(cartBar?.className).toContain('keyboard-safe-fixed-bottom');
+    expect(cartBar?.className).toContain('safe-area-inset-bottom');
+    expect(cartBar?.className).not.toContain('hide-when-keyboard-open');
+  });
+});
+
+async function addCocaColaOnPhone() {
+  const search = screen.getByPlaceholderText(/type product name/i);
+  fireEvent.focus(search);
+  fireEvent.change(search, { target: { value: 'Coca' } });
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+  await waitFor(() => {
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
+  });
+}
+
+describe('PosClient mobile phase 2 cart bar and sheet', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    mockPhoneViewport(true);
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    mockPhoneViewport(false);
+  });
+
+  it('hides the cart bar when the cart is empty', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(screen.getByText('Cart is empty')).toBeInTheDocument();
+    });
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /View cart/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the cart bar with count and total after adding an item', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+
+    const openButton = screen.getByRole('button', { name: /View cart, 1 item/i });
+    expect(openButton).toBeInTheDocument();
+    expect(openButton).toHaveTextContent(/1 item/i);
+    expect(openButton.textContent).toMatch(/GH₵|GHS|₵/);
+    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    expect(document.querySelector('[data-pos-cart-card="true"]')).toBeNull();
+  });
+
+  it('updates the cart bar total when quantity changes inside the sheet', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+
+    const barBefore = screen.getByRole('button', { name: /View cart, 1 item/i }).textContent ?? '';
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /Cart & checkout/i })).toBeInTheDocument();
+    });
+
+    const qtyPlus = screen.getByDisplayValue('1').parentElement?.querySelector('button:last-of-type');
+    expect(qtyPlus).toBeTruthy();
+    fireEvent.click(qtyPlus!);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('2')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Close cart and checkout/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+    });
+    const barAfter = screen.getByRole('button', { name: /View cart, 1 item/i }).textContent ?? '';
+    expect(barAfter).not.toEqual(barBefore);
+    expect(barAfter).toMatch(/5\.00|GH₵5/);
+  });
+
+  it('opens an accessible sheet that preserves checkout state across close/reopen', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Cart & checkout/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByRole('button', { name: /Close cart and checkout/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'MoMo' }));
+    expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: /Close cart and checkout/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+    });
+    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    expect(screen.getByRole('button', { name: /View cart, 1 item/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'MoMo' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: 'Cash' })).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  it('closes the sheet on Escape and keeps the cart', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /View cart, 1 item/i })).toBeInTheDocument();
+  });
+
+  it('keeps the sheet open when sale completion fails', async () => {
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: false,
+      error: 'Validation failed',
+    });
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+
+    const complete = document.querySelector(
+      '[data-pos-mobile-sheet-footer="true"] button.btn-primary',
+    ) as HTMLButtonElement | null;
+    expect(complete).toBeTruthy();
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+    fireEvent.click(complete!);
+
+    await waitFor(() => {
+      expect(mockedCompleteSaleAction).toHaveBeenCalled();
+      expect(document.querySelector('[data-pos-mobile-sheet-sale-error="true"]')).not.toBeNull();
+    });
+    const dialog = screen.getByRole('dialog', { name: /Cart & checkout/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelector('[data-pos-mobile-sheet-sale-error="true"]')?.textContent).toMatch(
+      /Validation failed/,
+    );
+    // Must not only exist behind the modal on the catalogue page.
+    expect(document.querySelector('[data-pos-sale-error="true"]')).toBeNull();
+    expect(screen.getByRole('button', { name: /View cart/i })).toBeInTheDocument();
+  });
+
+  it('closes the sheet and restores barcode focus after confirmed success', async () => {
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true,
+      data: { receiptId: 'inv-phase2', totalPence: 250, transactionNumber: 'TX-P2' },
+    });
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => expect(screen.getByText('Cart is empty')).toBeInTheDocument());
+    await addCocaColaOnPhone();
+    fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
+    await screen.findByRole('dialog', { name: /Cart & checkout/i });
+
+    const complete = document.querySelector(
+      '[data-pos-mobile-sheet-footer="true"] button.btn-primary',
+    ) as HTMLButtonElement | null;
+    expect(complete).toBeTruthy();
+    await waitFor(() => expect(complete!).not.toBeDisabled());
+    fireEvent.click(complete!);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+      expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).toBeNull();
+    });
+    expect(screen.getByPlaceholderText(/scan barcode/i)).toHaveFocus();
+  });
+
+  it('does not mount the phone cart bar at tablet/desktop widths', async () => {
+    mockPhoneViewport(false);
+    render(<PosClient {...baseProps} />);
+    expect(screen.getByRole('button', { name: /F2 focus barcode/i })).toBeInTheDocument();
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    await waitFor(() => {
+      expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
+    });
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-pos-cart-card="true"]')).not.toBeNull();
   });
 });

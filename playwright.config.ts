@@ -92,6 +92,14 @@ export default defineConfig({
       },
     },
     {
+      name: 'pos-mobile-phase2-chromium',
+      testMatch: /pos-mobile-phase2\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'playwright/.auth/owner.json',
+      },
+    },
+    {
       name: 'phase1-auth-chromium',
       testMatch: /tap-to-sell-phase1-auth\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },

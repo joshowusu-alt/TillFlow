@@ -103,8 +103,9 @@ select:-webkit-autofill {
   --mobile-bottom-nav-content-height: 5rem;
   --mobile-bottom-nav-height: calc(var(--mobile-bottom-nav-content-height) + env(safe-area-inset-bottom, 0px));
   --mobile-bottom-nav-clearance: calc(var(--mobile-bottom-nav-height) + 4rem);
-  /* POS hides the bottom tab bar; reserve room for the sticky checkout chrome only. */
+  /* POS hides the bottom tab bar; reserve room for sticky checkout chrome (tablet) or cart bar (phone). */
   --pos-mobile-bottom-clearance: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  --pos-mobile-cart-bar-clearance: calc(4.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 html {

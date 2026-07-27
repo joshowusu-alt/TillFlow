@@ -15,6 +15,9 @@ type ResponsiveModalProps = {
   backdropClassName?: string;
   lockBody?: boolean;
   closeOnBackdrop?: boolean;
+  closeOnEscape?: boolean;
+  /** When false, skip restoring focus on close (e.g. sale success restores barcode focus). */
+  restoreFocus?: boolean;
   mobileFullscreen?: boolean;
   footer?: ReactNode;
   keyboardSafeFooter?: boolean;
@@ -31,6 +34,8 @@ export default function ResponsiveModal({
   backdropClassName = 'bg-slate-950/40 backdrop-blur-[1.5px]',
   lockBody = true,
   closeOnBackdrop = true,
+  closeOnEscape = true,
+  restoreFocus = true,
   mobileFullscreen = false,
   footer,
   keyboardSafeFooter = true,
@@ -49,7 +54,7 @@ export default function ResponsiveModal({
       : null;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && closeOnEscape) {
         event.preventDefault();
         onClose();
       }
@@ -71,9 +76,11 @@ export default function ResponsiveModal({
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
+      if (restoreFocus) {
+        previousFocusRef.current?.focus();
+      }
     };
-  }, [open, onClose]);
+  }, [closeOnEscape, open, onClose, restoreFocus]);
 
   if (!open) return null;
 
@@ -86,7 +93,7 @@ export default function ResponsiveModal({
         className={`absolute inset-0 ${backdropClassName}`}
         onClick={closeOnBackdrop ? onClose : undefined}
       />
-      <div className="relative flex min-h-full items-end justify-center sm:items-center">
+      <div className="relative flex min-h-[100dvh] items-end justify-center sm:min-h-full sm:items-center">
         <div
           ref={panelRef}
           role="dialog"
@@ -97,15 +104,15 @@ export default function ResponsiveModal({
           className={`mx-auto flex w-full max-w-full flex-col bg-white shadow-xl ${
             mobileFullscreen
               ? 'h-[100dvh] rounded-none sm:h-auto sm:max-h-[min(92vh,92dvh)] sm:rounded-2xl'
-              : 'max-h-[min(92vh,92dvh)] rounded-2xl'
+              : 'max-h-[min(90dvh,90vh)] rounded-2xl'
           } ${maxWidthClassName} ${panelClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="mobile-scroll-panel flex-1">
+          <div className="mobile-scroll-panel min-h-0 flex-1 overscroll-contain">
             {children}
           </div>
           {footer ? (
-            <div className={`border-t border-black/5 bg-white px-4 py-3 ${keyboardSafeFooter ? 'keyboard-safe-bottom' : 'safe-area-bottom'}`}>
+            <div className={`flex-shrink-0 border-t border-black/5 bg-white px-4 py-3 ${keyboardSafeFooter ? 'keyboard-safe-bottom' : 'safe-area-bottom'}`}>
               {footer}
             </div>
           ) : null}
