@@ -1,16 +1,13 @@
 /**
  * C11: Checkout shift/cash-drawer RTT consolidation — focused tests.
  *
- * Verifies that the single CTE path (tx.$queryRaw) is the only mechanism
- * used for shift + cash-drawer writes during checkout, that all guard
- * conditions (no cash, no shift) are respected, and that the raw SQL is
- * never constructed via $queryRawUnsafe.
+ * Production (Postgres) consolidates shift + cash-drawer writes into one
+ * CTE via tx.$queryRaw. Local/CI SQLite cannot run that CTE, so sales.ts
+ * uses the typed recordCashDrawerEntryTx helper on SQLite URLs.
  *
- * NOTE: These tests use a fully-mocked Prisma client (same pattern as
- * sales.test.ts). The SQL itself is not executed against a real database;
- * correctness of the SQL dialect is validated by the Postgres smoke CI lane.
- * Concurrency-safety is structural (UPDATE … RETURNING feeds the INSERT
- * inside the same CTE) and cannot be proven with a SQLite unit test.
+ * These tests force DATABASE_URL to exercise each path explicitly (same
+ * pattern as sales.test.ts). The SQL dialect itself is not executed here;
+ * Postgres smoke CI covers migrate/deploy against a real engine.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +21,7 @@ const {
   fetchInventoryMapMock,
   batchDecrementInventoryBalanceMock,
   getOpenShiftForTillMock,
+  recordCashDrawerEntryTxMock,
   detectExcessiveDiscountRiskMock,
   detectNegativeMarginRiskMock,
   resolveBranchIdForStoreMock,
@@ -47,6 +45,7 @@ const {
   fetchInventoryMapMock: vi.fn(),
   batchDecrementInventoryBalanceMock: vi.fn(),
   getOpenShiftForTillMock: vi.fn(),
+  recordCashDrawerEntryTxMock: vi.fn(),
   detectExcessiveDiscountRiskMock: vi.fn(),
   detectNegativeMarginRiskMock: vi.fn(),
   resolveBranchIdForStoreMock: vi.fn(),
@@ -72,7 +71,7 @@ vi.mock('./shared', async () => {
 });
 vi.mock('./cash-drawer', () => ({
   getOpenShiftForTill: getOpenShiftForTillMock,
-  recordCashDrawerEntryTx: vi.fn(),
+  recordCashDrawerEntryTx: recordCashDrawerEntryTxMock,
 }));
 vi.mock('./risk-monitor', () => ({
   detectExcessiveDiscountRisk: detectExcessiveDiscountRiskMock,
@@ -93,6 +92,11 @@ const PROD = 'prod-1';
 const UNIT = 'unit-piece';
 const SHIFT_ID = 'shift-1';
 const INV_ID = 'inv-1';
+
+/** Forces the Postgres CTE branch in sales.ts without touching a real DB. */
+const POSTGRES_DATABASE_URL = 'postgresql://user:pass@localhost:5432/tillflow';
+/** Forces the SQLite helper branch used by local/CI unit runs. */
+const SQLITE_DATABASE_URL = 'file:./ci.db';
 
 const defaultAccounts = [
   { code: '1000', id: 'acc-cash' }, { code: '1010', id: 'acc-bank' },
@@ -129,6 +133,23 @@ function makeProductUnit() {
     },
     unit: { name: 'Piece', pluralName: 'Pieces' },
   };
+}
+
+async function withDatabaseUrl<T>(
+  databaseUrl: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = databaseUrl;
+  try {
+    return await run();
+  } finally {
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +189,7 @@ beforeEach(() => {
   );
   batchDecrementInventoryBalanceMock.mockResolvedValue(undefined);
   getOpenShiftForTillMock.mockResolvedValue(null);
+  recordCashDrawerEntryTxMock.mockResolvedValue({ id: 'cde-1' });
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
   detectNegativeMarginRiskMock.mockResolvedValue(undefined);
   resolveBranchIdForStoreMock.mockResolvedValue('branch-1');
@@ -175,28 +197,34 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. Core CTE path — cash payment + open shift
+// 1. Core CTE path — cash payment + open shift (Postgres)
 // ---------------------------------------------------------------------------
-describe('C11 shift/cash-drawer CTE — cash checkout', () => {
+describe('C11 shift/cash-drawer CTE — cash checkout (Postgres)', () => {
   it('calls $queryRaw exactly once for cash payment with open shift', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
 
-    await createSale(saleInput({
-      payments: [{ method: 'CASH', amountPence: 500 }],
-    }));
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }));
+    });
 
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
   it('does not call the deprecated two-call path (cashDrawerEntry.create / shift.update)', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
 
-    await createSale(saleInput({
-      payments: [{ method: 'CASH', amountPence: 500 }],
-    }));
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }));
+    });
 
     expect((prismaMock as any).cashDrawerEntry.create).not.toHaveBeenCalled();
     expect((prismaMock as any).shift.update).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 
   it('does not use $queryRawUnsafe anywhere in the checkout path', async () => {
@@ -236,7 +264,9 @@ describe('C11 shift/cash-drawer CTE — cash checkout', () => {
   it('shift update and cash drawer insert remain inside prisma.$transaction', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 0 });
 
-    await createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }));
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }));
+    });
 
     // $queryRaw is invoked as part of the $transaction callback, not outside it
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
@@ -245,43 +275,102 @@ describe('C11 shift/cash-drawer CTE — cash checkout', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Guard conditions — no CTE call when conditions unmet
+// 1b. SQLite helper path (local / CI unit runtime)
 // ---------------------------------------------------------------------------
-describe('C11 shift/cash-drawer CTE — guard conditions', () => {
-  it('skips CTE when there is no open shift', async () => {
-    getOpenShiftForTillMock.mockResolvedValue(null);
+describe('C11 shift/cash-drawer — SQLite helper path', () => {
+  it('records exactly one cash-drawer movement via the typed helper', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
 
-    await createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }));
-
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
-  });
-
-  it('skips CTE for a card-only payment', async () => {
-    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 1000 });
-
-    await createSale(saleInput({ payments: [{ method: 'CARD', amountPence: 500 }] }));
-
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
-  });
-
-  it('skips CTE for a credit-only sale (no payments)', async () => {
-    prismaMock.customer.findFirst.mockResolvedValue({
-      id: 'cust-1', storeId: STORE, creditLimitPence: 100000, loyaltyPointsBalance: 0,
+    await withDatabaseUrl(SQLITE_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }));
     });
-    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 1000 });
 
-    await createSale(saleInput({
-      paymentStatus: 'UNPAID', customerId: 'cust-1', payments: [],
-    }));
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+    expect(recordCashDrawerEntryTxMock.mock.calls[0][1]).toMatchObject({
+      businessId: BIZ,
+      storeId: STORE,
+      tillId: TILL,
+      shiftId: SHIFT_ID,
+      entryType: 'CASH_SALE',
+      amountPence: 500,
+      referenceType: 'SALES_INVOICE',
+      referenceId: INV_ID,
+    });
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
 
+  it('records only the cash component for mixed cash + card payments', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 2000 });
+    prismaMock.salesInvoice.create.mockResolvedValue({
+      id: INV_ID, totalPence: 1000, lines: [], payments: [],
+    });
+    prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
+
+    await withDatabaseUrl(SQLITE_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        lines: [line({ qtyInUnit: 2 })],
+        payments: [
+          { method: 'CASH', amountPence: 400 },
+          { method: 'CARD', amountPence: 600 },
+        ],
+      }));
+    });
+
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+    expect(recordCashDrawerEntryTxMock.mock.calls[0][1].amountPence).toBe(400);
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Mixed-payment split — cash portion only
+// 2. Guard conditions — no drawer write when conditions unmet
 // ---------------------------------------------------------------------------
-describe('C11 shift/cash-drawer CTE — mixed payments', () => {
+describe('C11 shift/cash-drawer — guard conditions', () => {
+  it('skips drawer write when there is no open shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue(null);
+
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }));
+    });
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('skips drawer write for a card-only payment', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 1000 });
+
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({ payments: [{ method: 'CARD', amountPence: 500 }] }));
+    });
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('skips drawer write for a credit-only sale (no payments)', async () => {
+    prismaMock.customer.findFirst.mockResolvedValue({
+      id: 'cust-1', storeId: STORE, creditLimitPence: 100000, loyaltyPointsBalance: 0,
+    });
+    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 1000 });
+
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        paymentStatus: 'UNPAID', customerId: 'cust-1', payments: [],
+      }));
+    });
+
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Mixed-payment split — cash portion only (Postgres CTE)
+// ---------------------------------------------------------------------------
+describe('C11 shift/cash-drawer CTE — mixed payments (Postgres)', () => {
   it('executes CTE once for mixed cash + card payment', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 2000 });
     prismaMock.salesInvoice.create.mockResolvedValue({
@@ -289,32 +378,39 @@ describe('C11 shift/cash-drawer CTE — mixed payments', () => {
     });
     prismaMock.productUnit.findMany.mockResolvedValue([makeProductUnit()]);
 
-    await createSale(saleInput({
-      lines: [line({ qtyInUnit: 2 })],
-      payments: [
-        { method: 'CASH', amountPence: 400 },
-        { method: 'CARD', amountPence: 600 },
-      ],
-    }));
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await createSale(saleInput({
+        lines: [line({ qtyInUnit: 2 })],
+        payments: [
+          { method: 'CASH', amountPence: 400 },
+          { method: 'CARD', amountPence: 600 },
+        ],
+      }));
+    });
 
     // One CTE for the cash portion, journal + inventory still run via their own paths
     expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
     expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
     expect(batchDecrementInventoryBalanceMock).toHaveBeenCalledTimes(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. Transaction boundary — rollback on failure
+// 4. Transaction boundary — rollback on failure (Postgres CTE)
 // ---------------------------------------------------------------------------
-describe('C11 shift/cash-drawer CTE — transaction boundary', () => {
+describe('C11 shift/cash-drawer CTE — transaction boundary (Postgres)', () => {
   it('propagates $queryRaw failure to the caller', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
     prismaMock.$queryRaw.mockRejectedValueOnce(new Error('DB connection lost'));
 
-    await expect(
-      createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }))
-    ).rejects.toThrow('DB connection lost');
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await expect(
+        createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }))
+      ).rejects.toThrow('DB connection lost');
+    });
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
   });
 
   it('throws when CTE returns empty rows (shift not found)', async () => {
@@ -322,9 +418,27 @@ describe('C11 shift/cash-drawer CTE — transaction boundary', () => {
     // Simulate the shift row not matching (already closed between context read and tx)
     prismaMock.$queryRaw.mockResolvedValueOnce([]);
 
-    await expect(
-      createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }))
-    ).rejects.toThrow('Shift not found or already closed during checkout');
+    await withDatabaseUrl(POSTGRES_DATABASE_URL, async () => {
+      await expect(
+        createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }))
+      ).rejects.toThrow('Shift not found or already closed during checkout');
+    });
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates SQLite helper failure to the caller', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: SHIFT_ID, expectedCashPence: 5000 });
+    recordCashDrawerEntryTxMock.mockRejectedValueOnce(new Error('drawer write failed'));
+
+    await withDatabaseUrl(SQLITE_DATABASE_URL, async () => {
+      await expect(
+        createSale(saleInput({ payments: [{ method: 'CASH', amountPence: 500 }] }))
+      ).rejects.toThrow('drawer write failed');
+    });
+
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 });
 
