@@ -1,15 +1,15 @@
 const { chromium } = require('playwright');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:6200';
 const CASHIER_EMAIL = process.env.E2E_CASHIER_EMAIL || 'cashier@store.com';
 const CASHIER_PASSWORD = process.env.E2E_CASHIER_PASSWORD || 'Pass1234!';
 const prisma = new PrismaClient();
 
-function escapeRegex(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+/** Current POS primary CTA: "Complete Cash Sale — …", "Complete Sale — …", credit/part-paid variants. */
+const COMPLETE_SALE_NAME = /Complete (?:Cash |Part-Paid |Credit )?Sale/i;
 
 /** Ensure the cashier account has the known E2E password.
  *  A failed backup restore can wipe + recreate users with random passwords;
@@ -24,13 +24,43 @@ async function ensureCashierPassword() {
   } catch (e) { /* best effort */ }
 }
 
-async function waitForEnabled(locator, timeoutMs = 15000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await locator.isEnabled()) return;
-    await new Promise((resolve) => setTimeout(resolve, 200));
+async function captureFailureArtifacts(page, stage, extra = {}) {
+  try {
+    fs.mkdirSync('.playwright-mcp', { recursive: true });
+    const shot = `.playwright-mcp/offline-smoke-${stage}.png`;
+    await page.screenshot({ path: shot, fullPage: true }).catch(() => undefined);
+    const completeButtons = await page
+      .getByRole('button', { name: COMPLETE_SALE_NAME })
+      .evaluateAll((nodes) =>
+        nodes.map((n) => {
+          const el = /** @type {HTMLButtonElement} */ (n);
+          const style = window.getComputedStyle(el);
+          return {
+            text: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+            disabled: el.disabled,
+            display: style.display,
+            visibility: style.visibility,
+            width: Math.round(el.getBoundingClientRect().width),
+            height: Math.round(el.getBoundingClientRect().height),
+          };
+        }),
+      )
+      .catch(() => []);
+    return {
+      stage,
+      url: page.url(),
+      viewport: page.viewportSize(),
+      tillState: await page.locator('#pos-till-select').getAttribute('data-checkout-till-state').catch(() => null),
+      checkoutState: await page.locator('[data-checkout-state]').first().getAttribute('data-checkout-state').catch(() => null),
+      paymentStatus: await page.getByLabel(/payment status/i).inputValue().catch(() => null),
+      cashTendered: await page.locator('#pos-cash-tendered').inputValue().catch(() => null),
+      completeButtons,
+      screenshot: shot,
+      ...extra,
+    };
+  } catch {
+    return { stage, url: page.url(), ...extra };
   }
-  throw new Error('Timed out waiting for enabled element');
 }
 
 async function seedSellableProductIfNeeded() {
@@ -74,7 +104,8 @@ async function seedSellableProductIfNeeded() {
 
 async function run() {
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  // Desktop POS region: Complete Sale lives in checkout panel + sidebar (not phone sheet).
+  const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
 
   const report = {
@@ -89,13 +120,16 @@ async function run() {
     syncedInvoiceId: null,
   };
 
+  let stage = 'init';
+
   try {
     // Ensure the cashier password is set correctly (guards against partial backup restore)
+    stage = 'ensure-cashier-password';
     await ensureCashierPassword();
 
+    stage = 'login';
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-    // Wait for hydration before interacting with the form
-    await page.waitForTimeout(5000);
+    await page.locator('input[name="email"]').waitFor({ state: 'visible', timeout: 15000 });
     await page.locator('input[name="email"]').fill(CASHIER_EMAIL);
     await page.locator('input[name="password"]').fill(CASHIER_PASSWORD);
     await page.getByRole('button', { name: /sign in/i }).click();
@@ -104,7 +138,7 @@ async function run() {
     while (Date.now() < deadline) {
       const url = page.url();
       if (/\/pos|\/onboarding/.test(url)) break;
-      await page.waitForTimeout(500);
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
     const postLoginUrl = page.url();
     if (!/\/pos|\/onboarding/.test(postLoginUrl)) {
@@ -129,6 +163,7 @@ async function run() {
       return payload;
     };
 
+    stage = 'offline-cache';
     let cacheData = await getCacheData();
     let saleProduct = cacheData.products.find(
       (p) => p.onHandBase > 0 && Array.isArray(p.units) && p.units.length > 0
@@ -145,6 +180,7 @@ async function run() {
     const billingRestrictionBanner = page.getByText(/Access restricted\. Complete payment to continue using TillFlow\./i);
     const barcodeInput = page.getByPlaceholder(/scan barcode/i);
     const productSearch = page.getByPlaceholder(/type product name|search products by name or barcode/i);
+    stage = 'pos-ready';
     const posReadyState = await Promise.race([
       productSearch.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'product-search'),
       barcodeInput.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'barcode'),
@@ -162,39 +198,182 @@ async function run() {
 
     await productSearch.waitFor({ state: 'visible', timeout: 10000 });
 
+    stage = 'till-ready';
+    // Evidenced till readiness: select is present and marked ready (or till-ready text).
+    const tillSelect = page.locator('#pos-till-select');
+    await tillSelect.waitFor({ state: 'attached', timeout: 20000 });
+    const tillReadyDeadline = Date.now() + 20000;
+    let tillReady = false;
+    while (Date.now() < tillReadyDeadline) {
+      const state = await tillSelect.getAttribute('data-checkout-till-state').catch(() => null);
+      if (state === 'ready') {
+        tillReady = true;
+        break;
+      }
+      // When requireOpenTillForSales is false, expanded form still uses data-checkout-state=ready.
+      const checkoutReady = await page.locator('[data-checkout-state="ready"]').count().catch(() => 0);
+      if (checkoutReady > 0 && state && state !== 'loading' && state !== 'failed' && state !== 'empty') {
+        tillReady = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (!tillReady) {
+      const artifacts = await captureFailureArtifacts(page, 'till-not-ready');
+      throw new Error(`Till did not become ready. Diagnostics: ${JSON.stringify(artifacts)}`);
+    }
+
+    stage = 'add-product';
     const searchTerm = String(saleProduct.name || '').slice(0, 6) || 'a';
     // Click first so onFocus → setProductDropdownOpen(true), then fill (which uses
     // native input events, bypassing the POS barcode-scanner global keydown handler)
     await productSearch.click();
     await productSearch.fill(searchTerm);
-    // Use hasText locator — simpler and more reliable than accessible-name role matching
-    const productButton = page.locator('button', { hasText: saleProduct.name });
-    // Wait for the autocomplete dropdown to render the product button
+    // Prefer enabled catalogue result buttons; avoid matching unrelated disabled controls.
+    const productButton = page.locator('button:not([disabled])', { hasText: saleProduct.name });
     await productButton.first().waitFor({ state: 'visible', timeout: 10000 });
     await productButton.first().click();
 
-    // Products with multiple units now stage for unit selection before adding
-    // to cart. Race between the staging "Add to Cart" button and the direct
-    // "Exact" qty button (single-unit products skip staging).
+    // Multi-unit products stage for unit selection; single-unit may add immediately.
     const addToCartBtn = page.getByRole('button', { name: /Add to Cart/i });
-    const exactBtn = page.getByRole('button', { name: /^Exact$/ });
-    const outcome = await Promise.race([
+    const cartEvidence = page
+      .locator('[data-pos-cart-card="true"]')
+      .or(page.locator('[data-pos-mobile-cart-bar="true"]'))
+      .or(page.getByText(new RegExp(String(saleProduct.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')));
+
+    const addOutcome = await Promise.race([
       addToCartBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'staged'),
-      exactBtn.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'direct'),
+      page
+        .getByText(/Ready — Cash|Ready to complete/i)
+        .first()
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(() => 'direct'),
     ]).catch(() => 'timeout');
 
-    if (outcome === 'staged') {
+    if (addOutcome === 'staged') {
       await addToCartBtn.click();
     }
 
-    await exactBtn.click();
+    // Cart must contain the product before payment/complete.
+    const cartDeadline = Date.now() + 15000;
+    let cartReady = false;
+    while (Date.now() < cartDeadline) {
+      const readyBanner = await page.getByText(/Ready — Cash|Ready to complete/i).count().catch(() => 0);
+      const completeCount = await page.getByRole('button', { name: COMPLETE_SALE_NAME }).count().catch(() => 0);
+      if (readyBanner > 0 || completeCount > 0) {
+        // Prefer an enabled complete CTA as proof the line is in cart and priced.
+        const enabledComplete = page.getByRole('button', { name: COMPLETE_SALE_NAME }).filter({ hasNotText: /^$/ });
+        const anyEnabled = await enabledComplete.evaluateAll((nodes) =>
+          nodes.some((n) => !(/** @type {HTMLButtonElement} */ (n)).disabled),
+        ).catch(() => false);
+        if (anyEnabled || readyBanner > 0) {
+          cartReady = true;
+          break;
+        }
+      }
+      await cartEvidence.first().isVisible().catch(() => false);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (!cartReady) {
+      const artifacts = await captureFailureArtifacts(page, 'product-not-in-cart', {
+        productName: saleProduct.name,
+        addOutcome,
+      });
+      throw new Error(`Product was not added to cart. Diagnostics: ${JSON.stringify(artifacts)}`);
+    }
 
-    const completeSaleButton = page.getByRole('button', { name: /Complete Sale/i });
-    await waitForEnabled(completeSaleButton);
-    await completeSaleButton.click();
-    await page.getByText(/Sale Complete!/i).waitFor({ timeout: 20000 });
+    stage = 'payment';
+    // Explicit Paid + Cash (current default journey); do not rely on stale qty/"Exact" races.
+    const paymentStatus = page.getByLabel(/payment status/i);
+    if ((await paymentStatus.count()) > 0) {
+      const currentStatus = await paymentStatus.inputValue().catch(() => '');
+      if (currentStatus && currentStatus !== 'PAID') {
+        await paymentStatus.selectOption('PAID').catch(() => undefined);
+      }
+    }
+    const cashMethod = page.getByRole('button', { name: 'Cash', exact: true });
+    if ((await cashMethod.count()) > 0) {
+      const pressed = await cashMethod.first().getAttribute('aria-pressed').catch(() => null);
+      if (pressed !== 'true') {
+        await cashMethod.first().click();
+      }
+    }
+
+    // Establish exact cash tender via the denominations control (not a product-qty Exact).
+    const exactCash = page.locator('[data-pos-cash-denominations="true"]').getByRole('button', { name: /^Exact$/ });
+    if ((await exactCash.count()) > 0) {
+      await exactCash.first().click();
+    }
+
+    const paymentReady = page.getByText(/Ready — Cash|Ready to complete • Cash/i).first();
+    await paymentReady.waitFor({ state: 'visible', timeout: 15000 }).catch(async () => {
+      const artifacts = await captureFailureArtifacts(page, 'payment-not-ready');
+      throw new Error(`Payment state was not established for exact cash. Diagnostics: ${JSON.stringify(artifacts)}`);
+    });
+
+    stage = 'complete-sale';
+    // Prefer a visible, enabled, non-zero-box CTA (skip sticky lg:hidden zero-size duplicates).
+    const completeCandidates = page.getByRole('button', { name: COMPLETE_SALE_NAME });
+    let completeHandle = null;
+    const completeDeadline = Date.now() + 20000;
+    while (Date.now() < completeDeadline) {
+      const handles = await completeCandidates.elementHandles();
+      for (const handle of handles) {
+        const meta = await handle.evaluate((el) => {
+          const node = /** @type {HTMLButtonElement} */ (el);
+          const rect = node.getBoundingClientRect();
+          const style = window.getComputedStyle(node);
+          return {
+            disabled: node.disabled,
+            display: style.display,
+            visibility: style.visibility,
+            width: rect.width,
+            height: rect.height,
+          };
+        });
+        const actionable =
+          !meta.disabled &&
+          meta.display !== 'none' &&
+          meta.visibility !== 'hidden' &&
+          meta.width > 0 &&
+          meta.height > 0;
+        if (actionable) {
+          completeHandle = handle;
+          break;
+        }
+        await handle.dispose().catch(() => undefined);
+      }
+      if (completeHandle) {
+        for (const handle of handles) {
+          if (handle !== completeHandle) await handle.dispose().catch(() => undefined);
+        }
+        break;
+      }
+      for (const handle of handles) {
+        await handle.dispose().catch(() => undefined);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    if (!completeHandle) {
+      const artifacts = await captureFailureArtifacts(page, 'complete-sale-unavailable');
+      throw new Error(
+        `Complete Sale control not visible and enabled. Diagnostics: ${JSON.stringify(artifacts)}`,
+      );
+    }
+
+    // Submit exactly once.
+    await completeHandle.click();
+    await completeHandle.dispose().catch(() => undefined);
+
+    stage = 'sale-complete';
+    await page.getByText(/Sale Complete!/i).waitFor({ timeout: 20000 }).catch(async () => {
+      const artifacts = await captureFailureArtifacts(page, 'sale-submit-failed');
+      throw new Error(`Sale completion banner not observed after one Complete Sale click. Diagnostics: ${JSON.stringify(artifacts)}`);
+    });
     report.posSale = true;
 
+    stage = 'receipt';
     const reprintLink = page.getByRole('link', { name: /Reprint last receipt/i });
     await reprintLink.waitFor({ state: 'visible', timeout: 15000 });
     const receiptPath = await reprintLink.getAttribute('href');
@@ -211,6 +390,7 @@ async function run() {
 
     report.offlineCacheApi = true;
 
+    stage = 'offline-sync';
     const product =
       cacheData.products.find((p) => p.onHandBase > 0 && Array.isArray(p.units) && p.units.length > 0) ||
       cacheData.products.find((p) => Array.isArray(p.units) && p.units.length > 0);
@@ -252,12 +432,18 @@ async function run() {
 
     const syncResp2 = await page.request.post(`${BASE_URL}/api/offline/sync-sale`, { data: payload });
     const syncData2 = await syncResp2.json();
-    if (
-      syncResp2.status() !== 200 ||
-      !syncData2.success ||
-      !String(syncData2.message || '').toLowerCase().includes('already synced')
-    ) {
-      throw new Error(`Second offline sync did not behave idempotently: ${syncResp2.status()} ${JSON.stringify(syncData2)}`);
+    // Idempotency contract: replay must return the same invoice. createSale short-circuits on
+    // externalRef and may omit the "already synced" message that the payment.reference path used.
+    const sameInvoice =
+      Boolean(syncData1.invoiceId) && syncData2.invoiceId === syncData1.invoiceId;
+    const legacyMessage = String(syncData2.message || '')
+      .toLowerCase()
+      .includes('already synced');
+    if (syncResp2.status() !== 200 || !syncData2.success || !sameInvoice) {
+      throw new Error(
+        `Second offline sync did not behave idempotently: ${syncResp2.status()} ${JSON.stringify(syncData2)} ` +
+          `(firstInvoiceId=${syncData1.invoiceId}, legacyMessage=${legacyMessage})`,
+      );
     }
     report.offlineSyncIdempotent = true;
 
@@ -272,7 +458,20 @@ async function run() {
 
     console.log(JSON.stringify({ success: true, report }, null, 2));
   } catch (error) {
-    console.error(JSON.stringify({ success: false, report, error: error instanceof Error ? error.message : String(error) }, null, 2));
+    const artifacts = await captureFailureArtifacts(page, stage).catch(() => ({ stage }));
+    console.error(
+      JSON.stringify(
+        {
+          success: false,
+          report,
+          stage,
+          artifacts,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        null,
+        2,
+      ),
+    );
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
