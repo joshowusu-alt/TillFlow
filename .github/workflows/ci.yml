@@ -5,15 +5,44 @@ on:
     branches: [main, master]
   pull_request:
 
+permissions:
+  contents: read
+
+# Stable displayed check names (Gate 3 interface):
+#   CI / lint
+#   CI / unit
+#   CI / typecheck
+#   CI / build
+#   CI / pos-safety
+# Job `name:` values must stay literal — do not matrix or templatize them.
+
 jobs:
-  quality:
+  lint:
+    name: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
-      DATABASE_URL: file:./ci.db
-      BASE_URL: http://localhost:6200
-      E2E_OWNER_EMAIL: owner@store.com
-      E2E_OWNER_PASSWORD: Pass1234!
+      DATABASE_URL: file:./ci-unit.db
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,21 +59,117 @@ jobs:
       - name: Generate Prisma client for SQLite
         run: npm run db:prepare:ci
 
-      - name: Lint
-        run: npm run lint
-
       - name: Unit tests
         run: npm test
 
-      - name: Build
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        # Explicit tsc — independent of next build. Uses tsconfig.json (noEmit).
+        run: npm run typecheck
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:./ci-build.db
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client for SQLite
+        run: npm run db:prepare:ci
+
+      - name: Production build
         run: npm run build
+
+      - name: Upload Next.js build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: .next
+          retention-days: 1
+          if-no-files-found: error
+          # `.next` is a dot-directory; upload-artifact@v4 excludes hidden paths by default.
+          include-hidden-files: true
+
+  pos-safety:
+    name: pos-safety
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Job-local SQLite — does not share unit/build DB files.
+      DATABASE_URL: file:./ci-pos-safety.db
+      BASE_URL: http://localhost:6200
+      E2E_OWNER_EMAIL: owner@store.com
+      E2E_OWNER_PASSWORD: Pass1234!
+      E2E_CASHIER_EMAIL: cashier@store.com
+      E2E_CASHIER_PASSWORD: Pass1234!
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client for SQLite
+        run: npm run db:prepare:ci
+
+      - name: Download Next.js build output
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+
+      - name: Verify build artifact
+        run: |
+          set -euo pipefail
+          test -d .next
+          test -f .next/BUILD_ID || test -f .next/prerender-manifest.json || test -d .next/server
+
+      - name: Focused POS/financial unit safety
+        run: npm run test:pos-safety:unit
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
       - name: Start app
         run: |
+          set -euo pipefail
           npm run start -- -p 6200 > .ci-server.log 2>&1 &
+          echo $! > .ci-server.pid
           for i in {1..60}; do
             if curl -fsS "$BASE_URL/login" >/dev/null; then
               echo "Server ready"
@@ -59,6 +184,8 @@ jobs:
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 
+      # Route-speed remains a running-app latency regression check (not a substitute
+      # for POS financial assertions). Kept in pos-safety because it requires BASE_URL.
       - name: Route speed check
         run: npm run test:perf
 
@@ -68,11 +195,11 @@ jobs:
       - name: Phase 3A financial QA
         run: npm run test:qa:phase3a
 
-      - name: Upload E2E artifacts
+      - name: Upload POS-safety artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-artifacts
+          name: pos-safety-artifacts
           path: |
             .playwright-mcp/**
             .ci-server.log
