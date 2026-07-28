@@ -115,6 +115,8 @@ jobs:
           path: .next
           retention-days: 1
           if-no-files-found: error
+          # `.next` is a dot-directory; upload-artifact@v4 excludes hidden paths by default.
+          include-hidden-files: true
 
   pos-safety:
     name: pos-safety
