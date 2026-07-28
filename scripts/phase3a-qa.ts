@@ -76,6 +76,14 @@ async function closeOpenShiftsForTill(tillId: string) {
 }
 
 async function run() {
+  const harness = (globalThis as { __PHASE3A_HARNESS__?: { reactCacheShimmed: boolean; unstableCacheShimmed: boolean } })
+    .__PHASE3A_HARNESS__;
+  if (!harness?.reactCacheShimmed || !harness?.unstableCacheShimmed) {
+    throw new Error(
+      'Phase 3A standalone harness is not active. Run via `npm run test:qa:phase3a` (loads scripts/phase3a-harness.cjs).',
+    );
+  }
+
   const report = {
     momo: {
       initiatePending: false,
@@ -477,7 +485,14 @@ async function run() {
       userId: owner.id,
     });
 
-    const riskAfter = await prisma.riskAlert.count({ where: { businessId: business.id } });
+    // Service-layer risk detection is intentionally fire-and-forget; wait for
+    // the expected alert row instead of a fixed sleep.
+    const riskDeadline = Date.now() + 5000;
+    let riskAfter = await prisma.riskAlert.count({ where: { businessId: business.id } });
+    while (riskAfter <= riskBefore && Date.now() < riskDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      riskAfter = await prisma.riskAlert.count({ where: { businessId: business.id } });
+    }
     assert(riskAfter > riskBefore, 'Risk alerts did not increment for fraud controls.');
     report.fraud.riskAlertsIncrement = true;
 
