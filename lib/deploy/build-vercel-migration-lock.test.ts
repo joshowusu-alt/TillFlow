@@ -5,10 +5,13 @@ import { describe, expect, it } from 'vitest';
 /**
  * P0-B: Production/Preview Vercel builds must use Prisma's default advisory
  * lock during `prisma migrate deploy`. Disabling the lock allows concurrent
- * builds to race migration application.
+ * builds against the same database to race migration application.
  *
  * Migrations use `directUrl` (POSTGRES_URL_NON_POOLING) from
  * prisma/schema.postgres.prisma — not the pooled runtime URL.
+ *
+ * Boundary: advisory locking serializes migrate deploy only. It does not
+ * authorise Production releases — that remains Gate 3 / P0-A / Owner controls.
  */
 describe('P0-B build:vercel migration lock contract', () => {
   const packageJsonPath = path.join(process.cwd(), 'package.json');
