@@ -99,6 +99,8 @@ npm run build:vercel
 
 That script includes `prisma migrate deploy --schema=prisma/schema.postgres.prisma`, so committed migrations are applied automatically during deployment.
 
+Prisma Migrate uses PostgreSQL advisory locks by default so concurrent Vercel builds cannot apply migrations at the same time. Migrations must use the **direct** (non-pooled) URL via `directUrl` / `POSTGRES_URL_NON_POOLING`. Do **not** set `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1` on hosted builds — that flag is for clustered MySQL/MariaDB setups, not Neon, and removes migration serialization.
+
 ---
 
 ## Step 5 — Deploy
@@ -191,6 +193,7 @@ CLI deploys (`vercel deploy --prod`) are a fallback only. They attach local git 
 | `DEPLOYMENT_NOT_FOUND` | Make sure the project is deployed and the URL matches. |
 | Build fails with `POSTGRES_PRISMA_URL` error | Add the env vars in Step 3. |
 | `prisma migrate deploy` fails | Check that `POSTGRES_URL_NON_POOLING` uses the direct (non-pooled) URL and that the migration files are committed. |
+| Build hangs or times out on migrate | Confirm migrations use the direct URL (not the pooler). A second concurrent deploy may be waiting on Prisma’s advisory lock — wait for it or cancel the duplicate build. Do not disable advisory locking. |
 | Login doesn't work | Ensure `NEXTAUTH_SECRET` and `NEXTAUTH_URL` are set. |
 | Login lockout is inconsistent across instances | Ensure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set. |
 | EOD summary falls back to manual review | Check Meta env vars and `/settings/notifications` diagnostics. |
