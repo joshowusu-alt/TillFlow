@@ -1,5 +1,10 @@
 {
   "buildCommand": "npm run build:vercel",
+  "git": {
+    "deploymentEnabled": {
+      "ci/p0b-prisma-migration-lock": false
+    }
+  },
   "regions": ["iad1"],
   "crons": [
     {
