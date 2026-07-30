@@ -2,7 +2,8 @@
   "buildCommand": "npm run build:vercel",
   "git": {
     "deploymentEnabled": {
-      "ci/p0b-prisma-migration-lock": false
+      "ci/p0b-prisma-migration-lock": false,
+      "ci/p0a-deployment-checks-empirical": false
     }
   },
   "regions": ["iad1"],
