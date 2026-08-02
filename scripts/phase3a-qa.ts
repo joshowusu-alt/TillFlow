@@ -6,7 +6,7 @@ import {
 } from '../lib/services/mobile-money';
 import { createSale } from '../lib/services/sales';
 import { createSalesReturn } from '../lib/services/returns';
-import { createStockAdjustment } from '../lib/services/inventory';
+import { createInventoryDecrease } from '../lib/services/inventory-decrease';
 import { ensureOrganizationAndBranches } from '../lib/services/branches';
 import { approveAndCompleteStockTransfer, requestStockTransfer } from '../lib/services/stock-transfers';
 import { resolveEffectiveSellingPricePence } from '../lib/services/shared';
@@ -474,15 +474,50 @@ async function run() {
       payments: [{ method: 'CASH', amountPence: saleLine.approxUnitPrice * 2 }],
     });
 
-    await createStockAdjustment({
+    process.env.TILLFLOW_INVENTORY_ADJUST_PHASE1 = '1';
+    const riskThreshold =
+      (
+        await prisma.business.findUnique({
+          where: { id: business.id },
+          select: { inventoryAdjustmentRiskThresholdBase: true },
+        })
+      )?.inventoryAdjustmentRiskThresholdBase ?? 50;
+    const riskQty = Math.max(riskThreshold + 1, 2);
+    const riskBalance = await prisma.inventoryBalance.findUnique({
+      where: {
+        storeId_productId: { storeId: mainStore.id, productId: saleLine.productId },
+      },
+      select: { qtyOnHandBase: true, avgCostBasePence: true },
+    });
+    if (!riskBalance || riskBalance.qtyOnHandBase < riskQty || riskBalance.avgCostBasePence <= 0) {
+      await prisma.inventoryBalance.upsert({
+        where: {
+          storeId_productId: { storeId: mainStore.id, productId: saleLine.productId },
+        },
+        update: {
+          qtyOnHandBase: Math.max(riskBalance?.qtyOnHandBase ?? 0, riskQty + 5),
+          avgCostBasePence: Math.max(riskBalance?.avgCostBasePence ?? 0, 100),
+        },
+        create: {
+          storeId: mainStore.id,
+          productId: saleLine.productId,
+          qtyOnHandBase: riskQty + 5,
+          avgCostBasePence: 100,
+        },
+      });
+    }
+    await createInventoryDecrease({
       businessId: business.id,
       storeId: mainStore.id,
       productId: saleLine.productId,
       unitId: saleLine.unitId,
-      qtyInUnit: 2,
-      direction: 'INCREASE',
+      qtyInUnit: riskQty,
+      reasonCode: 'WASTAGE',
       reason: 'QA risk threshold trigger',
+      idempotencyKey: `qa-risk-adjust-${Date.now()}`,
       userId: owner.id,
+      userName: owner.name ?? 'Owner',
+      userRole: owner.role,
     });
 
     // Service-layer risk detection is intentionally fire-and-forget; wait for

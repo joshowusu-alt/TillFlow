@@ -946,24 +946,34 @@ model StockMovement {
 }
 
 model StockAdjustment {
-  id        String   @id @default(cuid())
-  storeId   String
-  productId String
-  unitId    String
-  qtyInUnit Int
-  qtyBase   Int
-  direction String
-  reason    String?
-  userId    String
-  qaTag     String?
-  qaRunId   String?
-  createdAt DateTime @default(now())
+  id                 String   @id @default(cuid())
+  storeId            String
+  productId          String
+  unitId             String
+  qtyInUnit          Int
+  qtyBase            Int
+  direction          String
+  reason             String?
+  /// Phase 1 decrease taxonomy (WASTAGE, EXPIRED, …). Null on pre-Phase-1 rows.
+  reasonCode         String?
+  /// Client/server idempotency key; unique per store when set.
+  idempotencyKey     String?
+  /// SHA-256 of the immutable decrease payload (schemaVersion-aware).
+  payloadHash        String?
+  unitCostBasePence  Int?
+  valuePence         Int?
+  schemaVersion      Int?
+  userId             String
+  qaTag              String?
+  qaRunId            String?
+  createdAt          DateTime @default(now())
 
   store   Store   @relation(fields: [storeId], references: [id])
   product Product @relation(fields: [productId], references: [id])
   unit    Unit    @relation(fields: [unitId], references: [id])
   user    User    @relation(fields: [userId], references: [id])
 
+  @@unique([storeId, idempotencyKey])
   @@index([storeId, createdAt])
   @@index([productId, createdAt])
 }
@@ -1320,6 +1330,8 @@ model StocktakeLine {
   countedBase  Int
   varianceBase Int
   adjusted     Boolean @default(false)
+  /// e.g. SURPLUS_PENDING_REVIEW — surplus counted but not posted to inventory/GL.
+  reviewStatus String?
 
   stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id])

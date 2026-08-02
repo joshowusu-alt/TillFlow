@@ -163,14 +163,28 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
   const stats = useMemo(() => {
     let counted = 0;
     let variances = 0;
+    let shortfalls = 0;
+    let surpluses = 0;
     for (const l of initialLines) {
       const c = counts[l.id];
       if (c && c !== '') {
         counted++;
-        if (Number(c) !== l.expectedBase) variances++;
+        const n = Number(c);
+        if (n !== l.expectedBase) {
+          variances++;
+          if (n < l.expectedBase) shortfalls++;
+          if (n > l.expectedBase) surpluses++;
+        }
       }
     }
-    return { total: initialLines.length, counted, uncounted: initialLines.length - counted, variances };
+    return {
+      total: initialLines.length,
+      counted,
+      uncounted: initialLines.length - counted,
+      variances,
+      shortfalls,
+      surpluses,
+    };
   }, [initialLines, counts]);
 
   const activeLine = activeLineId ? initialLines.find((l) => l.id === activeLineId) : null;
@@ -222,6 +236,12 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
         reason: varianceReason.trim(),
       });
       if (completeResult.success) {
+        const surplus = completeResult.data?.surplusPendingReview ?? 0;
+        if (surplus > 0) {
+          setSaveMsg(
+            `Stocktake completed. ${surplus} surplus line(s) saved as pending review — authoritative on-hand balance was not increased.`,
+          );
+        }
         router.push('/inventory/stocktake');
         router.refresh();
       } else {
@@ -252,6 +272,9 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
             {stats.variances > 0 && (
               <span className="ml-2 font-semibold text-amber-600">
                 {stats.variances} variance{stats.variances > 1 ? 's' : ''}
+                {stats.surpluses > 0
+                  ? ` (${stats.surpluses} surplus pending review — balance unchanged)`
+                  : ''}
               </span>
             )}
           </span>
@@ -600,10 +623,11 @@ export default function StocktakeClient({ stocktakeId, lines: initialLines, star
               confirmComplete ? (
                 <div className="w-full space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3 sm:max-w-xl">
                   <p className="text-sm text-amber-900">
-                    You are about to adjust <span className="font-semibold">{stats.variances}</span> product
-                    {stats.variances === 1 ? '' : 's'} based on this stocktake.
+                    Shortfalls ({stats.shortfalls}) will reduce on-hand stock via Phase 1 inventory
+                    decrease. Surpluses ({stats.surpluses}) are saved as pending review and will{' '}
+                    <span className="font-semibold">not</span> change the authoritative balance yet.
                     {stats.variances > 0
-                      ? ' Please enter a reason for the variance adjustment.'
+                      ? ' Please enter a reason before completing.'
                       : ' No quantity changes will be posted.'}
                   </p>
                   {stats.variances > 0 ? (

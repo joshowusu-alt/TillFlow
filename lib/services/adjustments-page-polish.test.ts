@@ -14,7 +14,6 @@ describe('inventory adjustments page polish', () => {
 
   it('uses owner-friendly subtitle', () => {
     expect(src).toContain('Correct stock safely and keep a clear audit trail.');
-    expect(src).not.toContain('Record shrinkage, found stock, and corrections.');
   });
 
   it('stat card labels are present', () => {
@@ -25,7 +24,7 @@ describe('inventory adjustments page polish', () => {
 
   it('stat cards have helper text', () => {
     expect(src).toContain('Total adjustments');
-    expect(src).toContain('Stock increases');
+    expect(src).toContain('Historical increases');
     expect(src).toContain('Stock decreases');
   });
 
@@ -35,53 +34,41 @@ describe('inventory adjustments page polish', () => {
   });
 
   it('audit trail copy is present in history section', () => {
-    expect(src).toContain('Every adjustment is permanently recorded');
-    expect(src).toContain('audited opposite entry');
+    expect(src).toContain('Every Phase 1 decrease is permanently recorded');
+    expect(src).toContain('Automated reversal is unavailable in Phase 1');
   });
 
   it('adjustment form component remains present', () => {
     expect(src).toContain('StockAdjustmentClient');
     expect(src).toContain('storeId={store.id}');
+    expect(src).toContain('phase1Enabled={phase1Enabled}');
   });
 
   it('adjustment form references createStockAdjustmentAction', () => {
     expect(formSrc).toContain('createStockAdjustmentAction');
   });
 
-  it('adjustment form input names are unchanged', () => {
+  it('decrease-only form posts required Phase 1 fields', () => {
     expect(formSrc).toContain('name="storeId"');
     expect(formSrc).toContain('name="productId"');
     expect(formSrc).toContain('name="unitId"');
     expect(formSrc).toContain('name="qtyInUnit"');
     expect(formSrc).toContain('name="direction"');
+    expect(formSrc).toContain('value="DECREASE"');
     expect(formSrc).toContain('name="reason"');
+    expect(formSrc).toContain('name="reasonCode"');
+    expect(formSrc).toContain('name="idempotencyKey"');
+    expect(formSrc).not.toContain('Increase (found stock)');
   });
 
   it('recent adjustments history section is present', () => {
     expect(src).toContain('Recent adjustments');
   });
 
-  it('reversal action remains available', () => {
-    expect(src).toContain('ReverseStockAdjustmentForm');
-    expect(src).toContain('canReverseAdjustments');
-  });
-
-  it('owner-only reversal gating is unchanged', () => {
-    expect(src).toContain("user.role === 'OWNER'");
-    expect(reverseSrc).toContain('reverseStockAdjustmentAction');
-  });
-
-  it('reversal form input name is unchanged', () => {
-    expect(reverseSrc).toContain('name="adjustmentId"');
-    expect(reverseSrc).toContain('name="reason"');
-  });
-
-  it('isReversal helper logic is unchanged', () => {
-    expect(src).toContain("reason?.includes('Reversal of adjustment')");
-  });
-
-  it('isIncreaseDirection logic is unchanged', () => {
-    expect(src).toContain("direction === 'INCREASE' || direction === 'IN'");
+  it('automated reversal UI is unavailable', () => {
+    expect(src).not.toContain('ReverseStockAdjustmentForm');
+    expect(reverseSrc).toContain('Automated reversal unavailable');
+    expect(reverseSrc).not.toContain('reverseStockAdjustmentAction');
   });
 
   it('desktop table has row hover polish', () => {
@@ -104,12 +91,12 @@ describe('inventory adjustments page polish', () => {
 
   it('empty state copy is owner-friendly', () => {
     expect(src).toContain('No stock adjustments yet.');
-    expect(src).toContain('When stock needs correcting, record an adjustment so TillFlow keeps a clear audit trail.');
+    expect(src).toContain('When stock needs correcting, record a decrease so TillFlow keeps a clear audit trail.');
   });
 
   it('desktop table has an empty state', () => {
     expect(src).toContain('AdjustmentsEmptyState');
-    expect(src).toContain('colSpan={canReverseAdjustments ? 7 : 6}');
+    expect(src).toContain('colSpan={6}');
   });
 
   it('does not add pointer or touch handlers', () => {

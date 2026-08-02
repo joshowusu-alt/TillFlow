@@ -3,10 +3,16 @@
 import { prisma } from '@/lib/prisma';
 import { revalidateTag } from 'next/cache';
 import { withBusinessStoreContext, safeAction, type ActionResult } from '@/lib/action-utils';
-import { createStockAdjustment } from '@/lib/services/inventory';
 import { audit } from '@/lib/audit';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { getFeatures } from '@/lib/features';
+import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
+import {
+  createInventoryDecrease,
+  InventoryDecreaseError,
+} from '@/lib/services/inventory-decrease';
+
+export const STOCKTAKE_SURPLUS_PENDING_REVIEW = 'SURPLUS_PENDING_REVIEW';
 
 async function assertGrowthStocktake(businessId: string): Promise<{ allowed: true } | { allowed: false; error: string }> {
   const business = await prisma.business.findUnique({
@@ -34,7 +40,6 @@ export async function createStocktakeAction(): Promise<ActionResult<{ id: string
     const plan = await assertGrowthStocktake(businessId);
     if (!plan.allowed) return { success: false, error: plan.error };
 
-    // Prevent multiple in-progress stocktakes
     const existing = await prisma.stocktake.findFirst({
       where: { storeId, status: 'IN_PROGRESS' },
     });
@@ -121,14 +126,15 @@ export async function saveStocktakeCountsAction(data: {
 }
 
 /**
- * Complete a stocktake — apply variances as stock adjustments.
- * When any variance exists, a non-empty reason is required.
+ * Complete a stocktake.
+ * - Shortfalls: Phase 1 inventory decrease (requires rollout flag).
+ * - Surpluses: persisted as SURPLUS_PENDING_REVIEW — no inventory/GL post.
  */
 export async function completeStocktakeAction(data: {
   stocktakeId: string;
   counts: { lineId: string; countedBase: number }[];
   reason?: string;
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ surplusPendingReview: number; shortfallsAdjusted: number }>> {
   return safeAction(async () => {
     const { user, businessId, storeId } =
       await withBusinessStoreContext(['MANAGER', 'OWNER']);
@@ -137,77 +143,142 @@ export async function completeStocktakeAction(data: {
 
     const stocktake = await prisma.stocktake.findUnique({
       where: { id: data.stocktakeId },
-      include: { lines: { include: { product: { select: { id: true, name: true, productUnits: { where: { isBaseUnit: true }, select: { unitId: true } } } } } } },
+      include: {
+        lines: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                productUnits: {
+                  where: { isBaseUnit: true },
+                  select: { unitId: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!stocktake || stocktake.status !== 'IN_PROGRESS') {
       return { success: false, error: 'Stocktake not found or already completed.' };
     }
 
-    const varianceCount = data.counts.reduce((sum, count) => {
+    let shortfallCount = 0;
+    let surplusCount = 0;
+    for (const count of data.counts) {
       const line = stocktake.lines.find((l) => l.id === count.lineId);
-      if (!line || line.adjusted) return sum;
-      return count.countedBase - line.expectedBase !== 0 ? sum + 1 : sum;
-    }, 0);
+      if (!line || line.adjusted || line.reviewStatus === STOCKTAKE_SURPLUS_PENDING_REVIEW) continue;
+      const variance = count.countedBase - line.expectedBase;
+      if (variance < 0) shortfallCount += 1;
+      if (variance > 0) surplusCount += 1;
+    }
 
-    const reasonText = (data.reason ?? '').trim();
-    if (varianceCount > 0 && reasonText.length < 3) {
+    if (shortfallCount > 0 && !isInventoryDecreasePhase1Enabled()) {
       return {
         success: false,
-        error: 'Enter a reason for the variance adjustment before completing this stocktake.',
+        error:
+          'Stocktake shortfalls require inventory decrease Phase 1. Surplus counts can be saved only after Phase 1 is enabled for shortfall posting, or clear shortfall lines first.',
+      };
+    }
+
+    const reasonText = (data.reason ?? '').trim();
+    if ((shortfallCount > 0 || surplusCount > 0) && reasonText.length < 3) {
+      return {
+        success: false,
+        error: 'Enter a reason for the variance before completing this stocktake.',
       };
     }
 
     const adjustmentReason =
       reasonText.length >= 3
         ? `Stocktake: ${reasonText.slice(0, 200)}`
-        : 'Stocktake count adjustment';
+        : 'Stocktake shortfall';
 
-    // Wrap all mutations in a single transaction so a mid-loop crash cannot
-    // leave inventory in a partially-adjusted state.  On retry the idempotency
-    // guard (line.adjusted check) ensures already-processed lines are skipped.
-    let adjustedCount = 0;
+    let shortfallsAdjusted = 0;
+    let surplusPendingReview = 0;
     const affectedProductIds = new Set<string>();
+
     await prisma.$transaction(
       async (tx) => {
         for (const count of data.counts) {
           const line = stocktake.lines.find((l) => l.id === count.lineId);
           if (!line) continue;
-
-          // Idempotency guard: skip lines already adjusted in a previous partial run.
-          if (line.adjusted) continue;
+          if (line.adjusted || line.reviewStatus === STOCKTAKE_SURPLUS_PENDING_REVIEW) continue;
 
           const variance = count.countedBase - line.expectedBase;
+
+          if (variance === 0) {
+            await tx.stocktakeLine.update({
+              where: { id: count.lineId },
+              data: {
+                countedBase: count.countedBase,
+                varianceBase: 0,
+                adjusted: false,
+                reviewStatus: null,
+              },
+            });
+            continue;
+          }
+
+          if (variance > 0) {
+            // Persist surplus for review — do not post inventory or journal.
+            await tx.stocktakeLine.update({
+              where: { id: count.lineId },
+              data: {
+                countedBase: count.countedBase,
+                varianceBase: variance,
+                adjusted: false,
+                reviewStatus: STOCKTAKE_SURPLUS_PENDING_REVIEW,
+              },
+            });
+            surplusPendingReview += 1;
+            continue;
+          }
+
+          // Shortfall: Phase 1 decrease.
+          const baseUnitId = line.product.productUnits[0]?.unitId;
+          if (!baseUnitId) {
+            throw new Error(`No base unit configured for ${line.product.name}`);
+          }
+
+          const qtyInUnit = Math.abs(variance);
+          try {
+            await createInventoryDecrease(
+              {
+                businessId,
+                storeId,
+                productId: line.productId,
+                unitId: baseUnitId,
+                qtyInUnit,
+                reasonCode: 'STOCKTAKE_SHORTFALL',
+                reason: adjustmentReason,
+                idempotencyKey: `stocktake:${data.stocktakeId}:line:${count.lineId}`,
+                userId: user.id,
+                userName: user.name ?? 'Unknown',
+                userRole: user.role,
+              },
+              tx,
+            );
+          } catch (error) {
+            if (error instanceof InventoryDecreaseError) {
+              throw new Error(`${line.product.name}: ${error.message}`);
+            }
+            throw error;
+          }
 
           await tx.stocktakeLine.update({
             where: { id: count.lineId },
             data: {
               countedBase: count.countedBase,
               varianceBase: variance,
-              adjusted: variance !== 0,
+              adjusted: true,
+              reviewStatus: null,
             },
           });
 
-          // Create stock adjustment for non-zero variances
-          if (variance !== 0) {
-            const baseUnitId = line.product.productUnits[0]?.unitId;
-            if (baseUnitId) {
-              await createStockAdjustment(
-                {
-                  businessId,
-                  storeId,
-                  productId: line.productId,
-                  unitId: baseUnitId,
-                  qtyInUnit: Math.abs(variance),
-                  direction: variance > 0 ? 'INCREASE' : 'DECREASE',
-                  reason: adjustmentReason,
-                  userId: user.id,
-                },
-                tx,
-              );
-              affectedProductIds.add(line.productId);
-              adjustedCount++;
-            }
-          }
+          affectedProductIds.add(line.productId);
+          shortfallsAdjusted += 1;
         }
 
         await tx.stocktake.update({
@@ -222,7 +293,6 @@ export async function completeStocktakeAction(data: {
       { timeout: 30000, maxWait: 5000 },
     );
 
-    // Audit log and cache invalidation are fire-and-forget; keep outside the tx.
     audit({
       businessId,
       userId: user.id,
@@ -233,7 +303,8 @@ export async function completeStocktakeAction(data: {
       entityId: data.stocktakeId,
       details: {
         totalLines: stocktake.lines.length,
-        adjustedLines: adjustedCount,
+        shortfallsAdjusted,
+        surplusPendingReview,
         reason: reasonText || null,
       },
     });
@@ -250,7 +321,10 @@ export async function completeStocktakeAction(data: {
       }).catch(() => {});
     }
 
-    return { success: true };
+    return {
+      success: true,
+      data: { surplusPendingReview, shortfallsAdjusted },
+    };
   });
 }
 

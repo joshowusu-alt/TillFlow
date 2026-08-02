@@ -1,10 +1,10 @@
 'use client';
 
-import SubmitButton from '@/components/SubmitButton';
-import { reverseStockAdjustmentAction } from '@/app/actions/inventory';
-
+/**
+ * Automated reversal is unavailable in inventory-decrease Phase 1.
+ * Component retained so historical links/tests do not 404; it never submits a reverse.
+ */
 export default function ReverseStockAdjustmentForm({
-  adjustmentId,
   disabled,
 }: {
   adjustmentId: string;
@@ -15,25 +15,8 @@ export default function ReverseStockAdjustmentForm({
   }
 
   return (
-    <form
-      action={reverseStockAdjustmentAction}
-      className="flex flex-col gap-2 sm:flex-row sm:items-center"
-      onSubmit={(event) => {
-        if (!window.confirm('Reverse this stock adjustment? This creates an opposite audited stock entry.')) {
-          event.preventDefault();
-        }
-      }}
-    >
-      <input type="hidden" name="adjustmentId" value={adjustmentId} />
-      <input
-        className="input h-9 min-w-[12rem] text-xs"
-        name="reason"
-        placeholder="Correction note"
-        maxLength={180}
-      />
-      <SubmitButton className="btn-secondary h-9 px-3 text-xs" loadingText="Reversing...">
-        Reverse
-      </SubmitButton>
-    </form>
+    <span className="text-xs text-black/45">
+      Automated reversal unavailable (Phase 1 decreases only)
+    </span>
   );
 }
