@@ -12,7 +12,7 @@ import {
   InventoryDecreaseError,
 } from '@/lib/services/inventory-decrease';
 
-export const STOCKTAKE_SURPLUS_PENDING_REVIEW = 'SURPLUS_PENDING_REVIEW';
+const STOCKTAKE_SURPLUS_PENDING_REVIEW = 'SURPLUS_PENDING_REVIEW';
 
 async function assertGrowthStocktake(businessId: string): Promise<{ allowed: true } | { allowed: false; error: string }> {
   const business = await prisma.business.findUnique({

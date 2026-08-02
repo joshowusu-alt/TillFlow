@@ -11,7 +11,6 @@ import {
   createInventoryDecrease,
   InventoryDecreaseError,
   isInventoryDecreaseReasonCode,
-  INVENTORY_DECREASE_ERROR,
 } from '@/lib/services/inventory-decrease';
 
 function mapDecreaseError(error: unknown): never {
@@ -100,5 +99,3 @@ export async function reverseStockAdjustmentAction(_formData: FormData): Promise
     );
   }, '/inventory/adjustments');
 }
-
-export { INVENTORY_DECREASE_ERROR };

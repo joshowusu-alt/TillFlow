@@ -39,13 +39,22 @@ describe('inventory decrease Phase 1 actions', () => {
     expect(stocktakeAction).not.toContain("from '@/lib/services/inventory'");
   });
 
+  it('stocktake shortfalls require the Phase 1 flag', () => {
+    expect(stocktakeAction).toContain('isInventoryDecreasePhase1Enabled');
+    expect(stocktakeAction).toContain('shortfallCount > 0 && !isInventoryDecreasePhase1Enabled()');
+  });
+
   it('no production callers import the disabled legacy inventory service', () => {
-    const inventoryAction = readFileSync(join(process.cwd(), 'app/actions/inventory.ts'), 'utf8');
-    const stocktakeAction = readFileSync(join(process.cwd(), 'app/actions/stocktake.ts'), 'utf8');
     const phase3a = readFileSync(join(process.cwd(), 'scripts/phase3a-qa.ts'), 'utf8');
     expect(inventoryAction).not.toContain("from '@/lib/services/inventory'");
     expect(stocktakeAction).not.toContain("from '@/lib/services/inventory'");
     expect(phase3a).toContain('createInventoryDecrease');
     expect(phase3a).not.toContain('createStockAdjustment');
+  });
+
+  it('use server files do not export non-async constants', () => {
+    expect(stocktakeAction).not.toMatch(/export const STOCKTAKE_SURPLUS_PENDING_REVIEW/);
+    expect(stocktakeAction).toContain("const STOCKTAKE_SURPLUS_PENDING_REVIEW = 'SURPLUS_PENDING_REVIEW'");
+    expect(inventoryAction).not.toContain('export { INVENTORY_DECREASE_ERROR }');
   });
 });
