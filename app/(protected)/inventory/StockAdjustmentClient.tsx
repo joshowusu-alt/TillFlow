@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SubmitButton from '@/components/SubmitButton';
 import { createStockAdjustmentAction } from '@/app/actions/inventory';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
+import type { InventoryDecreaseReasonCode } from '@/lib/services/inventory-decrease';
 
 type UnitDto = {
   id: string;
@@ -20,21 +21,44 @@ type ProductDto = {
   onHandBase: number;
 };
 
+const REASON_OPTIONS: { code: InventoryDecreaseReasonCode; label: string }[] = [
+  { code: 'WASTAGE', label: 'Wastage' },
+  { code: 'EXPIRED', label: 'Expired' },
+  { code: 'DAMAGED', label: 'Damaged' },
+  { code: 'THEFT', label: 'Theft' },
+  { code: 'STOCKTAKE_SHORTFALL', label: 'Stocktake shortfall' },
+  { code: 'AUTHORISED_QUANTITY_CORRECTION', label: 'Authorised quantity correction' },
+];
+
+function newIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `adj-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function StockAdjustmentClient({
   storeId,
-  products
+  products,
+  phase1Enabled,
 }: {
   storeId: string;
   products: ProductDto[];
+  phase1Enabled: boolean;
 }) {
   const [productId, setProductId] = useState(products[0]?.id ?? '');
   const [unitId, setUnitId] = useState(products[0]?.units[0]?.id ?? '');
   const [qtyInput, setQtyInput] = useState('1');
-  const [direction, setDirection] = useState<'INCREASE' | 'DECREASE'>('DECREASE');
-  const [reason, setReason] = useState('');
+  const [reasonCode, setReasonCode] = useState<InventoryDecreaseReasonCode>('WASTAGE');
+  const [reason, setReason] = useState('Wastage');
   const [productSearch, setProductSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIdempotencyKey(newIdempotencyKey());
+  }, [productId, unitId, qtyInput, reasonCode, reason]);
 
   const selectProduct = useCallback((id: string) => {
     setProductId(id);
@@ -58,8 +82,6 @@ export default function StockAdjustmentClient({
   const unitsForProduct = selectedProduct?.units ?? [];
   const selectedUnit = unitsForProduct.find((unit) => unit.id === unitId);
   const qtyNumber = Math.max(0, Math.floor(Number(qtyInput) || 0));
-  const directionTone = direction === 'DECREASE' ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50';
-  const directionText = direction === 'DECREASE' ? 'Stock will be reduced from on-hand balance.' : 'Stock will be added back to on-hand balance.';
 
   const onHandLabel = useMemo(() => {
     if (!selectedProduct) return '';
@@ -77,14 +99,33 @@ export default function StockAdjustmentClient({
     });
   }, [selectedProduct]);
 
+  if (!phase1Enabled) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-900">
+        <div className="font-semibold">Inventory decreases are not enabled</div>
+        <p className="mt-1 text-amber-800/80">
+          Phase 1 quantity decreases are gated behind the rollout flag. Adjustments are unavailable
+          until that flag is enabled — legacy unhardened adjustments cannot be used as a bypass.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form action={createStockAdjustmentAction} className="space-y-5">
       <input type="hidden" name="storeId" value={storeId} />
       <input type="hidden" name="productId" value={productId} />
+      <input type="hidden" name="direction" value="DECREASE" />
+      <input type="hidden" name="reasonCode" value={reasonCode} />
+      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+
       <div className="rounded-2xl border border-black/5 bg-black/[0.02] p-4 sm:p-5">
         <div className="mb-4">
-          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Adjustment details</div>
-          <div className="mt-1 text-sm text-black/60">Choose the product, unit, and quantity to record stock found or stock lost.</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-black/40">Decrease details</div>
+          <div className="mt-1 text-sm text-black/60">
+            Record wastage, damage, theft, expiry, stocktake shortfall, or an authorised quantity
+            correction. Quantity increases are not available in Phase 1.
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -100,7 +141,6 @@ export default function StockAdjustmentClient({
                 setShowDropdown(true);
               }}
               onBlur={() => {
-                // Delay so click on dropdown item registers before close
                 setTimeout(() => setShowDropdown(false), 200);
               }}
               onChange={(event) => {
@@ -148,7 +188,7 @@ export default function StockAdjustmentClient({
             ) : null}
           </div>
           <div>
-            <label className="label">Quantity</label>
+            <label className="label">Quantity to remove</label>
             <input
               className="input"
               name="qtyInUnit"
@@ -167,64 +207,59 @@ export default function StockAdjustmentClient({
               </div>
             ) : null}
           </div>
-          <div>
-            <label className="label">Direction</label>
-            <select
-              className="input"
-              name="direction"
-              value={direction}
-              onChange={(event) => setDirection(event.target.value as 'INCREASE' | 'DECREASE')}
-            >
-              <option value="DECREASE">Decrease (shrinkage)</option>
-              <option value="INCREASE">Increase (found stock)</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2 xl:col-span-2">
-            <label className="label">Reason</label>
-            {direction === 'DECREASE' && (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {['Wastage', 'Expired', 'Damaged', 'Theft', 'Stocktake correction'].map((label) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setReason(label)}
-                    className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
-                      reason === label
-                        ? 'border-rose-400 bg-rose-100 text-rose-700'
-                        : 'border-black/10 bg-white text-black/60 hover:border-rose-300 hover:text-rose-600'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="sm:col-span-2 xl:col-span-3">
+            <label className="label">Reason code</label>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {REASON_OPTIONS.map((option) => (
+                <button
+                  key={option.code}
+                  type="button"
+                  onClick={() => {
+                    setReasonCode(option.code);
+                    setReason(option.label);
+                  }}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                    reasonCode === option.code
+                      ? 'border-rose-400 bg-rose-100 text-rose-700'
+                      : 'border-black/10 bg-white text-black/60 hover:border-rose-300 hover:text-rose-600'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <input
               className="input"
               name="reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder={direction === 'DECREASE' ? 'Reason (or select above)' : 'Optional reason'}
+              placeholder="Describe the loss (required)"
+              required
+              minLength={3}
             />
           </div>
         </div>
       </div>
 
-      <div className={`rounded-2xl border p-4 ${directionTone}`}>
-        <div className="text-sm font-semibold text-ink">Adjustment summary</div>
-        <div className="mt-1 text-sm text-black/65">{directionText}</div>
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+        <div className="text-sm font-semibold text-ink">Decrease summary</div>
+        <div className="mt-1 text-sm text-black/65">
+          Stock will be reduced from the on-hand balance at the locked average cost. The journal
+          debits Inventory Loss &amp; Shrinkage (5100) and credits Inventory (1200).
+        </div>
         {selectedUnit && qtyNumber > 0 ? (
           <div className="mt-3 text-sm">
-            You are about to <span className="font-semibold">{direction === 'DECREASE' ? 'remove' : 'add'}</span>{' '}
+            You are about to <span className="font-semibold">remove</span>{' '}
             <span className="font-semibold">{qtyNumber * selectedUnit.conversionToBase}</span> base units of{' '}
-            <span className="font-semibold">{selectedProduct?.name ?? 'this product'}</span>.
+            <span className="font-semibold">{selectedProduct?.name ?? 'this product'}</span>
+            {' '}({REASON_OPTIONS.find((o) => o.code === reasonCode)?.label ?? reasonCode}).
           </div>
         ) : null}
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-black/60">Record the adjustment once the details and reason look correct.</div>
-        <SubmitButton className="btn-primary" loadingText="Recording…">Record adjustment</SubmitButton>
+        <div className="text-sm text-black/60">Record the decrease once the details and reason look correct.</div>
+        <SubmitButton className="btn-primary" loadingText="Recording…">Record decrease</SubmitButton>
       </div>
     </form>
   );

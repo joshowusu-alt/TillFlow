@@ -483,6 +483,7 @@ async function main() {
     { code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' },
     { code: '4000', name: 'Sales Revenue', type: 'INCOME' },
     { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
+    { code: '5100', name: 'Inventory Loss & Shrinkage', type: 'EXPENSE' },
     { code: '6000', name: 'Operating Expenses', type: 'EXPENSE' },
     { code: '6100', name: 'Rent', type: 'EXPENSE' },
     { code: '6200', name: 'Utilities', type: 'EXPENSE' },

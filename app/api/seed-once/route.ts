@@ -172,29 +172,9 @@ export async function GET(request: Request) {
     }
     results.push('Seeded units');
 
-    // 8. Accounts (basic chart of accounts)
-    const accountData = [
-      { code: '1000', name: 'Cash', type: 'ASSET' },
-      { code: '1100', name: 'Bank', type: 'ASSET' },
-      { code: '1200', name: 'Inventory', type: 'ASSET' },
-      { code: '1300', name: 'Mobile Money', type: 'ASSET' },
-      { code: '2000', name: 'Accounts Payable', type: 'LIABILITY' },
-      { code: '3000', name: 'Owner Equity', type: 'EQUITY' },
-      { code: '4000', name: 'Sales Revenue', type: 'REVENUE' },
-      { code: '5000', name: 'Cost of Goods Sold', type: 'EXPENSE' },
-      { code: '5100', name: 'Operating Expenses', type: 'EXPENSE' },
-      { code: '5200', name: 'VAT Collected', type: 'LIABILITY' },
-    ];
-    for (const a of accountData) {
-      const existing = await prisma.account.findFirst({
-        where: { businessId: business.id, code: a.code },
-      });
-      if (!existing) {
-        await prisma.account.create({
-          data: { businessId: business.id, ...a },
-        });
-      }
-    }
+    // 8. Accounts — align with canonical CHART_OF_ACCOUNTS (lib/accounting.ts)
+    const { ensureChartOfAccounts } = await import('@/lib/accounting');
+    await ensureChartOfAccounts(business.id);
     results.push('Seeded accounts');
 
     return NextResponse.json({

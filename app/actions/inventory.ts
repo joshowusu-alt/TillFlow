@@ -1,18 +1,35 @@
 'use server';
 
-import { createStockAdjustment } from '@/lib/services/inventory';
 import { redirect } from 'next/navigation';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
-import { StockDirectionEnum } from '@/lib/validation/enums';
-import { withBusinessStoreContext, formAction, type ActionResult } from '@/lib/action-utils';
-import { audit } from '@/lib/audit';
+import { withBusinessStoreContext, formAction, UserError } from '@/lib/action-utils';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
-import { prisma } from '@/lib/prisma';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
+import {
+  createInventoryDecrease,
+  InventoryDecreaseError,
+  isInventoryDecreaseReasonCode,
+} from '@/lib/services/inventory-decrease';
 
+function mapDecreaseError(error: unknown): never {
+  if (error instanceof InventoryDecreaseError) {
+    throw new UserError(error.message);
+  }
+  throw error;
+}
+
+/**
+ * Phase 1 quantity-decrease only. Does not call legacy createStockAdjustment.
+ * Authoritative audit is written inside the decrease service transaction.
+ */
 export async function createStockAdjustmentAction(formData: FormData): Promise<void> {
   return formAction(async () => {
+    if (!isInventoryDecreasePhase1Enabled()) {
+      throw new UserError('Inventory adjustments are temporarily unavailable.');
+    }
+
     const { user, businessId, storeId: defaultStoreId } =
       await withBusinessStoreContext(['MANAGER', 'OWNER']);
 
@@ -20,32 +37,45 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     const productId = formString(formData, 'productId');
     const unitId = formString(formData, 'unitId');
     const qtyInUnit = formInt(formData, 'qtyInUnit');
-    const direction = (formString(formData, 'direction') || 'DECREASE') as 'INCREASE' | 'DECREASE';
-    const dirValidation = StockDirectionEnum.safeParse(direction);
-    if (!dirValidation.success) {
-      redirect('/inventory?error=invalid-direction');
-    }
-    const reason = formString(formData, 'reason') || null;
+    const direction = (formString(formData, 'direction') || 'DECREASE').toUpperCase();
+    const reasonCodeRaw = formString(formData, 'reasonCode');
+    const reason = formString(formData, 'reason') || '';
+    const idempotencyKey = formString(formData, 'idempotencyKey');
 
-    const adjustment = await createStockAdjustment({
-      businessId,
-      storeId,
-      productId,
-      unitId,
-      qtyInUnit,
-      direction,
-      reason,
-      userId: user.id
-    });
+    if (direction !== 'DECREASE') {
+      throw new UserError('Only quantity decreases are supported.');
+    }
+    if (!isInventoryDecreaseReasonCode(reasonCodeRaw)) {
+      throw new UserError('Select a valid adjustment reason code.');
+    }
+    if (!idempotencyKey) {
+      throw new UserError('Missing idempotency key. Refresh and try again.');
+    }
+
+    let adjustment;
+    try {
+      adjustment = await createInventoryDecrease({
+        businessId,
+        storeId,
+        productId,
+        unitId,
+        qtyInUnit,
+        reasonCode: reasonCodeRaw,
+        reason,
+        idempotencyKey,
+        userId: user.id,
+        userName: user.name ?? 'Unknown',
+        userRole: user.role,
+      });
+    } catch (error) {
+      mapDecreaseError(error);
+    }
 
     void checkAndSendLowStockAlert({
       businessId,
       storeId,
       productIds: [adjustment.productId],
     }).catch(() => {});
-
-    // Fire-and-forget: don't block the user on audit logging
-    audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'INVENTORY_ADJUST', entity: 'Product', entityId: productId, details: { direction, qtyInUnit, unitId, reason } }).catch(() => {});
 
     revalidateTag('pos-products');
     revalidateTag('reports');
@@ -54,107 +84,18 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     revalidateImproveRecordsHome();
 
     redirect('/inventory/adjustments');
-  }, '/inventory');
+  }, '/inventory/adjustments');
 }
 
-export async function reverseStockAdjustmentAction(formData: FormData): Promise<void> {
+/**
+ * Automated reversal is unavailable in Phase 1 (increases deferred; payload-safe
+ * compensating entries are a later design).
+ */
+export async function reverseStockAdjustmentAction(_formData: FormData): Promise<void> {
   return formAction(async () => {
-    const { user, businessId } = await withBusinessStoreContext(['OWNER']);
-
-    const adjustmentId = formString(formData, 'adjustmentId');
-    const ownerReason = formString(formData, 'reason') || null;
-    if (!adjustmentId) {
-      redirect('/inventory/adjustments?error=missing-adjustment');
-    }
-
-    const adjustment = await prisma.stockAdjustment.findFirst({
-      where: {
-        id: adjustmentId,
-        store: { businessId },
-      },
-      select: {
-        id: true,
-        storeId: true,
-        productId: true,
-        unitId: true,
-        qtyInUnit: true,
-        qtyBase: true,
-        direction: true,
-        reason: true,
-        product: { select: { name: true } },
-      },
-    });
-
-    if (!adjustment) {
-      redirect('/inventory/adjustments?error=adjustment-not-found');
-    }
-
-    const existingReversal = await prisma.stockAdjustment.findFirst({
-      where: {
-        storeId: adjustment.storeId,
-        productId: adjustment.productId,
-        reason: { contains: `Reversal of adjustment ${adjustment.id}` },
-      },
-      select: { id: true },
-    });
-
-    if (existingReversal) {
-      redirect('/inventory/adjustments?error=already-reversed');
-    }
-
-    const wasIncrease = adjustment.direction === 'INCREASE' || adjustment.direction === 'IN';
-    const reverseDirection = wasIncrease ? 'DECREASE' : 'INCREASE';
-    const reason = [
-      `Reversal of adjustment ${adjustment.id}`,
-      ownerReason ? ownerReason : null,
-      adjustment.reason ? `Original reason: ${adjustment.reason}` : null,
-    ].filter(Boolean).join(' | ');
-
-    const reversal = await createStockAdjustment({
-      businessId,
-      storeId: adjustment.storeId,
-      productId: adjustment.productId,
-      unitId: adjustment.unitId,
-      qtyInUnit: adjustment.qtyInUnit,
-      direction: reverseDirection,
-      reason,
-      userId: user.id,
-    });
-
-    void checkAndSendLowStockAlert({
-      businessId,
-      storeId: adjustment.storeId,
-      productIds: [adjustment.productId],
-    }).catch(() => {});
-
-    audit({
-      businessId,
-      userId: user.id,
-      userName: user.name,
-      userRole: user.role,
-      action: 'INVENTORY_ADJUST',
-      entity: 'StockAdjustment',
-      entityId: adjustment.id,
-      details: {
-        correctionType: 'REVERSAL',
-        productId: adjustment.productId,
-        productName: adjustment.product.name,
-        originalDirection: adjustment.direction,
-        originalQtyBase: adjustment.qtyBase,
-        reversalAdjustmentId: reversal.id,
-        reversalDirection: reverseDirection,
-        reason: ownerReason,
-      },
-    }).catch(() => {});
-
-    revalidateTag('pos-products');
-    revalidateTag('reports');
-    revalidateOwnerDashboardCache();
-    revalidatePath('/inventory');
-    revalidatePath('/inventory/adjustments');
-    const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
-    revalidateImproveRecordsHome();
-
-    redirect('/inventory/adjustments?reversed=1');
+    await withBusinessStoreContext(['OWNER']);
+    throw new UserError(
+      'Automated adjustment reversal is unavailable. Phase 1 supports decreases only.',
+    );
   }, '/inventory/adjustments');
 }

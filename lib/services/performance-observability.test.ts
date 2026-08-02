@@ -194,7 +194,7 @@ describe('Phase C3: performance observability baseline', () => {
       read('lib/services/payments.ts'),
       read('lib/services/purchases.ts'),
       read('lib/services/expenses.ts'),
-      read('lib/services/inventory.ts'),
+      read('lib/services/inventory-decrease.ts'),
       read('lib/services/shifts.ts'),
       read('lib/services/returns.ts'),
       read('lib/services/mobile-money.ts'),

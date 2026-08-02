@@ -16,6 +16,8 @@ export const ACCOUNT_CODES = {
   openingBalanceEquity: '3200',
   sales: '4000',
   cogs: '5000',
+  /** Inventory write-offs / shrinkage (Phase 1 decreases). Not interchangeable with COGS. */
+  inventoryLoss: '5100',
   operatingExpenses: '6000'
 };
 
@@ -30,9 +32,10 @@ export const CHART_OF_ACCOUNTS = [
   { code: '2100', name: 'VAT Payable',            type: 'LIABILITY' as const },
   { code: '3000', name: 'Retained Earnings',      type: 'EQUITY' as const },
   { code: '3200', name: 'Opening Balance Equity', type: 'EQUITY' as const },
-  { code: '4000', name: 'Sales Revenue',          type: 'INCOME' as const },
-  { code: '5000', name: 'Cost of Goods Sold',     type: 'EXPENSE' as const },
-  { code: '6000', name: 'Operating Expenses',     type: 'EXPENSE' as const },
+  { code: '4000', name: 'Sales Revenue',              type: 'INCOME' as const },
+  { code: '5000', name: 'Cost of Goods Sold',         type: 'EXPENSE' as const },
+  { code: '5100', name: 'Inventory Loss & Shrinkage', type: 'EXPENSE' as const },
+  { code: '6000', name: 'Operating Expenses',         type: 'EXPENSE' as const },
   { code: '6100', name: 'Rent',                   type: 'EXPENSE' as const },
   { code: '6200', name: 'Utilities',              type: 'EXPENSE' as const },
   { code: '6300', name: 'Salaries',               type: 'EXPENSE' as const },

@@ -96,6 +96,8 @@ describe('Reorder Suggestions clarity pass', () => {
     expect(reorderAction).toContain("revalidatePath('/reports/reorder-suggestions')");
     expect(purchases).toContain("stockMovementType?: 'OPENING' | 'PURCHASE'");
     expect(products).toContain('preferredSupplierId?: string | null');
-    expect(inventory).toContain("type: 'ADJUSTMENT'");
+    // Phase 1: legacy createStockAdjustment is disabled; ADJUSTMENT posts live in inventory-decrease.
+    expect(inventory).toContain('Legacy unhardened stock adjustment — permanently disabled');
+    expect(readSource('lib/services/inventory-decrease.ts')).toContain("type: 'ADJUSTMENT'");
   });
 });
