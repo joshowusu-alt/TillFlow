@@ -139,7 +139,7 @@ async function run() {
     const [owner, cashier, customer, mainStore] = await Promise.all([
       prisma.user.findFirst({
         where: { businessId: business.id, role: 'OWNER', active: true },
-        select: { id: true },
+        select: { id: true, name: true, role: true },
       }),
       prisma.user.findFirst({
         where: { businessId: business.id, role: 'CASHIER', active: true },

@@ -105,7 +105,9 @@ describe('Stock Movements clarity and mobile polish', () => {
     const transfers = readSource('lib/services/stock-transfers.ts');
     const exports = readSource('lib/exports/csv-writers.ts');
 
-    expect(inventory).toContain("type: 'ADJUSTMENT'");
+    // Phase 1: legacy createStockAdjustment is disabled; ADJUSTMENT posts live in inventory-decrease.
+    expect(inventory).toContain('Legacy unhardened stock adjustment — permanently disabled');
+    expect(readSource('lib/services/inventory-decrease.ts')).toContain("type: 'ADJUSTMENT'");
     expect(sales).toContain("type: 'SALE' as const");
     expect(purchases).toContain("stockMovementType?: 'OPENING' | 'PURCHASE'");
     expect(returns).toContain("type: 'PURCHASE_RETURN'");

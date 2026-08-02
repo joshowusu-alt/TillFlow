@@ -303,6 +303,14 @@ async function createInventoryDecreaseImpl(
     );
   }
 
+  const userRole = typeof input.userRole === 'string' ? input.userRole.trim() : '';
+  if (!userRole) {
+    throw new InventoryDecreaseError(
+      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+      'Actor role is required for authoritative audit',
+    );
+  }
+
   const client = outerTx ?? prisma;
 
   const [store, productUnit] = await Promise.all([
@@ -467,7 +475,7 @@ async function createInventoryDecreaseImpl(
           businessId: input.businessId,
           userId: input.userId,
           userName: input.userName || 'Unknown',
-          userRole: input.userRole,
+          userRole,
           action: 'INVENTORY_ADJUST',
           entity: 'StockAdjustment',
           entityId: created.id,

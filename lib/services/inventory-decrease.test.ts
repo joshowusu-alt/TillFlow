@@ -169,6 +169,18 @@ describe('createInventoryDecrease', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
+  it('rejects missing userRole before any writes', async () => {
+    await expect(
+      createInventoryDecrease(baseInput({ userRole: '   ' })),
+    ).rejects.toMatchObject({
+      code: INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+      message: expect.stringMatching(/role/i),
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('posts a decrease with Dr 5100 / Cr 1200 and in-tx audit', async () => {
     const result = await createInventoryDecrease(baseInput({ reasonCode: 'EXPIRED' }));
 
