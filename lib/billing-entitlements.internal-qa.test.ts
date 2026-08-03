@@ -35,6 +35,8 @@ describe('internal QA billing access entitlement', () => {
     expect(qa.canWrite).toBe(true);
     expect(qa.isReadOnly).toBe(false);
     expect(qa.nextPaymentDueAt?.toISOString()).toBe('2026-08-01T19:54:03.773Z');
+    expect(qa.primaryBanner).toBe('Access restricted until payment is confirmed.');
+    expect(qa.merchantMessage).toBe('Access restricted until payment is confirmed.');
   });
 
   it('keeps overdue genuine customers restricted', () => {
