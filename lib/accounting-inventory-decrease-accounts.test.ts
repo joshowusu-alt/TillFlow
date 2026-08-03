@@ -1,13 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ACCOUNT_CODES, CHART_OF_ACCOUNTS } from '@/lib/accounting';
 import { INVENTORY_LOSS_5100_NAME } from '@/lib/accounting-inventory-loss-5100';
-import {
+
+const { isPostgresRuntimeEnvMock } = vi.hoisted(() => ({
+  isPostgresRuntimeEnvMock: vi.fn(() => false),
+}));
+
+vi.mock('@/lib/database-runtime', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/database-runtime')>(
+    '@/lib/database-runtime',
+  );
+  return {
+    ...actual,
+    isPostgresRuntimeEnv: isPostgresRuntimeEnvMock,
+  };
+});
+
+const {
   INVENTORY_DECREASE_REQUIRED_ACCOUNTS,
   assertInventoryDecreaseAccountCompatible,
   ensureInventoryDecreaseAccounts,
-} from './accounting-inventory-decrease-accounts';
+} = await import('./accounting-inventory-decrease-accounts');
 
 describe('inventory-decrease account contract', () => {
   it('requires exactly 1200 Inventory ASSET and 5100 Inventory Loss EXPENSE', () => {
@@ -92,16 +107,7 @@ describe('ensureInventoryDecreaseAccounts', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.POSTGRES_PRISMA_URL;
-    delete process.env.POSTGRES_URL;
-    delete process.env.POSTGRES_URL_NON_POOLING;
-    process.env.DATABASE_URL = 'file:./dev.db';
-  });
-
-  afterEach(() => {
-    delete process.env.POSTGRES_PRISMA_URL;
-    delete process.env.POSTGRES_URL;
-    delete process.env.POSTGRES_URL_NON_POOLING;
+    isPostgresRuntimeEnvMock.mockReturnValue(false);
   });
 
   it('empty COA: upserts exactly 1200 and 5100 (sqlite path) and creates no unrelated codes', async () => {
@@ -158,9 +164,8 @@ describe('ensureInventoryDecreaseAccounts', () => {
     expect(client.account.upsert.mock.calls[0][0].create.code).toBe('1200');
   });
 
-  it('postgres path: single INSERT for missing accounts when POSTGRES_* is set without DATABASE_URL', async () => {
-    delete process.env.DATABASE_URL;
-    process.env.POSTGRES_PRISMA_URL = 'postgresql://neondb_owner:x@ep-x/neondb';
+  it('postgres path: single INSERT for missing accounts when Postgres runtime is detected', async () => {
+    isPostgresRuntimeEnvMock.mockReturnValue(true);
     client.account.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([approved1200, approved5100]);
@@ -173,9 +178,7 @@ describe('ensureInventoryDecreaseAccounts', () => {
   });
 
   it('concurrent creators: ON CONFLICT then re-read returns stable IDs without duplicate create side effects', async () => {
-    delete process.env.DATABASE_URL;
-    process.env.POSTGRES_PRISMA_URL = 'postgresql://neondb_owner:x@ep-x/neondb';
-    // First finder sees empty; insert conflicts (0 rows); re-read sees winner rows.
+    isPostgresRuntimeEnvMock.mockReturnValue(true);
     client.account.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([approved1200, approved5100]);
