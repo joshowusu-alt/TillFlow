@@ -317,6 +317,7 @@ const _getBusiness = cache(async (businessId: string) => {
     billingAccessState: entitlement.accessState,
     billingCanWrite: entitlement.canWrite,
     billingReadOnly: entitlement.isReadOnly,
+    billingInternalQaAccess: entitlement.internalQaAccess,
     billingDisplayStatus: entitlement.displayStatus,
     billingDaysRemaining: entitlement.daysRemaining,
     billingIsTrial: entitlement.isTrial,
