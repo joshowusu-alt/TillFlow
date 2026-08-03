@@ -1,4 +1,5 @@
 import { getBusinessPlan, type BusinessMode, type BusinessPlan, type StoreMode } from './features';
+import { isInternalQaBusinessId } from './internal-qa-access';
 import {
   computeBillingAccessState,
   getSubscriptionSnapshot,
@@ -7,6 +8,7 @@ import {
 } from './subscription-lifecycle';
 
 type BillingBusinessInput = SubscriptionInput & {
+  id?: string | null;
   plan?: BusinessPlan | null;
   mode?: BusinessMode | null;
   storeMode?: StoreMode | null;
@@ -20,6 +22,8 @@ export type BillingEntitlement = {
   accessState: BillingAccessState;
   canWrite: boolean;
   isReadOnly: boolean;
+  /** True when an exact allowlisted internal-QA business ID bypasses write restriction. */
+  internalQaAccess: boolean;
   statusLabel: string;
   displayStatus: string;
   daysRemaining: number | null;
@@ -53,7 +57,10 @@ export function getBillingEntitlement(input: BillingBusinessInput, now = new Dat
   const computation = computeBillingAccessState({ ...input, selectedPlan: purchasedPlan }, now);
   const snapshot = getSubscriptionSnapshot({ ...input, selectedPlan: purchasedPlan }, now);
   const accessState = computation.accessState;
-  const isReadOnly = computation.isRestricted;
+  const internalQaAccess = isInternalQaBusinessId(input.id);
+  // Preserve truthful billing accessState / dates for reporting. Only lift the
+  // operational write gate for exact allowlisted internal-QA business IDs.
+  const isReadOnly = internalQaAccess ? false : computation.isRestricted;
 
   return {
     purchasedPlan,
@@ -62,6 +69,7 @@ export function getBillingEntitlement(input: BillingBusinessInput, now = new Dat
     accessState,
     canWrite: !isReadOnly,
     isReadOnly,
+    internalQaAccess,
     statusLabel: labelFor(accessState),
     displayStatus: computation.displayStatus,
     daysRemaining: computation.daysRemaining,

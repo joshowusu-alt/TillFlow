@@ -121,8 +121,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const billingNextActionHref = String((business as any).billingNextActionHref ?? '/settings/billing');
   const billingControlMessage = String((business as any).billingControlMessage ?? 'Billing access is being evaluated.');
   const billingMerchantMessage = String((business as any).billingMerchantMessage ?? getMerchantSubscriptionMessage(business as any));
+  const billingInternalQaAccess = Boolean((business as any).billingInternalQaAccess);
   const shouldRestrictPage =
     RESTRICTED_BILLING_STATES.has(billingAccessState) &&
+    !billingInternalQaAccess &&
     !isAllowedWhenBillingRestricted(pathname);
 
   return (
