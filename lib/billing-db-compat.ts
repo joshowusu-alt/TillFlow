@@ -94,7 +94,13 @@ const COMMERCIAL_LEGACY_SELECT = {
   storeMode: true,
 } as const;
 
-const COMMERCIAL_BILLING_SELECT = {
+/**
+ * Commercial billing snapshot used by write-gate and plan checks.
+ * `id` is required so getBillingEntitlement can apply the exact-ID
+ * internal-QA allowlist (and any future tenant-scoped entitlement rules).
+ */
+export const COMMERCIAL_BILLING_SELECT = {
+  id: true,
   ...COMMERCIAL_LEGACY_SELECT,
   plan: true,
   planStatus: true,

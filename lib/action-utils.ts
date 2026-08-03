@@ -77,7 +77,12 @@ type BusinessContextOptions = {
   requireWrite?: boolean;
 };
 
-async function assertBusinessWriteAllowed(businessId: string) {
+/**
+ * Server-action write gate. Uses the commercial billing snapshot (including
+ * business id) so exact-ID internal-QA entitlements apply consistently with
+ * the authenticated layout path.
+ */
+export async function assertBusinessWriteAllowed(businessId: string) {
   const { business } = await findBusinessCommercialSnapshot(businessId);
 
   if (!business) redirect('/settings');

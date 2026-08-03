@@ -31,6 +31,13 @@ describe('inventory decrease Phase 1 actions', () => {
     expect(legacyService).not.toContain('postJournalEntry');
   });
 
+  it('create action restricts adjustments to Owner/Manager and excludes Cashier', () => {
+    expect(inventoryAction).toContain("withBusinessStoreContext(['MANAGER', 'OWNER'])");
+    expect(inventoryAction).not.toMatch(
+      /withBusinessStoreContext\(\s*\[[^\]]*['"]CASHIER['"]/,
+    );
+  });
+
   it('stocktake posts shortfalls via Phase 1 and marks surplus pending review', () => {
     expect(stocktakeAction).toContain('createInventoryDecrease');
     expect(stocktakeAction).toContain('STOCKTAKE_SHORTFALL');
