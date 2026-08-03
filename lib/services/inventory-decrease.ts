@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
+import { ensureInventoryDecreaseAccounts } from '@/lib/accounting-inventory-decrease-accounts';
 import { assertAccount5100SafeForInventoryLoss } from '@/lib/accounting-inventory-loss-5100';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
@@ -439,7 +440,11 @@ async function createInventoryDecreaseImpl(
     });
 
     try {
+      // Narrow account resolution only (1200 + 5100). Do not seed the full COA
+      // inside this interactive transaction — empty tenants previously timed out
+      // after ~19 sequential upserts against the default 5s budget.
       await assertAccount5100SafeForInventoryLoss(tx, input.businessId);
+      const accountMap = await ensureInventoryDecreaseAccounts(input.businessId, tx);
       await postJournalEntry({
         businessId: input.businessId,
         description: `Inventory decrease ${created.id}`,
@@ -450,13 +455,16 @@ async function createInventoryDecreaseImpl(
           { accountCode: ACCOUNT_CODES.inventory, creditPence: valuePence },
         ],
         prismaClient: tx as any,
+        accountMap,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Journal posting failed';
       if (
         message.includes('Account not found') ||
         message.includes('Account 5100') ||
-        message.includes('Inventory Loss')
+        message.includes('Account 1200') ||
+        message.includes('Inventory Loss') ||
+        message.includes('incorrectly configured')
       ) {
         throw new InventoryDecreaseError(
           INVENTORY_DECREASE_ERROR.ACCOUNT_MAPPING_UNAVAILABLE,

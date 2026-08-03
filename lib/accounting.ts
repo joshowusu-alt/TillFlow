@@ -1,7 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { PrismaClient } from '@prisma/client';
-import { isPostgresDatabaseUrl, isSqliteDatabaseUrl } from '@/lib/database-runtime';
+import {
+  isPostgresDatabaseUrl,
+  isPostgresRuntimeEnv,
+  isSqliteDatabaseUrl,
+} from '@/lib/database-runtime';
 
 export const ACCOUNT_CODES = {
   cash: '1000',
@@ -51,7 +55,10 @@ function isSqliteRuntime() {
 }
 
 function isPostgresRuntime() {
-  return isPostgresDatabaseUrl(process.env.DATABASE_URL);
+  // Production Vercel often exposes POSTGRES_PRISMA_URL / POSTGRES_URL without
+  // DATABASE_URL. Checking only DATABASE_URL incorrectly selected the sequential
+  // upsert path and timed out inventory-decrease interactive transactions.
+  return isPostgresRuntimeEnv(process.env) || isPostgresDatabaseUrl(process.env.DATABASE_URL);
 }
 
 /**

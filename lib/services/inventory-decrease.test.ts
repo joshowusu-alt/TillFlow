@@ -13,6 +13,7 @@ import {
 const {
   prismaMock,
   postJournalEntryMock,
+  ensureInventoryDecreaseAccountsMock,
   decrementInventoryBalanceMock,
   isPhase1EnabledMock,
   detectInventoryAdjustmentRiskMock,
@@ -29,6 +30,7 @@ const {
     $queryRaw: vi.fn(),
   },
   postJournalEntryMock: vi.fn(),
+  ensureInventoryDecreaseAccountsMock: vi.fn(),
   decrementInventoryBalanceMock: vi.fn(),
   isPhase1EnabledMock: vi.fn(() => true),
   detectInventoryAdjustmentRiskMock: vi.fn().mockResolvedValue(undefined),
@@ -45,6 +47,9 @@ vi.mock('@/lib/accounting', async () => {
     postJournalEntry: postJournalEntryMock,
   };
 });
+vi.mock('@/lib/accounting-inventory-decrease-accounts', () => ({
+  ensureInventoryDecreaseAccounts: ensureInventoryDecreaseAccountsMock,
+}));
 vi.mock('@/lib/accounting-inventory-loss-5100', () => ({
   assertAccount5100SafeForInventoryLoss: vi.fn().mockResolvedValue(undefined),
 }));
@@ -155,6 +160,12 @@ describe('createInventoryDecrease', () => {
     prismaMock.business.findUnique.mockResolvedValue({ inventoryAdjustmentRiskThresholdBase: 50 });
     decrementInventoryBalanceMock.mockResolvedValue(8);
     postJournalEntryMock.mockResolvedValue({ id: 'je-1' });
+    ensureInventoryDecreaseAccountsMock.mockResolvedValue(
+      new Map([
+        [ACCOUNT_CODES.inventory, 'acc-1200'],
+        [ACCOUNT_CODES.inventoryLoss, 'acc-5100'],
+      ]),
+    );
 
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
       fn(prismaMock),
@@ -193,8 +204,10 @@ describe('createInventoryDecrease', () => {
           { accountCode: ACCOUNT_CODES.inventoryLoss, debitPence: 200 },
           { accountCode: ACCOUNT_CODES.inventory, creditPence: 200 },
         ],
+        accountMap: expect.any(Map),
       }),
     );
+    expect(ensureInventoryDecreaseAccountsMock).toHaveBeenCalledWith(BIZ, prismaMock);
     expect(ACCOUNT_CODES.inventoryLoss).toBe('5100');
     expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -241,6 +254,12 @@ describe('createInventoryDecrease', () => {
       prismaMock.auditLog.create.mockResolvedValue({});
       decrementInventoryBalanceMock.mockResolvedValue(8);
       postJournalEntryMock.mockResolvedValue({});
+      ensureInventoryDecreaseAccountsMock.mockResolvedValue(
+        new Map([
+          [ACCOUNT_CODES.inventory, 'acc-1200'],
+          [ACCOUNT_CODES.inventoryLoss, 'acc-5100'],
+        ]),
+      );
       prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) =>
         fn(prismaMock),
       );
@@ -267,6 +286,8 @@ describe('createInventoryDecrease', () => {
     await expect(createInventoryDecrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_DECREASE_ERROR.INSUFFICIENT_QUANTITY,
     });
+    expect(ensureInventoryDecreaseAccountsMock).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
   });
 
   it('rejects zero avgCostBasePence as MISSING_VALUATION without writes', async () => {
@@ -278,6 +299,7 @@ describe('createInventoryDecrease', () => {
       code: INVENTORY_DECREASE_ERROR.MISSING_VALUATION,
     });
     expect(prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(ensureInventoryDecreaseAccountsMock).not.toHaveBeenCalled();
     expect(postJournalEntryMock).not.toHaveBeenCalled();
     expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
   });
@@ -366,6 +388,18 @@ describe('createInventoryDecrease', () => {
     await expect(createInventoryDecrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_DECREASE_ERROR.ACCOUNT_MAPPING_UNAVAILABLE,
     });
+  });
+
+  it('maps incompatible account resolution to ACCOUNT_MAPPING_UNAVAILABLE without journal', async () => {
+    ensureInventoryDecreaseAccountsMock.mockRejectedValueOnce(
+      new Error(
+        'Account 1200 is configured as "Merchandise" (ASSET) but inventory decrease requires "Inventory" (ASSET). Refusing to post to an incorrectly configured account.',
+      ),
+    );
+    await expect(createInventoryDecrease(baseInput())).rejects.toMatchObject({
+      code: INVENTORY_DECREASE_ERROR.ACCOUNT_MAPPING_UNAVAILABLE,
+    });
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
   });
 
   it('fails the transaction when audit insert fails', async () => {
