@@ -1,7 +1,8 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { getBillingEntitlement } from '@/lib/billing-entitlements';
+import { BUILTIN_INTERNAL_QA_BUSINESS_IDS } from '@/lib/internal-qa-access';
 
-const QA_ID = 'cmr2h7pna55f22d2288316407';
+const QA_ID = BUILTIN_INTERNAL_QA_BUSINESS_IDS[0];
 const CUSTOMER_ID = 'cmcustomer000000000000001';
 
 function overduePaidInput(id: string) {
@@ -24,8 +25,8 @@ describe('internal QA billing access entitlement', () => {
     else process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS = previous;
   });
 
-  it('lifts write restriction only for exact allowlisted business IDs', () => {
-    process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS = QA_ID;
+  it('lifts write restriction for built-in TillFlow QA Demo without env', () => {
+    delete process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS;
     const now = new Date('2026-08-03T12:00:00.000Z');
 
     const qa = getBillingEntitlement(overduePaidInput(QA_ID), now);
@@ -34,6 +35,11 @@ describe('internal QA billing access entitlement', () => {
     expect(qa.canWrite).toBe(true);
     expect(qa.isReadOnly).toBe(false);
     expect(qa.nextPaymentDueAt?.toISOString()).toBe('2026-08-01T19:54:03.773Z');
+  });
+
+  it('keeps overdue genuine customers restricted', () => {
+    delete process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS;
+    const now = new Date('2026-08-03T12:00:00.000Z');
 
     const customer = getBillingEntitlement(overduePaidInput(CUSTOMER_ID), now);
     expect(customer.accessState).toBe('PAYMENT_RESTRICTED');
@@ -42,19 +48,19 @@ describe('internal QA billing access entitlement', () => {
     expect(customer.isReadOnly).toBe(true);
   });
 
-  it('does not unlock overdue customers when allowlist is empty', () => {
-    delete process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS;
-    const now = new Date('2026-08-03T12:00:00.000Z');
-    const qa = getBillingEntitlement(overduePaidInput(QA_ID), now);
-    expect(qa.internalQaAccess).toBe(false);
-    expect(qa.canWrite).toBe(false);
-  });
-
   it('does not unlock from isDemo-like naming alone (ID must match)', () => {
-    process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS = QA_ID;
+    delete process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS;
     const now = new Date('2026-08-03T12:00:00.000Z');
     const otherDemo = getBillingEntitlement(overduePaidInput('cmmm6apt40000t9bepahhkehw'), now);
     expect(otherDemo.internalQaAccess).toBe(false);
     expect(otherDemo.canWrite).toBe(false);
+  });
+
+  it('env allowlist can add additional exact business IDs', () => {
+    const extra = 'cmextraqa0000000000000001';
+    process.env.TILLFLOW_INTERNAL_QA_BUSINESS_IDS = extra;
+    const now = new Date('2026-08-03T12:00:00.000Z');
+    expect(getBillingEntitlement(overduePaidInput(extra), now).internalQaAccess).toBe(true);
+    expect(getBillingEntitlement(overduePaidInput(CUSTOMER_ID), now).internalQaAccess).toBe(false);
   });
 });
