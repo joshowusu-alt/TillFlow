@@ -100,8 +100,8 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
   });
 
   it('stock, shift, return, product, and mobile money writes revalidate owner dashboard', () => {
-    // Phase 1: create path revalidates; reverse path is blocked and does not write/revalidate.
-    expect(inventoryActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(1);
+    // Phase 1 decrease + Phase 2 increase create paths revalidate; reverse stays blocked.
+    expect(inventoryActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(2);
     expect(shiftActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(returnActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)).toHaveLength(2);
     expect(productActionsSrc.match(/revalidateOwnerDashboardCache\(\);/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
