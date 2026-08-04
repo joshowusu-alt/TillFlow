@@ -10,7 +10,8 @@ export default defineConfig({
         setupFiles: ['./vitest.setup.ts'],
         include: ['**/*.test.{ts,tsx}'],
         exclude: ['**/node_modules/**', '.next', 'tishgroup-control/**'],
-        pool: 'threads',
+        // forks: avoid Prisma N-API "failed to delete napi ref" teardown under threads (CI exit 134)
+        pool: 'forks',
         fileParallelism: false,
         maxWorkers: 1,
         isolate: true,
