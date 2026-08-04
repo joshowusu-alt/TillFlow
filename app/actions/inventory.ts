@@ -7,7 +7,7 @@ import { withBusinessStoreContext, formAction, UserError } from '@/lib/action-ut
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
-import { isInventoryIncreasePhase2Enabled } from '@/lib/inventory-increase-flag';
+import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import {
   createInventoryDecrease,
   InventoryDecreaseError,
@@ -104,7 +104,9 @@ export async function createStockAdjustmentAction(formData: FormData): Promise<v
     }
 
     if (direction === 'INCREASE') {
-      if (!isInventoryIncreasePhase2Enabled()) {
+      // Server-authoritative scoped gate (global flag + exact business allowlist).
+      // UI visibility is not the enforcement boundary.
+      if (!isInventoryIncreasePhase2EnabledForBusiness(businessId)) {
         throw new UserError('Inventory increases are temporarily unavailable.');
       }
       if (!isInventoryIncreaseReasonCode(reasonCodeRaw)) {

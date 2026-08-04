@@ -21,9 +21,24 @@ describe('inventory increase Phase 2 actions and UI contracts', () => {
   it('create action supports Phase 2 increase and Phase 1 decrease', () => {
     expect(inventoryAction).toContain('createInventoryIncrease');
     expect(inventoryAction).toContain('createInventoryDecrease');
-    expect(inventoryAction).toContain('isInventoryIncreasePhase2Enabled');
+    expect(inventoryAction).toContain('isInventoryIncreasePhase2EnabledForBusiness');
     expect(inventoryAction).toContain('isInventoryDecreasePhase1Enabled');
     expect(inventoryAction).not.toContain("from '@/lib/services/inventory'");
+  });
+
+  it('Phase 2 action and page use business-scoped eligibility (not global-only)', () => {
+    expect(inventoryAction).toContain(
+      'isInventoryIncreasePhase2EnabledForBusiness(businessId)',
+    );
+    expect(pageSrc).toContain(
+      'isInventoryIncreasePhase2EnabledForBusiness(business.id)',
+    );
+    expect(inventoryAction).not.toMatch(
+      /if\s*\(\s*!isInventoryIncreasePhase2Enabled\(\s*\)\s*\)/,
+    );
+    expect(pageSrc).not.toMatch(
+      /phase2Enabled\s*=\s*isInventoryIncreasePhase2Enabled\(\s*\)/,
+    );
   });
 
   it('restricts adjustments to Owner/Manager and excludes Cashier', () => {
