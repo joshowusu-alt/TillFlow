@@ -19,6 +19,7 @@ export {
   decrementInventoryBalance,
   batchDecrementInventoryBalance,
   incrementInventoryBalance,
+  incrementInventoryBalanceQtyOnly,
   buildQtyByProductMap
 } from './inventory-utils';
 

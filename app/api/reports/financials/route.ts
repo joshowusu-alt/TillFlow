@@ -39,6 +39,7 @@ export async function GET(request: Request) {
       ['Revenue', formatMoney(data.revenue, currency)],
       ['Cost of Goods Sold', formatMoney(data.cogs, currency)],
       ['Gross Profit', formatMoney(data.grossProfit, currency)],
+      ['Other Operating Income', formatMoney(data.otherOperatingIncome, currency)],
       ['Operating Expenses', formatMoney(data.otherExpenses, currency)],
       ['Net Profit', formatMoney(data.netProfit, currency)],
     ];

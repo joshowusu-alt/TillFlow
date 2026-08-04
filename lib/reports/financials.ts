@@ -73,14 +73,20 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
 
   // Other expenses from journals (excluding COGS which is derived above)
   let otherExpenses = 0;
+  // Non-sales journal INCOME (e.g. 4100 Inventory Gain) — other operating income.
+  // Must never be rolled into sale-line Revenue / Gross Profit.
+  let otherOperatingIncome = 0;
   for (const g of grouped) {
     const account = accountMap.get(g.accountId);
     if (!account) continue;
     const accountType = account.type as AccountType;
+    const debit = g._sum.debitPence ?? 0;
+    const credit = g._sum.creditPence ?? 0;
     if (accountType === 'EXPENSE' && account.code !== ACCOUNT_CODES.cogs) {
-      const debit = g._sum.debitPence ?? 0;
-      const credit = g._sum.creditPence ?? 0;
       otherExpenses += applyBalance(accountType, debit, credit);
+    }
+    if (accountType === 'INCOME' && account.code !== ACCOUNT_CODES.sales) {
+      otherOperatingIncome += applyBalance(accountType, debit, credit);
     }
   }
 
@@ -92,8 +98,9 @@ async function _getIncomeStatement(businessId: string, startIso: string, endIso:
     revenue,
     cogs,
     otherExpenses,
+    otherOperatingIncome,
     grossProfit,
-    netProfit: grossProfit - otherExpenses,
+    netProfit: grossProfit - otherExpenses + otherOperatingIncome,
     stockValueIncomplete: incomplete.stockValueIncomplete,
     profitMayBeIncomplete: incomplete.profitMayBeIncomplete,
     incompleteStockMessage: incompleteStockDisclosureMessage(incomplete),

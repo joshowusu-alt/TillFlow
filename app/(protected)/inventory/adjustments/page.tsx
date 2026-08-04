@@ -3,8 +3,9 @@ import Pagination from '@/components/Pagination';
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatMoney } from '@/lib/format';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
+import { isInventoryIncreasePhase2Enabled } from '@/lib/inventory-increase-flag';
 import StockAdjustmentClient from '../StockAdjustmentClient';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +25,7 @@ function AdjustmentsEmptyState({ q }: { q?: string }) {
       <div className="mt-1 text-sm text-black/55">
         {q
           ? 'Try a different search term.'
-          : 'When stock needs correcting, record a decrease so TillFlow keeps a clear audit trail.'}
+          : 'Record a decrease for confirmed loss, or a controlled increase for physical-count surplus / found stock. Posted adjustments are immutable — never correct a decrease with another decrease.'}
       </div>
     </div>
   );
@@ -33,17 +34,31 @@ function AdjustmentsEmptyState({ q }: { q?: string }) {
 export default async function StockAdjustmentsPage({
   searchParams,
 }: {
-  searchParams?: { page?: string; reversed?: string; error?: string };
+  searchParams?: {
+    page?: string;
+    reversed?: string;
+    error?: string;
+    posted?: string;
+    direction?: string;
+    ref?: string;
+    prev?: string;
+    added?: string;
+    newQty?: string;
+    value?: string;
+    cost?: string;
+    replayed?: string;
+  };
 }) {
-  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  const { user, business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) {
     return <div className="card p-6">Seed data missing.</div>;
   }
 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const phase1Enabled = isInventoryDecreasePhase1Enabled();
+  const phase2Enabled = isInventoryIncreasePhase2Enabled();
 
-  const [products, adjustmentCount, adjustments] = await Promise.all([
+  const [products, adjustmentCount, adjustments, increaseCount, decreaseCount] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       orderBy: { name: 'asc' },
@@ -55,14 +70,14 @@ export default async function StockAdjustmentsPage({
             unitId: true,
             isBaseUnit: true,
             conversionToBase: true,
-            unit: { select: { name: true, pluralName: true } }
-          }
+            unit: { select: { name: true, pluralName: true } },
+          },
         },
         inventoryBalances: {
           where: { storeId: store.id },
-          select: { qtyOnHandBase: true }
-        }
-      }
+          select: { qtyOnHandBase: true, avgCostBasePence: true },
+        },
+      },
     }),
     prisma.stockAdjustment.count({
       where: { storeId: store.id },
@@ -76,6 +91,7 @@ export default async function StockAdjustmentsPage({
         direction: true,
         reason: true,
         reasonCode: true,
+        valuePence: true,
         product: {
           select: {
             name: true,
@@ -83,24 +99,34 @@ export default async function StockAdjustmentsPage({
               select: {
                 isBaseUnit: true,
                 conversionToBase: true,
-                unit: { select: { name: true, pluralName: true } }
-              }
-            }
-          }
+                unit: { select: { name: true, pluralName: true } },
+              },
+            },
+          },
         },
-        user: { select: { name: true } }
+        user: { select: { name: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-    })
+    }),
+    // Store-scoped totals (not page-scoped) so counters stay consistent when paginated.
+    prisma.stockAdjustment.count({
+      where: { storeId: store.id, direction: { in: ['INCREASE', 'IN'] } },
+    }),
+    prisma.stockAdjustment.count({
+      where: { storeId: store.id, NOT: { direction: { in: ['INCREASE', 'IN'] } } },
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(adjustmentCount / PAGE_SIZE));
   const adjustmentRows = adjustments.map((adjustment) => {
     const baseUnit = adjustment.product.productUnits.find((unit) => unit.isBaseUnit);
     const packaging = getPrimaryPackagingUnit(
-      adjustment.product.productUnits.map((pu) => ({ conversionToBase: pu.conversionToBase, unit: pu.unit }))
+      adjustment.product.productUnits.map((pu) => ({
+        conversionToBase: pu.conversionToBase,
+        unit: pu.unit,
+      })),
     );
     const formatted = formatMixedUnit({
       qtyBase: Math.abs(adjustment.qtyBase),
@@ -108,7 +134,7 @@ export default async function StockAdjustmentsPage({
       baseUnitPlural: baseUnit?.unit.pluralName,
       packagingUnit: packaging?.unit.name,
       packagingUnitPlural: packaging?.unit.pluralName,
-      packagingConversion: packaging?.conversionToBase
+      packagingConversion: packaging?.conversionToBase,
     });
 
     return {
@@ -116,13 +142,15 @@ export default async function StockAdjustmentsPage({
       formatted,
     };
   });
-  const countIn = adjustmentRows.filter(({ adjustment }) => isIncreaseDirection(adjustment.direction)).length;
-  const countOut = adjustmentRows.filter(({ adjustment }) => !isIncreaseDirection(adjustment.direction)).length;
-  const isPaginated = adjustmentRows.length < adjustmentCount;
+
+  const successPosted = searchParams?.posted === '1' && searchParams.ref;
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <PageHeader title="Stock Adjustments" subtitle="Correct stock safely and keep a clear audit trail." />
+      <PageHeader
+        title="Stock Adjustments"
+        subtitle="Correct stock safely and keep a clear audit trail."
+      />
 
       {searchParams?.error ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
@@ -130,39 +158,97 @@ export default async function StockAdjustmentsPage({
         </div>
       ) : null}
 
+      {successPosted ? (
+        <div
+          className={`rounded-2xl border px-4 py-4 text-sm ${
+            searchParams.direction === 'INCREASE'
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+              : 'border-rose-200 bg-rose-50 text-rose-950'
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="text-base font-semibold">
+            {searchParams.replayed === '1' ? 'Adjustment already recorded' : 'Adjustment posted'}
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div>
+              Reference: <span className="font-mono font-semibold">{searchParams.ref}</span>
+            </div>
+            <div>Direction: {searchParams.direction ?? '—'}</div>
+            {searchParams.direction === 'INCREASE' ? (
+              <>
+                <div>Previous quantity: {searchParams.prev ?? '—'}</div>
+                <div>Quantity added: {searchParams.added ?? '—'}</div>
+                <div>New quantity: {searchParams.newQty ?? '—'}</div>
+                <div>
+                  Inventory value added:{' '}
+                  {formatMoney(Number(searchParams.value ?? 0), business.currency)}
+                </div>
+                {searchParams.cost ? (
+                  <div>
+                    Average cost (unchanged):{' '}
+                    {formatMoney(Number(searchParams.cost), business.currency)}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div>Quantity removed: {searchParams.added ?? '—'}</div>
+                <div>
+                  Inventory value removed:{' '}
+                  {formatMoney(Number(searchParams.value ?? 0), business.currency)}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-black/5 bg-white px-4 py-3 shadow-card">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">Recorded</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-black/45">
+            Recorded
+          </div>
           <div className="mt-2 text-2xl font-bold tabular-nums text-ink">{adjustmentCount}</div>
-          <div className="mt-1 text-xs text-black/50">Total adjustments</div>
+          <div className="mt-1 text-xs text-black/50">Total adjustments (this store)</div>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-card">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700/70">Added</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-emerald-700">{countIn}</div>
-          <div className="mt-1 text-xs text-emerald-600/70">{isPaginated ? 'On this page' : 'Historical increases'}</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700/70">
+            Added
+          </div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-emerald-700">{increaseCount}</div>
+          <div className="mt-1 text-xs text-emerald-600/70">Store increases (all pages)</div>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 shadow-card">
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">Removed</div>
-          <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{countOut}</div>
-          <div className="mt-1 text-xs text-rose-600/70">{isPaginated ? 'On this page' : 'Stock decreases'}</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-700/70">
+            Removed
+          </div>
+          <div className="mt-2 text-2xl font-bold tabular-nums text-rose-700">{decreaseCount}</div>
+          <div className="mt-1 text-xs text-rose-600/70">Store decreases (all pages)</div>
         </div>
       </div>
 
       <div className="card p-4 sm:p-6">
         <StockAdjustmentClient
           storeId={store.id}
+          storeName={store.name}
+          currency={business.currency}
           phase1Enabled={phase1Enabled}
+          phase2Enabled={phase2Enabled}
+          actorRole={user.role}
           products={products.map((product) => ({
             id: product.id,
             name: product.name,
             onHandBase: product.inventoryBalances[0]?.qtyOnHandBase ?? 0,
+            avgCostBasePence: product.inventoryBalances[0]?.avgCostBasePence ?? 0,
             units: product.productUnits.map((pu) => ({
               id: pu.unitId,
               name: pu.unit.name,
               pluralName: pu.unit.pluralName,
               conversionToBase: pu.conversionToBase,
-              isBaseUnit: pu.isBaseUnit
-            }))
+              isBaseUnit: pu.isBaseUnit,
+            })),
           }))}
         />
       </div>
@@ -172,11 +258,14 @@ export default async function StockAdjustmentsPage({
           <div>
             <h2 className="text-lg font-display font-semibold">Recent adjustments</h2>
             <p className="mt-1 text-sm text-black/55">
-              Every Phase 1 decrease is permanently recorded with inventory, journal, and audit in
-              one transaction. Automated reversal is unavailable in Phase 1.
+              Every posting is permanently recorded with inventory, journal, and audit in one
+              transaction. Automated reversal is unavailable — Owner-only opposite compensating
+              entries may link the original ID until a dedicated reversal lands.
             </p>
           </div>
-          <div className="text-xs text-black/45 sm:flex-shrink-0">{adjustmentCount} total records</div>
+          <div className="text-xs text-black/45 sm:flex-shrink-0">
+            {adjustmentCount} total records
+          </div>
         </div>
 
         <div className="space-y-3 lg:hidden">
@@ -191,10 +280,15 @@ export default async function StockAdjustmentsPage({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-ink">{adjustment.product.name}</div>
-                    <div className="mt-1 text-sm text-black/60">{formatDateTime(adjustment.createdAt)}</div>
+                    <div className="mt-1 text-sm text-black/60">
+                      {formatDateTime(adjustment.createdAt)}
+                    </div>
+                    <div className="mt-1 font-mono text-xs text-black/40">{adjustment.id}</div>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {adjustment.direction}
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
+                  >
+                    {isIncreaseDirection(adjustment.direction) ? 'INCREASE' : 'DECREASE'}
                   </span>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -224,6 +318,7 @@ export default async function StockAdjustmentsPage({
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Reference</th>
                 <th>Product</th>
                 <th>Qty</th>
                 <th>Direction</th>
@@ -234,7 +329,7 @@ export default async function StockAdjustmentsPage({
             <tbody>
               {adjustmentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-12 text-center">
+                  <td colSpan={7} className="px-3 py-12 text-center">
                     <AdjustmentsEmptyState />
                   </td>
                 </tr>
@@ -245,11 +340,14 @@ export default async function StockAdjustmentsPage({
                     className="rounded-xl bg-white transition-all duration-150 hover:-translate-y-px hover:bg-slate-50 hover:shadow-card motion-reduce:transform-none motion-reduce:transition-none"
                   >
                     <td className="px-3 py-3 text-sm">{formatDateTime(adjustment.createdAt)}</td>
+                    <td className="px-3 py-3 font-mono text-xs text-black/50">{adjustment.id}</td>
                     <td className="px-3 py-3 text-sm font-semibold">{adjustment.product.name}</td>
                     <td className="px-3 py-3 text-sm">{formatted}</td>
                     <td className="px-3 py-3 text-sm">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {adjustment.direction}
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isIncreaseDirection(adjustment.direction) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
+                      >
+                        {isIncreaseDirection(adjustment.direction) ? 'INCREASE' : 'DECREASE'}
                       </span>
                     </td>
                     <td className="px-3 py-3 text-sm">

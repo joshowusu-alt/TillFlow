@@ -11,7 +11,7 @@ describe('inventory decrease Phase 1 actions', () => {
     expect(inventoryAction).toContain('createInventoryDecrease');
     expect(inventoryAction).toContain('isInventoryDecreasePhase1Enabled');
     expect(inventoryAction).not.toContain("from '@/lib/services/inventory'");
-    expect(inventoryAction).toContain("direction !== 'DECREASE'");
+    expect(inventoryAction).toContain("direction === 'DECREASE'");
   });
 
   it('requires reasonCode and idempotencyKey on create', () => {

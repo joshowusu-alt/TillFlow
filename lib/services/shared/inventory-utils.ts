@@ -167,6 +167,24 @@ export async function incrementInventoryBalance(
 }
 
 /**
+ * Atomically increment on-hand quantity only. Leaves avgCostBasePence untouched.
+ * Requires the InventoryBalance row to already exist (Phase 2 increase path).
+ */
+export async function incrementInventoryBalanceQtyOnly(
+  tx: any,
+  storeId: string,
+  productId: string,
+  qtyBase: number,
+): Promise<number> {
+  const updated = await tx.inventoryBalance.update({
+    where: { storeId_productId: { storeId, productId } },
+    data: { qtyOnHandBase: { increment: qtyBase } },
+    select: { qtyOnHandBase: true },
+  });
+  return updated.qtyOnHandBase as number;
+}
+
+/**
  * Build a qty-per-product map from invoice lines.
  */
 export function buildQtyByProductMap(
