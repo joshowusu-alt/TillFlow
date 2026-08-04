@@ -21,7 +21,8 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/accounting', () => ({
   ACCOUNT_CODES: {
     cash: '1000', bank: '1010', inventory: '1200', ap: '2000',
-    cogs: '5000', vatReceivable: '1300', ar: '1100',
+    sales: '4000', inventoryGain: '4100',
+    cogs: '5000', inventoryLoss: '5100', vatReceivable: '1300', ar: '1100',
   },
 }));
 

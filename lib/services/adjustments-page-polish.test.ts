@@ -22,10 +22,10 @@ describe('inventory adjustments page polish', () => {
     expect(src).toContain('Removed');
   });
 
-  it('stat cards have helper text', () => {
-    expect(src).toContain('Total adjustments');
-    expect(src).toContain('Historical increases');
-    expect(src).toContain('Stock decreases');
+  it('stat cards have helper text with consistent store scope', () => {
+    expect(src).toContain('Total adjustments (this store)');
+    expect(src).toContain('Store increases (all pages)');
+    expect(src).toContain('Store decreases (all pages)');
   });
 
   it('stat cards use shadow-card and polished typography', () => {
@@ -34,31 +34,32 @@ describe('inventory adjustments page polish', () => {
   });
 
   it('audit trail copy is present in history section', () => {
-    expect(src).toContain('Every Phase 1 decrease is permanently recorded');
-    expect(src).toContain('Automated reversal is unavailable in Phase 1');
+    expect(src).toContain('Every posting is permanently recorded');
+    expect(src).toContain('Automated reversal is unavailable');
   });
 
-  it('adjustment form component remains present', () => {
+  it('adjustment form component remains present with Phase 1 and Phase 2 flags', () => {
     expect(src).toContain('StockAdjustmentClient');
     expect(src).toContain('storeId={store.id}');
     expect(src).toContain('phase1Enabled={phase1Enabled}');
+    expect(src).toContain('phase2Enabled={phase2Enabled}');
   });
 
   it('adjustment form references createStockAdjustmentAction', () => {
     expect(formSrc).toContain('createStockAdjustmentAction');
   });
 
-  it('decrease-only form posts required Phase 1 fields', () => {
+  it('form posts required fields for decrease and increase modes', () => {
     expect(formSrc).toContain('name="storeId"');
     expect(formSrc).toContain('name="productId"');
     expect(formSrc).toContain('name="unitId"');
     expect(formSrc).toContain('name="qtyInUnit"');
     expect(formSrc).toContain('name="direction"');
-    expect(formSrc).toContain('value="DECREASE"');
     expect(formSrc).toContain('name="reason"');
     expect(formSrc).toContain('name="reasonCode"');
     expect(formSrc).toContain('name="idempotencyKey"');
-    expect(formSrc).not.toContain('Increase (found stock)');
+    expect(formSrc).toContain('Record increase');
+    expect(formSrc).toContain('Record decrease');
   });
 
   it('recent adjustments history section is present', () => {
@@ -89,14 +90,14 @@ describe('inventory adjustments page polish', () => {
     expect(src).toContain('bg-rose-100 text-rose-700');
   });
 
-  it('empty state copy is owner-friendly', () => {
+  it('empty state copy forbids same-direction corrections', () => {
     expect(src).toContain('No stock adjustments yet.');
-    expect(src).toContain('When stock needs correcting, record a decrease so TillFlow keeps a clear audit trail.');
+    expect(src).toContain('never correct a decrease with another decrease');
   });
 
   it('desktop table has an empty state', () => {
     expect(src).toContain('AdjustmentsEmptyState');
-    expect(src).toContain('colSpan={6}');
+    expect(src).toContain('colSpan={7}');
   });
 
   it('does not add pointer or touch handlers', () => {
@@ -106,7 +107,7 @@ describe('inventory adjustments page polish', () => {
     expect(src).not.toContain('onTouchEnd');
   });
 
-  it('adjustment count query is unchanged', () => {
+  it('adjustment count query is present', () => {
     expect(src).toContain('prisma.stockAdjustment.count');
     expect(src).toContain('prisma.stockAdjustment.findMany');
   });

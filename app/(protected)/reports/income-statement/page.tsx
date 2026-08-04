@@ -38,7 +38,11 @@ export default async function IncomeStatementPage({
   const statement = await getIncomeStatement(business.id, start, end);
   const gpPct = statement.revenue > 0 ? Math.round((statement.grossProfit / statement.revenue) * 100) : 0;
   const npPct = statement.revenue > 0 ? Math.round((statement.netProfit / statement.revenue) * 100) : 0;
-  const hasData = statement.revenue !== 0 || statement.cogs !== 0 || statement.otherExpenses !== 0;
+  const hasData =
+    statement.revenue !== 0 ||
+    statement.cogs !== 0 ||
+    statement.otherExpenses !== 0 ||
+    statement.otherOperatingIncome !== 0;
 
   return (
     <div className="space-y-6">
@@ -123,6 +127,16 @@ export default async function IncomeStatementPage({
             divider="default"
             emphasis="strong"
           />
+          {statement.otherOperatingIncome !== 0 && (
+            <ReportSummaryRow
+              label={<span className="text-black/70">Other operating income</span>}
+              value={
+                <span className="text-emerald-700">
+                  {formatMoney(statement.otherOperatingIncome, business.currency)}
+                </span>
+              }
+            />
+          )}
           {statement.otherExpenses !== 0 && (
             <ReportSummaryRow
               label={<span className="text-black/70">Operating Expenses</span>}

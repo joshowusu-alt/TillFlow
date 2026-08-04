@@ -2,60 +2,55 @@ import { createHash } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
-import { ensureInventoryDecreaseAccounts } from '@/lib/accounting-inventory-decrease-accounts';
-import { assertAccount5100SafeForInventoryLoss } from '@/lib/accounting-inventory-loss-5100';
+import { ensureInventoryIncreaseAccounts } from '@/lib/accounting-inventory-increase-accounts';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
-import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
-import { decrementInventoryBalance } from './shared';
-import { detectInventoryAdjustmentRisk } from './risk-monitor';
+import { isInventoryIncreasePhase2Enabled } from '@/lib/inventory-increase-flag';
+import { incrementInventoryBalanceQtyOnly } from './shared';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
-export const INVENTORY_DECREASE_SCHEMA_VERSION = 1;
+export const INVENTORY_INCREASE_SCHEMA_VERSION = 1;
 
-export const INVENTORY_DECREASE_REASON_CODES = [
-  'WASTAGE',
-  'EXPIRED',
-  'DAMAGED',
-  'THEFT',
-  'STOCKTAKE_SHORTFALL',
-  'AUTHORISED_QUANTITY_CORRECTION',
+export const INVENTORY_INCREASE_REASON_CODES = [
+  'PHYSICAL_COUNT_SURPLUS',
+  'STOCK_FOUND',
 ] as const;
 
-export type InventoryDecreaseReasonCode = (typeof INVENTORY_DECREASE_REASON_CODES)[number];
+export type InventoryIncreaseReasonCode = (typeof INVENTORY_INCREASE_REASON_CODES)[number];
 
-export const INVENTORY_DECREASE_ERROR = {
+export const INVENTORY_INCREASE_ERROR = {
   FLAG_DISABLED: 'FLAG_DISABLED',
   UNAUTHORISED: 'UNAUTHORISED',
   INVALID_ADJUSTMENT: 'INVALID_ADJUSTMENT',
-  INSUFFICIENT_QUANTITY: 'INSUFFICIENT_QUANTITY',
+  MISSING_BALANCE: 'MISSING_BALANCE',
   MISSING_VALUATION: 'MISSING_VALUATION',
   DUPLICATE_MISMATCH: 'DUPLICATE_MISMATCH',
   ACCOUNT_MAPPING_UNAVAILABLE: 'ACCOUNT_MAPPING_UNAVAILABLE',
   ARITHMETIC_LIMIT: 'ARITHMETIC_LIMIT',
   POSTING_FAILURE: 'POSTING_FAILURE',
   AUDIT_FAILURE: 'AUDIT_FAILURE',
+  CORRECTION_INVALID: 'CORRECTION_INVALID',
 } as const;
 
-export type InventoryDecreaseErrorCode =
-  (typeof INVENTORY_DECREASE_ERROR)[keyof typeof INVENTORY_DECREASE_ERROR];
+export type InventoryIncreaseErrorCode =
+  (typeof INVENTORY_INCREASE_ERROR)[keyof typeof INVENTORY_INCREASE_ERROR];
 
-export class InventoryDecreaseError extends Error {
-  readonly code: InventoryDecreaseErrorCode;
+export class InventoryIncreaseError extends Error {
+  readonly code: InventoryIncreaseErrorCode;
 
-  constructor(code: InventoryDecreaseErrorCode, message: string) {
+  constructor(code: InventoryIncreaseErrorCode, message: string) {
     super(message);
-    this.name = 'InventoryDecreaseError';
+    this.name = 'InventoryIncreaseError';
     this.code = code;
   }
 }
 
-export type InventoryDecreaseInput = {
+export type InventoryIncreaseInput = {
   businessId: string;
   storeId: string;
   productId: string;
   unitId: string;
   qtyInUnit: number;
-  reasonCode: InventoryDecreaseReasonCode;
+  reasonCode: InventoryIncreaseReasonCode;
   reason: string;
   idempotencyKey: string;
   userId: string;
@@ -65,14 +60,14 @@ export type InventoryDecreaseInput = {
   correctsAdjustmentId?: string | null;
 };
 
-export type InventoryDecreaseResult = {
+export type InventoryIncreaseResult = {
   id: string;
   storeId: string;
   productId: string;
   unitId: string;
   qtyInUnit: number;
   qtyBase: number;
-  direction: 'DECREASE';
+  direction: 'INCREASE';
   reasonCode: string;
   reason: string | null;
   idempotencyKey: string | null;
@@ -80,6 +75,8 @@ export type InventoryDecreaseResult = {
   unitCostBasePence: number | null;
   valuePence: number | null;
   schemaVersion: number | null;
+  previousQtyBase: number;
+  newQtyBase: number;
   replayed: boolean;
 };
 
@@ -114,30 +111,30 @@ export function normalizeReasonText(reason: string): string {
   return reason.trim().replace(/\s+/g, ' ');
 }
 
-export function isInventoryDecreaseReasonCode(
+export function isInventoryIncreaseReasonCode(
   value: string,
-): value is InventoryDecreaseReasonCode {
-  return (INVENTORY_DECREASE_REASON_CODES as readonly string[]).includes(value);
+): value is InventoryIncreaseReasonCode {
+  return (INVENTORY_INCREASE_REASON_CODES as readonly string[]).includes(value);
 }
 
 export function checkedMul(a: number, b: number): number {
   if (!Number.isInteger(a) || !Number.isInteger(b)) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.ARITHMETIC_LIMIT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.ARITHMETIC_LIMIT,
       'Quantity and cost must be integers',
     );
   }
   const product = a * b;
   if (!Number.isSafeInteger(product)) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.ARITHMETIC_LIMIT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.ARITHMETIC_LIMIT,
       'Arithmetic limit exceeded',
     );
   }
   return product;
 }
 
-export function buildInventoryDecreasePayloadHash(parts: {
+export function buildInventoryIncreasePayloadHash(parts: {
   businessId: string;
   storeId: string;
   productId: string;
@@ -147,24 +144,22 @@ export function buildInventoryDecreasePayloadHash(parts: {
   reasonCode: string;
   normalizedReason: string;
   schemaVersion: number;
-  /** Optional Owner correction link; omitted/empty keeps Phase 1 hash stable. */
-  correctsAdjustmentId?: string | null;
+  correctsAdjustmentId: string | null;
 }): string {
-  const fields = [
+  const canonical = [
     parts.businessId,
     parts.storeId,
     parts.productId,
     parts.unitId,
     String(parts.conversionToBase),
     String(parts.qtyBase),
-    'DECREASE',
+    'INCREASE',
     parts.reasonCode,
     parts.normalizedReason,
     String(parts.schemaVersion),
-  ];
-  const correctionId = parts.correctsAdjustmentId?.trim();
-  if (correctionId) fields.push(correctionId);
-  return createHash('sha256').update(fields.join('\0'), 'utf8').digest('hex');
+    parts.correctsAdjustmentId ?? '',
+  ].join('\0');
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
 function toResult(
@@ -183,8 +178,8 @@ function toResult(
     valuePence: number | null;
     schemaVersion: number | null;
   },
-  replayed: boolean,
-): InventoryDecreaseResult {
+  extras: { previousQtyBase: number; newQtyBase: number; replayed: boolean },
+): InventoryIncreaseResult {
   return {
     id: row.id,
     storeId: row.storeId,
@@ -192,7 +187,7 @@ function toResult(
     unitId: row.unitId,
     qtyInUnit: row.qtyInUnit,
     qtyBase: row.qtyBase,
-    direction: 'DECREASE',
+    direction: 'INCREASE',
     reasonCode: row.reasonCode ?? '',
     reason: row.reason,
     idempotencyKey: row.idempotencyKey,
@@ -200,7 +195,9 @@ function toResult(
     unitCostBasePence: row.unitCostBasePence,
     valuePence: row.valuePence,
     schemaVersion: row.schemaVersion,
-    replayed,
+    previousQtyBase: extras.previousQtyBase,
+    newQtyBase: extras.newQtyBase,
+    replayed: extras.replayed,
   };
 }
 
@@ -249,80 +246,90 @@ async function findByIdempotencyKey(storeId: string, idempotencyKey: string) {
 }
 
 /**
- * Phase 1 quantity-decrease only. Requires rollout flag.
- * Does not fall back to Product.defaultCostBasePence — uses locked avgCostBasePence only.
+ * Phase 2 controlled quantity-increase. Requires rollout flag.
+ * Inherits locked avgCostBasePence only — does not recompute WAC or accept user cost.
  */
-export async function createInventoryDecrease(
-  input: InventoryDecreaseInput,
+export async function createInventoryIncrease(
+  input: InventoryIncreaseInput,
   outerTx?: Prisma.TransactionClient,
-): Promise<InventoryDecreaseResult> {
+): Promise<InventoryIncreaseResult> {
   return measureServerOperation(
-    'action.stock-adjustment.create',
-    () => createInventoryDecreaseImpl(input, outerTx),
+    'action.stock-adjustment.increase',
+    () => createInventoryIncreaseImpl(input, outerTx),
     {
       businessId: input.businessId,
       storeId: input.storeId,
-      action: 'createInventoryDecrease',
+      action: 'createInventoryIncrease',
       cacheState: outerTx ? 'nested-transaction' : 'write-through',
     },
     { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
   );
 }
 
-async function createInventoryDecreaseImpl(
-  input: InventoryDecreaseInput,
+async function createInventoryIncreaseImpl(
+  input: InventoryIncreaseInput,
   outerTx?: Prisma.TransactionClient,
-): Promise<InventoryDecreaseResult> {
-  if (!isInventoryDecreasePhase1Enabled()) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.FLAG_DISABLED,
-      'Inventory decrease Phase 1 is not enabled',
+): Promise<InventoryIncreaseResult> {
+  if (!isInventoryIncreasePhase2Enabled()) {
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
+      'Inventory increase Phase 2 is not enabled',
     );
   }
 
   const idempotencyKey = input.idempotencyKey.trim();
   if (!idempotencyKey) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Idempotency key is required',
     );
   }
 
-  if (!Number.isInteger(input.qtyInUnit) || input.qtyInUnit < 1) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+  if (
+    !Number.isFinite(input.qtyInUnit) ||
+    !Number.isInteger(input.qtyInUnit) ||
+    input.qtyInUnit < 1
+  ) {
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Quantity must be an integer of at least 1',
     );
   }
 
-  if (!isInventoryDecreaseReasonCode(input.reasonCode)) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+  if (!isInventoryIncreaseReasonCode(input.reasonCode)) {
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Invalid reason code',
     );
   }
 
   const normalizedReason = normalizeReasonText(input.reason);
   if (normalizedReason.length < 3) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Reason text is required',
     );
   }
 
   const userRole = typeof input.userRole === 'string' ? input.userRole.trim() : '';
   if (!userRole) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Actor role is required for authoritative audit',
+    );
+  }
+  if (userRole !== 'OWNER' && userRole !== 'MANAGER') {
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.UNAUTHORISED,
+      'Only Owner or Manager may record inventory increases',
     );
   }
 
   const correctsAdjustmentId = input.correctsAdjustmentId?.trim() || null;
   if (correctsAdjustmentId && userRole !== 'OWNER') {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.UNAUTHORISED,
-      'Only Owner may post a compensating correction decrease',
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.UNAUTHORISED,
+      'Only Owner may post a compensating correction increase',
     );
   }
 
@@ -337,35 +344,35 @@ async function createInventoryDecreaseImpl(
       where: {
         productId: input.productId,
         unitId: input.unitId,
-        product: { businessId: input.businessId },
+        product: { businessId: input.businessId, active: true },
       },
       select: { conversionToBase: true },
     }),
   ]);
 
   if (!store) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.UNAUTHORISED,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.UNAUTHORISED,
       'Store not found for this business',
     );
   }
   if (!productUnit) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.UNAUTHORISED,
-      'Unit not configured for product in this business',
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.UNAUTHORISED,
+      'Unit not configured for an active product in this business',
     );
   }
 
   const conversionToBase = productUnit.conversionToBase;
   if (!Number.isInteger(conversionToBase) || conversionToBase < 1) {
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.INVALID_ADJUSTMENT,
       'Invalid unit conversion',
     );
   }
 
   const qtyBase = checkedMul(input.qtyInUnit, conversionToBase);
-  const payloadHash = buildInventoryDecreasePayloadHash({
+  const payloadHash = buildInventoryIncreasePayloadHash({
     businessId: input.businessId,
     storeId: store.id,
     productId: input.productId,
@@ -374,18 +381,30 @@ async function createInventoryDecreaseImpl(
     qtyBase,
     reasonCode: input.reasonCode,
     normalizedReason,
-    schemaVersion: INVENTORY_DECREASE_SCHEMA_VERSION,
+    schemaVersion: INVENTORY_INCREASE_SCHEMA_VERSION,
     correctsAdjustmentId,
   });
 
-  // 1. Preliminary idempotency lookup (outside the authoritative write tx).
   const existing = await findByIdempotencyKey(store.id, idempotencyKey);
   if (existing) {
     if (existing.payloadHash === payloadHash) {
-      return toResult(existing, true);
+      const movement = await prisma.stockMovement.findFirst({
+        where: {
+          referenceType: 'STOCK_ADJUSTMENT',
+          referenceId: existing.id,
+          type: 'ADJUSTMENT',
+        },
+        select: { beforeQtyBase: true, afterQtyBase: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      return toResult(existing, {
+        previousQtyBase: movement?.beforeQtyBase ?? 0,
+        newQtyBase: movement?.afterQtyBase ?? existing.qtyBase,
+        replayed: true,
+      });
     }
-    throw new InventoryDecreaseError(
-      INVENTORY_DECREASE_ERROR.DUPLICATE_MISMATCH,
+    throw new InventoryIncreaseError(
+      INVENTORY_INCREASE_ERROR.DUPLICATE_MISMATCH,
       'Duplicate request with a different payload',
     );
   }
@@ -398,47 +417,53 @@ async function createInventoryDecreaseImpl(
           storeId: store.id,
           productId: input.productId,
         },
-        select: { id: true, direction: true },
+        select: { id: true, direction: true, qtyBase: true },
       });
       if (!original) {
-        throw new InventoryDecreaseError(
-          INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
+        throw new InventoryIncreaseError(
+          INVENTORY_INCREASE_ERROR.CORRECTION_INVALID,
           'Original adjustment not found for this store and product',
         );
       }
-      if (original.direction === 'DECREASE' || original.direction === 'OUT') {
-        throw new InventoryDecreaseError(
-          INVENTORY_DECREASE_ERROR.INVALID_ADJUSTMENT,
-          'Never correct a decrease with another decrease',
+      if (original.direction === 'INCREASE' || original.direction === 'IN') {
+        throw new InventoryIncreaseError(
+          INVENTORY_INCREASE_ERROR.CORRECTION_INVALID,
+          'Never correct an increase with another increase',
+        );
+      }
+      if (original.direction !== 'DECREASE' && original.direction !== 'OUT') {
+        throw new InventoryIncreaseError(
+          INVENTORY_INCREASE_ERROR.CORRECTION_INVALID,
+          'Original adjustment direction is not a decrease',
         );
       }
     }
 
     const balance = await lockInventoryBalance(tx, store.id, input.productId);
     if (!balance) {
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.INSUFFICIENT_QUANTITY,
-        'No inventory balance exists for this product',
-      );
-    }
-    if (balance.qtyOnHandBase < qtyBase) {
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.INSUFFICIENT_QUANTITY,
-        'Insufficient quantity on hand',
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.MISSING_BALANCE,
+        'No inventory balance exists for this product — retained average cost is required',
       );
     }
 
     const unitCostBasePence = balance.avgCostBasePence;
     if (!Number.isInteger(unitCostBasePence) || unitCostBasePence <= 0) {
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.MISSING_VALUATION,
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.MISSING_VALUATION,
         'Authoritative average cost is missing or zero',
       );
     }
 
     const valuePence = checkedMul(unitCostBasePence, qtyBase);
     const beforeQty = balance.qtyOnHandBase;
-    const afterQty = beforeQty - qtyBase;
+    if (!Number.isSafeInteger(beforeQty + qtyBase)) {
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.ARITHMETIC_LIMIT,
+        'Resulting quantity would exceed arithmetic limits',
+      );
+    }
+    const afterQty = beforeQty + qtyBase;
 
     const created = await tx.stockAdjustment.create({
       data: {
@@ -446,27 +471,39 @@ async function createInventoryDecreaseImpl(
         productId: input.productId,
         unitId: input.unitId,
         qtyInUnit: input.qtyInUnit,
-        qtyBase: -qtyBase,
-        direction: 'DECREASE',
+        qtyBase,
+        direction: 'INCREASE',
         reason: normalizedReason,
         reasonCode: input.reasonCode,
         idempotencyKey,
         payloadHash,
         unitCostBasePence,
         valuePence,
-        schemaVersion: INVENTORY_DECREASE_SCHEMA_VERSION,
+        schemaVersion: INVENTORY_INCREASE_SCHEMA_VERSION,
         userId: input.userId,
       },
       select: ADJUSTMENT_SELECT,
     });
 
-    await decrementInventoryBalance(tx, store.id, input.productId, qtyBase);
+    const newQty = await incrementInventoryBalanceQtyOnly(
+      tx,
+      store.id,
+      input.productId,
+      qtyBase,
+    );
+    if (newQty !== afterQty) {
+      // Defensive: locked row + atomic increment should match. Fail closed.
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.POSTING_FAILURE,
+        'Inventory quantity reconciliation failed after increment',
+      );
+    }
 
     await tx.stockMovement.create({
       data: {
         storeId: store.id,
         productId: input.productId,
-        qtyBase: -qtyBase,
+        qtyBase,
         beforeQtyBase: beforeQty,
         afterQtyBase: afterQty,
         unitCostBasePence,
@@ -478,19 +515,15 @@ async function createInventoryDecreaseImpl(
     });
 
     try {
-      // Narrow account resolution only (1200 + 5100). Do not seed the full COA
-      // inside this interactive transaction — empty tenants previously timed out
-      // after ~19 sequential upserts against the default 5s budget.
-      await assertAccount5100SafeForInventoryLoss(tx, input.businessId);
-      const accountMap = await ensureInventoryDecreaseAccounts(input.businessId, tx);
+      const accountMap = await ensureInventoryIncreaseAccounts(input.businessId, tx);
       await postJournalEntry({
         businessId: input.businessId,
-        description: `Inventory decrease ${created.id}`,
+        description: `Inventory increase ${created.id}`,
         referenceType: 'STOCK_ADJUSTMENT',
         referenceId: created.id,
         lines: [
-          { accountCode: ACCOUNT_CODES.inventoryLoss, debitPence: valuePence },
-          { accountCode: ACCOUNT_CODES.inventory, creditPence: valuePence },
+          { accountCode: ACCOUNT_CODES.inventory, debitPence: valuePence },
+          { accountCode: ACCOUNT_CODES.inventoryGain, creditPence: valuePence },
         ],
         prismaClient: tx as any,
         accountMap,
@@ -499,18 +532,18 @@ async function createInventoryDecreaseImpl(
       const message = error instanceof Error ? error.message : 'Journal posting failed';
       if (
         message.includes('Account not found') ||
-        message.includes('Account 5100') ||
+        message.includes('Account 4100') ||
         message.includes('Account 1200') ||
-        message.includes('Inventory Loss') ||
+        message.includes('Inventory Gain') ||
         message.includes('incorrectly configured')
       ) {
-        throw new InventoryDecreaseError(
-          INVENTORY_DECREASE_ERROR.ACCOUNT_MAPPING_UNAVAILABLE,
+        throw new InventoryIncreaseError(
+          INVENTORY_INCREASE_ERROR.ACCOUNT_MAPPING_UNAVAILABLE,
           message,
         );
       }
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.POSTING_FAILURE,
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.POSTING_FAILURE,
         message,
       );
     }
@@ -526,8 +559,8 @@ async function createInventoryDecreaseImpl(
           entity: 'StockAdjustment',
           entityId: created.id,
           details: JSON.stringify({
-            phase: 'inventory-decrease-phase1',
-            direction: 'DECREASE',
+            phase: 'inventory-increase-phase2',
+            direction: 'INCREASE',
             reasonCode: input.reasonCode,
             reason: normalizedReason,
             qtyInUnit: input.qtyInUnit,
@@ -536,13 +569,14 @@ async function createInventoryDecreaseImpl(
             afterQtyBase: afterQty,
             unitCostBasePence,
             valuePence,
+            avgCostUnchanged: true,
             idempotencyKey,
             payloadHash,
-            schemaVersion: INVENTORY_DECREASE_SCHEMA_VERSION,
+            schemaVersion: INVENTORY_INCREASE_SCHEMA_VERSION,
             correctsAdjustmentId,
             journal: {
-              debit: ACCOUNT_CODES.inventoryLoss,
-              credit: ACCOUNT_CODES.inventory,
+              debit: ACCOUNT_CODES.inventory,
+              credit: ACCOUNT_CODES.inventoryGain,
             },
           }),
         },
@@ -559,65 +593,61 @@ async function createInventoryDecreaseImpl(
             entity: 'StockAdjustment',
             entityId: correctsAdjustmentId,
             details: JSON.stringify({
-              phase: 'inventory-decrease-phase1',
+              phase: 'inventory-increase-phase2',
               correctedByAdjustmentId: created.id,
-              correctingDirection: 'DECREASE',
-              originalDirection: 'INCREASE',
+              correctingDirection: 'INCREASE',
+              originalDirection: 'DECREASE',
               reason: normalizedReason,
             }),
           },
         });
       }
     } catch (error) {
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.AUDIT_FAILURE,
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.AUDIT_FAILURE,
         error instanceof Error ? error.message : 'Audit write failed',
       );
     }
 
-    return toResult(created, false);
+    return toResult(created, {
+      previousQtyBase: beforeQty,
+      newQtyBase: afterQty,
+      replayed: false,
+    });
   };
 
-  let result: InventoryDecreaseResult;
   try {
     if (outerTx) {
-      result = await doWork(outerTx);
-    } else {
-      result = await prisma.$transaction(doWork);
+      return await doWork(outerTx);
     }
+    return await prisma.$transaction(doWork);
   } catch (error) {
-    // Unique race: never continue inside an aborted Postgres transaction.
-    // Re-read the winner outside, then replay or mismatch.
     if (
       !outerTx &&
       isPrismaUniqueConstraintOn(error, ['storeId', 'idempotencyKey'])
     ) {
       const winner = await findByIdempotencyKey(store.id, idempotencyKey);
       if (winner && winner.payloadHash === payloadHash) {
-        return toResult(winner, true);
+        const movement = await prisma.stockMovement.findFirst({
+          where: {
+            referenceType: 'STOCK_ADJUSTMENT',
+            referenceId: winner.id,
+            type: 'ADJUSTMENT',
+          },
+          select: { beforeQtyBase: true, afterQtyBase: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        return toResult(winner, {
+          previousQtyBase: movement?.beforeQtyBase ?? 0,
+          newQtyBase: movement?.afterQtyBase ?? winner.qtyBase,
+          replayed: true,
+        });
       }
-      throw new InventoryDecreaseError(
-        INVENTORY_DECREASE_ERROR.DUPLICATE_MISMATCH,
+      throw new InventoryIncreaseError(
+        INVENTORY_INCREASE_ERROR.DUPLICATE_MISMATCH,
         'Duplicate request with a different payload',
       );
     }
     throw error;
   }
-
-  if (!result.replayed && !outerTx) {
-    const business = await prisma.business.findUnique({
-      where: { id: input.businessId },
-      select: { inventoryAdjustmentRiskThresholdBase: true },
-    });
-    detectInventoryAdjustmentRisk({
-      businessId: input.businessId,
-      storeId: store.id,
-      cashierUserId: input.userId,
-      adjustmentId: result.id,
-      qtyBase: -qtyBase,
-      thresholdQtyBase: business?.inventoryAdjustmentRiskThresholdBase ?? 50,
-    }).catch(() => {});
-  }
-
-  return result;
 }
