@@ -191,6 +191,58 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
     expect(balance.qtyOnHandBase).toBe(20 + 5 - 2);
     expect(balance.avgCostBasePence).toBe(100);
   });
+
+  it('two overlapping identical same-key requests produce exactly one posting', async () => {
+    await prisma.inventoryBalance.update({
+      where: { storeId_productId: { storeId, productId } },
+      data: { qtyOnHandBase: 30, avgCostBasePence: 100 },
+    });
+    const beforeAdjustments = await prisma.stockAdjustment.count({ where: { storeId } });
+    const beforeMovements = await prisma.stockMovement.count({ where: { storeId } });
+    const beforeJournals = await prisma.journalEntry.count({ where: { businessId } });
+    const beforeAudits = await prisma.auditLog.count({
+      where: { businessId, action: 'INVENTORY_ADJUST' },
+    });
+
+    const { createInventoryIncrease } = await import('./inventory-increase');
+    const payload = {
+      businessId,
+      storeId,
+      productId,
+      unitId,
+      qtyInUnit: 2,
+      reasonCode: 'STOCK_FOUND' as const,
+      reason: 'Same-key concurrent surplus',
+      idempotencyKey: `${suffix}-same-key`,
+      userId,
+      userName: 'Owner',
+      userRole: 'OWNER' as const,
+    };
+
+    const [a, b] = await Promise.all([
+      createInventoryIncrease(payload),
+      createInventoryIncrease(payload),
+    ]);
+
+    expect(a.id).toBe(b.id);
+    expect([a.replayed, b.replayed].filter(Boolean).length).toBe(1);
+    expect([a.replayed, b.replayed].filter((x) => !x).length).toBe(1);
+
+    const balance = await prisma.inventoryBalance.findUniqueOrThrow({
+      where: { storeId_productId: { storeId, productId } },
+    });
+    expect(balance.qtyOnHandBase).toBe(30 + 2);
+    expect(balance.avgCostBasePence).toBe(100);
+
+    expect(await prisma.stockAdjustment.count({ where: { storeId } })).toBe(beforeAdjustments + 1);
+    expect(await prisma.stockMovement.count({ where: { storeId } })).toBe(beforeMovements + 1);
+    expect(await prisma.journalEntry.count({ where: { businessId } })).toBe(beforeJournals + 1);
+    expect(
+      await prisma.auditLog.count({ where: { businessId, action: 'INVENTORY_ADJUST' } }),
+    ).toBe(beforeAudits + 1);
+  });
+
+
 });
 
 describe('concurrency suite availability', () => {
