@@ -5,7 +5,7 @@ import { requireBusinessStore } from '@/lib/auth';
 import { formatMixedUnit, getPrimaryPackagingUnit } from '@/lib/units';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { isInventoryDecreasePhase1Enabled } from '@/lib/inventory-decrease-flag';
-import { isInventoryIncreasePhase2Enabled } from '@/lib/inventory-increase-flag';
+import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import StockAdjustmentClient from '../StockAdjustmentClient';
 
 export const dynamic = 'force-dynamic';
@@ -56,7 +56,8 @@ export default async function StockAdjustmentsPage({
 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const phase1Enabled = isInventoryDecreasePhase1Enabled();
-  const phase2Enabled = isInventoryIncreasePhase2Enabled();
+  // Visibility only — createInventoryIncrease still enforces the scoped gate.
+  const phase2Enabled = isInventoryIncreasePhase2EnabledForBusiness(business.id);
 
   const [products, adjustmentCount, adjustments, increaseCount, decreaseCount] = await Promise.all([
     prisma.product.findMany({

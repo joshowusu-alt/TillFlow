@@ -17,7 +17,7 @@ const {
   postJournalEntryMock,
   ensureInventoryIncreaseAccountsMock,
   incrementInventoryBalanceQtyOnlyMock,
-  isPhase2EnabledMock,
+  isPhase2EnabledForBusinessMock,
 } = vi.hoisted(() => ({
   prismaMock: {
     store: { findFirst: vi.fn() },
@@ -32,12 +32,12 @@ const {
   postJournalEntryMock: vi.fn(),
   ensureInventoryIncreaseAccountsMock: vi.fn(),
   incrementInventoryBalanceQtyOnlyMock: vi.fn(),
-  isPhase2EnabledMock: vi.fn(() => true),
+  isPhase2EnabledForBusinessMock: vi.fn(() => true),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/inventory-increase-flag', () => ({
-  isInventoryIncreasePhase2Enabled: isPhase2EnabledMock,
+  isInventoryIncreasePhase2EnabledForBusiness: isPhase2EnabledForBusinessMock,
 }));
 vi.mock('@/lib/accounting', async () => {
   const actual = await vi.importActual<typeof import('@/lib/accounting')>('@/lib/accounting');
@@ -153,7 +153,7 @@ describe('inventory increase helpers', () => {
 describe('createInventoryIncrease', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    isPhase2EnabledMock.mockReturnValue(true);
+    isPhase2EnabledForBusinessMock.mockReturnValue(true);
     process.env.DATABASE_URL = 'file:./dev.db';
 
     prismaMock.store.findFirst.mockResolvedValue({ id: STORE });
@@ -182,12 +182,23 @@ describe('createInventoryIncrease', () => {
     );
   });
 
-  it('rejects when the Phase 2 flag is off', async () => {
-    isPhase2EnabledMock.mockReturnValue(false);
+  it('rejects when the Phase 2 scoped gate is off (flag and/or allowlist)', async () => {
+    isPhase2EnabledForBusinessMock.mockReturnValue(false);
     await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
     });
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.stockAdjustment.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.create).not.toHaveBeenCalled();
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(incrementInventoryBalanceQtyOnlyMock).not.toHaveBeenCalled();
+  });
+
+  it('passes the target businessId into the scoped eligibility helper', async () => {
+    await createInventoryIncrease(baseInput());
+    expect(isPhase2EnabledForBusinessMock).toHaveBeenCalledWith(BIZ);
   });
 
   it('Owner records PHYSICAL_COUNT_SURPLUS with Dr 1200 / Cr 4100', async () => {
@@ -232,6 +243,21 @@ describe('createInventoryIncrease', () => {
         }),
       }),
     );
+    expect(prismaMock.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: BIZ,
+          action: 'INVENTORY_ADJUST',
+          details: expect.stringContaining('"scopedEligible":true'),
+        }),
+      }),
+    );
+    const auditDetails = JSON.parse(
+      prismaMock.auditLog.create.mock.calls[0][0].data.details as string,
+    );
+    expect(auditDetails.rolloutGate).toBe('phase2-business-allowlist');
+    expect(auditDetails.phase).toBe('inventory-increase-phase2');
+    expect(auditDetails).not.toHaveProperty('allowlist');
   });
 
   it('Manager records STOCK_FOUND', async () => {

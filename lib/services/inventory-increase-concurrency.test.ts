@@ -43,6 +43,8 @@ describeConcurrency('inventory increase overlapping transactions (Postgres)', ()
       },
     });
     businessId = business.id;
+    // Scoped gate: global flag alone must not admit every tenant.
+    process.env.TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS = businessId;
     const store = await prisma.store.create({
       data: { businessId, name: `Store ${suffix}` },
     });

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { ensureInventoryIncreaseAccounts } from '@/lib/accounting-inventory-increase-accounts';
 import { isPostgresDatabaseUrl } from '@/lib/database-runtime';
-import { isInventoryIncreasePhase2Enabled } from '@/lib/inventory-increase-flag';
+import { isInventoryIncreasePhase2EnabledForBusiness } from '@/lib/inventory-increase-flag';
 import { incrementInventoryBalanceQtyOnly } from './shared';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -246,7 +246,8 @@ async function findByIdempotencyKey(storeId: string, idempotencyKey: string) {
 }
 
 /**
- * Phase 2 controlled quantity-increase. Requires rollout flag.
+ * Phase 2 controlled quantity-increase.
+ * Requires global Phase 2 flag AND exact business allowlist membership.
  * Inherits locked avgCostBasePence only — does not recompute WAC or accept user cost.
  */
 export async function createInventoryIncrease(
@@ -270,7 +271,8 @@ async function createInventoryIncreaseImpl(
   input: InventoryIncreaseInput,
   outerTx?: Prisma.TransactionClient,
 ): Promise<InventoryIncreaseResult> {
-  if (!isInventoryIncreasePhase2Enabled()) {
+  // Fail-closed scoped gate before any durable work (including idempotency reads).
+  if (!isInventoryIncreasePhase2EnabledForBusiness(input.businessId)) {
     throw new InventoryIncreaseError(
       INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
       'Inventory increase Phase 2 is not enabled',
@@ -560,6 +562,8 @@ async function createInventoryIncreaseImpl(
           entityId: created.id,
           details: JSON.stringify({
             phase: 'inventory-increase-phase2',
+            rolloutGate: 'phase2-business-allowlist',
+            scopedEligible: true,
             direction: 'INCREASE',
             reasonCode: input.reasonCode,
             reason: normalizedReason,
