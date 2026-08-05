@@ -236,8 +236,8 @@ describe('supplier payments page — supplierId support', () => {
   });
 
   it('returns to the supplier profile after recording a filtered payment', () => {
-    expect(src).toContain('name="returnTo"');
-    expect(src).toContain('value={`/suppliers/${linkedSupplier.id}`}');
+    expect(src).toContain('SupplierPaymentForm');
+    expect(src).toContain('returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}');
   });
 
   it('uses owner-friendly page title and subtitle', () => {
@@ -253,12 +253,19 @@ describe('supplier payments page — supplierId support', () => {
     expect(src).toContain('mode="cards"');
     expect(src).toContain('active:scale-[0.98]');
     expect(src).toContain('hover:-translate-y-px');
-    expect(src).toContain('action={recordSupplierPaymentAction}');
-    expect(src).toContain('name="invoiceId"');
-    expect(src).toContain('name="paymentMethod"');
-    expect(src).toContain('name="amount"');
-    expect(src).toContain('name="paidAt"');
-    expect(src).toContain('name="notes"');
+    expect(src).toContain('<SupplierPaymentForm');
+    expect(src).toContain('invoiceId={invoiceId}');
+  });
+
+  it('SupplierPaymentForm carries method/amount fields and idempotency key', () => {
+    const formSrc = readFileSync(join(process.cwd(), 'components/SupplierPaymentForm.tsx'), 'utf8');
+    expect(formSrc).toContain('action={recordSupplierPaymentAction}');
+    expect(formSrc).toContain('name="invoiceId"');
+    expect(formSrc).toContain('name="idempotencyKey"');
+    expect(formSrc).toContain('name="paymentMethod"');
+    expect(formSrc).toContain('name="amount"');
+    expect(formSrc).toContain('name="paidAt"');
+    expect(formSrc).toContain('name="notes"');
   });
 
   it('keeps recent supplier payments visible with a helpful empty state', () => {

@@ -112,6 +112,89 @@ export function findOrphanCashPurchasePayments(
   });
 }
 
+export type HistoricalCashSupplierPaymentAssessmentRow = {
+  id: string;
+  amountPence: number;
+  paidAt: Date;
+  recordedByUserId: string | null;
+  linkedDrawerCount: number;
+  shiftStatus: 'OPEN' | 'CLOSED' | 'NONE' | 'MIXED' | null;
+};
+
+export type HistoricalCashSupplierPaymentCategory =
+  | 'properly_linked'
+  | 'missing_drawer_link'
+  | 'duplicate_drawer_links'
+  | 'funding_source_ambiguous'
+  | 'shift_association_unavailable';
+
+export type HistoricalCashSupplierPaymentAggregate = {
+  category: HistoricalCashSupplierPaymentCategory;
+  recordCount: number;
+  aggregateValuePence: number;
+  closedShiftExposureCount: number;
+  deterministic: boolean;
+};
+
+/**
+ * Pure, read-only classification of historical CASH supplier payments vs drawer links.
+ * Does not infer funding source. Missing idempotency keys are ignored (not orphans).
+ */
+export function assessHistoricalCashSupplierPayments(
+  rows: HistoricalCashSupplierPaymentAssessmentRow[],
+): HistoricalCashSupplierPaymentAggregate[] {
+  const buckets: Record<
+    HistoricalCashSupplierPaymentCategory,
+    { amountPence: number; closed: number; deterministic: boolean }
+  > = {
+    properly_linked: { amountPence: 0, closed: 0, deterministic: true },
+    missing_drawer_link: { amountPence: 0, closed: 0, deterministic: true },
+    duplicate_drawer_links: { amountPence: 0, closed: 0, deterministic: true },
+    funding_source_ambiguous: { amountPence: 0, closed: 0, deterministic: false },
+    shift_association_unavailable: { amountPence: 0, closed: 0, deterministic: false },
+  };
+
+  const counts: Record<HistoricalCashSupplierPaymentCategory, number> = {
+    properly_linked: 0,
+    missing_drawer_link: 0,
+    duplicate_drawer_links: 0,
+    funding_source_ambiguous: 0,
+    shift_association_unavailable: 0,
+  };
+
+  for (const row of rows) {
+    let category: HistoricalCashSupplierPaymentCategory;
+    if (row.linkedDrawerCount > 1) {
+      category = 'duplicate_drawer_links';
+    } else if (row.linkedDrawerCount === 1) {
+      if (row.shiftStatus === 'NONE' || row.shiftStatus === null) {
+        category = 'shift_association_unavailable';
+      } else {
+        category = 'properly_linked';
+      }
+    } else if (!row.recordedByUserId) {
+      // Cash payment with no actor — cannot determine whether till funding was intended.
+      category = 'funding_source_ambiguous';
+    } else {
+      category = 'missing_drawer_link';
+    }
+
+    counts[category] += 1;
+    buckets[category].amountPence += row.amountPence;
+    if (row.shiftStatus === 'CLOSED' || row.shiftStatus === 'MIXED') {
+      buckets[category].closed += 1;
+    }
+  }
+
+  return (Object.keys(counts) as HistoricalCashSupplierPaymentCategory[]).map((category) => ({
+    category,
+    recordCount: counts[category],
+    aggregateValuePence: buckets[category].amountPence,
+    closedShiftExposureCount: buckets[category].closed,
+    deterministic: buckets[category].deterministic,
+  }));
+}
+
 function toJson(value: unknown): string | null {
   if (value === undefined) return null;
   try {

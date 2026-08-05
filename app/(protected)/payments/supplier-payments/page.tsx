@@ -1,15 +1,14 @@
 import PageHeader from '@/components/PageHeader';
 import FormError from '@/components/FormError';
-import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDate } from '@/lib/format';
-import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { computeOutstandingBalance } from '@/lib/accounting';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
+import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -98,57 +97,11 @@ export default async function SupplierPaymentsPage({ searchParams }: { searchPar
   const lastPaymentAt = recentPayments.length > 0 ? recentPayments[0].paidAt : null;
 
   const renderPaymentForm = (invoiceId: string) => (
-    <form action={recordSupplierPaymentAction} className="grid gap-2 md:grid-cols-2">
-      <input type="hidden" name="invoiceId" value={invoiceId} />
-      {linkedSupplier ? (
-        <input type="hidden" name="returnTo" value={`/suppliers/${linkedSupplier.id}`} />
-      ) : null}
-      <div>
-        <div className="text-xs font-medium text-black/50">Payment method</div>
-        <select className="input" name="paymentMethod" defaultValue="CASH">
-          <option value="CASH">Cash</option>
-          <option value="CARD">Card</option>
-          <option value="TRANSFER">Bank Transfer</option>
-          <option value="MOBILE_MONEY">Mobile Money (MoMo)</option>
-        </select>
-      </div>
-      <div>
-        <div className="text-xs font-medium text-black/50">Amount paid</div>
-        <input
-          className="input"
-          name="amount"
-          type="number"
-          min={0}
-          step="0.01"
-          inputMode="decimal"
-          placeholder="0.00"
-        />
-      </div>
-      <div>
-        <div className="text-xs font-medium text-black/50">Payment date</div>
-        <input
-          className="input"
-          name="paidAt"
-          type="date"
-          defaultValue={today}
-        />
-      </div>
-      <div>
-        <div className="text-xs font-medium text-black/50">Notes (optional)</div>
-        <input
-          className="input"
-          name="notes"
-          type="text"
-          placeholder="e.g. cheque #1234"
-        />
-      </div>
-      <div className="text-xs text-black/45 md:col-span-2">
-        Enter the amount paid. Do not exceed the amount owed.
-      </div>
-      <div className="flex items-end md:col-span-2">
-        <SubmitButton className="btn-primary w-full text-xs" loadingText="Recording…">Record payment</SubmitButton>
-      </div>
-    </form>
+    <SupplierPaymentForm
+      invoiceId={invoiceId}
+      today={today}
+      returnTo={linkedSupplier ? `/suppliers/${linkedSupplier.id}` : undefined}
+    />
   );
 
   return (

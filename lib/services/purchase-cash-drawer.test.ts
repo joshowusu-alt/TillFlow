@@ -56,7 +56,7 @@ vi.mock('./shared', async () => {
 });
 
 import { createPurchase } from './purchases';
-import { findOrphanCashPurchasePayments, summarizeCashDrawerEntries } from './cash-drawer';
+import { findOrphanCashPurchasePayments, summarizeCashDrawerEntries, assessHistoricalCashSupplierPayments } from './cash-drawer';
 
 const bizId = 'biz-1';
 const storeId = 'store-1';
@@ -304,5 +304,78 @@ describe('purchase invoice cash drawer linkage', () => {
     );
 
     expect(orphans.map((payment) => payment.id)).toEqual(['pay-1']);
+  });
+
+  it('classifies historical cash supplier payments without treating missing idempotency as orphan', () => {
+    const aggregates = assessHistoricalCashSupplierPayments([
+      {
+        id: 'a',
+        amountPence: 1000,
+        paidAt: new Date(),
+        recordedByUserId: 'u1',
+        linkedDrawerCount: 1,
+        shiftStatus: 'CLOSED',
+      },
+      {
+        id: 'b',
+        amountPence: 2000,
+        paidAt: new Date(),
+        recordedByUserId: 'u1',
+        linkedDrawerCount: 0,
+        shiftStatus: 'NONE',
+      },
+      {
+        id: 'c',
+        amountPence: 3000,
+        paidAt: new Date(),
+        recordedByUserId: 'u1',
+        linkedDrawerCount: 2,
+        shiftStatus: 'MIXED',
+      },
+      {
+        id: 'd',
+        amountPence: 4000,
+        paidAt: new Date(),
+        recordedByUserId: null,
+        linkedDrawerCount: 0,
+        shiftStatus: 'NONE',
+      },
+      {
+        id: 'e',
+        amountPence: 5000,
+        paidAt: new Date(),
+        recordedByUserId: 'u1',
+        linkedDrawerCount: 1,
+        shiftStatus: 'NONE',
+      },
+    ]);
+
+    const byCat = Object.fromEntries(aggregates.map((a) => [a.category, a]));
+    expect(byCat.properly_linked).toMatchObject({
+      recordCount: 1,
+      aggregateValuePence: 1000,
+      closedShiftExposureCount: 1,
+      deterministic: true,
+    });
+    expect(byCat.missing_drawer_link).toMatchObject({
+      recordCount: 1,
+      aggregateValuePence: 2000,
+      deterministic: true,
+    });
+    expect(byCat.duplicate_drawer_links).toMatchObject({
+      recordCount: 1,
+      aggregateValuePence: 3000,
+      closedShiftExposureCount: 1,
+    });
+    expect(byCat.funding_source_ambiguous).toMatchObject({
+      recordCount: 1,
+      aggregateValuePence: 4000,
+      deterministic: false,
+    });
+    expect(byCat.shift_association_unavailable).toMatchObject({
+      recordCount: 1,
+      aggregateValuePence: 5000,
+      deterministic: false,
+    });
   });
 });

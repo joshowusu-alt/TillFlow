@@ -185,6 +185,7 @@ model Business {
   expensePayments        ExpensePayment[]
   salesInvoices          SalesInvoice[]
   purchaseInvoices       PurchaseInvoice[]
+  purchasePayments       PurchasePayment[]
   mobileMoneyCollections MobileMoneyCollection[]
   cashDrawerEntries      CashDrawerEntry[]
   riskAlerts             RiskAlert[]
@@ -1222,6 +1223,7 @@ model PurchaseInvoiceLine {
 
 model PurchasePayment {
   id                String   @id @default(cuid())
+  businessId        String?
   purchaseInvoiceId String
   method            String
   amountPence       Int
@@ -1229,14 +1231,21 @@ model PurchasePayment {
   reference         String?
   recordedByUserId  String?
   notes             String?
+  /// Client/server idempotency key; unique per business when set. Null on pre-hardening rows.
+  idempotencyKey    String?
+  /// SHA-256 of the canonical supplier-payment request payload.
+  payloadHash       String?
   qaTag             String?
   qaRunId           String?
 
+  business        Business?       @relation(fields: [businessId], references: [id], onDelete: SetNull)
   purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
   recordedBy      User?           @relation("PurchasePaymentRecordedBy", fields: [recordedByUserId], references: [id])
 
+  @@unique([businessId, idempotencyKey])
   @@index([purchaseInvoiceId, paidAt])
   @@index([paidAt])
+  @@index([businessId, paidAt])
 }
 
 model Account {

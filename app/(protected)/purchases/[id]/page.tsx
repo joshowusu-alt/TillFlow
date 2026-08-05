@@ -5,11 +5,11 @@ import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
-import { recordSupplierPaymentAction } from '@/app/actions/payments';
 import { changePurchaseProductSupplierLinkAction } from '@/app/actions/purchases';
 import SetPurchaseDueDateButton from '@/components/SetPurchaseDueDateButton';
 import DueDateBadge from '@/components/DueDateBadge';
 import PurchaseDraftClearer from '@/components/purchases/PurchaseDraftClearer';
+import SupplierPaymentForm from '@/components/SupplierPaymentForm';
 
 export default async function PurchaseInvoicePage({
   params,
@@ -317,42 +317,15 @@ export default async function PurchaseInvoicePage({
         {!isClosed && outstanding > 0 && (
           <div className="mt-6">
             <h3 className="text-sm font-semibold">Record a payment</h3>
-            <form action={recordSupplierPaymentAction} className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <input type="hidden" name="invoiceId" value={invoice.id} />
-              <input type="hidden" name="returnTo" value={`/purchases/${invoice.id}`} />
-              <div>
-                <label className="label">Method</label>
-                <select className="input" name="paymentMethod" defaultValue="CASH">
-                  <option value="CASH">Cash</option>
-                  <option value="CARD">Card</option>
-                  <option value="TRANSFER">Transfer</option>
-                  <option value="MOBILE_MONEY">Mobile Money</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Amount</label>
-                <input
-                  className="input"
-                  name="amount"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder={(outstanding / 100).toFixed(2)}
-                />
-              </div>
-              <div>
-                <label className="label">Payment date</label>
-                <input className="input" name="paidAt" type="date" defaultValue={today} />
-              </div>
-              <div>
-                <label className="label">Notes (optional)</label>
-                <input className="input" name="notes" type="text" placeholder="e.g. cheque #1234" />
-              </div>
-              <div className="flex items-end sm:col-span-2 lg:col-span-4">
-                <SubmitButton className="btn-primary" loadingText="Recording…">Record payment</SubmitButton>
-              </div>
-            </form>
+            <div className="mt-3">
+              <SupplierPaymentForm
+                invoiceId={invoice.id}
+                returnTo={`/purchases/${invoice.id}`}
+                today={today}
+                amountPlaceholder={(outstanding / 100).toFixed(2)}
+                formClassName="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+              />
+            </div>
           </div>
         )}
       </div>

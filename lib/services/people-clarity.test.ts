@@ -7,6 +7,7 @@ describe('Customer and Supplier reporting clarity', () => {
   const supplierListSrc   = readFileSync(join(process.cwd(), 'app/(protected)/suppliers/page.tsx'), 'utf8');
   const customerReceiptsSrc = readFileSync(join(process.cwd(), 'app/(protected)/payments/customer-receipts/page.tsx'), 'utf8');
   const supplierPaymentsSrc = readFileSync(join(process.cwd(), 'app/(protected)/payments/supplier-payments/page.tsx'), 'utf8');
+  const supplierPaymentFormSrc = readFileSync(join(process.cwd(), 'components/SupplierPaymentForm.tsx'), 'utf8');
   const customerDetailSrc = readFileSync(join(process.cwd(), 'app/(protected)/customers/[id]/page.tsx'), 'utf8');
   const supplierDetailSrc = readFileSync(join(process.cwd(), 'app/(protected)/suppliers/[id]/page.tsx'), 'utf8');
   const supplierAgingSrc  = readFileSync(join(process.cwd(), 'app/(protected)/payments/supplier-aging/page.tsx'), 'utf8');
@@ -106,28 +107,30 @@ describe('Customer and Supplier reporting clarity', () => {
   });
 
   it('22. "Mobile Money (MoMo)" option label is present', () => {
-    expect(supplierPaymentsSrc).toContain('Mobile Money (MoMo)');
+    expect(supplierPaymentFormSrc).toContain('Mobile Money (MoMo)');
   });
 
   it('23. "Bank Transfer" option label is present', () => {
-    expect(supplierPaymentsSrc).toContain('Bank Transfer');
+    expect(supplierPaymentFormSrc).toContain('Bank Transfer');
   });
 
   it('24. value="TRANSFER" remains present (form value unchanged)', () => {
-    expect(supplierPaymentsSrc).toContain('value="TRANSFER"');
+    expect(supplierPaymentFormSrc).toContain('value="TRANSFER"');
   });
 
   it('25. value="MOBILE_MONEY" remains present (form value unchanged)', () => {
-    expect(supplierPaymentsSrc).toContain('value="MOBILE_MONEY"');
+    expect(supplierPaymentFormSrc).toContain('value="MOBILE_MONEY"');
   });
 
   it('26. Recent payments do not display raw payment method strings as text', () => {
     expect(supplierPaymentsSrc).not.toContain('{payment.method}');
   });
 
-  it('27. recordSupplierPaymentAction import remains unchanged', () => {
-    expect(supplierPaymentsSrc).toContain("from '@/app/actions/payments'");
-    expect(supplierPaymentsSrc).toContain('recordSupplierPaymentAction');
+  it('27. recordSupplierPaymentAction remains wired through SupplierPaymentForm', () => {
+    expect(supplierPaymentsSrc).toContain('SupplierPaymentForm');
+    expect(supplierPaymentFormSrc).toContain("from '@/app/actions/payments'");
+    expect(supplierPaymentFormSrc).toContain('recordSupplierPaymentAction');
+    expect(supplierPaymentFormSrc).toContain('name="idempotencyKey"');
   });
 
   // ── Customer detail page ───────────────────────────────────────────────
