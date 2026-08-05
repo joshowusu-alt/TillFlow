@@ -12,6 +12,11 @@ const ownerRoutes = [
   ['/reports/cash-drawer', 'Cash drawer'],
   ['/payments/supplier-payments', 'Supplier payments'],
   ['/payments/customer-receipts', 'Customer payments'],
+  ['/payments/supplier-aging', 'Supplier ageing'],
+  ['/payments/expense-payments', 'Expense payments'],
+  ['/payments/reconciliation', 'MoMo reconciliation'],
+  ['/payments/reconciliation/card-transfer', 'Card transfer reconciliation'],
+  ['/inventory/adjustments', 'Stock adjustments'],
   ['/shifts', 'Shifts'],
   ['/account', 'Account'],
 ] as const;
