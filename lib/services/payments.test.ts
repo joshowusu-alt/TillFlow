@@ -444,10 +444,32 @@ describe('payments service', () => {
       ),
     ).rejects.toMatchObject({
       code: SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_REQUIRED,
+      message: expect.stringContaining('Refresh the page'),
     });
 
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(prismaMock.purchasePayment.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a write-freeze rollout flag without creating records', async () => {
+    const prev = process.env.TILLFLOW_SUPPLIER_PAYMENT_WRITES;
+    process.env.TILLFLOW_SUPPLIER_PAYMENT_WRITES = '0';
+    try {
+      await expect(
+        recordSupplierPayment(
+          'biz-1',
+          'purchase-1',
+          [{ method: 'CARD', amountPence: 1000 }],
+          { ...ownerOpts, idempotencyKey: 'idem-frozen' },
+        ),
+      ).rejects.toMatchObject({
+        code: SUPPLIER_PAYMENT_ERROR.TEMPORARILY_UNAVAILABLE,
+      });
+      expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) delete process.env.TILLFLOW_SUPPLIER_PAYMENT_WRITES;
+      else process.env.TILLFLOW_SUPPLIER_PAYMENT_WRITES = prev;
+    }
   });
 
   it('replays after unique-constraint race without duplicate posting', async () => {

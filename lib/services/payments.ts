@@ -21,6 +21,7 @@ export const SUPPLIER_PAYMENT_ERROR = {
   IDEMPOTENCY_REQUIRED: 'IDEMPOTENCY_REQUIRED',
   IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
   NOT_FOUND: 'NOT_FOUND',
+  TEMPORARILY_UNAVAILABLE: 'TEMPORARILY_UNAVAILABLE',
 } as const;
 
 export class SupplierPaymentError extends UserError {
@@ -46,6 +47,16 @@ export type RecordSupplierPaymentResult = {
   replayed: boolean;
 };
 
+/** Rollout freeze: set TILLFLOW_SUPPLIER_PAYMENT_WRITES=0 during mixed-version cutover. */
+export function assertSupplierPaymentWritesEnabled() {
+  if (process.env.TILLFLOW_SUPPLIER_PAYMENT_WRITES === '0') {
+    throw new SupplierPaymentError(
+      SUPPLIER_PAYMENT_ERROR.TEMPORARILY_UNAVAILABLE,
+      'Supplier payments are temporarily unavailable during a system update. Refresh the page and try again in a moment.',
+    );
+  }
+}
+
 function assertCanRecordSupplierPayment(actorRole: string | undefined) {
   if (!actorRole || !SUPPLIER_PAYMENT_ROLES.includes(actorRole as Role)) {
     throw new SupplierPaymentError(
@@ -55,18 +66,21 @@ function assertCanRecordSupplierPayment(actorRole: string | undefined) {
   }
 }
 
+const STALE_CLIENT_IDEMPOTENCY_MESSAGE =
+  'This payment form is out of date. Refresh the page or reopen the payment form, then try again.';
+
 function normalizeIdempotencyKey(raw: string | undefined): string {
   const key = raw?.trim() ?? '';
   if (!key) {
     throw new SupplierPaymentError(
       SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_REQUIRED,
-      'Idempotency key is required.',
+      STALE_CLIENT_IDEMPOTENCY_MESSAGE,
     );
   }
-  if (key.length > 128) {
+  if (key.length > 128 || /[\u0000-\u001f]/.test(key)) {
     throw new SupplierPaymentError(
       SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_REQUIRED,
-      'Idempotency key is invalid.',
+      STALE_CLIENT_IDEMPOTENCY_MESSAGE,
     );
   }
   return key;
@@ -273,6 +287,7 @@ async function recordSupplierPaymentImpl(
   payments: PaymentInput[],
   options: RecordSupplierPaymentOptions,
 ): Promise<RecordSupplierPaymentResult> {
+  assertSupplierPaymentWritesEnabled();
   assertCanRecordSupplierPayment(options.actorRole);
   const idempotencyKey = normalizeIdempotencyKey(options.idempotencyKey);
   const recordedByUserId = options.recordedByUserId;

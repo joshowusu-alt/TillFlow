@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import SubmitButton from '@/components/SubmitButton';
 import FormError from '@/components/FormError';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
