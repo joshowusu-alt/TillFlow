@@ -17,9 +17,13 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoi
     purchasePayment: {
       createMany: vi.fn(),
       create: vi.fn(),
+      findUnique: vi.fn(),
     },
     shift: {
       findFirst: vi.fn(),
+    },
+    auditLog: {
+      create: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -49,12 +53,26 @@ vi.mock('./cash-drawer', async () => {
   };
 });
 
-import { recordCustomerPayment, recordSupplierPayment } from './payments';
+import {
+  recordCustomerPayment,
+  recordSupplierPayment,
+  SupplierPaymentError,
+  SUPPLIER_PAYMENT_ERROR,
+} from './payments';
+
+const ownerOpts = {
+  recordedByUserId: 'user-1',
+  actorRole: 'OWNER',
+  actorName: 'Owner',
+  idempotencyKey: 'idem-1',
+};
 
 describe('payments service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.purchasePayment.findUnique.mockResolvedValue(null);
+    prismaMock.auditLog.create.mockResolvedValue({ id: 'audit-1' });
     prismaMock.purchasePayment.create.mockImplementation(async ({ data }: any) => ({
       id: `purchase-payment-${data.method.toLowerCase()}`,
       ...data,
@@ -85,6 +103,7 @@ describe('payments service', () => {
       businessId: 'biz-1',
       totalPence: 10000,
       payments: [{ amountPence: 1000 }],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
     });
 
     prismaMock.purchaseInvoice.update.mockResolvedValue({
@@ -94,7 +113,10 @@ describe('payments service', () => {
     });
 
     const payments: PaymentInput[] = [{ method: 'CARD', amountPence: 2000 }];
-    const result = await recordSupplierPayment('biz-1', 'purchase-1', payments);
+    const result = await recordSupplierPayment('biz-1', 'purchase-1', payments, {
+      ...ownerOpts,
+      idempotencyKey: 'idem-card-1',
+    });
 
     expect(prismaMock.purchaseInvoice.findFirst).toHaveBeenCalledWith({
       where: { id: 'purchase-1', businessId: 'biz-1' },
@@ -105,9 +127,18 @@ describe('payments service', () => {
     });
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        businessId: 'biz-1',
+        idempotencyKey: 'idem-card-1',
+        payloadHash: expect.any(String),
+      }),
+    });
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
     expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
-    expect(result).toMatchObject({ id: 'purchase-1' });
+    expect(prismaMock.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(result.replayed).toBe(false);
+    expect(result.invoice).toMatchObject({ id: 'purchase-1' });
   });
 
   it('records supplier cash payments as negative cash drawer movements', async () => {
@@ -130,8 +161,7 @@ describe('payments service', () => {
       'biz-1',
       'purchase-1',
       [{ method: 'CASH', amountPence: 50000 }],
-      undefined,
-      'user-1'
+      { ...ownerOpts, idempotencyKey: 'idem-cash-1' },
     );
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -140,6 +170,8 @@ describe('payments service', () => {
         method: 'CASH',
         amountPence: 50000,
         recordedByUserId: 'user-1',
+        businessId: 'biz-1',
+        idempotencyKey: 'idem-cash-1',
       }),
     });
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
@@ -185,8 +217,7 @@ describe('payments service', () => {
       'biz-1',
       'purchase-1',
       [{ method: 'MOBILE_MONEY', amountPence: 50000 }],
-      undefined,
-      'user-1'
+      { ...ownerOpts, idempotencyKey: 'idem-momo-1' },
     );
 
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
@@ -199,6 +230,275 @@ describe('payments service', () => {
       ])
     );
     expect(journalLines.some((line: any) => line.accountCode === '4000')).toBe(false);
+  });
+
+  it('denies Cashier at the service boundary with no financial writes', async () => {
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CASH', amountPence: 1000 }],
+        {
+          recordedByUserId: 'cashier-1',
+          actorRole: 'CASHIER',
+          idempotencyKey: 'idem-cashier',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: SUPPLIER_PAYMENT_ERROR.FORBIDDEN,
+    });
+
+    expect(prismaMock.purchaseInvoice.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('denies missing role at the service boundary', async () => {
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'TRANSFER', amountPence: 1000 }],
+        {
+          recordedByUserId: 'user-1',
+          actorRole: '',
+          idempotencyKey: 'idem-no-role',
+        },
+      ),
+    ).rejects.toBeInstanceOf(SupplierPaymentError);
+
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+  });
+
+  it('returns a safe not-found for cross-tenant invoice ids with no writes', async () => {
+    prismaMock.purchasePayment.findUnique.mockResolvedValue(null);
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue(null);
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'other-tenant-invoice',
+        [{ method: 'CARD', amountPence: 1000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-xtenant' },
+      ),
+    ).rejects.toMatchObject({
+      code: SUPPLIER_PAYMENT_ERROR.NOT_FOUND,
+      message: 'Invoice not found',
+    });
+
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+  });
+
+  it('replays an identical idempotent request without additional financial effects', async () => {
+    const { buildSupplierPaymentPayloadHash } = await import('./payments');
+    const hash = buildSupplierPaymentPayloadHash({
+      businessId: 'biz-1',
+      invoiceId: 'purchase-1',
+      payments: [{ method: 'CARD', amountPence: 2000, reference: null }],
+      paidAtIso: '',
+      notes: '',
+      recordedByUserId: 'user-1',
+    });
+
+    prismaMock.purchasePayment.findUnique.mockResolvedValue({
+      id: 'pp-1',
+      businessId: 'biz-1',
+      purchaseInvoiceId: 'purchase-1',
+      payloadHash: hash,
+      amountPence: 2000,
+      method: 'CARD',
+    });
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      payments: [{ id: 'pp-1', amountPence: 2000 }],
+    });
+
+    const result = await recordSupplierPayment(
+      'biz-1',
+      'purchase-1',
+      [{ method: 'CARD', amountPence: 2000 }],
+      { ...ownerOpts, idempotencyKey: 'idem-replay' },
+    );
+
+    expect(result.replayed).toBe(true);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
+    expect(prismaMock.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects same idempotency key with a different amount', async () => {
+    const { buildSupplierPaymentPayloadHash } = await import('./payments');
+    const hash = buildSupplierPaymentPayloadHash({
+      businessId: 'biz-1',
+      invoiceId: 'purchase-1',
+      payments: [{ method: 'CARD', amountPence: 2000, reference: null }],
+      paidAtIso: '',
+      notes: '',
+      recordedByUserId: 'user-1',
+    });
+
+    prismaMock.purchasePayment.findUnique.mockResolvedValue({
+      id: 'pp-1',
+      businessId: 'biz-1',
+      purchaseInvoiceId: 'purchase-1',
+      payloadHash: hash,
+      amountPence: 2000,
+      method: 'CARD',
+    });
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CARD', amountPence: 3000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-conflict' },
+      ),
+    ).rejects.toMatchObject({
+      code: SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_CONFLICT,
+    });
+
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects same idempotency key with a different supplier invoice', async () => {
+    const { buildSupplierPaymentPayloadHash } = await import('./payments');
+    const hash = buildSupplierPaymentPayloadHash({
+      businessId: 'biz-1',
+      invoiceId: 'purchase-1',
+      payments: [{ method: 'CARD', amountPence: 2000, reference: null }],
+      paidAtIso: '',
+      notes: '',
+      recordedByUserId: 'user-1',
+    });
+
+    prismaMock.purchasePayment.findUnique.mockResolvedValue({
+      id: 'pp-1',
+      businessId: 'biz-1',
+      purchaseInvoiceId: 'purchase-1',
+      payloadHash: hash,
+      amountPence: 2000,
+      method: 'CARD',
+    });
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-2',
+        [{ method: 'CARD', amountPence: 2000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-conflict-inv' },
+      ),
+    ).rejects.toMatchObject({
+      code: SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_CONFLICT,
+    });
+
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+  });
+
+  it('allows Manager to record a supplier payment', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 10000,
+      payments: [],
+      supplier: { id: 's1', name: 'S' },
+    });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({
+      id: 'purchase-1',
+      paymentStatus: 'PART_PAID',
+      payments: [{ amountPence: 1000 }],
+    });
+
+    const result = await recordSupplierPayment(
+      'biz-1',
+      'purchase-1',
+      [{ method: 'TRANSFER', amountPence: 1000 }],
+      {
+        recordedByUserId: 'mgr-1',
+        actorRole: 'MANAGER',
+        actorName: 'Manager',
+        idempotencyKey: 'idem-mgr',
+      },
+    );
+
+    expect(result.replayed).toBe(false);
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires an idempotency key and does not reserve a success record on validation failure', async () => {
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CARD', amountPence: 1000 }],
+        {
+          recordedByUserId: 'user-1',
+          actorRole: 'OWNER',
+          idempotencyKey: '   ',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: SUPPLIER_PAYMENT_ERROR.IDEMPOTENCY_REQUIRED,
+    });
+
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('replays after unique-constraint race without duplicate posting', async () => {
+    const { buildSupplierPaymentPayloadHash } = await import('./payments');
+    const hash = buildSupplierPaymentPayloadHash({
+      businessId: 'biz-1',
+      invoiceId: 'purchase-1',
+      payments: [{ method: 'CARD', amountPence: 2000, reference: null }],
+      paidAtIso: '',
+      notes: '',
+      recordedByUserId: 'user-1',
+    });
+
+    prismaMock.purchasePayment.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'pp-winner',
+        businessId: 'biz-1',
+        purchaseInvoiceId: 'purchase-1',
+        payloadHash: hash,
+        amountPence: 2000,
+        method: 'CARD',
+      });
+
+    prismaMock.purchaseInvoice.findFirst
+      .mockResolvedValueOnce({
+        id: 'purchase-1',
+        totalPence: 10000,
+        storeId: 'store-1',
+      })
+      .mockResolvedValueOnce({
+        id: 'purchase-1',
+        payments: [{ id: 'pp-winner', amountPence: 2000 }],
+      });
+
+    const uniqueError = Object.assign(new Error('Unique constraint'), {
+      code: 'P2002',
+      meta: { target: ['businessId', 'idempotencyKey'] },
+    });
+    prismaMock.$transaction.mockRejectedValueOnce(uniqueError);
+
+    const result = await recordSupplierPayment(
+      'biz-1',
+      'purchase-1',
+      [{ method: 'CARD', amountPence: 2000 }],
+      { ...ownerOpts, idempotencyKey: 'idem-race' },
+    );
+
+    expect(result.replayed).toBe(true);
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(postJournalEntryMock).not.toHaveBeenCalled();
   });
 
   it('records customer cash debt collections as cash drawer inflows without revenue', async () => {
@@ -288,5 +588,111 @@ describe('payments service', () => {
       ])
     );
     expect(journalLines.some((line: any) => line.accountCode === '4000')).toBe(false);
+  });
+});
+
+describe('supplier payment GH₵1,400 expected-cash reconciliation (unit)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.purchasePayment.findUnique.mockResolvedValue(null);
+    prismaMock.auditLog.create.mockResolvedValue({ id: 'audit-1' });
+    prismaMock.purchasePayment.create.mockImplementation(async ({ data }: any) => ({
+      id: 'pp-supplier-300',
+      ...data,
+    }));
+  });
+
+  it('posts till-funded supplier cash-out once and keeps expected cash at GH₵1,400 on replay', async () => {
+    // Scenario (minor units): float 50000 + sale 100000 + receipt 20000 - supplier 30000 = 140000
+    const openingCash = 50000;
+    const cashInflows = 100000 + 20000;
+    const supplierCashOut = 30000;
+    const expectedCash = openingCash + cashInflows - supplierCashOut;
+    expect(expectedCash).toBe(140000);
+
+    let shiftExpected = openingCash + cashInflows;
+    recordCashDrawerEntryTxMock.mockImplementation(async (_tx: unknown, input: { amountPence: number }) => {
+      shiftExpected += input.amountPence;
+      return { entry: { id: 'cde-1' }, afterExpectedCashPence: shiftExpected };
+    });
+
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-600',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 60000,
+      payments: [],
+      supplier: { id: 'sup-1', name: 'Supplier' },
+    });
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-1', tillId: 'till-1' });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({
+      id: 'purchase-600',
+      paymentStatus: 'PART_PAID',
+      payments: [{ id: 'pp-supplier-300', amountPence: 30000 }],
+    });
+
+    const first = await recordSupplierPayment(
+      'biz-1',
+      'purchase-600',
+      [{ method: 'CASH', amountPence: 30000 }],
+      {
+        recordedByUserId: 'user-1',
+        actorRole: 'OWNER',
+        actorName: 'Owner',
+        idempotencyKey: 'idem-1400',
+      },
+    );
+
+    expect(first.replayed).toBe(false);
+    expect(shiftExpected).toBe(140000);
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+    expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledTimes(1);
+
+    const { buildSupplierPaymentPayloadHash } = await import('./payments');
+    const hash = buildSupplierPaymentPayloadHash({
+      businessId: 'biz-1',
+      invoiceId: 'purchase-600',
+      payments: [{ method: 'CASH', amountPence: 30000, reference: null }],
+      paidAtIso: '',
+      notes: '',
+      recordedByUserId: 'user-1',
+    });
+    prismaMock.purchasePayment.findUnique.mockResolvedValue({
+      id: 'pp-supplier-300',
+      businessId: 'biz-1',
+      purchaseInvoiceId: 'purchase-600',
+      payloadHash: hash,
+      amountPence: 30000,
+      method: 'CASH',
+    });
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-600',
+      payments: [{ id: 'pp-supplier-300', amountPence: 30000 }],
+      totalPence: 60000,
+    });
+
+    const replay = await recordSupplierPayment(
+      'biz-1',
+      'purchase-600',
+      [{ method: 'CASH', amountPence: 30000 }],
+      {
+        recordedByUserId: 'user-1',
+        actorRole: 'OWNER',
+        actorName: 'Owner',
+        idempotencyKey: 'idem-1400',
+      },
+    );
+
+    expect(replay.replayed).toBe(true);
+    expect(shiftExpected).toBe(140000);
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
+    expect(postJournalEntryMock).toHaveBeenCalledTimes(1);
+    expect(prismaMock.purchasePayment.create).toHaveBeenCalledTimes(1);
+    const outstanding =
+      60000 -
+      (replay.invoice?.payments.reduce((s: number, p: { amountPence: number }) => s + p.amountPence, 0) ?? 0);
+    expect(outstanding).toBe(30000);
   });
 });
