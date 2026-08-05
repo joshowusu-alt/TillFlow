@@ -1,6 +1,6 @@
 /**
  * Service-level scoped-gate denials using the real flag helper (no mock).
- * Proves non-allowlisted / cross-config requests create no durable records.
+ * Proves non-allowlisted / invalid-mode / cross-config requests create no durable records.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNT_CODES } from '@/lib/accounting';
@@ -51,6 +51,7 @@ vi.mock('./shared', async () => {
 
 const FLAG = 'TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE';
 const ALLOW = 'TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS';
+const MODE = 'TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE';
 const BIZ = 'cmscopedgatebiz00000000001';
 const OTHER = 'cmscopedgatebiz00000000002';
 
@@ -81,9 +82,10 @@ function expectNoDurableSideEffects() {
   expect(incrementInventoryBalanceQtyOnlyMock).not.toHaveBeenCalled();
 }
 
-describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
+describe('createInventoryIncrease scoped gate (real flag helper)', () => {
   const previousFlag = process.env[FLAG];
   const previousAllow = process.env[ALLOW];
+  const previousMode = process.env[MODE];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -111,10 +113,13 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
     else process.env[FLAG] = previousFlag;
     if (previousAllow === undefined) delete process.env[ALLOW];
     else process.env[ALLOW] = previousAllow;
+    if (previousMode === undefined) delete process.env[MODE];
+    else process.env[MODE] = previousMode;
   });
 
   it('flag off + allowlisted business → denied, no durable records', async () => {
     delete process.env[FLAG];
+    process.env[MODE] = 'ALLOWLIST';
     process.env[ALLOW] = BIZ;
     await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
@@ -122,8 +127,19 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
     expectNoDurableSideEffects();
   });
 
-  it('flag on + business absent → denied, no durable records', async () => {
+  it('flag on + mode missing → denied, no durable records', async () => {
     process.env[FLAG] = '1';
+    delete process.env[MODE];
+    process.env[ALLOW] = BIZ;
+    await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
+      code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
+    });
+    expectNoDurableSideEffects();
+  });
+
+  it('flag on + ALLOWLIST + business absent → denied, no durable records', async () => {
+    process.env[FLAG] = '1';
+    process.env[MODE] = 'ALLOWLIST';
     delete process.env[ALLOW];
     await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
@@ -131,8 +147,9 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
     expectNoDurableSideEffects();
   });
 
-  it('flag on + different business allowlisted → denied, no durable records', async () => {
+  it('flag on + ALLOWLIST + different business allowlisted → denied, no durable records', async () => {
     process.env[FLAG] = '1';
+    process.env[MODE] = 'ALLOWLIST';
     process.env[ALLOW] = OTHER;
     await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
       code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
@@ -142,6 +159,7 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
 
   it('direct request for non-allowlisted business is denied even with crafted input', async () => {
     process.env[FLAG] = '1';
+    process.env[MODE] = 'ALLOWLIST';
     process.env[ALLOW] = OTHER;
     await expect(
       createInventoryIncrease(baseInput({ businessId: BIZ, storeId: 'store-of-other' })),
@@ -151,8 +169,9 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
     expectNoDurableSideEffects();
   });
 
-  it('flag on + exact business allowlisted proceeds past the gate (then tenant checks apply)', async () => {
+  it('flag on + ALLOWLIST + exact business proceeds past the gate (then tenant checks apply)', async () => {
     process.env[FLAG] = '1';
+    process.env[MODE] = 'ALLOWLIST';
     process.env[ALLOW] = BIZ;
     // Fail at tenant/store binding to prove we passed the gate but still enforce tenancy.
     prismaMock.store.findFirst.mockResolvedValue(null);
@@ -165,5 +184,31 @@ describe('createInventoryIncrease scoped allowlist (real flag helper)', () => {
       }),
     );
     expect(prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it('flag on + GENERAL proceeds past the gate without allowlist membership', async () => {
+    process.env[FLAG] = '1';
+    process.env[MODE] = 'GENERAL';
+    delete process.env[ALLOW];
+    prismaMock.store.findFirst.mockResolvedValue(null);
+    await expect(createInventoryIncrease(baseInput({ businessId: OTHER }))).rejects.toMatchObject({
+      code: INVENTORY_INCREASE_ERROR.UNAUTHORISED,
+    });
+    expect(prismaMock.store.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'store-1', businessId: OTHER },
+      }),
+    );
+    expect(prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it('flag on + invalid mode fails closed even with allowlist', async () => {
+    process.env[FLAG] = '1';
+    process.env[MODE] = 'OPEN';
+    process.env[ALLOW] = BIZ;
+    await expect(createInventoryIncrease(baseInput())).rejects.toMatchObject({
+      code: INVENTORY_INCREASE_ERROR.FLAG_DISABLED,
+    });
+    expectNoDurableSideEffects();
   });
 });

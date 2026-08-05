@@ -436,7 +436,9 @@ export default function StockAdjustmentClient({
                 />
                 <span>
                   I confirm this is a physical-count surplus or genuinely found stock — not a
-                  purchase, return, transfer, sale correction, or opening balance.
+                  purchase, return, transfer, sale correction, or opening balance. I counted the
+                  product first, reviewed quantity and value, and will submit once (do not resubmit
+                  if the response is delayed).
                 </span>
               </label>
             </div>

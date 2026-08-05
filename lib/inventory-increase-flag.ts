@@ -3,19 +3,30 @@
  * Independent of Phase 1 decrease. When disabled, increase UI/actions must
  * hide or reject — never fall back to the legacy unhardened mutation.
  *
- * Production blast radius is controlled by TWO independent conditions:
+ * Access requires ALL of:
  *   1. Global flag TILLFLOW_INVENTORY_ADJUST_PHASE2_INCREASE === "1"
- *   2. Exact business ID membership in TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS
+ *   2. Explicit rollout mode (see below)
+ *   3. Authenticated business membership + Owner/Manager (enforced outside this module)
  *
- * Both must be true. Missing/invalid/empty allowlist fails closed (no businesses).
- * Wildcard-like values never mean "all businesses".
+ * Rollout modes (TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE):
+ *   - ALLOWLIST — only exact IDs in TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS
+ *   - GENERAL  — any business with a non-empty authenticated business ID
  *
- * Env allowlist is read via dynamic key access so Next.js does not inline a
- * build-time empty value over a runtime-configured allowlist.
+ * Missing, empty, or unknown rollout mode fails closed (deny everywhere),
+ * even when the global flag is on. Empty/absent allowlist never means "all".
+ * Wildcard-like allowlist tokens are rejected.
+ *
+ * Env values are read via dynamic key access so Next.js does not inline
+ * build-time empty values over runtime configuration.
  */
 
 export const INVENTORY_INCREASE_PHASE2_BUSINESS_IDS_ENV =
   'TILLFLOW_INVENTORY_ADJUST_PHASE2_BUSINESS_IDS' as const;
+
+export const INVENTORY_INCREASE_PHASE2_ROLLOUT_MODE_ENV =
+  'TILLFLOW_INVENTORY_ADJUST_PHASE2_ROLLOUT_MODE' as const;
+
+export type InventoryIncreasePhase2RolloutMode = 'ALLOWLIST' | 'GENERAL';
 
 /** Tokens that must never grant global or wildcard Phase 2 access. */
 const PHASE2_ALLOWLIST_REJECTED_TOKENS = new Set([
@@ -59,10 +70,19 @@ function readPhase2BusinessIdsEnv(
   return env[INVENTORY_INCREASE_PHASE2_BUSINESS_IDS_ENV];
 }
 
+function readPhase2RolloutModeEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  rawOverride?: string | null,
+): string | undefined | null {
+  if (rawOverride !== undefined) return rawOverride;
+  return env[INVENTORY_INCREASE_PHASE2_ROLLOUT_MODE_ENV];
+}
+
 /**
  * Parse the Phase 2 business allowlist.
  * Fail-closed: missing, empty, or fully invalid configuration → empty Set.
  * Never logs the allowlist. Exact membership only (no substring matching).
+ * Used only when rollout mode is ALLOWLIST.
  */
 export function parseInventoryIncreasePhase2BusinessIds(
   raw?: string | null,
@@ -81,6 +101,22 @@ export function parseInventoryIncreasePhase2BusinessIds(
   return ids;
 }
 
+/**
+ * Resolve explicit rollout mode.
+ * Only ALLOWLIST and GENERAL are accepted. Anything else (including missing) → null (fail closed).
+ */
+export function parseInventoryIncreasePhase2RolloutMode(
+  raw?: string | null,
+  env: NodeJS.ProcessEnv = process.env,
+): InventoryIncreasePhase2RolloutMode | null {
+  const value = readPhase2RolloutModeEnv(env, raw);
+  if (!value || typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'ALLOWLIST') return 'ALLOWLIST';
+  if (normalized === 'GENERAL') return 'GENERAL';
+  return null;
+}
+
 export function isInventoryIncreasePhase2Enabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
@@ -89,8 +125,8 @@ export function isInventoryIncreasePhase2Enabled(
 
 /**
  * Exact allowlist membership for a business ID.
- * Does not consult the global flag — use isInventoryIncreasePhase2EnabledForBusiness
- * for the full gate.
+ * Does not consult the global flag or rollout mode — use
+ * isInventoryIncreasePhase2EnabledForBusiness for the full gate.
  */
 export function isInventoryIncreasePhase2BusinessAllowlisted(
   businessId: string | null | undefined,
@@ -103,15 +139,29 @@ export function isInventoryIncreasePhase2BusinessAllowlisted(
 
 /**
  * Authoritative Phase 2 eligibility for a business.
- * Requires global flag ON and exact allowlist membership.
+ * Requires global flag ON and an explicit valid rollout mode.
+ * - ALLOWLIST: exact allowlist membership required
+ * - GENERAL: any non-empty business ID is rollout-eligible (role/membership still enforced elsewhere)
  * Safe for UI visibility; must also be enforced on every posting path.
  */
 export function isInventoryIncreasePhase2EnabledForBusiness(
   businessId: string | null | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return (
-    isInventoryIncreasePhase2Enabled(env) &&
-    isInventoryIncreasePhase2BusinessAllowlisted(businessId, env)
-  );
+  if (!businessId || typeof businessId !== 'string' || !businessId.trim()) {
+    return false;
+  }
+  if (!isInventoryIncreasePhase2Enabled(env)) {
+    return false;
+  }
+
+  const mode = parseInventoryIncreasePhase2RolloutMode(undefined, env);
+  if (mode === 'GENERAL') {
+    return true;
+  }
+  if (mode === 'ALLOWLIST') {
+    return isInventoryIncreasePhase2BusinessAllowlisted(businessId, env);
+  }
+  // Missing / invalid / unknown mode → fail closed.
+  return false;
 }
