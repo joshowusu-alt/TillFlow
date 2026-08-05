@@ -184,7 +184,18 @@ describe('T4 role-based business launcher menu', () => {
     const hrefs = sections.flatMap((section) => section.items.map((item) => item.href));
 
     expect(hrefs).toEqual(
-      expect.arrayContaining(['/products', '/customers', '/suppliers', '/reports', '/settings', '/account']),
+      expect.arrayContaining([
+        '/products',
+        '/customers',
+        '/suppliers',
+        '/reports',
+        '/settings',
+        '/account',
+        '/expenses',
+        '/payments/supplier-aging',
+        '/inventory/adjustments',
+        '/inventory/stocktake',
+      ]),
     );
     expect(hrefs).not.toContain('/users');
     expect(hrefs).not.toContain('/help');

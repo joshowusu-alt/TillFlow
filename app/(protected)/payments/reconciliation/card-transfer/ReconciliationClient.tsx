@@ -116,45 +116,85 @@ export function TransactionDrillDown({
   }
 
   return (
-    <table className="table w-full min-w-[44rem] border-separate border-spacing-y-1">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Invoice</th>
-          <th>Customer</th>
-          <th>Amount</th>
-          <th>Reference</th>
-        </tr>
-      </thead>
-      <tbody>
+    <>
+      <div className="hidden lg:block">
+        <div className="responsive-table-shell">
+          <table className="table w-full min-w-[44rem] border-separate border-spacing-y-1">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((tx) => (
+                <tr key={tx.id} className="rounded-xl bg-white align-top">
+                  <td className="px-3 py-2 text-xs">
+                    {new Date(tx.receivedAt).toLocaleTimeString('en-GH', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    <Link
+                      className="text-emerald-700 hover:underline"
+                      href={`/receipts/${tx.salesInvoiceId}`}
+                    >
+                      {tx.salesInvoiceId.slice(0, 8)}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2 text-xs">
+                    {tx.customerName ?? <span className="text-black/40">Walk-in</span>}
+                  </td>
+                  <td className="px-3 py-2 text-sm font-semibold">
+                    {formatMoney(tx.amountPence, currency)}
+                  </td>
+                  <td className="px-3 py-2 text-xs font-mono">
+                    {tx.reference ?? <span className="text-black/40">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="space-y-2 lg:hidden">
         {transactions.map((tx) => (
-          <tr key={tx.id} className="rounded-xl bg-white align-top">
-            <td className="px-3 py-2 text-xs">
-              {new Date(tx.receivedAt).toLocaleTimeString('en-GH', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </td>
-            <td className="px-3 py-2 text-xs">
-              <Link
-                className="text-emerald-700 hover:underline"
-                href={`/receipts/${tx.salesInvoiceId}`}
-              >
-                {tx.salesInvoiceId.slice(0, 8)}
-              </Link>
-            </td>
-            <td className="px-3 py-2 text-xs">
-              {tx.customerName ?? <span className="text-black/40">Walk-in</span>}
-            </td>
-            <td className="px-3 py-2 text-sm font-semibold">
-              {formatMoney(tx.amountPence, currency)}
-            </td>
-            <td className="px-3 py-2 text-xs font-mono">
-              {tx.reference ?? <span className="text-black/40">—</span>}
-            </td>
-          </tr>
+          <div
+            key={tx.id}
+            className="rounded-xl border border-black/5 bg-white px-3 py-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs text-black/50">
+                  {new Date(tx.receivedAt).toLocaleTimeString('en-GH', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+                <div className="mt-1 text-sm font-semibold text-ink">
+                  {tx.customerName ?? 'Walk-in'}
+                </div>
+                <div className="mt-0.5 text-xs text-black/50">
+                  Invoice{' '}
+                  <Link className="text-emerald-700 hover:underline" href={`/receipts/${tx.salesInvoiceId}`}>
+                    {tx.salesInvoiceId.slice(0, 8)}
+                  </Link>
+                </div>
+              </div>
+              <div className="text-sm font-semibold tabular-nums">
+                {formatMoney(tx.amountPence, currency)}
+              </div>
+            </div>
+            <div className="mt-2 font-mono text-xs text-black/50">
+              Ref: {tx.reference ?? '—'}
+            </div>
+          </div>
         ))}
-      </tbody>
-    </table>
+      </div>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -197,6 +198,7 @@ export default async function MomoReconciliationPage({
       </div>
 
       <ResponsiveDataTable
+        mode="cards"
         desktop={
           <div className="card p-4">
             <div className="responsive-table-shell">
@@ -313,6 +315,91 @@ export default async function MomoReconciliationPage({
               </table>
             </div>
           </div>
+        }
+        mobile={
+          collections.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6 text-center text-sm text-black/50">
+              No mobile money collections yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {collections.map((collection) => {
+                const statusTone =
+                  collection.status === 'CONFIRMED'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : collection.status === 'PENDING'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-rose-100 text-rose-700';
+                const reference =
+                  collection.providerTransactionId ??
+                  collection.providerReference ??
+                  collection.id.slice(0, 8);
+                const canReinitiate = collection.status === 'FAILED' || collection.status === 'TIMEOUT';
+
+                return (
+                  <DataCard key={collection.id}>
+                    <DataCardHeader
+                      title={collection.payerMsisdn}
+                      subtitle={`${formatDateTime(collection.initiatedAt)} · ${collection.network} | ${collection.provider}`}
+                      aside={
+                        <span className="font-semibold tabular-nums">
+                          {formatMoney(collection.amountPence, collection.currency || business.currency)}
+                        </span>
+                      }
+                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className={`pill ${statusTone}`}>{collection.status}</span>
+                      <span className="text-xs text-black/50">{collection.providerStatus ?? '—'}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-black/60">
+                      <DataCardField label="Provider ref" value={<span className="font-mono">{reference}</span>} />
+                      <DataCardField
+                        label="TillFlow sale"
+                        value={
+                          collection.salesInvoiceId ? (
+                            <Link className="text-emerald-700 hover:underline" href={`/receipts/${collection.salesInvoiceId}`}>
+                              {collection.salesInvoiceId.slice(0, 8)}
+                            </Link>
+                          ) : (
+                            'Not linked'
+                          )
+                        }
+                      />
+                    </div>
+                    {collection.lastCheckedAt ? (
+                      <div className="mt-2 text-[11px] text-black/45">
+                        Last checked: {formatDateTime(collection.lastCheckedAt)}
+                      </div>
+                    ) : null}
+                    {collection.failureReason ? (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-rose hover:underline">
+                          Payment failed — Show reason
+                        </summary>
+                        <div className="mt-1 font-mono text-[11px] text-rose/80">{collection.failureReason}</div>
+                      </details>
+                    ) : null}
+                    <DataCardActions>
+                      <form action={recheckMomoCollectionAction} className="flex-1">
+                        <input type="hidden" name="collectionId" value={collection.id} />
+                        <SubmitButton className="btn-ghost w-full text-xs" loadingText="Checking...">
+                          Re-check
+                        </SubmitButton>
+                      </form>
+                      {canReinitiate ? (
+                        <form action={reinitiateMomoCollectionAction} className="flex-1">
+                          <input type="hidden" name="collectionId" value={collection.id} />
+                          <SubmitButton className="btn-secondary w-full text-xs" loadingText="Retrying...">
+                            Re-initiate
+                          </SubmitButton>
+                        </form>
+                      ) : null}
+                    </DataCardActions>
+                  </DataCard>
+                );
+              })}
+            </div>
+          )
         }
       />
     </div>

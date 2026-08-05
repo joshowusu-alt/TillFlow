@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
+import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { formatMoney } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -202,96 +204,184 @@ export default async function CardTransferReconciliationPage({
         </div>
       </details>
 
-      {/* Main reconciliation table */}
-      <div className="card overflow-x-auto p-4">
-        <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Method</th>
-              <th>System Total</th>
-              <th>Actual Total</th>
-              <th>Variance</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const methodTone =
-                row.method === 'CARD'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-purple-100 text-purple-700';
-              const statusTone =
-                row.status === 'RECONCILED'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : row.status === 'DISCREPANCY'
-                    ? 'bg-rose-100 text-rose-700'
-                    : 'bg-amber-100 text-amber-800';
-              const varianceColor =
-                row.variancePence === null
-                  ? 'text-black/40'
-                  : row.variancePence === 0
-                    ? 'text-emerald-700'
-                    : row.variancePence > 0
-                      ? 'text-accent'
-                      : 'text-rose';
-              const detailKey = `${row.date}|${row.method}`;
-              const isDetailOpen = searchParams?.detail === detailKey;
-
-              return (
-                <tr key={detailKey} className="rounded-xl bg-white align-top">
-                  <td className="px-3 py-3 text-sm">
-                    <Link
-                      className="text-emerald-700 hover:underline"
-                      href={`/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`}
-                    >
-                      {row.date}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`pill ${methodTone}`}>
-                      {row.method === 'CARD' ? 'Card' : 'Transfer'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-sm font-semibold">
-                    {formatMoney(row.systemTotalPence, business.currency)}
-                  </td>
-                  <td className="px-3 py-3 text-sm">
-                    {row.actualTotalPence !== null
-                      ? formatMoney(row.actualTotalPence, business.currency)
-                      : <span className="text-black/40">—</span>}
-                  </td>
-                  <td className={`px-3 py-3 text-sm font-semibold ${varianceColor}`}>
-                    {row.variancePence !== null
-                      ? formatMoney(row.variancePence, business.currency)
-                      : '—'}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`pill ${statusTone}`}>{row.status}</span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <ReconcileForm
-                      date={row.date}
-                      method={row.method}
-                      storeId={resolvedStoreId}
-                      systemTotalPence={row.systemTotalPence}
-                      currency={business.currency}
-                    />
-                  </td>
+      {/* Main reconciliation list */}
+      <ResponsiveDataTable
+        mode="cards"
+        desktop={
+          <div className="card overflow-x-auto p-4">
+            <table className="table w-full min-w-[68rem] border-separate border-spacing-y-2">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Method</th>
+                  <th>System Total</th>
+                  <th>Actual Total</th>
+                  <th>Variance</th>
+                  <th>Status</th>
+                  <th>Action</th>
                 </tr>
-              );
-            })}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
-                  No card or transfer payments found for this period.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const methodTone =
+                    row.method === 'CARD'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-purple-100 text-purple-700';
+                  const statusTone =
+                    row.status === 'RECONCILED'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : row.status === 'DISCREPANCY'
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-amber-100 text-amber-800';
+                  const varianceColor =
+                    row.variancePence === null
+                      ? 'text-black/40'
+                      : row.variancePence === 0
+                        ? 'text-emerald-700'
+                        : row.variancePence > 0
+                          ? 'text-accent'
+                          : 'text-rose';
+                  const detailKey = `${row.date}|${row.method}`;
+
+                  return (
+                    <tr key={detailKey} className="rounded-xl bg-white align-top">
+                      <td className="px-3 py-3 text-sm">
+                        <Link
+                          className="text-emerald-700 hover:underline"
+                          href={`/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`}
+                        >
+                          {row.date}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`pill ${methodTone}`}>
+                          {row.method === 'CARD' ? 'Card' : 'Transfer'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-sm font-semibold">
+                        {formatMoney(row.systemTotalPence, business.currency)}
+                      </td>
+                      <td className="px-3 py-3 text-sm">
+                        {row.actualTotalPence !== null
+                          ? formatMoney(row.actualTotalPence, business.currency)
+                          : <span className="text-black/40">—</span>}
+                      </td>
+                      <td className={`px-3 py-3 text-sm font-semibold ${varianceColor}`}>
+                        {row.variancePence !== null
+                          ? formatMoney(row.variancePence, business.currency)
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`pill ${statusTone}`}>{row.status}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <ReconcileForm
+                          date={row.date}
+                          method={row.method}
+                          storeId={resolvedStoreId}
+                          systemTotalPence={row.systemTotalPence}
+                          currency={business.currency}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-sm text-black/50">
+                      No card or transfer payments found for this period.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        }
+        mobile={
+          rows.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6 text-center text-sm text-black/50">
+              No card or transfer payments found for this period.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rows.map((row) => {
+                const methodTone =
+                  row.method === 'CARD'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-purple-100 text-purple-700';
+                const statusTone =
+                  row.status === 'RECONCILED'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : row.status === 'DISCREPANCY'
+                      ? 'bg-rose-100 text-rose-700'
+                      : 'bg-amber-100 text-amber-800';
+                const varianceColor =
+                  row.variancePence === null
+                    ? 'text-black/40'
+                    : row.variancePence === 0
+                      ? 'text-emerald-700'
+                      : row.variancePence > 0
+                        ? 'text-accent'
+                        : 'text-rose';
+                const detailKey = `${row.date}|${row.method}`;
+                const detailHref = `/payments/reconciliation/card-transfer?from=${searchParams?.from ?? from.toISOString().slice(0, 10)}&to=${searchParams?.to ?? to.toISOString().slice(0, 10)}&storeId=${displayStoreId}&detail=${detailKey}`;
+
+                return (
+                  <DataCard key={detailKey}>
+                    <DataCardHeader
+                      title={row.date}
+                      subtitle={row.method === 'CARD' ? 'Card' : 'Transfer'}
+                      aside={
+                        <span className="font-semibold tabular-nums">
+                          {formatMoney(row.systemTotalPence, business.currency)}
+                        </span>
+                      }
+                    />
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className={`pill ${methodTone}`}>
+                        {row.method === 'CARD' ? 'Card' : 'Transfer'}
+                      </span>
+                      <span className={`pill ${statusTone}`}>{row.status}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <DataCardField
+                        label="Actual"
+                        value={
+                          row.actualTotalPence !== null
+                            ? formatMoney(row.actualTotalPence, business.currency)
+                            : '—'
+                        }
+                        valueClassName="tabular-nums"
+                      />
+                      <DataCardField
+                        label="Variance"
+                        value={
+                          row.variancePence !== null
+                            ? formatMoney(row.variancePence, business.currency)
+                            : '—'
+                        }
+                        valueClassName={`tabular-nums font-semibold ${varianceColor}`}
+                      />
+                    </div>
+                    <DataCardActions className="flex-col items-stretch">
+                      <Link className="btn-ghost text-xs text-center" href={detailHref}>
+                        View transactions
+                      </Link>
+                      <ReconcileForm
+                        date={row.date}
+                        method={row.method}
+                        storeId={resolvedStoreId}
+                        systemTotalPence={row.systemTotalPence}
+                        currency={business.currency}
+                      />
+                    </DataCardActions>
+                  </DataCard>
+                );
+              })}
+            </div>
+          )
+        }
+      />
 
       {/* Drill-down panel */}
       {drillDownTransactions && drillDownTransactions.success ? (

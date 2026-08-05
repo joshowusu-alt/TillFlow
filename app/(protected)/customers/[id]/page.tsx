@@ -2,6 +2,7 @@ import PageHeader from '@/components/PageHeader';
 import DownloadLink from '@/components/DownloadLink';
 import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
+import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import TagChips from '@/components/TagChips';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
@@ -90,6 +91,7 @@ export default async function CustomerDetailPage({
         select: {
           id: true,
           createdAt: true,
+          dueDate: true,
           paymentStatus: true,
           totalPence: true,
           payments: {
@@ -456,6 +458,7 @@ export default async function CustomerDetailPage({
           </div>
         </div>
         <ResponsiveDataTable
+          mode="cards"
           desktop={
             <div className="responsive-table-shell">
               <table className="table mt-4 w-full min-w-[48rem] border-separate border-spacing-y-2">
@@ -501,6 +504,78 @@ export default async function CustomerDetailPage({
                 </tbody>
               </table>
             </div>
+          }
+          mobile={
+            invoices.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-dashed border-black/15 bg-white px-5 py-6 text-center text-sm text-black/50">
+                <div className="font-semibold text-ink">No invoices yet.</div>
+                <div className="mt-1">When this customer buys on credit, their unpaid invoices will appear here.</div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {invoices.map((invoice) => {
+                  const paidAmount = Math.max(invoice.totalPence - invoice.balance, 0);
+                  const isOverdue =
+                    invoice.balance > 0 &&
+                    invoice.dueDate != null &&
+                    new Date(invoice.dueDate).getTime() < Date.now();
+
+                  return (
+                    <DataCard key={invoice.id}>
+                      <DataCardHeader
+                        title={<span className="font-mono">{invoice.id.slice(0, 8)}</span>}
+                        subtitle={formatDateTime(invoice.createdAt)}
+                        aside={
+                          <span className="font-semibold tabular-nums">
+                            {formatMoney(invoice.balance, business.currency)}
+                          </span>
+                        }
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="pill bg-black/5 text-black/60">
+                          {STATUS_LABEL[invoice.paymentStatus] ?? invoice.paymentStatus}
+                        </span>
+                        {isOverdue ? (
+                          <span className="pill bg-rose-100 text-rose-700">Overdue</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <DataCardField
+                          label="Original"
+                          value={formatMoney(invoice.totalPence, business.currency)}
+                          valueClassName="tabular-nums font-semibold"
+                        />
+                        <DataCardField
+                          label="Paid"
+                          value={formatMoney(paidAmount, business.currency)}
+                          valueClassName="tabular-nums"
+                        />
+                        {invoice.dueDate ? (
+                          <DataCardField
+                            label="Due"
+                            value={formatDate(invoice.dueDate)}
+                            className="col-span-2"
+                          />
+                        ) : null}
+                      </div>
+                      <DataCardActions>
+                        <Link className="btn-ghost text-xs" href={`/receipts/${invoice.id}`}>
+                          Print receipt
+                        </Link>
+                        {invoice.balance > 0 ? (
+                          <Link
+                            className="btn-primary text-xs"
+                            href={`/payments/customer-receipts?customerId=${customer.id}`}
+                          >
+                            Record payment
+                          </Link>
+                        ) : null}
+                      </DataCardActions>
+                    </DataCard>
+                  );
+                })}
+              </div>
+            )
           }
         />
       </div>

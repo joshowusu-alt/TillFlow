@@ -102,6 +102,14 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
     description: 'Receive stock and manage supplier activity.',
     items: [
       { href: '/inventory', label: 'Inventory', iconKey: 'inventory', roles: ['OWNER'] },
+      { href: '/inventory/adjustments', label: 'Stock Adjustments', iconKey: 'stockAdjustments', roles: ['OWNER'] },
+      {
+        href: '/inventory/stocktake',
+        label: 'Stocktake',
+        iconKey: 'inventory',
+        roles: ['OWNER'],
+        minimumPlan: 'GROWTH',
+      },
       { href: '/purchases', label: 'Purchases', iconKey: 'purchases', roles: ['OWNER'] },
       { href: '/suppliers', label: 'Suppliers', iconKey: 'suppliers', roles: ['OWNER'] },
       { href: '/transfers', label: 'Transfers', iconKey: 'transfers', roles: ['OWNER'] },
@@ -113,9 +121,18 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
     description: 'Track cash, payments, and expenses.',
     items: [
       { href: '/expenses', label: 'Expenses', iconKey: 'expenses', roles: ['OWNER'] },
+      { href: '/payments/expense-payments', label: 'Expense payments', iconKey: 'expenses', roles: ['OWNER'] },
       { href: '/reports/cash-drawer', label: 'Cash drawer', iconKey: 'cashDrawer', roles: ['OWNER'] },
       { href: '/payments/customer-receipts', label: 'Customer payments', iconKey: 'payments', roles: ['OWNER'] },
       { href: '/payments/supplier-payments', label: 'Supplier payments', iconKey: 'payments', roles: ['OWNER'] },
+      { href: '/payments/supplier-aging', label: 'Supplier Ageing', iconKey: 'supplierAging', roles: ['OWNER'] },
+      { href: '/payments/reconciliation', label: 'MoMo reconciliation', iconKey: 'reconciliation', roles: ['OWNER'] },
+      {
+        href: '/payments/reconciliation/card-transfer',
+        label: 'Card/Transfer reconciliation',
+        iconKey: 'reconciliation',
+        roles: ['OWNER'],
+      },
     ],
   },
   {
@@ -164,10 +181,46 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
     items: [
       { href: '/pos', label: 'POS', iconKey: 'pos', roles: ['MANAGER'] },
       { href: '/sales', label: 'Sales', iconKey: 'sales', roles: ['MANAGER'] },
-      { href: '/inventory', label: 'Inventory', iconKey: 'inventory', roles: ['MANAGER'] },
-      { href: '/purchases', label: 'Purchases', iconKey: 'purchases', roles: ['MANAGER'] },
       { href: '/products', label: 'Products', iconKey: 'products', roles: ['MANAGER'] },
       { href: '/shifts', label: 'Shifts', iconKey: 'shifts', roles: ['MANAGER'] },
+    ],
+  },
+  {
+    id: 'stock',
+    label: 'Stock',
+    description: 'Count, adjust, and move inventory.',
+    items: [
+      { href: '/inventory', label: 'Inventory', iconKey: 'inventory', roles: ['MANAGER'] },
+      { href: '/inventory/adjustments', label: 'Stock Adjustments', iconKey: 'stockAdjustments', roles: ['MANAGER'] },
+      {
+        href: '/inventory/stocktake',
+        label: 'Stocktake',
+        iconKey: 'inventory',
+        roles: ['MANAGER'],
+        minimumPlan: 'GROWTH',
+      },
+      { href: '/purchases', label: 'Purchases', iconKey: 'purchases', roles: ['MANAGER'] },
+      { href: '/transfers', label: 'Transfers', iconKey: 'transfers', roles: ['MANAGER'] },
+    ],
+  },
+  {
+    id: 'money',
+    label: 'Money',
+    description: 'Cash, payments, expenses, and reconciliation.',
+    items: [
+      { href: '/expenses', label: 'Expenses', iconKey: 'expenses', roles: ['MANAGER'] },
+      { href: '/payments/expense-payments', label: 'Expense payments', iconKey: 'expenses', roles: ['MANAGER'] },
+      { href: '/reports/cash-drawer', label: 'Cash drawer', iconKey: 'cashDrawer', roles: ['MANAGER'] },
+      { href: '/payments/customer-receipts', label: 'Customer payments', iconKey: 'payments', roles: ['MANAGER'] },
+      { href: '/payments/supplier-payments', label: 'Supplier payments', iconKey: 'payments', roles: ['MANAGER'] },
+      { href: '/payments/supplier-aging', label: 'Supplier Ageing', iconKey: 'supplierAging', roles: ['MANAGER'] },
+      { href: '/payments/reconciliation', label: 'MoMo reconciliation', iconKey: 'reconciliation', roles: ['MANAGER'] },
+      {
+        href: '/payments/reconciliation/card-transfer',
+        label: 'Card/Transfer reconciliation',
+        iconKey: 'reconciliation',
+        roles: ['MANAGER'],
+      },
     ],
   },
   {
@@ -188,6 +241,25 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
     ],
   },
 ];
+
+/**
+ * Critical Money and Stock operational routes that must remain discoverable on mobile
+ * for authorised Owner/Manager roles (direct section link or explicit Hub destination).
+ * Used by navigation parity tests — keep in sync with OWNER_BROWSE_AREAS / MANAGER_MENU_SECTIONS.
+ */
+export const CRITICAL_MOBILE_OPERATIONAL_HREFS = [
+  '/payments/supplier-aging',
+  '/payments/reconciliation',
+  '/payments/reconciliation/card-transfer',
+  '/inventory/adjustments',
+  '/inventory/stocktake',
+  '/expenses',
+  '/payments/expense-payments',
+  '/payments/customer-receipts',
+  '/payments/supplier-payments',
+  '/reports/cash-drawer',
+  '/transfers',
+] as const;
 
 /** Cashier More sheet links — mirrors desktop Sell/Admin for cashiers when POS hides bottom tabs. */
 export const CASHIER_MENU_ITEMS: MobileNavLink[] = [

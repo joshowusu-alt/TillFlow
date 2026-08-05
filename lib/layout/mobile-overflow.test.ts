@@ -24,6 +24,23 @@ describe('mobile overflow guards', () => {
     expect(globals).toContain('minmax(0, 1fr)');
   });
 
+  it('keeps P1 operational Money/Stock lists on the cards responsive contract', () => {
+    const responsiveTable = read('components/ResponsiveDataTable.tsx');
+    expect(responsiveTable).toContain("mode: 'cards'");
+    expect(responsiveTable).toContain("mode: 'dense-ledger'");
+    expect(responsiveTable).toContain("mode: 'desktop-only'");
+
+    for (const path of [
+      'app/(protected)/payments/reconciliation/page.tsx',
+      'app/(protected)/payments/expense-payments/page.tsx',
+      'app/(protected)/customers/[id]/page.tsx',
+    ]) {
+      const src = read(path);
+      expect(src).toContain('mode="cards"');
+      expect(src).toContain('mobile=');
+    }
+  });
+
   it('keeps shared search and page header wrappers shrink-safe on mobile', () => {
     expect(searchFilter).toContain('min-w-0 w-full');
     expect(searchFilter).toContain('min-w-0 w-full flex-1');

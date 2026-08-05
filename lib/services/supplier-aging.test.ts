@@ -216,4 +216,76 @@ describe('getSupplierAgingReport', () => {
     expect(afterEdit.rows[0].buckets.CURRENT).toBe(0);
     expect(afterEdit.rows[0].buckets.D31_60).toBe(9_000);
   });
+
+  it('reconciles a populated multi-supplier fixture across totals, buckets and partial payments', async () => {
+    // asOf 2024-06-15
+    // Alpha: current not-due + 1–30 overdue + partial payment
+    // Beta: 31–60 + 90+ with large digit amounts (truncation-sensitive)
+    prismaMock.purchaseInvoice.findMany.mockResolvedValue([
+      makeInvoice({
+        id: 'alpha-current',
+        supplierId: 'sup-alpha',
+        supplierName: 'Alpha Trading Co',
+        dueDate: '2024-06-20',
+        totalPence: 1_250_000,
+      }),
+      makeInvoice({
+        id: 'alpha-d1',
+        supplierId: 'sup-alpha',
+        supplierName: 'Alpha Trading Co',
+        dueDate: '2024-06-01',
+        totalPence: 500_000,
+        paid: 100_000,
+        paymentStatus: 'PART_PAID',
+      }),
+      makeInvoice({
+        id: 'beta-d31',
+        supplierId: 'sup-beta',
+        supplierName: 'Beta Wholesalers Ltd',
+        dueDate: '2024-05-01',
+        totalPence: 2_345_678,
+      }),
+      makeInvoice({
+        id: 'beta-d90',
+        supplierId: 'sup-beta',
+        supplierName: 'Beta Wholesalers Ltd',
+        dueDate: '2024-02-01',
+        totalPence: 9_876_543,
+      }),
+    ]);
+
+    const report = await getSupplierAgingReport(BIZ, now);
+
+    expect(report.rows).toHaveLength(2);
+    expect(report.totals.supplierCount).toBe(2);
+    expect(report.totals.invoiceCount).toBe(4);
+
+    // Alpha outstanding: 1_250_000 + (500_000 - 100_000) = 1_650_000
+    const alpha = report.rows.find((row) => row.supplierId === 'sup-alpha');
+    expect(alpha).toBeTruthy();
+    expect(alpha!.totalPence).toBe(1_650_000);
+    expect(alpha!.buckets.CURRENT).toBe(1_250_000);
+    expect(alpha!.buckets.D1_30).toBe(400_000);
+
+    // Beta outstanding: 2_345_678 + 9_876_543 = 12_222_221
+    const beta = report.rows.find((row) => row.supplierId === 'sup-beta');
+    expect(beta).toBeTruthy();
+    expect(beta!.totalPence).toBe(12_222_221);
+    expect(beta!.buckets.D31_60).toBe(2_345_678);
+    expect(beta!.buckets.D90_PLUS).toBe(9_876_543);
+
+    expect(report.totals.totalPence).toBe(1_650_000 + 12_222_221);
+    expect(report.totals.buckets.CURRENT).toBe(1_250_000);
+    expect(report.totals.buckets.D1_30).toBe(400_000);
+    expect(report.totals.buckets.D31_60).toBe(2_345_678);
+    expect(report.totals.buckets.D90_PLUS).toBe(9_876_543);
+
+    // Row totals must reconcile to headline totals (desktop/mobile/tiles/export share this report)
+    const rowSum = report.rows.reduce((sum, row) => sum + row.totalPence, 0);
+    expect(rowSum).toBe(report.totals.totalPence);
+    for (const bucket of AGING_BUCKETS) {
+      const bucketSum = report.rows.reduce((sum, row) => sum + row.buckets[bucket], 0);
+      expect(bucketSum).toBe(report.totals.buckets[bucket]);
+    }
+  });
 });
