@@ -119,7 +119,8 @@ export default function LabelPrintClient({
   const [currentPage, setCurrentPage] = useState(Math.max(1, initialPage));
   const [previewError, setPreviewError] = useState<string | undefined>();
   const [previewPending, startPreview] = useTransition();
-  const selectAllRef = useRef<HTMLInputElement>(null);
+  const selectAllMobileRef = useRef<HTMLInputElement>(null);
+  const selectAllDesktopRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -167,8 +168,12 @@ export default function LabelPrintClient({
   const someVisibleSelected = visibleIds.some((id) => selectedIdSet.has(id));
 
   useEffect(() => {
-    if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+    const indeterminate = someVisibleSelected && !allVisibleSelected;
+    if (selectAllMobileRef.current) {
+      selectAllMobileRef.current.indeterminate = indeterminate;
+    }
+    if (selectAllDesktopRef.current) {
+      selectAllDesktopRef.current.indeterminate = indeterminate;
     }
   }, [allVisibleSelected, someVisibleSelected]);
 
@@ -382,7 +387,7 @@ export default function LabelPrintClient({
             </div>
           </div>
 
-          <div className="card p-6 overflow-x-auto">
+          <div className="card p-6" data-label-print-queue>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-display font-semibold">Product label queue</h2>
@@ -403,84 +408,169 @@ export default function LabelPrintClient({
               />
             ) : (
               <>
-                <table className="table w-full border-separate border-spacing-y-2">
-                  <thead>
-                    <tr>
-                      <th className="w-12 px-3 py-2 text-left">
-                        <input
-                          ref={selectAllRef}
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={allVisibleSelected}
-                          onChange={(event) => toggleAllVisible(event.target.checked)}
-                          aria-label="Select all products on this page"
-                        />
-                      </th>
-                      <th className="px-3 py-2 text-left">Product</th>
-                      <th className="px-3 py-2 text-left">Barcode</th>
-                      <th className="px-3 py-2 text-left">Price</th>
-                      <th className="px-3 py-2 text-left">Category</th>
-                      <th className="px-3 py-2 text-left">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleProducts.map((product) => {
-                      const isSelected = selectedIdSet.has(product.id);
-                      const quantity = clampQuantity(quantities[product.id]);
+                <div className="mb-3 flex items-center gap-2 lg:hidden">
+                  <input
+                    ref={selectAllMobileRef}
+                    type="checkbox"
+                    className="h-5 w-5"
+                    checked={allVisibleSelected}
+                    onChange={(event) => toggleAllVisible(event.target.checked)}
+                    aria-label="Select all products on this page"
+                    id="label-select-all-mobile"
+                  />
+                  <label htmlFor="label-select-all-mobile" className="text-sm font-medium text-ink">
+                    Select all on this page
+                  </label>
+                </div>
 
-                      return (
-                        <tr key={product.id} className={`rounded-xl ${isSelected ? 'bg-blue-50/70' : 'bg-white'}`}>
-                          <td className="px-3 py-3 align-top">
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4"
-                              checked={isSelected}
-                              onChange={(event) => toggleProduct(product.id, event.target.checked)}
-                              aria-label={`Select ${product.name}`}
-                            />
-                          </td>
-                          <td className="px-3 py-3 align-top">
-                            <div className="font-semibold text-ink">
+                <div className="space-y-3 lg:hidden" data-label-print-mobile-queue>
+                  {visibleProducts.map((product) => {
+                    const isSelected = selectedIdSet.has(product.id);
+                    const quantity = clampQuantity(quantities[product.id]);
+
+                    return (
+                      <div
+                        key={product.id}
+                        className={`rounded-2xl border px-4 py-4 shadow-sm ${
+                          isSelected ? 'border-blue-200 bg-blue-50/70' : 'border-black/5 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-5 w-5 shrink-0"
+                            checked={isSelected}
+                            onChange={(event) => toggleProduct(product.id, event.target.checked)}
+                            aria-label={`Select ${product.name}`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-ink break-words [overflow-wrap:anywhere]">
                               <Link href={`/products/${product.id}`} className="hover:underline">
                                 {product.name}
                               </Link>
                             </div>
                             {product.sku ? <div className="mt-1 text-xs text-black/45">SKU: {product.sku}</div> : null}
-                          </td>
-                          <td className="px-3 py-3 align-top text-sm text-black/65">
-                            {product.barcode || <span className="text-black/30">—</span>}
-                          </td>
-                          <td className="px-3 py-3 align-top">{formatMoney(product.sellingPriceBasePence, currency)}</td>
-                          <td className="px-3 py-3 align-top">
-                            {product.category ? (
-                              <span
-                                className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                                style={{ backgroundColor: product.category.colour }}
-                              >
-                                {product.category.name}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-black/35">Uncategorised</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 align-top">
-                            <input
-                              type="number"
-                              min={1}
-                              max={500}
-                              inputMode="numeric"
-                              className="input min-w-[88px]"
-                              value={quantity}
-                              disabled={!isSelected}
-                              onChange={(event) => updateQuantity(product.id, event.target.value)}
-                              aria-label={`Quantity for ${product.name}`}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-black/65">
+                              <span className="tabular-nums">{formatMoney(product.sellingPriceBasePence, currency)}</span>
+                              <span className="text-black/30">·</span>
+                              <span className="break-all">{product.barcode || 'No barcode'}</span>
+                            </div>
+                            <div className="mt-2">
+                              {product.category ? (
+                                <span
+                                  className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+                                  style={{ backgroundColor: product.category.colour }}
+                                >
+                                  {product.category.name}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-black/35">Uncategorised</span>
+                              )}
+                            </div>
+                            <div className="mt-3">
+                              <label className="label" htmlFor={`label-qty-mobile-${product.id}`}>
+                                Quantity
+                              </label>
+                              <input
+                                id={`label-qty-mobile-${product.id}`}
+                                type="number"
+                                min={1}
+                                max={500}
+                                inputMode="numeric"
+                                className="input min-h-11 w-full max-w-[8rem]"
+                                value={quantity}
+                                disabled={!isSelected}
+                                onChange={(event) => updateQuantity(product.id, event.target.value)}
+                                aria-label={`Quantity for ${product.name}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-x-auto lg:block">
+                  <table className="table w-full border-separate border-spacing-y-2">
+                    <thead>
+                      <tr>
+                        <th className="w-12 px-3 py-2 text-left">
+                          <input
+                            ref={selectAllDesktopRef}
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={allVisibleSelected}
+                            onChange={(event) => toggleAllVisible(event.target.checked)}
+                            aria-label="Select all products on this page"
+                          />
+                        </th>
+                        <th className="px-3 py-2 text-left">Product</th>
+                        <th className="px-3 py-2 text-left">Barcode</th>
+                        <th className="px-3 py-2 text-left">Price</th>
+                        <th className="px-3 py-2 text-left">Category</th>
+                        <th className="px-3 py-2 text-left">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleProducts.map((product) => {
+                        const isSelected = selectedIdSet.has(product.id);
+                        const quantity = clampQuantity(quantities[product.id]);
+
+                        return (
+                          <tr key={product.id} className={`rounded-xl ${isSelected ? 'bg-blue-50/70' : 'bg-white'}`}>
+                            <td className="px-3 py-3 align-top">
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4"
+                                checked={isSelected}
+                                onChange={(event) => toggleProduct(product.id, event.target.checked)}
+                                aria-label={`Select ${product.name}`}
+                              />
+                            </td>
+                            <td className="px-3 py-3 align-top">
+                              <div className="font-semibold text-ink">
+                                <Link href={`/products/${product.id}`} className="hover:underline">
+                                  {product.name}
+                                </Link>
+                              </div>
+                              {product.sku ? <div className="mt-1 text-xs text-black/45">SKU: {product.sku}</div> : null}
+                            </td>
+                            <td className="px-3 py-3 align-top text-sm text-black/65">
+                              {product.barcode || <span className="text-black/30">—</span>}
+                            </td>
+                            <td className="px-3 py-3 align-top">{formatMoney(product.sellingPriceBasePence, currency)}</td>
+                            <td className="px-3 py-3 align-top">
+                              {product.category ? (
+                                <span
+                                  className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+                                  style={{ backgroundColor: product.category.colour }}
+                                >
+                                  {product.category.name}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-black/35">Uncategorised</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3 align-top">
+                              <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                inputMode="numeric"
+                                className="input min-w-[88px]"
+                                value={quantity}
+                                disabled={!isSelected}
+                                onChange={(event) => updateQuantity(product.id, event.target.value)}
+                                aria-label={`Quantity for ${product.name}`}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
                 <Pagination
                   currentPage={safeCurrentPage}
@@ -497,7 +587,7 @@ export default function LabelPrintClient({
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 pb-28 lg:pb-0" data-label-print-actions>
           <LabelPreview data={previewLabel} size={template} />
 
           <div className="card p-6">
@@ -552,7 +642,7 @@ export default function LabelPrintClient({
               <FormError error={previewError} />
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-5 hidden flex-col gap-3 sm:flex-row lg:flex">
               <button
                 type="button"
                 className="btn-secondary justify-center"
@@ -572,6 +662,37 @@ export default function LabelPrintClient({
             <div className="mt-4 text-xs text-black/45">
               Preview opens a new tab with the rendered HTML. Print opens the same type of view and immediately starts the browser print dialog.
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky mobile primary actions — clear of bottom navigation */}
+      <div
+        className="fixed inset-x-0 z-30 border-t border-black/10 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden"
+        style={{ bottom: 'var(--mobile-bottom-nav-height)' }}
+        data-label-print-sticky-actions
+      >
+        <div className="mx-auto flex max-w-lg flex-col gap-2">
+          <div className="text-center text-xs text-black/55">
+            {selectedProducts.length > 0
+              ? `${selectedProducts.length} selected · ${totalLabels} label${totalLabels === 1 ? '' : 's'}`
+              : 'Select products to enable preview and print'}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-secondary min-h-11 flex-1 justify-center"
+              onClick={handlePreview}
+              disabled={selectedProducts.length === 0 || previewPending}
+            >
+              {previewPending ? 'Generating…' : 'Preview'}
+            </button>
+            <PrintLabelsButton
+              selectedProducts={selectedProducts}
+              template={template}
+              className="btn-primary min-h-11 flex-1 justify-center"
+              onError={setPreviewError}
+            />
           </div>
         </div>
       </div>
