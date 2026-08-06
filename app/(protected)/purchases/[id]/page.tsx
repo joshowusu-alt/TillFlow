@@ -2,6 +2,7 @@ import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import SubmitButton from '@/components/SubmitButton';
 import FormError from '@/components/FormError';
+import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { formatMoney, formatDateTime, formatDate } from '@/lib/format';
@@ -251,9 +252,40 @@ export default async function PurchaseInvoicePage({
       )}
 
       {/* Invoice lines */}
-      <div className="card p-6">
+      <div className="card p-6" data-purchase-detail-lines>
         <h2 className="text-base font-semibold">Items purchased</h2>
-        <div className="overflow-x-auto">
+        <div className="mt-4 space-y-3 lg:hidden">
+          {invoice.lines.map((line) => (
+            <DataCard key={line.id}>
+              <DataCardHeader
+                title={line.product.name}
+                subtitle={`${line.qtyInUnit} ${line.unit.name}`}
+                aside={
+                  <span className="text-sm font-semibold tabular-nums">
+                    {formatMoney(line.lineTotalPence, business.currency)}
+                  </span>
+                }
+              />
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <DataCardField
+                  label="Unit cost"
+                  value={formatMoney(line.unitCostPence, business.currency)}
+                  valueClassName="text-sm tabular-nums"
+                />
+                <DataCardField
+                  label="Line total"
+                  value={formatMoney(line.lineTotalPence, business.currency)}
+                  valueClassName="text-sm font-semibold tabular-nums"
+                />
+              </div>
+            </DataCard>
+          ))}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-black/5 bg-black/[0.02] px-4 py-3">
+            <span className="text-xs uppercase tracking-wider text-black/40">Total (incl. VAT)</span>
+            <span className="text-sm font-bold tabular-nums">{formatMoney(invoice.totalPence, business.currency)}</span>
+          </div>
+        </div>
+        <div className="hidden overflow-x-auto lg:block">
           <table className="table mt-4 w-full border-separate border-spacing-y-1 text-sm">
             <thead>
               <tr>
@@ -282,40 +314,71 @@ export default async function PurchaseInvoicePage({
       </div>
 
       {/* Payment history */}
-      <div className="card p-6">
+      <div className="card p-6 pb-28 lg:pb-6" data-purchase-detail-payments>
         <h2 className="text-base font-semibold">Payment history</h2>
         {invoice.payments.length === 0 ? (
           <p className="mt-3 text-sm text-black/50">No payments recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="table mt-4 w-full border-separate border-spacing-y-1 text-sm">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Method</th>
-                  <th className="text-right">Amount</th>
-                  <th>Notes</th>
-                  <th>Recorded by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.payments.map((payment) => (
-                  <tr key={payment.id} className="rounded-xl bg-white">
-                    <td className="px-3 py-2">{formatDate(payment.paidAt)}</td>
-                    <td className="px-3 py-2">{payment.method}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatMoney(payment.amountPence, business.currency)}</td>
-                    <td className="px-3 py-2 text-black/50">{payment.notes ?? '—'}</td>
-                    <td className="px-3 py-2 text-black/50">{payment.recordedBy?.name ?? '—'}</td>
+          <>
+            <div className="mt-4 space-y-3 lg:hidden">
+              {invoice.payments.map((payment) => (
+                <DataCard key={payment.id}>
+                  <DataCardHeader
+                    title={formatDate(payment.paidAt)}
+                    subtitle={payment.method}
+                    aside={
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatMoney(payment.amountPence, business.currency)}
+                      </span>
+                    }
+                  />
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <DataCardField
+                      label="Notes"
+                      value={payment.notes ?? '—'}
+                      className="col-span-2"
+                      valueClassName="text-sm break-words [overflow-wrap:anywhere]"
+                    />
+                    <DataCardField
+                      label="Recorded by"
+                      value={payment.recordedBy?.name ?? '—'}
+                      className="col-span-2"
+                      valueClassName="text-sm"
+                    />
+                  </div>
+                </DataCard>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="table mt-4 w-full border-separate border-spacing-y-1 text-sm">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Method</th>
+                    <th className="text-right">Amount</th>
+                    <th>Notes</th>
+                    <th>Recorded by</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {invoice.payments.map((payment) => (
+                    <tr key={payment.id} className="rounded-xl bg-white">
+                      <td className="px-3 py-2">{formatDate(payment.paidAt)}</td>
+                      <td className="px-3 py-2">{payment.method}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{formatMoney(payment.amountPence, business.currency)}</td>
+                      <td className="px-3 py-2 text-black/50">{payment.notes ?? '—'}</td>
+                      <td className="px-3 py-2 text-black/50">{payment.recordedBy?.name ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {/* Record payment form */}
+        {/* Record payment form — unchanged SupplierPaymentForm (PR #78 controls). */}
         {!isClosed && outstanding > 0 && (
-          <div className="mt-6">
+          <div className="mt-6 scroll-mb-28" data-purchase-payment-form>
             <h3 className="text-sm font-semibold">Record a payment</h3>
             <div className="mt-3">
               <SupplierPaymentForm
@@ -330,7 +393,7 @@ export default async function PurchaseInvoicePage({
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 pb-24 lg:pb-0">
         <Link href="/purchases" className="btn-ghost text-sm">← Back to purchases</Link>
         {invoice.supplier && (
           <Link href={`/suppliers/${invoice.supplier.id}`} className="btn-ghost text-sm">
