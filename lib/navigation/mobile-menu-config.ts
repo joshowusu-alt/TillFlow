@@ -110,6 +110,19 @@ export const OWNER_BROWSE_AREAS: MobileBrowseArea[] = [
         roles: ['OWNER'],
         minimumPlan: 'GROWTH',
       },
+      {
+        href: '/reports/stock-movements',
+        label: 'Stock Movements',
+        iconKey: 'stockMovements',
+        roles: ['OWNER'],
+      },
+      {
+        href: '/products/labels',
+        label: 'Product Labels',
+        iconKey: 'labels',
+        roles: ['OWNER'],
+        minimumPlan: 'GROWTH',
+      },
       { href: '/purchases', label: 'Purchases', iconKey: 'purchases', roles: ['OWNER'] },
       { href: '/suppliers', label: 'Suppliers', iconKey: 'suppliers', roles: ['OWNER'] },
       { href: '/transfers', label: 'Transfers', iconKey: 'transfers', roles: ['OWNER'] },
@@ -182,6 +195,13 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
       { href: '/pos', label: 'POS', iconKey: 'pos', roles: ['MANAGER'] },
       { href: '/sales', label: 'Sales', iconKey: 'sales', roles: ['MANAGER'] },
       { href: '/products', label: 'Products', iconKey: 'products', roles: ['MANAGER'] },
+      {
+        href: '/online-orders',
+        label: 'Online Orders',
+        iconKey: 'orders',
+        roles: ['MANAGER'],
+        requiresFeature: 'onlineStorefront',
+      },
       { href: '/shifts', label: 'Shifts', iconKey: 'shifts', roles: ['MANAGER'] },
     ],
   },
@@ -196,6 +216,19 @@ export const MANAGER_MENU_SECTIONS: MobileBrowseArea[] = [
         href: '/inventory/stocktake',
         label: 'Stocktake',
         iconKey: 'inventory',
+        roles: ['MANAGER'],
+        minimumPlan: 'GROWTH',
+      },
+      {
+        href: '/reports/stock-movements',
+        label: 'Stock Movements',
+        iconKey: 'stockMovements',
+        roles: ['MANAGER'],
+      },
+      {
+        href: '/products/labels',
+        label: 'Product Labels',
+        iconKey: 'labels',
         roles: ['MANAGER'],
         minimumPlan: 'GROWTH',
       },
@@ -253,6 +286,8 @@ export const CRITICAL_MOBILE_OPERATIONAL_HREFS = [
   '/payments/reconciliation/card-transfer',
   '/inventory/adjustments',
   '/inventory/stocktake',
+  '/reports/stock-movements',
+  '/products/labels',
   '/expenses',
   '/payments/expense-payments',
   '/payments/customer-receipts',
@@ -293,6 +328,9 @@ export function itemIsVisible(item: Pick<MobileNavLink, 'roles' | 'href' | 'requ
   if (!item.roles.includes(context.role)) return false;
   if (!context.features.multiStore && item.href === '/transfers') return false;
   if (context.momoEnabled === false && item.href === '/payments/reconciliation') return false;
+  // Hide feature-gated destinations when the entitlement is off (no false discoverability).
+  // Plan-gated items remain visible with an upgrade lock badge via NavMobileMenu.
+  if (item.requiresFeature && !context.features[item.requiresFeature]) return false;
   return true;
 }
 

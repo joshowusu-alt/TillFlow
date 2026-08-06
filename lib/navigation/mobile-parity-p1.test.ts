@@ -73,6 +73,8 @@ describe('P1 mobile navigation parity', () => {
       expect.arrayContaining([
         '/inventory/adjustments',
         '/inventory/stocktake',
+        '/reports/stock-movements',
+        '/products/labels',
         '/transfers',
       ]),
     );
@@ -104,7 +106,13 @@ describe('P1 mobile navigation parity', () => {
       ]),
     );
     expect(stock?.items.map((item) => item.href)).toEqual(
-      expect.arrayContaining(['/inventory/adjustments', '/inventory/stocktake', '/transfers']),
+      expect.arrayContaining([
+        '/inventory/adjustments',
+        '/inventory/stocktake',
+        '/reports/stock-movements',
+        '/products/labels',
+        '/transfers',
+      ]),
     );
 
     for (const href of CRITICAL_MOBILE_OPERATIONAL_HREFS) {
