@@ -9,11 +9,14 @@ vi.mock('react', async () => {
     };
 });
 
-// Mock navigator.onLine
-Object.defineProperty(navigator, 'onLine', {
-    writable: true,
-    value: true
-});
+// Mock navigator.onLine only when a browser-like global exists (jsdom).
+// Node-environment suites (e.g. lib/migration) must not crash on setup.
+if (typeof navigator !== 'undefined') {
+    Object.defineProperty(navigator, 'onLine', {
+        writable: true,
+        value: true,
+    });
+}
 
 // Mock indexedDB for tests
 const mockIDB = {
