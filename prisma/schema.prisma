@@ -179,6 +179,7 @@ model Business {
   categories             Category[]
   products               Product[]
   productImports         ProductImport[]
+  migrationPackages      MigrationPackage[]
   accounts               Account[]
   journalEntries         JournalEntry[]
   expenses               Expense[]
@@ -420,7 +421,10 @@ model Store {
   transfersIn            StockTransfer[]         @relation("StockTransferToStore")
   reorderActions             ReorderAction[]
   paymentReconciliations     PaymentReconciliation[]
+  migrationBranchMappings    MigrationBranchMapping[]
 
+  /// Tenant-aware composite target for migration branch mappings.
+  @@unique([businessId, id])
   @@index([businessId])
 }
 
@@ -524,6 +528,11 @@ model User {
   purchasePaymentsRecorded   PurchasePayment[]       @relation("PurchasePaymentRecordedBy")
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
+  migrationPackagesCreated   MigrationPackage[]      @relation("MigrationPackageCreatedBy")
+  migrationPackagesValidated MigrationPackage[]      @relation("MigrationPackageValidatedBy")
+  migrationPackagesApproved  MigrationPackage[]      @relation("MigrationPackageApprovedBy")
+  migrationPackagesExecuted  MigrationPackage[]      @relation("MigrationPackageExecutedBy")
+  migrationPackagesCancelled MigrationPackage[]      @relation("MigrationPackageCancelledBy")
 
   @@index([businessId, active])
 }
@@ -709,6 +718,121 @@ model ProductImport {
   uploadedBy User?    @relation(fields: [uploadedByUserId], references: [id])
 
   @@index([businessId, createdAt])
+}
+
+/// Atomic Phase 1 migration package (suppliers + products + opening stock).
+/// Lifecycle status is separate from reconciliationStatus. Strings are CHECK-constrained in SQL.
+model MigrationPackage {
+  id                       String    @id @default(cuid())
+  businessId               String
+  /// TillFlow migration contract version (e.g. "1").
+  contractVersion          String
+  /// Stable normalized source namespace (immutable after create).
+  sourceSystemKey          String
+  /// Source-system business identity (not a TillFlow business id).
+  sourceBusinessKey        String
+  /// ISO 4217 reporting currency for package money fields.
+  reportingCurrency        String
+  /// Package as-of date (YYYY-MM-DD calendar date).
+  packageAsOfDate          String
+  /// DRAFT | VALIDATED | APPROVED | IMPORTING | IMPORTED | VALIDATION_FAILED |
+  /// APPROVAL_INVALIDATED | IMPORT_FAILED | EXPIRED | CANCELLED
+  status                   String    @default("DRAFT")
+  /// NOT_STARTED | RECONCILING | MATCHED | MISMATCHED | RECONCILIATION_FAILED
+  reconciliationStatus     String    @default("NOT_STARTED")
+  /// Optional client key for idempotent package create within a business.
+  clientPackageKey         String?
+  /// Canonical SHA-256 of the approved/validatable package manifest.
+  manifestChecksum         String?
+  /// Manifest checksum frozen at Owner approval.
+  approvedManifestChecksum String?
+  /// Expiry clock starts at package creation; not restarted by file replacement.
+  expiresAt                DateTime
+  expiredAt                DateTime?
+  version                  Int       @default(1)
+  createdByUserId          String?
+  validatedByUserId        String?
+  validatedAt              DateTime?
+  approvedByUserId         String?
+  approvedAt               DateTime?
+  /// Future executor — unused in P0.
+  executedByUserId         String?
+  executedAt               DateTime?
+  cancelledByUserId        String?
+  cancelledAt              DateTime?
+  errorMessage             String?
+  summaryJson              String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy   User?                     @relation("MigrationPackageCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  validatedBy User?                     @relation("MigrationPackageValidatedBy", fields: [validatedByUserId], references: [id], onDelete: SetNull)
+  approvedBy  User?                     @relation("MigrationPackageApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  executedBy  User?                     @relation("MigrationPackageExecutedBy", fields: [executedByUserId], references: [id], onDelete: SetNull)
+  cancelledBy User?                     @relation("MigrationPackageCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  files          MigrationFile[]
+  branchMappings MigrationBranchMapping[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, clientPackageKey])
+  @@index([businessId, status, createdAt])
+  @@index([businessId, status, expiresAt])
+  @@index([businessId, sourceSystemKey, sourceBusinessKey])
+}
+
+/// One immutable logical file belonging to a MigrationPackage.
+model MigrationFile {
+  id                 String    @id @default(cuid())
+  businessId         String
+  packageId          String
+  /// SUPPLIERS | PRODUCTS | OPENING_STOCK
+  entityType         String
+  /// Original filename stored safely (basename only; no path separators).
+  originalFilename   String?
+  contentType        String?
+  byteLength         Int       @default(0)
+  /// SHA-256 hex of exact uploaded bytes.
+  uploadChecksum     String
+  /// SHA-256 of bytes presented at validation (must match upload for approval).
+  validationChecksum String?
+  /// SHA-256 frozen at package approval for this file.
+  approvedChecksum   String?
+  /// Future blob/object storage key — unused in P0 upload endpoints.
+  storageKey         String?
+  rowCount           Int?
+  validatedAt        DateTime?
+  approvedAt         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  package MigrationPackage @relation(fields: [businessId, packageId], references: [businessId, id], onDelete: Cascade)
+
+  @@unique([businessId, id])
+  @@unique([packageId, entityType])
+  @@index([businessId, packageId])
+  @@index([businessId, uploadChecksum])
+}
+
+/// Maps a source branch key to a TillFlow Store in the same business.
+model MigrationBranchMapping {
+  id              String   @id @default(cuid())
+  businessId      String
+  packageId       String
+  sourceBranchKey String
+  targetStoreId   String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  package MigrationPackage @relation(fields: [businessId, packageId], references: [businessId, id], onDelete: Cascade)
+  /// Composite FK guarantees the store belongs to the same business.
+  store   Store            @relation(fields: [businessId, targetStoreId], references: [businessId, id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([packageId, sourceBranchKey])
+  @@unique([packageId, targetStoreId])
+  @@index([businessId, packageId])
+  @@index([businessId, targetStoreId])
 }
 
 model Unit {
