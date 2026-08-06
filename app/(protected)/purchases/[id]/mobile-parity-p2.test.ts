@@ -31,9 +31,17 @@ describe('P2 purchase-detail mobile presentation', () => {
   it('keeps SupplierPaymentForm / PR #78 controls intact on the detail page', () => {
     expect(src).toContain('SupplierPaymentForm');
     expect(src).toContain('data-purchase-payment-form');
-    expect(src).toContain('pb-24');
+    expect(src).toContain('pb-28 lg:pb-6');
+    expect(src).toContain('pb-24 lg:pb-0');
+    expect(src).not.toContain('pb-24 sm:pb-6');
     expect(paymentForm).toContain('idempotencyKey');
     expect(paymentForm).toContain('recordSupplierPaymentAction');
     expect(paymentForm).not.toContain('freeze'); // freeze lives in the action/service layer
+  });
+
+  it('keeps bottom-nav clearance until lg where the mobile tab bar hides', () => {
+    // Bottom tab bar uses lg:hidden; padding must not collapse at sm/md.
+    expect(src).toMatch(/pb-28\s+lg:pb-6/);
+    expect(src).toMatch(/pb-24\s+lg:pb-0/);
   });
 });

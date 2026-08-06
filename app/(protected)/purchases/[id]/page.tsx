@@ -314,7 +314,7 @@ export default async function PurchaseInvoicePage({
       </div>
 
       {/* Payment history */}
-      <div className="card p-6 pb-24 sm:pb-6" data-purchase-detail-payments>
+      <div className="card p-6 pb-28 lg:pb-6" data-purchase-detail-payments>
         <h2 className="text-base font-semibold">Payment history</h2>
         {invoice.payments.length === 0 ? (
           <p className="mt-3 text-sm text-black/50">No payments recorded yet.</p>
@@ -393,7 +393,7 @@ export default async function PurchaseInvoicePage({
         )}
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 pb-24 lg:pb-0">
         <Link href="/purchases" className="btn-ghost text-sm">← Back to purchases</Link>
         {invoice.supplier && (
           <Link href={`/suppliers/${invoice.supplier.id}`} className="btn-ghost text-sm">
