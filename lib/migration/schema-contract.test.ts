@@ -40,4 +40,9 @@ describe('migration P0 schema contract', () => {
     expect(sql).not.toContain('CREATE TABLE "MigrationChunkReceipt"');
     expect(sql).not.toContain('CREATE TABLE "MigrationOpeningStockPosting"');
   });
+
+  it('documents that uniqueness is at-most-one per entity type, not completeness', () => {
+    // Service-layer helpers still enforce exactly-three at validation/approval.
+    expect(MIGRATION_ENTITY_TYPES).toHaveLength(3);
+  });
 });

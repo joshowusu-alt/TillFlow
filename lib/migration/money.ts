@@ -3,6 +3,12 @@
  *
  * Prospects supply ordinary decimal notation (e.g. "12.50"). TillFlow stores
  * integer minor units. Parsing normalisation is separate from file checksums.
+ *
+ * CSV / file-boundary callers must pass string cell values. The `number`
+ * overload remains for internal numeric literals in tests and helpers; do not
+ * feed float-computed numbers from a spreadsheet path (float artefacts can
+ * appear as excessive fractional digits). A string-only public boundary may be
+ * introduced when P1 upload wiring lands.
  */
 
 import { MigrationContractError } from '@/lib/migration/errors';
@@ -17,14 +23,16 @@ export const MIGRATION_MAX_MINOR_UNITS = 9_000_000_000_000; // 90 billion major 
  * - "12", "12.5", "12.50"
  * - optional leading +
  * - optional thousands grouping with commas only when groups are exactly three digits
+ * - "0", "0.0", "0.00", "+0" → ordinary `0` (never JavaScript `-0`)
  *
  * Rejected:
- * - blank / non-string
+ * - blank / non-string-or-number
  * - currency symbols or letters
  * - scientific notation
  * - more than 2 decimal places
  * - malformed grouping
  * - non-finite / overflow
+ * - signed negative zero ("-0", "-0.0", "-0.00")
  */
 export function parseDecimalCurrencyToMinorUnits(raw: unknown, fieldLabel = 'amount'): number {
   if (typeof raw !== 'string' && typeof raw !== 'number') {
@@ -81,11 +89,19 @@ export function parseDecimalCurrencyToMinorUnits(raw: unknown, fieldLabel = 'amo
   if (minor > BigInt(MIGRATION_MAX_MINOR_UNITS)) {
     throw new MigrationContractError(`${fieldLabel} exceeds the maximum supported amount.`);
   }
+  // Reject textual signed zero before producing JavaScript -0.
+  if (negative && minor === 0n) {
+    throw new MigrationContractError(`${fieldLabel} must not be signed negative zero.`);
+  }
   const asNumber = Number(minor);
   if (!Number.isFinite(asNumber)) {
     throw new MigrationContractError(`${fieldLabel} is not a finite number.`);
   }
-  return negative ? -asNumber : asNumber;
+  const result = negative ? -asNumber : asNumber;
+  if (Object.is(result, -0)) {
+    throw new MigrationContractError(`${fieldLabel} must not be signed negative zero.`);
+  }
+  return result;
 }
 
 function stripThousandsGrouping(intPartRaw: string, fieldLabel: string): string {
@@ -114,7 +130,7 @@ function stripThousandsGrouping(intPartRaw: string, fieldLabel: string): string 
 
 /** Opening-stock unit costs must be ≥ 0 after minor-unit conversion. */
 export function assertNonNegativeUnitCostMinor(unitCostMinor: number): void {
-  if (!Number.isInteger(unitCostMinor) || unitCostMinor < 0) {
+  if (!Number.isInteger(unitCostMinor) || unitCostMinor < 0 || Object.is(unitCostMinor, -0)) {
     throw new MigrationContractError('unitCost must not be negative.');
   }
 }

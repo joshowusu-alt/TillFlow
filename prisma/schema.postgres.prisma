@@ -787,6 +787,7 @@ model MigrationPackage {
 }
 
 /// One immutable logical file belonging to a MigrationPackage.
+/// UNIQUE(packageId, entityType) = at most one of each type (not exactly-three completeness).
 model MigrationFile {
   id                 String    @id @default(cuid())
   businessId         String

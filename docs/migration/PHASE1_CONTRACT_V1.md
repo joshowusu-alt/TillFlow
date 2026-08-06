@@ -20,6 +20,24 @@ A package must carry:
 | Three file checksums | `SUPPLIERS`, `PRODUCTS`, `OPENING_STOCK` |
 | Branch mappings | Every `sourceBranchKey` → same-business `Store` |
 
+### Source branch key canonicalisation
+
+Approval-material `sourceBranchKey` identity (manifest + duplicate policy) uses one shared rule:
+
+1. require a string;
+2. trim surrounding whitespace;
+3. Unicode NFC;
+4. locale-independent lowercase;
+5. reject empty;
+6. max length 128 (on the NFC-trimmed form).
+
+`HQ`, `hq`, and ` HQ ` share one identity. Target `storeId` values are not case-folded.
+
+### Package file completeness
+
+The database guarantees **at most one** file per `(packageId, entityType)`.  
+P1 validation/approval must still require **exactly** the three Phase 1 entity files transactionally.
+
 ## Suppliers file
 
 Required: `sourceSupplierKey`, `supplierName`  

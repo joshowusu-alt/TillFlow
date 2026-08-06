@@ -12,6 +12,7 @@ export * from '@/lib/migration/lifecycle';
 export * from '@/lib/migration/money';
 export * from '@/lib/migration/limits';
 export * from '@/lib/migration/source-system-key';
+export * from '@/lib/migration/source-branch-key';
 export * from '@/lib/migration/roles';
 export * from '@/lib/migration/tenant-policy';
 export * from '@/lib/migration/approval';

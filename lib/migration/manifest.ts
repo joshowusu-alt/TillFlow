@@ -7,6 +7,7 @@
 
 import { sha256Hex } from '@/lib/migration/checksum';
 import { MigrationContractError } from '@/lib/migration/errors';
+import { canonicaliseSourceBranchKey } from '@/lib/migration/source-branch-key';
 import {
   MIGRATION_ENTITY_TYPES,
   type CanonicalBranchMapping,
@@ -63,7 +64,9 @@ export function buildCanonicalManifest(input: {
   );
   const branchMappings = sortMappings(
     input.branchMappings.map((m) => ({
-      sourceBranchKey: assertNonEmpty(m.sourceBranchKey, 'sourceBranchKey'),
+      // Approval-material identity — same rule as tenant duplicate policy.
+      sourceBranchKey: canonicaliseSourceBranchKey(m.sourceBranchKey),
+      // Store ids are TillFlow identifiers; do not case-fold.
       targetStoreId: assertNonEmpty(m.targetStoreId, 'targetStoreId'),
     })),
   );

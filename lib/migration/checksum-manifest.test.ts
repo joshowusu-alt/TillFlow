@@ -135,4 +135,63 @@ describe('migration checksums', () => {
     });
     expect(next).toBe('APPROVAL_INVALIDATED');
   });
+
+  it('canonicalises sourceBranchKey identically for case/whitespace and changes checksum for distinct keys', () => {
+    const a = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: 'HQ', targetStoreId: 'store_1' }],
+      }),
+    );
+    const b = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: 'hq', targetStoreId: 'store_1' }],
+      }),
+    );
+    const c = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: '  HQ  ', targetStoreId: 'store_1' }],
+      }),
+    );
+    expect(a).toBe(b);
+    expect(a).toBe(c);
+
+    const differentKey = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: 'WAREHOUSE', targetStoreId: 'store_1' }],
+      }),
+    );
+    expect(a).not.toBe(differentKey);
+
+    // target storeId identity is not case-folded
+    const storeCase = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: 'HQ', targetStoreId: 'STORE_1' }],
+      }),
+    );
+    expect(a).not.toBe(storeCase);
+
+    const manifest = buildCanonicalManifest(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: 'HQ', targetStoreId: 'store_1' }],
+      }),
+    );
+    expect(manifest.branchMappings[0]?.sourceBranchKey).toBe('hq');
+    expect(manifest.branchMappings[0]?.targetStoreId).toBe('store_1');
+  });
+
+  it('treats NFC-equivalent sourceBranchKey forms as identical', () => {
+    const composed = 'caf\u00e9';
+    const decomposed = 'cafe\u0301';
+    const a = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: composed, targetStoreId: 'store_1' }],
+      }),
+    );
+    const b = manifestChecksum(
+      baseManifestInput({
+        branchMappings: [{ sourceBranchKey: decomposed, targetStoreId: 'store_1' }],
+      }),
+    );
+    expect(a).toBe(b);
+  });
 });

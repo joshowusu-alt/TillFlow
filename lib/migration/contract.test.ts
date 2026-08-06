@@ -99,6 +99,18 @@ describe('migration data contract v1', () => {
     expect(() => calculateOpeningStockValueMinor(-1, 100)).toThrow(/non-negative/);
   });
 
+  it('rejects signed negative zero and returns ordinary zero for valid zeros', () => {
+    for (const z of ['0', '0.0', '0.00', '+0'] as const) {
+      const v = parseDecimalCurrencyToMinorUnits(z);
+      expect(v).toBe(0);
+      expect(Object.is(v, -0)).toBe(false);
+    }
+    for (const nz of ['-0', '-0.0', '-0.00'] as const) {
+      expect(() => parseDecimalCurrencyToMinorUnits(nz)).toThrow(/signed negative zero/);
+      expect(() => parseOpeningStockUnitCostToMinorUnits(nz)).toThrow();
+    }
+  });
+
   it('validates dates, currency, and source keys', () => {
     expect(parseAsOfDate('2026-09-01')).toBe('2026-09-01');
     expect(() => parseAsOfDate('2026-13-01')).toThrow();

@@ -6,6 +6,7 @@
  */
 
 import { MigrationPolicyError } from '@/lib/migration/errors';
+import { canonicaliseSourceBranchKey } from '@/lib/migration/source-branch-key';
 import { MIGRATION_ENTITY_TYPES, type MigrationEntityType } from '@/lib/migration/types';
 
 export type BranchMappingInput = {
@@ -38,7 +39,7 @@ export function assertNoDuplicateSourceBranchKeys(
 ): void {
   const seen = new Set<string>();
   for (const m of mappings) {
-    const key = m.sourceBranchKey.trim().normalize('NFC').toLowerCase();
+    const key = canonicaliseSourceBranchKey(m.sourceBranchKey);
     if (seen.has(key)) {
       throw new MigrationPolicyError(
         `Duplicate source branch key "${m.sourceBranchKey}".`,
@@ -87,11 +88,9 @@ export function assertBranchMappingsResolved(input: {
     });
   }
 
-  const mapped = new Set(
-    input.mappings.map((m) => m.sourceBranchKey.trim().normalize('NFC').toLowerCase()),
-  );
+  const mapped = new Set(input.mappings.map((m) => canonicaliseSourceBranchKey(m.sourceBranchKey)));
   for (const required of input.requiredSourceBranchKeys) {
-    const key = required.trim().normalize('NFC').toLowerCase();
+    const key = canonicaliseSourceBranchKey(required);
     if (!mapped.has(key)) {
       throw new MigrationPolicyError(
         `Source branch "${required}" has no target store mapping.`,

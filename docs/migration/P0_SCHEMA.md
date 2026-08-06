@@ -14,7 +14,19 @@ Critical constraints:
 
 ### `MigrationFile`
 
-Exactly one file per `(packageId, entityType)` where entityType ∈ `SUPPLIERS | PRODUCTS | OPENING_STOCK`.
+One logical file belonging to a package. Entity type ∈ `SUPPLIERS | PRODUCTS | OPENING_STOCK`
+(CHECK-constrained in SQL).
+
+`@@unique([packageId, entityType])` guarantees **at most one** file of each entity type
+within a package. It does **not** guarantee that all three Phase 1 types exist.
+
+P1 validation and approval must **transactionally** require exactly:
+
+- one `SUPPLIERS` file;
+- one `PRODUCTS` file;
+- one `OPENING_STOCK` file;
+
+before a package may become `VALIDATED` or `APPROVED`. Passing uniqueness alone is not package completeness.
 
 Checksum fields: `uploadChecksum`, `validationChecksum`, `approvedChecksum`.
 
