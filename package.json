@@ -36,7 +36,8 @@
     "db:wal": "tsx scripts/enable-wal.ts",
     "db:setup": "npm run db:push:local && npm run db:wal && npm run db:seed",
     "db:reset": "del dev.db 2>nul & npm run db:setup",
-    "generate:og": "node scripts/generate-tillflow-og-v2.mjs"
+    "generate:og": "node scripts/generate-tillflow-og-v2.mjs",
+    "test:migration:p1-schema:pg": "node scripts/migration-p1-schema-pg-test.cjs"
   },
   "engines": {
     "node": ">=18 <24"

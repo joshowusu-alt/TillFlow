@@ -8,10 +8,26 @@ import {
   MIGRATION_PACKAGE_STATUSES,
   MIGRATION_RECONCILIATION_STATUSES,
 } from '@/lib/migration/types';
+import {
+  MIGRATION_APPROVAL_VALIDITY_DAYS,
+  MIGRATION_COMPRESSION_ALLOWED,
+  MIGRATION_MAX_COLUMNS,
+  MIGRATION_MAX_ROWS,
+  MIGRATION_MAX_UNCOMPRESSED_BYTES,
+  MIGRATION_MAX_UPLOAD_BYTES,
+  MIGRATION_UNAPPROVED_EXPIRY_DAYS,
+} from '@/lib/migration/limits';
 
-describe('migration P0 schema contract', () => {
-  const sql = readFileSync(
+describe('migration P1 schema contract', () => {
+  const p0Sql = readFileSync(
     join(process.cwd(), 'prisma/migrations/20260806130000_migration_framework_p0/migration.sql'),
+    'utf8',
+  );
+  const p1Sql = readFileSync(
+    join(
+      process.cwd(),
+      'prisma/migrations/20260806170000_migration_framework_p1_slice1_schema/migration.sql',
+    ),
     'utf8',
   );
 
@@ -24,25 +40,46 @@ describe('migration P0 schema contract', () => {
     for (const status of MIGRATION_RECONCILIATION_STATUSES) {
       expect(MIGRATION_PACKAGE_STATUSES).not.toContain(status as never);
     }
+    expect(MIGRATION_PACKAGE_STATUSES).toContain('SUPERSEDED');
     expect(MIGRATION_PACKAGE_STATUSES).not.toContain('MATCHED' as never);
     expect(MIGRATION_RECONCILIATION_STATUSES).toContain('MATCHED');
   });
 
-  it('migration SQL creates package-oriented tables with tenant composite FKs', () => {
-    expect(sql).toContain('CREATE TABLE "MigrationPackage"');
-    expect(sql).toContain('CREATE TABLE "MigrationFile"');
-    expect(sql).toContain('CREATE TABLE "MigrationBranchMapping"');
-    expect(sql).toContain('MigrationFile_packageId_entityType_key');
-    expect(sql).toContain('MigrationBranchMapping_businessId_targetStoreId_fkey');
-    expect(sql).toContain('REFERENCES "Store"("businessId", "id")');
-    expect(sql).not.toContain('CREATE TABLE "MigrationBatch"');
-    expect(sql).not.toContain('CREATE TABLE "MigrationEntityMap"');
-    expect(sql).not.toContain('CREATE TABLE "MigrationChunkReceipt"');
-    expect(sql).not.toContain('CREATE TABLE "MigrationOpeningStockPosting"');
+  it('locks P1 contractual file limits', () => {
+    expect(MIGRATION_MAX_UPLOAD_BYTES).toBe(26_214_400);
+    expect(MIGRATION_MAX_UNCOMPRESSED_BYTES).toBe(26_214_400);
+    expect(MIGRATION_MAX_ROWS).toBe(50_000);
+    expect(MIGRATION_MAX_COLUMNS).toBe(32);
+    expect(MIGRATION_UNAPPROVED_EXPIRY_DAYS).toBe(14);
+    expect(MIGRATION_APPROVAL_VALIDITY_DAYS).toBe(14);
+    expect(MIGRATION_COMPRESSION_ALLOWED).toBe(false);
+  });
+
+  it('P0 migration SQL creates package-oriented tables with tenant composite FKs', () => {
+    expect(p0Sql).toContain('CREATE TABLE "MigrationPackage"');
+    expect(p0Sql).toContain('CREATE TABLE "MigrationFile"');
+    expect(p0Sql).toContain('CREATE TABLE "MigrationBranchMapping"');
+    expect(p0Sql).toContain('MigrationFile_packageId_entityType_key');
+    expect(p0Sql).toContain('MigrationBranchMapping_businessId_targetStoreId_fkey');
+    expect(p0Sql).toContain('REFERENCES "Store"("businessId", "id")');
+  });
+
+  it('P1 migration SQL adds lineage, evidence tables, and invariants', () => {
+    expect(p1Sql).toContain('CREATE TABLE "MigrationValidationRun"');
+    expect(p1Sql).toContain('CREATE TABLE "MigrationApprovalHistory"');
+    expect(p1Sql).toContain('User_businessId_id_key');
+    expect(p1Sql).toContain('MigrationPackage_predecessorPackageId_key');
+    expect(p1Sql).toContain('MigrationPackage_businessId_predecessorPackageId_fkey');
+    expect(p1Sql).toContain('MigrationPackage_predecessor_not_self_check');
+    expect(p1Sql).toContain('MigrationPackage_recon_imported_only_check');
+    expect(p1Sql).toContain("'SUPERSEDED'");
+    expect(p1Sql).toContain('storageStatus');
+    expect(p1Sql).not.toContain('supersededByPackageId');
+    expect(p1Sql).not.toContain('CREATE TABLE "MigrationEntityMap"');
+    expect(p1Sql).not.toContain('CREATE TABLE "MigrationChunkReceipt"');
   });
 
   it('documents that uniqueness is at-most-one per entity type, not completeness', () => {
-    // Service-layer helpers still enforce exactly-three at validation/approval.
     expect(MIGRATION_ENTITY_TYPES).toHaveLength(3);
   });
 });

@@ -1,7 +1,7 @@
 /**
- * Migration Framework P0 public surface.
+ * Migration Framework public surface (P0 helpers + P1 Slice 1 schema constants).
  *
- * No upload UI, import execution, or accounting posting is exported from P0.
+ * No upload UI, import execution, or accounting posting is exported yet.
  */
 
 export * from '@/lib/migration/types';

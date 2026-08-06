@@ -32,16 +32,26 @@ describe('migration package lifecycle', () => {
     expect(() => assertPackageTransition('DRAFT', 'IMPORTING')).toThrow(MigrationLifecycleError);
   });
 
-  it('treats IMPORTED, EXPIRED, CANCELLED as terminal', () => {
+  it('treats IMPORTED, EXPIRED, CANCELLED, SUPERSEDED as terminal', () => {
     expect(isPackageLifecycleTerminal('IMPORTED')).toBe(true);
     expect(isPackageLifecycleTerminal('EXPIRED')).toBe(true);
     expect(isPackageLifecycleTerminal('CANCELLED')).toBe(true);
+    expect(isPackageLifecycleTerminal('SUPERSEDED')).toBe(true);
     expect(isPackageLifecycleTerminal('APPROVED')).toBe(false);
   });
 
   it('allows approval invalidation from APPROVED only via APPROVAL_INVALIDATED', () => {
     assertPackageTransition('APPROVED', 'APPROVAL_INVALIDATED');
     expect(canTransitionPackage('IMPORTED', 'APPROVAL_INVALIDATED')).toBe(false);
+    expect(canTransitionPackage('APPROVAL_INVALIDATED', 'DRAFT')).toBe(false);
+    expect(canTransitionPackage('APPROVAL_INVALIDATED', 'VALIDATED')).toBe(false);
+  });
+
+  it('allows supersession from APPROVED or APPROVAL_INVALIDATED only', () => {
+    assertPackageTransition('APPROVED', 'SUPERSEDED');
+    assertPackageTransition('APPROVAL_INVALIDATED', 'SUPERSEDED');
+    expect(canTransitionPackage('DRAFT', 'SUPERSEDED')).toBe(false);
+    expect(canTransitionPackage('IMPORTING', 'SUPERSEDED')).toBe(false);
   });
 
   it('keeps reconciliation separate from package lifecycle', () => {

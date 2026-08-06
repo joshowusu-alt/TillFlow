@@ -1,8 +1,10 @@
 /**
  * Package lifecycle and reconciliation transition rules (fail-closed).
  *
- * Provenance: structure adapted from historic lib/migration/lifecycle.ts (0f6a917);
- * statuses rewritten for the locked DRAFT→IMPORTED / separate reconciliation model.
+ * P1 closed contract:
+ * - packages are mutable only before first APPROVED;
+ * - APPROVAL_INVALIDATED is not an editable recovery state;
+ * - SUPERSEDED is terminal (successor creation).
  */
 
 import { MigrationLifecycleError } from '@/lib/migration/errors';
@@ -10,15 +12,16 @@ import type { MigrationPackageStatus, MigrationReconciliationStatus } from '@/li
 
 const PACKAGE_TRANSITIONS: Record<MigrationPackageStatus, MigrationPackageStatus[]> = {
   DRAFT: ['VALIDATED', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
-  VALIDATED: ['APPROVED', 'APPROVAL_INVALIDATED', 'DRAFT', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
-  APPROVED: ['IMPORTING', 'APPROVAL_INVALIDATED', 'CANCELLED'],
+  VALIDATED: ['APPROVED', 'DRAFT', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
+  APPROVED: ['IMPORTING', 'APPROVAL_INVALIDATED', 'CANCELLED', 'SUPERSEDED'],
   IMPORTING: ['IMPORTED', 'IMPORT_FAILED'],
   IMPORTED: [],
   VALIDATION_FAILED: ['DRAFT', 'CANCELLED', 'EXPIRED'],
-  APPROVAL_INVALIDATED: ['DRAFT', 'VALIDATED', 'CANCELLED', 'EXPIRED'],
+  APPROVAL_INVALIDATED: ['SUPERSEDED', 'CANCELLED', 'EXPIRED'],
   IMPORT_FAILED: ['IMPORTING', 'CANCELLED'],
   EXPIRED: [],
   CANCELLED: [],
+  SUPERSEDED: [],
 };
 
 const RECON_TRANSITIONS: Record<MigrationReconciliationStatus, MigrationReconciliationStatus[]> = {
@@ -63,14 +66,19 @@ export function assertReconciliationTransition(
 
 /** Import completion does not imply successful reconciliation. */
 export function isPackageLifecycleTerminal(status: MigrationPackageStatus): boolean {
-  return status === 'IMPORTED' || status === 'EXPIRED' || status === 'CANCELLED';
+  return (
+    status === 'IMPORTED' ||
+    status === 'EXPIRED' ||
+    status === 'CANCELLED' ||
+    status === 'SUPERSEDED'
+  );
 }
 
 export function isReconciliationTerminal(status: MigrationReconciliationStatus): boolean {
   return status === 'MATCHED';
 }
 
-/** Statuses subject to the 14-day unapproved expiry rule. */
+/** Statuses subject to the 14-day unapproved (draft) expiry rule. */
 export function isExpiryEligibleStatus(status: MigrationPackageStatus): boolean {
   return (
     status === 'DRAFT' ||
@@ -80,7 +88,17 @@ export function isExpiryEligibleStatus(status: MigrationPackageStatus): boolean 
   );
 }
 
+/** Pre-approval mutable statuses (files/mappings may change). */
+export function isPreApprovalMutableStatus(status: MigrationPackageStatus): boolean {
+  return status === 'DRAFT' || status === 'VALIDATED' || status === 'VALIDATION_FAILED';
+}
+
 /** Material change after approval must move APPROVED → APPROVAL_INVALIDATED. */
 export function assertCanInvalidateApproval(status: MigrationPackageStatus): void {
   assertPackageTransition(status, 'APPROVAL_INVALIDATED');
+}
+
+/** Successor creation transitions predecessor to SUPERSEDED. */
+export function assertCanSupersedePackage(status: MigrationPackageStatus): void {
+  assertPackageTransition(status, 'SUPERSEDED');
 }
