@@ -8,6 +8,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/migration-p1-schema-pg-test.cjs'
+      - 'scripts/migration-p1-sql-only-constraint-contract.cjs'
+      - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'lib/migration/**'
       - '.github/workflows/postgres-smoke.yml'
 
@@ -51,11 +53,14 @@ jobs:
       - name: Generate Postgres Prisma client
         run: npx prisma generate --schema=prisma/schema.postgres.prisma
 
-      - name: Deploy migrations
+      - name: Deploy complete migration history
         run: npx prisma migrate deploy --schema=prisma/schema.postgres.prisma
 
       - name: Check migration status
         run: npx prisma migrate status --schema=prisma/schema.postgres.prisma
 
-      - name: Migration P1 schema PostgreSQL constraint tests
+      - name: Migration P1 PostgreSQL behavioural suite
         run: node scripts/migration-p1-schema-pg-test.cjs
+
+      - name: SQL-only constraint-contract introspection
+        run: node scripts/migration-p1-sql-only-constraint-contract.cjs

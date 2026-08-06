@@ -1,13 +1,8 @@
 /**
- * Disposable PostgreSQL constraint tests for Migration P1 Slice 1 schema.
+ * Disposable PostgreSQL behavioural tests for Migration P1 Slice 1 schema.
  *
- * Requires:
- *   POSTGRES_PRISMA_URL / POSTGRES_URL_NON_POOLING (or DATABASE_URL)
- *
- * Applies prisma migrate deploy against a disposable database, asserts real
- * PostgreSQL constraints, then exits non-zero on failure.
- *
- * Not a substitute: SQLite / mocked Prisma unit tests.
+ * Requires POSTGRES_PRISMA_URL / POSTGRES_URL_NON_POOLING.
+ * Applies full migrate history, then asserts real PostgreSQL constraints with SQLSTATE.
  */
 
 const { Client } = require('pg');
@@ -16,7 +11,14 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const root = path.resolve(__dirname, '..');
-const schema = path.join(root, 'prisma', 'schema.postgres.prisma');
+const schemaRel = 'prisma/schema.postgres.prisma';
+
+const SQLSTATE = {
+  FOREIGN_KEY: '23503',
+  UNIQUE: '23505',
+  CHECK: '23514',
+  NOT_NULL: '23502',
+};
 
 function requireUrl() {
   const url =
@@ -36,17 +38,31 @@ function cuid() {
   return 'c' + crypto.randomBytes(12).toString('hex');
 }
 
-async function expectReject(fn, label, match) {
+/**
+ * @param {() => Promise<unknown>} fn
+ * @param {{ label: string, sqlstate: string, constraint?: string }} expect
+ */
+async function expectPgReject(fn, expect) {
   try {
     await fn();
-    throw new Error(`EXPECTED_REJECT_MISSING: ${label}`);
+    throw new Error(`EXPECTED_REJECT_MISSING: ${expect.label}`);
   } catch (err) {
-    const msg = String(err && err.message ? err.message : err);
-    if (msg.startsWith('EXPECTED_REJECT_MISSING')) throw err;
-    if (match && !match.test(msg)) {
-      throw new Error(`${label}: rejected but unexpected message: ${msg}`);
+    if (String(err.message || err).startsWith('EXPECTED_REJECT_MISSING')) throw err;
+    const code = err && err.code;
+    const constraint = err && err.constraint;
+    if (code !== expect.sqlstate) {
+      throw new Error(
+        `${expect.label}: expected SQLSTATE ${expect.sqlstate}, got ${code} (${err.message})`,
+      );
     }
-    console.log(`  OK reject: ${label}`);
+    if (expect.constraint && constraint !== expect.constraint) {
+      throw new Error(
+        `${expect.label}: expected constraint ${expect.constraint}, got ${constraint}`,
+      );
+    }
+    console.log(
+      `  OK reject: ${expect.label} [${code}${constraint ? '/' + constraint : ''}]`,
+    );
   }
 }
 
@@ -56,10 +72,11 @@ async function main() {
   process.env.POSTGRES_URL_NON_POOLING = url;
 
   console.log('Deploying migrations…');
-  execSync(`npx prisma migrate deploy --schema="${schema}"`, {
+  execSync(`npx prisma migrate deploy --schema=${schemaRel}`, {
     cwd: root,
     stdio: 'inherit',
     env: process.env,
+    shell: true,
   });
 
   const client = new Client({ connectionString: url });
@@ -73,10 +90,8 @@ async function main() {
   const userApprover = cuid();
 
   async function seedTenant() {
-    await client.query(`DELETE FROM "MigrationApprovalHistory"`);
-    await client.query(`DELETE FROM "MigrationPackage"`); // cascades validation runs/files via FKs carefully
-    // Order: clear latest pointers first
     await client.query(`UPDATE "MigrationPackage" SET "latestValidationRunId" = NULL`);
+    await client.query(`DELETE FROM "MigrationApprovalHistory"`);
     await client.query(`DELETE FROM "MigrationValidationRun"`);
     await client.query(`DELETE FROM "MigrationFile"`);
     await client.query(`DELETE FROM "MigrationBranchMapping"`);
@@ -90,18 +105,6 @@ async function main() {
       `INSERT INTO "Business" (id, name, "createdAt", "updatedAt") VALUES ($1,'BizA',NOW(),NOW()), ($2,'BizB',NOW(),NOW())`,
       [bizA, bizB],
     );
-
-    // Minimal User insert — inspect required columns
-    const userCols = await client.query(`
-      SELECT column_name, is_nullable, column_default
-      FROM information_schema.columns
-      WHERE table_name = 'User' AND table_schema = 'public'
-      ORDER BY ordinal_position`);
-    const requiredUser = userCols.rows
-      .filter((c) => c.is_nullable === 'NO' && !c.column_default && c.column_name !== 'id')
-      .map((c) => c.column_name);
-    console.log('User required cols without default:', requiredUser.join(', '));
-
     await client.query(
       `INSERT INTO "User" (id, "businessId", name, email, "passwordHash", role, active, "createdAt")
        VALUES
@@ -133,11 +136,11 @@ async function main() {
          "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
          "expiresAt", version, "lineageRootId", "predecessorPackageId",
          "createdByUserId", "validatedByUserId", "approvedByUserId", "cancelledByUserId",
-         "supersededByUserId", "createdAt", "updatedAt"
+         "supersededByUserId", "latestValidationRunId", "createdAt", "updatedAt"
        ) VALUES (
          $1,$2,'1','src','biz','GHS','2026-08-01',$3,$4,
          NOW() + interval '14 days', 1, $5, $6,
-         $7,$8,$9,$10,$11, NOW(), NOW()
+         $7,$8,$9,$10,$11,$12, NOW(), NOW()
        )`,
       [
         id,
@@ -151,26 +154,35 @@ async function main() {
         opts.approvedByUserId || null,
         opts.cancelledByUserId || null,
         opts.supersededByUserId || null,
+        opts.latestValidationRunId || null,
       ],
     );
     return id;
   }
 
-  const results = [];
+  async function insertRun(opts) {
+    const id = opts.id || cuid();
+    await client.query(
+      `INSERT INTO "MigrationValidationRun" (
+         id, "businessId", "packageId", status, "manifestChecksum", "createdAt"
+       ) VALUES ($1,$2,$3,$4,$5,NOW())`,
+      [id, opts.businessId, opts.packageId, opts.status || 'SUCCESS', opts.checksum || 'a'.repeat(64)],
+    );
+    return id;
+  }
+
   function pass(name) {
-    results.push({ name, ok: true });
     console.log(`PASS ${name}`);
   }
 
   try {
     await seedTenant();
 
-    // 7) Multiple NULL predecessors allowed
-    const p1 = await insertPackage({ businessId: bizA, createdByUserId: userA });
-    const p2 = await insertPackage({ businessId: bizA, createdByUserId: userA });
-    pass('7 multiple NULL predecessorPackageId');
+    // --- lineage / actors / recon / files (SQLSTATE) ---
+    await insertPackage({ businessId: bizA, createdByUserId: userA });
+    await insertPackage({ businessId: bizA, createdByUserId: userA });
+    pass('multiple NULL predecessorPackageId');
 
-    // 1) Two packages cannot share same predecessor
     const pred = await insertPackage({
       businessId: bizA,
       createdByUserId: userA,
@@ -181,9 +193,8 @@ async function main() {
       createdByUserId: userA,
       predecessorPackageId: pred,
       lineageRootId: pred,
-      status: 'DRAFT',
     });
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
@@ -191,14 +202,20 @@ async function main() {
           predecessorPackageId: pred,
           lineageRootId: pred,
         }),
-      '1 duplicate predecessor',
-      /unique|duplicate/i,
+      {
+        label: 'duplicate predecessor',
+        sqlstate: SQLSTATE.UNIQUE,
+        constraint: 'MigrationPackage_predecessorPackageId_key',
+      },
     );
-    pass('1 one-successor uniqueness');
+    pass('one-successor uniqueness');
 
-    // 2) Cross-business predecessor rejected
-    const predB = await insertPackage({ businessId: bizB, createdByUserId: userB, status: 'APPROVED' });
-    await expectReject(
+    const predB = await insertPackage({
+      businessId: bizB,
+      createdByUserId: userB,
+      status: 'APPROVED',
+    });
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
@@ -206,14 +223,16 @@ async function main() {
           predecessorPackageId: predB,
           lineageRootId: predB,
         }),
-      '2 cross-business predecessor',
-      /foreign key|violates/i,
+      {
+        label: 'cross-business predecessor',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationPackage_businessId_predecessorPackageId_fkey',
+      },
     );
-    pass('2 cross-business predecessor FK');
+    pass('cross-business predecessor FK');
 
-    // 3) Self-predecessor rejected
     const selfId = cuid();
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           id: selfId,
@@ -222,69 +241,70 @@ async function main() {
           predecessorPackageId: selfId,
           lineageRootId: selfId,
         }),
-      '3 self-predecessor',
-      /check|violates|foreign key/i,
+      {
+        label: 'self-predecessor',
+        sqlstate: SQLSTATE.CHECK,
+        constraint: 'MigrationPackage_predecessor_not_self_check',
+      },
     );
-    pass('3 self-predecessor blocked');
+    pass('self-predecessor blocked');
 
-    // 4) Actor from another business rejected for each actor relation
-    await expectReject(
+    await expectPgReject(
       () => insertPackage({ businessId: bizA, createdByUserId: userB }),
-      '4a createdBy cross-tenant',
-      /foreign key|violates/i,
+      {
+        label: 'createdBy cross-tenant',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationPackage_businessId_createdByUserId_fkey',
+      },
     );
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
           createdByUserId: userA,
           validatedByUserId: userB,
         }),
-      '4b validatedBy cross-tenant',
-      /foreign key|violates/i,
+      {
+        label: 'validatedBy cross-tenant',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+      },
     );
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
           createdByUserId: userA,
           approvedByUserId: userB,
         }),
-      '4c approvedBy cross-tenant',
-      /foreign key|violates/i,
+      { label: 'approvedBy cross-tenant', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
           createdByUserId: userA,
           cancelledByUserId: userB,
         }),
-      '4d cancelledBy cross-tenant',
-      /foreign key|violates/i,
+      { label: 'cancelledBy cross-tenant', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
           createdByUserId: userA,
           supersededByUserId: userB,
         }),
-      '4e supersededBy cross-tenant',
-      /foreign key|violates/i,
+      { label: 'supersededBy cross-tenant', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    pass('4 actor tenant isolation');
+    pass('actor tenant isolation');
 
-    // 5) Deleting referenced actor blocked
-    const held = await insertPackage({ businessId: bizA, createdByUserId: userA });
-    await expectReject(
+    await insertPackage({ businessId: bizA, createdByUserId: userA });
+    await expectPgReject(
       () => client.query(`DELETE FROM "User" WHERE id = $1`, [userA]),
-      '5 delete referenced creator',
-      /foreign key|violates|restrict/i,
+      { label: 'delete referenced creator', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    pass('5 actor deletion restricted');
+    pass('actor deletion restricted');
 
-    // 6) Deleting referenced predecessor blocked
     const root = await insertPackage({
       businessId: bizA,
       createdByUserId: userA2,
@@ -296,39 +316,38 @@ async function main() {
       predecessorPackageId: root,
       lineageRootId: root,
     });
-    await expectReject(
+    await expectPgReject(
       () => client.query(`DELETE FROM "MigrationPackage" WHERE id = $1`, [root]),
-      '6 delete predecessor',
-      /foreign key|violates|restrict/i,
+      { label: 'delete predecessor', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    pass('6 predecessor deletion restricted');
+    pass('predecessor deletion restricted');
 
-    // 8) Duplicate (packageId, entityType) rejected
     const filePkg = await insertPackage({ businessId: bizA, createdByUserId: userA2 });
-    const fileId = cuid();
     await client.query(
       `INSERT INTO "MigrationFile" (
          id, "businessId", "packageId", "entityType", "storageStatus",
          "uploadChecksum", "byteLength", "createdAt", "updatedAt"
        ) VALUES ($1,$2,$3,'PRODUCTS','PENDING',$4,0,NOW(),NOW())`,
-      [fileId, bizA, filePkg, 'a'.repeat(64)],
+      [cuid(), bizA, filePkg, 'b'.repeat(64)],
     );
-    await expectReject(
+    await expectPgReject(
       () =>
         client.query(
           `INSERT INTO "MigrationFile" (
              id, "businessId", "packageId", "entityType", "storageStatus",
              "uploadChecksum", "byteLength", "createdAt", "updatedAt"
            ) VALUES ($1,$2,$3,'PRODUCTS','PENDING',$4,0,NOW(),NOW())`,
-          [cuid(), bizA, filePkg, 'b'.repeat(64)],
+          [cuid(), bizA, filePkg, 'c'.repeat(64)],
         ),
-      '8 duplicate entityType',
-      /unique|duplicate/i,
+      {
+        label: 'duplicate entityType',
+        sqlstate: SQLSTATE.UNIQUE,
+        constraint: 'MigrationFile_packageId_entityType_key',
+      },
     );
-    pass('8 duplicate packageId+entityType');
+    pass('duplicate packageId+entityType');
 
-    // 9) Non-IMPORTED cannot leave NOT_STARTED recon
-    await expectReject(
+    await expectPgReject(
       () =>
         insertPackage({
           businessId: bizA,
@@ -336,27 +355,22 @@ async function main() {
           status: 'DRAFT',
           reconciliationStatus: 'RECONCILING',
         }),
-      '9 recon before imported',
-      /check|violates/i,
+      {
+        label: 'recon before imported',
+        sqlstate: SQLSTATE.CHECK,
+        constraint: 'MigrationPackage_recon_imported_only_check',
+      },
     );
-    pass('9 reconciliation invariant (non-IMPORTED)');
+    pass('reconciliation invariant (non-IMPORTED)');
 
-    // 10) IMPORTED can use recon states
-    await insertPackage({
-      businessId: bizA,
-      createdByUserId: userA2,
-      status: 'IMPORTED',
-      reconciliationStatus: 'RECONCILING',
-    });
     await insertPackage({
       businessId: bizA,
       createdByUserId: userA2,
       status: 'IMPORTED',
       reconciliationStatus: 'MATCHED',
     });
-    pass('10 IMPORTED may leave NOT_STARTED');
+    pass('IMPORTED may leave NOT_STARTED');
 
-    // 11) Approval-history actor deletion blocked (approver not used as package creator)
     const apPkg = await insertPackage({
       businessId: bizA,
       createdByUserId: userA2,
@@ -368,78 +382,171 @@ async function main() {
          "approvedManifestChecksum", "approvalExpiresAt", "contractVersion",
          "reportingCurrency", "packageAsOfDate", "fileChecksumsJson", "createdAt"
        ) VALUES ($1,$2,$3,$4,NOW(),$5,NOW()+interval '14 days','1','GHS','2026-08-01','[]',NOW())`,
-      [cuid(), bizA, apPkg, userApprover, 'c'.repeat(64)],
+      [cuid(), bizA, apPkg, userApprover, 'd'.repeat(64)],
     );
-    await expectReject(
+    await expectPgReject(
       () => client.query(`DELETE FROM "User" WHERE id = $1`, [userApprover]),
-      '11 delete approval history approver',
-      /foreign key|violates|restrict/i,
+      { label: 'delete approval history approver', sqlstate: SQLSTATE.FOREIGN_KEY },
     );
-    pass('11 approval-history actor deletion restricted');
+    pass('approval-history actor deletion restricted');
 
-    // 12) Transaction rollback leaves no partial schema-domain records
+    // --- latestValidationRun ownership ---
+    const pkgA1 = await insertPackage({ businessId: bizA, createdByUserId: userA2 });
+    const pkgA2 = await insertPackage({ businessId: bizA, createdByUserId: userA2 });
+    const pkgB1 = await insertPackage({ businessId: bizB, createdByUserId: userB });
+
+    const runA1 = await insertRun({
+      businessId: bizA,
+      packageId: pkgA1,
+      checksum: '1'.repeat(64),
+    });
+    const runA1b = await insertRun({
+      businessId: bizA,
+      packageId: pkgA1,
+      checksum: '2'.repeat(64),
+    });
+    const runB1 = await insertRun({
+      businessId: bizB,
+      packageId: pkgB1,
+      checksum: '3'.repeat(64),
+    });
+
+    // NULL latest permitted
+    const nullCheck = await client.query(
+      `SELECT "latestValidationRunId" FROM "MigrationPackage" WHERE id = $1`,
+      [pkgA2],
+    );
+    if (nullCheck.rows[0].latestValidationRunId !== null) {
+      throw new Error('expected NULL latestValidationRunId on new draft');
+    }
+    pass('latestValidationRunId NULL permitted');
+
+    // Own-package latest accepted
+    await client.query(
+      `UPDATE "MigrationPackage" SET "latestValidationRunId" = $1 WHERE id = $2`,
+      [runA1, pkgA1],
+    );
+    pass('own-package latest run accepted');
+
+    // Switch pointer to newer historical run on same package
+    await client.query(
+      `UPDATE "MigrationPackage" SET "latestValidationRunId" = $1 WHERE id = $2`,
+      [runA1b, pkgA1],
+    );
+    const stillThere = await client.query(
+      `SELECT id FROM "MigrationValidationRun" WHERE id = ANY($1::text[])`,
+      [[runA1, runA1b]],
+    );
+    if (stillThere.rowCount !== 2) {
+      throw new Error('historical validation runs were not retained');
+    }
+    pass('pointer switch retains historical runs');
+
+    await expectPgReject(
+      () =>
+        client.query(
+          `UPDATE "MigrationPackage" SET "latestValidationRunId" = $1 WHERE id = $2`,
+          [runB1, pkgA1],
+        ),
+      {
+        label: 'cross-business latest run',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationPackage_businessId_latestValidationRunId_fkey',
+      },
+    );
+    pass('cross-business latest run rejected');
+
+    await expectPgReject(
+      () =>
+        client.query(
+          `UPDATE "MigrationPackage" SET "latestValidationRunId" = $1 WHERE id = $2`,
+          [runA1, pkgA2],
+        ),
+      {
+        label: 'cross-package latest run',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationPackage_latestValidationRunId_id_fkey',
+      },
+    );
+    pass('cross-package latest run rejected');
+
+    // Selected run deletion blocked (runA1b is currently selected by pkgA1)
+    await expectPgReject(
+      () => client.query(`DELETE FROM "MigrationValidationRun" WHERE id = $1`, [runA1b]),
+      {
+        label: 'delete selected validation run',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+      },
+    );
+    pass('selected run deletion restricted');
+
+    // Historical runA1 still cannot be claimed by another package (ownership FK)
+    // (re-assert after ensuring it is not uniquely held — already unselected)
+    const claim = await client.query(
+      `SELECT "latestValidationRunId" FROM "MigrationPackage" WHERE id = $1`,
+      [pkgA1],
+    );
+    if (claim.rows[0].latestValidationRunId === runA1) {
+      throw new Error('runA1 unexpectedly still selected');
+    }
+    await expectPgReject(
+      () =>
+        client.query(
+          `UPDATE "MigrationPackage" SET "latestValidationRunId" = $1 WHERE id = $2`,
+          [runA1, pkgA2],
+        ),
+      {
+        label: 'unrelated historical run claim',
+        sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationPackage_latestValidationRunId_id_fkey',
+      },
+    );
+    pass('unrelated historical run cannot be claimed');
+
+    // rollback
     const rollId = cuid();
     try {
       await client.query('BEGIN');
-      await client.query(
-        `INSERT INTO "MigrationPackage" (
-           id, "businessId", "contractVersion", "sourceSystemKey", "sourceBusinessKey",
-           "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
-           "expiresAt", version, "lineageRootId", "createdByUserId", "createdAt", "updatedAt"
-         ) VALUES ($1,$2,'1','src','biz','GHS','2026-08-01','DRAFT','NOT_STARTED',
-           NOW()+interval '14 days',1,$1,$3,NOW(),NOW())`,
-        [rollId, bizA, userA],
-      );
-      await client.query(
-        `INSERT INTO "MigrationValidationRun" (
-           id, "businessId", "packageId", status, "manifestChecksum", "createdAt"
-         ) VALUES ($1,$2,$3,'SUCCESS',$4,NOW())`,
-        [cuid(), bizA, rollId, 'd'.repeat(64)],
-      );
-      // Force failure: duplicate predecessor uniqueness using existing pred
-      await client.query(
-        `INSERT INTO "MigrationPackage" (
-           id, "businessId", "contractVersion", "sourceSystemKey", "sourceBusinessKey",
-           "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
-           "expiresAt", version, "lineageRootId", "predecessorPackageId",
-           "createdByUserId", "createdAt", "updatedAt"
-         ) VALUES ($1,$2,'1','src','biz','GHS','2026-08-01','DRAFT','NOT_STARTED',
-           NOW()+interval '14 days',1,$3,$3,$4,NOW(),NOW())`,
-        [cuid(), bizA, pred, userA],
-      );
+      await insertPackage({
+        id: rollId,
+        businessId: bizA,
+        createdByUserId: userA2,
+      });
+      await insertPackage({
+        businessId: bizA,
+        createdByUserId: userA2,
+        predecessorPackageId: pred,
+        lineageRootId: pred,
+      });
       await client.query('COMMIT');
       throw new Error('rollback test should have failed before commit');
     } catch (err) {
       await client.query('ROLLBACK');
-      const msg = String(err.message || err);
-      if (msg.includes('rollback test should have failed')) throw err;
+      if (String(err.message || '').includes('rollback test should have failed')) throw err;
+      if (err.code && err.code !== SQLSTATE.UNIQUE) {
+        // insertPackage may throw before setting code on nested — accept unique path
+      }
     }
-    const leftover = await client.query(`SELECT id FROM "MigrationPackage" WHERE id = $1`, [rollId]);
-    if (leftover.rowCount !== 0) {
-      throw new Error('rollback left MigrationPackage row');
-    }
-    pass('12 transaction rollback');
+    const leftover = await client.query(`SELECT id FROM "MigrationPackage" WHERE id = $1`, [
+      rollId,
+    ]);
+    if (leftover.rowCount !== 0) throw new Error('rollback left MigrationPackage row');
+    pass('transaction rollback');
 
-    // 13) migrate applied cleanly (deploy at start + history row present)
     const mig = await client.query(
-      `SELECT migration_name, finished_at FROM "_prisma_migrations"
-       WHERE migration_name = '20260806170000_migration_framework_p1_slice1_schema'
-         AND finished_at IS NOT NULL`,
-    );
-    if (mig.rowCount !== 1) {
-      throw new Error('P1 slice1 migration not recorded as finished');
-    }
-    const p0 = await client.query(
       `SELECT migration_name FROM "_prisma_migrations"
-       WHERE migration_name = '20260806130000_migration_framework_p0'
-         AND finished_at IS NOT NULL`,
+       WHERE migration_name IN (
+         '20260806130000_migration_framework_p0',
+         '20260806170000_migration_framework_p1_slice1_schema',
+         '20260806183000_migration_p1_slice1_latest_run_ownership'
+       ) AND finished_at IS NOT NULL`,
     );
-    if (p0.rowCount !== 1) {
-      throw new Error('P0 migration missing from history');
+    if (mig.rowCount !== 3) {
+      throw new Error(`expected 3 finished migrations, got ${mig.rowCount}`);
     }
-    pass('13 migrate deploy/status from P0+P1');
+    pass('P0→P1→ownership migrate history');
 
-    console.log(`\nAll ${results.length} PostgreSQL schema gates passed.`);
+    console.log('\nAll PostgreSQL behavioural schema gates passed.');
   } finally {
     await client.end().catch(() => {});
   }

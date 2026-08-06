@@ -794,7 +794,10 @@ model MigrationPackage {
   predecessor         MigrationPackage?          @relation("MigrationPackageLineage", fields: [predecessorPackageId], references: [id], onDelete: Restrict)
   successors          MigrationPackage[]         @relation("MigrationPackageLineage")
   validationRuns      MigrationValidationRun[]   @relation("PackageValidationRuns")
-  latestValidationRun MigrationValidationRun?    @relation("PackageLatestValidationRun", fields: [latestValidationRunId], references: [id], onDelete: SetNull)
+  /// Prisma single-column Restrict pointer. SQL adds same-business + same-package composite FKs
+  /// (Prisma cannot express optional composite ownership sharing package id). See
+  /// docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md.
+  latestValidationRun MigrationValidationRun?    @relation("PackageLatestValidationRun", fields: [latestValidationRunId], references: [id], onDelete: Restrict)
   approvalHistories   MigrationApprovalHistory[]
   files               MigrationFile[]
   branchMappings      MigrationBranchMapping[]
@@ -829,6 +832,8 @@ model MigrationValidationRun {
   latestFor    MigrationPackage? @relation("PackageLatestValidationRun")
 
   @@unique([businessId, id])
+  /// FK target for package-ownership: (latestValidationRunId, package.id) → (id, packageId)
+  @@unique([id, packageId])
   @@index([businessId, packageId, createdAt])
   @@index([packageId, createdAt])
 }

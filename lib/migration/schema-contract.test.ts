@@ -79,6 +79,21 @@ describe('migration P1 schema contract', () => {
     expect(p1Sql).not.toContain('CREATE TABLE "MigrationChunkReceipt"');
   });
 
+  it('P1 ownership correction enforces same-business and same-package latest runs', () => {
+    const ownershipSql = readFileSync(
+      join(
+        process.cwd(),
+        'prisma/migrations/20260806183000_migration_p1_slice1_latest_run_ownership/migration.sql',
+      ),
+      'utf8',
+    );
+    expect(ownershipSql).toContain('MigrationValidationRun_id_packageId_key');
+    expect(ownershipSql).toContain('MigrationPackage_businessId_latestValidationRunId_fkey');
+    expect(ownershipSql).toContain('MigrationPackage_latestValidationRunId_id_fkey');
+    expect(ownershipSql).toContain('ON DELETE RESTRICT');
+    expect(ownershipSql).toMatch(/constraint strengthening|Constraint strengthening/i);
+  });
+
   it('documents that uniqueness is at-most-one per entity type, not completeness', () => {
     expect(MIGRATION_ENTITY_TYPES).toHaveLength(3);
   });
