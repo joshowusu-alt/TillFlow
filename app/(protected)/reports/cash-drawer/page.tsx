@@ -2,6 +2,7 @@ import DownloadLink from '@/components/DownloadLink';
 import Pagination from '@/components/Pagination';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
+import { DataCard, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import NotesCell from './NotesCell';
@@ -278,98 +279,215 @@ export default async function CashDrawerReportPage({
         </div>
       </div>
 
-      <ReportTableCard tableClassName="table w-full min-w-[56rem] border-separate border-spacing-y-2 xl:min-w-[104rem]">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Branch</th>
-            <th>Till</th>
-            <th>Cashier</th>
-            <th className="hidden xl:table-cell">Opening float</th>
-            <th className="hidden xl:table-cell">Cash sales</th>
-            <th className="hidden xl:table-cell">Customer payments</th>
-            <th className="hidden xl:table-cell">Supplier cash paid out</th>
-            <th className="hidden xl:table-cell">Expenses paid out</th>
-            <th className="hidden xl:table-cell">Refunds</th>
-            <th className="hidden xl:table-cell">Cash added</th>
-            <th>Cash expected</th>
-            <th>Cash counted</th>
-            <th>Difference</th>
-            <th>Reason</th>
-            <th>Notes</th>
-            <th>Manager approval</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shifts.map((shift) => {
+      {/* Mobile shift ledger — same server values as the desktop table; presentation only. */}
+      <div className="space-y-3 lg:hidden" data-cash-drawer-mobile-ledger>
+        <h2 className="text-base font-display font-semibold">Shift ledger</h2>
+        {shifts.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+            No shifts found in this date range.
+          </div>
+        ) : (
+          shifts.map((shift) => {
             const byType = summarizeCashDrawerEntries(shift.cashDrawerEntries).byType;
+            const countedLabel =
+              shift.status === 'OPEN'
+                ? 'Not counted yet'
+                : shift.actualCashPence !== null
+                  ? formatMoney(shift.actualCashPence, business.currency)
+                  : '-';
+            const varianceNode =
+              shift.status === 'OPEN' ? (
+                <span className="text-amber-600">Pending close</span>
+              ) : shift.variance !== null ? (
+                <span
+                  className={
+                    shift.variance === 0
+                      ? 'text-emerald-700'
+                      : shift.variance > 0
+                        ? 'text-accent'
+                        : 'text-rose'
+                  }
+                >
+                  {formatMoney(shift.variance, business.currency)}
+                </span>
+              ) : (
+                <span className="text-black/40">-</span>
+              );
+            const movementChips = (
+              [
+                ['OPEN_FLOAT', 'Opening float'],
+                ['CASH_SALE', 'Cash sales'],
+                ['CASH_DEBTOR_PAYMENT', 'Customer payments'],
+                ['PAID_OUT_SUPPLIER', 'Supplier cash paid out'],
+                ['PAID_OUT_EXPENSE', 'Expenses paid out'],
+                ['CASH_REFUND', 'Refunds'],
+                ['CASH_ADJUSTMENT', 'Cash added'],
+              ] as const
+            )
+              .map(([entryType, label]) => ({
+                label,
+                amount: byType[entryType] ?? 0,
+              }))
+              .filter((row) => row.amount !== 0);
+
             return (
-              <tr key={shift.id} className="rounded-xl bg-white">
-                <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
-                <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
-                <td className="px-3 py-3 text-sm">{shift.till.name}</td>
-                <td className="px-3 py-3 text-sm">{shift.user.name}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.OPEN_FLOAT ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_SALE ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_DEBTOR_PAYMENT ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
-                <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {formatMoney(shift.expectedCashPence, business.currency)}
-                </td>
-                <td className="px-3 py-3 text-sm font-semibold">
-                  {shift.status === 'OPEN' ? (
-                    <span className="text-amber-600">Not counted yet</span>
-                  ) : shift.actualCashPence !== null ? (
-                    formatMoney(shift.actualCashPence, business.currency)
-                  ) : (
-                    '-'
-                  )}
-                </td>
-                <td className="px-3 py-3 text-sm">
-                  {shift.status === 'OPEN' ? (
-                    <span className="text-amber-600">Pending close</span>
-                  ) : shift.variance !== null ? (
-                    <span
-                      className={
-                        shift.variance === 0
-                          ? 'text-emerald-700'
-                          : shift.variance > 0
-                            ? 'text-accent'
-                            : 'text-rose'
-                      }
-                    >
-                      {formatMoney(shift.variance, business.currency)}
+              <DataCard key={shift.id}>
+                <DataCardHeader
+                  title={formatDateTime(shift.openedAt)}
+                  subtitle={`${shift.till.store.name} · ${shift.till.name} · ${shift.user.name}`}
+                  aside={
+                    <span className="text-xs font-semibold uppercase tracking-wide text-black/45">
+                      {shift.status === 'OPEN' ? 'Open' : 'Closed'}
                     </span>
-                  ) : (
-                    <span className="text-black/40">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-sm">
-                  {shift.varianceReasonCode ? (
-                    <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">
-                      {reasonCodeLabel(shift.varianceReasonCode)}
-                    </span>
-                  ) : (
-                    <span className="text-black/40">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-3 align-top text-sm">
-                  <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
-                </td>
-                <td className="px-3 py-3 text-xs">
-                  {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Shift open' : '—')}
-                </td>
-              </tr>
+                  }
+                />
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <DataCardField
+                    label="Cash expected"
+                    value={formatMoney(shift.expectedCashPence, business.currency)}
+                    valueClassName="text-sm font-semibold tabular-nums"
+                  />
+                  <DataCardField
+                    label="Cash counted"
+                    value={countedLabel}
+                    valueClassName={`text-sm font-semibold tabular-nums ${shift.status === 'OPEN' ? 'text-amber-600' : ''}`}
+                  />
+                  <DataCardField label="Difference" value={varianceNode} valueClassName="text-sm font-semibold tabular-nums" />
+                  <DataCardField
+                    label="Reason"
+                    value={shift.varianceReasonCode ? reasonCodeLabel(shift.varianceReasonCode) : '-'}
+                    valueClassName="text-sm"
+                  />
+                  <DataCardField
+                    label="Notes"
+                    value={notesText(shift.varianceReason, shift.notes)}
+                    className="col-span-2"
+                    valueClassName="text-sm break-words [overflow-wrap:anywhere]"
+                  />
+                  <DataCardField
+                    label="Manager approval"
+                    value={shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Shift open' : '—')}
+                    className="col-span-2"
+                    valueClassName="text-sm"
+                  />
+                </div>
+                {movementChips.length > 0 ? (
+                  <div className="mt-3 space-y-1.5 border-t border-black/5 pt-3">
+                    <div className="text-xs uppercase tracking-[0.16em] text-black/40">Drawer movements</div>
+                    {movementChips.map((row) => (
+                      <div key={row.label} className="flex items-start justify-between gap-3 text-sm">
+                        <span className="min-w-0 flex-1 break-words text-slate-600">{row.label}</span>
+                        <span
+                          className={`shrink-0 tabular-nums font-medium ${
+                            row.amount < 0 ? 'text-rose-700' : 'text-slate-950'
+                          }`}
+                        >
+                          {formatMoney(row.amount, business.currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </DataCard>
             );
-          })}
-          {shifts.length === 0 ? (
-            <ReportTableEmptyRow colSpan={17} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
-          ) : null}
-        </tbody>
-      </ReportTableCard>
+          })
+        )}
+      </div>
+
+      <div className="hidden lg:block">
+        <ReportTableCard tableClassName="table w-full min-w-[56rem] border-separate border-spacing-y-2 xl:min-w-[104rem]">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Branch</th>
+              <th>Till</th>
+              <th>Cashier</th>
+              <th className="hidden xl:table-cell">Opening float</th>
+              <th className="hidden xl:table-cell">Cash sales</th>
+              <th className="hidden xl:table-cell">Customer payments</th>
+              <th className="hidden xl:table-cell">Supplier cash paid out</th>
+              <th className="hidden xl:table-cell">Expenses paid out</th>
+              <th className="hidden xl:table-cell">Refunds</th>
+              <th className="hidden xl:table-cell">Cash added</th>
+              <th>Cash expected</th>
+              <th>Cash counted</th>
+              <th>Difference</th>
+              <th>Reason</th>
+              <th>Notes</th>
+              <th>Manager approval</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shifts.map((shift) => {
+              const byType = summarizeCashDrawerEntries(shift.cashDrawerEntries).byType;
+              return (
+                <tr key={shift.id} className="rounded-xl bg-white">
+                  <td className="px-3 py-3 text-xs">{formatDateTime(shift.openedAt)}</td>
+                  <td className="px-3 py-3 text-sm">{shift.till.store.name}</td>
+                  <td className="px-3 py-3 text-sm">{shift.till.name}</td>
+                  <td className="px-3 py-3 text-sm">{shift.user.name}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.OPEN_FLOAT ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_SALE ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_DEBTOR_PAYMENT ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_SUPPLIER ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.PAID_OUT_EXPENSE ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_REFUND ?? 0, business.currency)}</td>
+                  <td className="hidden px-3 py-3 text-sm xl:table-cell">{formatMoney(byType.CASH_ADJUSTMENT ?? 0, business.currency)}</td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {formatMoney(shift.expectedCashPence, business.currency)}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold">
+                    {shift.status === 'OPEN' ? (
+                      <span className="text-amber-600">Not counted yet</span>
+                    ) : shift.actualCashPence !== null ? (
+                      formatMoney(shift.actualCashPence, business.currency)
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    {shift.status === 'OPEN' ? (
+                      <span className="text-amber-600">Pending close</span>
+                    ) : shift.variance !== null ? (
+                      <span
+                        className={
+                          shift.variance === 0
+                            ? 'text-emerald-700'
+                            : shift.variance > 0
+                              ? 'text-accent'
+                              : 'text-rose'
+                        }
+                      >
+                        {formatMoney(shift.variance, business.currency)}
+                      </span>
+                    ) : (
+                      <span className="text-black/40">-</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-sm">
+                    {shift.varianceReasonCode ? (
+                      <span className="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-black/50">
+                        {reasonCodeLabel(shift.varianceReasonCode)}
+                      </span>
+                    ) : (
+                      <span className="text-black/40">-</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 align-top text-sm">
+                    <NotesCell text={notesText(shift.varianceReason, shift.notes)} />
+                  </td>
+                  <td className="px-3 py-3 text-xs">
+                    {shift.closeManagerApprovedBy?.name ?? (shift.status === 'OPEN' ? 'Shift open' : '—')}
+                  </td>
+                </tr>
+              );
+            })}
+            {shifts.length === 0 ? (
+              <ReportTableEmptyRow colSpan={17} message="No shifts found in this date range." paddingClassName="px-3 py-8" />
+            ) : null}
+          </tbody>
+        </ReportTableCard>
+      </div>
 
       {totalRows > 0 ? (
         <Pagination
