@@ -38,7 +38,10 @@
     "db:reset": "del dev.db 2>nul & npm run db:setup",
     "generate:og": "node scripts/generate-tillflow-og-v2.mjs",
     "test:migration:p1-schema:pg": "node scripts/migration-p1-schema-pg-test.cjs",
-    "test:migration:p1-sql-only-contract": "node scripts/migration-p1-sql-only-constraint-contract.cjs"
+    "test:migration:p1-slice2a:pg": "node scripts/migration-p1-slice2a-pg-test.cjs",
+    "test:migration:p1-slice2a:preview-probe": "node scripts/migration-p1-slice2a-preview-probe.cjs",
+    "test:migration:p1-sql-only-contract": "node scripts/migration-p1-sql-only-constraint-contract.cjs",
+    "test:migration:slice2a:unit": "vitest run --reporter=dot lib/services/migration/file-policy.test.ts lib/services/migration/storage-vercel.test.ts lib/services/migration/slice2a-services.test.ts lib/services/migration/errors-public.test.ts lib/services/migration/cleanup-referenced-object.test.ts"
   },
   "engines": {
     "node": ">=18 <24"

@@ -8,9 +8,12 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/migration-p1-schema-pg-test.cjs'
+      - 'scripts/migration-p1-slice2a-pg-test.cjs'
       - 'scripts/migration-p1-sql-only-constraint-contract.cjs'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
+      - 'docs/migration/P1_SLICE2A_CONTRACT.md'
       - 'lib/migration/**'
+      - 'lib/services/migration/**'
       - '.github/workflows/postgres-smoke.yml'
 
 permissions:
@@ -64,6 +67,9 @@ jobs:
 
       - name: Migration P1 PostgreSQL behavioural suite
         run: node scripts/migration-p1-schema-pg-test.cjs
+
+      - name: Migration P1 Slice 2A PostgreSQL behavioural suite
+        run: node scripts/migration-p1-slice2a-pg-test.cjs
 
       - name: SQL-only constraint-contract introspection
         run: node scripts/migration-p1-sql-only-constraint-contract.cjs
