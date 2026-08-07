@@ -410,7 +410,7 @@ describe('migration slice 2B validate service', () => {
     );
     expect(first.packageStatus).toBe('VALIDATED');
     const pkg = state.packages.find((p) => p.id === 'pkg-a')!;
-    await prismaMock.$transaction(async (tx: typeof prismaMock) => {
+    await prismaMock.$transaction(async (tx) => {
       const locked = {
         id: pkg.id as string,
         businessId: 'biz-a',
