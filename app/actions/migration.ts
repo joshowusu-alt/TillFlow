@@ -90,6 +90,7 @@ export async function finaliseMigrationUploadAction(input: {
   packageId: string;
   entityType: string;
   pathname: string;
+  clientToken: string;
   expectedVersion: number;
   replace?: boolean;
   originalFilename?: string | null;

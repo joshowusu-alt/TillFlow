@@ -113,6 +113,15 @@ const {
         }
         return { count };
       }),
+      count: vi.fn(async ({ where }: { where: Row }) => {
+        return state.files.filter((f) => {
+          if (where.businessId && f.businessId !== where.businessId) return false;
+          if (where.storageKey && f.storageKey !== where.storageKey) return false;
+          if (where.packageId && f.packageId !== where.packageId) return false;
+          if (where.entityType && f.entityType !== where.entityType) return false;
+          return true;
+        }).length;
+      }),
     },
     migrationBranchMapping: {
       findFirst: vi.fn(async ({ where }: { where: Row }) => {
@@ -723,6 +732,7 @@ describe('migration slice 2A services', () => {
         packageId: pkg.id,
         entityType: 'PRODUCTS',
         pathname: prepared.pathname,
+        clientToken: prepared.clientToken,
         expectedVersion: 1,
         originalFilename: 'products.csv',
         contentType: 'text/csv',

@@ -91,9 +91,18 @@ Base64-in-action upload is **retired** and rejected before decode.
 4. Server `head` + bounded stream checksum + CSV/text/archive policy
 5. Short DB transaction: lock package, CAS version, upsert `MigrationFile` as `FINALISED`
 6. Fail-closed audit (client-safe error mapping)
-7. On DB/CAS failure after upload: best-effort delete of the new object only
+7. On DB/CAS failure after upload: best-effort delete of the **newly prepared, unfinalised** object only
 
 `MigrationFile` is inserted only when `uploadChecksum` is known (hash-before-insert).
+
+### Deletion invariant (referenced-object protection)
+
+**Never delete an object referenced by any successful `MigrationFile` record.**
+
+- Cleanup authority requires prepared-upload identity (verified short-lived client token, or an in-process server-minted pathname) — a raw client pathname alone is never sufficient.
+- Immediately before any `storage.delete`, re-check tenant-scoped references (`businessId` + `storageKey`).
+- If the candidate equals the current file’s `storageKey`, any reference exists, the reference check fails/times out/is ambiguous, or ownership cannot be proven: **retain the object** (fail closed).
+- Prefer retaining an uncertain orphan over deleting a live reference. Previous successfully referenced objects follow the retention policy (not deleted on replacement in Slice 2A).
 
 ## Concurrency
 
@@ -139,4 +148,4 @@ No Prisma schema or migration files. Merge would deploy runtime code only (schem
 
 ## Orphans
 
-Best-effort delete of newly uploaded objects after finalisation/CAS failure. Objects abandoned by process kill remain identifiable by `mig/` key prefix for a later operational task (no worker here).
+Best-effort delete of newly prepared, **proven-unreferenced** objects after finalisation/CAS/policy failure, via `safeDeleteUnreferencedMigrationObject` only. Objects abandoned by process kill, or retained because reference state was uncertain, remain identifiable by `mig/` key prefix for a later bounded operational task (no worker here).

@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
         packageId: String(body.packageId ?? ''),
         entityType: String(body.entityType ?? ''),
         pathname: String(body.pathname ?? ''),
+        clientToken: String(body.clientToken ?? ''),
         expectedVersion: body.expectedVersion as number,
         replace: Boolean(body.replace),
         originalFilename: (body.originalFilename as string | null) ?? null,

@@ -42,6 +42,11 @@ export interface MigrationObjectStorage {
    * Must be minted with the migration RW token — never returned as the RW token.
    */
   createClientUploadToken(input: MigrationClientUploadTokenInput): Promise<string>;
+  /**
+   * Prove a client token was minted for exactly this pathname and is unexpired.
+   * Required before treating a pathname as a prepared-upload cleanup candidate.
+   */
+  verifyClientUploadToken(input: { clientToken: string; pathname: string }): Promise<boolean>;
 }
 
 export const MIGRATION_BLOB_TOKEN_ENV = 'MIGRATION_BLOB_READ_WRITE_TOKEN';
@@ -178,6 +183,23 @@ export function createVercelMigrationObjectStorage(
         throw new MigrationServiceError('STORAGE_FAILURE', undefined, 502);
       }
     },
+
+    async verifyClientUploadToken(input) {
+      try {
+        const { getPayloadFromClientToken } = await import('@vercel/blob/client');
+        const payload = getPayloadFromClientToken(input.clientToken) as {
+          pathname?: string;
+          validUntil?: number;
+        };
+        if (!payload || payload.pathname !== input.pathname) return false;
+        if (typeof payload.validUntil === 'number' && payload.validUntil < Date.now()) {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
   };
 }
 
@@ -249,7 +271,15 @@ export function createMemoryMigrationObjectStorage(): MigrationObjectStorage & {
     },
     async createClientUploadToken(input) {
       // Deterministic fake — never equals a real RW token; put() ignores it in memory mode.
-      return `memory-client-token:${input.pathname}:${input.maximumSizeInBytes}`;
+      return `memory-client-token:${input.pathname}:${input.maximumSizeInBytes}:${input.validUntilMs}`;
+    },
+    async verifyClientUploadToken(input) {
+      const prefix = `memory-client-token:${input.pathname}:`;
+      if (!input.clientToken.startsWith(prefix)) return false;
+      const parts = input.clientToken.split(':');
+      const validUntilMs = Number(parts[parts.length - 1]);
+      if (!Number.isFinite(validUntilMs) || validUntilMs < Date.now()) return false;
+      return true;
     },
   };
 }

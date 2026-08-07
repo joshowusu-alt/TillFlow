@@ -6,3 +6,4 @@ export * from '@/lib/services/migration/file-upload';
 export * from '@/lib/services/migration/branch-mapping';
 export * from '@/lib/services/migration/file-download';
 export * from '@/lib/services/migration/preapproval';
+export * from '@/lib/services/migration/cleanup';

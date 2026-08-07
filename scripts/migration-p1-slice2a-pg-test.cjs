@@ -618,6 +618,119 @@ async function main() {
     }
     pass('non-effects: no product/supplier/sale/purchase/shift/approval/stock mutation');
 
+    // Referenced-object cleanup race: winner establishes DB reference before loser's
+    // final pre-delete count. Separate backends + barrier; deletion suppressed when count>0.
+    {
+      const pkgRace = await insertPackage(setup, {
+        businessId: bizA,
+        createdByUserId: userA,
+        clientPackageKey: `cleanup-race-${cuid()}`,
+        version: 1,
+      });
+      const candidateKey = `mig/${bizA}/${pkgRace}/up-new/PRODUCTS.csv`;
+      const currentKey = `mig/${bizA}/${pkgRace}/up-cur/PRODUCTS.csv`;
+      await setup.query(
+        `INSERT INTO "MigrationFile" (
+           id, "businessId", "packageId", "entityType", "storageStatus",
+           "uploadChecksum", "byteLength", "storageKey", "createdAt", "updatedAt"
+         ) VALUES ($1,$2,$3,'PRODUCTS','FINALISED',$4,10,$5,NOW(),NOW())`,
+        [cuid(), bizA, pkgRace, 'c'.repeat(64), currentKey],
+      );
+
+      const a = await connectClient(url, 'cleanup-a');
+      const b = await connectClient(url, 'cleanup-b');
+      const ready = deferred();
+      const winnerCommitted = deferred();
+      let readyCount = 0;
+      const markReady = () => {
+        readyCount += 1;
+        if (readyCount === 2) ready.resolve();
+      };
+      const barrierTimeout = setTimeout(
+        () => ready.reject(new Error('cleanup barrier timeout')),
+        10000,
+      );
+
+      const loserCleanup = (async () => {
+        markReady();
+        await ready.promise;
+        // Wait until winner has committed the new reference (deterministic, not sleep).
+        await winnerCommitted.promise;
+        const count = await a.client.query(
+          `SELECT count(*)::int AS c FROM "MigrationFile"
+           WHERE "businessId"=$1 AND "storageKey"=$2`,
+          [bizA, candidateKey],
+        );
+        return count.rows[0].c;
+      })();
+
+      const winnerFinalise = (async () => {
+        markReady();
+        await ready.promise;
+        await b.client.query('BEGIN');
+        await b.client.query(
+          `SELECT id, version FROM "MigrationPackage" WHERE id=$1 FOR UPDATE`,
+          [pkgRace],
+        );
+        await b.client.query(
+          `UPDATE "MigrationFile"
+           SET "storageKey"=$1, "uploadChecksum"=$2, "updatedAt"=NOW()
+           WHERE "packageId"=$3 AND "entityType"='PRODUCTS'`,
+          [candidateKey, 'd'.repeat(64), pkgRace],
+        );
+        await b.client.query(
+          `UPDATE "MigrationPackage" SET version = version + 1 WHERE id=$1 AND version=1`,
+          [pkgRace],
+        );
+        await b.client.query('COMMIT');
+        winnerCommitted.resolve();
+        return 'winner';
+      })();
+
+      const [refCount, winner] = await Promise.all([loserCleanup, winnerFinalise]);
+      clearTimeout(barrierTimeout);
+      if (winner !== 'winner') throw new Error('winner did not commit');
+      if (refCount !== 1) {
+        throw new Error(
+          `cleanup race: expected loser reference count 1 after winner commit, got ${refCount}`,
+        );
+      }
+      const still = await setup.query(
+        `SELECT "storageKey" FROM "MigrationFile" WHERE "packageId"=$1`,
+        [pkgRace],
+      );
+      if (still.rows[0].storageKey !== candidateKey) {
+        throw new Error('winner DB reference lost');
+      }
+      const ver = await setup.query(`SELECT version FROM "MigrationPackage" WHERE id=$1`, [
+        pkgRace,
+      ]);
+      if (ver.rows[0].version !== 2) throw new Error('only winner should advance version');
+      await a.client.end();
+      await b.client.end();
+      pass(
+        `cleanup race: winner reference retained before loser delete decision (pids ${a.pid}/${b.pid})`,
+      );
+    }
+    // Proven-unreferenced cleanup decision: count=0 permits delete; count>0 retains.
+    {
+      const pkgOrphan = await insertPackage(setup, {
+        businessId: bizA,
+        createdByUserId: userA,
+        clientPackageKey: `cleanup-orphan-${cuid()}`,
+      });
+      const orphanKey = `mig/${bizA}/${pkgOrphan}/up-orphan/PRODUCTS.csv`;
+      const a = await connectClient(url, 'orphan-check');
+      const count = await a.client.query(
+        `SELECT count(*)::int AS c FROM "MigrationFile"
+         WHERE "businessId"=$1 AND "storageKey"=$2`,
+        [bizA, orphanKey],
+      );
+      if (count.rows[0].c !== 0) throw new Error('expected unreferenced orphan candidate');
+      await a.client.end();
+      pass('proven orphan: reference count 0 permits bounded cleanup');
+    }
+
     // Nine-FK guard
     const fks = await setup.query(
       `SELECT conname FROM pg_constraint WHERE contype='f' AND conname = ANY($1::text[])`,

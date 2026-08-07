@@ -38,6 +38,11 @@ import {
   type MigrationObjectStorage,
 } from '@/lib/services/migration/storage';
 import type { MigrationEntityType } from '@/lib/migration/types';
+import {
+  assertPreparedUploadTokenMatchesPathname,
+  safeDeleteUnreferencedMigrationObject,
+  type PreparedUploadCleanupIdentity,
+} from '@/lib/services/migration/cleanup';
 
 const CLIENT_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -65,6 +70,8 @@ export type FinaliseMigrationUploadedObjectInput = {
   packageId: string;
   entityType: string;
   pathname: string;
+  /** Short-lived token from prepare — binds cleanup/finalise to prepared identity. */
+  clientToken: string;
   expectedVersion: number;
   replace?: boolean;
   originalFilename?: string | null;
@@ -354,19 +361,34 @@ export async function finaliseMigrationUploadedObject(
     packageId: input.packageId,
     entityType,
   });
-
-  await loadMutablePackagePreview(db, actor, input.packageId, expectedVersion);
-
-  const existing = await db.migrationFile.findFirst({
-    where: {
-      businessId: actor.businessId,
-      packageId: input.packageId,
-      entityType,
-    },
+  // Prepared-upload identity: clientToken must authorise this exact pathname.
+  await assertPreparedUploadTokenMatchesPathname(storage, {
+    clientToken: input.clientToken,
+    pathname: input.pathname,
   });
 
-  let uploadedPathForCleanup: string | null = input.pathname;
+  const cleanupIdentity: PreparedUploadCleanupIdentity = {
+    businessId: actor.businessId,
+    packageId: input.packageId,
+    entityType,
+    preparedPathname: input.pathname,
+  };
+
+  // Only the verified prepared pathname is eligible for orphan cleanup — never
+  // the current referenced storageKey unless it is proven unreferenced.
+  let mayAttemptOrphanCleanup = true;
+
   try {
+    await loadMutablePackagePreview(db, actor, input.packageId, expectedVersion);
+
+    const existing = await db.migrationFile.findFirst({
+      where: {
+        businessId: actor.businessId,
+        packageId: input.packageId,
+        entityType,
+      },
+    });
+
     const headMeta = await storage.head(input.pathname);
     if (headMeta.size > MIGRATION_MAX_UPLOAD_BYTES) {
       throw new MigrationServiceError('FILE_POLICY', undefined);
@@ -388,14 +410,11 @@ export async function finaliseMigrationUploadedObject(
       existing.uploadChecksum === hashed.hex &&
       existing.storageStatus === 'FINALISED'
     ) {
-      // Exact replay — no version bump; attempt cleanup of unused new object.
-      try {
-        if (existing.storageKey !== input.pathname) {
-          await storage.delete(input.pathname);
-        }
-      } catch {
-        // best-effort
+      // Exact replay — no version bump; cleanup unused NEW object only.
+      if (existing.storageKey !== input.pathname) {
+        await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
       }
+      mayAttemptOrphanCleanup = false;
       return {
         fileId: existing.id,
         packageId: existing.packageId,
@@ -432,22 +451,15 @@ export async function finaliseMigrationUploadedObject(
     );
 
     if (result.orphanNewObject) {
-      try {
-        await storage.delete(input.pathname);
-      } catch {
-        // best-effort
-      }
+      await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
     }
-    uploadedPathForCleanup = null;
+    mayAttemptOrphanCleanup = false;
     const { orphanNewObject: _o, ...publicResult } = result;
     return publicResult;
   } catch (error) {
-    if (uploadedPathForCleanup) {
-      try {
-        await storage.delete(uploadedPathForCleanup);
-      } catch {
-        // best-effort orphan cleanup after stale/finalise failure
-      }
+    if (mayAttemptOrphanCleanup) {
+      // Fail-closed: safeDelete re-checks references; never deletes a live key.
+      await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
     }
     if (error instanceof MigrationServiceError) throw error;
     throw error;
@@ -528,14 +540,21 @@ export async function uploadMigrationFile(
     entityType,
   });
 
-  let uploadedUrl: string | null = null;
+  const cleanupIdentity: PreparedUploadCleanupIdentity = {
+    businessId: actor.businessId,
+    packageId: input.packageId,
+    entityType,
+    preparedPathname: pathname,
+  };
+
+  let uploadedPathname: string | null = null;
   try {
     const putMeta = await storage.put({
       pathname,
       body: input.bytes,
       contentType: policy.contentType,
     });
-    uploadedUrl = putMeta.url;
+    uploadedPathname = pathname;
     const headMeta = await storage.head(putMeta.url);
     if (headMeta.size !== input.bytes.length) {
       throw new MigrationServiceError('STORAGE_FAILURE', undefined, 502);
@@ -557,22 +576,22 @@ export async function uploadMigrationFile(
       db,
     );
 
-    if (result.orphanNewObject && uploadedUrl) {
-      try {
-        await storage.delete(uploadedUrl);
-      } catch {
-        // best-effort
-      }
+    if (result.orphanNewObject && uploadedPathname) {
+      await safeDeleteUnreferencedMigrationObject(
+        { db, storage },
+        cleanupIdentity,
+        uploadedPathname,
+      );
     }
     const { orphanNewObject: _o, ...publicResult } = result;
     return publicResult;
   } catch (error) {
-    if (uploadedUrl) {
-      try {
-        await storage.delete(uploadedUrl);
-      } catch {
-        // best-effort
-      }
+    if (uploadedPathname) {
+      await safeDeleteUnreferencedMigrationObject(
+        { db, storage },
+        cleanupIdentity,
+        uploadedPathname,
+      );
     }
     if (error instanceof MigrationServiceError) throw error;
     throw error;
