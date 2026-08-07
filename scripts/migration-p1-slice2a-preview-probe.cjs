@@ -59,33 +59,59 @@ async function loginWithPlaywright(base, email, password, bypass) {
   await page.goto(`${base}/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
-  await Promise.all([
-    page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60000 }).catch(() => null),
-    page.click('button[type="submit"]'),
-  ]);
+  await page.click('button[type="submit"]');
+  await page.waitForTimeout(4000);
+  await page
+    .waitForURL((url) => !String(url.pathname || '').includes('/login'), {
+      timeout: 60000,
+    })
+    .catch(() => null);
   const cookies = await context.cookies();
-  await browser.close();
-  const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-  const loggedIn = cookies.some((c) => c.name.includes('session') || c.name.startsWith('pos_'));
-  return { ok: loggedIn || cookieHeader.length > 20, cookie: cookieHeader };
+  const sessionCookies = cookies.filter((c) => c.name.startsWith('pos_session'));
+  if (sessionCookies.length === 0) {
+    await browser.close();
+    return { ok: false, context: null, browser: null };
+  }
+  // Keep browser/context open so APIRequestContext retains auth cookies.
+  // Node fetch does not reliably replay Preview session cookies (307→/login).
+  return { ok: true, context, browser };
 }
 
-async function jsonFetch(base, pathName, { method = 'GET', cookie, body, bypass } = {}) {
-  const res = await fetch(`${base}${pathName}`, {
-    method,
-    headers: {
-      ...(cookie ? { cookie } : {}),
-      ...(bypass
-        ? {
-            'x-vercel-protection-bypass': bypass,
-            'x-vercel-set-bypass-cookie': 'true',
-          }
-        : {}),
-      ...(body ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    redirect: 'manual',
-  });
+async function jsonFetch(context, base, pathName, { method = 'GET', body, bypass } = {}) {
+  const headers = {
+    ...(bypass
+      ? {
+          'x-vercel-protection-bypass': bypass,
+          'x-vercel-set-bypass-cookie': 'true',
+        }
+      : {}),
+    ...(body ? { 'content-type': 'application/json' } : {}),
+  };
+  const res = context
+    ? await context.request.fetch(`${base}${pathName}`, {
+        method,
+        headers,
+        data: body || undefined,
+        maxRedirects: 0,
+      })
+    : await fetch(`${base}${pathName}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        redirect: 'manual',
+      });
+
+  if (context) {
+    const text = await res.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { status: res.status(), json, text, headers: res.headers() };
+  }
+
   const text = await res.text();
   let json = null;
   try {
@@ -94,6 +120,12 @@ async function jsonFetch(base, pathName, { method = 'GET', cookie, body, bypass 
     json = null;
   }
   return { status: res.status, json, text, headers: res.headers };
+}
+
+function probeFail(code, msg) {
+  const err = new Error(msg);
+  err.exitCode = code;
+  throw err;
 }
 
 async function main() {
@@ -130,318 +162,326 @@ async function main() {
   process.env.MIGRATION_BLOB_READ_WRITE_TOKEN = migToken;
 
   const recorded = { packageId: null, fileId: null, pathnames: [] };
+  let cashierLogin = null;
+  let ownerLogin = null;
+  let db = null;
 
-  console.log('Preview host:', base.replace(/^https?:\/\//, ''));
+  const bypassHeaders = bypass
+    ? {
+        'x-vercel-protection-bypass': bypass,
+        'x-vercel-set-bypass-cookie': 'true',
+      }
+    : {};
 
-  // 1 unauthenticated
-  {
-    const res = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-      method: 'POST',
-      bypass,
-      body: { packageId: 'x', entityType: 'PRODUCTS', expectedVersion: 1 },
-    });
-    if (res.status === 200) fail(1, 'unauthenticated prepare unexpectedly succeeded');
-    console.log('PASS unauthenticated denied', res.status);
-  }
-
-  // 2 cashier denied
-  const cashierLogin = await loginWithPlaywright(base, cashierEmail, cashierPass, bypass);
-  if (!cashierLogin.ok) fail(2, 'BLOCKED: cashier login failed for synthetic Preview identity');
-  {
-    const res = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-      method: 'POST',
-      cookie: cashierLogin.cookie,
-      bypass,
-      body: { packageId: 'x', entityType: 'PRODUCTS', expectedVersion: 1 },
-    });
-    if (res.status === 200) fail(1, 'cashier prepare unexpectedly succeeded');
-    console.log('PASS cashier denied', res.status);
-  }
-
-  const ownerLogin = await loginWithPlaywright(base, ownerEmail, ownerPass, bypass);
-  if (!ownerLogin.ok) fail(2, 'BLOCKED: owner login failed for synthetic Preview identity');
-
-  const { Client } = require('pg');
-  const db = new Client({ connectionString: previewDb, ssl: { rejectUnauthorized: false } });
-  await db.connect();
-
-  const owner = await db.query(
-    `SELECT id, "businessId", role FROM "User" WHERE email=$1 AND active=true LIMIT 1`,
-    [ownerEmail],
-  );
-  if (owner.rowCount !== 1 || owner.rows[0].role !== 'OWNER') {
-    await db.end();
-    fail(2, 'BLOCKED: synthetic owner identity not found or not OWNER');
-  }
-  const businessId = owner.rows[0].businessId;
-  const userId = owner.rows[0].id;
-
-  const packageId = 'c' + crypto.randomBytes(12).toString('hex');
-  recorded.packageId = packageId;
-  await db.query(
-    `INSERT INTO "MigrationPackage" (
-       id, "businessId", "contractVersion", "sourceSystemKey", "sourceBusinessKey",
-       "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
-       "clientPackageKey", "expiresAt", version, "lineageRootId",
-       "createdByUserId", "createdAt", "updatedAt"
-     ) VALUES (
-       $1,$2,'1','slice2a-preview-probe','synthetic','GHS','2026-08-01','DRAFT','NOT_STARTED',
-       $3, NOW() + interval '1 day', 1, $1, $4, NOW(), NOW()
-     )`,
-    [packageId, businessId, `slice2a-preview-${Date.now()}`, userId],
-  );
-  console.log('PASS seeded synthetic DRAFT package');
-
-  const before = await db.query(
-    `SELECT
-      (SELECT count(*)::int FROM "Product" WHERE "businessId"=$1) AS products,
-      (SELECT count(*)::int FROM "Supplier" WHERE "businessId"=$1) AS suppliers,
-      (SELECT count(*)::int FROM "MigrationValidationRun" WHERE "businessId"=$1 AND "packageId"=$2) AS runs`,
-    [businessId, packageId],
-  );
-
-  const prepare = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'PRODUCTS',
-      expectedVersion: 1,
-      originalFilename: 'probe.csv',
-      contentType: 'text/csv',
-    },
-  });
-  if (prepare.status !== 200 || !prepare.json?.clientToken || !prepare.json?.pathname) {
-    console.error('prepare failed', prepare.status, prepare.json?.code);
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'prepare-upload failed — Preview runtime may lack migration token binding');
-  }
-  if (prepare.json.clientToken === migToken) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'clientToken leaked migration RW token');
-  }
-  if (prepare.json.access !== 'private' || prepare.json.maximumSizeInBytes !== 26214400) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'prepare token constraints incorrect');
-  }
-  recorded.pathnames.push(prepare.json.pathname);
-  console.log('PASS prepare private client token');
-
-  const { put } = await import('@vercel/blob/client');
-  const csv = Buffer.from('sku,name\nprobe-1,Tea\n');
   try {
-    await put(prepare.json.pathname, csv, {
-      access: 'private',
-      token: prepare.json.clientToken,
-      contentType: 'text/csv',
-    });
-  } catch (err) {
-    console.error('client put failed', err && err.name);
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'private client put failed');
-  }
-  console.log('PASS private client put');
+    console.log('Preview host:', base.replace(/^https?:\/\//, ''));
 
-  // Prove object is not anonymously readable
-  try {
-    const anon = await fetch(`https://blob.vercel-storage.com/${prepare.json.pathname}`);
-    if (anon.ok) {
-      await cleanup(db, recorded, businessId, migToken);
-      fail(1, 'uploaded object unexpectedly public');
-    }
-    console.log('PASS object not anonymously readable', anon.status);
-  } catch {
-    console.log('PASS anonymous fetch failed closed');
-  }
-
-  const finalise = await jsonFetch(base, '/api/migration/files/finalise', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'PRODUCTS',
-      pathname: prepare.json.pathname,
-      expectedVersion: 1,
-      originalFilename: 'probe.csv',
-      contentType: 'text/csv',
-    },
-  });
-  if (finalise.status !== 200 || !finalise.json?.fileId) {
-    console.error('finalise failed', finalise.status, finalise.json?.code);
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'finalise failed');
-  }
-  recorded.fileId = finalise.json.fileId;
-  console.log('PASS finalise');
-
-  const dl = await fetch(`${base}/api/migration/files/${recorded.fileId}/download`, {
-    headers: {
-      cookie: ownerLogin.cookie,
-      ...(bypass
-        ? {
-            'x-vercel-protection-bypass': bypass,
-            'x-vercel-set-bypass-cookie': 'true',
-          }
-        : {}),
-    },
-  });
-  if (!dl.ok) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'authorised download failed');
-  }
-  const bytes = Buffer.from(await dl.arrayBuffer());
-  if (!bytes.equals(csv)) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'download bytes mismatch');
-  }
-  console.log('PASS authorised download');
-
-  // missing version
-  const missingVer = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: { packageId, entityType: 'OPENING_STOCK' },
-  });
-  if (missingVer.status === 200) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'missing expectedVersion unexpectedly accepted');
-  }
-  console.log('PASS missing expectedVersion rejected');
-
-  // replace + stale
-  const ver = finalise.json.packageVersion;
-  const prepR = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'PRODUCTS',
-      expectedVersion: ver,
-      replace: true,
-      originalFilename: 'probe2.csv',
-      contentType: 'text/csv',
-    },
-  });
-  if (prepR.status !== 200) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'replace prepare failed');
-  }
-  recorded.pathnames.push(prepR.json.pathname);
-  const csv2 = Buffer.from('sku,name\nprobe-2,Coffee\n');
-  await put(prepR.json.pathname, csv2, {
-    access: 'private',
-    token: prepR.json.clientToken,
-    contentType: 'text/csv',
-  });
-  const finR = await jsonFetch(base, '/api/migration/files/finalise', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'PRODUCTS',
-      pathname: prepR.json.pathname,
-      expectedVersion: ver,
-      replace: true,
-      originalFilename: 'probe2.csv',
-      contentType: 'text/csv',
-    },
-  });
-  if (finR.status !== 200) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'replace finalise failed');
-  }
-  console.log('PASS replacement with valid version');
-
-  const staleFin = await jsonFetch(base, '/api/migration/files/finalise', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'PRODUCTS',
-      pathname: prepR.json.pathname,
-      expectedVersion: ver,
-      replace: true,
-    },
-  });
-  if (staleFin.status === 200 && staleFin.json && !staleFin.json.replayed) {
-    await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'stale replacement unexpectedly mutated');
-  }
-  console.log('PASS stale replacement rejected or replay-safe');
-
-  // archive rejection
-  const prepBad = await jsonFetch(base, '/api/migration/files/prepare-upload', {
-    method: 'POST',
-    cookie: ownerLogin.cookie,
-    bypass,
-    body: {
-      packageId,
-      entityType: 'SUPPLIERS',
-      expectedVersion: finR.json.packageVersion,
-      originalFilename: 'bad.zip',
-      contentType: 'application/zip',
-    },
-  });
-  if (prepBad.status === 200) {
-    recorded.pathnames.push(prepBad.json.pathname);
-    const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00]);
-    try {
-      await put(prepBad.json.pathname, zip, {
-        access: 'private',
-        token: prepBad.json.clientToken,
-        contentType: 'application/zip',
+    // 1 unauthenticated
+    {
+      const res = await jsonFetch(null, base, '/api/migration/files/prepare-upload', {
+        method: 'POST',
+        bypass,
+        body: { packageId: 'x', entityType: 'PRODUCTS', expectedVersion: 1 },
       });
-    } catch {
-      console.log('PASS archive rejected at Blob content-type gate');
+      if (res.status === 200) probeFail(1, 'unauthenticated prepare unexpectedly succeeded');
+      console.log('PASS unauthenticated denied', res.status);
     }
-    const finBad = await jsonFetch(base, '/api/migration/files/finalise', {
+
+    // 2 cashier denied
+    cashierLogin = await loginWithPlaywright(base, cashierEmail, cashierPass, bypass);
+    if (!cashierLogin.ok) probeFail(2, 'BLOCKED: cashier login failed for synthetic Preview identity');
+    {
+      const res = await jsonFetch(cashierLogin.context, base, '/api/migration/files/prepare-upload', {
+        method: 'POST',
+        bypass,
+        body: { packageId: 'x', entityType: 'PRODUCTS', expectedVersion: 1 },
+      });
+      if (res.status === 200) probeFail(1, 'cashier prepare unexpectedly succeeded');
+      console.log('PASS cashier denied', res.status);
+    }
+
+    ownerLogin = await loginWithPlaywright(base, ownerEmail, ownerPass, bypass);
+    if (!ownerLogin.ok) probeFail(2, 'BLOCKED: owner login failed for synthetic Preview identity');
+
+    const { Client } = require('pg');
+    db = new Client({ connectionString: previewDb, ssl: { rejectUnauthorized: false } });
+    await db.connect();
+
+    const owner = await db.query(
+      `SELECT id, "businessId", role FROM "User" WHERE email=$1 AND active=true LIMIT 1`,
+      [ownerEmail],
+    );
+    if (owner.rowCount !== 1 || owner.rows[0].role !== 'OWNER') {
+      await db.end();
+      db = null;
+      probeFail(2, 'BLOCKED: synthetic owner identity not found or not OWNER');
+    }
+    const businessId = owner.rows[0].businessId;
+    const userId = owner.rows[0].id;
+
+    const packageId = 'c' + crypto.randomBytes(12).toString('hex');
+    recorded.packageId = packageId;
+    await db.query(
+      `INSERT INTO "MigrationPackage" (
+         id, "businessId", "contractVersion", "sourceSystemKey", "sourceBusinessKey",
+         "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
+         "clientPackageKey", "expiresAt", version, "lineageRootId",
+         "createdByUserId", "createdAt", "updatedAt"
+       ) VALUES (
+         $1,$2,'1','slice2a-preview-probe','synthetic','GHS','2026-08-01','DRAFT','NOT_STARTED',
+         $3, NOW() + interval '1 day', 1, $1, $4, NOW(), NOW()
+       )`,
+      [packageId, businessId, `slice2a-preview-${Date.now()}`, userId],
+    );
+    console.log('PASS seeded synthetic DRAFT package');
+
+    const before = await db.query(
+      `SELECT
+        (SELECT count(*)::int FROM "Product" WHERE "businessId"=$1) AS products,
+        (SELECT count(*)::int FROM "Supplier" WHERE "businessId"=$1) AS suppliers,
+        (SELECT count(*)::int FROM "MigrationValidationRun" WHERE "businessId"=$1 AND "packageId"=$2) AS runs`,
+      [businessId, packageId],
+    );
+
+    const prepare = await jsonFetch(ownerLogin.context, base, '/api/migration/files/prepare-upload', {
       method: 'POST',
-      cookie: ownerLogin.cookie,
+      bypass,
+      body: {
+        packageId,
+        entityType: 'PRODUCTS',
+        expectedVersion: 1,
+        originalFilename: 'probe.csv',
+        contentType: 'text/csv',
+      },
+    });
+    if (prepare.status !== 200 || !prepare.json?.clientToken || !prepare.json?.pathname) {
+      console.error('prepare failed', prepare.status, prepare.json?.code);
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'prepare-upload failed — Preview runtime may lack migration token binding');
+    }
+    if (prepare.json.clientToken === migToken) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'clientToken leaked migration RW token');
+    }
+    if (prepare.json.access !== 'private' || prepare.json.maximumSizeInBytes !== 26214400) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'prepare token constraints incorrect');
+    }
+    recorded.pathnames.push(prepare.json.pathname);
+    console.log('PASS prepare private client token');
+
+    const { put } = await import('@vercel/blob/client');
+    const csv = Buffer.from('sku,name\nprobe-1,Tea\n');
+    try {
+      await put(prepare.json.pathname, csv, {
+        access: 'private',
+        token: prepare.json.clientToken,
+        contentType: 'text/csv',
+      });
+    } catch (err) {
+      console.error('client put failed', err && err.name);
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'private client put failed');
+    }
+    console.log('PASS private client put');
+
+    // Prove object is not anonymously readable
+    try {
+      const anon = await fetch(`https://blob.vercel-storage.com/${prepare.json.pathname}`);
+      if (anon.ok) {
+        await cleanup(db, recorded, businessId, migToken);
+        probeFail(1, 'uploaded object unexpectedly public');
+      }
+      console.log('PASS object not anonymously readable', anon.status);
+    } catch {
+      console.log('PASS anonymous fetch failed closed');
+    }
+
+    const finalise = await jsonFetch(ownerLogin.context, base, '/api/migration/files/finalise', {
+      method: 'POST',
+      bypass,
+      body: {
+        packageId,
+        entityType: 'PRODUCTS',
+        pathname: prepare.json.pathname,
+        expectedVersion: 1,
+        originalFilename: 'probe.csv',
+        contentType: 'text/csv',
+      },
+    });
+    if (finalise.status !== 200 || !finalise.json?.fileId) {
+      console.error('finalise failed', finalise.status, finalise.json?.code);
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'finalise failed');
+    }
+    recorded.fileId = finalise.json.fileId;
+    console.log('PASS finalise');
+
+    const dl = await ownerLogin.context.request.get(
+      `${base}/api/migration/files/${recorded.fileId}/download`,
+      { headers: bypassHeaders },
+    );
+    if (!dl.ok()) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'authorised download failed');
+    }
+    const bytes = Buffer.from(await dl.body());
+    if (!bytes.equals(csv)) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'download bytes mismatch');
+    }
+    console.log('PASS authorised download');
+
+    // missing version
+    const missingVer = await jsonFetch(ownerLogin.context, base, '/api/migration/files/prepare-upload', {
+      method: 'POST',
+      bypass,
+      body: { packageId, entityType: 'OPENING_STOCK' },
+    });
+    if (missingVer.status === 200) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'missing expectedVersion unexpectedly accepted');
+    }
+    console.log('PASS missing expectedVersion rejected');
+
+    // replace + stale
+    const ver = finalise.json.packageVersion;
+    const prepR = await jsonFetch(ownerLogin.context, base, '/api/migration/files/prepare-upload', {
+      method: 'POST',
+      bypass,
+      body: {
+        packageId,
+        entityType: 'PRODUCTS',
+        expectedVersion: ver,
+        replace: true,
+        originalFilename: 'probe2.csv',
+        contentType: 'text/csv',
+      },
+    });
+    if (prepR.status !== 200) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'replace prepare failed');
+    }
+    recorded.pathnames.push(prepR.json.pathname);
+    const csv2 = Buffer.from('sku,name\nprobe-2,Coffee\n');
+    await put(prepR.json.pathname, csv2, {
+      access: 'private',
+      token: prepR.json.clientToken,
+      contentType: 'text/csv',
+    });
+    const finR = await jsonFetch(ownerLogin.context, base, '/api/migration/files/finalise', {
+      method: 'POST',
+      bypass,
+      body: {
+        packageId,
+        entityType: 'PRODUCTS',
+        pathname: prepR.json.pathname,
+        expectedVersion: ver,
+        replace: true,
+        originalFilename: 'probe2.csv',
+        contentType: 'text/csv',
+      },
+    });
+    if (finR.status !== 200) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'replace finalise failed');
+    }
+    console.log('PASS replacement with valid version');
+
+    const staleFin = await jsonFetch(ownerLogin.context, base, '/api/migration/files/finalise', {
+      method: 'POST',
+      bypass,
+      body: {
+        packageId,
+        entityType: 'PRODUCTS',
+        pathname: prepR.json.pathname,
+        expectedVersion: ver,
+        replace: true,
+      },
+    });
+    if (staleFin.status === 200 && staleFin.json && !staleFin.json.replayed) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'stale replacement unexpectedly mutated');
+    }
+    console.log('PASS stale replacement rejected or replay-safe');
+
+    // archive rejection
+    const prepBad = await jsonFetch(ownerLogin.context, base, '/api/migration/files/prepare-upload', {
+      method: 'POST',
       bypass,
       body: {
         packageId,
         entityType: 'SUPPLIERS',
-        pathname: prepBad.json.pathname,
         expectedVersion: finR.json.packageVersion,
         originalFilename: 'bad.zip',
         contentType: 'application/zip',
       },
     });
-    if (finBad.status === 200) {
-      await cleanup(db, recorded, businessId, migToken);
-      fail(1, 'archive finalise unexpectedly succeeded');
+    if (prepBad.status === 200) {
+      recorded.pathnames.push(prepBad.json.pathname);
+      const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00]);
+      try {
+        await put(prepBad.json.pathname, zip, {
+          access: 'private',
+          token: prepBad.json.clientToken,
+          contentType: 'application/zip',
+        });
+      } catch {
+        console.log('PASS archive rejected at Blob content-type gate');
+      }
+      const finBad = await jsonFetch(ownerLogin.context, base, '/api/migration/files/finalise', {
+        method: 'POST',
+        bypass,
+        body: {
+          packageId,
+          entityType: 'SUPPLIERS',
+          pathname: prepBad.json.pathname,
+          expectedVersion: finR.json.packageVersion,
+          originalFilename: 'bad.zip',
+          contentType: 'application/zip',
+        },
+      });
+      if (finBad.status === 200) {
+        await cleanup(db, recorded, businessId, migToken);
+        probeFail(1, 'archive finalise unexpectedly succeeded');
+      }
+      console.log('PASS archive finalise rejected', finBad.json?.code);
+    } else {
+      console.log('PASS archive prepare rejected', prepBad.json?.code);
     }
-    console.log('PASS archive finalise rejected', finBad.json?.code);
-  } else {
-    console.log('PASS archive prepare rejected', prepBad.json?.code);
-  }
 
-  const after = await db.query(
-    `SELECT
-      (SELECT count(*)::int FROM "Product" WHERE "businessId"=$1) AS products,
-      (SELECT count(*)::int FROM "Supplier" WHERE "businessId"=$1) AS suppliers,
-      (SELECT count(*)::int FROM "MigrationValidationRun" WHERE "businessId"=$1 AND "packageId"=$2) AS runs`,
-    [businessId, packageId],
-  );
-  if (
-    before.rows[0].products !== after.rows[0].products ||
-    before.rows[0].suppliers !== after.rows[0].suppliers ||
-    after.rows[0].runs !== 0
-  ) {
+    const after = await db.query(
+      `SELECT
+        (SELECT count(*)::int FROM "Product" WHERE "businessId"=$1) AS products,
+        (SELECT count(*)::int FROM "Supplier" WHERE "businessId"=$1) AS suppliers,
+        (SELECT count(*)::int FROM "MigrationValidationRun" WHERE "businessId"=$1 AND "packageId"=$2) AS runs`,
+      [businessId, packageId],
+    );
+    if (
+      before.rows[0].products !== after.rows[0].products ||
+      before.rows[0].suppliers !== after.rows[0].suppliers ||
+      after.rows[0].runs !== 0
+    ) {
+      await cleanup(db, recorded, businessId, migToken);
+      probeFail(1, 'non-effects violated');
+    }
+    console.log('PASS non-effects');
+
     await cleanup(db, recorded, businessId, migToken);
-    fail(1, 'non-effects violated');
+    await db.end();
+    db = null;
+    console.log('\nPreview Slice 2A private-storage probe verified and cleaned.');
+  } catch (err) {
+    if (err.exitCode != null) {
+      console.error(err.message);
+      process.exitCode = err.exitCode;
+      return;
+    }
+    throw err;
+  } finally {
+    if (cashierLogin?.browser) await cashierLogin.browser.close();
+    if (ownerLogin?.browser) await ownerLogin.browser.close();
   }
-  console.log('PASS non-effects');
-
-  await cleanup(db, recorded, businessId, migToken);
-  await db.end();
-  console.log('\nPreview Slice 2A private-storage probe verified and cleaned.');
 }
 
 async function cleanup(db, recorded, businessId, token) {
@@ -486,5 +526,5 @@ async function cleanup(db, recorded, businessId, token) {
 
 main().catch((err) => {
   console.error(err && err.message ? err.message : err);
-  process.exit(1);
+  process.exit(typeof process.exitCode === 'number' ? process.exitCode : 1);
 });
