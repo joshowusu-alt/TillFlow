@@ -21,6 +21,7 @@ export const MIGRATION_PACKAGE_STATUSES = [
   'IMPORT_FAILED',
   'EXPIRED',
   'CANCELLED',
+  'SUPERSEDED',
 ] as const;
 export type MigrationPackageStatus = (typeof MIGRATION_PACKAGE_STATUSES)[number];
 

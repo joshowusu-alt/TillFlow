@@ -527,12 +527,17 @@ model User {
   passwordResetTokens        PasswordResetToken[]
   reconciledPayments         PaymentReconciliation[] @relation("PaymentReconciledBy")
   productImports             ProductImport[]
-  migrationPackagesCreated   MigrationPackage[]      @relation("MigrationPackageCreatedBy")
-  migrationPackagesValidated MigrationPackage[]      @relation("MigrationPackageValidatedBy")
-  migrationPackagesApproved  MigrationPackage[]      @relation("MigrationPackageApprovedBy")
-  migrationPackagesExecuted  MigrationPackage[]      @relation("MigrationPackageExecutedBy")
-  migrationPackagesCancelled MigrationPackage[]      @relation("MigrationPackageCancelledBy")
+  migrationPackagesCreated    MigrationPackage[]           @relation("MigrationPackageCreatedBy")
+  migrationPackagesValidated  MigrationPackage[]           @relation("MigrationPackageValidatedBy")
+  migrationPackagesApproved   MigrationPackage[]           @relation("MigrationPackageApprovedBy")
+  migrationPackagesExecuted   MigrationPackage[]           @relation("MigrationPackageExecutedBy")
+  migrationPackagesCancelled  MigrationPackage[]           @relation("MigrationPackageCancelledBy")
+  migrationPackagesSuperseded MigrationPackage[]           @relation("MigrationPackageSupersededBy")
+  migrationValidationRuns     MigrationValidationRun[]
+  migrationApprovalHistories  MigrationApprovalHistory[]
 
+  /// Tenant-aware composite target for migration actor FKs.
+  @@unique([businessId, id])
   @@index([businessId, active])
 }
 
@@ -727,6 +732,7 @@ model ProductImport {
 
 /// Atomic Phase 1 migration package (suppliers + products + opening stock).
 /// Lifecycle status is separate from reconciliationStatus. Strings are CHECK-constrained in SQL.
+/// Lineage authority: successor.predecessorPackageId only (no supersededByPackageId).
 model MigrationPackage {
   id                       String    @id @default(cuid())
   businessId               String
@@ -741,7 +747,7 @@ model MigrationPackage {
   /// Package as-of date (YYYY-MM-DD calendar date).
   packageAsOfDate          String
   /// DRAFT | VALIDATED | APPROVED | IMPORTING | IMPORTED | VALIDATION_FAILED |
-  /// APPROVAL_INVALIDATED | IMPORT_FAILED | EXPIRED | CANCELLED
+  /// APPROVAL_INVALIDATED | IMPORT_FAILED | EXPIRED | CANCELLED | SUPERSEDED
   status                   String    @default("DRAFT")
   /// NOT_STARTED | RECONCILING | MATCHED | MISMATCHED | RECONCILIATION_FAILED
   reconciliationStatus     String    @default("NOT_STARTED")
@@ -751,49 +757,135 @@ model MigrationPackage {
   manifestChecksum         String?
   /// Manifest checksum frozen at Owner approval.
   approvedManifestChecksum String?
-  /// Expiry clock starts at package creation; not restarted by file replacement.
+  /// Draft/validation expiry clock (from creation; not restarted by file replacement).
   expiresAt                DateTime
   expiredAt                DateTime?
+  /// Import-validity window set at approval; null until approved.
+  approvalExpiresAt        DateTime?
   version                  Int       @default(1)
-  createdByUserId          String?
+  /// Immutable lineage root (root packages: lineageRootId = id).
+  lineageRootId            String
+  /// Authoritative successor link; UNIQUE; multiple NULLs allowed.
+  predecessorPackageId     String?   @unique
+  latestValidationRunId    String?   @unique
+  /// Required after create — Restrict retention (no SET NULL).
+  createdByUserId          String
   validatedByUserId        String?
   validatedAt              DateTime?
   approvedByUserId         String?
   approvedAt               DateTime?
-  /// Future executor — unused in P0.
+  /// Future executor — unused in P1 slice 1 services.
   executedByUserId         String?
   executedAt               DateTime?
   cancelledByUserId        String?
   cancelledAt              DateTime?
+  supersededByUserId       String?
+  supersededAt             DateTime?
   errorMessage             String?
   summaryJson              String?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  business    Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdBy   User?                     @relation("MigrationPackageCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  validatedBy User?                     @relation("MigrationPackageValidatedBy", fields: [validatedByUserId], references: [id], onDelete: SetNull)
-  approvedBy  User?                     @relation("MigrationPackageApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  executedBy  User?                     @relation("MigrationPackageExecutedBy", fields: [executedByUserId], references: [id], onDelete: SetNull)
-  cancelledBy User?                     @relation("MigrationPackageCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
-  files          MigrationFile[]
-  branchMappings MigrationBranchMapping[]
+  business            Business                   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Required creator — Prisma composite same-business FK.
+  createdBy           User                       @relation("MigrationPackageCreatedBy", fields: [businessId, createdByUserId], references: [businessId, id], onDelete: Restrict)
+  /// Optional actors: Prisma single-column Restrict; SQL adds same-business composite FKs (Prisma cannot express optional composites sharing required businessId).
+  validatedBy         User?                      @relation("MigrationPackageValidatedBy", fields: [validatedByUserId], references: [id], onDelete: Restrict)
+  approvedBy          User?                      @relation("MigrationPackageApprovedBy", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  executedBy          User?                      @relation("MigrationPackageExecutedBy", fields: [executedByUserId], references: [id], onDelete: Restrict)
+  cancelledBy         User?                      @relation("MigrationPackageCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+  supersededBy        User?                      @relation("MigrationPackageSupersededBy", fields: [supersededByUserId], references: [id], onDelete: Restrict)
+  /// Prisma self-FK by id; SQL adds composite (businessId, predecessorPackageId) for tenant safety.
+  predecessor         MigrationPackage?          @relation("MigrationPackageLineage", fields: [predecessorPackageId], references: [id], onDelete: Restrict)
+  successors          MigrationPackage[]         @relation("MigrationPackageLineage")
+  validationRuns      MigrationValidationRun[]   @relation("PackageValidationRuns")
+  /// Prisma single-column Restrict pointer. SQL adds same-business + same-package composite FKs
+  /// (Prisma cannot express optional composite ownership sharing package id). See
+  /// docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md.
+  latestValidationRun MigrationValidationRun?    @relation("PackageLatestValidationRun", fields: [latestValidationRunId], references: [id], onDelete: Restrict)
+  approvalHistories   MigrationApprovalHistory[]
+  files               MigrationFile[]
+  branchMappings      MigrationBranchMapping[]
 
   @@unique([businessId, id])
   @@unique([businessId, clientPackageKey])
   @@index([businessId, status, createdAt])
   @@index([businessId, status, expiresAt])
+  @@index([businessId, status, approvalExpiresAt])
   @@index([businessId, sourceSystemKey, sourceBusinessKey])
+  @@index([businessId, lineageRootId])
+}
+
+/// Historical validation evidence for a package. Retained across supersession of latestValidationRunId.
+model MigrationValidationRun {
+  id                   String    @id @default(cuid())
+  businessId           String
+  packageId            String
+  /// SUCCESS | FAILED | STALE
+  status               String
+  manifestChecksum     String
+  resultDigest         String?
+  summaryJson          String?
+  exceptionCount       Int       @default(0)
+  exceptionsTruncated  Int       @default(0)
+  validatedByUserId    String?
+  createdAt            DateTime  @default(now())
+  supersededAt         DateTime?
+
+  package      MigrationPackage  @relation("PackageValidationRuns", fields: [businessId, packageId], references: [businessId, id], onDelete: Cascade)
+  validatedBy  User?             @relation(fields: [validatedByUserId], references: [id], onDelete: Restrict)
+  latestFor    MigrationPackage? @relation("PackageLatestValidationRun")
+
+  @@unique([businessId, id])
+  /// FK target for package-ownership: (latestValidationRunId, package.id) → (id, packageId)
+  @@unique([id, packageId])
+  @@index([businessId, packageId, createdAt])
+  @@index([packageId, createdAt])
+}
+
+/// Immutable approval snapshots. Active package approval fields may be cleared without rewriting history.
+model MigrationApprovalHistory {
+  id                       String    @id @default(cuid())
+  businessId               String
+  packageId                String
+  approverUserId           String
+  approvedAt               DateTime
+  approvedManifestChecksum String
+  approvalExpiresAt        DateTime
+  validationRunId          String?
+  validationResultDigest   String?
+  contractVersion          String
+  reportingCurrency        String
+  packageAsOfDate          String
+  branchMappingDigest      String?
+  fileChecksumsJson        String
+  acknowledgementJson      String?
+  note                     String?
+  snapshotJson             String?
+  invalidatedAt            DateTime?
+  invalidationReason       String?
+  createdAt                DateTime  @default(now())
+
+  package  MigrationPackage @relation(fields: [businessId, packageId], references: [businessId, id], onDelete: Restrict)
+  /// Required approver — Prisma composite same-business FK.
+  approver User             @relation(fields: [businessId, approverUserId], references: [businessId, id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@index([businessId, packageId, approvedAt])
+  @@index([packageId, approvedAt])
 }
 
 /// One immutable logical file belonging to a MigrationPackage.
 /// UNIQUE(packageId, entityType) = at most one of each type (not exactly-three completeness).
+/// Only storageStatus=FINALISED files are approval-material (enforced in services; schema documents status).
 model MigrationFile {
   id                 String    @id @default(cuid())
   businessId         String
   packageId          String
   /// SUPPLIERS | PRODUCTS | OPENING_STOCK
   entityType         String
+  /// PENDING | FINALISED | FAILED — PENDING/FAILED are not approval-material.
+  storageStatus      String    @default("PENDING")
   /// Original filename stored safely (basename only; no path separators).
   originalFilename   String?
   contentType        String?
@@ -804,7 +896,7 @@ model MigrationFile {
   validationChecksum String?
   /// SHA-256 frozen at package approval for this file.
   approvedChecksum   String?
-  /// Future blob/object storage key — unused in P0 upload endpoints.
+  /// Immutable object storage key once assigned (service-layer immutability).
   storageKey         String?
   rowCount           Int?
   validatedAt        DateTime?
@@ -818,6 +910,7 @@ model MigrationFile {
   @@unique([packageId, entityType])
   @@index([businessId, packageId])
   @@index([businessId, uploadChecksum])
+  @@index([businessId, storageStatus])
 }
 
 /// Maps a source branch key to a TillFlow Store in the same business.
