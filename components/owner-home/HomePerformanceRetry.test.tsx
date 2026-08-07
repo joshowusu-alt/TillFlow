@@ -41,6 +41,14 @@ const zeroSummary: HomePerformanceSummary = {
   expectedCashPence: 0,
   openShiftCount: 0,
   productCount: 812,
+  timeZone: 'Africa/Accra',
+  todayScope: {
+    periodKey: 'today',
+    fromInputValue: '2026-08-07',
+    toInputValue: '2026-08-07',
+    storeId: 'ALL',
+  },
+  tradingReportHref: '/reports/dashboard?period=today&from=2026-08-07&to=2026-08-07&storeId=ALL',
 };
 
 const dataSummary: HomePerformanceSummary = {
@@ -51,6 +59,14 @@ const dataSummary: HomePerformanceSummary = {
   expectedCashPence: 2_000_00,
   openShiftCount: 1,
   productCount: 812,
+  timeZone: 'Africa/Accra',
+  todayScope: {
+    periodKey: 'today',
+    fromInputValue: '2026-08-07',
+    toInputValue: '2026-08-07',
+    storeId: 'ALL',
+  },
+  tradingReportHref: '/reports/dashboard?period=today&from=2026-08-07&to=2026-08-07&storeId=ALL',
 };
 
 afterEach(() => {

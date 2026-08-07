@@ -5,7 +5,10 @@ import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
 import { requireBusiness } from '@/lib/auth';
 import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { getBusinessStores } from '@/lib/services/stores';
-import { resolveReportDateRange } from '@/lib/reports/date-parsing';
+import {
+  isReportingScopeToday,
+  resolveReportingScope,
+} from '@/lib/reports/reporting-scope';
 import TradingDashboardContent from './TradingDashboardContent';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +16,7 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: { from?: string; to?: string; storeId?: string };
+  searchParams?: { from?: string; to?: string; storeId?: string; period?: string };
 }) {
   const { business, user } = await requireBusiness(['MANAGER', 'OWNER']);
   if (user.role === 'OWNER') {
@@ -34,28 +37,26 @@ export default async function DashboardPage({
     searchParams?.storeId,
   );
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
+  const scope = resolveReportingScope({
+    businessId: business.id,
+    timeZone: (business as { timezone?: string | null }).timezone,
+    params: {
+      period: searchParams?.period,
+      from: searchParams?.from,
+      to: searchParams?.to,
+      storeId: rawStoreId ?? searchParams?.storeId ?? 'ALL',
+    },
+    defaultPeriod: '7d',
+    allowedStoreIds: stores.map((store) => store.id),
+  });
 
-  const defaultRangeStart = new Date(todayStart);
-  defaultRangeStart.setDate(defaultRangeStart.getDate() - 6);
-
-  const { start, end, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(
-    searchParams,
-    defaultRangeStart,
-    todayEnd,
-  );
-
-  const selectedStoreId = rawStoreId ?? 'ALL';
-  const isToday =
-    start.toDateString() === todayStart.toDateString() &&
-    end.toDateString() === todayEnd.toDateString();
+  const selectedStoreId = scope.storeId;
+  const isToday = isReportingScopeToday(scope);
   const hasNonDefaultParams = !!(
-    searchParams?.from ||
-    searchParams?.to ||
-    (searchParams?.storeId && searchParams?.storeId !== 'ALL')
+    searchParams?.from
+    || searchParams?.to
+    || searchParams?.period
+    || (searchParams?.storeId && searchParams.storeId !== 'ALL')
   );
 
   return (
@@ -67,7 +68,9 @@ export default async function DashboardPage({
             {business.name}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {isToday ? 'Today (live)' : `${fromIso} to ${toIso}`}
+            {isToday
+              ? `Today (live) · ${scope.timeZone}`
+              : `${scope.fromInputValue} to ${scope.toInputValue} · ${scope.timeZone}`}
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
@@ -78,7 +81,7 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <details className="details-mobile" open={hasNonDefaultParams}>
+      <details className="details-mobile" open={hasNonDefaultParams || isToday}>
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm">
           <span className="text-sm font-semibold text-ink">Adjust date range / branch</span>
           <svg className="h-4 w-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -88,16 +91,17 @@ export default async function DashboardPage({
         <div className="mt-2 space-y-2">
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
             <p>
-              Figures use the selected period and branch where supported. Sales and receipts may differ
-              because customer credit can be paid later.
+              <strong>Sales revenue</strong> is recognised sales for this period.
+              <strong> Money received</strong> is payment receipts (including later credit collections).
+              They can differ when customers buy on credit or pay old balances.
             </p>
             <p className="mt-1">
-              Customer and supplier balances show the current position, not only this period. Gross profit
-              uses sale-line cost snapshots.
+              Period uses the business timezone ({scope.timeZone}). Customer and supplier balances show the
+              current position, not only this period.
             </p>
           </div>
           <ReportFilterCard
-            columnsClassName={stores.length > 1 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}
+            columnsClassName={stores.length > 1 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}
             submitLabel="Apply filters"
             submitTone="primary"
             actions={
@@ -107,12 +111,20 @@ export default async function DashboardPage({
             }
           >
             <div>
+              <label className="label">Quick period</label>
+              <select className="input" name="period" defaultValue={scope.periodKey}>
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="custom">Custom dates</option>
+              </select>
+            </div>
+            <div>
               <label className="label">From</label>
-              <input className="input" type="date" name="from" defaultValue={fromIso} />
+              <input className="input" type="date" name="from" defaultValue={scope.fromInputValue} />
             </div>
             <div>
               <label className="label">To</label>
-              <input className="input" type="date" name="to" defaultValue={toIso} />
+              <input className="input" type="date" name="to" defaultValue={scope.toInputValue} />
             </div>
             {stores.length > 1 ? (
               <div>
@@ -138,14 +150,16 @@ export default async function DashboardPage({
           businessId={business.id}
           businessName={business.name}
           currency={business.currency}
+          timeZone={scope.timeZone}
           userId={user.id}
           userName={user.name}
           userEmail={user.email}
           selectedStoreId={selectedStoreId}
-          fromIso={fromIso}
-          toIso={toIso}
-          startIso={start.toISOString()}
-          endIso={end.toISOString()}
+          fromIso={scope.fromInputValue}
+          toIso={scope.toInputValue}
+          periodKey={scope.periodKey}
+          startIso={scope.startInclusive.toISOString()}
+          endIso={scope.endExclusive.toISOString()}
           isToday={isToday}
         />
       </Suspense>

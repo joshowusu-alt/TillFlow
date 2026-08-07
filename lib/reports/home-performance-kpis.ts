@@ -1,20 +1,26 @@
 /**
- * Slim Owner Home performance summary — revenue, transactions, expected cash,
+ * Slim Owner Home performance summary — sales revenue, transactions, expected cash,
  * yesterday comparison, product count. Does NOT load Command Center payloads.
  *
- * Today revenue/tx match getTodayKPIs (RETURNED/VOID excluded; DEMO_DAY not filtered).
- * Yesterday matches historical getReadiness aggregate (also excludes DEMO_DAY).
+ * Today sales revenue uses the shared sales-revenue contract (RETURNED/VOID excluded).
+ * Period bounds use the business timezone (inclusive start / exclusive end).
  * Expected cash uses open-shift sum semantics via resolveReadinessExpectedCashPence.
  */
 import { prisma } from '@/lib/prisma';
-import {
-  ensureSqliteReportDateColumnsNormalized,
-  isDateWithinRange,
-  isSqliteRuntime,
-} from '@/lib/reports/sqlite-report-date-normalization';
 import { resolveReadinessExpectedCashPence } from '@/lib/reports/home-expected-cash';
 import { measureHomePerf } from '@/lib/performance/home-perf-instrumentation';
 import { assertHomeLoaderAllowed } from '@/lib/owner-home/force-fail';
+import {
+  getBusinessDayBounds,
+  resolveBusinessTimeZone,
+} from '@/lib/notifications/utils';
+import {
+  resolveReportingScope,
+  tradingReportHref,
+  type ReportingScope,
+} from '@/lib/reports/reporting-scope';
+import { getSalesRevenueSummary } from '@/lib/reports/sales-revenue';
+import { REPORTING_EXCLUDED_SALE_STATUSES } from '@/lib/reports/reporting-scope';
 
 export type HomePerformanceSummary = {
   todayRevenuePence: number;
@@ -24,146 +30,106 @@ export type HomePerformanceSummary = {
   expectedCashPence: number;
   openShiftCount: number;
   productCount: number;
+  timeZone: string;
+  todayScope: Pick<ReportingScope, 'periodKey' | 'fromInputValue' | 'toInputValue' | 'storeId'>;
+  tradingReportHref: string;
 };
 
-function dayBounds(now: Date) {
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-  const yesterdayEnd = new Date(todayEnd);
-  yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
-  return { todayStart, todayEnd, yesterdayStart, yesterdayEnd };
-}
-
-/** Match getTodayKPIs today sales filter. */
-const TODAY_SALE_WHERE = {
-  paymentStatus: { notIn: ['RETURNED', 'VOID'] as ('RETURNED' | 'VOID')[] },
-};
-
-/** Match getReadiness yesterday aggregate. */
-const YESTERDAY_SALE_WHERE = {
-  paymentStatus: { notIn: ['RETURNED', 'VOID'] as ('RETURNED' | 'VOID')[] },
-  OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
-};
-
-async function getHomePerformanceSummarySqlite(
-  businessId: string,
-  now: Date
-): Promise<HomePerformanceSummary> {
-  const { todayStart, todayEnd, yesterdayStart, yesterdayEnd } = dayBounds(now);
-
-  const [salesRows, openShifts, productCount] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: {
-        businessId,
-        paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        createdAt: { gte: yesterdayStart, lte: todayEnd },
-      },
-      select: { totalPence: true, createdAt: true, paymentStatus: true, qaTag: true },
-    }),
-    prisma.shift.findMany({
-      where: {
-        status: 'OPEN',
-        closedAt: null,
-        till: { store: { businessId } },
-      },
-      select: { expectedCashPence: true },
-    }),
-    prisma.product.count({ where: { businessId } }),
-  ]);
-
-  const todayRows = salesRows.filter((row) =>
-    isDateWithinRange(row.createdAt, todayStart, todayEnd)
-  );
-  const yesterdayRows = salesRows.filter(
-    (row) =>
-      isDateWithinRange(row.createdAt, yesterdayStart, yesterdayEnd) &&
-      (row.qaTag == null || row.qaTag !== 'DEMO_DAY')
-  );
-
-  const expectedCashPence = await resolveReadinessExpectedCashPence({
-    openShiftExpectedCashPence: openShifts.map((s) => s.expectedCashPence),
+async function loadBusinessTimeZone(businessId: string): Promise<string> {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { timezone: true },
   });
-
-  return {
-    todayRevenuePence: todayRows.reduce((s, r) => s + r.totalPence, 0),
-    todayTransactionCount: todayRows.length,
-    yesterdayRevenuePence: yesterdayRows.reduce((s, r) => s + r.totalPence, 0),
-    yesterdayTransactionCount: yesterdayRows.length,
-    expectedCashPence,
-    openShiftCount: openShifts.length,
-    productCount,
-  };
-}
-
-async function getHomePerformanceSummaryPostgres(
-  businessId: string,
-  now: Date
-): Promise<HomePerformanceSummary> {
-  const { todayStart, todayEnd, yesterdayStart, yesterdayEnd } = dayBounds(now);
-
-  const [todayAgg, yesterdayAgg, openShifts, productCount] = await Promise.all([
-    prisma.salesInvoice.aggregate({
-      where: {
-        businessId,
-        createdAt: { gte: todayStart, lte: todayEnd },
-        ...TODAY_SALE_WHERE,
-      },
-      _sum: { totalPence: true },
-      _count: { id: true },
-    }),
-    prisma.salesInvoice.aggregate({
-      where: {
-        businessId,
-        createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
-        ...YESTERDAY_SALE_WHERE,
-      },
-      _sum: { totalPence: true },
-      _count: { id: true },
-    }),
-    prisma.shift.findMany({
-      where: {
-        status: 'OPEN',
-        closedAt: null,
-        till: { store: { businessId } },
-      },
-      select: { expectedCashPence: true },
-    }),
-    prisma.product.count({ where: { businessId } }),
-  ]);
-
-  const expectedCashPence = await resolveReadinessExpectedCashPence({
-    openShiftExpectedCashPence: openShifts.map((s) => s.expectedCashPence),
-  });
-
-  return {
-    todayRevenuePence: todayAgg._sum.totalPence ?? 0,
-    todayTransactionCount: todayAgg._count.id,
-    yesterdayRevenuePence: yesterdayAgg._sum.totalPence ?? 0,
-    yesterdayTransactionCount: yesterdayAgg._count.id,
-    expectedCashPence,
-    openShiftCount: openShifts.length,
-    productCount,
-  };
+  return resolveBusinessTimeZone(business?.timezone);
 }
 
 export async function getHomePerformanceSummary(
-  businessId: string
+  businessId: string,
+  now = new Date(),
 ): Promise<HomePerformanceSummary> {
   return measureHomePerf('home.performance-summary', async () => {
     assertHomeLoaderAllowed('performance');
-    try {
-      await ensureSqliteReportDateColumnsNormalized();
-    } catch {
-      // Same resilience as getTodayKPIs — continue with best-effort dates.
-    }
-    const now = new Date();
-    if (isSqliteRuntime()) {
-      return getHomePerformanceSummarySqlite(businessId, now);
-    }
-    return getHomePerformanceSummaryPostgres(businessId, now);
+
+    const timeZone = await loadBusinessTimeZone(businessId);
+    const todayScope = resolveReportingScope({
+      businessId,
+      timeZone,
+      params: { period: 'today', storeId: 'ALL' },
+      defaultPeriod: 'today',
+      allowedStoreIds: [],
+      now,
+    });
+
+    const yesterdayProbe = new Date(todayScope.startInclusive.getTime() - 1);
+    const yesterdayDay = getBusinessDayBounds(yesterdayProbe, timeZone);
+    const yesterdayKey = [
+      yesterdayDay.localDate.year,
+      String(yesterdayDay.localDate.month).padStart(2, '0'),
+      String(yesterdayDay.localDate.day).padStart(2, '0'),
+    ].join('-');
+    const yesterdayScope = resolveReportingScope({
+      businessId,
+      timeZone,
+      params: {
+        period: 'custom',
+        from: yesterdayKey,
+        to: yesterdayKey,
+        storeId: 'ALL',
+      },
+      defaultPeriod: 'today',
+      allowedStoreIds: [],
+      now: yesterdayProbe,
+    });
+
+    // Yesterday historically also excluded DEMO_DAY tags (getReadiness parity).
+    const [todaySummary, yesterdayAgg, openShifts, productCount] = await Promise.all([
+      getSalesRevenueSummary(todayScope),
+      prisma.salesInvoice.aggregate({
+        where: {
+          businessId,
+          createdAt: {
+            gte: yesterdayScope.startInclusive,
+            lt: yesterdayScope.endExclusive,
+          },
+          paymentStatus: { notIn: [...REPORTING_EXCLUDED_SALE_STATUSES] },
+          OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+        },
+        _sum: { totalPence: true },
+        _count: { id: true },
+      }),
+      prisma.shift.findMany({
+        where: {
+          status: 'OPEN',
+          closedAt: null,
+          till: { store: { businessId } },
+        },
+        select: { expectedCashPence: true },
+      }),
+      prisma.product.count({ where: { businessId } }),
+    ]);
+
+    const expectedCashPence = await resolveReadinessExpectedCashPence({
+      openShiftExpectedCashPence: openShifts.map((s) => s.expectedCashPence),
+    });
+
+    const hrefScope = {
+      periodKey: todayScope.periodKey,
+      fromInputValue: todayScope.fromInputValue,
+      toInputValue: todayScope.toInputValue,
+      storeId: todayScope.storeId,
+    };
+
+    return {
+      todayRevenuePence: todaySummary.salesRevenuePence,
+      todayTransactionCount: todaySummary.transactionCount,
+      yesterdayRevenuePence: yesterdayAgg._sum.totalPence ?? 0,
+      yesterdayTransactionCount: yesterdayAgg._count.id,
+      expectedCashPence,
+      openShiftCount: openShifts.length,
+      productCount,
+      timeZone,
+      todayScope: hrefScope,
+      tradingReportHref: tradingReportHref(hrefScope),
+    };
   });
 }

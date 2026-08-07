@@ -9,18 +9,34 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import { classifyInventoryState, getReceivableAgeBucket } from '@/lib/reports/operational-metrics';
 import { unstable_cache } from 'next/cache';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  getMoneyReceivedSummary,
+  RECEIPT_METHOD_LABELS,
+  type ReceiptPaymentMethod,
+} from '@/lib/reports/money-received';
+import {
+  buildReportingScopeSearchParams,
+  moneyReceivedHref,
+  type ReportingPeriodKey,
+  type ReportingScope,
+} from '@/lib/reports/reporting-scope';
+import { getSalesRevenueSummary } from '@/lib/reports/sales-revenue';
 
 type TradingDashboardContentProps = {
   businessId: string;
   businessName: string;
   currency: string;
+  timeZone: string;
   userId: string;
   userName: string | null;
   userEmail: string;
   selectedStoreId: string;
   fromIso: string;
   toIso: string;
+  periodKey: ReportingPeriodKey;
+  /** Inclusive start ISO */
   startIso: string;
+  /** Exclusive end ISO */
   endIso: string;
   isToday: boolean;
 };
@@ -33,7 +49,9 @@ async function _getTradingDashboardSnapshot(
   selectedStoreId: string,
 ) {
   const start = new Date(startIso);
-  const end = new Date(endIso);
+  const endExclusive = new Date(endIso);
+  // Income statement helper still uses inclusive end — pass last in-range instant.
+  const endInclusiveForJournals = new Date(endExclusive.getTime() - 1);
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
 
   const [
@@ -55,7 +73,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         businessId,
         ...storeFilter,
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: endExclusive },
         paymentStatus: { notIn: ['RETURNED', 'VOID'] },
       },
       _sum: { totalPence: true },
@@ -63,7 +81,7 @@ async function _getTradingDashboardSnapshot(
     prisma.salesPayment.groupBy({
       by: ['method'],
       where: {
-        receivedAt: { gte: start, lte: end },
+        receivedAt: { gte: start, lt: endExclusive },
         status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
         salesInvoice: {
           businessId,
@@ -73,7 +91,7 @@ async function _getTradingDashboardSnapshot(
       },
       _sum: { amountPence: true },
     }),
-    getIncomeStatement(businessId, start, end),
+    getIncomeStatement(businessId, start, endInclusiveForJournals),
     prisma.salesInvoice.findMany({
       where: {
         businessId,
@@ -130,7 +148,7 @@ async function _getTradingDashboardSnapshot(
         salesInvoice: {
           businessId,
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
+          createdAt: { gte: start, lt: endExclusive },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
       },
@@ -149,7 +167,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         store: { businessId },
         ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: endExclusive },
       },
       select: {
         direction: true,
@@ -164,7 +182,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         businessId,
         ...storeFilter,
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: endExclusive },
         paymentStatus: 'VOID',
       },
       select: { totalPence: true, cashierUser: { select: { name: true } } },
@@ -174,7 +192,7 @@ async function _getTradingDashboardSnapshot(
       where: {
         store: { businessId },
         ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: endExclusive },
         type: 'RETURN',
       },
       select: { refundAmountPence: true },
@@ -188,7 +206,7 @@ async function _getTradingDashboardSnapshot(
             ...(selectedStoreId === 'ALL' ? {} : { id: selectedStoreId }),
           },
         },
-        closedAt: { gte: start, lte: end },
+        closedAt: { gte: start, lt: endExclusive },
         variance: { not: null },
       },
       select: { variance: true, user: { select: { name: true } } },
@@ -199,7 +217,7 @@ async function _getTradingDashboardSnapshot(
         salesInvoice: {
           businessId,
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
+          createdAt: { gte: start, lt: endExclusive },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
         lineCostPence: { gt: 0 },
@@ -215,7 +233,7 @@ async function _getTradingDashboardSnapshot(
         salesInvoice: {
           businessId,
           ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          createdAt: { gte: start, lte: end },
+          createdAt: { gte: start, lt: endExclusive },
           paymentStatus: { notIn: ['RETURNED', 'VOID'] },
         },
         lineCostPence: 0,
@@ -284,22 +302,76 @@ export default async function TradingDashboardContent({
   businessId,
   businessName,
   currency,
+  timeZone,
   userId,
   userName,
   userEmail,
   selectedStoreId,
   fromIso,
   toIso,
+  periodKey,
   startIso,
   endIso,
   isToday,
 }: TradingDashboardContentProps) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
+  const scope: ReportingScope = {
+    businessId,
+    timeZone,
+    periodKey,
+    startInclusive: new Date(startIso),
+    endExclusive: new Date(endIso),
+    fromInputValue: fromIso,
+    toInputValue: toIso,
+    storeId: selectedStoreId === 'ALL' ? 'ALL' : selectedStoreId,
+  };
 
   const storeFilter = selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId };
+
+  const [
+    snapshot,
+    moneyReceived,
+    salesRevenue,
+  ] = await Promise.all([
+    measureServerOperation(
+      'report.trading-dashboard.snapshot',
+      () => getCachedTradingDashboardSnapshot(
+        businessId,
+        currency,
+        startIso,
+        endIso,
+        selectedStoreId,
+      ),
+      {
+        businessId,
+        storeId: selectedStoreId,
+        route: '/reports/dashboard',
+        cacheState: 'cached-wrapper',
+      },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+    ),
+    measureServerOperation(
+      'report.trading-dashboard.money-received',
+      () => getMoneyReceivedSummary(scope),
+      {
+        businessId,
+        storeId: selectedStoreId,
+        route: '/reports/dashboard',
+        cacheState: 'uncached-money-received',
+      },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+    ),
+    measureServerOperation(
+      'report.trading-dashboard.sales-revenue',
+      () => getSalesRevenueSummary(scope),
+      {
+        businessId,
+        storeId: selectedStoreId,
+        route: '/reports/dashboard',
+        cacheState: 'uncached-sales-revenue',
+      },
+      { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
+    ),
+  ]);
 
   const {
     salesAgg,
@@ -317,29 +389,13 @@ export default async function TradingDashboardContent({
     uncostedMarginGroups,
     bestSellerProducts,
     uncostedProducts,
-  } = await measureServerOperation(
-    'report.trading-dashboard.snapshot',
-    () => getCachedTradingDashboardSnapshot(
-      businessId,
-      currency,
-      startIso,
-      endIso,
-      selectedStoreId,
-    ),
-    {
-      businessId,
-      storeId: selectedStoreId,
-      route: '/reports/dashboard',
-      cacheState: 'cached-wrapper',
-    },
-    { thresholdMs: PERFORMANCE_THRESHOLDS_MS.report, operationType: 'report' },
-  );
+  } = snapshot;
 
   const bestSellerProductMap = new Map(bestSellerProducts.map((product) => [product.id, product]));
   const uncostedProductCostMap = new Map(uncostedProducts.map((product) => [product.id, product.defaultCostBasePence]));
 
-  // Summarise sales — already aggregated by DB
-  const totalSales = salesAgg._sum.totalPence ?? 0;
+  // Summarise sales — shared sales-revenue contract (matches Home)
+  const totalSales = salesRevenue.salesRevenuePence;
   // GP from sale lines — consistent with margins/analytics/KPIs
   const costedGrossMargin =
     (costedMarginAgg._sum.lineSubtotalPence ?? 0) - (costedMarginAgg._sum.lineCostPence ?? 0);
@@ -354,13 +410,11 @@ export default async function TradingDashboardContent({
   // Expenses and NP still from journals (accounting source of truth for expense tracking)
   const npPercent = totalSales > 0 ? Math.round(((totalGrossMargin - income.otherExpenses) / totalSales) * 100) : 0;
 
-  // Payment split — already grouped by DB
-  const paymentSplit = { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 };
-  for (const p of paymentsByMethod) {
-    const k = p.method as keyof typeof paymentSplit;
-    if (k in paymentSplit) paymentSplit[k] = p._sum.amountPence ?? 0;
-  }
-  const totalPaymentReceipts = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
+  // Money received — payment records (authoritative for method totals)
+  const paymentSplit = moneyReceived.byMethod;
+  const totalPaymentReceipts = moneyReceived.totalPence;
+  void salesAgg;
+  void paymentsByMethod;
 
   // AR / AP
   const outstandingAR = outstandingSales.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);
@@ -418,7 +472,7 @@ export default async function TradingDashboardContent({
         where: {
           businessId,
           ...storeFilter,
-          createdAt: { gte: todayStart },
+          createdAt: { gte: scope.startInclusive },
           paymentStatus: { notIn: ['VOID', 'RETURNED'] },
         },
         orderBy: { createdAt: 'desc' },
@@ -454,9 +508,9 @@ export default async function TradingDashboardContent({
     selectedStoreId === 'ALL'
       ? 'Figures use the selected period across all branches. Expenses and net profit use business-wide accounting records.'
       : 'Sales are filtered to this branch. Expenses and net profit use the business-wide accounting records currently available.';
-  const cashDrawerParams = new URLSearchParams({ from: fromIso, to: toIso });
-  if (selectedStoreId !== 'ALL') cashDrawerParams.set('storeId', selectedStoreId);
+  const cashDrawerParams = buildReportingScopeSearchParams(scope);
   const cashDrawerHref = `/reports/cash-drawer?${cashDrawerParams.toString()}`;
+  const receiptsHref = moneyReceivedHref(scope);
 
   const firstName = (userName ?? '').trim().split(/\s+/)[0] || userEmail.split('@')[0] || 'there';
   const lastSaleChipLabel =
@@ -504,7 +558,12 @@ export default async function TradingDashboardContent({
 
       {/* KPI row */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <StatCard label="Sales" value={formatMoney(totalSales, currency)} tone="accent" />
+        <StatCard
+          label="Sales revenue"
+          value={formatMoney(totalSales, currency)}
+          tone="accent"
+          helper="Recognised sales for this period (not money received)."
+        />
         <StatCard
           label={`Gross Profit (${gpPercent}%)`}
           value={formatMoney(totalGrossMargin, currency)}
@@ -518,10 +577,26 @@ export default async function TradingDashboardContent({
           tone={npPercent >= 10 ? 'success' : npPercent >= 0 ? 'warn' : 'danger'}
           helper="Profit after expenses."
         />
-        <StatCard label="What customers owe" value={formatMoney(outstandingAR, currency)} helper="Current customer credit balance, not just this period. Record receipts when customers pay." />
+        <StatCard
+          label="Credit sales (unpaid)"
+          value={formatMoney(salesRevenue.creditSalesOutstandingPence, currency)}
+          helper="Unpaid portion of sales in this period. Not counted as money received."
+        />
         <a href="/payments/supplier-payments" className="block min-w-0">
           <StatCard label="What you owe suppliers" value={formatMoney(outstandingAP, currency)} helper="Current supplier balances. Record supplier payments when purchases are paid." />
         </a>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <p>
+          <strong>Sales revenue</strong> ({formatMoney(totalSales, currency)}) can differ from{' '}
+          <strong>Money received</strong> ({formatMoney(totalPaymentReceipts, currency)}).
+          Credit sales raise revenue before cash arrives; later credit collections raise receipts without new revenue.
+          Physical Cash Drawer totals follow till/shift cash movements and will not always match cash receipts.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          What customers owe overall (all periods): {formatMoney(outstandingAR, currency)}.
+        </p>
       </div>
 
       {/* Data-quality warning: extremely negative GP almost always means wrong cost prices */}
@@ -537,41 +612,71 @@ export default async function TradingDashboardContent({
         </div>
       )}
 
-      {/* Payment split + Activity highlights */}
+      {/* Money received + Activity highlights */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="card p-4 sm:p-6">
-          <div className="mb-4">
-            <h2 className="text-base font-display font-semibold sm:text-lg">How money came in</h2>
-            <p className="mt-1 text-xs leading-relaxed text-black/50">
-              Shows payment receipts by method. This can differ from sales when customers pay old credit.
-            </p>
+        <div className="card p-4 sm:p-6" id="money-received">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-display font-semibold sm:text-lg">Money received</h2>
+              <p className="mt-1 text-xs leading-relaxed text-black/50">
+                Payment receipts by method for this period (from payment records). Includes money
+                received at sale and later credit collections. Tap a method to inspect supporting payments.
+              </p>
+            </div>
+            <a href={receiptsHref} className="shrink-0 text-xs font-medium text-accent underline-offset-2 hover:underline">
+              All receipts →
+            </a>
+          </div>
+          <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
+              <div className="text-emerald-800/70">Received at sale</div>
+              <div className="mt-0.5 font-semibold text-emerald-900">
+                {formatMoney(moneyReceived.receivedAtSalePence, currency)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
+              <div className="text-amber-800/70">Later credit collected</div>
+              <div className="mt-0.5 font-semibold text-amber-900">
+                {formatMoney(moneyReceived.laterCreditCollectionPence, currency)}
+              </div>
+            </div>
           </div>
           <div className="space-y-3 text-sm">
             {(
               [
-                { label: 'Cash', key: 'CASH', cls: 'bg-emerald-500', text: 'text-emerald-700' },
-                { label: 'Mobile Money (MoMo)', key: 'MOBILE_MONEY', cls: 'bg-amber-500', text: 'text-amber-700' },
-                { label: 'Card', key: 'CARD', cls: 'bg-blue-500', text: 'text-accent' },
-                { label: 'Bank Transfer', key: 'TRANSFER', cls: 'bg-purple-500', text: 'text-purple-700' },
+                { label: RECEIPT_METHOD_LABELS.CASH, key: 'CASH' as ReceiptPaymentMethod, cls: 'bg-emerald-500', text: 'text-emerald-700' },
+                { label: RECEIPT_METHOD_LABELS.MOBILE_MONEY, key: 'MOBILE_MONEY' as ReceiptPaymentMethod, cls: 'bg-amber-500', text: 'text-amber-700' },
+                { label: RECEIPT_METHOD_LABELS.CARD, key: 'CARD' as ReceiptPaymentMethod, cls: 'bg-blue-500', text: 'text-accent' },
+                { label: RECEIPT_METHOD_LABELS.TRANSFER, key: 'TRANSFER' as ReceiptPaymentMethod, cls: 'bg-purple-500', text: 'text-purple-700' },
               ] as const
             ).map(({ label, key, cls, text }) => {
-              const amount = paymentSplit[key as keyof typeof paymentSplit];
+              const amount = paymentSplit[key];
               const pct = totalPaymentReceipts > 0 ? Math.round((amount / totalPaymentReceipts) * 100) : 0;
+              const href = moneyReceivedHref(scope, key);
               return (
-                <div key={key}>
+                <a
+                  key={key}
+                  href={href}
+                  className="block rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  aria-label={`View ${label} payment records: ${formatMoney(amount, currency)}`}
+                >
                   <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-black/60">{label}</span>
+                    <span className="text-black/60 underline-offset-2 group-hover:underline">{label}</span>
                     <span className={`font-semibold ${text}`}>
                       {formatMoney(amount, currency)} ({pct}%)
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-black/5 overflow-hidden">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-black/5">
                     <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
-                </div>
+                </a>
               );
             })}
           </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-black/45">
+            Electronic payments (MoMo, card, bank transfer) are listed here — not in the Cash Drawer.
+            Physical cash till movements: <a href={cashDrawerHref} className="font-medium underline underline-offset-2">Cash Drawer</a>.
+          </p>
         </div>
 
         <div className="card p-4 sm:p-6">

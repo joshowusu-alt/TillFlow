@@ -491,7 +491,7 @@ function WelcomeDashboard({
         { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till', primary: false },
       ]
     : [
-        { label: "Today's Revenue", displayLabel: 'Revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard', footer: todayVsYesterdayText, primary: true },
+        { label: "Today's Sales Revenue", displayLabel: 'Sales revenue', value: formatCurrency(data.todayRevenuePence), href: '/reports/dashboard?period=today&storeId=ALL', footer: todayVsYesterdayText, primary: true },
         { label: "Today's Transactions", displayLabel: 'Transactions', value: data.todayTransactionCount.toLocaleString(), href: '/sales', footer: null, primary: false },
         { label: 'Expected Cash', displayLabel: 'Expected Cash', value: formatCurrency(data.expectedCashPence), href: '/reports/cash-drawer', footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till', primary: false },
       ];

@@ -219,7 +219,7 @@ describe('ReadinessJourney home stats', () => {
     const revenueValue = screen.getByText((_, element) =>
       element?.textContent?.replace(/\u00a0/g, ' ') === 'GH₵1,149.50'
     );
-    const revenueCard = screen.getByRole('link', { name: /Today's Revenue:/ });
+    const revenueCard = screen.getByRole('link', { name: /Today's Sales Revenue:/ });
 
     expect(revenueCard.parentElement).toHaveClass('grid-cols-2');
     expect(revenueCard).toHaveClass('min-w-0');
@@ -237,7 +237,7 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    const revenueLabel = screen.getByText('Revenue');
+    const revenueLabel = screen.getByText('Sales revenue');
     const transactionsLabel = screen.getByText('Transactions');
     const expectedCashLabel = screen.getByText('Expected Cash');
     const transactionsCard = screen.getByRole('link', { name: /Today's Transactions:/ });
@@ -250,12 +250,12 @@ describe('ReadinessJourney home stats', () => {
       expect(label).toHaveClass('whitespace-nowrap');
     }
 
-    expect(screen.queryByText("Today's Revenue")).not.toBeInTheDocument();
+    expect(screen.queryByText("Today's Sales Revenue")).not.toBeInTheDocument();
     expect(screen.queryByText("Today's Transactions")).not.toBeInTheDocument();
     expect(screen.queryByText('Open Issues')).not.toBeInTheDocument();
     expect(transactionsCard).not.toHaveClass('col-span-2');
     expect(expectedCashCard).not.toHaveClass('col-span-2');
-    expect(screen.getByRole('link', { name: /Today's Revenue:/ })).toHaveClass('col-span-2');
+    expect(screen.getByRole('link', { name: /Today's Sales Revenue:/ })).toHaveClass('col-span-2');
   });
 
   it('drops very long revenue values to the smallest stat size', () => {
@@ -292,7 +292,7 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Sales Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText('Day in progress')).not.toBeInTheDocument();
     expect(screen.queryByText('-93% vs yesterday')).not.toBeInTheDocument();
@@ -304,7 +304,7 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard();
 
-    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Sales Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
   });
@@ -315,7 +315,7 @@ describe('ReadinessJourney home stats', () => {
 
     renderDashboard({ todayTransactionCount: 20 });
 
-    expect(within(screen.getByRole('link', { name: /Today's Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
+    expect(within(screen.getByRole('link', { name: /Today's Sales Revenue:/ })).getByText('GH₵467.50 today / GH₵7,000.00 yesterday')).toBeInTheDocument();
     expect(within(screen.getByRole('link', { name: /Today's Transactions:/ })).queryByText(/yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
   });
@@ -365,7 +365,7 @@ describe('ReadinessJourney home stats', () => {
       openShiftCount: 1,
     });
 
-    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Today's Sales Revenue: GH₵9,593.00/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Today's Transactions: 85/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Expected Cash: GH₵8,919.00/ })).toBeInTheDocument();
     expect(getNavTodaySales).not.toHaveBeenCalled();
@@ -382,7 +382,7 @@ describe('ReadinessJourney home stats', () => {
       openShiftSalesCount: 85,
     });
 
-    expect(screen.getByRole('link', { name: /Today's Revenue: GH₵9,593.00/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Today's Sales Revenue: GH₵9,593.00/ })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('4 areas need your attention today');
     expect(screen.getAllByText('4 areas need your attention today.')).toHaveLength(1); // Today's attention only
     expect(screen.getByText(/85 sales in this open shift/)).toBeInTheDocument();
