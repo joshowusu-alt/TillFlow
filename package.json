@@ -43,7 +43,10 @@
     "test:migration:p1-slice2a:pg": "node scripts/migration-p1-slice2a-pg-test.cjs",
     "test:migration:p1-slice2a:preview-probe": "node scripts/migration-p1-slice2a-preview-probe.cjs",
     "test:migration:p1-sql-only-contract": "node scripts/migration-p1-sql-only-constraint-contract.cjs",
-    "test:migration:slice2a:unit": "vitest run --reporter=dot lib/services/migration/file-policy.test.ts lib/services/migration/storage-vercel.test.ts lib/services/migration/slice2a-services.test.ts lib/services/migration/errors-public.test.ts lib/services/migration/cleanup-referenced-object.test.ts"
+    "test:migration:slice2a:unit": "vitest run --reporter=dot lib/services/migration/file-policy.test.ts lib/services/migration/storage-vercel.test.ts lib/services/migration/slice2a-services.test.ts lib/services/migration/errors-public.test.ts lib/services/migration/cleanup-referenced-object.test.ts",
+    "test:migration:slice2b:unit": "vitest run --reporter=dot lib/services/migration/slice2b-engine.test.ts lib/services/migration/slice2b-services.test.ts lib/migration/lifecycle.test.ts lib/services/migration/storage-vercel.test.ts",
+    "test:migration:slice2b:scale": "vitest run --reporter=verbose lib/services/migration/slice2b-scale.test.ts",
+    "test:migration:slice2b:pg": "vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts"
   },
   "engines": {
     "node": ">=18 <24"
