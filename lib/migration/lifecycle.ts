@@ -12,11 +12,13 @@ import type { MigrationPackageStatus, MigrationReconciliationStatus } from '@/li
 
 const PACKAGE_TRANSITIONS: Record<MigrationPackageStatus, MigrationPackageStatus[]> = {
   DRAFT: ['VALIDATED', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
-  VALIDATED: ['APPROVED', 'DRAFT', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
+  // Slice 2B: VALIDATED → VALIDATED allows checksum-bound re-validation success.
+  VALIDATED: ['APPROVED', 'DRAFT', 'VALIDATED', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
   APPROVED: ['IMPORTING', 'APPROVAL_INVALIDATED', 'CANCELLED', 'SUPERSEDED'],
   IMPORTING: ['IMPORTED', 'IMPORT_FAILED'],
   IMPORTED: [],
-  VALIDATION_FAILED: ['DRAFT', 'CANCELLED', 'EXPIRED'],
+  // Slice 2B: allow same-file re-validation without requiring a demotion round-trip.
+  VALIDATION_FAILED: ['DRAFT', 'VALIDATED', 'VALIDATION_FAILED', 'CANCELLED', 'EXPIRED'],
   APPROVAL_INVALIDATED: ['SUPERSEDED', 'CANCELLED', 'EXPIRED'],
   IMPORT_FAILED: ['IMPORTING', 'CANCELLED'],
   EXPIRED: [],
