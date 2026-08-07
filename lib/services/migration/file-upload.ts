@@ -40,7 +40,7 @@ import {
 import type { MigrationEntityType } from '@/lib/migration/types';
 import {
   assertPreparedUploadTokenMatchesPathname,
-  safeDeleteUnreferencedMigrationObject,
+  deferUnfinalisedMigrationObjectCleanup,
   type PreparedUploadCleanupIdentity,
 } from '@/lib/services/migration/cleanup';
 
@@ -374,8 +374,8 @@ export async function finaliseMigrationUploadedObject(
     preparedPathname: input.pathname,
   };
 
-  // Only the verified prepared pathname is eligible for orphan cleanup — never
-  // the current referenced storageKey unless it is proven unreferenced.
+  // Failure/orphan retention only — synchronous Blob delete disabled (TOCTOU).
+  // Prepared pathname is logged for operational orphan tracking; never deleted here.
   let mayAttemptOrphanCleanup = true;
 
   try {
@@ -410,9 +410,9 @@ export async function finaliseMigrationUploadedObject(
       existing.uploadChecksum === hashed.hex &&
       existing.storageStatus === 'FINALISED'
     ) {
-      // Exact replay — no version bump; cleanup unused NEW object only.
+      // Exact replay — no version bump. Unused NEW object retained (Option B).
       if (existing.storageKey !== input.pathname) {
-        await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
+        await deferUnfinalisedMigrationObjectCleanup(cleanupIdentity, input.pathname);
       }
       mayAttemptOrphanCleanup = false;
       return {
@@ -451,15 +451,14 @@ export async function finaliseMigrationUploadedObject(
     );
 
     if (result.orphanNewObject) {
-      await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
+      await deferUnfinalisedMigrationObjectCleanup(cleanupIdentity, input.pathname);
     }
     mayAttemptOrphanCleanup = false;
     const { orphanNewObject: _o, ...publicResult } = result;
     return publicResult;
   } catch (error) {
     if (mayAttemptOrphanCleanup) {
-      // Fail-closed: safeDelete re-checks references; never deletes a live key.
-      await safeDeleteUnreferencedMigrationObject({ db, storage }, cleanupIdentity, input.pathname);
+      await deferUnfinalisedMigrationObjectCleanup(cleanupIdentity, input.pathname);
     }
     if (error instanceof MigrationServiceError) throw error;
     throw error;
@@ -577,21 +576,13 @@ export async function uploadMigrationFile(
     );
 
     if (result.orphanNewObject && uploadedPathname) {
-      await safeDeleteUnreferencedMigrationObject(
-        { db, storage },
-        cleanupIdentity,
-        uploadedPathname,
-      );
+      await deferUnfinalisedMigrationObjectCleanup(cleanupIdentity, uploadedPathname);
     }
     const { orphanNewObject: _o, ...publicResult } = result;
     return publicResult;
   } catch (error) {
     if (uploadedPathname) {
-      await safeDeleteUnreferencedMigrationObject(
-        { db, storage },
-        cleanupIdentity,
-        uploadedPathname,
-      );
+      await deferUnfinalisedMigrationObjectCleanup(cleanupIdentity, uploadedPathname);
     }
     if (error instanceof MigrationServiceError) throw error;
     throw error;

@@ -414,7 +414,7 @@ describe('migration slice 2A services', () => {
     expect(state.files[0]!.storageKey).toBe(replaced.storageKey);
   });
 
-  it('cleans up orphan object when database finalisation fails', async () => {
+  it('retains prepared object when database finalisation fails (Option B — no sync delete)', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'orphan' }));
     prismaMock.$transaction.mockImplementationOnce(async () => {
       throw new Error('db down');
@@ -433,7 +433,8 @@ describe('migration slice 2A services', () => {
         { storage },
       ),
     ).rejects.toThrow(/db down/);
-    expect(storage.objects.size).toBe(0);
+    // Synchronous delete disabled — prepared object retained as bounded orphan.
+    expect(storage.objects.size).toBe(1);
     expect(state.files).toHaveLength(0);
   });
 

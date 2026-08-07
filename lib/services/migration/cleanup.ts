@@ -1,27 +1,32 @@
 /**
- * Slice 2A — bounded orphan cleanup that never deletes a referenced Blob.
+ * Slice 2A — failure-path / unfinalised-object retention (Option B).
  *
- * Invariant: never delete an object referenced by any successful MigrationFile.
- * Prefer retaining an uncertain orphan over deleting a live reference.
+ * Locked invariant: no failure-path cleanup may delete a Blob if a concurrent
+ * operation can establish (or has established) a successful MigrationFile
+ * reference to that Blob.
  *
- * Cleanup authority requires:
- * 1. server-owned pathname under the authenticated business/package/entity;
- * 2. prepared-upload identity (verified client token OR in-process server-minted path);
- * 3. a latest tenant-scoped DB reference check immediately before delete.
+ * A PostgreSQL reference count followed by an external Blob delete is a
+ * classic TOCTOU race and is NOT race-safe. Slice 2A has no schema-backed
+ * deletion lease / advisory-lock convention that covers both reference
+ * creation and Blob I/O outside short DB transactions.
  *
- * A raw client pathname alone is never sufficient deletion authority.
+ * Therefore synchronous automatic Blob deletion is disabled. Failed or
+ * unused prepared uploads are deliberately retained. Bounded operational
+ * orphans under the `mig/` prefix are preferable to a successful database
+ * record referencing a missing object. Automatic orphan collection is
+ * deferred to separately authorised lifecycle work.
+ *
+ * Authority checks below exist only to sanitise operational logs and to
+ * reject treating a raw client pathname as cleanup authority — they never
+ * authorise deletion.
  */
 
 import { MigrationServiceError, safeMigrationLogFields } from '@/lib/services/migration/errors';
 import { assertServerOwnedMigrationPathname } from '@/lib/services/migration/file-policy';
-import type { DbClient } from '@/lib/services/migration/preapproval';
-import type { MigrationObjectStorage } from '@/lib/services/migration/storage';
 import type { MigrationEntityType } from '@/lib/migration/types';
 
 export type CleanupOutcome =
-  | 'deleted'
-  | 'retained_referenced'
-  | 'retained_uncertain'
+  | 'retained_deferred'
   | 'retained_not_authorised';
 
 export type PreparedUploadCleanupIdentity = {
@@ -32,19 +37,27 @@ export type PreparedUploadCleanupIdentity = {
   preparedPathname: string;
 };
 
+/** Optional deterministic test hook — never used for deletion. */
+export type DeferredCleanupTestHooks = {
+  /**
+   * Invoked after prepared-identity validation, before returning deferred
+   * retention. Used to prove concurrent reference creation can commit while
+   * cleanup holds no delete authority (Option B critical interleaving).
+   */
+  afterRetentionDecision?: () => Promise<void>;
+};
+
 /**
- * Attempt best-effort deletion of a newly prepared, unfinalised object only.
- * Never deletes when any MigrationFile in the business references the key.
+ * Record that an unfinalised prepared upload is retained (no Blob delete).
+ *
+ * Does not call storage.delete. Prefer retaining an orphan over risking a
+ * dangling MigrationFile.storageKey.
  */
-export async function safeDeleteUnreferencedMigrationObject(
-  deps: {
-    db: DbClient;
-    storage: MigrationObjectStorage;
-  },
+export async function deferUnfinalisedMigrationObjectCleanup(
   identity: PreparedUploadCleanupIdentity,
   candidatePathname: string,
+  hooks: DeferredCleanupTestHooks = {},
 ): Promise<CleanupOutcome> {
-  // 1. Candidate must be exactly the prepared pathname — never a client-nominated alternate.
   if (!candidatePathname || candidatePathname !== identity.preparedPathname) {
     console.error(
       '[migration.cleanup] retained_not_authorised: pathname mismatch',
@@ -69,68 +82,44 @@ export async function safeDeleteUnreferencedMigrationObject(
     return 'retained_not_authorised';
   }
 
-  // 2. Latest reference check immediately before delete (race-safe vs concurrent finalise).
-  let referenced = true;
-  try {
-    const count = await deps.db.migrationFile.count({
-      where: {
-        businessId: identity.businessId,
-        storageKey: candidatePathname,
-      },
-    });
-    referenced = count > 0;
-  } catch (error) {
-    console.error(
-      '[migration.cleanup] retained_uncertain: reference check failed',
-      safeMigrationLogFields({
-        code: 'CLEANUP_REF_CHECK_FAILED',
-        businessId: identity.businessId,
-        packageId: identity.packageId,
-        entityType: identity.entityType,
-        storageKey: candidatePathname,
-      }),
-    );
-    return 'retained_uncertain';
+  console.error(
+    '[migration.cleanup] retained_deferred: synchronous Blob delete disabled (TOCTOU)',
+    safeMigrationLogFields({
+      code: 'CLEANUP_DEFERRED',
+      businessId: identity.businessId,
+      packageId: identity.packageId,
+      entityType: identity.entityType,
+      storageKey: candidatePathname,
+    }),
+  );
+
+  if (hooks.afterRetentionDecision) {
+    await hooks.afterRetentionDecision();
   }
 
-  if (referenced) {
-    console.error(
-      '[migration.cleanup] retained_referenced: MigrationFile still points at object',
-      safeMigrationLogFields({
-        code: 'CLEANUP_REFERENCED',
-        businessId: identity.businessId,
-        packageId: identity.packageId,
-        entityType: identity.entityType,
-        storageKey: candidatePathname,
-      }),
-    );
-    return 'retained_referenced';
-  }
-
-  try {
-    await deps.storage.delete(candidatePathname);
-    return 'deleted';
-  } catch {
-    // Deletion failure is non-fatal; object may remain as operational orphan.
-    console.error(
-      '[migration.cleanup] delete attempt failed; retaining object',
-      safeMigrationLogFields({
-        code: 'CLEANUP_DELETE_FAILED',
-        businessId: identity.businessId,
-        packageId: identity.packageId,
-        storageKey: candidatePathname,
-      }),
-    );
-    return 'retained_uncertain';
-  }
+  return 'retained_deferred';
 }
 
 /**
- * Verify a short-lived prepare token authorises cleanup/finalise of pathname.
- * Does not accept a raw pathname as authority.
+ * @deprecated Name retained for call-site clarity during Option B — does not delete.
+ * Prefer {@link deferUnfinalisedMigrationObjectCleanup}.
+ */
+export async function safeDeleteUnreferencedMigrationObject(
+  _deps: { db?: unknown; storage?: { delete?: (pathname: string) => Promise<void> } },
+  identity: PreparedUploadCleanupIdentity,
+  candidatePathname: string,
+  hooks: DeferredCleanupTestHooks = {},
+): Promise<CleanupOutcome> {
+  // Explicitly never invoke storage.delete — count-then-delete is not race-safe.
+  return deferUnfinalisedMigrationObjectCleanup(identity, candidatePathname, hooks);
+}
+
+/**
+ * Verify a short-lived prepare token authorises finalise of pathname.
+ * Does not accept a raw pathname as authority (including for any cleanup).
  */
 export async function assertPreparedUploadTokenMatchesPathname(
-  storage: MigrationObjectStorage,
+  storage: { verifyClientUploadToken(input: { clientToken: string; pathname: string }): Promise<boolean> },
   input: { clientToken: string; pathname: string },
 ): Promise<void> {
   if (!input.clientToken || typeof input.clientToken !== 'string') {

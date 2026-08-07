@@ -91,18 +91,29 @@ Base64-in-action upload is **retired** and rejected before decode.
 4. Server `head` + bounded stream checksum + CSV/text/archive policy
 5. Short DB transaction: lock package, CAS version, upsert `MigrationFile` as `FINALISED`
 6. Fail-closed audit (client-safe error mapping)
-7. On DB/CAS failure after upload: best-effort delete of the **newly prepared, unfinalised** object only
+7. On DB/CAS/policy failure after upload: **retain** the newly prepared object (no synchronous Blob delete)
 
 `MigrationFile` is inserted only when `uploadChecksum` is known (hash-before-insert).
 
-### Deletion invariant (referenced-object protection)
+### Deletion invariant (TOCTOU / referenced-object protection)
 
-**Never delete an object referenced by any successful `MigrationFile` record.**
+**Never delete a Blob on a failure path when a concurrent finalisation could establish (or has established) a `MigrationFile` reference.**
 
-- Cleanup authority requires prepared-upload identity (verified short-lived client token, or an in-process server-minted pathname) — a raw client pathname alone is never sufficient.
-- Immediately before any `storage.delete`, re-check tenant-scoped references (`businessId` + `storageKey`).
-- If the candidate equals the current file’s `storageKey`, any reference exists, the reference check fails/times out/is ambiguous, or ownership cannot be proven: **retain the object** (fail closed).
-- Prefer retaining an uncertain orphan over deleting a live reference. Previous successfully referenced objects follow the retention policy (not deleted on replacement in Slice 2A).
+Slice 2A chooses **Option B — disable synchronous failure-path Blob deletion**:
+
+- A DB reference count followed by an external Blob delete is a classic check/use race and is **not** race-safe.
+- “Immediately before deletion” does **not** close that race.
+- Separate PostgreSQL connections do **not** make an external Blob delete atomic with reference creation.
+- There is no existing schema-backed lease or shared advisory-lock convention covering both reference creators and Blob I/O outside short DB transactions.
+
+Therefore:
+
+- Failure-path and unused-prepared-upload cleanup **never** call `storage.delete`.
+- Failed / unused prepared uploads are deliberately retained under the `mig/` prefix.
+- Bounded operational orphans are preferable to a successful DB record referencing a missing object.
+- Automatic orphan collection is deferred to separately authorised lifecycle coordination.
+- Prepared-upload token verification and server-owned pathnames remain mandatory for finalise; a raw client pathname alone is never deletion authority (and runtime deletion is disabled regardless).
+- Previous successfully referenced objects follow the retention policy (not deleted on replacement in Slice 2A).
 
 ## Concurrency
 
@@ -148,4 +159,4 @@ No Prisma schema or migration files. Merge would deploy runtime code only (schem
 
 ## Orphans
 
-Best-effort delete of newly prepared, **proven-unreferenced** objects after finalisation/CAS/policy failure, via `safeDeleteUnreferencedMigrationObject` only. Objects abandoned by process kill, or retained because reference state was uncertain, remain identifiable by `mig/` key prefix for a later bounded operational task (no worker here).
+Failure-path and unused prepared uploads are **retained** (Option B). Synchronous automatic Blob deletion is disabled because count-then-delete cannot close the TOCTOU race against concurrent `MigrationFile` reference creation without schema-backed coordination. Objects abandoned by process kill or deferred cleanup remain identifiable by the `mig/` key prefix for a later bounded operational task (no worker here).

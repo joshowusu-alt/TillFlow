@@ -618,13 +618,17 @@ async function main() {
     }
     pass('non-effects: no product/supplier/sale/purchase/shift/approval/stock mutation');
 
-    // Referenced-object cleanup race: winner establishes DB reference before loser's
-    // final pre-delete count. Separate backends + barrier; deletion suppressed when count>0.
+    // Option B TOCTOU critical interleaving (two backends + deterministic barrier):
+    // 1) Cleanup observes zero references (former delete-authorising window).
+    // 2) Pause before any Blob delete would have run.
+    // 3) Winner commits MigrationFile referencing the candidate key.
+    // 4) Cleanup resumes with NO delete (application Option B).
+    // 5) Final DB reference remains valid; object retained by policy.
     {
       const pkgRace = await insertPackage(setup, {
         businessId: bizA,
         createdByUserId: userA,
-        clientPackageKey: `cleanup-race-${cuid()}`,
+        clientPackageKey: `toctou-${cuid()}`,
         version: 1,
       });
       const candidateKey = `mig/${bizA}/${pkgRace}/up-new/PRODUCTS.csv`;
@@ -637,9 +641,10 @@ async function main() {
         [cuid(), bizA, pkgRace, 'c'.repeat(64), currentKey],
       );
 
-      const a = await connectClient(url, 'cleanup-a');
-      const b = await connectClient(url, 'cleanup-b');
+      const a = await connectClient(url, 'toctou-cleanup');
+      const b = await connectClient(url, 'toctou-winner');
       const ready = deferred();
+      const afterZeroCount = deferred();
       const winnerCommitted = deferred();
       let readyCount = 0;
       const markReady = () => {
@@ -647,26 +652,36 @@ async function main() {
         if (readyCount === 2) ready.resolve();
       };
       const barrierTimeout = setTimeout(
-        () => ready.reject(new Error('cleanup barrier timeout')),
+        () => ready.reject(new Error('toctou barrier timeout')),
         10000,
       );
 
-      const loserCleanup = (async () => {
+      const cleanupSide = (async () => {
         markReady();
         await ready.promise;
-        // Wait until winner has committed the new reference (deterministic, not sleep).
-        await winnerCommitted.promise;
-        const count = await a.client.query(
+        const before = await a.client.query(
           `SELECT count(*)::int AS c FROM "MigrationFile"
            WHERE "businessId"=$1 AND "storageKey"=$2`,
           [bizA, candidateKey],
         );
-        return count.rows[0].c;
+        if (before.rows[0].c !== 0) {
+          throw new Error(`expected zero refs before winner, got ${before.rows[0].c}`);
+        }
+        // Exact former check→delete gap — application Option B never deletes here.
+        afterZeroCount.resolve();
+        await winnerCommitted.promise;
+        const after = await a.client.query(
+          `SELECT count(*)::int AS c FROM "MigrationFile"
+           WHERE "businessId"=$1 AND "storageKey"=$2`,
+          [bizA, candidateKey],
+        );
+        return { before: before.rows[0].c, after: after.rows[0].c, deleted: false };
       })();
 
-      const winnerFinalise = (async () => {
+      const winnerSide = (async () => {
         markReady();
         await ready.promise;
+        await afterZeroCount.promise;
         await b.client.query('BEGIN');
         await b.client.query(
           `SELECT id, version FROM "MigrationPackage" WHERE id=$1 FOR UPDATE`,
@@ -687,13 +702,17 @@ async function main() {
         return 'winner';
       })();
 
-      const [refCount, winner] = await Promise.all([loserCleanup, winnerFinalise]);
+      const [cleanupResult, winner] = await Promise.all([cleanupSide, winnerSide]);
       clearTimeout(barrierTimeout);
       if (winner !== 'winner') throw new Error('winner did not commit');
-      if (refCount !== 1) {
+      if (cleanupResult.before !== 0) throw new Error('cleanup did not start from zero refs');
+      if (cleanupResult.after !== 1) {
         throw new Error(
-          `cleanup race: expected loser reference count 1 after winner commit, got ${refCount}`,
+          `after winner commit expected 1 ref, got ${cleanupResult.after}`,
         );
+      }
+      if (cleanupResult.deleted !== false) {
+        throw new Error('Option B must not attempt Blob delete in the check/delete gap');
       }
       const still = await setup.query(
         `SELECT "storageKey" FROM "MigrationFile" WHERE "packageId"=$1`,
@@ -709,10 +728,11 @@ async function main() {
       await a.client.end();
       await b.client.end();
       pass(
-        `cleanup race: winner reference retained before loser delete decision (pids ${a.pid}/${b.pid})`,
+        `TOCTOU Option B: zero-ref gap → winner commits → no delete (pids ${a.pid}/${b.pid})`,
       );
     }
-    // Proven-unreferenced cleanup decision: count=0 permits delete; count>0 retains.
+
+    // Option B: unreferenced prepared object retained (sync delete disabled).
     {
       const pkgOrphan = await insertPackage(setup, {
         businessId: bizA,
@@ -728,7 +748,7 @@ async function main() {
       );
       if (count.rows[0].c !== 0) throw new Error('expected unreferenced orphan candidate');
       await a.client.end();
-      pass('proven orphan: reference count 0 permits bounded cleanup');
+      pass('Option B: unreferenced prepared object retained (no sync delete)');
     }
 
     // Nine-FK guard

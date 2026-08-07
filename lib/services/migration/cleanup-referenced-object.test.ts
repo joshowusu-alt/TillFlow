@@ -14,6 +14,7 @@ import {
   uploadMigrationFile,
 } from '@/lib/services/migration/file-upload';
 import {
+  deferUnfinalisedMigrationObjectCleanup,
   safeDeleteUnreferencedMigrationObject,
   assertPreparedUploadTokenMatchesPathname,
 } from '@/lib/services/migration/cleanup';
@@ -557,8 +558,8 @@ describe('referenced-object cleanup preservation', () => {
 
     expect(storage.objects.has(referencedKey)).toBe(true);
     expect(state.files.find((f) => f.id === uploaded.fileId)?.storageKey).toBe(referencedKey);
-    // New orphan may be cleaned; referenced must remain.
-    expect(storage.objects.has(prepared.pathname)).toBe(false);
+    // Option B: prepared object also retained (no sync delete).
+    expect(storage.objects.has(prepared.pathname)).toBe(true);
   });
 
   it('preserves referenced Blob after unknown exception after Blob inspection', async () => {
@@ -658,7 +659,7 @@ describe('referenced-object cleanup preservation', () => {
   });
 });
 
-describe('proven orphan cleanup', () => {
+describe('Option B deferred cleanup (no synchronous Blob delete)', () => {
   let storage: ReturnType<typeof createMemoryMigrationObjectStorage>;
 
   beforeEach(() => {
@@ -675,16 +676,9 @@ describe('proven orphan cleanup', () => {
       state.audits.push(row);
       return row;
     });
-    prismaMock.migrationFile.count.mockImplementation(async ({ where }: { where: Row }) => {
-      return state.files.filter((f) => {
-        if (where.businessId && f.businessId !== where.businessId) return false;
-        if (where.storageKey && f.storageKey !== where.storageKey) return false;
-        return true;
-      }).length;
-    });
   });
 
-  it('deletes proven new orphan after stale-version failure', async () => {
+  it('retains prepared object after stale-version failure (no delete)', async () => {
     const { pkg, referencedKey } = await seedFinalisedFile(storage, 'orphan-stale');
     const version = state.packages.find((p) => p.id === pkg.id)!.version as number;
     const prepared = await prepareAndPut(
@@ -695,7 +689,7 @@ describe('proven orphan cleanup', () => {
       Buffer.from('sku,name\n9,Orphan\n'),
       { replace: true },
     );
-    expect(storage.objects.has(prepared.pathname)).toBe(true);
+    const deleteSpy = vi.spyOn(storage, 'delete');
 
     await expect(
       finaliseMigrationUploadedObject(
@@ -714,11 +708,12 @@ describe('proven orphan cleanup', () => {
       ),
     ).rejects.toMatchObject({ code: 'STALE_VERSION' });
 
-    expect(storage.objects.has(prepared.pathname)).toBe(false);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(storage.objects.has(prepared.pathname)).toBe(true);
     expect(storage.objects.has(referencedKey)).toBe(true);
   });
 
-  it('deletes proven new orphan after database failure before finalisation', async () => {
+  it('retains prepared object after database failure before finalisation', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'orphan-db' }));
     const prepared = await prepareAndPut(
       storage,
@@ -727,6 +722,7 @@ describe('proven orphan cleanup', () => {
       1,
       Buffer.from('sku,name\n1,X\n'),
     );
+    const deleteSpy = vi.spyOn(storage, 'delete');
     prismaMock.$transaction.mockImplementationOnce(async () => {
       throw new Error('tx fail');
     });
@@ -745,11 +741,123 @@ describe('proven orphan cleanup', () => {
         { storage },
       ),
     ).rejects.toThrow(/tx fail/);
-    expect(storage.objects.has(prepared.pathname)).toBe(false);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(storage.objects.has(prepared.pathname)).toBe(true);
     expect(state.files).toHaveLength(0);
   });
 
-  it('suppresses deletion when concurrent winner references the object before cleanup', async () => {
+  it('critical TOCTOU interleaving: zero-ref window then concurrent commit — no delete, Blob retained', async () => {
+    /**
+     * Exact previously unproven race shape under Option B:
+     * 1) cleanup would have seen zero references
+     * 2) pause before any former delete
+     * 3) second actor commits MigrationFile referencing the object
+     * 4) cleanup resumes without deleting
+     * 5) DB reference resolves to an existing Blob
+     */
+    const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'toctou' }));
+    const pathname = `mig/${owner.businessId}/${pkg.id}/up-toctou/PRODUCTS.csv`;
+    await storage.put({
+      pathname,
+      body: Buffer.from('sku,name\n1,Race\n'),
+      contentType: 'text/csv',
+    });
+    const deleteSpy = vi.spyOn(storage, 'delete');
+
+    let resolveBarrier!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      resolveBarrier = resolve;
+    });
+    let cleanupReachedPause = false;
+
+    const cleanupPromise = deferUnfinalisedMigrationObjectCleanup(
+      {
+        businessId: owner.businessId,
+        packageId: pkg.id,
+        entityType: 'PRODUCTS',
+        preparedPathname: pathname,
+      },
+      pathname,
+      {
+        afterRetentionDecision: async () => {
+          cleanupReachedPause = true;
+          await barrier;
+        },
+      },
+    );
+
+    // Wait until cleanup has decided to retain (would have been the delete gap).
+    await vi.waitFor(() => {
+      expect(cleanupReachedPause).toBe(true);
+    });
+
+    // Concurrent reference creation while cleanup is paused in the former delete gap.
+    state.files.push({
+      id: 'winner-file',
+      businessId: owner.businessId,
+      packageId: pkg.id,
+      entityType: 'PRODUCTS',
+      storageStatus: 'FINALISED',
+      storageKey: pathname,
+      uploadChecksum: 'a'.repeat(64),
+      byteLength: 20,
+    });
+    resolveBarrier();
+
+    const outcome = await cleanupPromise;
+    expect(outcome).toBe('retained_deferred');
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(storage.objects.has(pathname)).toBe(true);
+    expect(state.files.some((f) => f.storageKey === pathname)).toBe(true);
+    const { stream } = await storage.getStream(pathname);
+    const reader = stream.getReader();
+    const { value } = await reader.read();
+    expect(Buffer.from(value!).toString()).toContain('Race');
+  });
+
+  it('legacy safeDelete alias never deletes even when unreferenced', async () => {
+    const pathname = 'mig/biz-a/pkg-1/up1/PRODUCTS.csv';
+    await storage.put({
+      pathname,
+      body: Buffer.from('x'),
+      contentType: 'text/csv',
+    });
+    const deleteSpy = vi.spyOn(storage, 'delete');
+    const outcome = await safeDeleteUnreferencedMigrationObject(
+      { db: prismaMock as never, storage },
+      {
+        businessId: 'biz-a',
+        packageId: 'pkg-1',
+        entityType: 'PRODUCTS',
+        preparedPathname: pathname,
+      },
+      pathname,
+    );
+    expect(outcome).toBe('retained_deferred');
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(storage.objects.has(pathname)).toBe(true);
+  });
+
+  it('retains when candidate pathname does not match prepared identity', async () => {
+    await storage.put({
+      pathname: 'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
+      body: Buffer.from('x'),
+      contentType: 'text/csv',
+    });
+    const outcome = await deferUnfinalisedMigrationObjectCleanup(
+      {
+        businessId: 'biz-a',
+        packageId: 'pkg-1',
+        entityType: 'PRODUCTS',
+        preparedPathname: 'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
+      },
+      'mig/biz-a/pkg-1/up2/PRODUCTS.csv',
+    );
+    expect(outcome).toBe('retained_not_authorised');
+    expect(storage.objects.has('mig/biz-a/pkg-1/up1/PRODUCTS.csv')).toBe(true);
+  });
+
+  it('conflicting finalisation retains prepared object for loser', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'race-win' }));
     const prepared = await prepareAndPut(
       storage,
@@ -758,9 +866,8 @@ describe('proven orphan cleanup', () => {
       1,
       Buffer.from('sku,name\n1,Race\n'),
     );
+    const deleteSpy = vi.spyOn(storage, 'delete');
 
-    // Simulate concurrent winner establishing a reference after failure path begins:
-    // count returns >0 even though finalise itself failed.
     prismaMock.$transaction.mockImplementationOnce(async () => {
       state.files.push({
         id: 'winner-file',
@@ -791,51 +898,9 @@ describe('proven orphan cleanup', () => {
       ),
     ).rejects.toThrow(/loser lost CAS/);
 
+    expect(deleteSpy).not.toHaveBeenCalled();
     expect(storage.objects.has(prepared.pathname)).toBe(true);
     expect(state.files.some((f) => f.storageKey === prepared.pathname)).toBe(true);
-  });
-
-  it('retains object when reference-check fails (uncertain)', async () => {
-    const outcome = await safeDeleteUnreferencedMigrationObject(
-      {
-        db: {
-          migrationFile: {
-            count: async () => {
-              throw new Error('db timeout');
-            },
-          },
-        } as never,
-        storage,
-      },
-      {
-        businessId: 'biz-a',
-        packageId: 'pkg-1',
-        entityType: 'PRODUCTS',
-        preparedPathname: 'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
-      },
-      'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
-    );
-    expect(outcome).toBe('retained_uncertain');
-  });
-
-  it('retains when candidate pathname does not match prepared identity', async () => {
-    await storage.put({
-      pathname: 'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
-      body: Buffer.from('x'),
-      contentType: 'text/csv',
-    });
-    const outcome = await safeDeleteUnreferencedMigrationObject(
-      { db: prismaMock as never, storage },
-      {
-        businessId: 'biz-a',
-        packageId: 'pkg-1',
-        entityType: 'PRODUCTS',
-        preparedPathname: 'mig/biz-a/pkg-1/up1/PRODUCTS.csv',
-      },
-      'mig/biz-a/pkg-1/up2/PRODUCTS.csv',
-    );
-    expect(outcome).toBe('retained_not_authorised');
-    expect(storage.objects.has('mig/biz-a/pkg-1/up1/PRODUCTS.csv')).toBe(true);
   });
 });
 
