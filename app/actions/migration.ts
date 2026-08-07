@@ -13,7 +13,9 @@ import {
   type CreateMigrationPackageResult,
 } from '@/lib/services/migration/package-create';
 import {
-  uploadMigrationFile,
+  prepareMigrationClientUpload,
+  finaliseMigrationUploadedObject,
+  type PrepareMigrationClientUploadResult,
   type UploadMigrationFileResult,
 } from '@/lib/services/migration/file-upload';
 import {
@@ -23,14 +25,15 @@ import {
 } from '@/lib/services/migration/branch-mapping';
 import {
   isMigrationServiceError,
+  toPublicMigrationError,
+  MIGRATION_PUBLIC_ERROR_MESSAGES,
   type MigrationServiceError,
 } from '@/lib/services/migration/errors';
+import { assertRejectedBase64Transport } from '@/lib/services/migration/file-policy';
 
 function mapError(error: unknown): never {
-  if (isMigrationServiceError(error)) {
-    throw new UserError(error.message);
-  }
-  throw error;
+  const pub = toPublicMigrationError(error);
+  throw new UserError(pub.body.error);
 }
 
 function actorFromContext(ctx: {
@@ -59,33 +62,65 @@ export async function createMigrationPackageAction(
   });
 }
 
-export async function uploadMigrationFileAction(input: {
+/**
+ * Issue a short-lived private client-upload token. The migration RW token never
+ * leaves the server. File bytes must not be sent through this action (Vercel
+ * Functions reject bodies above 4.5 MiB).
+ */
+export async function prepareMigrationUploadAction(input: {
   packageId: string;
   entityType: string;
-  /** Base64-encoded file bytes (server actions cannot accept raw Buffer from the client form cleanly). */
-  bytesBase64: string;
+  expectedVersion: number;
+  replace?: boolean;
   originalFilename?: string | null;
   contentType?: string | null;
-  replace?: boolean;
-  expectedVersion?: number | null;
-}): Promise<ActionResult<UploadMigrationFileResult>> {
+}): Promise<ActionResult<PrepareMigrationClientUploadResult>> {
   return safeAction(async () => {
     const ctx = await withBusinessContext(['MANAGER', 'OWNER']);
     try {
-      const bytes = Buffer.from(input.bytesBase64, 'base64');
-      const result = await uploadMigrationFile(actorFromContext(ctx), {
-        packageId: input.packageId,
-        entityType: input.entityType,
-        bytes,
-        originalFilename: input.originalFilename,
-        contentType: input.contentType,
-        replace: input.replace,
-        expectedVersion: input.expectedVersion,
-      });
+      const result = await prepareMigrationClientUpload(actorFromContext(ctx), input);
       return ok(result);
     } catch (error) {
       mapError(error);
     }
+  });
+}
+
+export async function finaliseMigrationUploadAction(input: {
+  packageId: string;
+  entityType: string;
+  pathname: string;
+  expectedVersion: number;
+  replace?: boolean;
+  originalFilename?: string | null;
+  contentType?: string | null;
+}): Promise<ActionResult<UploadMigrationFileResult>> {
+  return safeAction(async () => {
+    const ctx = await withBusinessContext(['MANAGER', 'OWNER']);
+    try {
+      const result = await finaliseMigrationUploadedObject(actorFromContext(ctx), input);
+      return ok(result);
+    } catch (error) {
+      mapError(error);
+    }
+  });
+}
+
+/**
+ * Explicit rejection of the retired Base64 transport — never allocates file bytes.
+ */
+export async function uploadMigrationFileAction(input: {
+  bytesBase64?: unknown;
+}): Promise<ActionResult<void>> {
+  return safeAction(async () => {
+    await withBusinessContext(['MANAGER', 'OWNER']);
+    try {
+      assertRejectedBase64Transport(input.bytesBase64);
+    } catch (error) {
+      mapError(error);
+    }
+    // Unreachable: assertRejectedBase64Transport always throws.
+    throw new UserError(MIGRATION_PUBLIC_ERROR_MESSAGES.FILE_POLICY);
   });
 }
 
@@ -94,7 +129,7 @@ export async function upsertMigrationBranchMappingAction(input: {
   sourceBranchKey: string;
   targetStoreId: string;
   mappingId?: string | null;
-  expectedVersion?: number | null;
+  expectedVersion: number;
 }): Promise<ActionResult<BranchMappingResult>> {
   return safeAction(async () => {
     const ctx = await withBusinessContext(['MANAGER', 'OWNER']);
@@ -110,7 +145,7 @@ export async function upsertMigrationBranchMappingAction(input: {
 export async function deleteMigrationBranchMappingAction(input: {
   packageId: string;
   mappingId: string;
-  expectedVersion?: number | null;
+  expectedVersion: number;
 }): Promise<ActionResult<{ packageVersion: number; packageStatus: string }>> {
   return safeAction(async () => {
     const ctx = await withBusinessContext(['MANAGER', 'OWNER']);
@@ -123,13 +158,13 @@ export async function deleteMigrationBranchMappingAction(input: {
   });
 }
 
-/** Exported for route handlers that already hold a session context. */
 export function migrationServiceErrorToHttp(error: MigrationServiceError): {
   status: number;
   body: { error: string; code: string };
 } {
-  return {
-    status: error.httpStatus,
-    body: { error: error.message, code: error.code },
-  };
+  return toPublicMigrationError(error);
+}
+
+export function isMigrationDomainError(error: unknown): boolean {
+  return isMigrationServiceError(error);
 }

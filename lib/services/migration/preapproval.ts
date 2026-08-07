@@ -5,7 +5,10 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { isPreApprovalMutableStatus } from '@/lib/migration/lifecycle';
 import type { MigrationPackageStatus } from '@/lib/migration/types';
-import { MigrationServiceError } from '@/lib/services/migration/errors';
+import {
+  MigrationServiceError,
+  safeMigrationLogFields,
+} from '@/lib/services/migration/errors';
 
 export type MigrationTx = Prisma.TransactionClient;
 
@@ -29,36 +32,38 @@ export async function lockPackageForBusiness(
   `;
   const pkg = rows[0];
   if (!pkg) {
-    throw new MigrationServiceError(
-      'NOT_FOUND',
-      'Migration package not found.',
-      404,
-    );
+    throw new MigrationServiceError('NOT_FOUND', undefined, 404);
   }
   return pkg;
 }
 
 export function assertPreApprovalMutable(status: string): void {
   if (!isPreApprovalMutableStatus(status as MigrationPackageStatus)) {
+    throw new MigrationServiceError('LIFECYCLE', undefined, 409);
+  }
+}
+
+/**
+ * Material mutations require an explicit integer package version for CAS.
+ * Omission or malformed values fail closed — adapters must not auto-fetch.
+ */
+export function requireExpectedVersion(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
     throw new MigrationServiceError(
-      'LIFECYCLE',
-      'Package is not mutable in its current lifecycle state.',
+      'STALE_VERSION',
+      'expectedVersion is required and must be a positive integer.',
       409,
     );
   }
+  return raw;
 }
 
 export function assertExpectedVersion(
   pkg: LockedMigrationPackage,
-  expectedVersion: number | null | undefined,
+  expectedVersion: number,
 ): void {
-  if (expectedVersion == null) return;
   if (pkg.version !== expectedVersion) {
-    throw new MigrationServiceError(
-      'STALE_VERSION',
-      'Package was modified by another request. Retry with the current version.',
-      409,
-    );
+    throw new MigrationServiceError('STALE_VERSION', undefined, 409);
   }
 }
 
@@ -147,11 +152,16 @@ export async function writeMigrationAudit(
       },
     });
   } catch (error) {
-    throw new MigrationServiceError(
-      'AUDIT_FAILURE',
-      error instanceof Error ? error.message : 'Audit write failed',
-      500,
+    console.error(
+      '[migration.audit] write failed',
+      safeMigrationLogFields({
+        code: 'AUDIT_FAILURE',
+        businessId: input.businessId,
+        packageId: input.entityId,
+      }),
     );
+    // Never propagate raw DB/provider messages to callers.
+    throw new MigrationServiceError('AUDIT_FAILURE', undefined, 500);
   }
 }
 
@@ -168,22 +178,14 @@ export function assertMigrationActor(actor: {
   businessId?: string | null;
 }): ActorContext {
   if (!actor.userId || !actor.userRole || !actor.businessId) {
-    throw new MigrationServiceError(
-      'UNAUTHENTICATED',
-      'Authentication required for migration access.',
-      401,
-    );
+    throw new MigrationServiceError('UNAUTHENTICATED', undefined, 401);
   }
   if (actor.userRole !== 'OWNER' && actor.userRole !== 'MANAGER') {
-    throw new MigrationServiceError(
-      'ROLE_DENIED',
-      'Migration access denied for this role.',
-      403,
-    );
+    throw new MigrationServiceError('ROLE_DENIED', undefined, 403);
   }
   return {
     userId: actor.userId,
-    userName: '', // filled by callers when known
+    userName: '',
     userRole: actor.userRole,
     businessId: actor.businessId,
   };

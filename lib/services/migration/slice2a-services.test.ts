@@ -1,14 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMigrationPackage } from '@/lib/services/migration/package-create';
-import { uploadMigrationFile } from '@/lib/services/migration/file-upload';
+import {
+  uploadMigrationFile,
+  prepareMigrationClientUpload,
+  finaliseMigrationUploadedObject,
+} from '@/lib/services/migration/file-upload';
 import {
   upsertMigrationBranchMapping,
   deleteMigrationBranchMapping,
 } from '@/lib/services/migration/branch-mapping';
 import { openMigrationFileDownload } from '@/lib/services/migration/file-download';
 import { createMemoryMigrationObjectStorage } from '@/lib/services/migration/storage';
-import { MigrationServiceError } from '@/lib/services/migration/errors';
+import {
+  MigrationServiceError,
+  toPublicMigrationError,
+  MIGRATION_PUBLIC_ERROR_MESSAGES,
+} from '@/lib/services/migration/errors';
 import { applyMaterialMutationDemotion } from '@/lib/services/migration/preapproval';
+import { MIGRATION_MAX_UPLOAD_BYTES } from '@/lib/migration/limits';
 
 type Row = Record<string, unknown>;
 
@@ -325,6 +334,7 @@ describe('migration slice 2A services', () => {
   it('finalises private upload, exact replay, conflict, and replace', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'upl' }));
     const bytes = Buffer.from('sku,name\n1,Tea\n');
+    let version = 1;
 
     const uploaded = await uploadMigrationFile(
       owner,
@@ -334,9 +344,11 @@ describe('migration slice 2A services', () => {
         bytes,
         originalFilename: 'products.csv',
         contentType: 'text/csv',
+        expectedVersion: version,
       },
       { storage },
     );
+    version = uploaded.packageVersion;
     expect(uploaded.storageStatus).toBe('FINALISED');
     expect(uploaded.replayed).toBe(false);
     expect(storage.objects.has(uploaded.storageKey)).toBe(true);
@@ -350,11 +362,13 @@ describe('migration slice 2A services', () => {
         bytes,
         originalFilename: 'products.csv',
         contentType: 'text/csv',
+        expectedVersion: version,
       },
       { storage },
     );
     expect(replay.replayed).toBe(true);
     expect(replay.fileId).toBe(uploaded.fileId);
+    expect(replay.packageVersion).toBe(version);
     expect(state.files).toHaveLength(1);
 
     await expect(
@@ -366,6 +380,7 @@ describe('migration slice 2A services', () => {
           bytes: Buffer.from('sku,name\n2,Coffee\n'),
           originalFilename: 'products.csv',
           contentType: 'text/csv',
+          expectedVersion: version,
         },
         { storage },
       ),
@@ -380,7 +395,7 @@ describe('migration slice 2A services', () => {
         originalFilename: 'products-v2.csv',
         contentType: 'text/csv',
         replace: true,
-        expectedVersion: uploaded.packageVersion,
+        expectedVersion: version,
       },
       { storage },
     );
@@ -404,6 +419,7 @@ describe('migration slice 2A services', () => {
           bytes: Buffer.from('name\nAcme\n'),
           originalFilename: 'suppliers.csv',
           contentType: 'text/csv',
+          expectedVersion: 1,
         },
         { storage },
       ),
@@ -423,6 +439,7 @@ describe('migration slice 2A services', () => {
           bytes: Buffer.from('a,b\n1,2\n'),
           originalFilename: 'stock.csv',
           contentType: 'text/csv',
+          expectedVersion: 1,
         },
         { storage },
       ),
@@ -436,6 +453,7 @@ describe('migration slice 2A services', () => {
         bytes: Buffer.from('a,b\n1,2\n'),
         originalFilename: 'stock.csv',
         contentType: 'text/csv',
+        expectedVersion: 1,
       },
       { storage },
     );
@@ -460,6 +478,7 @@ describe('migration slice 2A services', () => {
         bytes,
         originalFilename: 'opening.csv',
         contentType: 'text/csv',
+        expectedVersion: 1,
       },
       { storage },
     );
@@ -475,12 +494,14 @@ describe('migration slice 2A services', () => {
 
   it('creates, updates, deletes branch mappings with same-business store', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'map' }));
+    let version = 1;
 
     await expect(
       upsertMigrationBranchMapping(owner, {
         packageId: pkg.id,
         sourceBranchKey: 'Main',
         targetStoreId: 'store-b1',
+        expectedVersion: version,
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
@@ -488,7 +509,9 @@ describe('migration slice 2A services', () => {
       packageId: pkg.id,
       sourceBranchKey: 'Main',
       targetStoreId: 'store-a1',
+      expectedVersion: version,
     });
+    version = created.packageVersion;
     expect(created.sourceBranchKey).toBe('main');
 
     const updated = await upsertMigrationBranchMapping(owner, {
@@ -496,14 +519,15 @@ describe('migration slice 2A services', () => {
       mappingId: created.mappingId,
       sourceBranchKey: 'Main-2',
       targetStoreId: 'store-a1',
-      expectedVersion: created.packageVersion,
+      expectedVersion: version,
     });
+    version = updated.packageVersion;
     expect(updated.sourceBranchKey).toBe('main-2');
 
     const deleted = await deleteMigrationBranchMapping(owner, {
       packageId: pkg.id,
       mappingId: created.mappingId,
-      expectedVersion: updated.packageVersion,
+      expectedVersion: version,
     });
     expect(deleted.packageStatus).toBe('DRAFT');
     expect(state.mappings).toHaveLength(0);
@@ -560,7 +584,8 @@ describe('migration slice 2A services', () => {
 
   it('does not mutate products, suppliers, sales, or approval tables', async () => {
     const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'noneffect' }));
-    await uploadMigrationFile(
+    let version = 1;
+    const uploaded = await uploadMigrationFile(
       owner,
       {
         packageId: pkg.id,
@@ -568,17 +593,179 @@ describe('migration slice 2A services', () => {
         bytes: Buffer.from('a\n1\n'),
         originalFilename: 'p.csv',
         contentType: 'text/csv',
+        expectedVersion: version,
       },
       { storage },
     );
+    version = uploaded.packageVersion;
     await upsertMigrationBranchMapping(owner, {
       packageId: pkg.id,
       sourceBranchKey: 'west',
       targetStoreId: 'store-a1',
+      expectedVersion: version,
     });
     expect(state.products).toHaveLength(0);
     expect(state.suppliers).toHaveLength(0);
     expect(state.sales).toHaveLength(0);
     expect(state.audits.every((a) => String(a.action).startsWith('MIGRATION_'))).toBe(true);
+  });
+
+  it('rejects missing or undefined expectedVersion with STALE_VERSION', async () => {
+    const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'missing-ev' }));
+
+    await expect(
+      uploadMigrationFile(
+        owner,
+        {
+          packageId: pkg.id,
+          entityType: 'PRODUCTS',
+          bytes: Buffer.from('a\n1\n'),
+          originalFilename: 'p.csv',
+          contentType: 'text/csv',
+          expectedVersion: undefined as unknown as number,
+        },
+        { storage },
+      ),
+    ).rejects.toMatchObject({ code: 'STALE_VERSION' });
+
+    await expect(
+      upsertMigrationBranchMapping(owner, {
+        packageId: pkg.id,
+        sourceBranchKey: 'north',
+        targetStoreId: 'store-a1',
+        expectedVersion: undefined as unknown as number,
+      }),
+    ).rejects.toMatchObject({ code: 'STALE_VERSION' });
+
+    await expect(
+      deleteMigrationBranchMapping(owner, {
+        packageId: pkg.id,
+        mappingId: 'map-missing',
+        expectedVersion: undefined as unknown as number,
+      }),
+    ).rejects.toMatchObject({ code: 'STALE_VERSION' });
+  });
+
+  it('successful material mutation advances package version once', async () => {
+    const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'version-bump' }));
+    expect(state.packages[0]!.version).toBe(1);
+
+    const uploaded = await uploadMigrationFile(
+      owner,
+      {
+        packageId: pkg.id,
+        entityType: 'PRODUCTS',
+        bytes: Buffer.from('sku\n1\n'),
+        originalFilename: 'p.csv',
+        contentType: 'text/csv',
+        expectedVersion: 1,
+      },
+      { storage },
+    );
+    expect(uploaded.packageVersion).toBe(2);
+    expect(state.packages[0]!.version).toBe(2);
+  });
+
+  it('prepareMigrationClientUpload returns safe client token and upload constraints', async () => {
+    const fakeRwToken = 'fake-rw-token-env-value';
+    const previous = process.env.MIGRATION_BLOB_READ_WRITE_TOKEN;
+    process.env.MIGRATION_BLOB_READ_WRITE_TOKEN = fakeRwToken;
+    try {
+      const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'prep' }));
+      const prepared = await prepareMigrationClientUpload(
+        owner,
+        {
+          packageId: pkg.id,
+          entityType: 'PRODUCTS',
+          expectedVersion: 1,
+          originalFilename: 'products.csv',
+          contentType: 'text/csv',
+        },
+        { storage },
+      );
+      expect(prepared.clientToken).not.toBe(fakeRwToken);
+      expect(prepared.access).toBe('private');
+      expect(prepared.maximumSizeInBytes).toBe(MIGRATION_MAX_UPLOAD_BYTES);
+      expect(prepared.maximumSizeInBytes).toBe(26_214_400);
+      expect(prepared.packageVersion).toBe(1);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MIGRATION_BLOB_READ_WRITE_TOKEN;
+      } else {
+        process.env.MIGRATION_BLOB_READ_WRITE_TOKEN = previous;
+      }
+    }
+  });
+
+  it('finaliseMigrationUploadedObject succeeds after memory storage.put', async () => {
+    const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'fin' }));
+    const bytes = Buffer.from('sku,name\n1,Tea\n');
+    const prepared = await prepareMigrationClientUpload(
+      owner,
+      {
+        packageId: pkg.id,
+        entityType: 'PRODUCTS',
+        expectedVersion: 1,
+        originalFilename: 'products.csv',
+        contentType: 'text/csv',
+      },
+      { storage },
+    );
+    await storage.put({
+      pathname: prepared.pathname,
+      body: bytes,
+      contentType: 'text/csv',
+    });
+
+    const finalised = await finaliseMigrationUploadedObject(
+      owner,
+      {
+        packageId: pkg.id,
+        entityType: 'PRODUCTS',
+        pathname: prepared.pathname,
+        expectedVersion: 1,
+        originalFilename: 'products.csv',
+        contentType: 'text/csv',
+      },
+      { storage },
+    );
+    expect(finalised.storageStatus).toBe('FINALISED');
+    expect(finalised.replayed).toBe(false);
+    expect(finalised.packageVersion).toBe(2);
+    expect(state.files).toHaveLength(1);
+  });
+
+  it('audit failure returns AUDIT_FAILURE without leaking secret via toPublicMigrationError', async () => {
+    const secret = 'SECRET_DB_DETAIL_xyz';
+    const pkg = await createMigrationPackage(owner, baseCreate({ clientPackageKey: 'audit-fail' }));
+    prismaMock.auditLog.create.mockImplementationOnce(async () => {
+      throw new Error(secret);
+    });
+
+    let caught: unknown;
+    try {
+      await uploadMigrationFile(
+        owner,
+        {
+          packageId: pkg.id,
+          entityType: 'SUPPLIERS',
+          bytes: Buffer.from('name\nAcme\n'),
+          originalFilename: 'suppliers.csv',
+          contentType: 'text/csv',
+          expectedVersion: 1,
+        },
+        { storage },
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(MigrationServiceError);
+    expect((caught as MigrationServiceError).code).toBe('AUDIT_FAILURE');
+    const pub = toPublicMigrationError(caught);
+    expect(pub.body.code).toBe('AUDIT_FAILURE');
+    expect(pub.body.error).toBe(MIGRATION_PUBLIC_ERROR_MESSAGES.AUDIT_FAILURE);
+    expect(pub.body.error).not.toContain(secret);
+    expect(JSON.stringify(pub)).not.toContain(secret);
   });
 });

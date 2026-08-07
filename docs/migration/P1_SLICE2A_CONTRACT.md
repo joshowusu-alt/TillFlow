@@ -71,24 +71,37 @@ Rules:
 - Never log raw CSV bytes or secrets
 - Keys: `mig/{businessId}/{packageId}/{uploadId}/{entityType}.csv` (server-owned, unique)
 
+### Application upload transport (hardened)
+
+Vercel Functions reject request bodies above **4.5 MiB**. Next.js server actions in this repo are further capped at `bodySizeLimit: '4mb'`. Therefore **file bytes must not transit the Next.js/Vercel function body**.
+
+Approved transport:
+
+1. Authenticated `prepareMigrationClientUpload` / `POST /api/migration/files/prepare-upload` issues a **short-lived client upload token** minted with `MIGRATION_BLOB_READ_WRITE_TOKEN` (RW token never returned).
+2. Client uploads directly to the private migration store (`access: 'private'`) to the **server-owned pathname**, with `maximumSizeInBytes = 25 MiB`.
+3. Authenticated `finaliseMigrationUploadedObject` / `POST /api/migration/files/finalise` verifies `head`, streams a bounded SHA-256, enforces file policy, then finalises in a short DB transaction.
+
+Base64-in-action upload is **retired** and rejected before decode.
+
 ## Upload / finalisation sequence
 
-1. AuthZ + same-business mutable package
-2. Enforce ≤25 MiB; CSV/text allowlist; reject archives
-3. Server-side SHA-256 of exact bytes
-4. Upload private object (outside DB transaction)
-5. `head` metadata verification
-6. Short DB transaction: lock package, CAS version, upsert `MigrationFile` as `FINALISED`
-7. Fail-closed audit
-8. On DB failure after upload: best-effort delete of the new object only
+1. AuthZ + same-business mutable package + **mandatory** `expectedVersion`
+2. Prepare client token (no file bytes on server)
+3. Client private Blob put (≤25 MiB)
+4. Server `head` + bounded stream checksum + CSV/text/archive policy
+5. Short DB transaction: lock package, CAS version, upsert `MigrationFile` as `FINALISED`
+6. Fail-closed audit (client-safe error mapping)
+7. On DB/CAS failure after upload: best-effort delete of the new object only
 
 `MigrationFile` is inserted only when `uploadChecksum` is known (hash-before-insert).
 
-## Replay and replacement
+## Concurrency
 
-- Exact replay (same package, entity, checksum): return existing; no duplicate effect
-- Conflicting replay (same entity intent, different checksum without replace flag): conflict
-- Replacement: new unique object key; atomic DB pointer swap; never in-place overwrite; previous object retained for retention (no GC worker in Slice 2A)
+- Material mutations **require** `expectedVersion` (positive integer) at every callable boundary
+- Omission / malformed / stale values fail closed
+- Adapters must not silently refresh version for the client
+- Short transactions + `SELECT … FOR UPDATE` + unique constraints
+- Exact idempotent replay remains distinct from stale conflicting mutation
 
 ## Pre-approval mutation
 
@@ -110,19 +123,15 @@ Historical validation runs are never deleted. No new validation results are crea
 - Same-business package and `Store`
 - Canonical source branch key
 - Unique `(packageId, sourceBranchKey)` and `(packageId, targetStoreId)`
-- Material mutations follow the demotion rule above
-
-## Concurrency
-
-- Short transactions
-- `SELECT … FOR UPDATE` on package rows
-- Version compare-and-set
-- Existing unique constraints
-- Fail-closed audit (transaction aborts on audit failure)
+- Material mutations require `expectedVersion` and follow demotion
 
 ## Download
 
 Authenticated Owner/Manager only; same-business file ownership; stream via server using migration token; safe `Content-Disposition` filename; no public URL exposure.
+
+## Client errors
+
+Clients receive stable public codes/messages only. Raw database, Blob, SDK, constraint names, tokens and stack details never cross the boundary.
 
 ## Deployment
 
@@ -130,4 +139,4 @@ No Prisma schema or migration files. Merge would deploy runtime code only (schem
 
 ## Orphans
 
-Best-effort delete of newly uploaded objects after finalisation failure. Objects abandoned by process kill remain identifiable by `mig/` key prefix for a later operational task (no worker here).
+Best-effort delete of newly uploaded objects after finalisation/CAS failure. Objects abandoned by process kill remain identifiable by `mig/` key prefix for a later operational task (no worker here).

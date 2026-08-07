@@ -2,9 +2,13 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
   assertUploadContentPolicy,
   assertUploadByteLimit,
+  assertRejectedBase64Transport,
+  assertServerOwnedMigrationPathname,
   buildMigrationStoragePathname,
+  MIGRATION_MAX_BASE64_CHARS,
   newMigrationUploadId,
   sha256HexOfBuffer,
+  sha256HexOfStreamBounded,
   assertMigrationEntityType,
 } from '@/lib/services/migration/file-policy';
 import {
@@ -75,6 +79,92 @@ describe('migration file policy', () => {
     );
     expect(assertMigrationEntityType('SUPPLIERS')).toBe('SUPPLIERS');
     expect(() => assertMigrationEntityType('CUSTOMERS')).toThrow(MigrationServiceError);
+  });
+
+  it('assertRejectedBase64Transport rejects oversized string before decode', () => {
+    const oversized = 'A'.repeat(MIGRATION_MAX_BASE64_CHARS + 1);
+    expect(() => assertRejectedBase64Transport(oversized)).toThrow(MigrationServiceError);
+    try {
+      assertRejectedBase64Transport(oversized);
+    } catch (error) {
+      expect((error as MigrationServiceError).code).toBe('FILE_POLICY');
+      expect((error as MigrationServiceError).message).toMatch(/size ceiling/i);
+    }
+  });
+
+  it('assertRejectedBase64Transport rejects malformed base64', () => {
+    expect(() => assertRejectedBase64Transport('abc!!!')).toThrow(MigrationServiceError);
+    try {
+      assertRejectedBase64Transport('abc!!!');
+    } catch (error) {
+      expect((error as MigrationServiceError).code).toBe('FILE_POLICY');
+      expect((error as MigrationServiceError).message).toMatch(/Malformed Base64/i);
+    }
+  });
+
+  it('assertRejectedBase64Transport rejects valid-looking base64 (transport retired)', () => {
+    const validBase64 = Buffer.from('hello').toString('base64');
+    expect(() => assertRejectedBase64Transport(validBase64)).toThrow(MigrationServiceError);
+    try {
+      assertRejectedBase64Transport(validBase64);
+    } catch (error) {
+      expect((error as MigrationServiceError).code).toBe('FILE_POLICY');
+      expect((error as MigrationServiceError).message).toMatch(/client-upload transport/i);
+    }
+  });
+
+  it('assertServerOwnedMigrationPathname accepts valid path and rejects traversal/wrong business', () => {
+    const valid = buildMigrationStoragePathname({
+      businessId: 'biz1',
+      packageId: 'pkg1',
+      uploadId: newMigrationUploadId(),
+      entityType: 'PRODUCTS',
+    });
+    expect(() =>
+      assertServerOwnedMigrationPathname({
+        pathname: valid,
+        businessId: 'biz1',
+        packageId: 'pkg1',
+        entityType: 'PRODUCTS',
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertServerOwnedMigrationPathname({
+        pathname: 'mig/other-biz/pkg1/upl1/PRODUCTS.csv',
+        businessId: 'biz1',
+        packageId: 'pkg1',
+        entityType: 'PRODUCTS',
+      }),
+    ).toThrow(MigrationServiceError);
+
+    expect(() =>
+      assertServerOwnedMigrationPathname({
+        pathname: 'mig/biz1/../evil/upl1/PRODUCTS.csv',
+        businessId: 'biz1',
+        packageId: 'pkg1',
+        entityType: 'PRODUCTS',
+      }),
+    ).toThrow(MigrationServiceError);
+  });
+
+  it('sha256HexOfStreamBounded rejects empty and oversized streams', async () => {
+    const empty = new ReadableStream({
+      start(c) {
+        c.close();
+      },
+    });
+    await expect(sha256HexOfStreamBounded(empty)).rejects.toMatchObject({ code: 'FILE_POLICY' });
+
+    const oversized = new ReadableStream({
+      start(c) {
+        c.enqueue(Buffer.alloc(MIGRATION_MAX_UPLOAD_BYTES + 1));
+        c.close();
+      },
+    });
+    await expect(sha256HexOfStreamBounded(oversized)).rejects.toMatchObject({
+      code: 'FILE_POLICY',
+    });
   });
 });
 

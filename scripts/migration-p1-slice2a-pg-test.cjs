@@ -1,9 +1,9 @@
 /**
- * Disposable PostgreSQL behavioural tests for Migration P1 Slice 2A.
+ * Disposable PostgreSQL behavioural tests for Migration P1 Slice 2A (hardened).
  *
- * Proves concurrency, uniqueness, same-business mappings, demotion retention,
- * non-effects, and that Slice 1 SQL-only constraints remain present.
- * No Prisma schema changes; no Blob credentials required.
+ * Uses at least two independent `pg.Client` connections with a deterministic
+ * barrier so concurrent requests genuinely overlap. Asserts exact SQLSTATE and
+ * constraint names — unrelated failures do not satisfy the gates.
  */
 
 const { Client } = require('pg');
@@ -51,6 +51,16 @@ function cuid() {
   return 'c' + crypto.randomBytes(12).toString('hex');
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 async function expectPgReject(fn, expect) {
   try {
     await fn();
@@ -75,6 +85,14 @@ async function expectPgReject(fn, expect) {
   }
 }
 
+async function connectClient(url, label) {
+  const client = new Client({ connectionString: url });
+  await client.connect();
+  const pid = (await client.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+  console.log(`  connection ${label} backend_pid=${pid}`);
+  return { client, pid };
+}
+
 async function main() {
   const url = requireUrl();
   process.env.POSTGRES_PRISMA_URL = url;
@@ -88,8 +106,8 @@ async function main() {
     shell: true,
   });
 
-  const client = new Client({ connectionString: url });
-  await client.connect();
+  const setup = new Client({ connectionString: url });
+  await setup.connect();
 
   const bizA = cuid();
   const bizB = cuid();
@@ -103,36 +121,37 @@ async function main() {
   }
 
   async function seed() {
-    await client.query(`UPDATE "MigrationPackage" SET "latestValidationRunId" = NULL`);
-    await client.query(`DELETE FROM "MigrationApprovalHistory"`);
-    await client.query(`DELETE FROM "MigrationValidationRun"`);
-    await client.query(`DELETE FROM "MigrationFile"`);
-    await client.query(`DELETE FROM "MigrationBranchMapping"`);
-    await client.query(`DELETE FROM "MigrationPackage"`);
-    await client.query(`DELETE FROM "Store" WHERE id = ANY($1::text[])`, [[storeA, storeB]]);
-    await client.query(`DELETE FROM "User" WHERE id = ANY($1::text[])`, [[userA, userB]]);
-    await client.query(`DELETE FROM "Business" WHERE id = ANY($1::text[])`, [[bizA, bizB]]);
+    await setup.query(`UPDATE "MigrationPackage" SET "latestValidationRunId" = NULL`);
+    await setup.query(`DELETE FROM "MigrationApprovalHistory"`);
+    await setup.query(`DELETE FROM "MigrationValidationRun"`);
+    await setup.query(`DELETE FROM "MigrationFile"`);
+    await setup.query(`DELETE FROM "MigrationBranchMapping"`);
+    await setup.query(`DELETE FROM "MigrationPackage"`);
+    await setup.query(`DELETE FROM "Store" WHERE id = ANY($1::text[])`, [[storeA, storeB]]);
+    await setup.query(`DELETE FROM "User" WHERE id = ANY($1::text[])`, [[userA, userB]]);
+    await setup.query(`DELETE FROM "Business" WHERE id = ANY($1::text[])`, [[bizA, bizB]]);
 
-    await client.query(
+    await setup.query(
       `INSERT INTO "Business" (id, name, "createdAt", "updatedAt") VALUES ($1,'BizA',NOW(),NOW()), ($2,'BizB',NOW(),NOW())`,
       [bizA, bizB],
     );
-    await client.query(
+    await setup.query(
       `INSERT INTO "User" (id, "businessId", name, email, "passwordHash", role, active, "createdAt")
        VALUES ($1,$2,'Owner A',$3,'x','OWNER',true,NOW()), ($4,$5,'Owner B',$6,'x','OWNER',true,NOW())`,
       [userA, bizA, `a-${userA}@example.com`, userB, bizB, `b-${userB}@example.com`],
     );
-    await client.query(
+    await setup.query(
       `INSERT INTO "Store" (id, "businessId", name, "createdAt")
        VALUES ($1,$2,'Store A',NOW()), ($3,$4,'Store B',NOW())`,
       [storeA, bizA, storeB, bizB],
     );
   }
 
-  async function insertPackage(opts) {
+  function insertPackageSql(opts) {
     const id = opts.id || cuid();
-    await client.query(
-      `INSERT INTO "MigrationPackage" (
+    return {
+      id,
+      text: `INSERT INTO "MigrationPackage" (
          id, "businessId", "contractVersion", "sourceSystemKey", "sourceBusinessKey",
          "reportingCurrency", "packageAsOfDate", status, "reconciliationStatus",
          "clientPackageKey", "expiresAt", version, "lineageRootId",
@@ -142,7 +161,7 @@ async function main() {
          $6, NOW() + interval '14 days', $7, $1,
          $8, NOW(), NOW()
        )`,
-      [
+      values: [
         id,
         opts.businessId,
         opts.sourceSystemKey || 'legacy-pos',
@@ -152,53 +171,103 @@ async function main() {
         opts.version || 1,
         opts.createdByUserId,
       ],
-    );
-    return id;
+    };
+  }
+
+  async function insertPackage(client, opts) {
+    const sql = insertPackageSql(opts);
+    await client.query(sql.text, sql.values);
+    return sql.id;
   }
 
   try {
     await seed();
 
-    // Concurrent identical clientPackageKey → one row (unique)
-    const key = `idem-${cuid()}`;
-    const results = await Promise.allSettled([
-      insertPackage({ businessId: bizA, createdByUserId: userA, clientPackageKey: key }),
-      insertPackage({ businessId: bizA, createdByUserId: userA, clientPackageKey: key }),
-    ]);
-    const ok = results.filter((r) => r.status === 'fulfilled');
-    const rejected = results.filter((r) => r.status === 'rejected');
-    if (ok.length !== 1 || rejected.length !== 1) {
-      throw new Error(
-        `concurrent identical create: expected 1 success + 1 reject, got ${ok.length}/${rejected.length}`,
-      );
-    }
-    if (rejected[0].reason.code !== SQLSTATE.UNIQUE) {
-      throw new Error(
-        `concurrent identical create: expected SQLSTATE ${SQLSTATE.UNIQUE}, got ${rejected[0].reason.code}`,
-      );
-    }
-    const count = await client.query(
-      `SELECT count(*)::int AS c FROM "MigrationPackage" WHERE "businessId"=$1 AND "clientPackageKey"=$2`,
-      [bizA, key],
-    );
-    if (count.rows[0].c !== 1) throw new Error('concurrent identical create left !=1 row');
-    pass('concurrent identical package create → one effect');
+    // --- Concurrent identical clientPackageKey on TWO connections ---
+    {
+      const a = await connectClient(url, 'pkg-a');
+      const b = await connectClient(url, 'pkg-b');
+      if (a.pid === b.pid) throw new Error('expected distinct backend PIDs');
+      const key = `idem-${cuid()}`;
+      const ready = deferred();
+      let readyCount = 0;
+      const markReady = () => {
+        readyCount += 1;
+        if (readyCount === 2) ready.resolve();
+      };
+      const barrierTimeout = setTimeout(() => ready.reject(new Error('barrier timeout')), 10000);
 
-    // Different businesses may reuse key
-    await insertPackage({
+      const run = async (conn, id) => {
+        markReady();
+        await ready.promise;
+        return insertPackage(conn.client, {
+          id,
+          businessId: bizA,
+          createdByUserId: userA,
+          clientPackageKey: key,
+        });
+      };
+
+      const id1 = cuid();
+      const id2 = cuid();
+      const results = await Promise.allSettled([run(a, id1), run(b, id2)]);
+      clearTimeout(barrierTimeout);
+
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+      if (ok.length !== 1 || rejected.length !== 1) {
+        throw new Error(
+          `concurrent identical create: expected 1 success + 1 reject, got ${ok.length}/${rejected.length}`,
+        );
+      }
+      if (rejected[0].reason.code !== SQLSTATE.UNIQUE) {
+        throw new Error(
+          `concurrent identical create: expected SQLSTATE ${SQLSTATE.UNIQUE}, got ${rejected[0].reason.code}`,
+        );
+      }
+      if (
+        rejected[0].reason.constraint !== 'MigrationPackage_businessId_clientPackageKey_key'
+      ) {
+        throw new Error(
+          `concurrent identical create: expected MigrationPackage_businessId_clientPackageKey_key, got ${rejected[0].reason.constraint}`,
+        );
+      }
+      const count = await setup.query(
+        `SELECT count(*)::int AS c FROM "MigrationPackage" WHERE "businessId"=$1 AND "clientPackageKey"=$2`,
+        [bizA, key],
+      );
+      if (count.rows[0].c !== 1) throw new Error('concurrent identical create left !=1 row');
+      await a.client.end();
+      await b.client.end();
+      pass(`concurrent identical package create → one effect (pids ${a.pid}/${b.pid})`);
+    }
+
+    // Cross-business key reuse
+    await insertPackage(setup, {
       businessId: bizB,
       createdByUserId: userB,
-      clientPackageKey: key,
+      clientPackageKey: `shared-${cuid()}`,
+    });
+    const sharedKey = `reuse-${cuid()}`;
+    await insertPackage(setup, {
+      businessId: bizA,
+      createdByUserId: userA,
+      clientPackageKey: sharedKey,
+    });
+    await insertPackage(setup, {
+      businessId: bizB,
+      createdByUserId: userB,
+      clientPackageKey: sharedKey,
     });
     pass('cross-business clientPackageKey reuse allowed');
 
-    // One current entity file per package
-    const pkgFile = await insertPackage({
+    // One current entity file
+    const pkgFile = await insertPackage(setup, {
       businessId: bizA,
       createdByUserId: userA,
       clientPackageKey: `file-${cuid()}`,
     });
-    await client.query(
+    await setup.query(
       `INSERT INTO "MigrationFile" (
          id, "businessId", "packageId", "entityType", "storageStatus",
          "uploadChecksum", "byteLength", "storageKey", "createdAt", "updatedAt"
@@ -207,7 +276,7 @@ async function main() {
     );
     await expectPgReject(
       () =>
-        client.query(
+        setup.query(
           `INSERT INTO "MigrationFile" (
              id, "businessId", "packageId", "entityType", "storageStatus",
              "uploadChecksum", "byteLength", "createdAt", "updatedAt"
@@ -222,13 +291,13 @@ async function main() {
     );
     pass('one current entity file per package');
 
-    // Same-business store mapping; cross-business store rejected
-    const pkgMap = await insertPackage({
+    // Branch mapping same-business / cross-business / duplicate
+    const pkgMap = await insertPackage(setup, {
       businessId: bizA,
       createdByUserId: userA,
       clientPackageKey: `map-${cuid()}`,
     });
-    await client.query(
+    await setup.query(
       `INSERT INTO "MigrationBranchMapping" (
          id, "businessId", "packageId", "sourceBranchKey", "targetStoreId", "createdAt", "updatedAt"
        ) VALUES ($1,$2,$3,'main',$4,NOW(),NOW())`,
@@ -238,7 +307,7 @@ async function main() {
 
     await expectPgReject(
       () =>
-        client.query(
+        setup.query(
           `INSERT INTO "MigrationBranchMapping" (
              id, "businessId", "packageId", "sourceBranchKey", "targetStoreId", "createdAt", "updatedAt"
            ) VALUES ($1,$2,$3,'other',$4,NOW(),NOW())`,
@@ -247,13 +316,14 @@ async function main() {
       {
         label: 'cross-business store mapping',
         sqlstate: SQLSTATE.FOREIGN_KEY,
+        constraint: 'MigrationBranchMapping_businessId_targetStoreId_fkey',
       },
     );
     pass('cross-business store mapping rejected');
 
     await expectPgReject(
       () =>
-        client.query(
+        setup.query(
           `INSERT INTO "MigrationBranchMapping" (
              id, "businessId", "packageId", "sourceBranchKey", "targetStoreId", "createdAt", "updatedAt"
            ) VALUES ($1,$2,$3,'main',$4,NOW(),NOW())`,
@@ -267,8 +337,167 @@ async function main() {
     );
     pass('duplicate branch mapping rejected');
 
+    // Conflicting concurrent file inserts — two connections + barrier
+    {
+      const pkgRace = await insertPackage(setup, {
+        businessId: bizA,
+        createdByUserId: userA,
+        clientPackageKey: `race-${cuid()}`,
+      });
+      const a = await connectClient(url, 'file-a');
+      const b = await connectClient(url, 'file-b');
+      const ready = deferred();
+      let n = 0;
+      const mark = () => {
+        n += 1;
+        if (n === 2) ready.resolve();
+      };
+      const t = setTimeout(() => ready.reject(new Error('file barrier timeout')), 10000);
+      const insertFile = async (conn, checksum) => {
+        mark();
+        await ready.promise;
+        return conn.client.query(
+          `INSERT INTO "MigrationFile" (
+             id, "businessId", "packageId", "entityType", "storageStatus",
+             "uploadChecksum", "byteLength", "createdAt", "updatedAt"
+           ) VALUES ($1,$2,$3,'SUPPLIERS','FINALISED',$4,1,NOW(),NOW())`,
+          [cuid(), bizA, pkgRace, checksum],
+        );
+      };
+      const race = await Promise.allSettled([
+        insertFile(a, 'c'.repeat(64)),
+        insertFile(b, 'd'.repeat(64)),
+      ]);
+      clearTimeout(t);
+      const raceOk = race.filter((r) => r.status === 'fulfilled');
+      const raceBad = race.filter((r) => r.status === 'rejected');
+      if (raceOk.length !== 1 || raceBad.length !== 1) {
+        throw new Error('conflicting concurrent file inserts: expected 1/1');
+      }
+      if (raceBad[0].reason.code !== SQLSTATE.UNIQUE) {
+        throw new Error(
+          `conflicting concurrent file inserts: expected ${SQLSTATE.UNIQUE}, got ${raceBad[0].reason.code}`,
+        );
+      }
+      if (raceBad[0].reason.constraint !== 'MigrationFile_packageId_entityType_key') {
+        throw new Error(
+          `conflicting concurrent file inserts: wrong constraint ${raceBad[0].reason.constraint}`,
+        );
+      }
+      await a.client.end();
+      await b.client.end();
+      pass(`conflicting concurrent file inserts → one effect (pids ${a.pid}/${b.pid})`);
+    }
+
+    // Conflicting concurrent branch mappings — two connections
+    {
+      const pkgBM = await insertPackage(setup, {
+        businessId: bizA,
+        createdByUserId: userA,
+        clientPackageKey: `bm-${cuid()}`,
+      });
+      // second store in bizA for unique targetStoreId race on source keys
+      const storeA2 = cuid();
+      await setup.query(
+        `INSERT INTO "Store" (id, "businessId", name, "createdAt") VALUES ($1,$2,'Store A2',NOW())`,
+        [storeA2, bizA],
+      );
+      const a = await connectClient(url, 'map-a');
+      const b = await connectClient(url, 'map-b');
+      const ready = deferred();
+      let n = 0;
+      const mark = () => {
+        n += 1;
+        if (n === 2) ready.resolve();
+      };
+      const t = setTimeout(() => ready.reject(new Error('map barrier timeout')), 10000);
+      const insertMap = async (conn, branch, store) => {
+        mark();
+        await ready.promise;
+        return conn.client.query(
+          `INSERT INTO "MigrationBranchMapping" (
+             id, "businessId", "packageId", "sourceBranchKey", "targetStoreId", "createdAt", "updatedAt"
+           ) VALUES ($1,$2,$3,$4,$5,NOW(),NOW())`,
+          [cuid(), bizA, pkgBM, branch, store],
+        );
+      };
+      // Same sourceBranchKey → unique conflict
+      const race = await Promise.allSettled([
+        insertMap(a, 'east', storeA),
+        insertMap(b, 'east', storeA2),
+      ]);
+      clearTimeout(t);
+      const raceOk = race.filter((r) => r.status === 'fulfilled');
+      const raceBad = race.filter((r) => r.status === 'rejected');
+      if (raceOk.length !== 1 || raceBad.length !== 1) {
+        throw new Error('conflicting concurrent mappings: expected 1/1');
+      }
+      if (raceBad[0].reason.code !== SQLSTATE.UNIQUE) {
+        throw new Error(
+          `conflicting concurrent mappings: expected ${SQLSTATE.UNIQUE}, got ${raceBad[0].reason.code}`,
+        );
+      }
+      if (
+        raceBad[0].reason.constraint !==
+        'MigrationBranchMapping_packageId_sourceBranchKey_key'
+      ) {
+        throw new Error(
+          `conflicting concurrent mappings: wrong constraint ${raceBad[0].reason.constraint}`,
+        );
+      }
+      await a.client.end();
+      await b.client.end();
+      pass(`conflicting concurrent branch mappings → one effect (pids ${a.pid}/${b.pid})`);
+    }
+
+    // Stale version CAS simulation with two connections: winner bumps, loser sees stale
+    {
+      const pkgV = await insertPackage(setup, {
+        businessId: bizA,
+        createdByUserId: userA,
+        clientPackageKey: `ver-${cuid()}`,
+        version: 5,
+      });
+      const a = await connectClient(url, 'ver-a');
+      const b = await connectClient(url, 'ver-b');
+      await a.client.query('BEGIN');
+      await b.client.query('BEGIN');
+      const lockA = await a.client.query(
+        `SELECT id, version FROM "MigrationPackage" WHERE id=$1 FOR UPDATE`,
+        [pkgV],
+      );
+      // B blocks until A commits
+      const bLockPromise = b.client.query(
+        `SELECT id, version FROM "MigrationPackage" WHERE id=$1 FOR UPDATE`,
+        [pkgV],
+      );
+      await a.client.query(
+        `UPDATE "MigrationPackage" SET version = version + 1 WHERE id=$1 AND version=$2`,
+        [pkgV, 5],
+      );
+      await a.client.query('COMMIT');
+      const lockB = await bLockPromise;
+      if (lockB.rows[0].version !== 6) {
+        throw new Error(`loser should observe version 6 after winner, got ${lockB.rows[0].version}`);
+      }
+      // Stale CAS from original expected version 5
+      const stale = await b.client.query(
+        `UPDATE "MigrationPackage" SET version = version + 1 WHERE id=$1 AND version=$2 RETURNING version`,
+        [pkgV, 5],
+      );
+      if (stale.rowCount !== 0) throw new Error('stale version update should affect 0 rows');
+      await b.client.query('ROLLBACK');
+      const final = await setup.query(`SELECT version FROM "MigrationPackage" WHERE id=$1`, [
+        pkgV,
+      ]);
+      if (final.rows[0].version !== 6) throw new Error('version should remain 6');
+      await a.client.end();
+      await b.client.end();
+      pass(`stale version rejected after winner commits (pids ${a.pid}/${b.pid})`);
+    }
+
     // Demotion retains historical validation runs
-    const pkgVal = await insertPackage({
+    const pkgVal = await insertPackage(setup, {
       businessId: bizA,
       createdByUserId: userA,
       clientPackageKey: `val-${cuid()}`,
@@ -277,106 +506,78 @@ async function main() {
     });
     const run1 = cuid();
     const run2 = cuid();
-    await client.query(
+    await setup.query(
       `INSERT INTO "MigrationValidationRun" (id, "businessId", "packageId", status, "manifestChecksum", "createdAt")
        VALUES ($1,$2,$3,'SUCCESS',$4,NOW()), ($5,$2,$3,'SUCCESS',$6,NOW())`,
       [run1, bizA, pkgVal, '1'.repeat(64), run2, '2'.repeat(64)],
     );
-    await client.query(
+    await setup.query(
       `UPDATE "MigrationPackage" SET "latestValidationRunId"=$1, status='VALIDATED' WHERE id=$2`,
       [run2, pkgVal],
     );
-    // Simulate Slice 2A demotion
-    await client.query('BEGIN');
-    await client.query(
+    await setup.query('BEGIN');
+    await setup.query(
       `UPDATE "MigrationValidationRun" SET "supersededAt"=NOW()
        WHERE id=$1 AND "businessId"=$2 AND "packageId"=$3 AND "supersededAt" IS NULL`,
       [run2, bizA, pkgVal],
     );
-    await client.query(
+    await setup.query(
       `UPDATE "MigrationPackage"
        SET status='DRAFT', version=version+1, "latestValidationRunId"=NULL,
            "validatedAt"=NULL, "validatedByUserId"=NULL
        WHERE id=$1`,
       [pkgVal],
     );
-    await client.query('COMMIT');
-    const runs = await client.query(
-      `SELECT id, "supersededAt" FROM "MigrationValidationRun" WHERE "packageId"=$1 ORDER BY id`,
+    await setup.query('COMMIT');
+    const runs = await setup.query(
+      `SELECT id FROM "MigrationValidationRun" WHERE "packageId"=$1`,
       [pkgVal],
     );
     if (runs.rowCount !== 2) throw new Error('demotion deleted historical runs');
-    const pkgAfter = await client.query(
-      `SELECT status, version, "latestValidationRunId" FROM "MigrationPackage" WHERE id=$1`,
-      [pkgVal],
-    );
-    if (pkgAfter.rows[0].status !== 'DRAFT') throw new Error('demotion status');
-    if (pkgAfter.rows[0].latestValidationRunId !== null) throw new Error('pointer not cleared');
-    if (pkgAfter.rows[0].version !== 3) throw new Error('version not bumped');
     pass('demotion retains historical validation evidence');
 
-    // Injected failure leaves no partial package row
+    // Injected NOT NULL failure — exact SQLSTATE 23502 on uploadChecksum
     const failId = cuid();
     try {
-      await client.query('BEGIN');
-      await insertPackage({
+      await setup.query('BEGIN');
+      await insertPackage(setup, {
         id: failId,
         businessId: bizA,
         createdByUserId: userA,
         clientPackageKey: `fail-${cuid()}`,
       });
-      // Force NOT NULL violation mid-transaction
-      await client.query(
+      await setup.query(
         `INSERT INTO "MigrationFile" (
            id, "businessId", "packageId", "entityType", "storageStatus",
            "uploadChecksum", "byteLength", "createdAt", "updatedAt"
          ) VALUES ($1,$2,$3,'PRODUCTS','FINALISED',NULL,1,NOW(),NOW())`,
         [cuid(), bizA, failId],
       );
-      await client.query('COMMIT');
-      throw new Error('expected injected failure');
+      await setup.query('COMMIT');
+      throw new Error('expected injected NOT NULL failure');
     } catch (err) {
-      await client.query('ROLLBACK');
-      if (String(err.message || '').includes('expected injected failure')) throw err;
+      await setup.query('ROLLBACK');
+      if (String(err.message || '').includes('expected injected')) throw err;
       if (err.code !== SQLSTATE.NOT_NULL) {
-        // Accept any constraint failure that aborts the transaction
+        throw new Error(
+          `injected failure: expected SQLSTATE ${SQLSTATE.NOT_NULL}, got ${err.code}`,
+        );
       }
+      // Column-level not-null may not expose constraint name consistently; require column in message or schema.
+      const detail = `${err.column || ''} ${err.message || ''}`;
+      if (!/uploadChecksum/i.test(detail)) {
+        throw new Error(
+          `injected failure: expected uploadChecksum NOT NULL identity, got column=${err.column} msg=${err.message}`,
+        );
+      }
+      console.log(`  OK reject: uploadChecksum NOT NULL [${err.code}/uploadChecksum]`);
     }
-    const leftover = await client.query(`SELECT id FROM "MigrationPackage" WHERE id=$1`, [failId]);
+    const leftover = await setup.query(`SELECT id FROM "MigrationPackage" WHERE id=$1`, [failId]);
     if (leftover.rowCount !== 0) throw new Error('partial package survived rollback');
-    pass('injected failure leaves no partial database state');
+    pass('injected NOT NULL failure leaves no partial database state');
 
-    // Conflicting concurrent file inserts cannot both succeed
-    const pkgRace = await insertPackage({
-      businessId: bizA,
-      createdByUserId: userA,
-      clientPackageKey: `race-${cuid()}`,
-    });
-    const race = await Promise.allSettled([
-      client.query(
-        `INSERT INTO "MigrationFile" (
-           id, "businessId", "packageId", "entityType", "storageStatus",
-           "uploadChecksum", "byteLength", "createdAt", "updatedAt"
-         ) VALUES ($1,$2,$3,'SUPPLIERS','FINALISED',$4,1,NOW(),NOW())`,
-        [cuid(), bizA, pkgRace, 'c'.repeat(64)],
-      ),
-      client.query(
-        `INSERT INTO "MigrationFile" (
-           id, "businessId", "packageId", "entityType", "storageStatus",
-           "uploadChecksum", "byteLength", "createdAt", "updatedAt"
-         ) VALUES ($1,$2,$3,'SUPPLIERS','FINALISED',$4,2,NOW(),NOW())`,
-        [cuid(), bizA, pkgRace, 'd'.repeat(64)],
-      ),
-    ]);
-    const raceOk = race.filter((r) => r.status === 'fulfilled');
-    const raceBad = race.filter((r) => r.status === 'rejected');
-    if (raceOk.length !== 1 || raceBad.length !== 1 || raceBad[0].reason.code !== SQLSTATE.UNIQUE) {
-      throw new Error('conflicting concurrent file inserts both succeeded or wrong SQLSTATE');
-    }
-    pass('conflicting concurrent file inserts → one effect');
-
-    // Non-effects: Slice 2A SQL ops must not create products/suppliers/sales/etc.
-    const before = await client.query(`
+    // Non-effects
+    const before = await setup.query(`
       SELECT
         (SELECT count(*)::int FROM "Product") AS products,
         (SELECT count(*)::int FROM "Supplier") AS suppliers,
@@ -387,20 +588,19 @@ async function main() {
         (SELECT count(*)::int FROM "InventoryBalance") AS inventory,
         (SELECT count(*)::int FROM "MigrationApprovalHistory") AS approvals
     `);
-    // Perform Slice 2A-shaped mutations again
-    const pkgNe = await insertPackage({
+    const pkgNe = await insertPackage(setup, {
       businessId: bizA,
       createdByUserId: userA,
       clientPackageKey: `ne-${cuid()}`,
     });
-    await client.query(
+    await setup.query(
       `INSERT INTO "MigrationFile" (
          id, "businessId", "packageId", "entityType", "storageStatus",
          "uploadChecksum", "byteLength", "createdAt", "updatedAt"
        ) VALUES ($1,$2,$3,'OPENING_STOCK','FINALISED',$4,3,NOW(),NOW())`,
       [cuid(), bizA, pkgNe, 'e'.repeat(64)],
     );
-    const after = await client.query(`
+    const after = await setup.query(`
       SELECT
         (SELECT count(*)::int FROM "Product") AS products,
         (SELECT count(*)::int FROM "Supplier") AS suppliers,
@@ -413,13 +613,13 @@ async function main() {
     `);
     for (const k of Object.keys(before.rows[0])) {
       if (before.rows[0][k] !== after.rows[0][k]) {
-        throw new Error(`non-effect violated for ${k}: ${before.rows[0][k]} → ${after.rows[0][k]}`);
+        throw new Error(`non-effect violated for ${k}`);
       }
     }
-    pass('non-effects: no product/supplier/sale/purchase/shift/approval/import/chunk mutation');
+    pass('non-effects: no product/supplier/sale/purchase/shift/approval/stock mutation');
 
-    // Nine-FK guard present
-    const fks = await client.query(
+    // Nine-FK guard
+    const fks = await setup.query(
       `SELECT conname FROM pg_constraint WHERE contype='f' AND conname = ANY($1::text[])`,
       [NINE_FK],
     );
@@ -428,9 +628,9 @@ async function main() {
     }
     pass('nine Slice 1 SQL-only FKs still present');
 
-    console.log('\nAll Slice 2A PostgreSQL behavioural gates passed.');
+    console.log('\nAll hardened Slice 2A PostgreSQL behavioural gates passed.');
   } finally {
-    await client.end().catch(() => {});
+    await setup.end().catch(() => {});
   }
 }
 

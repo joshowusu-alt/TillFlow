@@ -22,6 +22,13 @@ export type MigrationPutObjectInput = {
   contentType: string;
 };
 
+export type MigrationClientUploadTokenInput = {
+  pathname: string;
+  maximumSizeInBytes: number;
+  allowedContentTypes: string[];
+  validUntilMs: number;
+};
+
 export interface MigrationObjectStorage {
   put(input: MigrationPutObjectInput): Promise<MigrationStoredObjectMeta>;
   head(pathnameOrUrl: string): Promise<MigrationStoredObjectMeta>;
@@ -30,6 +37,11 @@ export interface MigrationObjectStorage {
     meta: MigrationStoredObjectMeta;
   }>;
   delete(pathnameOrUrl: string): Promise<void>;
+  /**
+   * Short-lived client upload token for direct browser→private-Blob upload.
+   * Must be minted with the migration RW token — never returned as the RW token.
+   */
+  createClientUploadToken(input: MigrationClientUploadTokenInput): Promise<string>;
 }
 
 export const MIGRATION_BLOB_TOKEN_ENV = 'MIGRATION_BLOB_READ_WRITE_TOKEN';
@@ -146,11 +158,24 @@ export function createVercelMigrationObjectStorage(
       try {
         await del(pathnameOrUrl, { token });
       } catch {
-        throw new MigrationServiceError(
-          'STORAGE_FAILURE',
-          'Private migration object deletion failed.',
-          502,
-        );
+        throw new MigrationServiceError('STORAGE_FAILURE', undefined, 502);
+      }
+    },
+
+    async createClientUploadToken(input) {
+      const { generateClientTokenFromReadWriteToken } = await import('@vercel/blob/client');
+      try {
+        return await generateClientTokenFromReadWriteToken({
+          token,
+          pathname: input.pathname,
+          maximumSizeInBytes: input.maximumSizeInBytes,
+          allowedContentTypes: input.allowedContentTypes,
+          addRandomSuffix: false,
+          allowOverwrite: false,
+          validUntil: input.validUntilMs,
+        });
+      } catch {
+        throw new MigrationServiceError('STORAGE_FAILURE', undefined, 502);
       }
     },
   };
@@ -221,6 +246,10 @@ export function createMemoryMigrationObjectStorage(): MigrationObjectStorage & {
       const key = resolve(pathnameOrUrl);
       if (!key) return;
       objects.delete(key);
+    },
+    async createClientUploadToken(input) {
+      // Deterministic fake — never equals a real RW token; put() ignores it in memory mode.
+      return `memory-client-token:${input.pathname}:${input.maximumSizeInBytes}`;
     },
   };
 }

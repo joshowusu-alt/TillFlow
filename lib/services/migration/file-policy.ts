@@ -149,3 +149,99 @@ export function buildMigrationStoragePathname(input: {
     `${safe(input.entityType)}.csv`,
   ].join('/');
 }
+
+/**
+ * Reject client-supplied pathnames that are not exactly under the server-owned
+ * namespace for this business + package + entity.
+ */
+export function assertServerOwnedMigrationPathname(input: {
+  pathname: string;
+  businessId: string;
+  packageId: string;
+  entityType: MigrationEntityType;
+}): void {
+  const expectedPrefix = `mig/${input.businessId}/${input.packageId}/`;
+  const expectedSuffix = `/${input.entityType}.csv`;
+  if (
+    !input.pathname.startsWith(expectedPrefix) ||
+    !input.pathname.endsWith(expectedSuffix) ||
+    input.pathname.includes('..') ||
+    input.pathname.split('/').length !== 5
+  ) {
+    throw new MigrationServiceError('FILE_POLICY', 'Invalid migration storage pathname.');
+  }
+}
+
+/**
+ * Base64 is not a supported transport for migration file bytes (Vercel Functions
+ * cap request bodies at 4.5 MiB; 25 MiB Base64 would amplify memory further).
+ * Reject before any decode/allocation when an oversized or malformed payload appears.
+ */
+export const MIGRATION_MAX_BASE64_CHARS = Math.ceil((MIGRATION_MAX_UPLOAD_BYTES * 4) / 3) + 8;
+
+export function assertRejectedBase64Transport(raw: unknown): never {
+  if (typeof raw !== 'string') {
+    throw new MigrationServiceError(
+      'FILE_POLICY',
+      'Migration file bytes must use the private client-upload transport.',
+    );
+  }
+  if (raw.length > MIGRATION_MAX_BASE64_CHARS) {
+    throw new MigrationServiceError(
+      'FILE_POLICY',
+      'Encoded upload payload exceeds the migration size ceiling before decoding.',
+    );
+  }
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(raw) || raw.length % 4 !== 0) {
+    throw new MigrationServiceError('FILE_POLICY', 'Malformed Base64 encoding.');
+  }
+  throw new MigrationServiceError(
+    'FILE_POLICY',
+    'Migration file bytes must use the private client-upload transport.',
+  );
+}
+
+export const MIGRATION_ALLOWED_UPLOAD_CONTENT_TYPES = [
+  'text/csv',
+  'text/plain',
+  'application/csv',
+  'application/vnd.ms-excel',
+] as const;
+
+/** Stream SHA-256 while enforcing the 25 MiB ceiling (no Base64 path). */
+export async function sha256HexOfStreamBounded(
+  stream: ReadableStream,
+  maxBytes: number = MIGRATION_MAX_UPLOAD_BYTES,
+): Promise<{ hex: string; bytes: Buffer; byteLength: number }> {
+  const { createHash } = await import('crypto');
+  const hash = createHash('sha256');
+  const chunks: Buffer[] = [];
+  let byteLength = 0;
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      byteLength += chunk.length;
+      if (byteLength > maxBytes) {
+        throw new MigrationServiceError(
+          'FILE_POLICY',
+          `Uploaded file must not exceed ${maxBytes} bytes.`,
+        );
+      }
+      hash.update(chunk);
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (byteLength <= 0) {
+    throw new MigrationServiceError('FILE_POLICY', 'Uploaded file is empty.');
+  }
+  return {
+    hex: hash.digest('hex'),
+    bytes: Buffer.concat(chunks, byteLength),
+    byteLength,
+  };
+}

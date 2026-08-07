@@ -12,6 +12,7 @@ import {
   assertMigrationActor,
   assertPreApprovalMutable,
   lockPackageForBusiness,
+  requireExpectedVersion,
   writeMigrationAudit,
   type ActorContext,
   type DbClient,
@@ -22,13 +23,13 @@ export type UpsertBranchMappingInput = {
   sourceBranchKey: string;
   targetStoreId: string;
   mappingId?: string | null;
-  expectedVersion?: number | null;
+  expectedVersion: number;
 };
 
 export type DeleteBranchMappingInput = {
   packageId: string;
   mappingId: string;
-  expectedVersion?: number | null;
+  expectedVersion: number;
 };
 
 export type BranchMappingResult = {
@@ -65,6 +66,7 @@ export async function upsertMigrationBranchMapping(
     ...assertMigrationActor(actorInput),
     userName: actorInput.userName?.trim() || actorInput.userId,
   };
+  const expectedVersion = requireExpectedVersion(input.expectedVersion);
   const sourceBranchKey = mapBranchKey(input.sourceBranchKey);
   const targetStoreId = String(input.targetStoreId ?? '').trim();
   if (!targetStoreId) {
@@ -78,7 +80,7 @@ export async function upsertMigrationBranchMapping(
         packageId: input.packageId,
       });
       assertPreApprovalMutable(pkg.status);
-      assertExpectedVersion(pkg, input.expectedVersion);
+      assertExpectedVersion(pkg, expectedVersion);
 
       const store = await tx.store.findFirst({
         where: { id: targetStoreId, businessId: actor.businessId },
@@ -176,6 +178,7 @@ export async function deleteMigrationBranchMapping(
     ...assertMigrationActor(actorInput),
     userName: actorInput.userName?.trim() || actorInput.userId,
   };
+  const expectedVersion = requireExpectedVersion(input.expectedVersion);
 
   return db.$transaction(async (tx) => {
     const pkg = await lockPackageForBusiness(tx, {
@@ -183,7 +186,7 @@ export async function deleteMigrationBranchMapping(
       packageId: input.packageId,
     });
     assertPreApprovalMutable(pkg.status);
-    assertExpectedVersion(pkg, input.expectedVersion);
+    assertExpectedVersion(pkg, expectedVersion);
 
     const existing = await tx.migrationBranchMapping.findFirst({
       where: {

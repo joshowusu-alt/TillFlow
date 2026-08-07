@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth';
-import {
-  isMigrationServiceError,
-} from '@/lib/services/migration/errors';
+import { toPublicMigrationError } from '@/lib/services/migration/errors';
 import { openMigrationFileDownload } from '@/lib/services/migration/file-download';
+import { isRedirectError } from 'next/dist/client/components/redirect';
 
 export const runtime = 'nodejs';
 
@@ -21,7 +20,7 @@ export async function GET(
     const params = await Promise.resolve(context.params);
     const fileId = params.fileId;
     if (!fileId) {
-      return NextResponse.json({ error: 'fileId required' }, { status: 400 });
+      return NextResponse.json({ error: 'fileId required', code: 'CONTRACT' }, { status: 400 });
     }
 
     const download = await openMigrationFileDownload(
@@ -46,16 +45,8 @@ export async function GET(
 
     return new NextResponse(download.stream, { status: 200, headers });
   } catch (error) {
-    if (isMigrationServiceError(error)) {
-      return NextResponse.json(
-        { error: error.message, code: error.code },
-        { status: error.httpStatus },
-      );
-    }
-    // requireRole redirects unauthenticated users; other errors stay generic.
-    if (error && typeof error === 'object' && 'digest' in error) {
-      throw error;
-    }
-    return NextResponse.json({ error: 'Download failed.' }, { status: 500 });
+    if (isRedirectError(error)) throw error;
+    const pub = toPublicMigrationError(error);
+    return NextResponse.json(pub.body, { status: pub.status });
   }
 }
