@@ -586,9 +586,9 @@ async function main() {
       `${base}/reports/dashboard?period=today&storeId=${ids.store}`,
       { waitUntil: 'domcontentloaded', timeout: 90000 }
     );
-    await managerLogin.page.waitForTimeout(2500);
+    await managerLogin.page.getByText(/Sales revenue|Money received|Trading Report/i).first().waitFor({ timeout: 60000 });
     const validStoreText = await managerLogin.page.locator('body').innerText();
-    assert(/Sales revenue|Money received/i.test(validStoreText), 'Valid store scope should render Trading Report');
+    assert(/Sales revenue|Money received|Trading Report/i.test(validStoreText), 'Valid store scope should render Trading Report');
     assert(!/999\.00|OB-FOREIGN/i.test(validStoreText), 'Valid store must not leak foreign tenant');
     checks.push({ name: 'manager_valid_store' });
 
@@ -596,9 +596,9 @@ async function main() {
       `${base}/reports/dashboard?period=today&storeId=ALL`,
       { waitUntil: 'domcontentloaded', timeout: 90000 }
     );
-    await managerLogin.page.waitForTimeout(2500);
+    await managerLogin.page.getByText(/Sales revenue|Money received|Trading Report/i).first().waitFor({ timeout: 60000 });
     const allStoreText = await managerLogin.page.locator('body').innerText();
-    assert(/Sales revenue|Money received/i.test(allStoreText), 'Explicit ALL should render Trading Report');
+    assert(/Sales revenue|Money received|Trading Report/i.test(allStoreText), 'Explicit ALL should render Trading Report');
     assert(!/999\.00|OB-FOREIGN/i.test(allStoreText), 'ALL scope must not leak foreign tenant');
     checks.push({ name: 'manager_explicit_all' });
 
