@@ -115,7 +115,6 @@ describePg('money received reconciliation (Postgres)', () => {
     customerId = customer.id;
 
     const saleAt = new Date('2026-08-07T10:00:00.000Z');
-    const laterAt = new Date('2026-08-08T11:00:00.000Z');
 
     // Cash sale GH₵40
     const cashSale = await prisma.salesInvoice.create({
