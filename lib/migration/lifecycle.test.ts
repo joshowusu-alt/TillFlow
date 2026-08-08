@@ -25,6 +25,13 @@ describe('migration package lifecycle', () => {
     assertPackageTransition('IMPORTING', 'IMPORTED');
   });
 
+  it('allows Slice 2B validation retry transitions', () => {
+    assertPackageTransition('VALIDATION_FAILED', 'VALIDATED');
+    assertPackageTransition('VALIDATION_FAILED', 'VALIDATION_FAILED');
+    assertPackageTransition('VALIDATED', 'VALIDATED');
+    assertPackageTransition('VALIDATED', 'VALIDATION_FAILED');
+  });
+
   it('rejects forbidden transitions fail-closed', () => {
     expect(canTransitionPackage('DRAFT', 'APPROVED')).toBe(false);
     expect(canTransitionPackage('DRAFT', 'IMPORTED')).toBe(false);

@@ -9,11 +9,13 @@ on:
       - 'package-lock.json'
       - 'scripts/migration-p1-schema-pg-test.cjs'
       - 'scripts/migration-p1-slice2a-pg-test.cjs'
+      - 'scripts/migration-p1-slice2b-pg-test.cjs'
       - 'scripts/migration-p1-sql-only-constraint-contract.cjs'
       - 'scripts/payment-receipt-origin-pg-test.cjs'
       - 'lib/payments/**'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
+      - 'docs/migration/P1_SLICE2B_CONTRACT.md'
       - 'docs/payments/**'
       - 'lib/migration/**'
       - 'lib/services/migration/**'
@@ -76,6 +78,16 @@ jobs:
 
       - name: Payment receipt-origin PostgreSQL behavioural suite
         run: npm run test:payment-receipt-origin:pg
+
+      - name: Migration P1 Slice 2B PostgreSQL behavioural suite
+        run: node scripts/migration-p1-slice2b-pg-test.cjs
+
+      - name: Migration P1 Slice 2B PostgreSQL service integration
+        run: npx vitest run --reporter=dot lib/services/migration/slice2b-pg.integration.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          MIGRATION_SLICE2B_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
 
       - name: SQL-only constraint-contract introspection
         run: node scripts/migration-p1-sql-only-constraint-contract.cjs

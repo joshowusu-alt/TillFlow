@@ -7,3 +7,6 @@ export * from '@/lib/services/migration/branch-mapping';
 export * from '@/lib/services/migration/file-download';
 export * from '@/lib/services/migration/preapproval';
 export * from '@/lib/services/migration/cleanup';
+export * from '@/lib/services/migration/validate';
+export * from '@/lib/services/migration/csv-parser';
+export * from '@/lib/services/migration/validate-engine';
