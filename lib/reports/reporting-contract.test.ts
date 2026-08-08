@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildReportingScopeSearchParams,
   isReportingScopeToday,
+  ReportingScopeStoreError,
+  resolveAuthorisedStoreId,
   resolveReportingScope,
   tradingReportHref,
 } from '@/lib/reports/reporting-scope';
@@ -76,15 +78,79 @@ describe('resolveReportingScope — business timezone Today', () => {
     expect(scope.toInputValue).toBe('2026-08-07');
   });
 
-  it('rejects foreign storeId and falls back to ALL', () => {
-    const scope = resolveReportingScope({
+  it('PRE-FIX DEFECT: inaccessible storeId must not silently broaden to ALL', () => {
+    // This asserts the required fail-closed contract. On the defective head it
+    // failed because resolveReportingScope fell back to storeId=ALL.
+    expect(() =>
+      resolveReportingScope({
+        businessId: 'biz-1',
+        timeZone: 'Africa/Accra',
+        params: { period: 'today', storeId: 'foreign-store' },
+        allowedStoreIds: ['store-a'],
+        now: new Date('2026-08-07T10:00:00.000Z'),
+      }),
+    ).toThrow(ReportingScopeStoreError);
+
+    const broadened = (() => {
+      try {
+        return resolveReportingScope({
+          businessId: 'biz-1',
+          timeZone: 'Africa/Accra',
+          params: { period: 'today', storeId: 'foreign-store' },
+          allowedStoreIds: ['store-a'],
+          now: new Date('2026-08-07T10:00:00.000Z'),
+        }).storeId;
+      } catch {
+        return null;
+      }
+    })();
+    expect(broadened).not.toBe('ALL');
+  });
+
+  it('omitted storeId defaults to ALL; explicit ALL stays ALL', () => {
+    const omitted = resolveReportingScope({
       businessId: 'biz-1',
       timeZone: 'Africa/Accra',
-      params: { period: 'today', storeId: 'foreign-store' },
+      params: { period: 'today' },
+      allowedStoreIds: ['store-a', 'store-b'],
+      now: new Date('2026-08-07T10:00:00.000Z'),
+    });
+    expect(omitted.storeId).toBe('ALL');
+
+    const explicitAll = resolveReportingScope({
+      businessId: 'biz-1',
+      timeZone: 'Africa/Accra',
+      params: { period: 'today', storeId: 'ALL' },
       allowedStoreIds: ['store-a'],
       now: new Date('2026-08-07T10:00:00.000Z'),
     });
-    expect(scope.storeId).toBe('ALL');
+    expect(explicitAll.storeId).toBe('ALL');
+  });
+
+  it('accepts each accessible store and rejects blank, whitespace, unknown and foreign', () => {
+    expect(
+      resolveAuthorisedStoreId({ storeId: 'store-a', allowedStoreIds: ['store-a', 'store-b'] }),
+    ).toBe('store-a');
+    expect(
+      resolveAuthorisedStoreId({ storeId: 'store-b', allowedStoreIds: ['store-a', 'store-b'] }),
+    ).toBe('store-b');
+
+    expect(() =>
+      resolveAuthorisedStoreId({ storeId: '', allowedStoreIds: ['store-a'] }),
+    ).toThrow(ReportingScopeStoreError);
+    expect(() =>
+      resolveAuthorisedStoreId({ storeId: '   ', allowedStoreIds: ['store-a'] }),
+    ).toThrow(ReportingScopeStoreError);
+    expect(() =>
+      resolveAuthorisedStoreId({ storeId: 'store-missing', allowedStoreIds: ['store-a'] }),
+    ).toThrow(ReportingScopeStoreError);
+    expect(() =>
+      resolveAuthorisedStoreId({ storeId: 'foreign-store', allowedStoreIds: ['store-a'] }),
+    ).toThrow(ReportingScopeStoreError);
+    // Deleted/inactive: not present in allowedStoreIds for this business.
+    expect(() =>
+      resolveAuthorisedStoreId({ storeId: 'store-deleted', allowedStoreIds: ['store-a'] }),
+    ).toThrow(ReportingScopeStoreError);
   });
 
   it('preserves authorised branch selection', () => {

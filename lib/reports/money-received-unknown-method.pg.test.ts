@@ -342,17 +342,14 @@ describePg('money received unknown payment-method reconciliation (Postgres)', ()
     const ownStore = await getMoneyReceivedSummary(dayScope(storeId));
     expect(ownStore.totalCount).toBe(10);
 
-    // Inaccessible / foreign store id must not broaden scope (resolveReportingScope fail-closed).
-    const blocked = resolveReportingScope({
-      businessId,
-      timeZone: 'Africa/Accra',
-      params: { period: 'custom', from: '2026-08-07', to: '2026-08-07', storeId: otherStoreId },
-      allowedStoreIds: [storeId],
-      now: new Date('2026-08-07T12:00:00.000Z'),
-    });
-    // When store is not allowed, scope typically falls back to ALL or rejects — assert no foreign leak.
-    const summary = await getMoneyReceivedSummary(blocked);
-    expect(summary.totalPence).toBeLessThan(99999);
-    expect(summary.byMethod.UNKNOWN).toBeLessThan(99999);
+    expect(() =>
+      resolveReportingScope({
+        businessId,
+        timeZone: 'Africa/Accra',
+        params: { period: 'custom', from: '2026-08-07', to: '2026-08-07', storeId: otherStoreId },
+        allowedStoreIds: [storeId],
+        now: new Date('2026-08-07T12:00:00.000Z'),
+      }),
+    ).toThrow(/invalid|inaccessible|store/i);
   });
 });

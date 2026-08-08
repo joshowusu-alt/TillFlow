@@ -46,6 +46,54 @@ export type ReportingScopeParams = {
   storeId?: string;
 };
 
+/**
+ * Thrown when a storeId query param is supplied but is blank, malformed,
+ * unknown, deleted, or otherwise inaccessible. Callers must fail closed
+ * (typically `notFound()` / 4xx) — never broaden to ALL-store data.
+ */
+export class ReportingScopeStoreError extends Error {
+  readonly code = 'INVALID_STORE_SCOPE' as const;
+
+  constructor(message = 'Invalid or inaccessible reporting store scope') {
+    super(message);
+    this.name = 'ReportingScopeStoreError';
+  }
+}
+
+export function isReportingScopeStoreError(error: unknown): error is ReportingScopeStoreError {
+  return error instanceof ReportingScopeStoreError;
+}
+
+/**
+ * Resolve an authorised store scope.
+ *
+ * - Omitted storeId → ALL (established default)
+ * - Explicit ALL → ALL
+ * - Valid accessible store → that store
+ * - Blank, whitespace, unknown, deleted, or inaccessible → throw ReportingScopeStoreError
+ */
+export function resolveAuthorisedStoreId(input: {
+  storeId?: string | null;
+  allowedStoreIds: readonly string[];
+}): 'ALL' | string {
+  if (input.storeId === undefined || input.storeId === null) {
+    return 'ALL';
+  }
+
+  // Param was supplied (including empty string) — blank/whitespace fail closed.
+  const trimmed = input.storeId.trim();
+  if (trimmed === '') {
+    throw new ReportingScopeStoreError('Blank reporting store scope is not authorised');
+  }
+  if (trimmed === 'ALL') {
+    return 'ALL';
+  }
+  if (input.allowedStoreIds.includes(trimmed)) {
+    return trimmed;
+  }
+  throw new ReportingScopeStoreError('Invalid or inaccessible reporting store scope');
+}
+
 function addLocalDays(parts: LocalDateParts, days: number): LocalDateParts {
   const probe = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
   return {
@@ -84,6 +132,9 @@ function compareLocalDates(a: LocalDateParts, b: LocalDateParts): number {
  * Resolve Home / Trading Report scope from URL params.
  * Malformed dates fall back safely to the default period (7d for bare Trading
  * Report; callers that need Today pass period=today explicitly).
+ *
+ * Store scope is fail-closed: an explicitly supplied invalid/inaccessible
+ * storeId throws ReportingScopeStoreError (never silently broadens to ALL).
  */
 export function resolveReportingScope(input: {
   businessId: string;
@@ -91,7 +142,7 @@ export function resolveReportingScope(input: {
   params?: ReportingScopeParams;
   /** Default when period/from/to are absent. Trading Report uses 7d. */
   defaultPeriod?: ReportingPeriodKey;
-  /** Allowed store ids for this business; unknown storeId → ALL. */
+  /** Allowed store ids for this authenticated business context. */
   allowedStoreIds: string[];
   now?: Date;
 }): ReportingScope {
@@ -148,13 +199,10 @@ export function resolveReportingScope(input: {
 
   const { startInclusive, endExclusive } = rangeForLocalDates(fromParts, toParts, timeZone);
 
-  const requestedStore = input.params?.storeId?.trim();
-  const storeId =
-    requestedStore
-    && requestedStore !== 'ALL'
-    && input.allowedStoreIds.includes(requestedStore)
-      ? requestedStore
-      : 'ALL';
+  const storeId = resolveAuthorisedStoreId({
+    storeId: input.params?.storeId,
+    allowedStoreIds: input.allowedStoreIds,
+  });
 
   return {
     businessId: input.businessId,

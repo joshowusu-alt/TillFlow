@@ -52,6 +52,10 @@
 
  * - Period bounds: business timezone, inclusive start / exclusive end.
 
+ * - Store scope is fail-closed: omitted → ALL; explicit ALL → ALL; valid accessible
+
+ *   store → that store; blank/whitespace/unknown/deleted/foreign → reject (never ALL).
+
  * - No PR #84 schema migration or historical origin/method backfill.
 
  */

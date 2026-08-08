@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { notFound } from 'next/navigation';
 import RefreshIndicator from '@/components/RefreshIndicator';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
 import ReportSectionSkeleton from '@/components/reports/ReportSectionSkeleton';
@@ -6,6 +7,7 @@ import { requireBusiness } from '@/lib/auth';
 import { recordOwnerDashboardView, recordOwnerReportView } from '@/app/actions/activation';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
+  isReportingScopeStoreError,
   isReportingScopeToday,
   resolveReportingScope,
 } from '@/lib/reports/reporting-scope';
@@ -32,23 +34,26 @@ export default async function DashboardPage({
     );
   }
 
-  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(
-    business.id,
-    searchParams?.storeId,
-  );
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
 
-  const scope = resolveReportingScope({
-    businessId: business.id,
-    timeZone: (business as { timezone?: string | null }).timezone,
-    params: {
-      period: searchParams?.period,
-      from: searchParams?.from,
-      to: searchParams?.to,
-      storeId: rawStoreId ?? searchParams?.storeId ?? 'ALL',
-    },
-    defaultPeriod: '7d',
-    allowedStoreIds: stores.map((store) => store.id),
-  });
+  let scope;
+  try {
+    scope = resolveReportingScope({
+      businessId: business.id,
+      timeZone: (business as { timezone?: string | null }).timezone,
+      params: {
+        period: searchParams?.period,
+        from: searchParams?.from,
+        to: searchParams?.to,
+        storeId: searchParams?.storeId,
+      },
+      defaultPeriod: '7d',
+      allowedStoreIds: stores.map((store) => store.id),
+    });
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
 
   const selectedStoreId = scope.storeId;
   const isToday = isReportingScopeToday(scope);

@@ -10,7 +10,12 @@ import { formatDateTime, formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
-import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
+import { getBusinessStores } from '@/lib/services/stores';
+import {
+  isReportingScopeStoreError,
+  resolveAuthorisedStoreId,
+} from '@/lib/reports/reporting-scope';
+import { notFound } from 'next/navigation';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
@@ -49,7 +54,16 @@ export default async function CashDrawerReportPage({
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
+  let selectedStoreId: string;
+  try {
+    selectedStoreId = resolveAuthorisedStoreId({
+      storeId: searchParams?.storeId,
+      allowedStoreIds: stores.map((store) => store.id),
+    });
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
   const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
@@ -7,6 +8,7 @@ import { requireBusiness } from '@/lib/auth';
 import { formatDateTime, formatMoney } from '@/lib/format';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
+  isReportingScopeStoreError,
   isReportingScopeToday,
   moneyReceivedHref,
   resolveReportingScope,
@@ -43,23 +45,26 @@ export default async function MoneyReceivedReceiptsPage({
     return <div className="card p-6">Setup Required</div>;
   }
 
-  const { stores, selectedStoreId: rawStoreId } = await getBusinessStores(
-    business.id,
-    searchParams?.storeId,
-  );
+  const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
 
-  const scope = resolveReportingScope({
-    businessId: business.id,
-    timeZone: (business as { timezone?: string | null }).timezone,
-    params: {
-      period: searchParams?.period,
-      from: searchParams?.from,
-      to: searchParams?.to,
-      storeId: rawStoreId ?? searchParams?.storeId ?? 'ALL',
-    },
-    defaultPeriod: 'today',
-    allowedStoreIds: stores.map((store) => store.id),
-  });
+  let scope;
+  try {
+    scope = resolveReportingScope({
+      businessId: business.id,
+      timeZone: (business as { timezone?: string | null }).timezone,
+      params: {
+        period: searchParams?.period,
+        from: searchParams?.from,
+        to: searchParams?.to,
+        storeId: searchParams?.storeId,
+      },
+      defaultPeriod: 'today',
+      allowedStoreIds: stores.map((store) => store.id),
+    });
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
 
   const method = parseReceiptMethodParam(searchParams?.method);
   const origin = parseReceiptOriginParam(searchParams?.origin);

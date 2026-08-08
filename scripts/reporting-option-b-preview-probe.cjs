@@ -580,16 +580,71 @@ async function main() {
     const managerLogin = await loginWithPlaywright(base, managerEmail, password, bypass);
     assert(managerLogin.ok, `manager login failed url=${managerLogin.url}`);
     browserHandles.push(managerLogin);
+
+    // Valid own store and explicit ALL remain authorised.
     await managerLogin.page.goto(
-      `${base}/reports/dashboard?period=today&storeId=${ids.foreignStore}`,
+      `${base}/reports/dashboard?period=today&storeId=${ids.store}`,
       { waitUntil: 'domcontentloaded', timeout: 90000 }
     );
-    await managerLogin.page.waitForTimeout(3000);
-    const mgrText = await managerLogin.page.locator('body').innerText();
-    assert(!/999\.00|OB-FOREIGN/i.test(mgrText), 'Manager saw foreign branch/sale data');
-    checks.push({ name: 'manager_foreign_branch_blocked' });
-    console.log('PASS manager foreign branch parameter blocked');
+    await managerLogin.page.waitForTimeout(2500);
+    const validStoreText = await managerLogin.page.locator('body').innerText();
+    assert(/Sales revenue|Money received/i.test(validStoreText), 'Valid store scope should render Trading Report');
+    assert(!/999\.00|OB-FOREIGN/i.test(validStoreText), 'Valid store must not leak foreign tenant');
+    checks.push({ name: 'manager_valid_store' });
+
+    await managerLogin.page.goto(
+      `${base}/reports/dashboard?period=today&storeId=ALL`,
+      { waitUntil: 'domcontentloaded', timeout: 90000 }
+    );
+    await managerLogin.page.waitForTimeout(2500);
+    const allStoreText = await managerLogin.page.locator('body').innerText();
+    assert(/Sales revenue|Money received/i.test(allStoreText), 'Explicit ALL should render Trading Report');
+    assert(!/999\.00|OB-FOREIGN/i.test(allStoreText), 'ALL scope must not leak foreign tenant');
+    checks.push({ name: 'manager_explicit_all' });
+
+    // Foreign / unknown / blank store must fail closed (404), never broaden to ALL.
+    for (const [label, storeParam] of [
+      ['foreign', ids.foreignStore],
+      ['unknown', 'store_does_not_exist_zzzz'],
+      ['blank', ''],
+    ]) {
+      const path =
+        storeParam === ''
+          ? `${base}/reports/dashboard?period=today&storeId=`
+          : `${base}/reports/dashboard?period=today&storeId=${storeParam}`;
+      await managerLogin.page.goto(path, { waitUntil: 'domcontentloaded', timeout: 90000 });
+      await managerLogin.page.waitForTimeout(2000);
+      const statusish = await managerLogin.page.locator('body').innerText();
+      const url = managerLogin.page.url();
+      const denied =
+        /not found|404|doesn.?t exist|page could not be found/i.test(statusish)
+        || /\/_not-found|404/i.test(url)
+        || !/Money received/i.test(statusish);
+      assert(denied, `${label} storeId must fail closed, got url=${url}`);
+      assert(!/999\.00|OB-FOREIGN/i.test(statusish), `${label} storeId must not reveal foreign totals`);
+      checks.push({ name: `manager_${label}_store_fail_closed` });
+    }
+    console.log('PASS manager store-scope fail-closed (foreign/unknown/blank)');
     await managerLogin.browser.close();
+    browserHandles = [];
+
+    // Receipts list must fail closed consistently with summary.
+    const owner2 = await loginWithPlaywright(base, ownerEmail, password, bypass);
+    assert(owner2.ok, `owner re-login failed url=${owner2.url}`);
+    browserHandles.push(owner2);
+    await owner2.page.goto(
+      `${base}/reports/receipts?period=today&storeId=${ids.foreignStore}&page=2`,
+      { waitUntil: 'domcontentloaded', timeout: 90000 }
+    );
+    await owner2.page.waitForTimeout(2000);
+    const receiptsDeniedText = await owner2.page.locator('body').innerText();
+    const receiptsDenied =
+      /not found|404|doesn.?t exist|page could not be found/i.test(receiptsDeniedText)
+      || !/Money received/i.test(receiptsDeniedText);
+    assert(receiptsDenied, 'Receipts foreign store must fail closed (including page>1)');
+    assert(!/999\.00|OB-FOREIGN/i.test(receiptsDeniedText), 'Receipts must not leak foreign rows via pagination');
+    checks.push({ name: 'receipts_foreign_store_fail_closed' });
+    await owner2.browser.close();
     browserHandles = [];
 
     const cashierLogin = await loginWithPlaywright(base, cashierEmail, password, bypass);
