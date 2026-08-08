@@ -553,6 +553,7 @@ describe('payments service', () => {
         salesInvoiceId: 'sale-1',
         method: 'CASH',
         amountPence: 200000,
+        receiptOrigin: 'LATER_CREDIT_COLLECTION',
       })],
     });
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
+import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 
 const DEMO_TAG = 'DEMO_DAY';
 const SAMPLE_STOCK_ADJUSTMENT_REASONS = new Set([
@@ -143,7 +144,7 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
     lineVatPence: number;
   }[] = [];
   const paymentBatch: {
-    salesInvoiceId: string; method: string; amountPence: number;
+    salesInvoiceId: string; method: string; amountPence: number; receiptOrigin: string;
   }[] = [];
 
   for (let day = 6; day >= 0; day--) {
@@ -214,6 +215,8 @@ export async function generateDemoDay(): Promise<{ ok: boolean; salesCount: numb
         salesInvoiceId: invoiceId,
         method: nextRand() > 0.7 ? 'MOBILE_MONEY' : 'CASH',
         amountPence: subtotal,
+        // Demo generator creates sale-time payments for each demo invoice.
+        receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
       });
     }
   }

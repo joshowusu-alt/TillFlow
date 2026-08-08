@@ -10,8 +10,11 @@ on:
       - 'scripts/migration-p1-schema-pg-test.cjs'
       - 'scripts/migration-p1-slice2a-pg-test.cjs'
       - 'scripts/migration-p1-sql-only-constraint-contract.cjs'
+      - 'scripts/payment-receipt-origin-pg-test.cjs'
+      - 'lib/payments/**'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
+      - 'docs/payments/**'
       - 'lib/migration/**'
       - 'lib/services/migration/**'
       - '.github/workflows/postgres-smoke.yml'
@@ -70,6 +73,9 @@ jobs:
 
       - name: Migration P1 Slice 2A PostgreSQL behavioural suite
         run: node scripts/migration-p1-slice2a-pg-test.cjs
+
+      - name: Payment receipt-origin PostgreSQL behavioural suite
+        run: npm run test:payment-receipt-origin:pg
 
       - name: SQL-only constraint-contract introspection
         run: node scripts/migration-p1-sql-only-constraint-contract.cjs
