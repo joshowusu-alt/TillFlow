@@ -167,7 +167,7 @@ describePg('money received reconciliation (Postgres)', () => {
     });
     momoSaleId = momoSale.id;
 
-    // Credit sale GH₵100 with GH₵30 cash at sale, GH₵70 later MoMo
+    // Credit sale GH₵100 with GH₵30 cash at sale; GH₵70 later MoMo added in collection test.
     const creditSale = await prisma.salesInvoice.create({
       data: {
         businessId,
@@ -181,30 +181,18 @@ describePg('money received reconciliation (Postgres)', () => {
         totalPence: 10000,
         createdAt: saleAt,
         payments: {
-          create: [
-            {
-              method: 'CASH',
-              amountPence: 3000,
-              receivedAt: saleAt,
-              status: 'CONFIRMED',
-              receiptOrigin: 'RECEIVED_AT_SALE',
-            },
-            {
-              method: 'MOBILE_MONEY',
-              amountPence: 7000,
-              receivedAt: laterAt,
-              status: 'CONFIRMED',
-              receiptOrigin: 'LATER_CREDIT_COLLECTION',
-            },
-          ],
+          create: {
+            method: 'CASH',
+            amountPence: 3000,
+            receivedAt: saleAt,
+            status: 'CONFIRMED',
+            receiptOrigin: 'RECEIVED_AT_SALE',
+          },
         },
       },
     });
     creditSaleId = creditSale.id;
-    const laterPayment = await prisma.salesPayment.findFirst({
-      where: { salesInvoiceId: creditSaleId, amountPence: 7000 },
-    });
-    laterMomoPaymentId = laterPayment!.id;
+    laterMomoPaymentId = '';
 
     // Foreign-tenant payment
     const foreignSale = await prisma.salesInvoice.create({
@@ -282,6 +270,23 @@ describePg('money received reconciliation (Postgres)', () => {
   });
 
   it('attributes later MoMo collection to collection date without inflating revenue', async () => {
+    const laterAt = new Date('2026-08-08T11:00:00.000Z');
+    const laterPayment = await prisma.salesPayment.create({
+      data: {
+        salesInvoiceId: creditSaleId,
+        method: 'MOBILE_MONEY',
+        amountPence: 7000,
+        receivedAt: laterAt,
+        status: 'CONFIRMED',
+        receiptOrigin: 'LATER_CREDIT_COLLECTION',
+      },
+    });
+    laterMomoPaymentId = laterPayment.id;
+    await prisma.salesInvoice.update({
+      where: { id: creditSaleId },
+      data: { paymentStatus: 'PAID' },
+    });
+
     const scope = resolveReportingScope({
       businessId,
       timeZone: 'Africa/Accra',
