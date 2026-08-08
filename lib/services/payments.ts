@@ -13,6 +13,7 @@ import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-draw
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { UserError } from '@/lib/action-utils';
 import type { Role } from '@/lib/auth';
+import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 
 const SUPPLIER_PAYMENT_ROLES: readonly Role[] = ['OWNER', 'MANAGER'];
 
@@ -199,7 +200,9 @@ async function recordCustomerPaymentImpl(
         salesInvoiceId: invoice.id,
         method: p.method,
         amountPence: p.amountPence,
-        reference: p.reference ?? null
+        reference: p.reference ?? null,
+        // Debtor / customer-receipt workflow after the sale already exists.
+        receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
       }))
     });
 

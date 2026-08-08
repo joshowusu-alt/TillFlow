@@ -13,6 +13,11 @@ dev.db-shm
 /prisma/dev.db-journal
 /prisma/dev.db-wal
 /prisma/dev.db-shm
+/prisma/dev-origin.db
+/prisma/*.db
+/prisma/*.db-journal
+/prisma/*.db-wal
+/prisma/*.db-shm
 test.txt
 
 .vercel
@@ -37,5 +42,7 @@ perf.db-journal
 
 # Local visual QA evidence (never commit)
 /tmp/home-qa/
+/tmp/*.local.env
+/tmp/*preview*.env
 
 .env*.local

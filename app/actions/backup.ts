@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { ACTIVE_BUSINESS_COOKIE, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
+import { parseOptionalReceiptOrigin } from '@/lib/payments/receipt-origin';
 
 export interface BackupData {
     version: string;
@@ -105,7 +106,7 @@ export async function exportDatabaseAction(): Promise<ActionResult<BackupData>> 
         ]);
 
         const backupData: BackupData = {
-            version: '1.0',
+            version: '1.1',
             exportedAt: new Date().toISOString(),
             business,
             stores,
@@ -360,7 +361,20 @@ export async function importDatabaseAction(backup: BackupData): Promise<ActionRe
       for (const payment of list(backup.salesPayments)) {
         // collectionId refs MobileMoneyCollection which is not included in the backup export,
         // so null it out to avoid FK constraint violation on restore.
-        await tx.salesPayment.create({ data: { ...payment, collectionId: null } });
+        // receiptOrigin: preserve valid new-format values; missing/empty → NULL (legacy unclassified).
+        // Invalid values fail the restore rather than fabricating origin.
+        const { collectionId: _ignoredCollectionId, receiptOrigin: rawOrigin, ...rest } = payment as Record<
+          string,
+          unknown
+        >;
+        const receiptOrigin = parseOptionalReceiptOrigin(rawOrigin);
+        await tx.salesPayment.create({
+          data: {
+            ...rest,
+            collectionId: null,
+            ...(receiptOrigin != null ? { receiptOrigin } : { receiptOrigin: null }),
+          } as any,
+        });
       }
 
       for (const ret of list(backup.salesReturns)) {

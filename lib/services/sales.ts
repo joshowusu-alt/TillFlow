@@ -29,6 +29,7 @@ import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
+import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { unstable_cache } from 'next/cache';
 
 // Account codes fetched on every checkout — extracted to module level so the
@@ -876,6 +877,9 @@ async function createSaleImpl(input: CreateSaleInput) {
           provider: payment.provider ?? null,
           status: payment.status ?? 'CONFIRMED',
           collectionId: payment.collectionId ?? null,
+          // Checkout / original sale workflow — including split-tender components
+          // and part-paid deposits created with the invoice.
+          receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
         }))
       }
     };
@@ -1512,6 +1516,9 @@ export async function amendSale(input: AmendSaleInput) {
             method: refundMethod,
             amountPence: -refundAmount, // negative = refund
             branchId: invoice.branchId ?? null,
+            // Amendment refund: direction is amount sign. Origin is UNCLASSIFIED —
+            // the amend workflow does not establish sale-time vs later-collection.
+            receiptOrigin: RECEIPT_ORIGIN.UNCLASSIFIED,
           },
         })
       );
@@ -1545,6 +1552,9 @@ export async function amendSale(input: AmendSaleInput) {
             method: additionalPaymentMethod,
             amountPence: additionalPaymentNeeded,
             branchId: invoice.branchId ?? null,
+            // Amendment add: sale already existed; action is amend, not checkout or
+            // debtor collection — persist UNCLASSIFIED rather than inventing meaning.
+            receiptOrigin: RECEIPT_ORIGIN.UNCLASSIFIED,
           },
         })
       );

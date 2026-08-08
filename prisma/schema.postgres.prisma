@@ -1325,6 +1325,10 @@ model SalesPayment {
   payerMsisdn    String?
   provider       String?
   status         String   @default("CONFIRMED")
+  // Forward-only payment-origin contract. NULL = historical / legacy unclassified.
+  // New write paths must persist RECEIVED_AT_SALE | LATER_CREDIT_COLLECTION | UNCLASSIFIED.
+  // See lib/payments/receipt-origin.ts. Do not infer from timestamps.
+  receiptOrigin  String?
   collectionId   String?
   branchId       String?
   qaTag          String?
