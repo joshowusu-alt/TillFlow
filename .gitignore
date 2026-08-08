@@ -46,3 +46,7 @@ perf.db-journal
 /tmp/*preview*.env
 
 .env*.local
+
+# Local Preview probe secrets (never commit)
+tmp/*.local.env
+tmp/reporting-preview.local.env

@@ -3,6 +3,7 @@ import { formatMoney } from '@/lib/format';
 import type { HomePerformanceSummary } from '@/lib/reports/home-performance-kpis';
 import { getStatValueSize } from '@/lib/owner-home/stat-value-size';
 import { HomePerformanceUnavailable } from '@/components/owner-home/section-errors';
+import { buildReportingScopeSearchParams } from '@/lib/reports/reporting-scope';
 
 export default async function HomePerformanceSlot({
   performancePromise,
@@ -22,6 +23,8 @@ export default async function HomePerformanceSlot({
   }
 
   const formatCurrency = (pence: number) => formatMoney(pence, currency);
+  const cashDrawerHref = `/reports/cash-drawer?${buildReportingScopeSearchParams(data.todayScope).toString()}`;
+  const salesTodayHref = `/sales?from=${encodeURIComponent(data.todayScope.fromInputValue)}&to=${encodeURIComponent(data.todayScope.toInputValue)}&storeId=ALL`;
 
   const todayVsYesterdayText =
     data.yesterdayRevenuePence > 0
@@ -43,7 +46,7 @@ export default async function HomePerformanceSlot({
             label: "Today's Transactions",
             displayLabel: 'Transactions',
             value: data.todayTransactionCount.toLocaleString(),
-            href: '/sales',
+            href: salesTodayHref,
             footer: null as string | null,
             primary: false,
           },
@@ -51,17 +54,17 @@ export default async function HomePerformanceSlot({
             label: 'Expected Cash',
             displayLabel: 'Expected Cash',
             value: formatCurrency(data.expectedCashPence),
-            href: '/reports/cash-drawer',
+            href: cashDrawerHref,
             footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till',
             primary: false,
           },
         ]
       : [
           {
-            label: "Today's Revenue",
-            displayLabel: 'Revenue',
+            label: "Today's Sales Revenue",
+            displayLabel: 'Sales revenue',
             value: formatCurrency(data.todayRevenuePence),
-            href: '/reports/dashboard',
+            href: data.tradingReportHref,
             footer: todayVsYesterdayText,
             primary: true,
           },
@@ -69,7 +72,7 @@ export default async function HomePerformanceSlot({
             label: "Today's Transactions",
             displayLabel: 'Transactions',
             value: data.todayTransactionCount.toLocaleString(),
-            href: '/sales',
+            href: salesTodayHref,
             footer: null as string | null,
             primary: false,
           },
@@ -77,7 +80,7 @@ export default async function HomePerformanceSlot({
             label: 'Expected Cash',
             displayLabel: 'Expected Cash',
             value: formatCurrency(data.expectedCashPence),
-            href: '/reports/cash-drawer',
+            href: cashDrawerHref,
             footer: data.openShiftCount > 0 ? 'Current open till balance' : 'No open till',
             primary: false,
           },

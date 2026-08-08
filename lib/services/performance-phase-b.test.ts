@@ -151,9 +151,10 @@ describe('Phase B: cache revalidation and dashboard performance hardening', () =
   it('Trading Dashboard keeps force-dynamic on page shell and existing date range resolution', () => {
     const dashboardPage = read('app/(protected)/reports/dashboard/page.tsx');
     expect(dashboardPage).toContain("export const dynamic = 'force-dynamic'");
-    expect(dashboardPage).toContain('resolveReportDateRange(');
-    expect(dashboardPage).toContain('defaultRangeStart');
-    expect(dashboardPage).toContain('todayEnd');
+    expect(dashboardPage).toContain('resolveReportingScope(');
+    expect(dashboardPage).toContain("defaultPeriod: '7d'");
+    expect(dashboardPage).toContain('scope.startInclusive');
+    expect(dashboardPage).toContain('scope.endExclusive');
   });
 
   it('POS cached loaders remain scoped by function arguments and TTLs are unchanged', () => {

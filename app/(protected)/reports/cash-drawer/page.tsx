@@ -10,7 +10,12 @@ import { formatDateTime, formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
-import { getBusinessStores, resolveStoreSelection } from '@/lib/services/stores';
+import { getBusinessStores } from '@/lib/services/stores';
+import {
+  isReportingScopeStoreError,
+  resolveAuthorisedStoreId,
+} from '@/lib/reports/reporting-scope';
+import { notFound } from 'next/navigation';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
@@ -49,7 +54,16 @@ export default async function CashDrawerReportPage({
 
   const { start: from, end: to, fromInputValue: fromIso, toInputValue: toIso } = resolveReportDateRange(searchParams, weekAgo, today);
   const { stores } = await getBusinessStores(business.id, searchParams?.storeId);
-  const selectedStoreId = resolveStoreSelection(stores, searchParams?.storeId, 'ALL') ?? 'ALL';
+  let selectedStoreId: string;
+  try {
+    selectedStoreId = resolveAuthorisedStoreId({
+      storeId: searchParams?.storeId,
+      allowedStoreIds: stores.map((store) => store.id),
+    });
+  } catch (error) {
+    if (isReportingScopeStoreError(error)) notFound();
+    throw error;
+  }
   const requestedPageSize = parseInt(searchParams?.pageSize ?? '20', 10) || 20;
   const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as 10 | 20 | 50) ? requestedPageSize : 20;
   const requestedPage = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
@@ -143,11 +157,18 @@ export default async function CashDrawerReportPage({
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
-        This report covers physical cash only. MoMo, card, and bank transfer receipts are not included here — see the{' '}
-        <a href="/reports/dashboard" className="font-semibold underline underline-offset-2">
-          Trading Report
+        This report covers physical cash movements only — notes and coins in the till.
+        MoMo, card, and bank transfer receipts are electronic payments and are not included here.
+        Inspect them under{' '}
+        <a href="/reports/dashboard#money-received" className="font-semibold underline underline-offset-2">
+          Trading Report → Money received
+        </a>
+        {' '}or the{' '}
+        <a href="/reports/receipts?period=today&storeId=ALL" className="font-semibold underline underline-offset-2">
+          Money received
         </a>{' '}
-        for all payment methods.
+        payment list. Cash Drawer follows shift open times and till activity, so figures may differ
+        from calendar-day cash receipts.
       </section>
 
       <ReportFilterCard

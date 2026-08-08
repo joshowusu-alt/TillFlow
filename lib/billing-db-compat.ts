@@ -4,6 +4,7 @@ const AUTH_LEGACY_SELECT = {
   id: true,
   name: true,
   currency: true,
+  timezone: true,
   vatEnabled: true,
   vatNumber: true,
   mode: true,

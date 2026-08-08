@@ -39,9 +39,11 @@ describe('Phase 2b report streaming', () => {
     expect(dashboardPage).not.toContain('_getTradingDashboardSnapshot');
     expect(dashboardContent).toContain('_getTradingDashboardSnapshot');
     expect(dashboardContent).toContain('getCachedTradingDashboardSnapshot');
-    expect(dashboardPage).toMatch(/startIso=\{start\.toISOString\(\)\}/);
-    expect(dashboardPage).toMatch(/endIso=\{end\.toISOString\(\)\}/);
+    expect(dashboardPage).toMatch(/startIso=\{scope\.startInclusive\.toISOString\(\)\}/);
+    expect(dashboardPage).toMatch(/endIso=\{scope\.endExclusive\.toISOString\(\)\}/);
     expect(dashboardPage).toMatch(/selectedStoreId=\{selectedStoreId\}/);
+    expect(dashboardPage).toContain('resolveReportingScope');
+    expect(dashboardPage).toContain('periodKey={scope.periodKey}');
   });
 
   it('owner page streams snapshot body behind Suspense', () => {

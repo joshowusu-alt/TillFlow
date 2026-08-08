@@ -13,7 +13,7 @@ describe('Reports dashboard clarity pass', () => {
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
 
-    expect(dashboard).toContain('const totalPaymentReceipts = Object.values(paymentSplit)');
+    expect(dashboard).toContain('const totalPaymentReceipts = moneyReceived.totalPence');
     expect(dashboard).toContain('amount / totalPaymentReceipts');
     expect(weeklyService).toContain('totalReceiptsPence');
     expect(weeklyPage).toContain('amount / data.totalReceiptsPence');
@@ -22,7 +22,9 @@ describe('Reports dashboard clarity pass', () => {
   it('excludes failed, cancelled, and void sales payment statuses from receipt splits', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
+    const moneyReceived = readSource('lib/reports/money-received.ts');
 
+    expect(moneyReceived).toContain("REPORTING_EXCLUDED_PAYMENT_STATUSES");
     expect(dashboard).toContain("status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] }");
     expect(weeklyService).toContain("status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] }");
   });
@@ -36,7 +38,7 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboard).toContain('Closed-shift cash difference');
     expect(dashboard).toContain('Difference between expected and counted cash from closed shifts.');
     // Calculation logic unchanged
-    expect(dashboard).toContain('closedAt: { gte: start, lte: end }');
+    expect(dashboard).toContain('closedAt: { gte: start, lt: endExclusive }');
     expect(dashboard).toContain('Math.abs(v.variance ?? 0)');
     expect(weeklyPage).toContain('Closed-shift variance');
     expect(commandCenter).toContain('closed-shift cash variance');
@@ -61,29 +63,44 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   // Phase 2A: Trading Report label / copy clarity
-  it('payment section heading uses owner-friendly "How money came in" label on both reports', () => {
+  it('payment section heading uses Money received with receipt semantics', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
 
-    expect(dashboard).toContain('How money came in');
+    expect(dashboard).toContain('Money received');
+    expect(dashboard).toContain('Received at sale');
+    expect(dashboard).toContain('Later credit collected');
+    expect(dashboard).toContain('Historical — not classified');
+    expect(dashboard).toContain('unknownHistoricalOriginPence');
+    expect(dashboard).toContain('moneyReceivedHref');
     expect(dashboard).not.toContain('Payment Receipts Split');
-    // Phase 2B: Weekly Digest also updated to "How money came in"
+    // Weekly Digest retains prior clarity label until a separate pass.
     expect(weeklyPage).toContain('How money came in');
     expect(weeklyPage).not.toContain('Payment Receipts Split');
+  });
+
+  it('Money received summary uses DB aggregation without legacy row cap', () => {
+    const moneyReceived = readSource('lib/reports/money-received.ts');
+    expect(moneyReceived).toContain('$queryRaw');
+    expect(moneyReceived).toContain('LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP');
+    expect(moneyReceived).not.toMatch(/take:\s*20_000/);
+    expect(moneyReceived).not.toContain('payerMsisdn');
   });
 
   it('payment section helper clarifies receipts vs sales distinction on both reports', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
 
-    expect(dashboard).toContain('can differ from sales when customers pay old credit');
+    expect(dashboard).toContain('Includes money');
+    expect(dashboard).toContain('later credit collections');
     // Phase 2B: Weekly Digest uses consistent receipts distinction copy
     expect(weeklyPage).toContain('Receipts may include payments for older customer credit.');
   });
 
-  it('"What customers owe" replaces "Debtors (AR)" label', () => {
+  it('"Credit sales (unpaid)" replaces bare debtor KPI in the primary row', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    expect(dashboard).toContain('What customers owe');
+    expect(dashboard).toContain('Credit sales (unpaid)');
+    expect(dashboard).toContain('What customers owe overall');
     expect(dashboard).not.toContain('Debtors (AR)');
   });
 
@@ -128,8 +145,8 @@ describe('Reports dashboard clarity pass', () => {
 
   it('customer debt helper clarifies current-state balance', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    expect(dashboard).toContain('Current customer credit balance');
-    expect(dashboard).toContain('not just this period');
+    expect(dashboard).toContain('What customers owe overall');
+    expect(dashboard).toContain('Credit sales (unpaid)');
   });
 
   it('supplier payable helper clarifies current-state balance', () => {
@@ -140,7 +157,9 @@ describe('Reports dashboard clarity pass', () => {
 
   it('trust copy in filter info box clarifies sales and receipts distinction', () => {
     const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
-    expect(dashboardPage).toContain('Sales and receipts may differ');
+    expect(dashboardPage).toContain('Sales revenue');
+    expect(dashboardPage).toContain('Money received');
+    expect(dashboardPage).toContain('business timezone');
     expect(dashboardPage).toContain('current position, not only this period');
   });
 
@@ -160,24 +179,28 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboard).toContain('/reports/analytics');
   });
 
-  it('report service imports remain unchanged', () => {
+  it('report service imports remain on the shared reporting contract', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const dashboardPage = readSource('app/(protected)/reports/dashboard/page.tsx');
     expect(dashboard).toContain("from '@/lib/reports/financials'");
     expect(dashboard).toContain("from '@/lib/reports/operational-metrics'");
-    expect(dashboardPage).toContain("from '@/lib/reports/date-parsing'");
+    expect(dashboard).toContain("from '@/lib/reports/money-received'");
+    expect(dashboard).toContain("from '@/lib/reports/sales-revenue'");
+    expect(dashboardPage).toContain("from '@/lib/reports/reporting-scope'");
     expect(dashboard).toContain('getIncomeStatement');
     expect(dashboard).toContain('classifyInventoryState');
-    expect(dashboardPage).toContain('resolveReportDateRange');
+    expect(dashboardPage).toContain('resolveReportingScope');
     expect(dashboard).toContain('computeOutstandingBalance');
   });
 
-  it('sales aggregation and calculation logic is unchanged', () => {
+  it('sales aggregation uses shared sales-revenue contract', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
-    expect(dashboard).toContain('salesAgg._sum.totalPence');
+    expect(dashboard).toContain('salesRevenue.salesRevenuePence');
     expect(dashboard).toContain('outstandingAR');
     expect(dashboard).toContain('outstandingAP');
-    expect(dashboard).toContain('paymentsByMethod');
+    expect(dashboard).toContain('moneyReceived.byMethod');
+    expect(dashboard).toContain('RECEIPT_METHOD_LABELS.UNKNOWN');
+    expect(dashboard).toContain('Unknown/Other');
     expect(dashboard).toContain('totalGrossMargin');
     expect(dashboard).toContain('income.otherExpenses');
   });

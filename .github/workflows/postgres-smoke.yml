@@ -13,6 +13,13 @@ on:
       - 'scripts/migration-p1-sql-only-constraint-contract.cjs'
       - 'scripts/payment-receipt-origin-pg-test.cjs'
       - 'lib/payments/**'
+      - 'lib/reports/money-received.ts'
+      - 'lib/reports/money-received-classify.ts'
+      - 'lib/reports/money-received.pg.test.ts'
+      - 'lib/reports/money-received-scale.pg.test.ts'
+      - 'lib/reports/money-received-unknown-method.pg.test.ts'
+      - 'lib/reports/money-received-store-scope.pg.test.ts'
+      - 'lib/reports/reporting-scope.ts'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
       - 'docs/migration/P1_SLICE2B_CONTRACT.md'
@@ -78,6 +85,12 @@ jobs:
 
       - name: Payment receipt-origin PostgreSQL behavioural suite
         run: npm run test:payment-receipt-origin:pg
+
+      - name: Money received reporting PostgreSQL suite
+        run: npx vitest run --reporter=dot lib/reports/money-received.pg.test.ts lib/reports/money-received-scale.pg.test.ts lib/reports/money-received-unknown-method.pg.test.ts lib/reports/money-received-store-scope.pg.test.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
 
       - name: Migration P1 Slice 2B PostgreSQL behavioural suite
         run: node scripts/migration-p1-slice2b-pg-test.cjs

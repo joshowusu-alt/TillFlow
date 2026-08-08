@@ -11,10 +11,11 @@ describe('Cash Drawer report clarity pass', () => {
   it('adds cash-only scope copy without changing the route or title', () => {
     expect(page).toContain('title="Cash Drawer Report"');
     expect(page).toContain('Track cash expected and cash counted across all tills and shifts.');
-    expect(page).toContain('This report covers physical cash only.');
-    expect(page).toContain('MoMo, card, and bank transfer receipts are not included here');
-    expect(page).toContain('href="/reports/dashboard"');
-    expect(page).toContain('Trading Report');
+    expect(page).toContain('This report covers physical cash movements only');
+    expect(page).toContain('MoMo, card, and bank transfer receipts are electronic payments');
+    expect(page).toContain('href="/reports/dashboard#money-received"');
+    expect(page).toContain('Trading Report → Money received');
+    expect(page).toContain('href="/reports/receipts?period=today&storeId=ALL"');
   });
 
   it('uses owner-friendly stat labels, helpers, and Difference wording', () => {
