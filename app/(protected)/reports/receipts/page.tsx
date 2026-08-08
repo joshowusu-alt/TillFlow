@@ -15,9 +15,11 @@ import {
 import {
   listMoneyReceivedPayments,
   parseReceiptMethodParam,
+  parseReceiptOriginParam,
   RECEIPT_CLASSIFICATION_LABELS,
   RECEIPT_METHOD_LABELS,
   SUPPORTED_RECEIPT_METHODS,
+  SUPPORTED_RECEIPT_ORIGINS,
 } from '@/lib/reports/money-received';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +33,7 @@ export default async function MoneyReceivedReceiptsPage({
     storeId?: string;
     period?: string;
     method?: string;
+    origin?: string;
     page?: string;
     pageSize?: string;
   };
@@ -59,18 +62,21 @@ export default async function MoneyReceivedReceiptsPage({
   });
 
   const method = parseReceiptMethodParam(searchParams?.method);
+  const origin = parseReceiptOriginParam(searchParams?.origin);
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
   const pageSize = Math.min(50, Math.max(1, parseInt(searchParams?.pageSize ?? '25', 10) || 25));
 
   const { rows, totalCount, totalPages, page: currentPage } = await listMoneyReceivedPayments({
     scope,
     method,
+    origin,
     page,
     pageSize,
   });
 
   const isToday = isReportingScopeToday(scope);
   const methodLabel = method ? RECEIPT_METHOD_LABELS[method] : 'All methods';
+  const originLabel = origin ? RECEIPT_CLASSIFICATION_LABELS[origin] : 'All origins';
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -86,16 +92,18 @@ export default async function MoneyReceivedReceiptsPage({
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
         <p>
-          Showing <strong>{methodLabel}</strong> for{' '}
+          Showing <strong>{methodLabel}</strong>
+          {' · '}
+          <strong>{originLabel}</strong> for{' '}
           {isToday ? 'Today' : `${scope.fromInputValue} → ${scope.toInputValue}`}
           {scope.storeId === 'ALL' ? ' · All branches' : ''}.
-          Rows are individual <strong>SalesPayment</strong> records. Classification separates
-          money received at sale from later credit collections.
+          Rows are individual <strong>SalesPayment</strong> records. Origin comes from the
+          persisted payment field — historical payments without origin stay “not classified”.
         </p>
       </section>
 
       <ReportFilterCard
-        columnsClassName="sm:grid-cols-5"
+        columnsClassName="sm:grid-cols-6"
         submitLabel="Apply"
         submitTone="secondary"
       >
@@ -122,6 +130,17 @@ export default async function MoneyReceivedReceiptsPage({
             {SUPPORTED_RECEIPT_METHODS.map((value) => (
               <option key={value} value={value}>
                 {RECEIPT_METHOD_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">Receipt origin</label>
+          <select className="input" name="origin" defaultValue={origin ?? ''}>
+            <option value="">All origins</option>
+            {SUPPORTED_RECEIPT_ORIGINS.map((value) => (
+              <option key={value} value={value}>
+                {RECEIPT_CLASSIFICATION_LABELS[value]}
               </option>
             ))}
           </select>
@@ -210,7 +229,9 @@ export default async function MoneyReceivedReceiptsPage({
                         className={
                           row.classification === 'RECEIVED_AT_SALE'
                             ? 'rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800'
-                            : 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800'
+                            : row.classification === 'LATER_CREDIT_COLLECTION'
+                              ? 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800'
+                              : 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700'
                         }
                       >
                         {row.classificationLabel}
@@ -258,6 +279,7 @@ export default async function MoneyReceivedReceiptsPage({
           to: scope.toInputValue,
           storeId: scope.storeId,
           method: method ?? undefined,
+          origin: origin ?? undefined,
           pageSize: String(pageSize),
         }}
       />
@@ -265,7 +287,7 @@ export default async function MoneyReceivedReceiptsPage({
       <p className="text-xs text-muted">
         Deep link for this view:{' '}
         <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">
-          {moneyReceivedHref(scope, method ?? undefined)}
+          {moneyReceivedHref(scope, method ?? undefined, origin ?? undefined)}
         </code>
       </p>
     </div>

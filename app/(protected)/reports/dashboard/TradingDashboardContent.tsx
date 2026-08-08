@@ -627,7 +627,7 @@ export default async function TradingDashboardContent({
               All receipts →
             </a>
           </div>
-          <div className="mb-4 grid grid-cols-2 gap-2 text-xs">
+          <div className="mb-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
             <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
               <div className="text-emerald-800/70">Received at sale</div>
               <div className="mt-0.5 font-semibold text-emerald-900">
@@ -640,7 +640,19 @@ export default async function TradingDashboardContent({
                 {formatMoney(moneyReceived.laterCreditCollectionPence, currency)}
               </div>
             </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 col-span-2 sm:col-span-1">
+              <div className="text-slate-600">Historical — not classified</div>
+              <div className="mt-0.5 font-semibold text-slate-800">
+                {formatMoney(moneyReceived.unknownHistoricalOriginPence, currency)}
+              </div>
+            </div>
           </div>
+          {moneyReceived.unknownHistoricalOriginPence !== 0 ? (
+            <p className="mb-3 text-[11px] leading-relaxed text-black/50">
+              Some older payments have no durable receipt origin. They remain in the total above
+              and are not guessed from timestamps.
+            </p>
+          ) : null}
           <div className="space-y-3 text-sm">
             {(
               [

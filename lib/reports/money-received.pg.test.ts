@@ -135,6 +135,7 @@ describePg('money received reconciliation (Postgres)', () => {
             amountPence: 4000,
             receivedAt: saleAt,
             status: 'CONFIRMED',
+            receiptOrigin: 'RECEIVED_AT_SALE',
           },
         },
       },
@@ -159,6 +160,7 @@ describePg('money received reconciliation (Postgres)', () => {
             amountPence: 6000,
             receivedAt: new Date(saleAt.getTime() + 1_000),
             status: 'CONFIRMED',
+            receiptOrigin: 'RECEIVED_AT_SALE',
           },
         },
       },
@@ -185,12 +187,14 @@ describePg('money received reconciliation (Postgres)', () => {
               amountPence: 3000,
               receivedAt: saleAt,
               status: 'CONFIRMED',
+              receiptOrigin: 'RECEIVED_AT_SALE',
             },
             {
               method: 'MOBILE_MONEY',
               amountPence: 7000,
               receivedAt: laterAt,
               status: 'CONFIRMED',
+              receiptOrigin: 'LATER_CREDIT_COLLECTION',
             },
           ],
         },
@@ -220,6 +224,7 @@ describePg('money received reconciliation (Postgres)', () => {
             amountPence: 9999,
             receivedAt: saleAt,
             status: 'CONFIRMED',
+            receiptOrigin: 'RECEIVED_AT_SALE',
           },
         },
       },
@@ -266,6 +271,13 @@ describePg('money received reconciliation (Postgres)', () => {
     expect(receipts.byMethod.MOBILE_MONEY).toBe(6000);
     expect(receipts.receivedAtSalePence).toBe(13000);
     expect(receipts.laterCreditCollectionPence).toBe(0);
+    expect(receipts.unknownHistoricalOriginPence).toBe(0);
+    expect(
+      receipts.receivedAtSalePence
+        + receipts.laterCreditCollectionPence
+        + receipts.unknownHistoricalOriginPence
+        + receipts.reversalPence,
+    ).toBe(receipts.totalPence);
     expect(revenue.creditSalesOutstandingPence).toBe(7000);
   });
 
@@ -326,5 +338,142 @@ describePg('money received reconciliation (Postgres)', () => {
     expect(missing).toBeNull();
     void cashSaleId;
     void tillId;
+  });
+
+  it('keeps historical NULL origins unclassified and does not use five-minute proximity', async () => {
+    const nearSale = new Date('2026-08-07T10:02:00.000Z'); // within old 5-minute window
+    const invoice = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId,
+        tillId,
+        cashierUserId: cashierId,
+        paymentStatus: 'PAID',
+        subtotalPence: 2500,
+        vatPence: 0,
+        totalPence: 2500,
+        createdAt: new Date('2026-08-07T10:00:00.000Z'),
+        payments: {
+          create: {
+            method: 'CARD',
+            amountPence: 2500,
+            receivedAt: nearSale,
+            status: 'CONFIRMED',
+            receiptOrigin: null,
+          },
+        },
+      },
+    });
+
+    // Explicit later collection within five minutes of invoice create — must stay later.
+    const explicitLater = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId,
+        tillId,
+        cashierUserId: cashierId,
+        paymentStatus: 'PART_PAID',
+        subtotalPence: 8000,
+        vatPence: 0,
+        totalPence: 8000,
+        createdAt: new Date('2026-08-07T10:00:00.000Z'),
+        payments: {
+          create: {
+            method: 'CASH',
+            amountPence: 1500,
+            receivedAt: nearSale,
+            status: 'CONFIRMED',
+            receiptOrigin: 'LATER_CREDIT_COLLECTION',
+          },
+        },
+      },
+    });
+
+    // Explicit at-sale far after invoice create — must stay at-sale.
+    const lateButAtSale = await prisma.salesInvoice.create({
+      data: {
+        businessId,
+        storeId,
+        tillId,
+        cashierUserId: cashierId,
+        paymentStatus: 'PAID',
+        subtotalPence: 1100,
+        vatPence: 0,
+        totalPence: 1100,
+        createdAt: new Date('2026-08-07T10:00:00.000Z'),
+        payments: {
+          create: {
+            method: 'TRANSFER',
+            amountPence: 1100,
+            receivedAt: new Date('2026-08-07T12:00:00.000Z'),
+            status: 'CONFIRMED',
+            receiptOrigin: 'RECEIVED_AT_SALE',
+          },
+        },
+      },
+    });
+
+    const scope = resolveReportingScope({
+      businessId,
+      timeZone: 'Africa/Accra',
+      params: { period: 'custom', from: '2026-08-07', to: '2026-08-07', storeId: 'ALL' },
+      allowedStoreIds: [storeId],
+      now: new Date('2026-08-07T12:00:00.000Z'),
+    });
+    const receipts = await getMoneyReceivedSummary(scope);
+    expect(receipts.unknownHistoricalOriginPence).toBeGreaterThanOrEqual(2500);
+    expect(
+      receipts.receivedAtSalePence
+        + receipts.laterCreditCollectionPence
+        + receipts.unknownHistoricalOriginPence
+        + receipts.reversalPence,
+    ).toBe(receipts.totalPence);
+
+    const unknownListed = await listMoneyReceivedPayments({
+      scope,
+      origin: 'UNCLASSIFIED',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(unknownListed.rows.some((r) => r.invoiceId === invoice.id)).toBe(true);
+    expect(unknownListed.rows.every((r) => r.classification === 'UNCLASSIFIED')).toBe(true);
+
+    const laterListed = await listMoneyReceivedPayments({
+      scope,
+      origin: 'LATER_CREDIT_COLLECTION',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(laterListed.rows.some((r) => r.invoiceId === explicitLater.id && r.amountPence === 1500)).toBe(true);
+
+    const atSaleListed = await listMoneyReceivedPayments({
+      scope,
+      origin: 'RECEIVED_AT_SALE',
+      method: 'TRANSFER',
+      page: 1,
+      pageSize: 50,
+    });
+    expect(atSaleListed.rows.some((r) => r.invoiceId === lateButAtSale.id)).toBe(true);
+  });
+
+  it('paginates without changing authorised totals', async () => {
+    const scope = resolveReportingScope({
+      businessId,
+      timeZone: 'Africa/Accra',
+      params: { period: 'custom', from: '2026-08-07', to: '2026-08-07', storeId: 'ALL' },
+      allowedStoreIds: [storeId],
+      now: new Date('2026-08-07T12:00:00.000Z'),
+    });
+    const summary = await getMoneyReceivedSummary(scope);
+    const page1 = await listMoneyReceivedPayments({ scope, page: 1, pageSize: 2 });
+    const page2 = await listMoneyReceivedPayments({ scope, page: 2, pageSize: 2 });
+    expect(page1.totalCount).toBe(page2.totalCount);
+    expect(page1.pageSize).toBe(2);
+    expect(page1.rows.length).toBeLessThanOrEqual(2);
+    const pageSum =
+      [...page1.rows, ...page2.rows].reduce((s, r) => s + r.amountPence, 0);
+    // Totals come from complete scope, not the current page alone.
+    expect(summary.totalPence).toBeGreaterThanOrEqual(pageSum);
+    expect(page1.totalCount).toBeGreaterThan(2);
   });
 });

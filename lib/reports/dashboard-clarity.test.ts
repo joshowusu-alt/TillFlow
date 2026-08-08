@@ -70,6 +70,8 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboard).toContain('Money received');
     expect(dashboard).toContain('Received at sale');
     expect(dashboard).toContain('Later credit collected');
+    expect(dashboard).toContain('Historical — not classified');
+    expect(dashboard).toContain('unknownHistoricalOriginPence');
     expect(dashboard).toContain('moneyReceivedHref');
     expect(dashboard).not.toContain('Payment Receipts Split');
     // Weekly Digest retains prior clarity label until a separate pass.

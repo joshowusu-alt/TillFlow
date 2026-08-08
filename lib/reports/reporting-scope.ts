@@ -199,8 +199,15 @@ export function tradingReportHref(
 export function moneyReceivedHref(
   scope: Pick<ReportingScope, 'periodKey' | 'fromInputValue' | 'toInputValue' | 'storeId'>,
   method?: string,
+  origin?: string,
 ): string {
-  const params = buildReportingScopeSearchParams(scope, method ? { method } : undefined);
+  const extras: Record<string, string> = {};
+  if (method) extras.method = method;
+  if (origin) extras.origin = origin;
+  const params = buildReportingScopeSearchParams(
+    scope,
+    Object.keys(extras).length ? extras : undefined,
+  );
   return `/reports/receipts?${params.toString()}`;
 }
 

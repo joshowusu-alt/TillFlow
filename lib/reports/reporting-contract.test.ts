@@ -10,8 +10,9 @@ import {
 } from '@/lib/reports/reporting-scope';
 import {
   classifySalesPaymentReceipt,
-  SALE_RECEIPT_GRACE_MS,
+  RECEIPT_CLASSIFICATION_LABELS,
 } from '@/lib/reports/money-received-classify';
+import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import {
   getBusinessCalendarDayBounds,
   getBusinessDayBounds,
@@ -151,35 +152,50 @@ describe('business calendar day helpers', () => {
 });
 
 describe('classifySalesPaymentReceipt', () => {
-  const saleAt = new Date('2026-08-07T10:00:00.000Z');
-
-  it('classifies checkout-aligned payments as RECEIVED_AT_SALE', () => {
+  it('uses persisted RECEIVED_AT_SALE without timestamps', () => {
     const result = classifySalesPaymentReceipt({
       amountPence: 5000,
-      receivedAt: new Date(saleAt.getTime() + 2_000),
-      invoiceCreatedAt: saleAt,
+      receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
     });
     expect(result.classification).toBe('RECEIVED_AT_SALE');
     expect(result.paymentState).toBe('CONFIRMED');
+    expect(RECEIPT_CLASSIFICATION_LABELS.RECEIVED_AT_SALE).toBe('Received at sale');
   });
 
-  it('classifies later collections beyond grace as LATER_CREDIT_COLLECTION', () => {
+  it('uses persisted LATER_CREDIT_COLLECTION even within five minutes of a sale', () => {
     const result = classifySalesPaymentReceipt({
       amountPence: 7000,
-      receivedAt: new Date(saleAt.getTime() + SALE_RECEIPT_GRACE_MS + 1),
-      invoiceCreatedAt: saleAt,
+      receiptOrigin: RECEIPT_ORIGIN.LATER_CREDIT_COLLECTION,
     });
     expect(result.classification).toBe('LATER_CREDIT_COLLECTION');
   });
 
-  it('marks negative amounts as REVERSAL while still classifying timing', () => {
+  it('maps historical NULL to UNCLASSIFIED and never invents sale-time meaning', () => {
+    const result = classifySalesPaymentReceipt({
+      amountPence: 1000,
+      receiptOrigin: null,
+    });
+    expect(result.classification).toBe('UNCLASSIFIED');
+    expect(RECEIPT_CLASSIFICATION_LABELS.UNCLASSIFIED).toBe('Historical — not classified');
+  });
+
+  it('does not infer origin from payment timing fields (none accepted)', () => {
+    const result = classifySalesPaymentReceipt({
+      amountPence: 9000,
+      receiptOrigin: RECEIPT_ORIGIN.RECEIVED_AT_SALE,
+    });
+    // Explicit at-sale origin wins even if a caller might also know timestamps.
+    expect(result.classification).toBe('RECEIVED_AT_SALE');
+    expect(result).not.toHaveProperty('deltaMs');
+  });
+
+  it('marks negative amounts as REVERSAL while preserving persisted origin', () => {
     const result = classifySalesPaymentReceipt({
       amountPence: -2000,
-      receivedAt: new Date(saleAt.getTime() + 60_000),
-      invoiceCreatedAt: saleAt,
+      receiptOrigin: RECEIPT_ORIGIN.UNCLASSIFIED,
     });
     expect(result.paymentState).toBe('REVERSAL');
-    expect(result.classification).toBe('RECEIVED_AT_SALE');
+    expect(result.classification).toBe('UNCLASSIFIED');
   });
 });
 

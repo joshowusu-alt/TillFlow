@@ -8,15 +8,17 @@ import {
 import {
   classifySalesPaymentReceipt,
   RECEIPT_CLASSIFICATION_LABELS,
-  SALE_RECEIPT_GRACE_MS,
   type ReceiptClassification,
   type ReceiptPaymentState,
 } from '@/lib/reports/money-received-classify';
+import {
+  isReceiptOrigin,
+  type ReceiptOrigin,
+} from '@/lib/payments/receipt-origin';
 
 export {
   classifySalesPaymentReceipt,
   RECEIPT_CLASSIFICATION_LABELS,
-  SALE_RECEIPT_GRACE_MS,
 };
 export type { ReceiptClassification, ReceiptPaymentState };
 
@@ -30,6 +32,12 @@ export const RECEIPT_METHOD_LABELS: Record<ReceiptPaymentMethod, string> = {
   TRANSFER: 'Bank transfer',
 };
 
+export const SUPPORTED_RECEIPT_ORIGINS = [
+  'RECEIVED_AT_SALE',
+  'LATER_CREDIT_COLLECTION',
+  'UNCLASSIFIED',
+] as const satisfies readonly ReceiptOrigin[];
+
 export type MoneyReceivedByMethod = Record<ReceiptPaymentMethod, number>;
 
 export type MoneyReceivedSummary = {
@@ -37,6 +45,8 @@ export type MoneyReceivedSummary = {
   totalPence: number;
   receivedAtSalePence: number;
   laterCreditCollectionPence: number;
+  /** Historical NULL / explicit UNCLASSIFIED — never inferred as a known origin. */
+  unknownHistoricalOriginPence: number;
   reversalPence: number;
 };
 
@@ -74,9 +84,20 @@ function isSupportedMethod(method: string): method is ReceiptPaymentMethod {
   return (SUPPORTED_RECEIPT_METHODS as readonly string[]).includes(method);
 }
 
+function originFilter(origin?: ReceiptOrigin | null) {
+  if (!origin) return {};
+  if (origin === 'UNCLASSIFIED') {
+    return {
+      OR: [{ receiptOrigin: null }, { receiptOrigin: 'UNCLASSIFIED' }],
+    };
+  }
+  return { receiptOrigin: origin };
+}
+
 function paymentListWhere(
   scope: ReportingScope,
   method?: string | null,
+  origin?: ReceiptOrigin | null,
 ) {
   const methodFilter =
     method && isSupportedMethod(method) ? { method } : {};
@@ -85,6 +106,7 @@ function paymentListWhere(
     receivedAt: reportingTimestampFilter(scope),
     status: { notIn: [...REPORTING_EXCLUDED_PAYMENT_STATUSES] },
     ...methodFilter,
+    ...originFilter(origin),
     salesInvoice: {
       businessId: scope.businessId,
       ...(scope.storeId === 'ALL' ? {} : { storeId: scope.storeId }),
@@ -95,7 +117,10 @@ function paymentListWhere(
 
 /**
  * Aggregate money received from payment records for the scope.
- * Classification totals require loading payment+invoice timestamps (bounded).
+ *
+ * Origin buckets use persisted receiptOrigin only.
+ * Identity (non-forced):
+ *   totalPence = receivedAtSale + laterCredit + unknownHistorical + reversal
  */
 export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<MoneyReceivedSummary> {
   const payments = await prisma.salesPayment.findMany({
@@ -103,10 +128,9 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
     select: {
       amountPence: true,
       method: true,
-      receivedAt: true,
-      salesInvoice: { select: { createdAt: true } },
+      receiptOrigin: true,
     },
-    // Bounded fetch for classification; period aggregates for a retail day stay well under this.
+    // Bounded fetch for origin buckets; retail-day aggregates stay well under this.
     take: 20_000,
     orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
   });
@@ -115,6 +139,7 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
   let totalPence = 0;
   let receivedAtSalePence = 0;
   let laterCreditCollectionPence = 0;
+  let unknownHistoricalOriginPence = 0;
   let reversalPence = 0;
 
   for (const payment of payments) {
@@ -125,16 +150,17 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
 
     const { classification, paymentState } = classifySalesPaymentReceipt({
       amountPence: payment.amountPence,
-      receivedAt: payment.receivedAt,
-      invoiceCreatedAt: payment.salesInvoice.createdAt,
+      receiptOrigin: payment.receiptOrigin,
     });
 
     if (paymentState === 'REVERSAL') {
       reversalPence += payment.amountPence;
     } else if (classification === 'RECEIVED_AT_SALE') {
       receivedAtSalePence += payment.amountPence;
-    } else {
+    } else if (classification === 'LATER_CREDIT_COLLECTION') {
       laterCreditCollectionPence += payment.amountPence;
+    } else {
+      unknownHistoricalOriginPence += payment.amountPence;
     }
   }
 
@@ -143,6 +169,7 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
     totalPence,
     receivedAtSalePence,
     laterCreditCollectionPence,
+    unknownHistoricalOriginPence,
     reversalPence,
   };
 }
@@ -153,6 +180,7 @@ export const RECEIPTS_MAX_PAGE_SIZE = 50;
 export async function listMoneyReceivedPayments(input: {
   scope: ReportingScope;
   method?: string | null;
+  origin?: ReceiptOrigin | null;
   page?: number;
   pageSize?: number;
 }): Promise<{
@@ -167,7 +195,7 @@ export async function listMoneyReceivedPayments(input: {
     RECEIPTS_MAX_PAGE_SIZE,
   );
   const requestedPage = Math.max(input.page ?? 1, 1);
-  const where = paymentListWhere(input.scope, input.method);
+  const where = paymentListWhere(input.scope, input.method, input.origin);
 
   const totalCount = await prisma.salesPayment.count({ where });
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -188,6 +216,7 @@ export async function listMoneyReceivedPayments(input: {
       payerMsisdn: true,
       provider: true,
       status: true,
+      receiptOrigin: true,
       salesInvoice: {
         select: {
           id: true,
@@ -208,8 +237,7 @@ export async function listMoneyReceivedPayments(input: {
   const rows: MoneyReceivedRow[] = payments.map((payment) => {
     const { classification, paymentState } = classifySalesPaymentReceipt({
       amountPence: payment.amountPence,
-      receivedAt: payment.receivedAt,
-      invoiceCreatedAt: payment.salesInvoice.createdAt,
+      receiptOrigin: payment.receiptOrigin,
     });
     const method = payment.method;
     return {
@@ -262,4 +290,10 @@ export function parseReceiptMethodParam(value: string | undefined | null): Recei
   const trimmed = value?.trim();
   if (!trimmed) return null;
   return isSupportedMethod(trimmed) ? trimmed : null;
+}
+
+export function parseReceiptOriginParam(value: string | undefined | null): ReceiptOrigin | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return isReceiptOrigin(trimmed) ? trimmed : null;
 }

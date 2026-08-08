@@ -269,12 +269,12 @@ async function main() {
       );
     }
 
-    async function insertPayment({ id, salesInvoiceId, method, amountPence, receivedAt, reference }) {
+    async function insertPayment({ id, salesInvoiceId, method, amountPence, receivedAt, reference, receiptOrigin }) {
       await db.query(
         `INSERT INTO "SalesPayment" (
-           id, "salesInvoiceId", method, "amountPence", "receivedAt", reference, status
-         ) VALUES ($1,$2,$3,$4,$5,$6,'CONFIRMED')`,
-        [id, salesInvoiceId, method, amountPence, receivedAt, reference || null]
+           id, "salesInvoiceId", method, "amountPence", "receivedAt", reference, status, "receiptOrigin"
+         ) VALUES ($1,$2,$3,$4,$5,$6,'CONFIRMED',$7)`,
+        [id, salesInvoiceId, method, amountPence, receivedAt, reference || null, receiptOrigin ?? null]
       );
     }
 
@@ -295,6 +295,7 @@ async function main() {
       method: 'CASH',
       amountPence: 10000,
       receivedAt: saleAt,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
 
     await insertSale({
@@ -315,6 +316,7 @@ async function main() {
       amountPence: 6000,
       receivedAt: saleAt,
       reference: `MOMO-REF-${stamp}`,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
 
     await insertSale({
@@ -334,6 +336,7 @@ async function main() {
       method: 'CASH',
       amountPence: 4000,
       receivedAt: saleAt,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
     await insertPayment({
       id: ids.paySplitMomo,
@@ -341,6 +344,7 @@ async function main() {
       method: 'MOBILE_MONEY',
       amountPence: 6000,
       receivedAt: saleAt,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
 
     await insertSale({
@@ -360,6 +364,7 @@ async function main() {
       method: 'CASH',
       amountPence: 3000,
       receivedAt: saleAt,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
     await insertPayment({
       id: ids.payLaterMomo,
@@ -368,6 +373,7 @@ async function main() {
       amountPence: 4000,
       receivedAt: laterAt,
       reference: `LATER-MOMO-${stamp}`,
+      receiptOrigin: 'LATER_CREDIT_COLLECTION',
     });
     await insertPayment({
       id: ids.payLaterCash,
@@ -375,11 +381,33 @@ async function main() {
       method: 'CASH',
       amountPence: 3000,
       receivedAt: laterAt,
+      receiptOrigin: 'LATER_CREDIT_COLLECTION',
     });
     await db.query(
       `UPDATE "SalesInvoice" SET "paymentStatus" = 'PAID' WHERE id = $1`,
       [ids.saleCredit]
     );
+
+    // Historical NULL-origin row (same day) — must stay unclassified in UI.
+    await insertSale({
+      id: `${ids.saleCash}-hist`,
+      businessId: ids.business,
+      storeId: ids.store,
+      tillId: ids.till,
+      cashierUserId: ids.cashier,
+      paymentStatus: 'PAID',
+      totalPence: 1200,
+      createdAt: saleAt,
+      txn: `OB-HIST-${stamp}`,
+    });
+    await insertPayment({
+      id: `${ids.payCash}-hist`,
+      salesInvoiceId: `${ids.saleCash}-hist`,
+      method: 'CARD',
+      amountPence: 1200,
+      receivedAt: saleAt,
+      receiptOrigin: null,
+    });
 
     await insertSale({
       id: ids.foreignSale,
@@ -398,6 +426,7 @@ async function main() {
       method: 'MOBILE_MONEY',
       amountPence: 99900,
       receivedAt: saleAt,
+      receiptOrigin: 'RECEIVED_AT_SALE',
     });
 
     console.log('PASS seeded synthetic Preview dataset');
@@ -417,7 +446,7 @@ async function main() {
     assert(revenueLink, 'Home Sales revenue Today deep-link missing');
     assert(/storeId=/i.test(revenueLink), 'Home deep-link missing store scope');
     const homeText = await page.locator('body').innerText();
-    assert(/360\.00/.test(homeText), 'Home Sales revenue missing expected GH₵360.00');
+    assert(/372\.00/.test(homeText), 'Home Sales revenue missing expected GH₵372.00');
     checks.push({ name: 'home_today_deeplink', href: revenueLink });
     console.log('PASS Home Today deep-link', revenueLink);
 
@@ -431,8 +460,11 @@ async function main() {
     let tradingText = await page.locator('body').innerText();
     assert(/Sales revenue/i.test(tradingText), 'Missing Sales revenue label');
     assert(/Money received/i.test(tradingText), 'Missing Money received label');
-    assert(/360\.00/.test(tradingText), 'Trading Sales revenue missing GH₵360.00');
-    assert(/360\.00/.test(tradingText), 'Trading Money received should include GH₵360.00 total receipts');
+    assert(/372\.00/.test(tradingText), 'Trading Sales revenue missing GH₵372.00');
+    assert(/372\.00/.test(tradingText), 'Trading Money received should include GH₵372.00 total receipts');
+    assert(/Historical — not classified|Historical - not classified/i.test(tradingText), 'Missing unknown-origin bucket');
+    assert(/Received at sale/i.test(tradingText), 'Missing received-at-sale bucket');
+    assert(/Later credit collected/i.test(tradingText), 'Missing later-collection bucket');
     checks.push({ name: 'trading_today_scope', url: page.url() });
     console.log('PASS Trading Report Today scope + terminology + totals');
 
@@ -457,6 +489,22 @@ async function main() {
     assert(/Money received/i.test(receiptsText), 'Receipts page missing title');
     assert(/Received at sale/i.test(receiptsText), 'Missing received-at-sale classification');
     assert(/Later credit collection/i.test(receiptsText), 'Missing later collection classification');
+    // Origin filter for historical NULL rows
+    await page.goto(
+      `${base}/reports/receipts?period=today&origin=UNCLASSIFIED&storeId=ALL`,
+      { waitUntil: 'networkidle', timeout: 90000 }
+    );
+    const histText = await page.locator('body').innerText();
+    assert(/Historical — not classified|Historical - not classified/i.test(histText), 'NULL origin label missing');
+    assert(/12\.00/.test(histText), 'Historical NULL payment amount missing');
+    assert(!/OB-FOREIGN|999\.00/.test(histText), 'Foreign tenant leaked into origin filter');
+    checks.push({ name: 'unknown_origin_filter' });
+    console.log('PASS historical NULL origin filter');
+    await page.goto(`${base}${relHref(base, momoHref)}`, {
+      waitUntil: 'networkidle',
+      timeout: 90000,
+    });
+    receiptsText = await page.locator('body').innerText();
     assert(
       !/OB-FOREIGN|999\.00/.test(receiptsText),
       'Foreign tenant payment leaked into MoMo drill-down'
@@ -571,6 +619,7 @@ async function main() {
       await db.query(`DELETE FROM "SalesPayment" WHERE id = ANY($1::text[])`, [
         [
           ids.payCash,
+          `${ids.payCash}-hist`,
           ids.payMomo,
           ids.paySplitCash,
           ids.paySplitMomo,
@@ -581,7 +630,7 @@ async function main() {
         ],
       ]);
       await db.query(`DELETE FROM "SalesInvoice" WHERE id = ANY($1::text[])`, [
-        [ids.saleCash, ids.saleMomo, ids.saleSplit, ids.saleCredit, ids.foreignSale],
+        [ids.saleCash, `${ids.saleCash}-hist`, ids.saleMomo, ids.saleSplit, ids.saleCredit, ids.foreignSale],
       ]);
       await db.query(`DELETE FROM "Till" WHERE id = ANY($1::text[])`, [
         [ids.till, ids.foreignTill],
