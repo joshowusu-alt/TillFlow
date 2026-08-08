@@ -42,18 +42,24 @@ function requireUrl() {
     ...loadEnvFile(path.join(root, 'tmp', 'payment-origin-preview.local.env')),
     ...loadEnvFile(path.join(root, 'tmp', 'slice2a-preview.env')),
   };
+  // Prefer explicit Preview file/env over ambient shell DATABASE URLs
+  // (local Docker URLs often linger in the agent shell).
   const url =
     process.env.PREVIEW_DATABASE_URL ||
-    process.env.POSTGRES_URL_NON_POOLING ||
-    process.env.POSTGRES_PRISMA_URL ||
     fileEnv.PREVIEW_DATABASE_URL ||
     fileEnv.POSTGRES_URL_NON_POOLING ||
-    fileEnv.POSTGRES_PRISMA_URL;
+    fileEnv.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRES_PRISMA_URL;
   if (!url || !String(url).startsWith('postgres')) {
     console.error('FATAL: Preview Postgres URL required. Probe did not execute.');
     process.exit(2);
   }
-  if (/tillflow(?!_preview)|prod/i.test(url) && !/preview/i.test(url)) {
+  const looksPreview =
+    /preview/i.test(url) ||
+    /tillflow_preview/i.test(url) ||
+    process.env.ALLOW_PREVIEW_PROBE_URL === '1';
+  if (!looksPreview) {
     console.error('FATAL: Refusing URL that does not look like Preview.');
     process.exit(2);
   }
