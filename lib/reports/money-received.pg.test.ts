@@ -259,12 +259,18 @@ describePg('money received reconciliation (Postgres)', () => {
     expect(receipts.receivedAtSalePence).toBe(13000);
     expect(receipts.laterCreditCollectionPence).toBe(0);
     expect(receipts.unknownHistoricalOriginPence).toBe(0);
+    expect(receipts.byMethod.CASH + receipts.byMethod.CARD + receipts.byMethod.TRANSFER + receipts.byMethod.MOBILE_MONEY)
+      .toBe(receipts.totalPence);
     expect(
       receipts.receivedAtSalePence
         + receipts.laterCreditCollectionPence
-        + receipts.unknownHistoricalOriginPence
-        + receipts.reversalPence,
+        + receipts.unknownHistoricalOriginPence,
     ).toBe(receipts.totalPence);
+    expect(
+      receipts.receivedAtSaleCount
+        + receipts.laterCreditCollectionCount
+        + receipts.unknownHistoricalOriginCount,
+    ).toBe(receipts.totalCount);
     expect(revenue.creditSalesOutstandingPence).toBe(7000);
   });
 
@@ -429,9 +435,13 @@ describePg('money received reconciliation (Postgres)', () => {
     expect(
       receipts.receivedAtSalePence
         + receipts.laterCreditCollectionPence
-        + receipts.unknownHistoricalOriginPence
-        + receipts.reversalPence,
+        + receipts.unknownHistoricalOriginPence,
     ).toBe(receipts.totalPence);
+    expect(
+      receipts.receivedAtSaleCount
+        + receipts.laterCreditCollectionCount
+        + receipts.unknownHistoricalOriginCount,
+    ).toBe(receipts.totalCount);
 
     const unknownListed = await listMoneyReceivedPayments({
       scope,

@@ -16,6 +16,7 @@ on:
       - 'lib/reports/money-received.ts'
       - 'lib/reports/money-received-classify.ts'
       - 'lib/reports/money-received.pg.test.ts'
+      - 'lib/reports/money-received-scale.pg.test.ts'
       - 'docs/migration/P1_SLICE1_SQL_ONLY_CONSTRAINTS.md'
       - 'docs/migration/P1_SLICE2A_CONTRACT.md'
       - 'docs/migration/P1_SLICE2B_CONTRACT.md'
@@ -83,7 +84,7 @@ jobs:
         run: npm run test:payment-receipt-origin:pg
 
       - name: Money received reporting PostgreSQL suite
-        run: npx vitest run --reporter=dot lib/reports/money-received.pg.test.ts
+        run: npx vitest run --reporter=dot lib/reports/money-received.pg.test.ts lib/reports/money-received-scale.pg.test.ts
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
           POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public

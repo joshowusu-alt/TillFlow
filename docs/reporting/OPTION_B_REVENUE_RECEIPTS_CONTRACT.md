@@ -11,8 +11,12 @@
  * - Known buckets: RECEIVED_AT_SALE, LATER_CREDIT_COLLECTION.
  * - Unknown bucket: historical NULL / UNCLASSIFIED — kept visible; not discarded to
  *   force known-origin subtotals to equal total Money received.
- * - Reconciliation (non-reversal identity):
- *   total = received-at-sale + later collections + unknown historical (+ reversals tracked separately).
+ * - Reconciliation:
+ *   total amount = Σ method groups (supported methods in fixtures)
+ *   total amount = received-at-sale + later collections + unknown historical
+ *   total count = origin counts
+ *   Signed reversals stay in their origin bucket (also surfaced as reversalPence).
+ * - Summary aggregation is complete DB SQL — never a capped in-memory findMany.
  * - Cash Drawer remains physical-cash-only (CASH_SALE / CASH_DEBTOR / etc.).
  * - Period bounds: business timezone, inclusive start / exclusive end.
  * - No PR #84 schema migration or historical origin backfill.

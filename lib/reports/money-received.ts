@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   REPORTING_EXCLUDED_PAYMENT_STATUSES,
@@ -22,6 +23,12 @@ export {
 };
 export type { ReceiptClassification, ReceiptPaymentState };
 
+/**
+ * Historical defective in-memory summary cap. Must never be used for aggregation.
+ * Kept only so tests can prove we did not raise or reintroduce a row-cap workaround.
+ */
+export const LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP = 20_000;
+
 export const SUPPORTED_RECEIPT_METHODS = ['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'] as const;
 export type ReceiptPaymentMethod = (typeof SUPPORTED_RECEIPT_METHODS)[number];
 
@@ -43,11 +50,16 @@ export type MoneyReceivedByMethod = Record<ReceiptPaymentMethod, number>;
 export type MoneyReceivedSummary = {
   byMethod: MoneyReceivedByMethod;
   totalPence: number;
+  totalCount: number;
   receivedAtSalePence: number;
   laterCreditCollectionPence: number;
   /** Historical NULL / explicit UNCLASSIFIED — never inferred as a known origin. */
   unknownHistoricalOriginPence: number;
+  /** Sum of negative payment amounts (display / audit); already included in origin buckets. */
   reversalPence: number;
+  receivedAtSaleCount: number;
+  laterCreditCollectionCount: number;
+  unknownHistoricalOriginCount: number;
 };
 
 export type MoneyReceivedRow = {
@@ -62,7 +74,6 @@ export type MoneyReceivedRow = {
   status: string;
   reference: string | null;
   network: string | null;
-  payerMsisdn: string | null;
   provider: string | null;
   transactionNumber: string | null;
   invoiceId: string;
@@ -82,6 +93,11 @@ function emptyByMethod(): MoneyReceivedByMethod {
 
 function isSupportedMethod(method: string): method is ReceiptPaymentMethod {
   return (SUPPORTED_RECEIPT_METHODS as readonly string[]).includes(method);
+}
+
+function toNumber(value: bigint | number | null | undefined): number {
+  if (value == null) return 0;
+  return typeof value === 'bigint' ? Number(value) : value;
 }
 
 function originFilter(origin?: ReceiptOrigin | null) {
@@ -115,62 +131,101 @@ function paymentListWhere(
   };
 }
 
+type AggregateRow = {
+  total_pence: bigint;
+  total_count: bigint;
+  cash_pence: bigint;
+  card_pence: bigint;
+  transfer_pence: bigint;
+  momo_pence: bigint;
+  at_sale_pence: bigint;
+  later_pence: bigint;
+  unknown_pence: bigint;
+  reversal_pence: bigint;
+  at_sale_count: bigint;
+  later_count: bigint;
+  unknown_count: bigint;
+};
+
 /**
  * Aggregate money received from payment records for the scope.
  *
- * Origin buckets use persisted receiptOrigin only.
- * Identity (non-forced):
- *   totalPence = receivedAtSale + laterCredit + unknownHistorical + reversal
+ * Complete database aggregation — never load matching payments into app memory.
+ *
+ * Origin buckets use persisted receiptOrigin only (NULL / invalid → unknown).
+ * Identities:
+ *   totalPence = Σ supported method groups (+ any unsupported method amounts still in total)
+ *   totalPence = receivedAtSale + laterCredit + unknownHistorical
+ *   totalCount = receivedAtSaleCount + laterCreditCount + unknownCount
+ * Signed reversals remain in their origin bucket and are also surfaced as reversalPence.
  */
 export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<MoneyReceivedSummary> {
-  const payments = await prisma.salesPayment.findMany({
-    where: paymentListWhere(scope),
-    select: {
-      amountPence: true,
-      method: true,
-      receiptOrigin: true,
-    },
-    // Bounded fetch for origin buckets; retail-day aggregates stay well under this.
-    take: 20_000,
-    orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
-  });
+  const storeClause =
+    scope.storeId === 'ALL'
+      ? Prisma.empty
+      : Prisma.sql`AND si."storeId" = ${scope.storeId}`;
 
+  const rows = await prisma.$queryRaw<AggregateRow[]>`
+    SELECT
+      COALESCE(SUM(sp."amountPence"), 0)::bigint AS total_pence,
+      COUNT(*)::bigint AS total_count,
+      COALESCE(SUM(CASE WHEN sp.method = 'CASH' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS cash_pence,
+      COALESCE(SUM(CASE WHEN sp.method = 'CARD' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS card_pence,
+      COALESCE(SUM(CASE WHEN sp.method = 'TRANSFER' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS transfer_pence,
+      COALESCE(SUM(CASE WHEN sp.method = 'MOBILE_MONEY' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS momo_pence,
+      COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'RECEIVED_AT_SALE' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS at_sale_pence,
+      COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'LATER_CREDIT_COLLECTION' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS later_pence,
+      COALESCE(SUM(
+        CASE
+          WHEN sp."receiptOrigin" IS NULL
+            OR sp."receiptOrigin" = ''
+            OR sp."receiptOrigin" = 'UNCLASSIFIED'
+            OR sp."receiptOrigin" NOT IN ('RECEIVED_AT_SALE', 'LATER_CREDIT_COLLECTION', 'UNCLASSIFIED')
+          THEN sp."amountPence"
+          ELSE 0
+        END
+      ), 0)::bigint AS unknown_pence,
+      COALESCE(SUM(CASE WHEN sp."amountPence" < 0 THEN sp."amountPence" ELSE 0 END), 0)::bigint AS reversal_pence,
+      COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'RECEIVED_AT_SALE' THEN 1 ELSE 0 END), 0)::bigint AS at_sale_count,
+      COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'LATER_CREDIT_COLLECTION' THEN 1 ELSE 0 END), 0)::bigint AS later_count,
+      COALESCE(SUM(
+        CASE
+          WHEN sp."receiptOrigin" IS NULL
+            OR sp."receiptOrigin" = ''
+            OR sp."receiptOrigin" = 'UNCLASSIFIED'
+            OR sp."receiptOrigin" NOT IN ('RECEIVED_AT_SALE', 'LATER_CREDIT_COLLECTION', 'UNCLASSIFIED')
+          THEN 1
+          ELSE 0
+        END
+      ), 0)::bigint AS unknown_count
+    FROM "SalesPayment" sp
+    INNER JOIN "SalesInvoice" si ON si.id = sp."salesInvoiceId"
+    WHERE sp."receivedAt" >= ${scope.startInclusive}
+      AND sp."receivedAt" < ${scope.endExclusive}
+      AND sp.status NOT IN (${Prisma.join([...REPORTING_EXCLUDED_PAYMENT_STATUSES])})
+      AND si."businessId" = ${scope.businessId}
+      AND si."paymentStatus" NOT IN (${Prisma.join([...REPORTING_EXCLUDED_SALE_STATUSES])})
+      ${storeClause}
+  `;
+
+  const row = rows[0];
   const byMethod = emptyByMethod();
-  let totalPence = 0;
-  let receivedAtSalePence = 0;
-  let laterCreditCollectionPence = 0;
-  let unknownHistoricalOriginPence = 0;
-  let reversalPence = 0;
-
-  for (const payment of payments) {
-    if (isSupportedMethod(payment.method)) {
-      byMethod[payment.method] += payment.amountPence;
-    }
-    totalPence += payment.amountPence;
-
-    const { classification, paymentState } = classifySalesPaymentReceipt({
-      amountPence: payment.amountPence,
-      receiptOrigin: payment.receiptOrigin,
-    });
-
-    if (paymentState === 'REVERSAL') {
-      reversalPence += payment.amountPence;
-    } else if (classification === 'RECEIVED_AT_SALE') {
-      receivedAtSalePence += payment.amountPence;
-    } else if (classification === 'LATER_CREDIT_COLLECTION') {
-      laterCreditCollectionPence += payment.amountPence;
-    } else {
-      unknownHistoricalOriginPence += payment.amountPence;
-    }
-  }
+  byMethod.CASH = toNumber(row?.cash_pence);
+  byMethod.CARD = toNumber(row?.card_pence);
+  byMethod.TRANSFER = toNumber(row?.transfer_pence);
+  byMethod.MOBILE_MONEY = toNumber(row?.momo_pence);
 
   return {
     byMethod,
-    totalPence,
-    receivedAtSalePence,
-    laterCreditCollectionPence,
-    unknownHistoricalOriginPence,
-    reversalPence,
+    totalPence: toNumber(row?.total_pence),
+    totalCount: toNumber(row?.total_count),
+    receivedAtSalePence: toNumber(row?.at_sale_pence),
+    laterCreditCollectionPence: toNumber(row?.later_pence),
+    unknownHistoricalOriginPence: toNumber(row?.unknown_pence),
+    reversalPence: toNumber(row?.reversal_pence),
+    receivedAtSaleCount: toNumber(row?.at_sale_count),
+    laterCreditCollectionCount: toNumber(row?.later_count),
+    unknownHistoricalOriginCount: toNumber(row?.unknown_count),
   };
 }
 
@@ -213,7 +268,6 @@ export async function listMoneyReceivedPayments(input: {
       receivedAt: true,
       reference: true,
       network: true,
-      payerMsisdn: true,
       provider: true,
       status: true,
       receiptOrigin: true,
@@ -254,7 +308,6 @@ export async function listMoneyReceivedPayments(input: {
       status: payment.status,
       reference: payment.reference,
       network: payment.network,
-      payerMsisdn: payment.payerMsisdn,
       provider: payment.provider,
       transactionNumber: payment.salesInvoice.transactionNumber,
       invoiceId: payment.salesInvoice.id,

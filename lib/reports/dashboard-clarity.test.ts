@@ -79,6 +79,14 @@ describe('Reports dashboard clarity pass', () => {
     expect(weeklyPage).not.toContain('Payment Receipts Split');
   });
 
+  it('Money received summary uses DB aggregation without legacy row cap', () => {
+    const moneyReceived = readSource('lib/reports/money-received.ts');
+    expect(moneyReceived).toContain('$queryRaw');
+    expect(moneyReceived).toContain('LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP');
+    expect(moneyReceived).not.toMatch(/take:\s*20_000/);
+    expect(moneyReceived).not.toContain('payerMsisdn');
+  });
+
   it('payment section helper clarifies receipts vs sales distinction on both reports', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyPage = readSource('app/(protected)/reports/weekly-digest/page.tsx');
