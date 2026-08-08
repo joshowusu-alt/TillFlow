@@ -28,7 +28,7 @@ type ZonedDateParts = {
   second: number;
 };
 
-type LocalDateParts = Pick<ZonedDateParts, 'year' | 'month' | 'day'>;
+export type LocalDateParts = Pick<ZonedDateParts, 'year' | 'month' | 'day'>;
 
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
@@ -139,6 +139,18 @@ function getNextLocalDate(parts: LocalDateParts): LocalDateParts {
 export function getBusinessDayBounds(date: Date, timeZone?: string | null) {
   const resolvedTimeZone = resolveBusinessTimeZone(timeZone);
   const localDate = getZonedDateParts(date, resolvedTimeZone);
+  return getBusinessCalendarDayBounds(localDate, resolvedTimeZone);
+}
+
+/**
+ * Inclusive start / exclusive end for a calendar Y-M-D in the business timezone.
+ * Prefer this over server-local setHours for reporting period boundaries.
+ */
+export function getBusinessCalendarDayBounds(
+  localDate: LocalDateParts,
+  timeZone?: string | null,
+) {
+  const resolvedTimeZone = resolveBusinessTimeZone(timeZone);
   const dayStart = zonedTimeToUtc(
     {
       year: localDate.year,
@@ -167,8 +179,34 @@ export function getBusinessDayBounds(date: Date, timeZone?: string | null) {
     timeZone: resolvedTimeZone,
     dayStart,
     dayEndExclusive,
-    localDate,
+    localDate: {
+      year: localDate.year,
+      month: localDate.month,
+      day: localDate.day,
+    },
   };
+}
+
+/** Parse YYYY-MM-DD into local date parts; returns null when malformed. */
+export function parseBusinessLocalDateKey(value: string | undefined | null): LocalDateParts | null {
+  const trimmed = value?.trim() ?? '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  // Reject impossible calendar dates (e.g. 2026-02-31).
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (
+    probe.getUTCFullYear() !== year
+    || probe.getUTCMonth() !== month - 1
+    || probe.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return { year, month, day };
 }
 
 export function formatBusinessDateLabel(date: Date, timeZone?: string | null) {

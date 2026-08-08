@@ -17,7 +17,10 @@ describe('Mobile dashboard sales consistency', () => {
     expect(navKpis).toContain('txCount: summary.todayTransactionCount');
     expect(navKpis).not.toContain('getTodayKPIs');
 
-    expect(homeSummary).toContain('paymentStatus: { notIn: [\'RETURNED\', \'VOID\']');
+    expect(homeSummary).toContain('REPORTING_EXCLUDED_SALE_STATUSES');
+    expect(homeSummary).toContain('getSalesRevenueSummary');
+    expect(homeSummary).toContain('tradingReportHref');
+    expect(homeSummary).toContain("period: 'today'");
     expect(onboarding).toContain("import { getTodayKPIs } from '@/lib/reports/today-kpis'");
     expect(onboarding).toContain('getTodayKPIs(business.id)');
     expect(onboarding).toContain('todayRevenuePence: todayKpis?.totalSalesPence ?? 0');

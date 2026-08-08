@@ -143,11 +143,18 @@ export default async function CashDrawerReportPage({
       />
 
       <section className="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm leading-relaxed text-blue-900 shadow-sm">
-        This report covers physical cash only. MoMo, card, and bank transfer receipts are not included here — see the{' '}
-        <a href="/reports/dashboard" className="font-semibold underline underline-offset-2">
-          Trading Report
+        This report covers physical cash movements only — notes and coins in the till.
+        MoMo, card, and bank transfer receipts are electronic payments and are not included here.
+        Inspect them under{' '}
+        <a href="/reports/dashboard#money-received" className="font-semibold underline underline-offset-2">
+          Trading Report → Money received
+        </a>
+        {' '}or the{' '}
+        <a href="/reports/receipts?period=today&storeId=ALL" className="font-semibold underline underline-offset-2">
+          Money received
         </a>{' '}
-        for all payment methods.
+        payment list. Cash Drawer follows shift open times and till activity, so figures may differ
+        from calendar-day cash receipts.
       </section>
 
       <ReportFilterCard
