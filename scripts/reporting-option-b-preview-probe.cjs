@@ -176,6 +176,7 @@ async function main() {
     payCreditCash: cuidLike(),
     payLaterMomo: cuidLike(),
     payLaterCash: cuidLike(),
+    payUnknown: cuidLike(),
     foreignPay: cuidLike(),
   };
 
@@ -409,6 +410,17 @@ async function main() {
       receiptOrigin: null,
     });
 
+    // Unsupported method (exact match only) — must land in Unknown/Other.
+    await insertPayment({
+      id: ids.payUnknown,
+      salesInvoiceId: ids.saleCash,
+      method: 'CHEQUE',
+      amountPence: 1500,
+      receivedAt: saleAt,
+      reference: `CHEQUE-REF-${stamp}`,
+      receiptOrigin: 'RECEIVED_AT_SALE',
+    });
+
     await insertSale({
       id: ids.foreignSale,
       businessId: ids.foreignBusiness,
@@ -461,7 +473,8 @@ async function main() {
     assert(/Sales revenue/i.test(tradingText), 'Missing Sales revenue label');
     assert(/Money received/i.test(tradingText), 'Missing Money received label');
     assert(/372\.00/.test(tradingText), 'Trading Sales revenue missing GH₵372.00');
-    assert(/372\.00/.test(tradingText), 'Trading Money received should include GH₵372.00 total receipts');
+    assert(/387\.00/.test(tradingText), 'Trading Money received should include GH₵387.00 (372 + CHEQUE 15)');
+    assert(/Unknown\/Other/i.test(tradingText), 'Missing Unknown/Other method bucket');
     assert(/Historical — not classified|Historical - not classified/i.test(tradingText), 'Missing unknown-origin bucket');
     assert(/Received at sale/i.test(tradingText), 'Missing received-at-sale bucket');
     assert(/Later credit collected/i.test(tradingText), 'Missing later-collection bucket');
@@ -530,6 +543,19 @@ async function main() {
     checks.push({ name: 'cash_drilldown' });
     console.log('PASS Cash payment drill-down');
 
+    await page.goto(
+      `${base}/reports/receipts?period=today&method=UNKNOWN&storeId=ALL`,
+      { waitUntil: 'networkidle', timeout: 90000 }
+    );
+    await page.getByText(/Money received|Unknown/i).first().waitFor({ timeout: 60000 });
+    const unknownText = await page.locator('body').innerText();
+    assert(/Unknown\/Other/i.test(unknownText), 'UNKNOWN filter missing Unknown/Other label');
+    assert(/15\.00/.test(unknownText), 'UNKNOWN filter missing CHEQUE amount');
+    assert(/CHEQUE-REF-/i.test(unknownText), 'UNKNOWN filter missing CHEQUE reference');
+    assert(!/OB-FOREIGN|999\.00/.test(unknownText), 'Foreign tenant leaked into UNKNOWN filter');
+    checks.push({ name: 'unknown_method_filter' });
+    console.log('PASS Unknown/Other method filter');
+
     await page.goto(`${base}/reports/cash-drawer`, {
       waitUntil: 'networkidle',
       timeout: 90000,
@@ -590,7 +616,9 @@ async function main() {
       JSON.stringify(
         {
           tag,
-          expectedRevenuePence: 36000,
+          expectedRevenuePence: 37200,
+          expectedMoneyReceivedPence: 38700,
+          expectedUnknownMethodPence: 1500,
           expectedCashReceiptsPence: 20000,
           expectedMomoReceiptsPence: 16000,
           checks: checks.map((c) => c.name),
@@ -626,6 +654,7 @@ async function main() {
           ids.payCreditCash,
           ids.payLaterMomo,
           ids.payLaterCash,
+          ids.payUnknown,
           ids.foreignPay,
         ],
       ]);
