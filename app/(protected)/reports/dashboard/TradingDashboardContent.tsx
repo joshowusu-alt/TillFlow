@@ -12,7 +12,6 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observa
 import {
   getMoneyReceivedSummary,
   RECEIPT_METHOD_LABELS,
-  type ReceiptPaymentMethod,
 } from '@/lib/reports/money-received';
 import {
   buildReportingScopeSearchParams,
@@ -656,10 +655,11 @@ export default async function TradingDashboardContent({
           <div className="space-y-3 text-sm">
             {(
               [
-                { label: RECEIPT_METHOD_LABELS.CASH, key: 'CASH' as ReceiptPaymentMethod, cls: 'bg-emerald-500', text: 'text-emerald-700' },
-                { label: RECEIPT_METHOD_LABELS.MOBILE_MONEY, key: 'MOBILE_MONEY' as ReceiptPaymentMethod, cls: 'bg-amber-500', text: 'text-amber-700' },
-                { label: RECEIPT_METHOD_LABELS.CARD, key: 'CARD' as ReceiptPaymentMethod, cls: 'bg-blue-500', text: 'text-accent' },
-                { label: RECEIPT_METHOD_LABELS.TRANSFER, key: 'TRANSFER' as ReceiptPaymentMethod, cls: 'bg-purple-500', text: 'text-purple-700' },
+                { label: RECEIPT_METHOD_LABELS.CASH, key: 'CASH' as const, cls: 'bg-emerald-500', text: 'text-emerald-700' },
+                { label: RECEIPT_METHOD_LABELS.MOBILE_MONEY, key: 'MOBILE_MONEY' as const, cls: 'bg-amber-500', text: 'text-amber-700' },
+                { label: RECEIPT_METHOD_LABELS.CARD, key: 'CARD' as const, cls: 'bg-blue-500', text: 'text-accent' },
+                { label: RECEIPT_METHOD_LABELS.TRANSFER, key: 'TRANSFER' as const, cls: 'bg-purple-500', text: 'text-purple-700' },
+                { label: RECEIPT_METHOD_LABELS.UNKNOWN, key: 'UNKNOWN' as const, cls: 'bg-slate-400', text: 'text-slate-700' },
               ] as const
             ).map(({ label, key, cls, text }) => {
               const amount = paymentSplit[key];
@@ -685,6 +685,12 @@ export default async function TradingDashboardContent({
               );
             })}
           </div>
+          {moneyReceived.byMethod.UNKNOWN !== 0 ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-black/50">
+              Unknown/Other includes stored payment methods outside the recognised set
+              (blank, differently cased, legacy or future values). They remain in the total.
+            </p>
+          ) : null}
           <p className="mt-3 text-[11px] leading-relaxed text-black/45">
             Electronic payments (MoMo, card, bank transfer) are listed here — not in the Cash Drawer.
             Physical cash till movements: <a href={cashDrawerHref} className="font-medium underline underline-offset-2">Cash Drawer</a>.

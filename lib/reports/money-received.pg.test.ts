@@ -259,8 +259,15 @@ describePg('money received reconciliation (Postgres)', () => {
     expect(receipts.receivedAtSalePence).toBe(13000);
     expect(receipts.laterCreditCollectionPence).toBe(0);
     expect(receipts.unknownHistoricalOriginPence).toBe(0);
-    expect(receipts.byMethod.CASH + receipts.byMethod.CARD + receipts.byMethod.TRANSFER + receipts.byMethod.MOBILE_MONEY)
+    expect(receipts.byMethod.CASH + receipts.byMethod.CARD + receipts.byMethod.TRANSFER + receipts.byMethod.MOBILE_MONEY + receipts.byMethod.UNKNOWN)
       .toBe(receipts.totalPence);
+    expect(
+      receipts.byMethodCount.CASH
+        + receipts.byMethodCount.CARD
+        + receipts.byMethodCount.TRANSFER
+        + receipts.byMethodCount.MOBILE_MONEY
+        + receipts.byMethodCount.UNKNOWN,
+    ).toBe(receipts.totalCount);
     expect(
       receipts.receivedAtSalePence
         + receipts.laterCreditCollectionPence

@@ -199,6 +199,8 @@ describe('Reports dashboard clarity pass', () => {
     expect(dashboard).toContain('outstandingAR');
     expect(dashboard).toContain('outstandingAP');
     expect(dashboard).toContain('moneyReceived.byMethod');
+    expect(dashboard).toContain('RECEIPT_METHOD_LABELS.UNKNOWN');
+    expect(dashboard).toContain('Unknown/Other');
     expect(dashboard).toContain('totalGrossMargin');
     expect(dashboard).toContain('income.otherExpenses');
   });

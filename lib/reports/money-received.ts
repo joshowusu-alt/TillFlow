@@ -29,14 +29,25 @@ export type { ReceiptClassification, ReceiptPaymentState };
  */
 export const LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP = 20_000;
 
+/** Exact stored values recognised by the Money received contract (case-sensitive). */
 export const SUPPORTED_RECEIPT_METHODS = ['CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY'] as const;
 export type ReceiptPaymentMethod = (typeof SUPPORTED_RECEIPT_METHODS)[number];
 
-export const RECEIPT_METHOD_LABELS: Record<ReceiptPaymentMethod, string> = {
+/** Filter / bucket key for every stored method that is not an exact supported value. */
+export const UNKNOWN_RECEIPT_METHOD = 'UNKNOWN' as const;
+export type ReceiptMethodBucket = ReceiptPaymentMethod | typeof UNKNOWN_RECEIPT_METHOD;
+
+export const RECEIPT_METHOD_BUCKETS = [
+  ...SUPPORTED_RECEIPT_METHODS,
+  UNKNOWN_RECEIPT_METHOD,
+] as const satisfies readonly ReceiptMethodBucket[];
+
+export const RECEIPT_METHOD_LABELS: Record<ReceiptMethodBucket, string> = {
   CASH: 'Physical cash',
   MOBILE_MONEY: 'Mobile Money (MoMo)',
   CARD: 'Card',
   TRANSFER: 'Bank transfer',
+  UNKNOWN: 'Unknown/Other',
 };
 
 export const SUPPORTED_RECEIPT_ORIGINS = [
@@ -45,10 +56,11 @@ export const SUPPORTED_RECEIPT_ORIGINS = [
   'UNCLASSIFIED',
 ] as const satisfies readonly ReceiptOrigin[];
 
-export type MoneyReceivedByMethod = Record<ReceiptPaymentMethod, number>;
+export type MoneyReceivedByMethod = Record<ReceiptMethodBucket, number>;
 
 export type MoneyReceivedSummary = {
   byMethod: MoneyReceivedByMethod;
+  byMethodCount: MoneyReceivedByMethod;
   totalPence: number;
   totalCount: number;
   receivedAtSalePence: number;
@@ -68,6 +80,7 @@ export type MoneyReceivedRow = {
   amountPence: number;
   method: string;
   methodLabel: string;
+  methodBucket: ReceiptMethodBucket;
   classification: ReceiptClassification;
   classificationLabel: string;
   paymentState: ReceiptPaymentState;
@@ -88,11 +101,28 @@ export type MoneyReceivedRow = {
 };
 
 function emptyByMethod(): MoneyReceivedByMethod {
-  return { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0 };
+  return { CASH: 0, CARD: 0, TRANSFER: 0, MOBILE_MONEY: 0, UNKNOWN: 0 };
 }
 
-function isSupportedMethod(method: string): method is ReceiptPaymentMethod {
+export function isSupportedMethod(method: string): method is ReceiptPaymentMethod {
   return (SUPPORTED_RECEIPT_METHODS as readonly string[]).includes(method);
+}
+
+export function resolveReceiptMethodBucket(
+  method: string | null | undefined,
+): ReceiptMethodBucket {
+  if (method != null && isSupportedMethod(method)) return method;
+  return UNKNOWN_RECEIPT_METHOD;
+}
+
+export function sumMoneyReceivedByMethod(byMethod: MoneyReceivedByMethod): number {
+  return (
+    byMethod.CASH
+    + byMethod.CARD
+    + byMethod.TRANSFER
+    + byMethod.MOBILE_MONEY
+    + byMethod.UNKNOWN
+  );
 }
 
 function toNumber(value: bigint | number | null | undefined): number {
@@ -110,18 +140,25 @@ function originFilter(origin?: ReceiptOrigin | null) {
   return { receiptOrigin: origin };
 }
 
+function methodFilter(method?: ReceiptMethodBucket | null) {
+  if (!method) return {};
+  if (method === UNKNOWN_RECEIPT_METHOD) {
+    // SalesPayment.method is a required string; unsupported/blank/wrong-case values
+    // are exactly those not in the supported set (exact match).
+    return { method: { notIn: [...SUPPORTED_RECEIPT_METHODS] } };
+  }
+  return { method };
+}
+
 function paymentListWhere(
   scope: ReportingScope,
-  method?: string | null,
+  method?: ReceiptMethodBucket | null,
   origin?: ReceiptOrigin | null,
 ) {
-  const methodFilter =
-    method && isSupportedMethod(method) ? { method } : {};
-
   return {
     receivedAt: reportingTimestampFilter(scope),
     status: { notIn: [...REPORTING_EXCLUDED_PAYMENT_STATUSES] },
-    ...methodFilter,
+    ...methodFilter(method),
     ...originFilter(origin),
     salesInvoice: {
       businessId: scope.businessId,
@@ -138,6 +175,12 @@ type AggregateRow = {
   card_pence: bigint;
   transfer_pence: bigint;
   momo_pence: bigint;
+  unknown_method_pence: bigint;
+  cash_count: bigint;
+  card_count: bigint;
+  transfer_count: bigint;
+  momo_count: bigint;
+  unknown_method_count: bigint;
   at_sale_pence: bigint;
   later_pence: bigint;
   unknown_pence: bigint;
@@ -152,12 +195,14 @@ type AggregateRow = {
  *
  * Complete database aggregation — never load matching payments into app memory.
  *
- * Origin buckets use persisted receiptOrigin only (NULL / invalid → unknown).
+ * Method buckets: exact CASH/CARD/TRANSFER/MOBILE_MONEY only; every other stored
+ * value (blank, whitespace, wrong case, legacy/future) → UNKNOWN.
+ *
  * Identities:
- *   totalPence = Σ supported method groups (+ any unsupported method amounts still in total)
+ *   totalPence = CASH + CARD + TRANSFER + MOBILE_MONEY + UNKNOWN
+ *   totalCount = Σ method counts
  *   totalPence = receivedAtSale + laterCredit + unknownHistorical
- *   totalCount = receivedAtSaleCount + laterCreditCount + unknownCount
- * Signed reversals remain in their origin bucket and are also surfaced as reversalPence.
+ *   totalCount = Σ origin counts
  */
 export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<MoneyReceivedSummary> {
   const storeClause =
@@ -173,6 +218,24 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
       COALESCE(SUM(CASE WHEN sp.method = 'CARD' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS card_pence,
       COALESCE(SUM(CASE WHEN sp.method = 'TRANSFER' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS transfer_pence,
       COALESCE(SUM(CASE WHEN sp.method = 'MOBILE_MONEY' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS momo_pence,
+      COALESCE(SUM(
+        CASE
+          WHEN sp.method IS NULL OR sp.method NOT IN ('CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY')
+          THEN sp."amountPence"
+          ELSE 0
+        END
+      ), 0)::bigint AS unknown_method_pence,
+      COALESCE(SUM(CASE WHEN sp.method = 'CASH' THEN 1 ELSE 0 END), 0)::bigint AS cash_count,
+      COALESCE(SUM(CASE WHEN sp.method = 'CARD' THEN 1 ELSE 0 END), 0)::bigint AS card_count,
+      COALESCE(SUM(CASE WHEN sp.method = 'TRANSFER' THEN 1 ELSE 0 END), 0)::bigint AS transfer_count,
+      COALESCE(SUM(CASE WHEN sp.method = 'MOBILE_MONEY' THEN 1 ELSE 0 END), 0)::bigint AS momo_count,
+      COALESCE(SUM(
+        CASE
+          WHEN sp.method IS NULL OR sp.method NOT IN ('CASH', 'CARD', 'TRANSFER', 'MOBILE_MONEY')
+          THEN 1
+          ELSE 0
+        END
+      ), 0)::bigint AS unknown_method_count,
       COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'RECEIVED_AT_SALE' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS at_sale_pence,
       COALESCE(SUM(CASE WHEN sp."receiptOrigin" = 'LATER_CREDIT_COLLECTION' THEN sp."amountPence" ELSE 0 END), 0)::bigint AS later_pence,
       COALESCE(SUM(
@@ -214,9 +277,18 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
   byMethod.CARD = toNumber(row?.card_pence);
   byMethod.TRANSFER = toNumber(row?.transfer_pence);
   byMethod.MOBILE_MONEY = toNumber(row?.momo_pence);
+  byMethod.UNKNOWN = toNumber(row?.unknown_method_pence);
+
+  const byMethodCount = emptyByMethod();
+  byMethodCount.CASH = toNumber(row?.cash_count);
+  byMethodCount.CARD = toNumber(row?.card_count);
+  byMethodCount.TRANSFER = toNumber(row?.transfer_count);
+  byMethodCount.MOBILE_MONEY = toNumber(row?.momo_count);
+  byMethodCount.UNKNOWN = toNumber(row?.unknown_method_count);
 
   return {
     byMethod,
+    byMethodCount,
     totalPence: toNumber(row?.total_pence),
     totalCount: toNumber(row?.total_count),
     receivedAtSalePence: toNumber(row?.at_sale_pence),
@@ -234,7 +306,7 @@ export const RECEIPTS_MAX_PAGE_SIZE = 50;
 
 export async function listMoneyReceivedPayments(input: {
   scope: ReportingScope;
-  method?: string | null;
+  method?: ReceiptMethodBucket | null;
   origin?: ReceiptOrigin | null;
   page?: number;
   pageSize?: number;
@@ -293,15 +365,14 @@ export async function listMoneyReceivedPayments(input: {
       amountPence: payment.amountPence,
       receiptOrigin: payment.receiptOrigin,
     });
-    const method = payment.method;
+    const methodBucket = resolveReceiptMethodBucket(payment.method);
     return {
       paymentId: payment.id,
       receivedAt: payment.receivedAt,
       amountPence: payment.amountPence,
-      method,
-      methodLabel: isSupportedMethod(method)
-        ? RECEIPT_METHOD_LABELS[method]
-        : method,
+      method: payment.method,
+      methodBucket,
+      methodLabel: RECEIPT_METHOD_LABELS[methodBucket],
       classification,
       classificationLabel: RECEIPT_CLASSIFICATION_LABELS[classification],
       paymentState,
@@ -339,9 +410,12 @@ export async function findTenantSalesPayment(input: {
   });
 }
 
-export function parseReceiptMethodParam(value: string | undefined | null): ReceiptPaymentMethod | null {
+export function parseReceiptMethodParam(
+  value: string | undefined | null,
+): ReceiptMethodBucket | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
+  if (trimmed === UNKNOWN_RECEIPT_METHOD) return UNKNOWN_RECEIPT_METHOD;
   return isSupportedMethod(trimmed) ? trimmed : null;
 }
 

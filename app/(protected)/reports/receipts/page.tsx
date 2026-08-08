@@ -18,7 +18,7 @@ import {
   parseReceiptOriginParam,
   RECEIPT_CLASSIFICATION_LABELS,
   RECEIPT_METHOD_LABELS,
-  SUPPORTED_RECEIPT_METHODS,
+  RECEIPT_METHOD_BUCKETS,
   SUPPORTED_RECEIPT_ORIGINS,
 } from '@/lib/reports/money-received';
 
@@ -127,7 +127,7 @@ export default async function MoneyReceivedReceiptsPage({
           <label className="label">Payment method</label>
           <select className="input" name="method" defaultValue={method ?? ''}>
             <option value="">All methods</option>
-            {SUPPORTED_RECEIPT_METHODS.map((value) => (
+            {RECEIPT_METHOD_BUCKETS.map((value) => (
               <option key={value} value={value}>
                 {RECEIPT_METHOD_LABELS[value]}
               </option>

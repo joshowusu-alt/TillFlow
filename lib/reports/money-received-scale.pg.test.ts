@@ -166,8 +166,16 @@ describePg('money received complete DB aggregation (Postgres scale)', () => {
       summary.byMethod.CASH
         + summary.byMethod.CARD
         + summary.byMethod.TRANSFER
-        + summary.byMethod.MOBILE_MONEY,
+        + summary.byMethod.MOBILE_MONEY
+        + summary.byMethod.UNKNOWN,
     ).toBe(summary.totalPence);
+    expect(
+      summary.byMethodCount.CASH
+        + summary.byMethodCount.CARD
+        + summary.byMethodCount.TRANSFER
+        + summary.byMethodCount.MOBILE_MONEY
+        + summary.byMethodCount.UNKNOWN,
+    ).toBe(summary.totalCount);
     expect(
       summary.receivedAtSalePence
         + summary.laterCreditCollectionPence
@@ -259,8 +267,16 @@ describePg('money received complete DB aggregation (Postgres scale)', () => {
       summary.byMethod.CASH
         + summary.byMethod.CARD
         + summary.byMethod.TRANSFER
-        + summary.byMethod.MOBILE_MONEY,
+        + summary.byMethod.MOBILE_MONEY
+        + summary.byMethod.UNKNOWN,
     ).toBe(summary.totalPence);
+    expect(
+      summary.byMethodCount.CASH
+        + summary.byMethodCount.CARD
+        + summary.byMethodCount.TRANSFER
+        + summary.byMethodCount.MOBILE_MONEY
+        + summary.byMethodCount.UNKNOWN,
+    ).toBe(summary.totalCount);
     expect(
       summary.receivedAtSalePence
         + summary.laterCreditCollectionPence
