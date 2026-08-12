@@ -94,6 +94,7 @@ export const REPORT_NAV_SECTIONS: NavigationSection[] = [
       { href: '/reports/dashboard', label: 'Trading Report', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
       { href: '/reports/money-received', label: 'Money Received', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
       { href: '/reports/momo-confirmation', label: 'MoMo Confirmation', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
+      { href: '/reports/business-movement', label: 'Business Movement', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
       { href: '/reports/receipts', label: 'Receipt transactions', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
       { href: '/reports/weekly-digest', label: 'Weekly Digest', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
     ],
