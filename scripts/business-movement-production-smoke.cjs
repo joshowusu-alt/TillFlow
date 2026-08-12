@@ -52,13 +52,18 @@ function assert(cond, msg) {
 }
 
 function denied(text, url) {
-  return (
-    /access denied|not authorised|not authorized|forbidden|do not have permission|insufficient/i.test(
+  if (/\/login/.test(url)) return true;
+  // Cashier requireBusiness redirect lands on /pos (not a report URL).
+  if (/\/pos(\/|\?|$)/i.test(url) && !/\/reports\//i.test(url)) return true;
+  if (
+    /Access denied/i.test(text) &&
+    /do not have access|not available for your business|another business|BRANCH_NOT_AUTHORISED|TENANT_MISMATCH|ROLE_DENIED/i.test(
       text,
-    ) ||
-    /\/login/.test(url) ||
-    /permission/i.test(text)
-  );
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function hasForbiddenStock(text) {
@@ -88,9 +93,9 @@ async function login(base, email, password, bypass) {
     page.waitForURL((url) => !String(url.pathname || '').includes('/login'), {
       timeout: 90000,
     }),
-    page.waitForTimeout(15000),
+    page.waitForTimeout(20000),
   ]).catch(() => null);
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     const cookies = await context.cookies();
     if (cookies.some((c) => c.name.startsWith('pos_session'))) break;
     await page.waitForTimeout(500);

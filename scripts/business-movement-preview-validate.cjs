@@ -62,13 +62,17 @@ function looksPreviewUrl(url) {
 }
 
 function denied(text, url) {
-  return (
-    /access denied|not authorised|not authorized|forbidden|do not have permission|insufficient/i.test(
+  if (/\/login/.test(url)) return true;
+  if (/\/pos(\/|\?|$)/i.test(url) && !/\/reports\//i.test(url)) return true;
+  if (
+    /Access denied/i.test(text) &&
+    /do not have access|not available for your business|another business|BRANCH_NOT_AUTHORISED|TENANT_MISMATCH|ROLE_DENIED/i.test(
       text,
-    ) ||
-    /\/login/.test(url) ||
-    /permission/i.test(text)
-  );
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function hasForbiddenStock(text) {
