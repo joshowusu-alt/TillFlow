@@ -340,6 +340,7 @@ describe('Step 5B preview-equivalent — access and surface', () => {
     expect(page).toContain('Needs MoMo confirmation');
     expect(page).toContain('Sale amend (money out)');
     expect(page).toContain('/reports/momo-confirmation');
+    expect(page).toContain('open review');
     expect(page).toContain('resolveMoneyReceivedAccess');
     expect(page).toContain('drillDownForMetric');
     expect(page).toContain('classifyMoneyReceivedRowKind');

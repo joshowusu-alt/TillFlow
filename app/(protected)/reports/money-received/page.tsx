@@ -271,15 +271,21 @@ export default async function MoneyReceivedReportPage({
           }
           helper="Returns/voids paid back — not subtracted from Money Received"
         />
-        <StatCard
-          label="Needs MoMo confirmation"
-          value={
-            queryFailed || unverified?.valuePence == null
-              ? '—'
-              : formatMoney(unverified.valuePence, currency)
-          }
-          helper="Left out of Money Received until confirmed"
-        />
+        <Link
+          href={`/reports/momo-confirmation?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+          className="block rounded-[1.25rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+        >
+          <StatCard
+            label="Needs MoMo confirmation"
+            value={
+              queryFailed || unverified?.valuePence == null
+                ? '—'
+                : formatMoney(unverified.valuePence, currency)
+            }
+            helper="Left out of Money Received until confirmed — open review"
+            tone="warn"
+          />
+        </Link>
         <StatCard
           label="Method check"
           value={bundle.methodReconcile.ok ? 'Balances' : 'Check needed'}
