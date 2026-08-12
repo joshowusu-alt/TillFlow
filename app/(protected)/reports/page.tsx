@@ -120,6 +120,14 @@ const reportGroups: ReportGroup[] = [
         badge: 'Cash',
       },
       {
+        label: 'Business Movement',
+        href: '/reports/business-movement',
+        description:
+          'What changed this month vs last — sales, Money Received, leakage, and ranked owner insights (facts first, not AI).',
+        icon: 'trend',
+        badge: 'Core',
+      },
+      {
         label: 'Sales Analytics',
         href: '/reports/analytics',
         description: 'Compare sales trends, product performance, categories, peak hours, and movement.',

@@ -99,6 +99,7 @@ describe('Reports Hub index polish', () => {
       '/reports/dashboard',
       '/reports/money-received',
       '/reports/momo-confirmation',
+      '/reports/business-movement',
       '/reports/analytics',
       '/reports/cash-drawer',
       '/reports/reorder-suggestions',
