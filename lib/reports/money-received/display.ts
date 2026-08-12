@@ -35,7 +35,7 @@ export function moneyReceivedRowKindLabel(kind: MoneyReceivedRowKind): string {
     case 'refund_outflow':
       return 'Refund outflow';
     case 'unverified':
-      return 'Unverified';
+      return 'Needs MoMo confirmation';
   }
 }
 

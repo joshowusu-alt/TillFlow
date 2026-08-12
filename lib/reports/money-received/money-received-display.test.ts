@@ -45,6 +45,6 @@ describe('Money Received owner-facing row kinds', () => {
       includedInMetricId: 'unverified_legacy_receipts',
     });
     expect(kind).toBe('unverified');
-    expect(moneyReceivedRowKindLabel(kind)).toBe('Unverified');
+    expect(moneyReceivedRowKindLabel(kind)).toBe('Needs MoMo confirmation');
   });
 });

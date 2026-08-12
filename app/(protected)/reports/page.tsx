@@ -107,9 +107,17 @@ const reportGroups: ReportGroup[] = [
         label: 'Money Received',
         href: '/reports/money-received',
         description:
-          'Confirmed money that came in by receipt time — method split, unverified items, and refunds kept separate (not a sales total).',
+          'Confirmed money that came in by receipt time — method split, MoMo needing confirmation, and refunds kept separate (not a sales total).',
         icon: 'cash',
         badge: 'Core',
+      },
+      {
+        label: 'MoMo Confirmation',
+        href: '/reports/momo-confirmation',
+        description:
+          'Review Mobile Money payments awaiting manual confirmation — not included in Money Received until confirmed.',
+        icon: 'cash',
+        badge: 'Cash',
       },
       {
         label: 'Sales Analytics',
