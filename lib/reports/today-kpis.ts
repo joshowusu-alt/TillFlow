@@ -10,7 +10,13 @@ import {
 } from './sqlite-report-date-normalization';
 import { summarizeInventoryRisk, summarizeReceivables } from './operational-metrics';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
-
+import {
+  aggregateConfirmedReceiptsThroughAsOf,
+  aggregateMoneyReceivedByMethod,
+  requireMoneyReceivedMethodRows,
+  resolveMoneyReceivedScope,
+} from '@/lib/reports/money-received';
+import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 export type TodayKPIs = {
   totalSalesPence: number;
   grossMarginPence: number;
@@ -62,18 +68,8 @@ async function getOperationalLiquidAssetsEstimatePence(
       },
       select: { amountPence: true },
     }),
-    prisma.salesPayment.aggregate({
-      where: {
-        receivedAt: { lte: asOf },
-        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
-        salesInvoice: {
-          businessId,
-          ...(storeId ? { storeId } : {}),
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      _sum: { amountPence: true },
-    }),
+    // Canonical CONFIRMED receipts through asOf — no parent RETURNED/VOID exclusion.
+    aggregateConfirmedReceiptsThroughAsOf(prisma, { businessId, asOf, storeId }),
     prisma.purchasePayment.aggregate({
       where: {
         paidAt: { lte: asOf },
@@ -91,6 +87,9 @@ async function getOperationalLiquidAssetsEstimatePence(
     }),
   ]);
 
+  // Do not convert a Money Received query failure into zero receipts.
+  if (salesPayments.queryFailed) return null;
+
   const openingPence = openingBalances.length > 0
     ? openingBalances.reduce((sum, row) => sum + row.amountPence, 0)
     : (business?.openingCapitalPence ?? 0);
@@ -98,7 +97,7 @@ async function getOperationalLiquidAssetsEstimatePence(
   return Math.max(
     0,
     openingPence +
-      (salesPayments._sum.amountPence ?? 0) -
+      salesPayments.amountPence -
       (purchasePayments._sum.amountPence ?? 0) -
       (expensePayments._sum.amountPence ?? 0)
   );
@@ -116,8 +115,10 @@ async function getLiquidAssetsPence(businessId: string, asOf: Date, storeId?: st
   // Prefer the formal accounting balance when it exists. If a business has
   // sales/payments but historical journal repair has not been run yet, fall
   // back to the operational payment ledger so deeper owner intelligence still
-  // has a practical cash-position signal.
+  // has a practical cash-position signal. If the operational receipt query
+  // failed, do not invent a zero-receipt cash position.
   if (accountingLiquidPence > 0) return accountingLiquidPence;
+  if (operationalLiquidPence === null) return accountingLiquidPence;
   return operationalLiquidPence;
 }
 
@@ -151,21 +152,18 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
         discountOverrideReason: true,
       },
     }),
-    prisma.salesPayment.findMany({
-      where: {
-        receivedAt: { gte: todayStart },
-        salesInvoice: {
-          businessId,
-          ...(storeId ? { storeId } : {}),
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      select: {
-        method: true,
-        amountPence: true,
-        receivedAt: true,
-      },
-    }),
+    aggregateMoneyReceivedByMethod(
+      prisma,
+      resolveMoneyReceivedScope({
+        businessId,
+        currency: 'GHS',
+        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        periodStart: todayStart,
+        periodEndInclusive: new Date(todayEnd.getTime() + 1),
+        branchIds: storeId ? [storeId] : null,
+        absoluteBounds: true,
+      }),
+    ),
     prisma.salesInvoice.findMany({
       where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
       select: {
@@ -245,11 +243,9 @@ async function getTodayKPIsSqlite(businessId: string, storeId: string | undefine
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
   const paymentSplit: Record<string, number> = {};
-  paymentRows
-    .filter((row) => isDateWithinRange(row.receivedAt, todayStart, todayEnd))
-    .forEach((row) => {
-      paymentSplit[row.method] = (paymentSplit[row.method] ?? 0) + row.amountPence;
-    });
+  for (const row of requireMoneyReceivedMethodRows(paymentRows)) {
+    paymentSplit[row.method] = (paymentSplit[row.method] ?? 0) + row.amountPence;
+  }
   const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 
   const receivables = summarizeReceivables(openSalesInvoices, now);
@@ -392,19 +388,19 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
       _sum: { totalPence: true },
       _count: { id: true },
     }),
-    // Today's payments grouped by method — aggregate at DB level
-    prisma.salesPayment.groupBy({
-      by: ['method'],
-      where: {
-        receivedAt: { gte: todayStart, lte: todayEnd },
-        salesInvoice: {
-          businessId,
-          ...(storeId ? { storeId } : {}),
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      _sum: { amountPence: true },
-    }),
+    // Today's payments — canonical Money Received (CONFIRMED; no parent RETURNED/VOID)
+    aggregateMoneyReceivedByMethod(
+      prisma,
+      resolveMoneyReceivedScope({
+        businessId,
+        currency: 'GHS',
+        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        periodStart: todayStart,
+        periodEndInclusive: new Date(todayEnd.getTime() + 1),
+        branchIds: storeId ? [storeId] : null,
+        absoluteBounds: true,
+      }),
+    ),
     prisma.salesInvoice.findMany({
       where: { businessId, ...storeFilter, paymentStatus: { in: ['UNPAID', 'PART_PAID'] }, createdAt: { gte: ninetyDaysAgo } },
       select: {
@@ -529,10 +525,10 @@ async function _getTodayKPIs(businessId: string, storeId?: string): Promise<Toda
   }, 0);
   const gpPercent = totalSalesPence > 0 ? Math.round((grossMarginPence / totalSalesPence) * 100) : 0;
 
-  // Payment split — already grouped by DB
+  // Payment split — canonical Money Received aggregation
   const paymentSplit: Record<string, number> = {};
-  for (const p of paymentsByMethod) {
-    paymentSplit[p.method] = p._sum.amountPence ?? 0;
+  for (const p of requireMoneyReceivedMethodRows(paymentsByMethod)) {
+    paymentSplit[p.method] = (paymentSplit[p.method] ?? 0) + p.amountPence;
   }
   const todayReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 

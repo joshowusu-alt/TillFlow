@@ -256,7 +256,7 @@ export function moneyReceivedHref(
     scope,
     Object.keys(extras).length ? extras : undefined,
   );
-  return `/reports/receipts?${params.toString()}`;
+  return `/reports/money-received?${params.toString()}`;
 }
 
 /** Prisma-friendly createdAt / receivedAt filter for inclusive/exclusive bounds. */

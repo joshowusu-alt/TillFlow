@@ -55,7 +55,6 @@ async function _getTradingDashboardSnapshot(
 
   const [
     salesAgg,
-    paymentsByMethod,
     income,
     outstandingSales,
     outstandingPurchases,
@@ -77,19 +76,8 @@ async function _getTradingDashboardSnapshot(
       },
       _sum: { totalPence: true },
     }),
-    prisma.salesPayment.groupBy({
-      by: ['method'],
-      where: {
-        receivedAt: { gte: start, lt: endExclusive },
-        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
-        salesInvoice: {
-          businessId,
-          ...(selectedStoreId === 'ALL' ? {} : { storeId: selectedStoreId }),
-          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
-        },
-      },
-      _sum: { amountPence: true },
-    }),
+    // Money Received method totals come from getMoneyReceivedSummary (canonical
+    // CONFIRMED inclusion; no parent RETURNED/VOID exclusion) — not a parallel groupBy.
     getIncomeStatement(businessId, start, endInclusiveForJournals),
     prisma.salesInvoice.findMany({
       where: {
@@ -274,7 +262,6 @@ async function _getTradingDashboardSnapshot(
   return {
     currency,
     salesAgg,
-    paymentsByMethod,
     income,
     outstandingSales,
     outstandingPurchases,
@@ -374,7 +361,6 @@ export default async function TradingDashboardContent({
 
   const {
     salesAgg,
-    paymentsByMethod,
     income,
     outstandingSales,
     outstandingPurchases,
@@ -413,7 +399,6 @@ export default async function TradingDashboardContent({
   const paymentSplit = moneyReceived.byMethod;
   const totalPaymentReceipts = moneyReceived.totalPence;
   void salesAgg;
-  void paymentsByMethod;
 
   // AR / AP
   const outstandingAR = outstandingSales.reduce((s, inv) => s + computeOutstandingBalance(inv), 0);

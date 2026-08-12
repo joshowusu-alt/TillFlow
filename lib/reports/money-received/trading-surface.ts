@@ -1,8 +1,17 @@
+/**
+ * Trading / receipts list surface adapted from PR #84.
+ *
+ * Canonical Step 3R / Step 5 rules win:
+ * - Money Received includes CONFIRMED payment events only.
+ * - Parent SalesInvoice RETURNED/VOID must NOT exclude confirmed historical receipts.
+ * - FAILED/PENDING/CANCELLED/VOID payment rows are excluded (CONFIRMED-only predicate).
+ *
+ * This module preserves PR #84 method/origin display helpers and DB aggregation
+ * for Trading Dashboard + /reports/receipts without the defective parent-sale filter.
+ */
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
-  REPORTING_EXCLUDED_PAYMENT_STATUSES,
-  REPORTING_EXCLUDED_SALE_STATUSES,
   reportingTimestampFilter,
   type ReportingScope,
 } from '@/lib/reports/reporting-scope';
@@ -16,6 +25,7 @@ import {
   isReceiptOrigin,
   type ReceiptOrigin,
 } from '@/lib/payments/receipt-origin';
+import { CONFIRMED_PAYMENT_STATUS } from './types';
 
 export {
   classifySalesPaymentReceipt,
@@ -143,13 +153,15 @@ function originFilter(origin?: ReceiptOrigin | null) {
 function methodFilter(method?: ReceiptMethodBucket | null) {
   if (!method) return {};
   if (method === UNKNOWN_RECEIPT_METHOD) {
-    // SalesPayment.method is a required string; unsupported/blank/wrong-case values
-    // are exactly those not in the supported set (exact match).
     return { method: { notIn: [...SUPPORTED_RECEIPT_METHODS] } };
   }
   return { method };
 }
 
+/**
+ * Receipt inclusion where — CONFIRMED only; business/branch via invoice;
+ * intentionally NO parent SalesInvoice paymentStatus RETURNED/VOID filter.
+ */
 function paymentListWhere(
   scope: ReportingScope,
   method?: ReceiptMethodBucket | null,
@@ -157,13 +169,12 @@ function paymentListWhere(
 ) {
   return {
     receivedAt: reportingTimestampFilter(scope),
-    status: { notIn: [...REPORTING_EXCLUDED_PAYMENT_STATUSES] },
+    status: CONFIRMED_PAYMENT_STATUS,
     ...methodFilter(method),
     ...originFilter(origin),
     salesInvoice: {
       businessId: scope.businessId,
       ...(scope.storeId === 'ALL' ? {} : { storeId: scope.storeId }),
-      paymentStatus: { notIn: [...REPORTING_EXCLUDED_SALE_STATUSES] },
     },
   };
 }
@@ -192,17 +203,9 @@ type AggregateRow = {
 
 /**
  * Aggregate money received from payment records for the scope.
- *
  * Complete database aggregation — never load matching payments into app memory.
  *
- * Method buckets: exact CASH/CARD/TRANSFER/MOBILE_MONEY only; every other stored
- * value (blank, whitespace, wrong case, legacy/future) → UNKNOWN.
- *
- * Identities:
- *   totalPence = CASH + CARD + TRANSFER + MOBILE_MONEY + UNKNOWN
- *   totalCount = Σ method counts
- *   totalPence = receivedAtSale + laterCredit + unknownHistorical
- *   totalCount = Σ origin counts
+ * Parent sale RETURNED/VOID does not exclude CONFIRMED receipts (Step 3R).
  */
 export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<MoneyReceivedSummary> {
   const storeClause =
@@ -265,9 +268,8 @@ export async function getMoneyReceivedSummary(scope: ReportingScope): Promise<Mo
     INNER JOIN "SalesInvoice" si ON si.id = sp."salesInvoiceId"
     WHERE sp."receivedAt" >= ${scope.startInclusive}
       AND sp."receivedAt" < ${scope.endExclusive}
-      AND sp.status NOT IN (${Prisma.join([...REPORTING_EXCLUDED_PAYMENT_STATUSES])})
+      AND sp.status = ${CONFIRMED_PAYMENT_STATUS}
       AND si."businessId" = ${scope.businessId}
-      AND si."paymentStatus" NOT IN (${Prisma.join([...REPORTING_EXCLUDED_SALE_STATUSES])})
       ${storeClause}
   `;
 

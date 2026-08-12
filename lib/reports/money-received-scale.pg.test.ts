@@ -133,13 +133,16 @@ describePg('money received complete DB aggregation (Postgres scale)', () => {
   }
 
   it('source no longer uses the legacy take:20_000 summary cap', () => {
-    const src = readFileSync(join(process.cwd(), 'lib/reports/money-received.ts'), 'utf8');
+    const src = readFileSync(join(process.cwd(), 'lib/reports/money-received/trading-surface.ts'), 'utf8');
     expect(src).toContain('LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP');
     expect(LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP).toBe(20_000);
     // Aggregation path must not reintroduce a capped findMany.
     expect(src).not.toMatch(/take:\s*20_000/);
     expect(src).not.toMatch(/take:\s*LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP/);
     expect(src).toMatch(/\$queryRaw/);
+    // Step 3R: parent sale RETURNED/VOID must not exclude confirmed receipts.
+    expect(src).not.toContain('REPORTING_EXCLUDED_SALE_STATUSES');
+    expect(src).not.toMatch(/paymentStatus.*RETURNED/);
   });
 
   it('includes receipt 20,001 — legacy cap would omit it and understate total', async () => {
