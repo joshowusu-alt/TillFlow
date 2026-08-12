@@ -141,8 +141,10 @@ describePg('money received complete DB aggregation (Postgres scale)', () => {
     expect(src).not.toMatch(/take:\s*LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP/);
     expect(src).toMatch(/\$queryRaw/);
     // Step 3R: parent sale RETURNED/VOID must not exclude confirmed receipts.
+    // Assert executable exclusion patterns only — file comments intentionally mention RETURNED/VOID.
     expect(src).not.toContain('REPORTING_EXCLUDED_SALE_STATUSES');
-    expect(src).not.toMatch(/paymentStatus.*RETURNED/);
+    expect(src).not.toMatch(/paymentStatus\s*:\s*\{\s*notIn/);
+    expect(src).not.toMatch(/paymentStatus\s*:\s*\{\s*in\s*:\s*\[[^\]]*RETURNED/);
   });
 
   it('includes receipt 20,001 — legacy cap would omit it and understate total', async () => {
