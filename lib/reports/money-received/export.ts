@@ -45,7 +45,7 @@ export async function* iterMoneyReceivedExportCsvChunks(
   const { scope, byId, quality, methodReconcile } = bundle;
 
   yield pushLine(['section', 'field', 'value']);
-  yield pushLine(['meta', 'report', 'Payments and Money Received']);
+  yield pushLine(['meta', 'report', 'Money Received']);
   yield pushLine(['meta', 'businessId', scope.businessId]);
   yield pushLine(['meta', 'branchScope', scope.branchIds === null ? 'ALL' : scope.branchIds.join('|')]);
   yield pushLine(['meta', 'currency', scope.currency]);
@@ -158,7 +158,7 @@ export function buildMoneyReceivedExportCsvFromRows(
     lines.push(cols.map((c) => csvEscape(spreadsheetSafeCell(c))).join(','));
   };
   push(['section', 'field', 'value']);
-  push(['meta', 'report', 'Payments and Money Received']);
+  push(['meta', 'report', 'Money Received']);
   push(['meta', 'businessId', scope.businessId]);
   push(['meta', 'exportCompleteness', 'COMPLETE_FROM_ROWS']);
   push(['meta', 'qualityState', quality.overall]);

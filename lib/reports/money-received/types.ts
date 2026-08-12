@@ -66,6 +66,8 @@ export type MoneyReceivedDrillRow = {
   status: string | null;
   eventAt: Date;
   salesInvoiceId: string | null;
+  /** Owner-facing sale reference when available (presentation only). */
+  transactionNumber?: string | null;
   branchId: string | null;
   includedInMetricId: MoneyReceivedMetricId;
 };

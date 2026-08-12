@@ -47,6 +47,12 @@ export {
 } from './reconcile';
 export { buildMoneyReceivedDrillRows, paginateDrillRows, drillSumPence } from './drill-down';
 export {
+  classifyMoneyReceivedRowKind,
+  moneyReceivedRowKindLabel,
+  moneyReceivedRowKindHint,
+  type MoneyReceivedRowKind,
+} from './display';
+export {
   computeMoneyReceivedBundle,
   computeMoneyReceivedBundleFromDb,
   computeMoneyReceivedBundleFromFacts,

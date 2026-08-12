@@ -92,7 +92,7 @@ export const REPORT_NAV_SECTIONS: NavigationSection[] = [
       { href: '/reports', label: 'Reports Hub', roles: ['MANAGER', 'OWNER'], iconKey: 'reportsHub' },
       { href: '/reports/command-center', label: 'Command Center', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
       { href: '/reports/dashboard', label: 'Trading Report', roles: ['MANAGER', 'OWNER'], iconKey: 'analytics' },
-      { href: '/reports/money-received', label: 'Payments & Money Received', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
+      { href: '/reports/money-received', label: 'Money Received', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
       { href: '/reports/receipts', label: 'Receipt transactions', roles: ['MANAGER', 'OWNER'], iconKey: 'payments' },
       { href: '/reports/weekly-digest', label: 'Weekly Digest', roles: ['MANAGER', 'OWNER'], iconKey: 'reports' },
     ],

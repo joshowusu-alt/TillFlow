@@ -341,6 +341,7 @@ export async function fetchDrillPage(
             createdAt: true,
             salesInvoiceId: true,
             storeId: true,
+            salesInvoice: { select: { transactionNumber: true } },
           },
         }),
       ]);
@@ -353,6 +354,7 @@ export async function fetchDrillPage(
           status: null,
           eventAt: r.createdAt,
           salesInvoiceId: r.salesInvoiceId,
+          transactionNumber: r.salesInvoice?.transactionNumber ?? null,
           branchId: r.storeId,
           includedInMetricId: 'refund_outflows' as const,
         })),
@@ -391,7 +393,7 @@ export async function fetchDrillPage(
           status: true,
           receivedAt: true,
           salesInvoiceId: true,
-          salesInvoice: { select: { storeId: true, businessId: true } },
+          salesInvoice: { select: { storeId: true, businessId: true, transactionNumber: true } },
         },
       }),
     ]);
@@ -407,6 +409,7 @@ export async function fetchDrillPage(
           status: r.status,
           eventAt: r.receivedAt,
           salesInvoiceId: r.salesInvoiceId,
+          transactionNumber: r.salesInvoice.transactionNumber,
           branchId: r.salesInvoice.storeId,
           includedInMetricId: request.metricId,
         })),

@@ -12,9 +12,12 @@ import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { resolveReportDateRange } from '@/lib/reports/date-parsing';
 import { getBusinessStores } from '@/lib/services/stores';
 import {
+  classifyMoneyReceivedRowKind,
   computeMoneyReceivedBundle,
   drillDownForMetric,
   methodLabel,
+  moneyReceivedRowKindHint,
+  moneyReceivedRowKindLabel,
   resolveMoneyReceivedAccess,
   type MoneyReceivedMetricId,
 } from '@/lib/reports/money-received';
@@ -60,7 +63,7 @@ export default async function MoneyReceivedReportPage({
         <EmptyState
           icon="chart"
           title="Setup required"
-          subtitle="Complete your business setup to unlock Payments and Money Received."
+          subtitle="Complete your business setup to unlock Money Received."
           cta={{ label: 'Complete Setup', href: '/onboarding' }}
         />
       </div>
@@ -85,7 +88,7 @@ export default async function MoneyReceivedReportPage({
               ? 'That branch is not available for your business.'
               : access.reason === 'TENANT_MISMATCH'
                 ? 'You cannot open another business from this account.'
-                : 'You do not have access to Payments and Money Received.'
+                : 'You do not have access to Money Received.'
           }
         />
       </div>
@@ -135,6 +138,9 @@ export default async function MoneyReceivedReportPage({
   const unverified = bundle.byId.unverified_legacy_receipts;
   const queryFailed = bundle.quality.overall === 'QUERY_FAILED';
   const selectedStoreId = access.selectedStoreId;
+  const hasAmendOutRows = drill.page.rows.some(
+    (row) => classifyMoneyReceivedRowKind(row) === 'sale_amend_out',
+  );
 
   const exportQs = new URLSearchParams({
     from: fromIso,
@@ -146,8 +152,8 @@ export default async function MoneyReceivedReportPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Payments and Money Received"
-        subtitle="Confirmed money that came in during the selected period — separate from sales and refunds."
+        title="Money Received"
+        subtitle="Confirmed customer money by the time it was received — separate from sales totals and from refunds."
         actions={
           <DownloadLink
             href={`/exports/money-received?${exportQs.toString()}`}
@@ -162,29 +168,28 @@ export default async function MoneyReceivedReportPage({
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
         <p>
-          <span className="font-medium text-slate-900">Money Received</span> is confirmed customer
-          money by receipt time. It is not a sales total. A later return or void does not erase a
-          confirmed receipt already recorded here.
+          Use this report for cash-in totals. A later return or void does not erase a confirmed
+          receipt already shown here. Full returns appear under Refund outflows; sale edits that
+          gave money back appear as negative lines in the table below.
         </p>
         <p className="mt-2 text-xs text-slate-600">
-          Business scope: {business.name} · Branch:{' '}
+          {business.name} ·{' '}
           {selectedStoreId === 'ALL'
             ? 'All branches'
             : stores.find((s) => s.id === selectedStoreId)?.name ?? selectedStoreId}{' '}
-          · Period: {formatScopeInstant(bundle.scope.periodStart, bundle.scope.timeZone)} →{' '}
+          · {formatScopeInstant(bundle.scope.periodStart, bundle.scope.timeZone)} →{' '}
           {formatScopeInstant(
             new Date(bundle.scope.periodEndExclusive.getTime() - 1),
             bundle.scope.timeZone,
           )}{' '}
-          · Timezone: {bundle.scope.timeZone} · As of:{' '}
-          {formatScopeInstant(bundle.scope.asOf, bundle.scope.timeZone)}
+          ({bundle.scope.timeZone})
         </p>
       </div>
 
       {bundle.quality.legacyWarning && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
           {bundle.quality.messages[0] ??
-            'Some receipts are unverified and are excluded from Money Received.'}
+            'Some older receipts are unverified and are left out of Money Received.'}
           {unverified?.valuePence != null && unverified.valuePence > 0 && (
             <span className="ml-1 font-medium">
               Unverified total: {formatMoney(unverified.valuePence, currency)}.
@@ -228,7 +233,7 @@ export default async function MoneyReceivedReportPage({
         </div>
         <div>
           <label className="label" htmlFor="metric">
-            Drill-down
+            Show transactions for
           </label>
           <select id="metric" name="metric" defaultValue={drillMetricId} className="input">
             {DRILL_OPTIONS.map((opt) => (
@@ -244,7 +249,7 @@ export default async function MoneyReceivedReportPage({
         <StatCard
           label="Money received"
           value={queryFailed || mr?.valuePence == null ? '—' : formatMoney(mr.valuePence, currency)}
-          helper="Confirmed receipts in period"
+          helper="Confirmed receipts in period (net of sale amends)"
         />
         <StatCard
           label="Refund outflows"
@@ -253,7 +258,7 @@ export default async function MoneyReceivedReportPage({
               ? '—'
               : formatMoney(refunds.valuePence, currency)
           }
-          helper="Separate cash out — does not rewrite receipts"
+          helper="Returns/voids paid back — not subtracted from Money Received"
         />
         <StatCard
           label="Unverified legacy"
@@ -262,7 +267,7 @@ export default async function MoneyReceivedReportPage({
               ? '—'
               : formatMoney(unverified.valuePence, currency)
           }
-          helper="Excluded from Money Received"
+          helper="Left out of Money Received until verified"
         />
         <StatCard
           label="Method check"
@@ -299,24 +304,35 @@ export default async function MoneyReceivedReportPage({
 
       <div className="space-y-2">
         <p className="text-sm text-slate-600">
-          Headline total{' '}
+          Selected total:{' '}
           {queryFailed || bundle.byId[drillMetricId]?.valuePence == null
             ? 'unavailable'
-            : formatMoney(bundle.byId[drillMetricId]!.valuePence!, currency)}{' '}
-          · page {drill.page.page} of {drill.page.totalPages} ({drill.page.rows.length} rows this
-          page; {drill.page.totalCount} matching) · reconcile{' '}
-          {drill.reconcile.ok ? 'OK' : drill.reconcile.reason ?? 'failed'}. Pagination does not change
-          headline totals.
+            : formatMoney(bundle.byId[drillMetricId]!.valuePence!, currency)}
+          {' · '}
+          {drill.page.totalCount} matching transaction
+          {drill.page.totalCount === 1 ? '' : 's'}
+          {' · '}
+          page {drill.page.page} of {drill.page.totalPages}. Changing pages does not change the
+          totals above.
+          {drill.reconcile.ok
+            ? ''
+            : ` Detail check: ${drill.reconcile.reason ?? 'needs review'}.`}
         </p>
+        {hasAmendOutRows && (
+          <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            Negative amounts labelled <span className="font-medium">Sale amend (money out)</span>{' '}
+            are sale edits that returned money to the customer. They stay inside Money Received so
+            the total matches cash movement on the sale.
+          </p>
+        )}
         <ReportTableCard
           title={DRILL_OPTIONS.find((o) => o.id === drillMetricId)?.label ?? 'Transactions'}
         >
           <thead>
             <tr>
               <th>When</th>
-              <th>Source</th>
+              <th>Type</th>
               <th>Method</th>
-              <th>Status</th>
               <th>Sale</th>
               <th className="text-right">Amount</th>
             </tr>
@@ -324,7 +340,7 @@ export default async function MoneyReceivedReportPage({
           <tbody>
             {drill.page.rows.length === 0 ? (
               <ReportTableEmptyRow
-                colSpan={6}
+                colSpan={5}
                 message={
                   queryFailed ||
                   drill.page.queryFailed ||
@@ -334,20 +350,32 @@ export default async function MoneyReceivedReportPage({
                 }
               />
             ) : (
-              drill.page.rows.map((row) => (
-                <tr key={`${row.sourceType}:${row.sourceId}`}>
-                  <td>{formatScopeInstant(row.eventAt, bundle.scope.timeZone)}</td>
-                  <td className="font-mono text-xs">
-                    {row.sourceType}:{row.sourceId.slice(0, 10)}
-                  </td>
-                  <td>{row.method ? methodLabel(row.method) : '—'}</td>
-                  <td>{row.status ?? '—'}</td>
-                  <td className="font-mono text-xs">
-                    {row.salesInvoiceId ? row.salesInvoiceId.slice(0, 10) : '—'}
-                  </td>
-                  <td className="text-right">{formatMoney(row.amountPence, currency)}</td>
-                </tr>
-              ))
+              drill.page.rows.map((row) => {
+                const kind = classifyMoneyReceivedRowKind(row);
+                const hint = moneyReceivedRowKindHint(kind);
+                return (
+                  <tr key={`${row.sourceType}:${row.sourceId}`}>
+                    <td>{formatScopeInstant(row.eventAt, bundle.scope.timeZone)}</td>
+                    <td>
+                      <span className="font-medium text-slate-800">
+                        {moneyReceivedRowKindLabel(kind)}
+                      </span>
+                      {hint ? (
+                        <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>
+                      ) : null}
+                    </td>
+                    <td>{row.method ? methodLabel(row.method) : '—'}</td>
+                    <td>{row.transactionNumber ?? '—'}</td>
+                    <td
+                      className={`text-right tabular-nums ${
+                        row.amountPence < 0 ? 'text-rose-700' : 'text-slate-900'
+                      }`}
+                    >
+                      {formatMoney(row.amountPence, currency)}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </ReportTableCard>
