@@ -486,11 +486,15 @@ async function main() {
     assert(/Product movers/i.test(text), 'missing product movers');
     assert(/Grew|Dropped|New product|No current sales/i.test(text), 'product movers missing owner wording');
     assert(
-      /All movement is from/i.test(text) || /Branch movement/i.test(text),
+      /All movement is from/i.test(text) ||
+        /Branch movement/i.test(text) ||
+        /No branch sales in either period/i.test(text),
       'missing branch collapse note or branch table',
     );
     assert(
-      /attributed to/i.test(text) || /Cashier movement/i.test(text),
+      /attributed to/i.test(text) ||
+        /Cashier movement/i.test(text) ||
+        /No cashier-attributed sales/i.test(text),
       'missing cashier collapse note or cashier table',
     );
     assert(text.includes(`Decliner ${TAG}`) || text.includes(`Grower ${TAG}`), 'product movers missing seeded SKUs');

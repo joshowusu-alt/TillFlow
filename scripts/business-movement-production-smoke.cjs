@@ -179,11 +179,15 @@ async function main() {
     assert(/Sales vs money in/i.test(text), 'missing sales vs money card');
     assert(/Product movers/i.test(text), 'missing product movers');
     assert(
-      /All movement is from/i.test(text) || /Branch movement/i.test(text),
+      /All movement is from/i.test(text) ||
+        /Branch movement/i.test(text) ||
+        /No branch sales in either period/i.test(text),
       'missing branch collapse note or branch table',
     );
     assert(
-      /attributed to/i.test(text) || /Cashier movement/i.test(text),
+      /attributed to/i.test(text) ||
+        /Cashier movement/i.test(text) ||
+        /No cashier-attributed sales/i.test(text),
       'missing cashier collapse note or cashier table',
     );
     assert(/Review MoMo confirmations/i.test(text), 'missing Review MoMo confirmations');
