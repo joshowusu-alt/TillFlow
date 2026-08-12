@@ -12,22 +12,27 @@ import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 import { getBusinessStores } from '@/lib/services/stores';
 import { resolveMoneyReceivedAccess } from '@/lib/reports/money-received';
 import {
-  BUSINESS_MOVEMENT_MONEY_LANGUAGE,
   STOCK_AVAILABILITY_READINESS,
   buildOwnerInsightSummary,
+  buildOwnerSummaryStrip,
   computeBusinessMovementWithMoneyFromDb,
   containsForbiddenStockLanguage,
   describeChangeVsComparison,
   formatSignedGhPence,
+  ownerCategoryLabel,
+  ownerConfidenceHint,
+  ownerPeriodChrome,
+  ownerProductMovers,
+  ownerWhyItMatters,
+  OWNER_STOCK_DATA_NOTE,
   resolveBusinessMovementPeriodInput,
+  singleBranchNote,
+  singleCashierNote,
   type ChangePair,
   type RankedBusinessMovementInsight,
 } from '@/lib/reports/business-movement';
 
 export const dynamic = 'force-dynamic';
-
-const STOCK_DISCLAIMER =
-  'Historical stock availability is not yet reliable. This report does not attribute sales movement to stock-outs or inventory gaps.';
 
 function formatScopeInstant(value: Date, timeZone: string) {
   return value.toLocaleString('en-GB', {
@@ -44,37 +49,39 @@ function changeHelper(pair: ChangePair, currency: string): string {
   if (pair.current === 0 && pair.comparison > 0) return `No current sales · was ${abs}`;
   const sign = pair.absoluteChange > 0 ? '+' : pair.absoluteChange < 0 ? '−' : '';
   if (described.usedPercentage && pair.percentageChange != null) {
-    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs comparison`;
+    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs last period`;
   }
-  return `${sign}${abs} vs comparison`;
+  return `${sign}${abs} vs last period`;
 }
 
 function InsightCard({ insight }: { insight: RankedBusinessMovementInsight }) {
+  const confidenceHint = ownerConfidenceHint(insight.confidence);
+  const why = ownerWhyItMatters(insight.signal);
   return (
     <article className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-          {insight.category.replace(/_/g, ' ')}
+          {ownerCategoryLabel(insight.category)}
         </span>
-        <span>{insight.severity}</span>
-        <span>confidence {insight.confidence}</span>
+        {confidenceHint ? <span>{confidenceHint}</span> : null}
       </div>
       <dl className="space-y-2">
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fact</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            What changed
+          </dt>
           <dd>{insight.fact}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Evidence</dt>
-          <dd className="text-slate-700">{insight.evidence}</dd>
-        </div>
-        <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signal</dt>
-          <dd className="text-slate-700">{insight.signal}</dd>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Why it matters
+          </dt>
+          <dd className="text-slate-700">{why}</dd>
+          <dd className="mt-1 text-xs text-slate-500">{insight.evidence}</dd>
         </div>
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Recommended check
+            What to check
           </dt>
           <dd className="text-slate-700">{insight.recommendedCheck}</dd>
         </div>
@@ -165,11 +172,16 @@ export default async function BusinessMovementReportPage({
     period: periodInput,
   });
   const summary = buildOwnerInsightSummary(result);
+  const strip = buildOwnerSummaryStrip(result, summary.insights);
+  const chrome = ownerPeriodChrome(result.scope.periods);
   const currency = business.currency;
   const selectedStoreId = access.selectedStoreId;
   const p = result.scope.periods;
   const gap = result.leakage.salesMinusMoneyReceivedCurrentPence;
   const queryFailed = result.moneyQueryFailed;
+  const productMovers = ownerProductMovers(result);
+  const branchNote = singleBranchNote(result.branches);
+  const cashierNote = singleCashierNote(result.cashiers);
 
   const exportQs = new URLSearchParams({
     preset: selectedPreset,
@@ -192,38 +204,29 @@ export default async function BusinessMovementReportPage({
     .join(' ');
   if (
     STOCK_AVAILABILITY_READINESS === 'NOT_RELIABLE' &&
-    containsForbiddenStockLanguage(insightBlob)
+    containsForbiddenStockLanguage(`${insightBlob} ${strip.paragraph} ${OWNER_STOCK_DATA_NOTE}`)
   ) {
     throw new Error('Business Movement page refused stock-causation language');
   }
-
-  const productMovers = [
-    ...result.productDecliners.map((row) => ({ row, side: 'Decline' as const })),
-    ...result.productGrowers.map((row) => ({ row, side: 'Growth' as const })),
-  ].sort(
-    (a, b) =>
-      Math.abs(b.row.salesValuePence.absoluteChange) -
-      Math.abs(a.row.salesValuePence.absoluteChange),
-  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Business Movement"
-        subtitle="What changed this month vs last — facts first."
+        subtitle={`${chrome.currentLabel} vs ${chrome.comparisonLabel} — what changed, in plain language.`}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/reports/money-received?${moneyQs.toString()}`}
-              className="btn-secondary justify-center text-sm"
-            >
-              Money Received
-            </Link>
             <Link
               href={`/reports/momo-confirmation?${momoQs.toString()}`}
               className="btn-secondary justify-center text-sm"
             >
-              MoMo Confirmation
+              Review MoMo confirmations
+            </Link>
+            <Link
+              href={`/reports/money-received?${moneyQs.toString()}`}
+              className="btn-secondary justify-center text-sm"
+            >
+              Open Money Received
             </Link>
             <DownloadLink
               href={`/exports/business-movement?${exportQs.toString()}`}
@@ -237,45 +240,26 @@ export default async function BusinessMovementReportPage({
         }
       />
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <p className="font-medium">Stock limitation</p>
-        <p className="mt-1">{STOCK_DISCLAIMER}</p>
-        <p className="mt-1 text-xs text-amber-900/80">
-          Readiness: {STOCK_AVAILABILITY_READINESS}. Days-unavailable history is not claimed on this
-          report.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        <p>
+      <section
+        className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-800"
+        data-testid="owner-summary-strip"
+      >
+        <h2 className="text-lg font-semibold text-slate-900">In short</h2>
+        <p className="mt-2 leading-relaxed">{strip.paragraph}</p>
+        <p className="mt-2 text-xs text-slate-500">
           {business.name} ·{' '}
           {selectedStoreId === 'ALL'
             ? 'All branches'
-            : stores.find((s) => s.id === selectedStoreId)?.name ?? selectedStoreId}
+            : stores.find((s) => s.id === selectedStoreId)?.name ?? selectedStoreId}{' '}
+          · {formatScopeInstant(p.currentStart, p.timeZone)} →{' '}
+          {formatScopeInstant(new Date(p.currentEndExclusive.getTime() - 1), p.timeZone)}
         </p>
-        <p className="mt-1">
-          Current: {p.currentFromKey} → {p.currentToKey} (
-          {formatScopeInstant(p.currentStart, p.timeZone)} →{' '}
-          {formatScopeInstant(new Date(p.currentEndExclusive.getTime() - 1), p.timeZone)})
-        </p>
-        <p className="mt-1">
-          Comparison: {p.comparisonFromKey} → {p.comparisonToKey} (
-          {formatScopeInstant(p.comparisonStart, p.timeZone)} →{' '}
-          {formatScopeInstant(new Date(p.comparisonEndExclusive.getTime() - 1), p.timeZone)})
-        </p>
-        <p className="mt-1 text-xs text-slate-600">
-          {BUSINESS_MOVEMENT_MONEY_LANGUAGE.salesVsMoney} Timezone {p.timeZone}.
-        </p>
-      </div>
+      </section>
 
       <ReportFilterCard columnsClassName="sm:grid-cols-4">
         <label className="text-sm">
           <span className="mb-1 block text-slate-600">Period</span>
-          <select
-            className="input w-full"
-            name="preset"
-            defaultValue={selectedPreset}
-          >
+          <select className="input w-full" name="preset" defaultValue={selectedPreset}>
             <option value="last_full_calendar_month">Last full calendar month</option>
             <option value="equal_length_custom">Custom equal-length window</option>
           </select>
@@ -328,34 +312,32 @@ export default async function BusinessMovementReportPage({
           label="Money Received"
           value={formatMoney(result.money.moneyReceived.current, currency)}
           helper={
-            queryFailed
-              ? 'Money layer unavailable'
-              : changeHelper(result.money.moneyReceived, currency)
+            queryFailed ? 'Money layer unavailable' : changeHelper(result.money.moneyReceived, currency)
           }
           tone="accent"
         />
         <StatCard
-          label="Refund outflows"
+          label="Refunds"
           value={formatMoney(result.money.refundOutflows.current, currency)}
           helper={changeHelper(result.money.refundOutflows, currency)}
           tone={result.money.refundOutflows.absoluteChange > 0 ? 'warn' : 'default'}
         />
         <StatCard
-          label="Needs MoMo confirmation"
+          label="MoMo to confirm"
           value={formatMoney(result.money.needsMomoConfirmation.current, currency)}
           helper={changeHelper(result.money.needsMomoConfirmation, currency)}
           tone={result.money.needsMomoConfirmation.current > 0 ? 'warn' : 'default'}
         />
         <StatCard
-          label="Sales vs Money Received gap"
+          label="Sales vs money in"
           value={gap == null ? '—' : formatMoney(Math.abs(gap), currency)}
           helper={
             gap == null
               ? 'Unavailable'
               : gap > 0
-                ? `Sales ahead by ${formatMoney(gap, currency)} — timing/quality indicator`
+                ? `Sales ahead by ${formatMoney(gap, currency)} — timing, not an error`
                 : gap < 0
-                  ? `Money ahead by ${formatMoney(-gap, currency)} — timing/quality indicator`
+                  ? `Money ahead by ${formatMoney(-gap, currency)} — timing, not an error`
                   : 'Aligned this period'
           }
           tone="default"
@@ -364,10 +346,8 @@ export default async function BusinessMovementReportPage({
 
       <section className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Owner summary</h2>
-          <p className="text-sm text-slate-600">
-            {summary.headline} Deterministic ranking — not AI advice.
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
+          <p className="text-sm text-slate-600">The few movements that matter most this period.</p>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
           {summary.insights.map((insight) => (
@@ -378,130 +358,121 @@ export default async function BusinessMovementReportPage({
 
       <ReportTableCard title="Product movers">
         <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-          Largest growers and decliners by invoice line sales (createdAt).
+          Products that grew, dropped, appeared, or had no sales this period.
         </caption>
         <thead>
           <tr>
             <th className="text-left">Product</th>
-            <th className="text-left">Side</th>
-            <th className="text-right">Current</th>
-            <th className="text-right">Comparison</th>
+            <th className="text-left">What happened</th>
+            <th className="text-right">This period</th>
+            <th className="text-right">Last period</th>
             <th className="text-right">Change</th>
-            <th className="text-right">Qty</th>
+            <th className="text-right">Quantity</th>
           </tr>
         </thead>
         <tbody>
           {productMovers.length === 0 ? (
             <ReportTableEmptyRow colSpan={6} message="No material product movers for this period pair." />
           ) : (
-            productMovers.map(({ row, side }) => (
-              <tr key={`${side}-${row.productId}`}>
-                <td>
-                  {row.productName}
-                  {row.kind !== 'continuing' ? (
-                    <span className="ml-1 text-xs text-slate-500">({row.kind.replace(/_/g, ' ')})</span>
-                  ) : null}
-                </td>
-                <td>{side}</td>
-                <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
-                <td className="text-right">
-                  {formatMoney(row.salesValuePence.comparison, currency)}
-                </td>
-                <td className="text-right">
-                  {formatSignedGhPence(row.salesValuePence.absoluteChange)}
-                </td>
-                <td className="text-right">
-                  {row.qtyBase.current} / {row.qtyBase.comparison}
-                </td>
+            productMovers.map((row) => (
+              <tr key={`${row.side}-${row.productId}`}>
+                <td>{row.productName}</td>
+                <td>{row.side}</td>
+                <td className="text-right">{formatMoney(row.currentPence, currency)}</td>
+                <td className="text-right">{formatMoney(row.comparisonPence, currency)}</td>
+                <td className="text-right">{formatSignedGhPence(row.changePence)}</td>
+                <td className="text-right">{row.qtyWording}</td>
               </tr>
             ))
           )}
         </tbody>
       </ReportTableCard>
 
-      <ReportTableCard title="Branch movement">
-        <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-          Invoice sales by store for the current vs comparison windows.
-        </caption>
-        <thead>
-          <tr>
-            <th className="text-left">Branch</th>
-            <th className="text-right">Current</th>
-            <th className="text-right">Comparison</th>
-            <th className="text-right">Change</th>
-            <th className="text-right">Transactions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.branches.length === 0 ? (
-            <ReportTableEmptyRow colSpan={5} message="No branch sales in either period." />
-          ) : (
-            result.branches.map((row) => (
+      {branchNote ? (
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+          <h2 className="text-base font-semibold text-slate-900">Branches</h2>
+          <p className="mt-1">{branchNote}</p>
+        </section>
+      ) : (
+        <ReportTableCard title="Branch movement">
+          <caption className="mb-2 caption-top text-left text-sm text-slate-600">
+            How each branch’s sales moved vs last period.
+          </caption>
+          <thead>
+            <tr>
+              <th className="text-left">Branch</th>
+              <th className="text-right">This period</th>
+              <th className="text-right">Last period</th>
+              <th className="text-right">Change</th>
+              <th className="text-right">Transactions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.branches.map((row) => (
               <tr key={row.storeId}>
                 <td>{row.storeName}</td>
                 <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
                 <td className="text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">
-                  {formatSignedGhPence(row.salesValuePence.absoluteChange)}
-                </td>
+                <td className="text-right">{formatSignedGhPence(row.salesValuePence.absoluteChange)}</td>
                 <td className="text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </ReportTableCard>
+            ))}
+          </tbody>
+        </ReportTableCard>
+      )}
 
-      <ReportTableCard title="Cashier movement">
-        <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-          Attributed via SalesInvoice.cashierUserId (schema-required; shown when rows exist).
-        </caption>
-        <thead>
-          <tr>
-            <th className="text-left">Cashier</th>
-            <th className="text-right">Current</th>
-            <th className="text-right">Comparison</th>
-            <th className="text-right">Change</th>
-            <th className="text-right">Transactions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.cashiers.length === 0 ? (
-            <ReportTableEmptyRow colSpan={5} message="No cashier-attributed sales in either period." />
-          ) : (
-            result.cashiers.map((row) => (
+      {cashierNote ? (
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+          <h2 className="text-base font-semibold text-slate-900">Cashiers</h2>
+          <p className="mt-1">{cashierNote}</p>
+        </section>
+      ) : (
+        <ReportTableCard title="Cashier movement">
+          <caption className="mb-2 caption-top text-left text-sm text-slate-600">
+            How cashier-attributed sales moved vs last period.
+          </caption>
+          <thead>
+            <tr>
+              <th className="text-left">Cashier</th>
+              <th className="text-right">This period</th>
+              <th className="text-right">Last period</th>
+              <th className="text-right">Change</th>
+              <th className="text-right">Transactions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.cashiers.map((row) => (
               <tr key={row.cashierUserId}>
                 <td>{row.cashierName}</td>
                 <td className="text-right">{formatMoney(row.salesValuePence.current, currency)}</td>
                 <td className="text-right">
                   {formatMoney(row.salesValuePence.comparison, currency)}
                 </td>
-                <td className="text-right">
-                  {formatSignedGhPence(row.salesValuePence.absoluteChange)}
-                </td>
+                <td className="text-right">{formatSignedGhPence(row.salesValuePence.absoluteChange)}</td>
                 <td className="text-right">
                   {row.transactionCount.current} / {row.transactionCount.comparison}
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </ReportTableCard>
+            ))}
+          </tbody>
+        </ReportTableCard>
+      )}
 
-      <section className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-700">
-        <h2 className="text-lg font-semibold text-slate-900">Leakage / quality notes</h2>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
-          {result.leakage.languageNotes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
+      <section className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <h2 className="text-sm font-semibold text-slate-800">Data note</h2>
+        <p className="mt-1">{OWNER_STOCK_DATA_NOTE}</p>
+        <p className="mt-1">
+          Sales use the time the invoice was created. Money Received uses the time confirmed money
+          came in. A gap is a timing check, not a balancing error.
+        </p>
         {queryFailed ? (
-          <p className="mt-3 text-amber-800">
-            Money Received layer query failed
-            {result.moneyQueryError ? `: ${result.moneyQueryError}` : '.'} Sales movement above may
+          <p className="mt-2 text-amber-800">
+            Money Received could not be loaded
+            {result.moneyQueryError ? `: ${result.moneyQueryError}` : '.'} Sales figures above may
             still be usable.
           </p>
         ) : null}
