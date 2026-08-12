@@ -24,7 +24,7 @@ export function qualityForMoneyReceivedBundle(results: MetricResult[]): {
   const messages: string[] = [];
   if (legacyWarning) {
     messages.push(
-      'Some receipts have missing or unknown confirmation status and are shown as unverified legacy receipts. They are not included in Money Received.',
+      'Some Mobile Money payments still need confirmation (usually PENDING_MANUAL) and are shown separately. They are not included in Money Received.',
     );
   }
 

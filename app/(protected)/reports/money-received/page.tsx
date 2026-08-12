@@ -1,4 +1,5 @@
 import DownloadLink from '@/components/DownloadLink';
+import Link from 'next/link';
 import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
@@ -31,7 +32,7 @@ const DRILL_OPTIONS: { id: MoneyReceivedMetricId; label: string }[] = [
   { id: 'money_received_card', label: 'Card' },
   { id: 'money_received_transfer', label: 'Bank transfer' },
   { id: 'money_received_other', label: 'Other methods' },
-  { id: 'unverified_legacy_receipts', label: 'Unverified legacy receipts' },
+  { id: 'unverified_legacy_receipts', label: 'Needs MoMo confirmation' },
   { id: 'refund_outflows', label: 'Refund outflows' },
 ];
 
@@ -188,13 +189,23 @@ export default async function MoneyReceivedReportPage({
 
       {bundle.quality.legacyWarning && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          {bundle.quality.messages[0] ??
-            'Some older receipts are unverified and are left out of Money Received.'}
-          {unverified?.valuePence != null && unverified.valuePence > 0 && (
-            <span className="ml-1 font-medium">
-              Unverified total: {formatMoney(unverified.valuePence, currency)}.
-            </span>
-          )}
+          <p>
+            {bundle.quality.messages[0] ??
+              'Some Mobile Money payments still need confirmation and are left out of Money Received.'}
+            {unverified?.valuePence != null && unverified.valuePence > 0 && (
+              <span className="ml-1 font-medium">
+                Needs confirmation: {formatMoney(unverified.valuePence, currency)}.
+              </span>
+            )}
+          </p>
+          <p className="mt-2">
+            <Link
+              href={`/reports/momo-confirmation?from=${fromIso}&to=${toIso}&storeId=${selectedStoreId}`}
+              className="font-medium text-amber-950 underline underline-offset-2 hover:text-amber-800"
+            >
+              Review MoMo confirmations
+            </Link>
+          </p>
         </div>
       )}
 
@@ -261,13 +272,13 @@ export default async function MoneyReceivedReportPage({
           helper="Returns/voids paid back — not subtracted from Money Received"
         />
         <StatCard
-          label="Unverified legacy"
+          label="Needs MoMo confirmation"
           value={
             queryFailed || unverified?.valuePence == null
               ? '—'
               : formatMoney(unverified.valuePence, currency)
           }
-          helper="Left out of Money Received until verified"
+          helper="Left out of Money Received until confirmed"
         />
         <StatCard
           label="Method check"

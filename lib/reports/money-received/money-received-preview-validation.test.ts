@@ -337,8 +337,9 @@ describe('Step 5B preview-equivalent — access and surface', () => {
     expect(page).toContain('title="Money Received"');
     expect(page).toContain('separate from sales totals');
     expect(page).toContain('Refund outflows');
-    expect(page).toContain('Unverified legacy');
+    expect(page).toContain('Needs MoMo confirmation');
     expect(page).toContain('Sale amend (money out)');
+    expect(page).toContain('/reports/momo-confirmation');
     expect(page).toContain('resolveMoneyReceivedAccess');
     expect(page).toContain('drillDownForMetric');
     expect(page).toContain('classifyMoneyReceivedRowKind');
