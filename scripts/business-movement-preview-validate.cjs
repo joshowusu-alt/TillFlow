@@ -1,5 +1,5 @@
 /**
- * Hosted Preview validation for Business Movement (Step 6G).
+ * Hosted Preview validation for Business Movement owner UX polish (Step 6I).
  * Preview DB only: seeds tagged MoM sales + money rows, then cleans up.
  * Exit 0 = passed, 1 = failed, 2 = blocked.
  */
@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
 const { Client } = require('pg');
 
 const root = path.resolve(__dirname, '..');
-const TAG = `BM_6G_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
+const TAG = `BM_6I_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
 
 const STOCK_DISCLAIMER =
   'Historical stock availability is not yet reliable. This report does not attribute sales movement to stock-outs or inventory gaps.';
@@ -466,19 +466,37 @@ async function main() {
     assert(/Business Movement/i.test(text), 'missing Business Movement title');
     assert(!denied(text, url), `owner denied BM url=${url}`);
     assert(!/Application error|Internal Server Error/i.test(text), 'BM page server error');
+    assert(/In short/i.test(text), 'missing In short summary strip');
+    assert(/What changed/i.test(text) && /Why it matters/i.test(text), 'missing What changed / Why it matters');
+    assert(/What to check/i.test(text), 'missing What to check');
+    assert(/Data note/i.test(text), 'missing Data note');
     assert(text.includes(STOCK_DISCLAIMER) || /Historical stock availability is not yet reliable/i.test(text), 'missing stock disclaimer');
-    assert(/Owner summary/i.test(text), 'missing owner summary');
-    assert(/\bFact\b/i.test(text) && /\bEvidence\b/i.test(text), 'missing Fact/Evidence');
-    assert(/\bSignal\b/i.test(text) && /Recommended check/i.test(text), 'missing Signal/Recommended check');
+    const inShortIdx = text.indexOf('In short');
+    const dataNoteIdx = text.indexOf('Data note');
+    assert(inShortIdx >= 0 && dataNoteIdx > inShortIdx, 'Data note must sit below In short, not as a top warning');
+    assert(!/Stock limitation/i.test(text), 'stock limitation heading should not dominate the top');
+    assert(!/Deterministic ranking/i.test(text), 'internal ranking copy leaked to owners');
+    assert(!/momo confirmation risk/i.test(text), 'internal momo category leaked');
+    assert(!/product_growth|product_decline/i.test(text), 'internal product category leaked');
+    assert(!/confidence high/i.test(text), 'internal confidence label leaked');
     assert(/Sales/i.test(text) && /Money Received/i.test(text), 'missing Sales / Money Received cards');
-    assert(/Refund outflows/i.test(text), 'missing Refund outflows card');
-    assert(/Needs MoMo confirmation/i.test(text), 'missing Needs MoMo card');
-    assert(/Sales vs Money Received gap/i.test(text), 'missing gap card');
+    assert(/Refunds/i.test(text), 'missing Refunds card');
+    assert(/MoMo to confirm/i.test(text), 'missing MoMo to confirm card');
+    assert(/Sales vs money in/i.test(text), 'missing sales vs money card');
     assert(/Product movers/i.test(text), 'missing product movers');
-    assert(/Branch movement/i.test(text), 'missing branch movement');
-    assert(/Cashier movement/i.test(text), 'missing cashier movement');
+    assert(/Grew|Dropped|New product|No current sales/i.test(text), 'product movers missing owner wording');
+    assert(
+      /All movement is from/i.test(text) || /Branch movement/i.test(text),
+      'missing branch collapse note or branch table',
+    );
+    assert(
+      /attributed to/i.test(text) || /Cashier movement/i.test(text),
+      'missing cashier collapse note or cashier table',
+    );
     assert(text.includes(`Decliner ${TAG}`) || text.includes(`Grower ${TAG}`), 'product movers missing seeded SKUs');
     assert(!hasForbiddenStock(text), 'forbidden stock-causation language on BM page');
+    assert(/Review MoMo confirmations/i.test(text), 'missing Review MoMo confirmations action');
+    assert(/Open Money Received/i.test(text), 'missing Open Money Received action');
     assert(
       (await owner.page.locator('a[href*="/reports/money-received"]').count()) > 0,
       'missing Money Received link',
@@ -592,7 +610,7 @@ async function main() {
     const cashierUrl = cashier.page.url();
     assert(
       denied(cashierText, cashierUrl) ||
-        !/Owner summary/i.test(cashierText) ||
+        !/In short/i.test(cashierText) ||
         /Access denied/i.test(cashierText) ||
         /\/pos/i.test(cashierUrl),
       'cashier should be denied Business Movement page',

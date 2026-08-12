@@ -1,5 +1,5 @@
 /**
- * Read-only Production smoke for Business Movement (Step 6G).
+ * Read-only Production smoke for Business Movement owner UX polish (Step 6I).
  * Uses existing QA tenant credentials. Does NOT insert or mutate production data.
  *
  * Env: .playwright-qa.local.env (PLAYWRIGHT_*) and optional VERCEL_AUTOMATION_BYPASS_SECRET
@@ -161,15 +161,33 @@ async function main() {
     assert(/Business Movement/i.test(text), 'owner missing Business Movement page');
     assert(!denied(text, url), `owner unexpectedly denied BM url=${url}`);
     assert(!/Application error|Internal Server Error/i.test(text), 'BM page server error');
+    assert(/In short/i.test(text), 'missing In short summary strip');
+    assert(/What changed/i.test(text) && /Why it matters/i.test(text), 'missing What changed / Why it matters');
+    assert(/What to check/i.test(text), 'missing What to check');
+    assert(/Data note/i.test(text), 'missing Data note');
     assert(text.includes(STOCK_DISCLAIMER_SNIPPET), 'missing stock disclaimer');
-    assert(/Owner summary/i.test(text), 'missing owner summary');
-    assert(/\bFact\b/i.test(text) && /\bEvidence\b/i.test(text), 'missing Fact/Evidence');
-    assert(/\bSignal\b/i.test(text) && /Recommended check/i.test(text), 'missing Signal/Recommended check');
-    assert(/Money Received/i.test(text) && /Refund outflows/i.test(text), 'missing money headline cards');
-    assert(/Needs MoMo confirmation/i.test(text), 'missing Needs MoMo card');
-    assert(/Sales vs Money Received gap/i.test(text), 'missing gap card');
-    assert(/Product movers/i.test(text) && /Branch movement/i.test(text), 'missing mover tables');
-    assert(/Cashier movement/i.test(text), 'missing cashier table');
+    const inShortIdx = text.indexOf('In short');
+    const dataNoteIdx = text.indexOf('Data note');
+    assert(inShortIdx >= 0 && dataNoteIdx > inShortIdx, 'Data note must sit below In short');
+    assert(!/Stock limitation/i.test(text), 'stock limitation heading should not dominate the top');
+    assert(!/Deterministic ranking/i.test(text), 'internal ranking copy leaked');
+    assert(!/momo confirmation risk/i.test(text), 'internal momo category leaked');
+    assert(!/product_growth|product_decline/i.test(text), 'internal product category leaked');
+    assert(!/confidence high/i.test(text), 'internal confidence label leaked');
+    assert(/Money Received/i.test(text) && /Refunds/i.test(text), 'missing money headline cards');
+    assert(/MoMo to confirm/i.test(text), 'missing MoMo to confirm card');
+    assert(/Sales vs money in/i.test(text), 'missing sales vs money card');
+    assert(/Product movers/i.test(text), 'missing product movers');
+    assert(
+      /All movement is from/i.test(text) || /Branch movement/i.test(text),
+      'missing branch collapse note or branch table',
+    );
+    assert(
+      /attributed to/i.test(text) || /Cashier movement/i.test(text),
+      'missing cashier collapse note or cashier table',
+    );
+    assert(/Review MoMo confirmations/i.test(text), 'missing Review MoMo confirmations');
+    assert(/Open Money Received/i.test(text), 'missing Open Money Received');
     assert(!hasForbiddenStock(text), 'forbidden stock-causation language on production BM page');
     checks.push('owner_bm_page_ok');
     console.log('PASS owner /reports/business-movement');
@@ -282,7 +300,7 @@ async function main() {
     const cashierUrl = cashier.page.url();
     assert(
       denied(cashierText, cashierUrl) ||
-        !/Owner summary/i.test(cashierText) ||
+        !/In short/i.test(cashierText) ||
         /Access denied/i.test(cashierText) ||
         /\/pos/i.test(cashierUrl),
       'cashier should be denied Business Movement page',

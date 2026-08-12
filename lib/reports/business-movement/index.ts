@@ -91,6 +91,26 @@ export {
 } from './insight-format';
 
 export {
+  OWNER_CATEGORY_LABEL,
+  OWNER_STOCK_DATA_NOTE,
+  buildOwnerSummaryStrip,
+  ownerCategoryLabel,
+  ownerConfidenceHint,
+  ownerPeriodChrome,
+  ownerProductMovers,
+  ownerWhyItMatters,
+  periodMonthLabel,
+  productMoverSideLabel,
+  productQtyWording,
+  shouldCollapseEntityTable,
+  shortPeriodLabel,
+  singleBranchNote,
+  singleCashierNote,
+  type OwnerProductMover,
+  type OwnerSummaryStrip,
+} from './owner-copy';
+
+export {
   assertOwnerSummaryHasNoStockCause,
   buildOwnerInsightSummary,
   insightTextBlob,

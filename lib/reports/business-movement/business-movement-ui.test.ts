@@ -215,24 +215,53 @@ describe('Business Movement 6F — surface wiring', () => {
 
     expect(page).toContain('title="Business Movement"');
     expect(page).toContain("requireBusiness(['MANAGER', 'OWNER'])");
-    expect(page).toContain('Owner summary');
-    expect(page).toContain('Fact');
-    expect(page).toContain('Evidence');
-    expect(page).toContain('Signal');
-    expect(page).toContain('Recommended check');
-    expect(page).toContain('Historical stock availability is not yet reliable');
-    expect(page).toContain('does not attribute sales movement to stock-outs');
     expect(page).toContain('Product movers');
-    expect(page).toContain('Branch movement');
-    expect(page).toContain('Cashier movement');
-    expect(page).toContain('Leakage / quality notes');
-    expect(page).toContain('Deterministic ranking — not AI advice');
-    expect(containsForbiddenStockLanguage(page)).toBe(false);
-    expect(STOCK_AVAILABILITY_READINESS).toBe('NOT_RELIABLE');
-
     expect(exportRoute).toContain('COMPLETE_STREAM');
     expect(exportRoute).toContain('requireExportUser');
     expect(nav).toContain('/reports/business-movement');
     expect(hub).toContain('/reports/business-movement');
+  });
+});
+
+describe('Business Movement 6H — owner UX polish', () => {
+  it('hides internal labels, shows summary strip, and demotes stock note', () => {
+    const root = process.cwd();
+    const page = readFileSync(
+      join(root, 'app/(protected)/reports/business-movement/page.tsx'),
+      'utf8',
+    );
+
+    expect(page).toContain('data-testid="owner-summary-strip"');
+    expect(page).toContain('In short');
+    expect(page).toContain('What changed');
+    expect(page).toContain('Why it matters');
+    expect(page).toContain('What to check');
+    expect(page).toContain('Review MoMo confirmations');
+    expect(page).toContain('Open Money Received');
+    expect(page).toContain('Export CSV');
+    expect(page).toContain('Data note');
+    expect(page).toContain('singleBranchNote');
+    expect(page).toContain('singleCashierNote');
+    expect(page).toContain('ownerProductMovers');
+    expect(page).toContain('buildOwnerSummaryStrip');
+
+    expect(page).not.toContain('Deterministic ranking — not AI advice');
+    expect(page).not.toContain('momo confirmation risk');
+    expect(page).not.toContain('product_growth');
+    expect(page).not.toContain('product_decline');
+    expect(page).not.toContain('confidence high');
+    expect(page).not.toContain('Stock limitation');
+    expect(page).not.toContain("insight.category.replace(/_/g, ' ')");
+    expect(page).not.toContain('Leakage / quality notes');
+
+    const summaryIdx = page.indexOf('owner-summary-strip');
+    const dataNoteIdx = page.lastIndexOf('Data note');
+    const productIdx = page.indexOf('Product movers');
+    expect(summaryIdx).toBeGreaterThan(0);
+    expect(dataNoteIdx).toBeGreaterThan(productIdx);
+    expect(summaryIdx).toBeLessThan(productIdx);
+
+    expect(containsForbiddenStockLanguage(page)).toBe(false);
+    expect(STOCK_AVAILABILITY_READINESS).toBe('NOT_RELIABLE');
   });
 });
