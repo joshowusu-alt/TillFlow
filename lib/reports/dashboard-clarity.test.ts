@@ -19,14 +19,22 @@ describe('Reports dashboard clarity pass', () => {
     expect(weeklyPage).toContain('amount / data.totalReceiptsPence');
   });
 
-  it('excludes failed, cancelled, and void sales payment statuses from receipt splits', () => {
+  it('uses canonical Money Received inclusion (CONFIRMED; no parent RETURNED/VOID)', () => {
     const dashboard = readSource('app/(protected)/reports/dashboard/TradingDashboardContent.tsx');
     const weeklyService = readSource('lib/reports/weekly-digest.ts');
-    const moneyReceived = readSource('lib/reports/money-received.ts');
+    const tradingSurface = readSource('lib/reports/money-received/trading-surface.ts');
+    const query = readSource('lib/reports/money-received/query.ts');
 
-    expect(moneyReceived).toContain("REPORTING_EXCLUDED_PAYMENT_STATUSES");
-    expect(dashboard).toContain("status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] }");
-    expect(weeklyService).toContain("status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] }");
+    expect(dashboard).toContain("from '@/lib/reports/money-received'");
+    expect(dashboard).toContain('getMoneyReceivedSummary');
+    expect(weeklyService).toContain('aggregateMoneyReceivedByMethod');
+    expect(tradingSurface).toContain("status: CONFIRMED_PAYMENT_STATUS");
+    expect(tradingSurface).not.toContain('REPORTING_EXCLUDED_SALE_STATUSES');
+    expect(tradingSurface).not.toMatch(/paymentStatus:\s*\{\s*notIn:.*RETURNED/);
+    expect(query).not.toMatch(/paymentStatus:.*RETURNED/);
+    expect(dashboard).not.toMatch(
+      /salesPayment\.groupBy\([\s\S]{0,400}?paymentStatus:\s*\{\s*notIn:\s*\['RETURNED',\s*'VOID'\]/,
+    );
   });
 
   it('describes cash variance with owner-friendly label and helper', () => {
@@ -80,11 +88,12 @@ describe('Reports dashboard clarity pass', () => {
   });
 
   it('Money received summary uses DB aggregation without legacy row cap', () => {
-    const moneyReceived = readSource('lib/reports/money-received.ts');
+    const moneyReceived = readSource('lib/reports/money-received/trading-surface.ts');
     expect(moneyReceived).toContain('$queryRaw');
     expect(moneyReceived).toContain('LEGACY_MONEY_RECEIVED_SUMMARY_ROW_CAP');
     expect(moneyReceived).not.toMatch(/take:\s*20_000/);
     expect(moneyReceived).not.toContain('payerMsisdn');
+    expect(moneyReceived).not.toContain('REPORTING_EXCLUDED_SALE_STATUSES');
   });
 
   it('payment section helper clarifies receipts vs sales distinction on both reports', () => {

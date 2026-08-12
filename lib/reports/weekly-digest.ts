@@ -1,6 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
-
+import {
+  aggregateMoneyReceivedByMethod,
+  requireMoneyReceivedMethodRows,
+  resolveMoneyReceivedScope,
+} from '@/lib/reports/money-received';
+import { DEFAULT_BUSINESS_TIMEZONE } from '@/lib/notifications/utils';
 export type WeeklyDigestData = {
   totalSalesPence: number;
   grossProfitPence: number;
@@ -61,16 +66,18 @@ async function _getWeeklyDigestData(
       _sum: { totalPence: true, grossMarginPence: true },
       _count: { id: true },
     }),
-    // Payments grouped by method — aggregate at DB level
-    prisma.salesPayment.groupBy({
-      by: ['method'],
-      where: {
-        receivedAt: { gte: weekStart, lte: weekEnd },
-        status: { notIn: ['FAILED', 'CANCELLED', 'VOID'] },
-        salesInvoice: { businessId, paymentStatus: { notIn: ['RETURNED', 'VOID'] } },
-      },
-      _sum: { amountPence: true },
-    }),
+    // Payments by method — canonical Money Received (CONFIRMED; no parent RETURNED/VOID)
+    aggregateMoneyReceivedByMethod(
+      prisma,
+      resolveMoneyReceivedScope({
+        businessId,
+        currency: 'GHS',
+        timeZone: DEFAULT_BUSINESS_TIMEZONE,
+        periodStart: weekStart,
+        periodEndInclusive: new Date(weekEnd.getTime() + 1),
+        absoluteBounds: true,
+      }),
+    ),
     prisma.salesInvoice.count({
       where: { businessId, createdAt: { gte: weekStart, lte: weekEnd }, paymentStatus: 'VOID' },
     }),
@@ -123,8 +130,8 @@ async function _getWeeklyDigestData(
   const prevGrossProfitPence = prevSalesAgg._sum.grossMarginPence ?? 0;
 
   const paymentSplit: Record<string, number> = {};
-  for (const p of paymentsByMethod) {
-    paymentSplit[p.method] = p._sum.amountPence ?? 0;
+  for (const p of requireMoneyReceivedMethodRows(paymentsByMethod)) {
+    paymentSplit[p.method] = p.amountPence;
   }
   const totalReceiptsPence = Object.values(paymentSplit).reduce((sum, amount) => sum + amount, 0);
 

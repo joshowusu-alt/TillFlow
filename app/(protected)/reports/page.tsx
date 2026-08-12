@@ -104,6 +104,13 @@ const reportGroups: ReportGroup[] = [
         badge: 'Core',
       },
       {
+        label: 'Payments and Money Received',
+        href: '/reports/money-received',
+        description: 'Confirmed money that came in — method split, unverified legacy, and refund outflows (not a sales total).',
+        icon: 'cash',
+        badge: 'Core',
+      },
+      {
         label: 'Sales Analytics',
         href: '/reports/analytics',
         description: 'Compare sales trends, product performance, categories, peak hours, and movement.',
