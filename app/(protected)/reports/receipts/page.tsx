@@ -12,7 +12,6 @@ import {
   isReportingScopeToday,
   moneyReceivedHref,
   resolveReportingScope,
-  tradingReportHref,
 } from '@/lib/reports/reporting-scope';
 import {
   listMoneyReceivedPayments,
@@ -86,11 +85,11 @@ export default async function MoneyReceivedReceiptsPage({
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
-        title="Money received"
-        subtitle="Payment records for the selected period — not a sales list."
+        title="Receipt transactions"
+        subtitle="Individual payment lines for the selected period — for detailed review, not the Money Received totals report."
         actions={
-          <Link href={tradingReportHref(scope)} className="btn-secondary text-sm">
-            Back to Trading Report
+          <Link href={moneyReceivedHref(scope)} className="btn-secondary text-sm">
+            Open Money Received
           </Link>
         }
       />
@@ -102,8 +101,8 @@ export default async function MoneyReceivedReceiptsPage({
           <strong>{originLabel}</strong> for{' '}
           {isToday ? 'Today' : `${scope.fromInputValue} → ${scope.toInputValue}`}
           {scope.storeId === 'ALL' ? ' · All branches' : ''}.
-          Rows are individual <strong>SalesPayment</strong> records. Origin comes from the
-          persisted payment field — historical payments without origin stay “not classified”.
+          Each row is one confirmed payment line. For cash-in totals, method split, unverified
+          items, and refunds, use <strong>Money Received</strong>.
         </p>
       </section>
 

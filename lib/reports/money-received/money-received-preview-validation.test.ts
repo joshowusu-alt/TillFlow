@@ -334,16 +334,19 @@ describe('Step 5B preview-equivalent — access and surface', () => {
       join(process.cwd(), 'app/(protected)/reports/money-received/page.tsx'),
       'utf8',
     );
-    expect(page).toContain('Payments and Money Received');
-    expect(page).toContain('It is not a sales total');
+    expect(page).toContain('title="Money Received"');
+    expect(page).toContain('separate from sales totals');
     expect(page).toContain('Refund outflows');
     expect(page).toContain('Unverified legacy');
+    expect(page).toContain('Sale amend (money out)');
     expect(page).toContain('resolveMoneyReceivedAccess');
     expect(page).toContain('drillDownForMetric');
+    expect(page).toContain('classifyMoneyReceivedRowKind');
     expect(page).not.toContain('Gross Profit');
     expect(page).not.toContain('Owner Home');
     expect(page).not.toContain('Command Center');
     expect(page).not.toContain('inventory');
+    expect(page).not.toContain('font-mono text-xs');
   });
 });
 
