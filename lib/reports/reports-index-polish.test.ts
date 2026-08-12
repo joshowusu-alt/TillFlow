@@ -97,6 +97,7 @@ describe('Reports Hub index polish', () => {
       '/reports/weekly-digest',
       '/reports/risk-monitor',
       '/reports/dashboard',
+      '/reports/money-received',
       '/reports/analytics',
       '/reports/cash-drawer',
       '/reports/reorder-suggestions',
