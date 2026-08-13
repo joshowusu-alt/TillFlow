@@ -1,5 +1,6 @@
 import { buildOwnerInsightSummary } from './insight-engine';
 import { formatGhPence } from './insight-format';
+import { ownerInsightCopy, ownerPeriodLabels } from './owner-copy';
 import {
   BUSINESS_MOVEMENT_DEFINITION_VERSION,
   STOCK_AVAILABILITY_READINESS,
@@ -81,6 +82,12 @@ export async function* iterBusinessMovementExportCsvChunks(
   yield pushLine(['meta', 'currentToKey', p.currentToKey]);
   yield pushLine(['meta', 'comparisonFromKey', p.comparisonFromKey]);
   yield pushLine(['meta', 'comparisonToKey', p.comparisonToKey]);
+  const labels = ownerPeriodLabels(p);
+  yield pushLine(['meta', 'currentPeriodLabel', labels.currentFull]);
+  yield pushLine(['meta', 'comparisonPeriodLabel', labels.comparisonFull]);
+  yield pushLine(['meta', 'comparingLine', labels.comparingLine]);
+  yield pushLine(['meta', 'currentRangeKeys', labels.currentRangeKeys]);
+  yield pushLine(['meta', 'comparisonRangeKeys', labels.comparisonRangeKeys]);
   yield pushLine(['meta', 'currentStart', p.currentStart.toISOString()]);
   yield pushLine(['meta', 'currentEndExclusive', p.currentEndExclusive.toISOString()]);
   yield pushLine(['meta', 'comparisonStart', p.comparisonStart.toISOString()]);
@@ -145,6 +152,7 @@ export async function* iterBusinessMovementExportCsvChunks(
   ]);
   for (let index = 0; index < summary.insights.length; index += 1) {
     const insight = summary.insights[index]!;
+    const copy = ownerInsightCopy(insight, labels);
     yield pushLine([
       'owner_insight',
       index + 1,
@@ -152,10 +160,10 @@ export async function* iterBusinessMovementExportCsvChunks(
       insight.category,
       insight.severity,
       insight.confidence,
-      insight.fact,
-      insight.evidence,
-      insight.signal,
-      insight.recommendedCheck,
+      copy.fact,
+      copy.evidence,
+      copy.signal,
+      copy.recommendedCheck,
       insight.rankScore,
     ]);
   }

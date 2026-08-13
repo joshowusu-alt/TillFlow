@@ -7,14 +7,18 @@ import {
   buildOwnerInsightSummary,
   buildOwnerSummaryStrip,
   compareSalesMovement,
+  formatHumanPeriodRange,
   ownerCategoryLabel,
   ownerConfidenceHint,
+  ownerInsightCopy,
+  ownerPeriodLabels,
   ownerProductMovers,
   ownerWhyItMatters,
   productMoverSideLabel,
   productQtyWording,
   rankBusinessMovementInsights,
   resolveLastFullCalendarMonthPair,
+  rewriteOwnerPeriodCopy,
   shortPeriodLabel,
   singleBranchNote,
   singleCashierNote,
@@ -221,7 +225,8 @@ describe('Business Movement 6H — owner copy', () => {
         },
       }),
     ).toBe('Dropped');
-    expect(productQtyWording(39, 0)).toBe('39 sold vs 0 last period');
+    expect(productQtyWording(39, 0, 'June')).toBe('39 sold vs 0 in June');
+    expect(productQtyWording(85, 21, 'Apr-May')).toBe('85 sold vs 21 in Apr-May');
   });
 
   it('collapses single branch and single cashier', () => {
@@ -257,7 +262,9 @@ describe('Business Movement 6H — owner copy', () => {
     const summary = buildOwnerInsightSummary(result);
     const strip = buildOwnerSummaryStrip(result, summary.insights);
     expect(strip.sales).toContain('July sales were down');
-    expect(strip.sales).toContain('vs June');
+    expect(strip.sales).toContain('compared with June');
+    expect(strip.sales).not.toMatch(/last period/i);
+    expect(strip.sales).not.toMatch(/2026-06-01|2026-07-01/);
     expect(strip.moneyReceived.toLowerCase()).toContain('money received');
     expect(strip.biggestCheck).toMatch(/confirm pending MoMo/i);
     expect(strip.paragraph).not.toMatch(/product_decline|momo_confirmation_risk|confidence high/i);
@@ -277,5 +284,82 @@ describe('Business Movement 6H — owner copy', () => {
     expect(ranked.find((i) => i.category === 'product_decline')?.rankScore).toBeGreaterThan(0);
     expect(summary.insights.length).toBeGreaterThanOrEqual(3);
     expect(summary.insights.length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('Business Movement 6J — period label clarity', () => {
+  it('formats a full calendar month', () => {
+    expect(formatHumanPeriodRange('2026-07-01', '2026-07-31', 'full')).toBe('July 2026');
+    expect(formatHumanPeriodRange('2026-06-01', '2026-06-30', 'full')).toBe('June 2026');
+    expect(formatHumanPeriodRange('2026-07-01', '2026-07-31', 'short')).toBe('July');
+    expect(formatHumanPeriodRange('2026-06-01', '2026-06-30', 'short')).toBe('June');
+  });
+
+  it('formats a multi-month aligned range', () => {
+    expect(formatHumanPeriodRange('2026-06-01', '2026-07-31', 'full')).toBe('Jun-Jul 2026');
+    expect(formatHumanPeriodRange('2026-04-01', '2026-05-31', 'full')).toBe('Apr-May 2026');
+    expect(formatHumanPeriodRange('2026-06-01', '2026-07-31', 'short')).toBe('Jun-Jul');
+    expect(formatHumanPeriodRange('2026-04-01', '2026-05-31', 'short')).toBe('Apr-May');
+    expect(formatHumanPeriodRange('2025-12-01', '2026-01-31', 'full')).toBe('Dec 2025-Jan 2026');
+  });
+
+  it('formats a non-month-aligned custom range', () => {
+    expect(formatHumanPeriodRange('2026-06-01', '2026-07-17', 'full')).toBe('1 Jun-17 Jul 2026');
+    expect(formatHumanPeriodRange('2026-06-01', '2026-07-17', 'short')).toBe('1 Jun-17 Jul');
+    expect(formatHumanPeriodRange('2025-12-15', '2026-01-10', 'full')).toBe(
+      '15 Dec 2025-10 Jan 2026',
+    );
+  });
+
+  it('builds the comparing line and rewrites vague insight copy', () => {
+    const result = buildResult();
+    const labels = ownerPeriodLabels(result.scope.periods);
+    expect(labels.comparingLine).toBe('Comparing: July 2026 vs June 2026');
+    expect(labels.currentRangeKeys).toBe('2026-07-01 → 2026-07-31');
+    expect(labels.comparisonRangeKeys).toBe('2026-06-01 → 2026-06-30');
+
+    expect(
+      rewriteOwnerPeriodCopy('Headline sales moved down vs the comparison period.', labels),
+    ).toBe('Headline sales moved down compared with June 2026.');
+    expect(rewriteOwnerPeriodCopy('85 sold vs 21 last period', labels)).toBe(
+      '85 sold vs 21 in June 2026',
+    );
+
+    const summary = buildOwnerInsightSummary(result);
+    for (const insight of summary.insights) {
+      const copy = ownerInsightCopy(insight, labels);
+      const blob = `${copy.fact} ${copy.evidence} ${copy.signal} ${copy.recommendedCheck}`;
+      expect(blob).not.toMatch(/last period/i);
+      expect(blob).not.toMatch(/comparison period/i);
+    }
+
+    const frytol = ownerProductMovers(result).find((m) => m.productName === 'Frytol 1L');
+    expect(frytol?.qtyWording).toBe('39 sold vs 10 in June');
+  });
+
+  it('does not change calculations when period labels are applied', () => {
+    const result = buildResult();
+    const rankedBefore = rankBusinessMovementInsights(result).map((i) => ({
+      id: i.id,
+      rankScore: i.rankScore,
+      category: i.category,
+    }));
+    const labels = ownerPeriodLabels(result.scope.periods);
+    const summary = buildOwnerInsightSummary(result);
+    buildOwnerSummaryStrip(result, summary.insights);
+    ownerProductMovers(result);
+    for (const insight of summary.insights) {
+      ownerInsightCopy(insight, labels);
+    }
+    const rankedAfter = rankBusinessMovementInsights(result).map((i) => ({
+      id: i.id,
+      rankScore: i.rankScore,
+      category: i.category,
+    }));
+    expect(rankedAfter).toEqual(rankedBefore);
+    expect(result.headline.salesValuePence.current).toBe(78_455_0);
+    expect(result.headline.salesValuePence.comparison).toBe(100_000_0);
+    expect(result.money.moneyReceived.current).toBe(70_000);
+    expect(result.money.moneyReceived.comparison).toBe(75_000);
   });
 });

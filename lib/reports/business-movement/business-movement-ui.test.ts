@@ -148,6 +148,13 @@ describe('Business Movement 6F — export COMPLETE_STREAM', () => {
     expect(containsForbiddenStockLanguage(csv)).toBe(false);
     expect(csv).toContain(String(result.money.moneyReceived.current));
     expect(csv.match(/COMPLETE_STREAM/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(csv).toContain('currentPeriodLabel,July 2026');
+    expect(csv).toContain('comparisonPeriodLabel,June 2026');
+    expect(csv).toContain('comparingLine,Comparing: July 2026 vs June 2026');
+    expect(csv).toContain('currentFromKey,2026-07-01');
+    expect(csv).toContain('comparisonFromKey,2026-06-01');
+    expect(csv).not.toMatch(/last period/i);
+    expect(csv).not.toMatch(/comparison period/i);
   });
 
   it('Money Received values match canonical composition', () => {
@@ -263,5 +270,22 @@ describe('Business Movement 6H — owner UX polish', () => {
 
     expect(containsForbiddenStockLanguage(page)).toBe(false);
     expect(STOCK_AVAILABILITY_READINESS).toBe('NOT_RELIABLE');
+  });
+});
+
+describe('Business Movement 6J — owner page period wording', () => {
+  it('has no visible last period or comparison period copy', () => {
+    const root = process.cwd();
+    const page = readFileSync(
+      join(root, 'app/(protected)/reports/business-movement/page.tsx'),
+      'utf8',
+    );
+
+    expect(page).toContain('data-testid="comparing-line"');
+    expect(page).toContain('comparingLine');
+    expect(page).toContain('period-audit-range');
+    expect(page).toContain('ownerInsightCopy');
+    expect(page).not.toMatch(/last period/i);
+    expect(page).not.toMatch(/comparison period/i);
   });
 });
