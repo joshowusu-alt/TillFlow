@@ -14,6 +14,9 @@ export type MomoConfirmationRow = {
   receiptOrigin: string | null;
   reference: string | null;
   network: string | null;
+  provider: string | null;
+  payerMsisdn: string | null;
+  collectionId: string | null;
   salesInvoiceId: string;
   transactionNumber: string | null;
   saleStatus: string;
