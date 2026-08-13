@@ -96,6 +96,9 @@ describe('MoMo confirmation review — list and export', () => {
         receiptOrigin: null,
         reference: null,
         network: 'MTN',
+        provider: null,
+        payerMsisdn: null,
+        collectionId: null,
         receivedAt,
         salesInvoiceId: 'inv-1',
         salesInvoice: {
@@ -148,6 +151,9 @@ describe('MoMo confirmation review — list and export', () => {
           receiptOrigin: null,
           reference: null,
           network: null,
+          provider: null,
+          payerMsisdn: null,
+          collectionId: null,
           receivedAt,
           salesInvoiceId: 'inv-1',
           salesInvoice: {
@@ -207,8 +213,10 @@ describe('MoMo confirmation review — surface wiring', () => {
 
     expect(page).toContain('MoMo Confirmation Review');
     expect(page).toContain('requireBusiness([\'MANAGER\', \'OWNER\'])');
+    expect(page).toContain('MomoConfirmDrawer');
     expect(page).not.toContain('Mark verified');
     expect(page).not.toContain('Approve');
+    expect(page).not.toContain('read-only report yet');
     expect(exportRoute).toContain('COMPLETE_STREAM');
     expect(exportRoute).toContain('iterMomoConfirmationExportCsvChunks');
     expect(moneyPage).toContain('/reports/momo-confirmation');

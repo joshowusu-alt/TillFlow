@@ -4,7 +4,6 @@ import PageHeader from '@/components/PageHeader';
 import StatCard from '@/components/StatCard';
 import EmptyState from '@/components/EmptyState';
 import ReportFilterCard from '@/components/reports/ReportFilterCard';
-import ReportTableCard, { ReportTableEmptyRow } from '@/components/reports/ReportTableCard';
 import Pagination from '@/components/Pagination';
 import { formatMoney } from '@/lib/format';
 import { requireBusiness } from '@/lib/auth';
@@ -19,18 +18,11 @@ import {
   listMomoConfirmationPayments,
   MOMO_CONFIRMATION_STATUS,
 } from '@/lib/reports/momo-confirmation';
+import MomoConfirmDrawer from './MomoConfirmDrawer';
 
 export const dynamic = 'force-dynamic';
 
 const SALE_STATUS_OPTIONS = ['PAID', 'PART_PAID', 'UNPAID', 'RETURNED', 'VOID'] as const;
-
-function formatScopeInstant(value: Date, timeZone: string) {
-  return value.toLocaleString('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone,
-  });
-}
 
 export default async function MomoConfirmationReviewPage({
   searchParams,
@@ -182,12 +174,11 @@ export default async function MomoConfirmationReviewPage({
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
         <p>
           These rows are usually recorded as <span className="font-medium">{MOMO_CONFIRMATION_STATUS}</span>{' '}
-          when Mobile Money was taken without a confirmed provider collection. Review them against the
-          customer receipt or statement. Confirmation actions are not available on this read-only
-          report yet.
+          when Mobile Money was taken without a confirmed provider collection. Open <span className="font-medium">Review</span>{' '}
+          to confirm money that was already received — this is not a new receipt.
         </p>
         <p className="mt-2 text-xs text-amber-900/80">
-          They do not change Money Received totals until status becomes CONFIRMED.
+          After confirmation the amount appears in Money Received using the original payment date, not today.
         </p>
       </div>
 
@@ -290,49 +281,30 @@ export default async function MomoConfirmationReviewPage({
             ? 'List unavailable.'
             : `${list.totalCount} matching payment${list.totalCount === 1 ? '' : 's'} · page ${list.page} of ${list.totalPages}.`}
         </p>
-        <ReportTableCard title="Needs MoMo confirmation">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>Branch</th>
-              <th>Cashier</th>
-              <th>Sale</th>
-              <th>Customer</th>
-              <th>Method</th>
-              <th>Status</th>
-              <th>Sale status</th>
-              <th className="text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.rows.length === 0 ? (
-              <ReportTableEmptyRow
-                colSpan={9}
-                message={
-                  queryFailed
-                    ? 'No rows — query failed.'
-                    : 'No payments need MoMo confirmation in this scope.'
-                }
-              />
-            ) : (
-              list.rows.map((row) => (
-                <tr key={row.paymentId}>
-                  <td>{formatScopeInstant(row.receivedAt, timeZone)}</td>
-                  <td>{row.storeName}</td>
-                  <td>{row.cashierName ?? '—'}</td>
-                  <td>{row.transactionNumber ?? '—'}</td>
-                  <td>{row.customerName ?? '—'}</td>
-                  <td>{row.method === 'MOBILE_MONEY' ? 'Mobile Money' : row.method}</td>
-                  <td>
-                    <span className="font-medium text-amber-900">{row.status}</span>
-                  </td>
-                  <td>{row.saleStatus}</td>
-                  <td className="text-right tabular-nums">{formatMoney(row.amountPence, currency)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </ReportTableCard>
+        <MomoConfirmDrawer
+          currency={currency}
+          timeZone={timeZone}
+          queryFailed={queryFailed}
+          rows={list.rows.map((row) => ({
+            paymentId: row.paymentId,
+            receivedAtIso: row.receivedAt.toISOString(),
+            amountPence: row.amountPence,
+            method: row.method,
+            status: row.status,
+            receiptOrigin: row.receiptOrigin,
+            reference: row.reference,
+            network: row.network,
+            provider: row.provider,
+            payerMsisdn: row.payerMsisdn,
+            collectionId: row.collectionId,
+            salesInvoiceId: row.salesInvoiceId,
+            transactionNumber: row.transactionNumber,
+            saleStatus: row.saleStatus,
+            storeName: row.storeName,
+            cashierName: row.cashierName,
+            customerName: row.customerName,
+          }))}
+        />
       </div>
 
       <Pagination

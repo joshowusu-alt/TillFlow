@@ -34,6 +34,7 @@ const ACTION_LABELS: Record<string, string> = {
   CASH_DRAWER_CLOSE: 'Cash Drawer Closed',
   STOCK_TRANSFER_REQUEST: 'Stock Transfer Requested',
   STOCK_TRANSFER_APPROVE: 'Stock Transfer Approved',
+  MOMO_PAYMENT_CONFIRM: 'MoMo Payment Confirmed',
 };
 
 const ACTION_COLOURS: Record<string, string> = {
@@ -59,6 +60,7 @@ const ACTION_COLOURS: Record<string, string> = {
   CASH_DRAWER_CLOSE: 'bg-amber-100 text-amber-800',
   STOCK_TRANSFER_REQUEST: 'bg-accentSoft text-accent',
   STOCK_TRANSFER_APPROVE: 'bg-emerald-100 text-emerald-800',
+  MOMO_PAYMENT_CONFIRM: 'bg-emerald-100 text-emerald-800',
 };
 
 export const dynamic = 'force-dynamic';

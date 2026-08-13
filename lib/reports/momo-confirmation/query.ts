@@ -54,6 +54,9 @@ function mapRow(r: {
   receiptOrigin: string | null;
   reference: string | null;
   network: string | null;
+  provider: string | null;
+  payerMsisdn: string | null;
+  collectionId: string | null;
   receivedAt: Date;
   salesInvoiceId: string;
   salesInvoice: {
@@ -75,6 +78,9 @@ function mapRow(r: {
     receiptOrigin: r.receiptOrigin,
     reference: r.reference,
     network: r.network,
+    provider: r.provider,
+    payerMsisdn: r.payerMsisdn,
+    collectionId: r.collectionId,
     salesInvoiceId: r.salesInvoiceId,
     transactionNumber: r.salesInvoice.transactionNumber,
     saleStatus: r.salesInvoice.paymentStatus,
@@ -94,6 +100,9 @@ const rowSelect = {
   receiptOrigin: true,
   reference: true,
   network: true,
+  provider: true,
+  payerMsisdn: true,
+  collectionId: true,
   receivedAt: true,
   salesInvoiceId: true,
   salesInvoice: {
