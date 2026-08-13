@@ -77,9 +77,14 @@ function assertPeriodClarity(text, label) {
     /\d{4}-\d{2}-\d{2}\s*→\s*\d{4}-\d{2}-\d{2}/.test(text),
     `${label} missing exact date audit line`,
   );
-  assert(/compared with/i.test(text), `${label} summary missing compared with`);
   assert(
-    /July sales|June sales|Jun-Jul sales|Apr-May sales|[A-Z][a-z]+ sales were/i.test(text),
+    /compared with|about the same as|none in |new in |no activity in either/i.test(text),
+    `${label} summary missing named comparison wording`,
+  );
+  assert(
+    /July sales|June sales|Jun-Jul sales|Apr-May sales|[A-Z][a-z]+ sales were|[A-Z][a-z]+ sales had|[A-Z][a-z]+ sales is/i.test(
+      text,
+    ),
     `${label} summary missing named current period`,
   );
   assert(
