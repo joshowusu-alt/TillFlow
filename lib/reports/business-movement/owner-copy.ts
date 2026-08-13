@@ -34,6 +34,21 @@ const MONTH_NAMES = [
   'December',
 ] as const;
 
+const MONTH_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
 export const OWNER_STOCK_DATA_NOTE =
   'Historical stock availability is not yet reliable. This report does not attribute sales movement to stock-outs or inventory gaps.';
 
@@ -97,8 +112,12 @@ export function productMoverSideLabel(row: {
   return 'Unchanged';
 }
 
-export function productQtyWording(qtyCurrent: number, qtyComparison: number): string {
-  return `${qtyCurrent} sold vs ${qtyComparison} last period`;
+export function productQtyWording(
+  qtyCurrent: number,
+  qtyComparison: number,
+  comparisonLabel: string,
+): string {
+  return `${qtyCurrent} sold vs ${qtyComparison} in ${comparisonLabel}`;
 }
 
 export function shouldCollapseEntityTable(rows: unknown[]): boolean {
@@ -129,26 +148,135 @@ function parseDateKey(key: string): { year: number; month: number; day: number }
   return { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
 }
 
-export function periodMonthLabel(fromKey: string, toKey: string): string {
+function lastDayOfMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function isFullCalendarMonth(
+  from: { year: number; month: number; day: number },
+  to: { year: number; month: number; day: number },
+): boolean {
+  return (
+    from.year === to.year &&
+    from.month === to.month &&
+    from.day === 1 &&
+    to.day === lastDayOfMonth(to.year, to.month)
+  );
+}
+
+function isFullCalendarMonthSpan(
+  from: { year: number; month: number; day: number },
+  to: { year: number; month: number; day: number },
+): boolean {
+  return from.day === 1 && to.day === lastDayOfMonth(to.year, to.month);
+}
+
+/**
+ * Human-readable inclusive range.
+ * July 2026 | Jun-Jul 2026 | 1 Jun-17 Jul 2026
+ */
+export function formatHumanPeriodRange(
+  fromKey: string,
+  toKey: string,
+  style: 'full' | 'short' = 'full',
+): string {
   const from = parseDateKey(fromKey);
   const to = parseDateKey(toKey);
   if (!from || !to) return `${fromKey} to ${toKey}`;
-  const lastDay = new Date(Date.UTC(to.year, to.month, 0)).getUTCDate();
-  if (from.year === to.year && from.month === to.month && from.day === 1 && to.day === lastDay) {
-    return `${MONTH_NAMES[from.month - 1]} ${from.year}`;
+  const sameYear = from.year === to.year;
+
+  if (isFullCalendarMonth(from, to)) {
+    const name = MONTH_NAMES[from.month - 1] ?? fromKey;
+    return style === 'short' ? name : `${name} ${from.year}`;
   }
-  return `${fromKey} to ${toKey}`;
+
+  if (isFullCalendarMonthSpan(from, to)) {
+    const a = MONTH_SHORT[from.month - 1];
+    const b = MONTH_SHORT[to.month - 1];
+    if (sameYear) {
+      return style === 'short' ? `${a}-${b}` : `${a}-${b} ${from.year}`;
+    }
+    return `${a} ${from.year}-${b} ${to.year}`;
+  }
+
+  const a = `${from.day} ${MONTH_SHORT[from.month - 1]}`;
+  const b = `${to.day} ${MONTH_SHORT[to.month - 1]}`;
+  if (sameYear) {
+    return style === 'short' ? `${a}-${b}` : `${a}-${b} ${from.year}`;
+  }
+  return `${a} ${from.year}-${b} ${to.year}`;
+}
+
+export function periodMonthLabel(fromKey: string, toKey: string): string {
+  return formatHumanPeriodRange(fromKey, toKey, 'full');
 }
 
 export function shortPeriodLabel(fromKey: string, toKey: string): string {
-  const from = parseDateKey(fromKey);
-  const to = parseDateKey(toKey);
-  if (!from || !to) return fromKey;
-  const lastDay = new Date(Date.UTC(to.year, to.month, 0)).getUTCDate();
-  if (from.year === to.year && from.month === to.month && from.day === 1 && to.day === lastDay) {
-    return MONTH_NAMES[from.month - 1] ?? fromKey;
-  }
-  return fromKey;
+  return formatHumanPeriodRange(fromKey, toKey, 'short');
+}
+
+export type OwnerPeriodLabels = {
+  currentFull: string;
+  comparisonFull: string;
+  currentShort: string;
+  comparisonShort: string;
+  comparingLine: string;
+  currentRangeKeys: string;
+  comparisonRangeKeys: string;
+};
+
+export function ownerPeriodLabels(periods: BusinessMovementPeriodPair): OwnerPeriodLabels {
+  const currentFull = formatHumanPeriodRange(periods.currentFromKey, periods.currentToKey, 'full');
+  const comparisonFull = formatHumanPeriodRange(
+    periods.comparisonFromKey,
+    periods.comparisonToKey,
+    'full',
+  );
+  const currentShort = formatHumanPeriodRange(periods.currentFromKey, periods.currentToKey, 'short');
+  const comparisonShort = formatHumanPeriodRange(
+    periods.comparisonFromKey,
+    periods.comparisonToKey,
+    'short',
+  );
+  return {
+    currentFull,
+    comparisonFull,
+    currentShort,
+    comparisonShort,
+    comparingLine: `Comparing: ${currentFull} vs ${comparisonFull}`,
+    currentRangeKeys: `${periods.currentFromKey} → ${periods.currentToKey}`,
+    comparisonRangeKeys: `${periods.comparisonFromKey} → ${periods.comparisonToKey}`,
+  };
+}
+
+/** Replace vague “last period” / “comparison period” with named ranges. */
+export function rewriteOwnerPeriodCopy(text: string, labels: OwnerPeriodLabels): string {
+  return text
+    .replace(/vs the comparison period/gi, `compared with ${labels.comparisonFull}`)
+    .replace(/vs comparison period/gi, `compared with ${labels.comparisonFull}`)
+    .replace(/in the comparison period/gi, `in ${labels.comparisonFull}`)
+    .replace(/the comparison period/gi, labels.comparisonFull)
+    .replace(/comparison period/gi, labels.comparisonFull)
+    .replace(/in the current period/gi, `in ${labels.currentFull}`)
+    .replace(/the current period/gi, labels.currentFull)
+    .replace(/current-period/gi, labels.currentFull)
+    .replace(/vs last period/gi, `vs ${labels.comparisonFull}`)
+    .replace(/ last period/gi, ` in ${labels.comparisonFull}`)
+    .replace(/last period/gi, labels.comparisonFull)
+    .replace(/this period pair/gi, `${labels.currentFull} vs ${labels.comparisonFull}`)
+    .replace(/this period/gi, `in ${labels.currentFull}`);
+}
+
+export function ownerInsightCopy(
+  insight: RankedBusinessMovementInsight,
+  labels: OwnerPeriodLabels,
+): { fact: string; evidence: string; signal: string; recommendedCheck: string } {
+  return {
+    fact: rewriteOwnerPeriodCopy(insight.fact, labels),
+    evidence: rewriteOwnerPeriodCopy(insight.evidence, labels),
+    signal: rewriteOwnerPeriodCopy(ownerWhyItMatters(insight.signal), labels),
+    recommendedCheck: rewriteOwnerPeriodCopy(insight.recommendedCheck, labels),
+  };
 }
 
 function movementClause(
@@ -162,16 +290,16 @@ function movementClause(
     return `${currentLabel} ${noun} had no activity in either period`;
   }
   if (pair.comparison === 0 && pair.current > 0) {
-    return `${currentLabel} ${noun} is ${formatGhPence(pair.current)} — new this period (no comparison base)`;
+    return `${currentLabel} ${noun} is ${formatGhPence(pair.current)} — new in ${currentLabel} (no comparison base)`;
   }
   if (pair.current === 0 && pair.comparison > 0) {
-    return `${currentLabel} ${noun} had ${formatGhPence(pair.comparison)} in ${comparisonLabel} and none this period`;
+    return `${currentLabel} ${noun} had ${formatGhPence(pair.comparison)} in ${comparisonLabel} and none in ${currentLabel}`;
   }
   if (pair.absoluteChange < 0) {
-    return `${currentLabel} ${noun} ${noun === 'sales' ? 'were' : 'was'} down ${abs} vs ${comparisonLabel}`;
+    return `${currentLabel} ${noun} ${noun === 'sales' ? 'were' : 'was'} down ${abs} compared with ${comparisonLabel}`;
   }
   if (pair.absoluteChange > 0) {
-    return `${currentLabel} ${noun} ${noun === 'sales' ? 'were' : 'was'} up ${abs} vs ${comparisonLabel}`;
+    return `${currentLabel} ${noun} ${noun === 'sales' ? 'were' : 'was'} up ${abs} compared with ${comparisonLabel}`;
   }
   return `${currentLabel} ${noun} ${noun === 'sales' ? 'were' : 'was'} about the same as ${comparisonLabel}`;
 }
@@ -198,7 +326,7 @@ function biggestCheckSentence(
       const momo = money.needsMomoConfirmation;
       const abs = formatGhPence(Math.abs(momo.absoluteChange));
       if (momo.comparison === 0 && momo.current > 0) {
-        return `MoMo needing confirmation is ${formatGhPence(momo.current)} this period, so confirm pending MoMo before judging cash performance.`;
+        return `MoMo needing confirmation is ${formatGhPence(momo.current)} in ${currentLabel}, so confirm pending MoMo before judging cash performance.`;
       }
       if (momo.absoluteChange > 0) {
         return `MoMo needing confirmation rose by ${abs}, so confirm pending MoMo before judging cash performance.`;
@@ -254,13 +382,15 @@ export function buildOwnerSummaryStrip(
   return { sales, moneyReceived, biggestCheck, paragraph };
 }
 
-export function ownerPeriodChrome(periods: BusinessMovementPeriodPair): {
+export function ownerPeriodChrome(periods: BusinessMovementPeriodPair): OwnerPeriodLabels & {
   currentLabel: string;
   comparisonLabel: string;
 } {
+  const labels = ownerPeriodLabels(periods);
   return {
-    currentLabel: periodMonthLabel(periods.currentFromKey, periods.currentToKey),
-    comparisonLabel: periodMonthLabel(periods.comparisonFromKey, periods.comparisonToKey),
+    ...labels,
+    currentLabel: labels.currentFull,
+    comparisonLabel: labels.comparisonFull,
   };
 }
 
@@ -275,6 +405,10 @@ export type OwnerProductMover = {
 };
 
 export function ownerProductMovers(result: BusinessMovementWithMoneyResult): OwnerProductMover[] {
+  const comparisonLabel = shortPeriodLabel(
+    result.scope.periods.comparisonFromKey,
+    result.scope.periods.comparisonToKey,
+  );
   const rows: ProductMovementRow[] = [...result.productDecliners, ...result.productGrowers];
   return rows
     .map((row) => ({
@@ -284,7 +418,7 @@ export function ownerProductMovers(result: BusinessMovementWithMoneyResult): Own
       currentPence: row.salesValuePence.current,
       comparisonPence: row.salesValuePence.comparison,
       changePence: row.salesValuePence.absoluteChange,
-      qtyWording: productQtyWording(row.qtyBase.current, row.qtyBase.comparison),
+      qtyWording: productQtyWording(row.qtyBase.current, row.qtyBase.comparison, comparisonLabel),
     }))
     .sort((a, b) => Math.abs(b.changePence) - Math.abs(a.changePence));
 }

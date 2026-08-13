@@ -1,5 +1,5 @@
 /**
- * Read-only Production smoke for Business Movement owner UX polish (Step 6I).
+ * Read-only Production smoke for Business Movement period clarity (Step 6K).
  * Uses existing QA tenant credentials. Does NOT insert or mutate production data.
  *
  * Env: .playwright-qa.local.env (PLAYWRIGHT_*) and optional VERCEL_AUTOMATION_BYPASS_SECRET
@@ -69,6 +69,41 @@ function denied(text, url) {
 function hasForbiddenStock(text) {
   const lower = String(text || '').toLowerCase();
   return FORBIDDEN.some((p) => lower.includes(p));
+}
+
+function assertPeriodClarity(text, label) {
+  assert(/Comparing:\s+/i.test(text), `${label} missing Comparing: line`);
+  assert(
+    /\d{4}-\d{2}-\d{2}\s*→\s*\d{4}-\d{2}-\d{2}/.test(text),
+    `${label} missing exact date audit line`,
+  );
+  assert(/compared with/i.test(text), `${label} summary missing compared with`);
+  assert(
+    /July sales|June sales|Jun-Jul sales|Apr-May sales|[A-Z][a-z]+ sales were/i.test(text),
+    `${label} summary missing named current period`,
+  );
+  assert(
+    /vs [A-Z][a-z]{2,8}(?:-[A-Z][a-z]{2})? \d{4}/.test(text),
+    `${label} headline missing named comparison label`,
+  );
+  assert(!/\bcomparison period\b/i.test(text), `${label} still shows comparison period`);
+  assert(!/\blast period\b/i.test(text), `${label} still shows last period`);
+  assert(
+    /sold vs \d+ in /i.test(text) ||
+      /in June|in July|in May|in Apr-May|in Jun-Jul/i.test(text) ||
+      /No material product movers/i.test(text),
+    `${label} product qty missing named comparison`,
+  );
+}
+
+function assertExportPeriodClarity(exportText, label) {
+  assert(/currentPeriodLabel/i.test(exportText), `${label} export missing currentPeriodLabel`);
+  assert(/comparisonPeriodLabel/i.test(exportText), `${label} export missing comparisonPeriodLabel`);
+  assert(/comparingLine/i.test(exportText), `${label} export missing comparingLine`);
+  assert(/currentFromKey/i.test(exportText), `${label} export missing currentFromKey`);
+  assert(/comparisonFromKey/i.test(exportText), `${label} export missing comparisonFromKey`);
+  assert(!/\blast period\b/i.test(exportText), `${label} export still has last period`);
+  assert(!/\bcomparison period\b/i.test(exportText), `${label} export still has comparison period`);
 }
 
 async function login(base, email, password, bypass) {
@@ -190,6 +225,7 @@ async function main() {
         /No cashier-attributed sales/i.test(text),
       'missing cashier collapse note or cashier table',
     );
+    assertPeriodClarity(text, 'owner BM page');
     assert(/Review MoMo confirmations/i.test(text), 'missing Review MoMo confirmations');
     assert(/Open Money Received/i.test(text), 'missing Open Money Received');
     assert(!hasForbiddenStock(text), 'forbidden stock-causation language on production BM page');
@@ -214,6 +250,7 @@ async function main() {
     assert(!/PARTIAL_EXPORT_CAP/i.test(exportText), 'owner BM export partial cap');
     assert(!/<html/i.test(exportText), 'owner BM export returned HTML');
     assert(!hasForbiddenStock(exportText), 'forbidden stock language in production BM export');
+    assertExportPeriodClarity(exportText, 'owner BM');
     checks.push('owner_bm_export_complete_stream');
     console.log('PASS owner BM export COMPLETE_STREAM');
 

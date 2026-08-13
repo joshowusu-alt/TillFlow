@@ -21,14 +21,15 @@ import {
   formatSignedGhPence,
   ownerCategoryLabel,
   ownerConfidenceHint,
+  ownerInsightCopy,
   ownerPeriodChrome,
   ownerProductMovers,
-  ownerWhyItMatters,
   OWNER_STOCK_DATA_NOTE,
   resolveBusinessMovementPeriodInput,
   singleBranchNote,
   singleCashierNote,
   type ChangePair,
+  type OwnerPeriodLabels,
   type RankedBusinessMovementInsight,
 } from '@/lib/reports/business-movement';
 
@@ -42,21 +43,31 @@ function formatScopeInstant(value: Date, timeZone: string) {
   });
 }
 
-function changeHelper(pair: ChangePair, currency: string): string {
+function changeHelper(pair: ChangePair, currency: string, labels: OwnerPeriodLabels): string {
   const described = describeChangeVsComparison(pair, 'Change');
   const abs = formatMoney(Math.abs(pair.absoluteChange), currency);
-  if (pair.comparison === 0 && pair.current > 0) return `New this period · ${abs}`;
-  if (pair.current === 0 && pair.comparison > 0) return `No current sales · was ${abs}`;
+  if (pair.comparison === 0 && pair.current > 0) {
+    return `New in ${labels.currentFull} · ${abs}`;
+  }
+  if (pair.current === 0 && pair.comparison > 0) {
+    return `No sales in ${labels.currentFull} · was ${abs} in ${labels.comparisonFull}`;
+  }
   const sign = pair.absoluteChange > 0 ? '+' : pair.absoluteChange < 0 ? '−' : '';
   if (described.usedPercentage && pair.percentageChange != null) {
-    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs last period`;
+    return `${sign}${abs} (${Math.abs(pair.percentageChange).toFixed(1)}%) vs ${labels.comparisonFull}`;
   }
-  return `${sign}${abs} vs last period`;
+  return `${sign}${abs} vs ${labels.comparisonFull}`;
 }
 
-function InsightCard({ insight }: { insight: RankedBusinessMovementInsight }) {
+function InsightCard({
+  insight,
+  labels,
+}: {
+  insight: RankedBusinessMovementInsight;
+  labels: OwnerPeriodLabels;
+}) {
   const confidenceHint = ownerConfidenceHint(insight.confidence);
-  const why = ownerWhyItMatters(insight.signal);
+  const copy = ownerInsightCopy(insight, labels);
   return (
     <article className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -70,20 +81,20 @@ function InsightCard({ insight }: { insight: RankedBusinessMovementInsight }) {
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             What changed
           </dt>
-          <dd>{insight.fact}</dd>
+          <dd>{copy.fact}</dd>
         </div>
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Why it matters
           </dt>
-          <dd className="text-slate-700">{why}</dd>
-          <dd className="mt-1 text-xs text-slate-500">{insight.evidence}</dd>
+          <dd className="text-slate-700">{copy.signal}</dd>
+          <dd className="mt-1 text-xs text-slate-500">{copy.evidence}</dd>
         </div>
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             What to check
           </dt>
-          <dd className="text-slate-700">{insight.recommendedCheck}</dd>
+          <dd className="text-slate-700">{copy.recommendedCheck}</dd>
         </div>
       </dl>
     </article>
@@ -200,7 +211,10 @@ export default async function BusinessMovementReportPage({
   const momoQs = new URLSearchParams(moneyQs);
 
   const insightBlob = summary.insights
-    .map((i) => `${i.fact} ${i.evidence} ${i.signal} ${i.recommendedCheck}`)
+    .map((i) => {
+      const copy = ownerInsightCopy(i, chrome);
+      return `${copy.fact} ${copy.evidence} ${copy.signal} ${copy.recommendedCheck}`;
+    })
     .join(' ');
   if (
     STOCK_AVAILABILITY_READINESS === 'NOT_RELIABLE' &&
@@ -213,7 +227,7 @@ export default async function BusinessMovementReportPage({
     <div className="space-y-6">
       <PageHeader
         title="Business Movement"
-        subtitle={`${chrome.currentLabel} vs ${chrome.comparisonLabel} — what changed, in plain language.`}
+        subtitle="What changed, in plain language."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -239,6 +253,18 @@ export default async function BusinessMovementReportPage({
           </div>
         }
       />
+
+      <div>
+        <p
+          className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-800"
+          data-testid="comparing-line"
+        >
+          {chrome.comparingLine}
+        </p>
+        <p className="mt-1 text-xs text-slate-500" data-testid="period-audit-range">
+          {chrome.currentRangeKeys} vs {chrome.comparisonRangeKeys}
+        </p>
+      </div>
 
       <section
         className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm text-slate-800"
@@ -299,7 +325,7 @@ export default async function BusinessMovementReportPage({
         <StatCard
           label="Sales"
           value={formatMoney(result.headline.salesValuePence.current, currency)}
-          helper={changeHelper(result.headline.salesValuePence, currency)}
+          helper={changeHelper(result.headline.salesValuePence, currency, chrome)}
           tone={
             result.headline.salesValuePence.absoluteChange < 0
               ? 'danger'
@@ -312,20 +338,22 @@ export default async function BusinessMovementReportPage({
           label="Money Received"
           value={formatMoney(result.money.moneyReceived.current, currency)}
           helper={
-            queryFailed ? 'Money layer unavailable' : changeHelper(result.money.moneyReceived, currency)
+            queryFailed
+              ? 'Money layer unavailable'
+              : changeHelper(result.money.moneyReceived, currency, chrome)
           }
           tone="accent"
         />
         <StatCard
           label="Refunds"
           value={formatMoney(result.money.refundOutflows.current, currency)}
-          helper={changeHelper(result.money.refundOutflows, currency)}
+          helper={changeHelper(result.money.refundOutflows, currency, chrome)}
           tone={result.money.refundOutflows.absoluteChange > 0 ? 'warn' : 'default'}
         />
         <StatCard
           label="MoMo to confirm"
           value={formatMoney(result.money.needsMomoConfirmation.current, currency)}
-          helper={changeHelper(result.money.needsMomoConfirmation, currency)}
+          helper={changeHelper(result.money.needsMomoConfirmation, currency, chrome)}
           tone={result.money.needsMomoConfirmation.current > 0 ? 'warn' : 'default'}
         />
         <StatCard
@@ -338,7 +366,7 @@ export default async function BusinessMovementReportPage({
                 ? `Sales ahead by ${formatMoney(gap, currency)} — timing, not an error`
                 : gap < 0
                   ? `Money ahead by ${formatMoney(-gap, currency)} — timing, not an error`
-                  : 'Aligned this period'
+                  : `Aligned in ${chrome.currentFull}`
           }
           tone="default"
         />
@@ -347,32 +375,37 @@ export default async function BusinessMovementReportPage({
       <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">What to look at</h2>
-          <p className="text-sm text-slate-600">The few movements that matter most this period.</p>
+          <p className="text-sm text-slate-600">
+            The few movements that matter most in {chrome.currentFull}.
+          </p>
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
           {summary.insights.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} />
+            <InsightCard key={insight.id} insight={insight} labels={chrome} />
           ))}
         </div>
       </section>
 
       <ReportTableCard title="Product movers">
         <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-          Products that grew, dropped, appeared, or had no sales this period.
+          Products that grew, dropped, appeared, or had no sales in {chrome.currentFull}.
         </caption>
         <thead>
           <tr>
             <th className="text-left">Product</th>
             <th className="text-left">What happened</th>
-            <th className="text-right">This period</th>
-            <th className="text-right">Last period</th>
+            <th className="text-right">{chrome.currentFull}</th>
+            <th className="text-right">{chrome.comparisonFull}</th>
             <th className="text-right">Change</th>
             <th className="text-right">Quantity</th>
           </tr>
         </thead>
         <tbody>
           {productMovers.length === 0 ? (
-            <ReportTableEmptyRow colSpan={6} message="No material product movers for this period pair." />
+            <ReportTableEmptyRow
+              colSpan={6}
+              message={`No material product movers for ${chrome.currentFull} vs ${chrome.comparisonFull}.`}
+            />
           ) : (
             productMovers.map((row) => (
               <tr key={`${row.side}-${row.productId}`}>
@@ -396,13 +429,13 @@ export default async function BusinessMovementReportPage({
       ) : (
         <ReportTableCard title="Branch movement">
           <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-            How each branch’s sales moved vs last period.
+            How each branch’s sales moved compared with {chrome.comparisonFull}.
           </caption>
           <thead>
             <tr>
               <th className="text-left">Branch</th>
-              <th className="text-right">This period</th>
-              <th className="text-right">Last period</th>
+              <th className="text-right">{chrome.currentFull}</th>
+              <th className="text-right">{chrome.comparisonFull}</th>
               <th className="text-right">Change</th>
               <th className="text-right">Transactions</th>
             </tr>
@@ -433,13 +466,13 @@ export default async function BusinessMovementReportPage({
       ) : (
         <ReportTableCard title="Cashier movement">
           <caption className="mb-2 caption-top text-left text-sm text-slate-600">
-            How cashier-attributed sales moved vs last period.
+            How cashier-attributed sales moved compared with {chrome.comparisonFull}.
           </caption>
           <thead>
             <tr>
               <th className="text-left">Cashier</th>
-              <th className="text-right">This period</th>
-              <th className="text-right">Last period</th>
+              <th className="text-right">{chrome.currentFull}</th>
+              <th className="text-right">{chrome.comparisonFull}</th>
               <th className="text-right">Change</th>
               <th className="text-right">Transactions</th>
             </tr>
