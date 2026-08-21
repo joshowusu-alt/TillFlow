@@ -17,7 +17,7 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
   it('streams owner readiness behind Suspense instead of blocking the page shell', () => {
     expect(onboardingPage).toContain('<Suspense');
     expect(onboardingPage).toContain('OwnerReadinessContent');
-    expect(onboardingPage).toContain('OwnerReadinessSkeleton');
+    expect(onboardingPage).toContain('ChecklistReadinessSkeleton');
     expect(onboardingPage).not.toMatch(/await\s+measureServerOperation[\s\S]*getReadiness/);
     expect(onboardingPage).not.toContain('await getReadiness');
   });
@@ -71,16 +71,18 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     expect(readinessJourney).toContain('HOME_RESUME_STALE_MS');
   });
 
-  it('uses a compact owner-dashboard skeleton fallback', () => {
-    const skeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
+  it('uses a checklist-shaped Instant Loading fallback; keeps completed-home skeleton separate', () => {
+    const checklist = read('app/(protected)/onboarding/ChecklistReadinessSkeleton.tsx');
+    const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
     const loading = read('app/(protected)/onboarding/loading.tsx');
 
-    expect(skeleton).toContain('Preparing owner home');
-    expect(skeleton).toContain('grid-cols-2');
-    expect(skeleton).not.toContain('Today in your shop');
-    expect(skeleton).not.toContain('min-h-[70vh]');
-    expect(skeleton).not.toContain('tillflow-logo');
-    expect(loading).toContain('OwnerReadinessSkeleton');
+    expect(loading).toContain('ChecklistReadinessSkeleton');
+    expect(checklist).toContain('Preparing setup checklist');
+    expect(checklist).not.toContain('bg-slate-900');
+    expect(homeSkeleton).toContain('Preparing owner home');
+    expect(homeSkeleton).toContain('bg-slate-900');
+    expect(homeSkeleton).not.toContain('min-h-[70vh]');
+    expect(homeSkeleton).not.toContain('tillflow-logo');
   });
 
   it('does not touch POS, checkout, cache TTLs, tags, revalidation, or schema', () => {

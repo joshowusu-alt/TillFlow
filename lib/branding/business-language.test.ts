@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('Owner-facing business language', () => {
   const skeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
+  const checklistSkeleton = read('app/(protected)/onboarding/ChecklistReadinessSkeleton.tsx');
   const activationSteps = read('lib/activation-steps.ts');
   const weeklyDigest = read('app/(protected)/reports/weekly-digest/page.tsx');
   const reorderSuggestions = read('app/(protected)/reports/reorder-suggestions/page.tsx');
@@ -16,6 +17,8 @@ describe('Owner-facing business language', () => {
     expect(skeleton).toContain('Preparing owner home');
     expect(skeleton).not.toContain('Today in your shop');
     expect(skeleton).not.toContain('your shop');
+    expect(checklistSkeleton).toContain('Preparing setup checklist');
+    expect(checklistSkeleton).not.toContain('your shop');
   });
 
   it('uses business wording in activation guidance', () => {

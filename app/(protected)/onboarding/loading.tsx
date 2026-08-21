@@ -1,5 +1,5 @@
-import OwnerReadinessSkeleton from './OwnerReadinessSkeleton';
+import ChecklistReadinessSkeleton from './ChecklistReadinessSkeleton';
 
 export default function Loading() {
-  return <OwnerReadinessSkeleton />;
+  return <ChecklistReadinessSkeleton />;
 }
