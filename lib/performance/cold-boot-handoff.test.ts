@@ -36,7 +36,7 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(onboardingPage).not.toContain('LaunchSessionCompletion');
     expect(onboardingClient).not.toContain('LaunchSessionCompletion');
     expect(onboardingPage).toContain('<Suspense');
-    expect(onboardingPage).toContain('OwnerReadinessSkeleton');
+    expect(onboardingPage).toContain('ChecklistReadinessSkeleton');
     expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 

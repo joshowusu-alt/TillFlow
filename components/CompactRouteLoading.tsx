@@ -1,5 +1,5 @@
 type CompactRouteLoadingProps = {
-  variant: 'inventory' | 'sales' | 'purchases' | 'reports';
+  variant: 'inventory' | 'sales' | 'purchases' | 'reports' | 'expenses' | 'list';
 };
 
 function PageHeaderPlaceholder({ subtitle = true }: { subtitle?: boolean }) {
@@ -84,6 +84,20 @@ function InsightRows({ count = 3 }: { count?: number }) {
   );
 }
 
+function FormPanelPlaceholder() {
+  return (
+    <div className="rounded-2xl border border-black/5 bg-white/90 p-4 shadow-sm">
+      <div className="h-4 w-28 rounded bg-black/5" />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="h-10 rounded-xl bg-black/5" />
+        <div className="h-10 rounded-xl bg-black/5" />
+        <div className="h-10 rounded-xl bg-black/5 sm:col-span-2" />
+      </div>
+      <div className="mt-3 h-10 w-28 rounded-xl bg-black/5" />
+    </div>
+  );
+}
+
 /**
  * Compact, mobile-first route skeletons for protected in-app navigation.
  */
@@ -119,6 +133,20 @@ export default function CompactRouteLoading({ variant }: CompactRouteLoadingProp
           <StatChips count={2} />
           <ChartBlockPlaceholder />
           <InsightRows count={3} />
+        </>
+      ) : null}
+
+      {variant === 'expenses' ? (
+        <>
+          <FormPanelPlaceholder />
+          <ListRows count={5} />
+        </>
+      ) : null}
+
+      {variant === 'list' ? (
+        <>
+          <FilterBarPlaceholder />
+          <ListRows count={6} />
         </>
       ) : null}
     </div>

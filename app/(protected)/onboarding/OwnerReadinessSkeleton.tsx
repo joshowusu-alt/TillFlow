@@ -1,6 +1,7 @@
 /**
- * Compact owner-home fallback while readiness data streams in.
- * Matches the control-centre shape (hero metrics + Open POS + attention) to limit layout shift.
+ * Completed owner-home control-centre skeleton (dark hero + metric chips).
+ * Use only where the final UI is the completed Home stream — not for incomplete
+ * checklist / “Ready to sell” loading (see ChecklistReadinessSkeleton).
  */
 export default function OwnerReadinessSkeleton() {
   return (

@@ -63,11 +63,18 @@ describe('Phase 2a compact route skeletons', () => {
     expect(loader).toContain('grid-cols-2');
   });
 
-  it('leaves POS loader unchanged', () => {
+  it('leaves POS loader as a single non-branded PosBoardSkeleton', () => {
     const posLoader = read('app/(protected)/pos/loading.tsx');
-    expect(posLoader).toContain('min-h-[70vh]');
-    expect(posLoader).toContain('TillFlow POS');
+    expect(posLoader).toContain('PosBoardSkeleton');
+    expect(posLoader).not.toContain('TillFlow POS');
     expect(posLoader).not.toContain('CompactRouteLoading');
+  });
+
+  it('uses compact expenses and list loaders for previously legacy routes', () => {
+    expect(read('app/(protected)/expenses/loading.tsx')).toContain('CompactRouteLoading');
+    expect(read('app/(protected)/expenses/loading.tsx')).toContain('variant="expenses"');
+    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/customers/loading.tsx')).toContain('variant="list"');
   });
 
   it('does not change checkout sale creation logic', () => {

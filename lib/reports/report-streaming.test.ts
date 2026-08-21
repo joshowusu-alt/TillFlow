@@ -71,8 +71,9 @@ describe('Phase 2b report streaming', () => {
     expect(todayKpis).toContain('revalidate: 30');
   });
 
-  it('does not touch POS loader or checkout actions', () => {
-    expect(posLoader).toContain('min-h-[70vh]');
+  it('does not change POS checkout actions; POS route loader stays non-report and non-splash', () => {
+    expect(posLoader).toContain('PosBoardSkeleton');
+    expect(posLoader).not.toContain('TillFlow POS');
     expect(posLoader).not.toContain('ReportSectionSkeleton');
     expect(salesActions).toContain('await createSale({');
     expect(salesActions).not.toContain('ReportSectionSkeleton');
