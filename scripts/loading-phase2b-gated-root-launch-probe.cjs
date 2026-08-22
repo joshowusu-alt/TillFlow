@@ -43,10 +43,17 @@ function assert(cond, msg) {
 }
 
 async function login(page, context, base, email, password, bypass) {
-  const loginUrl = bypass
-    ? `${base}/login?x-vercel-protection-bypass=${encodeURIComponent(bypass)}`
-    : `${base}/login`;
-  await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  const alreadyOnLogin = await page
+    .locator('input[name="email"]')
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (!alreadyOnLogin) {
+    const loginUrl = bypass
+      ? `${base}/login?x-vercel-protection-bypass=${encodeURIComponent(bypass)}`
+      : `${base}/login`;
+    await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+  }
   await page.locator('input[name="email"]').first().waitFor({ timeout: 30_000 });
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);
@@ -340,13 +347,12 @@ async function pollOpeningCopy(page, ms) {
     console.log(JSON.stringify({ base, checks, failed: failed.map((f) => f.name) }, null, 2));
     if (failed.length) {
       console.error('GATED ROOT LAUNCH PROBE FAILED');
-      process.exit(1);
+      throw Object.assign(new Error('probe failed'), { exitCode: 1 });
     }
     console.log('GATED ROOT LAUNCH PROBE PASSED');
-    process.exit(0);
   } catch (err) {
     console.error(err);
-    process.exit(err.exitCode || 1);
+    process.exitCode = err.exitCode || 1;
   } finally {
     await browser.close().catch(() => {});
     if (db && seeded) {
@@ -355,6 +361,7 @@ async function pollOpeningCopy(page, ms) {
         console.log(`Cleaned preview tag=${TAG}`);
       } catch (cleanupErr) {
         console.error('preview cleanup failed', cleanupErr);
+        process.exitCode = process.exitCode || 1;
       }
       await db.end().catch(() => {});
     } else if (db) {
