@@ -87,7 +87,7 @@ describe('Loading Phase 1: skeleton and route-loader polish', () => {
     expect(read('components/RootLaunchLoading.tsx')).toContain('mode="launch"');
     expect(read('components/RootLaunchLoading.tsx')).toContain('shell="fullscreen"');
     expect(read('app/launch/page.tsx')).toContain('LaunchRedirector');
-    expect(read('components/LaunchRedirector.tsx')).toContain("tillflow:launching");
+    expect(read('components/LaunchRedirector.tsx')).toContain('LAUNCHING_SESSION_KEY');
     expect(read('components/AppLaunchLoading.tsx')).toContain('mode?:');
   });
 });

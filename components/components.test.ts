@@ -98,16 +98,34 @@ describe('ResponsiveModal', () => {
 });
 
 describe('RootLaunchLoading', () => {
-    it('renders branded cold-start copy on the first paint', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+    });
+
+    it('renders nothing on first paint when no intentional launch session exists', () => {
+        const { container } = render(React.createElement(RootLaunchLoading));
+
+        expect(container).toBeEmptyDOMElement();
+        expect(screen.queryByText(ROOT_COLD_START_MESSAGE)).not.toBeInTheDocument();
+        expect(screen.queryByText(ROOT_COLD_START_DETAIL)).not.toBeInTheDocument();
+        expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();
+    });
+
+    it('renders branded launch copy when the launch session is active', async () => {
+        window.sessionStorage.setItem('tillflow:launching', '1');
+        window.sessionStorage.removeItem('tillflow:launchSplashSeen');
         render(React.createElement(RootLaunchLoading));
 
-        expect(screen.getByText(ROOT_COLD_START_MESSAGE)).toBeInTheDocument();
+        expect(await screen.findByText(ROOT_COLD_START_MESSAGE)).toBeInTheDocument();
         expect(screen.getByText(ROOT_COLD_START_DETAIL)).toBeInTheDocument();
         expect(screen.queryByText('Loading section...')).not.toBeInTheDocument();
     });
 
-    it('keeps personalised launch copy when a safe business name is cached', async () => {
+    it('keeps personalised launch copy when a safe business name is cached during launch', async () => {
         window.localStorage.setItem('tillflow:lastBusinessName', 'EL-SHADDAI');
+        window.sessionStorage.setItem('tillflow:launching', '1');
+        window.sessionStorage.removeItem('tillflow:launchSplashSeen');
         render(React.createElement(RootLaunchLoading));
         expect(await screen.findByText('Opening EL-SHADDAI...')).toBeInTheDocument();
         expect(screen.queryByText(ROOT_COLD_START_MESSAGE)).not.toBeInTheDocument();

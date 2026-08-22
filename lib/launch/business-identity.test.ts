@@ -50,7 +50,7 @@ describe('launch business identity', () => {
     expect(window.localStorage.getItem(LAUNCH_BUSINESS_SCOPE_KEY)).toBeNull();
   });
 
-  it('replaces identity when business scope changes', () => {
+  it('replaces identity when business scope changes (owner/manager of another tenant cannot keep prior name)', () => {
     saveLaunchBusinessIdentity('Business A', 'id-a');
     syncLaunchBusinessIdentity('Business B', 'id-b');
     expect(readLaunchBusinessName()).toBe('Business B');

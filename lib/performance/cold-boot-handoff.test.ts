@@ -40,15 +40,16 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
     expect(onboardingPage).toContain('OwnerReadinessContent');
   });
 
-  it('renders branded root loading immediately on first paint', () => {
+  it('gates branded root loading to an intentional launch session', () => {
     expect(rootLoading).toContain('RootLaunchLoading');
     expect(rootLaunchLoading).toContain('AppLaunchLoading');
     expect(rootLaunchLoading).toContain('mode="launch"');
     expect(rootLaunchLoading).toContain('shell="fullscreen"');
     expect(rootLaunchLoading).toContain('ROOT_COLD_START_MESSAGE');
     expect(rootLaunchLoading).toContain('LAUNCH_GENERIC_MESSAGE');
+    expect(rootLaunchLoading).toContain('isIntentionalLaunchSession');
+    expect(rootLaunchLoading).toContain('return null');
     expect(rootLaunchLoading).not.toContain('message={');
-    expect(rootLaunchLoading).not.toContain('return null');
     expect(rootLaunchLoading).not.toContain('useState<boolean | null>');
   });
 
