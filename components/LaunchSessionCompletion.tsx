@@ -3,6 +3,10 @@
 import { useEffect } from 'react';
 import { markTillflowPerformance } from '@/lib/performance/client-performance-marks';
 import { LAUNCH_COMPLETION_HOLD_MS } from '@/lib/performance/launch-handoff-timing';
+import {
+  LAUNCH_SPLASH_SEEN_KEY,
+  LAUNCHING_SESSION_KEY,
+} from '@/lib/launch/launch-session';
 
 export default function LaunchSessionCompletion() {
   useEffect(() => {
@@ -10,7 +14,7 @@ export default function LaunchSessionCompletion() {
     let completionTimer: number | null = null;
 
     try {
-      if (window.sessionStorage.getItem('tillflow:launching') !== '1') {
+      if (window.sessionStorage.getItem(LAUNCHING_SESSION_KEY) !== '1') {
         return;
       }
     } catch {
@@ -23,8 +27,8 @@ export default function LaunchSessionCompletion() {
       try {
         // Mount inside the protected shell so launch flags clear once auth/layout is ready,
         // not after the full readiness body finishes loading.
-        window.sessionStorage.setItem('tillflow:launchSplashSeen', '1');
-        window.sessionStorage.removeItem('tillflow:launching');
+        window.sessionStorage.setItem(LAUNCH_SPLASH_SEEN_KEY, '1');
+        window.sessionStorage.removeItem(LAUNCHING_SESSION_KEY);
       } catch {
         // Storage can be unavailable in private modes; the visual cleanup still matters.
       }

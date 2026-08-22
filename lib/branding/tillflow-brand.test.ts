@@ -157,8 +157,9 @@ describe('TillFlow brand logo system', () => {
     expect(readSource('lib/launch/business-identity.ts')).toContain('Checking your session and sync status');
     expect(readSource('lib/launch/business-identity.ts')).toContain("Getting today's sales, stock, and cash ready.");
     expect(launchLoading).toContain('readLaunchBusinessName');
-    expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launching')");
-    expect(launchLoading).toContain("window.sessionStorage.getItem('tillflow:launchSplashSeen')");
+    expect(launchLoading).toContain('isIntentionalLaunchSession');
+    expect(readSource('lib/launch/launch-session.ts')).toContain("window.sessionStorage.getItem(LAUNCHING_SESSION_KEY)");
+    expect(readSource('lib/launch/launch-session.ts')).toContain("window.sessionStorage.getItem(LAUNCH_SPLASH_SEEN_KEY)");
     expect(launchLoading).toContain("shell === 'launch' && launchMode");
     expect(protectedLoading).not.toContain('Preparing your dashboard');
     expect(commandCenterLoading).not.toContain('Preparing your dashboard');
@@ -294,7 +295,7 @@ describe('TillFlow brand logo system', () => {
 
     expect(layout).not.toContain('tillflow-initial-splash');
     expect(layout).not.toContain('SplashRemover');
-    expect(rootLaunchLoading).toContain('AppLaunchLoading');
+    expect(rootLaunchLoading).toContain('isIntentionalLaunchSession');
     expect(rootLaunchLoading).toContain('ROOT_COLD_START_MESSAGE');
     expect(rootLaunchLoading).toContain('LAUNCH_GENERIC_MESSAGE');
     expect(rootLaunchLoading).not.toContain('message={ROOT_COLD_START_MESSAGE}');
@@ -312,8 +313,8 @@ describe('TillFlow brand logo system', () => {
     expect(readSource('app/(protected)/pos/PosDeferredSection.tsx')).toContain('PosWelcomeShelf');
     expect(launchSessionCompletion).toContain('protected shell');
     expect(launchSessionCompletion).toContain('not after the full readiness body');
-    expect(launchSessionCompletion).toContain("window.sessionStorage.setItem('tillflow:launchSplashSeen', '1')");
-    expect(launchSessionCompletion).toContain("window.sessionStorage.removeItem('tillflow:launching')");
+    expect(launchSessionCompletion).toContain("setItem(LAUNCH_SPLASH_SEEN_KEY, '1')");
+    expect(launchSessionCompletion).toContain('removeItem(LAUNCHING_SESSION_KEY)');
     expect(launchSessionCompletion).not.toContain('removeInitialSplash');
     expect(launchSessionCompletion).not.toContain('localStorage');
   });
@@ -333,8 +334,9 @@ describe('TillFlow brand logo system', () => {
     expect(launchPage).toContain('LaunchRedirector');
     expect(launchPage).not.toContain('Opening TillFlow');
     expect(launchRedirector).toContain('getLaunchCopy');
-    expect(launchRedirector).toContain("window.sessionStorage.setItem('tillflow:launching', '1')");
-    expect(launchRedirector).toContain("window.sessionStorage.removeItem('tillflow:launchSplashSeen')");
+    expect(launchRedirector).toContain('LAUNCHING_SESSION_KEY');
+    expect(launchRedirector).toContain("setItem(LAUNCHING_SESSION_KEY, '1')");
+    expect(launchRedirector).toContain('removeItem(LAUNCH_SPLASH_SEEN_KEY)');
     expect(launchRedirector).not.toContain('Opening your business workspace');
     expect(launchRedirector).not.toContain("window.location.replace");
     expect(launchRedirector).toContain("router.replace('/onboarding')");
@@ -353,6 +355,7 @@ describe('TillFlow brand logo system', () => {
       readSource('components/AppLaunchLoading.tsx'),
       readSource('components/BusinessNameSaver.tsx'),
       readSource('lib/launch/business-identity.ts'),
+      readSource('lib/launch/launch-session.ts'),
     ].join('\n');
 
     expect(sources).toContain('tillflow:launching');

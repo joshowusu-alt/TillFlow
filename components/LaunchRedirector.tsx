@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { markTillflowPerformance } from '@/lib/performance/client-performance-marks';
 import { LAUNCH_REDIRECT_DELAY_MS } from '@/lib/performance/launch-handoff-timing';
 import { getLaunchCopy } from '@/lib/launch/business-identity';
+import {
+  LAUNCH_SPLASH_SEEN_KEY,
+  LAUNCHING_SESSION_KEY,
+} from '@/lib/launch/launch-session';
 
 export default function LaunchRedirector() {
   const router = useRouter();
@@ -16,8 +20,8 @@ export default function LaunchRedirector() {
     markTillflowPerformance('tillflow.launch.mounted');
 
     try {
-      window.sessionStorage.setItem('tillflow:launching', '1');
-      window.sessionStorage.removeItem('tillflow:launchSplashSeen');
+      window.sessionStorage.setItem(LAUNCHING_SESSION_KEY, '1');
+      window.sessionStorage.removeItem(LAUNCH_SPLASH_SEEN_KEY);
 
       const copy = getLaunchCopy();
       setMessage(copy.message);

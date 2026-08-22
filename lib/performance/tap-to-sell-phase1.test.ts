@@ -27,6 +27,7 @@ describe('Tap-to-Sell Phase 1 contracts', () => {
 
     expect(rootLaunch).toContain('mode="launch"');
     expect(rootLaunch).toContain('shell="fullscreen"');
+    expect(rootLaunch).toContain('isIntentionalLaunchSession');
     expect(rootLaunch).not.toContain('message={');
     expect(rootLaunch).not.toContain('ROOT_COLD_START_MESSAGE}');
 

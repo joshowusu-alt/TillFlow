@@ -6,6 +6,7 @@ import {
   getLaunchCopy,
   readLaunchBusinessName,
 } from '@/lib/launch/business-identity';
+import { isIntentionalLaunchSession } from '@/lib/launch/launch-session';
 
 type AppLaunchLoadingProps = {
   businessName?: string | null;
@@ -20,14 +21,7 @@ const INTERNAL_MESSAGE = 'Loading section...';
 const INTERNAL_DETAIL = 'Please wait while TillFlow gets this section ready.';
 
 function readLaunchMode() {
-  try {
-    return (
-      window.sessionStorage.getItem('tillflow:launching') === '1' &&
-      window.sessionStorage.getItem('tillflow:launchSplashSeen') !== '1'
-    );
-  } catch {
-    return false;
-  }
+  return isIntentionalLaunchSession();
 }
 
 export default function AppLaunchLoading({
