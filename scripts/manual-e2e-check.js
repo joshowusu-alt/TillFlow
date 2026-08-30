@@ -24,6 +24,34 @@ async function ensureCashierPassword() {
   } catch (e) { /* best effort */ }
 }
 
+/** Operational POS sales require an OPEN shift. Seed does not open one. */
+async function ensureOpenShift(email) {
+  const user = await prisma.user.findFirst({ where: { email } });
+  if (!user) throw new Error(`Cannot open till: no user ${email}`);
+  const store = await prisma.store.findFirst({ where: { businessId: user.businessId } });
+  if (!store) throw new Error('Cannot open till: no store for this business');
+  const till = await prisma.till.findFirst({
+    where: { storeId: store.id, active: true },
+    orderBy: { name: 'asc' },
+  });
+  if (!till) throw new Error('Cannot open till: no active till');
+  const existing = await prisma.shift.findFirst({
+    where: { tillId: till.id, status: 'OPEN' },
+  });
+  if (existing) return existing;
+  const openingCashPence = 10000;
+  return prisma.shift.create({
+    data: {
+      tillId: till.id,
+      userId: user.id,
+      openingCashPence,
+      expectedCashPence: openingCashPence,
+      status: 'OPEN',
+      openKey: till.id,
+    },
+  });
+}
+
 async function captureFailureArtifacts(page, stage, extra = {}) {
   try {
     fs.mkdirSync('.playwright-mcp', { recursive: true });
@@ -126,6 +154,9 @@ async function run() {
     // Ensure the cashier password is set correctly (guards against partial backup restore)
     stage = 'ensure-cashier-password';
     await ensureCashierPassword();
+
+    stage = 'ensure-open-shift';
+    await ensureOpenShift(CASHIER_EMAIL);
 
     stage = 'login';
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });

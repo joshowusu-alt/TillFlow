@@ -46,6 +46,36 @@ async function ensureOwnerPassword() {
   } catch (e) { step(`ensureOwnerPassword warning: ${e.message}`); }
 }
 
+/** Operational POS sales require an OPEN shift. Seed does not open one. */
+async function ensureOpenShift(email) {
+  const user = await prisma.user.findFirst({ where: { email } });
+  if (!user) throw new Error(`Cannot open till: no user ${email}`);
+  const store = await prisma.store.findFirst({ where: { businessId: user.businessId } });
+  if (!store) throw new Error('Cannot open till: no store for this business');
+  const till = await prisma.till.findFirst({
+    where: { storeId: store.id, active: true },
+    orderBy: { name: 'asc' },
+  });
+  if (!till) throw new Error('Cannot open till: no active till');
+  const existing = await prisma.shift.findFirst({
+    where: { tillId: till.id, status: 'OPEN' },
+  });
+  if (existing) return existing;
+  const openingCashPence = 10000;
+  const created = await prisma.shift.create({
+    data: {
+      tillId: till.id,
+      userId: user.id,
+      openingCashPence,
+      expectedCashPence: openingCashPence,
+      status: 'OPEN',
+      openKey: till.id,
+    },
+  });
+  step(`Opened till ${till.name} (${created.id})`);
+  return created;
+}
+
 async function login(page, email, password) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
   await page.locator('input[name="email"]').waitFor({ state: 'visible', timeout: 15000 });
@@ -287,6 +317,7 @@ async function run() {
   try {
     // Ensure password is correct before starting (defensive)
     await ensureOwnerPassword();
+    await ensureOpenShift(OWNER_EMAIL);
 
     step('1/12 Login as owner');
     await login(page, OWNER_EMAIL, OWNER_PASSWORD);
