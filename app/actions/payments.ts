@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
@@ -30,8 +31,9 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
+    const idempotencyKey = formString(formData, 'idempotencyKey') || randomUUID();
 
-    await recordCustomerPayment(businessId, invoiceId, payments, user.id);
+    await recordCustomerPayment(businessId, invoiceId, payments, user.id, { idempotencyKey });
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';

@@ -473,6 +473,57 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
     ).expectedCashPence;
     expect(afterExpected).toBe(beforeExpected);
   }, 60000);
+
+  it('rejects concurrent distinct-key payments that would overpay', async () => {
+    const invoice = await prisma.purchaseInvoice.create({
+      data: {
+        businessId,
+        storeId,
+        supplierId,
+        totalPence: 60000,
+        subtotalPence: 60000,
+        vatPence: 0,
+        paymentStatus: 'UNPAID',
+      },
+    });
+
+    const results = await Promise.allSettled([
+      recordSupplierPayment(
+        businessId,
+        invoice.id,
+        [{ method: 'TRANSFER', amountPence: 40000 }],
+        {
+          recordedByUserId: userId,
+          actorRole: 'OWNER',
+          actorName: 'Owner',
+          idempotencyKey: `overpay-a-${suffix}`,
+        },
+      ),
+      recordSupplierPayment(
+        businessId,
+        invoice.id,
+        [{ method: 'TRANSFER', amountPence: 40000 }],
+        {
+          recordedByUserId: userId,
+          actorRole: 'OWNER',
+          actorName: 'Owner',
+          idempotencyKey: `overpay-b-${suffix}`,
+        },
+      ),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled.length).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect((rejected[0] as PromiseRejectedResult).reason?.message).toMatch(/exceeds outstanding/i);
+
+    const payments = await prisma.purchasePayment.findMany({
+      where: { purchaseInvoiceId: invoice.id },
+    });
+    expect(payments).toHaveLength(1);
+    expect(payments[0]!.amountPence).toBe(40000);
+  }, 60000);
 });
 
 describe('supplier payment concurrency suite availability', () => {

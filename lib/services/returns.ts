@@ -8,7 +8,8 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
-import { recordCashDrawerEntryTx } from './cash-drawer';
+import { getOpenCashShiftForPayment, getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { assertMoneyMovementTenantChain } from './money-idempotency';
 import { detectVoidFrequencyRisk } from './risk-monitor';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 
@@ -154,29 +155,35 @@ async function createSalesReturnImpl(input: {
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
 
-    if (refundAmount > 0 && refundMethod === 'CASH' && invoice.tillId) {
-      // Record the cash refund on the CURRENT open shift for this till, not the
-      // original shift (which may already be closed). If no shift is open right
-      // now the entry is silently skipped — the return still completes and stock
-      // + accounting are correct; the merchant should note the cash was returned.
-      try {
-        await recordCashDrawerEntryTx(tx, {
-          businessId: invoice.businessId,
-          storeId: invoice.storeId,
-          tillId: invoice.tillId,
-          // deliberately omitting shiftId so the function resolves the current open shift
-          createdByUserId: input.userId,
-          cashierUserId: input.userId,
-          entryType: 'CASH_REFUND',
-          amountPence: -refundAmount,
-          reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
-          reason: input.reason ?? null,
-          referenceType: 'SALES_RETURN',
-          referenceId: created.id,
-        });
-      } catch {
-        // No open shift — cash drawer entry skipped; return still completes.
+    if (refundAmount > 0 && refundMethod === 'CASH') {
+      if (!invoice.tillId) {
+        throw new UserError('Open till is required before recording a cash refund.');
       }
+      const openShift = await getOpenShiftForTill(invoice.businessId, invoice.tillId, tx);
+      if (!openShift) {
+        throw new UserError('Open shift is required before recording a cash refund.');
+      }
+      await assertMoneyMovementTenantChain(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        userId: input.userId,
+        tillId: invoice.tillId,
+        shiftId: openShift.id,
+      });
+      await recordCashDrawerEntryTx(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: invoice.tillId,
+        shiftId: openShift.id,
+        createdByUserId: input.userId,
+        cashierUserId: input.userId,
+        entryType: 'CASH_REFUND',
+        amountPence: -refundAmount,
+        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+        reason: input.reason ?? null,
+        referenceType: 'SALES_RETURN',
+        referenceId: created.id,
+      });
     }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
@@ -325,6 +332,38 @@ async function createPurchaseReturnImpl(input: {
       where: { id: invoice.id },
       data: { paymentStatus: input.type === 'VOID' ? 'VOID' : 'RETURNED' }
     });
+
+    if (refundAmount > 0 && refundMethod === 'CASH') {
+      const openShift = await getOpenCashShiftForPayment(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        userId: input.userId,
+      });
+      if (!openShift) {
+        throw new UserError('Open shift is required before recording a cash purchase refund.');
+      }
+      await assertMoneyMovementTenantChain(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        userId: input.userId,
+        tillId: openShift.tillId,
+        shiftId: openShift.id,
+      });
+      await recordCashDrawerEntryTx(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: openShift.tillId,
+        shiftId: openShift.id,
+        createdByUserId: input.userId,
+        cashierUserId: input.userId,
+        entryType: 'CASH_REFUND',
+        amountPence: refundAmount,
+        reasonCode: input.type === 'VOID' ? 'VOID' : 'RETURN',
+        reason: input.reason ?? null,
+        referenceType: 'PURCHASE_RETURN',
+        referenceId: created.id,
+      });
+    }
 
     for (const [productId, qtyBase] of qtyByProduct.entries()) {
       const onHand = inventoryMap.get(productId)?.qtyOnHandBase ?? 0;

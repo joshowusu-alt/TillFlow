@@ -17,6 +17,9 @@ const {
     purchaseInvoiceLine: { createMany: vi.fn() },
     purchasePayment: { create: vi.fn() },
     shift: { findFirst: vi.fn(), update: vi.fn() },
+    user: { findFirst: vi.fn() },
+    till: { findFirst: vi.fn() },
+    moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     stockMovement: { createMany: vi.fn() },
     inventoryBalance: { upsert: vi.fn() },
     $executeRaw: vi.fn(),
@@ -77,6 +80,9 @@ describe('purchase invoice cash drawer linkage', () => {
       currency: 'GHS',
     });
     prismaMock.store.findFirst.mockResolvedValue({ id: storeId });
+    prismaMock.user.findFirst.mockResolvedValue({ id: userId });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-1', storeId });
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue(null);
     prismaMock.supplier.findFirst.mockResolvedValue({ id: 'supplier-accra', name: 'ACCRA GOODS' });
     prismaMock.product.findMany.mockResolvedValue([]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 0 });
