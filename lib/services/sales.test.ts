@@ -692,15 +692,26 @@ describe('createSale — payments & stock', () => {
     }
   });
 
-  it('skips shift/cash-drawer CTE when no cash payment', async () => {
+  it('locks the open shift without a cash-drawer CTE when there is no cash payment', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 5000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
 
-    await createSale(makeBaseInput({
-      payments: [{ method: 'CARD', amountPence: 500 }],
-      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
-    }));
+    try {
+      await createSale(makeBaseInput({
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
 
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      const fragments = prismaMock.$queryRaw.mock.calls[0]?.[0] as string[] | undefined;
+      const sql = Array.isArray(fragments) ? fragments.join(' ') : String(fragments ?? '');
+      expect(sql).toContain('FOR UPDATE');
+      expect(sql).not.toContain('CASH_SALE');
+      expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
   });
 
   it('rejects a POS sale without an open shift even when the stored flag is false', async () => {
