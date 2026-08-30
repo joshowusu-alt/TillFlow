@@ -27,6 +27,8 @@ describe('import-stock source: durable import-chunk idempotency', () => {
     expect(purchases).toMatch(
       /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => \{\s*const created = await runWithMoneyTx\(tx\);\s*return finishInvoice\(created, tx\);/,
     );
+    expect(purchases).toContain('await client.$executeRaw`');
+    expect(purchases).not.toContain('await prisma.$executeRaw`');
     expect(purchases).not.toMatch(
       /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => runWithMoneyTx\(tx\)\);\s*invoice = await finishInvoice\(invoice, prisma\)/,
     );

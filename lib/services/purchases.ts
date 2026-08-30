@@ -585,55 +585,25 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       return { productId, qtyBase: totals.qtyBase, newAvg };
     });
 
-    if (db) {
-      // Inside a caller-supplied tx — must use the tx client sequentially.
-      // This path is used for single-invoice flows (small N), not bulk import.
-      for (const { productId, qtyBase, newAvg } of upsertArgs) {
-        await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
-      }
-    } else {
-      // ── Bulk inventory upsert (1 SQL statement) ──────────────────────────
-      // The OLD approach used prisma.$transaction([N × upsert]) which sends
-      // each upsert as a separate SQL round-trip inside a PostgreSQL
-      // transaction (BEGIN → N queries → COMMIT). At ≥10 ms RTT per query,
-      // 150+ items easily exceed Prisma's default 5 s transaction timeout
-      // (P2028 "Transaction already closed"), surfacing as the generic
-      // "Something went wrong saving your data" message.
-      //
-      // FIX: on PostgreSQL, use a single INSERT … ON CONFLICT DO UPDATE —
-      // 1 round-trip for any number of products. On SQLite (dev), fall back
-      // to sub-batched $transaction with generous timeout.
-      if (upsertArgs.length > 0) {
-        const isPostgres = isPostgresDatabaseUrl(process.env.DATABASE_URL);
+    if (upsertArgs.length > 0) {
+      const isPostgres = isPostgresDatabaseUrl(process.env.DATABASE_URL);
 
-        if (isPostgres) {
-          const sid = store.id;
-          const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
-            Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
-          );
-          await prisma.$executeRaw`
-            INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
-            VALUES ${Prisma.join(values)}
-            ON CONFLICT ("storeId", "productId") DO UPDATE SET
-              "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
-              "avgCostBasePence" = EXCLUDED."avgCostBasePence",
-              "updatedAt" = NOW()
-          `;
-        } else {
-          // SQLite / dev: sub-batch the upserts to stay under the tx timeout.
-          const UPSERT_BATCH = 50;
-          for (let i = 0; i < upsertArgs.length; i += UPSERT_BATCH) {
-            const batch = upsertArgs.slice(i, i + UPSERT_BATCH);
-            await prisma.$transaction(
-              batch.map(({ productId, qtyBase, newAvg }) =>
-                prisma.inventoryBalance.upsert({
-                  where: { storeId_productId: { storeId: store.id, productId } },
-                  update: { qtyOnHandBase: { increment: qtyBase }, avgCostBasePence: newAvg },
-                  create: { storeId: store.id, productId, qtyOnHandBase: qtyBase, avgCostBasePence: newAvg },
-                })
-              )
-            );
-          }
+      if (isPostgres && typeof client.$executeRaw === 'function') {
+        const sid = store.id;
+        const values = upsertArgs.map(({ productId, qtyBase, newAvg }) =>
+          Prisma.sql`(gen_random_uuid()::text, ${sid}, ${productId}, ${qtyBase}, ${newAvg}, NOW())`
+        );
+        await client.$executeRaw`
+          INSERT INTO "InventoryBalance" ("id", "storeId", "productId", "qtyOnHandBase", "avgCostBasePence", "updatedAt")
+          VALUES ${Prisma.join(values)}
+          ON CONFLICT ("storeId", "productId") DO UPDATE SET
+            "qtyOnHandBase" = "InventoryBalance"."qtyOnHandBase" + EXCLUDED."qtyOnHandBase",
+            "avgCostBasePence" = EXCLUDED."avgCostBasePence",
+            "updatedAt" = NOW()
+        `;
+      } else {
+        for (const { productId, qtyBase, newAvg } of upsertArgs) {
+          await incrementInventoryBalance(client, store.id, productId, qtyBase, newAvg);
         }
       }
     }
