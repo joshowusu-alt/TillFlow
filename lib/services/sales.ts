@@ -353,6 +353,54 @@ export type CreateSaleInput = {
   lines: SaleLineInput[];
 };
 
+type LockedCapturedShift = {
+  id: string;
+  status: string;
+  openKey: string | null;
+};
+
+/**
+ * Lock the immutable captured offline shift inside the sale transaction.
+ * Postgres: SELECT … FOR UPDATE on the tenant-scoped row.
+ * SQLite: findFirst on the same tx (serialized writers).
+ */
+async function lockCapturedShiftForOfflineSale(
+  tx: Prisma.TransactionClient,
+  input: {
+    capturedShiftId: string;
+    tillId: string;
+    storeId: string;
+    businessId: string;
+  },
+): Promise<LockedCapturedShift | null> {
+  if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+    const rows = await tx.$queryRaw<LockedCapturedShift[]>`
+      SELECT sh."id", sh."status", sh."openKey"
+      FROM "Shift" AS sh
+      JOIN "Till" AS t ON t."id" = sh."tillId"
+      JOIN "Store" AS st ON st."id" = t."storeId"
+      WHERE sh."id" = ${input.capturedShiftId}
+        AND sh."tillId" = ${input.tillId}
+        AND st."id" = ${input.storeId}
+        AND st."businessId" = ${input.businessId}
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  }
+
+  return tx.shift.findFirst({
+    where: {
+      id: input.capturedShiftId,
+      tillId: input.tillId,
+      till: {
+        storeId: input.storeId,
+        store: { businessId: input.businessId },
+      },
+    },
+    select: { id: true, status: true, openKey: true },
+  });
+}
+
 const CHECKOUT_STAGE_THRESHOLDS_MS = {
   validate: 200,
   context: 300,
@@ -460,6 +508,7 @@ async function createSaleImpl(input: CreateSaleInput) {
   }
 
   // Pre-compute values available from input (no DB dependency)
+  const capturedShiftId = input.capturedShiftId?.trim() || null;
   const productIds = [...new Set(input.lines.map((l) => l.productId))];
   const hasMomoPayment = input.payments.some(
     (p) => p.method === 'MOBILE_MONEY' && p.amountPence > 0
@@ -543,7 +592,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         where: {
           id: input.cashierUserId,
           businessId: input.businessId,
-          ...(input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
+          ...(capturedShiftId || input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
         },
         select: { id: true },
       }),
@@ -571,15 +620,9 @@ async function createSaleImpl(input: CreateSaleInput) {
     throw new UserError('Till is inactive.');
   }
   if (!cashier) throw new UserError('Cashier is not authorised for this business.');
-  const lateOfflineShiftId =
-    input.saleSource === 'LATE_OFFLINE' ? input.capturedShiftId ?? null : null;
-  // LATE_OFFLINE must never bind money or the invoice to a later OPEN shift
-  // on the same till (silent reassignment).
-  const liveShiftForMoney =
-    lateOfflineShiftId && openShift && openShift.id !== lateOfflineShiftId
-      ? null
-      : openShift;
-  if (!openShift && !input.bypassOpenTillRequirement && !lateOfflineShiftId) {
+  // Offline path: do not decide LATE_OFFLINE vs live money from this pre-tx
+  // getOpenShiftForTill read — that happens under the captured-shift lock.
+  if (!openShift && !input.bypassOpenTillRequirement && !capturedShiftId) {
     throw new UserError('Open till is required before recording sales.');
   }
   if (input.bypassOpenTillRequirement && input.saleSource && input.saleSource !== 'ONLINE_ORDER') {
@@ -881,23 +924,35 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
-    let attachedShiftId = lateOfflineShiftId ? null : (liveShiftForMoney?.id ?? openShift?.id ?? null);
-    if (lateOfflineShiftId) {
-      const capturedShift = await tx.shift.findFirst({
-        where: {
-          id: lateOfflineShiftId,
-          tillId: till.id,
-          till: {
-            storeId: input.storeId,
-            store: { businessId: input.businessId },
-          },
-        },
-        select: { id: true },
+    let liveShiftForMoney: { id: string } | null = null;
+    let attachedShiftId: string | null = null;
+    let persistedSaleSource: SaleSource = input.bypassOpenTillRequirement
+      ? 'ONLINE_ORDER'
+      : (input.saleSource && input.saleSource !== 'LATE_OFFLINE' ? input.saleSource : 'POS');
+
+    if (capturedShiftId) {
+      const lockedCaptured = await lockCapturedShiftForOfflineSale(tx, {
+        capturedShiftId,
+        tillId: till.id,
+        storeId: input.storeId,
+        businessId: input.businessId,
       });
-      if (!capturedShift) {
+      if (!lockedCaptured) {
         throw new UserError('Captured offline shift does not match this sale context.');
       }
-      attachedShiftId = capturedShift.id;
+      attachedShiftId = lockedCaptured.id;
+      const capturedIsLiveOpen =
+        lockedCaptured.status === 'OPEN' && lockedCaptured.openKey === till.id;
+      if (capturedIsLiveOpen) {
+        // Ordinary sync: money stays on the captured shift, never a later OPEN.
+        liveShiftForMoney = { id: lockedCaptured.id };
+      } else {
+        liveShiftForMoney = null;
+        persistedSaleSource = 'LATE_OFFLINE';
+      }
+    } else {
+      liveShiftForMoney = openShift;
+      attachedShiftId = openShift?.id ?? null;
     }
 
     const invoiceCreateData = {
@@ -906,9 +961,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       branchId,
       tillId: till.id,
       shiftId: attachedShiftId,
-      saleSource: input.bypassOpenTillRequirement
-        ? 'ONLINE_ORDER'
-        : (input.saleSource ?? 'POS'),
+      saleSource: persistedSaleSource,
       cashierUserId: input.cashierUserId,
       customerId: input.customerId || null,
       paymentStatus: finalStatus,
@@ -1060,7 +1113,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       if (shiftUpdate.count !== 1) {
         throw new UserError('The till shift closed during checkout. Reopen the till and try again.');
       }
-    } else if (!input.bypassOpenTillRequirement && !lateOfflineShiftId) {
+    } else if (!input.bypassOpenTillRequirement && !capturedShiftId) {
       throw new UserError('Open till is required before recording sales.');
     }
 

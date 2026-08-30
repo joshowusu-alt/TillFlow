@@ -264,8 +264,6 @@ export async function processOfflineSale(
     return review('shift_till_mismatch');
   }
 
-  const shiftClosed = Boolean(capturedShift.closedAt) || capturedShift.status !== 'OPEN';
-
   const capturedCashierId = payload.cashierUserId?.trim() || null;
   if (capturedCashierId) {
     const cashier = await prisma.user.findFirst({
@@ -341,9 +339,9 @@ export async function processOfflineSale(
       inventoryPolicy,
       payments,
       lines,
-      ...(shiftClosed
-        ? { saleSource: LATE_OFFLINE_SALE_SOURCE, capturedShiftId: capturedShift.id }
-        : {}),
+      // Immutable captured shift. LATE_OFFLINE vs ordinary sync is decided
+      // inside createSale's transaction after locking this row — not here.
+      capturedShiftId: payload.shiftId,
     });
     return { success: true, status: 'synced', invoiceId: invoice.id };
   } catch (error: unknown) {

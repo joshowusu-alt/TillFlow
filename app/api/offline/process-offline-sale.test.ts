@@ -108,12 +108,34 @@ describe('processOfflineSale — offline lifecycle', () => {
         cashierUserId: 'cashier-1',
         inventoryPolicy: 'enforce',
         externalRef: 'OFFLINE_SYNC:idem-abc123',
+        capturedShiftId: 'shift-1',
       }),
     );
+    expect(mockCreateSale.mock.calls[0][0].saleSource).toBeUndefined();
     expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
   });
 
-  it('capture → shift closed → sync attaches LATE_OFFLINE to original shift', async () => {
+  it('always passes capturedShiftId and does not force saleSource from a pre-tx shift read', async () => {
+    mockCreateSale.mockResolvedValue({ id: 'inv-captured' });
+
+    for (const shift of [OPEN_SHIFT, CLOSED_SHIFT]) {
+      vi.clearAllMocks();
+      setupHappyPath();
+      prismaMock.shift.findFirst.mockResolvedValue(shift);
+      mockCreateSale.mockResolvedValue({ id: 'inv-captured' });
+
+      const result = await processOfflineSale(await makePayload(), USER);
+
+      expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-captured' });
+      expect(mockCreateSale).toHaveBeenCalledTimes(1);
+      const args = mockCreateSale.mock.calls[0][0];
+      expect(args.capturedShiftId).toBe('shift-1');
+      expect(args.saleSource).toBeUndefined();
+      expect(args.bypassOpenTillRequirement).toBeUndefined();
+    }
+  });
+
+  it('capture → shift closed → sync still passes capturedShiftId without pre-deciding LATE_OFFLINE', async () => {
     prismaMock.shift.findFirst.mockResolvedValue(CLOSED_SHIFT);
     mockCreateSale.mockResolvedValueOnce({ id: 'inv-late' });
     const payload = await makePayload();
@@ -123,11 +145,11 @@ describe('processOfflineSale — offline lifecycle', () => {
     expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-late' });
     expect(mockCreateSale).toHaveBeenCalledWith(
       expect.objectContaining({
-        saleSource: 'LATE_OFFLINE',
         capturedShiftId: 'shift-1',
         tillId: 'till-1',
       }),
     );
+    expect(mockCreateSale.mock.calls[0][0].saleSource).toBeUndefined();
     expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
   });
 
