@@ -29,6 +29,8 @@ describe('import-stock source: durable import-chunk idempotency', () => {
     );
     expect(purchases).toContain('await client.$executeRaw`');
     expect(purchases).not.toContain('await prisma.$executeRaw`');
+    expect(purchases).toContain('This paid purchase needs a durable idempotency key before money can be recorded.');
+    expect(purchases).toContain('totalPaid > 0 && !input.idempotencyKey?.trim()');
     expect(purchases).not.toMatch(
       /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => runWithMoneyTx\(tx\)\);\s*invoice = await finishInvoice\(invoice, prisma\)/,
     );

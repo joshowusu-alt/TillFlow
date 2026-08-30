@@ -58,7 +58,8 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     const transferPaid = formInt(formData, 'transferPaid');
     const tillId = formString(formData, 'tillId');
     const idempotencyKey = formString(formData, 'idempotencyKey');
-    if (cashPaid + cardPaid + transferPaid > 0 && !idempotencyKey) {
+    const paidTender = cashPaid + cardPaid + transferPaid > 0 || paymentStatus === 'PAID';
+    if (paidTender && !idempotencyKey) {
       redirect('/purchases?error=stale-purchase-form');
     }
     const willUseCash =

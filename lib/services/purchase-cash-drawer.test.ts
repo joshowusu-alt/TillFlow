@@ -140,6 +140,7 @@ describe('purchase invoice cash drawer linkage', () => {
       lines: [productLine],
       userId,
       tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
@@ -178,6 +179,7 @@ describe('purchase invoice cash drawer linkage', () => {
       lines: [productLine],
       userId,
       tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -203,6 +205,7 @@ describe('purchase invoice cash drawer linkage', () => {
         lines: [productLine],
         userId,
         tillId: 'till-1',
+        idempotencyKey: 'po-drawer',
       }),
     ).rejects.toThrow('Open shift is required before recording cash supplier payments.');
 
@@ -220,6 +223,7 @@ describe('purchase invoice cash drawer linkage', () => {
         payments: [{ method: 'CASH', amountPence: 229800 }],
         lines: [productLine],
         userId,
+        idempotencyKey: 'po-drawer-no-till',
       }),
     ).rejects.toThrow('Select an open till before recording this cash payment');
 
@@ -238,6 +242,7 @@ describe('purchase invoice cash drawer linkage', () => {
       lines: [productLine],
       userId,
       skipCashDrawerRequirement: true,
+      idempotencyKey: 'po-drawer-skip',
     });
 
     expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
@@ -254,6 +259,7 @@ describe('purchase invoice cash drawer linkage', () => {
       payments: [{ method: 'TRANSFER', amountPence: 229800 }],
       lines: [productLine],
       userId,
+      idempotencyKey: 'po-drawer-transfer',
     });
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -283,6 +289,7 @@ describe('purchase invoice cash drawer linkage', () => {
       lines: [productLine],
       userId,
       tillId: 'till-1',
+      idempotencyKey: 'po-drawer',
     });
 
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledTimes(1);
@@ -315,6 +322,7 @@ describe('purchase invoice cash drawer linkage', () => {
         lines: [productLine],
         userId,
         tillId: 'till-1',
+        idempotencyKey: 'po-drawer',
       }),
     ).rejects.toThrow('drawer write failed');
   });

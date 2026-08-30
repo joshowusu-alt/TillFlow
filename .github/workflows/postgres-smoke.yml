@@ -125,6 +125,7 @@ jobs:
           files=(
             lib/services/checkout-shift-cashdrawer-rtx.test.ts
             lib/services/payments-concurrency.test.ts
+            lib/services/purchases-concurrency.test.ts
             lib/services/sales.test.ts
           )
           present=()

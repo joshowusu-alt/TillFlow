@@ -14,7 +14,9 @@ import CameraScanner from '@/app/(protected)/pos/components/CameraScanner';
 import {
   PURCHASE_DRAFT_VERSION,
   clearPurchaseDraft,
+  clearPurchaseOperationKey,
   getPurchaseDraftStorageKey,
+  readOrCreatePurchaseOperationKey,
 } from '@/lib/purchases/purchase-draft';
 
 type UnitDto = {
@@ -118,7 +120,7 @@ export default function PurchaseFormClient({
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [barcodeLookup, setBarcodeLookup] = useState('');
   const [lookupCameraOpen, setLookupCameraOpen] = useState(false);
   const [quickCameraOpen, setQuickCameraOpen] = useState(false);
@@ -143,8 +145,14 @@ export default function PurchaseFormClient({
     );
   }, [productSearch, productOptions]);
 
+  useEffect(() => {
+    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, current));
+  }, [storeId]);
+
   const resetPurchaseForm = useCallback(() => {
     clearPurchaseDraft(storeId);
+    clearPurchaseOperationKey(storeId);
+    setIdempotencyKey(readOrCreatePurchaseOperationKey(storeId));
     setDraftNotice(null);
     setSupplierId('');
     setProductId(products[0]?.id ?? '');

@@ -407,6 +407,18 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       ? [{ method: 'CASH' as const, amountPence: total }]
       : positivePayments;
   const totalPaid = payments.reduce((sum, p) => sum + p.amountPence, 0);
+  /**
+   * Paid money (any positive tender, including PAID with synthesized CASH)
+   * requires a durable key at this service boundary. Unpaid/credit-only
+   * (totalPaid === 0) may omit a key and creates a new AP invoice each call.
+   * A key supplied on unpaid still participates in exact-replay.
+   */
+  if (totalPaid > 0 && !input.idempotencyKey?.trim()) {
+    throw new MoneyIdempotencyError(
+      MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_REQUIRED,
+      'This paid purchase needs a durable idempotency key before money can be recorded.',
+    );
+  }
   if (totalPaid > total) {
     throw new Error('Payment exceeds total due');
   }

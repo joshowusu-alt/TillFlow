@@ -44,6 +44,7 @@ describe('reliability CI governance contract', () => {
     }
     expect(smoke).toContain('lib/services/checkout-shift-cashdrawer-rtx.test.ts');
     expect(smoke).toContain('lib/services/payments-concurrency.test.ts');
+    expect(smoke).toContain('lib/services/purchases-concurrency.test.ts');
     expect(smoke).toContain('lib/services/sales.test.ts');
   });
 
@@ -57,6 +58,9 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('reliabilitySalesAllowed');
     expect(spec).toContain('/api/qa/deploy-sha');
     expect(spec).toContain('LATE_OFFLINE');
+    expect(spec).toContain('Product catalogue');
+    expect(spec).not.toMatch(/test\.skip\(\s*!reliabilitySalesAllowed\(\)/);
+    expect(spec).not.toMatch(/if \(!captured\?\.shiftId \|\| !captured\.tillId\) return;/);
     expect(env).toContain("process.env.RELIABILITY_E2E === '1'");
     expect(env).toContain('www.tillflow.app');
     expect(env).toContain('isProductionPlaywrightTarget');

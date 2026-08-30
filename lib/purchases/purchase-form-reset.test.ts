@@ -12,6 +12,9 @@ describe('Purchase form reset after completion', () => {
     expect(draft).toContain('getPurchaseDraftStorageKey');
     expect(draft).toContain('clearPurchaseDraft');
     expect(draft).toContain('tillflow:purchase-draft:');
+    expect(draft).toContain('readOrCreatePurchaseOperationKey');
+    expect(draft).toContain('tillflow:purchase-op-key:');
+    expect(draft).toContain('sessionStorage');
   });
 
   it('purchase invoice page clears draft after successful creation', () => {
@@ -21,6 +24,7 @@ describe('Purchase form reset after completion', () => {
     expect(detailPage).toContain('PurchaseDraftClearer');
     expect(detailPage).toContain("active={searchParams?.created === '1'}");
     expect(clearer).toContain('clearPurchaseDraft(storeId)');
+    expect(clearer).toContain('clearPurchaseOperationKey(storeId)');
   });
 
   it('purchase form resets fields when returning with created flag', () => {
@@ -32,6 +36,9 @@ describe('Purchase form reset after completion', () => {
     expect(form).toContain('setCart([])');
     expect(form).toContain("setSupplierId('')");
     expect(form).toContain("setPaymentStatus('PAID')");
+    expect(form).toContain('readOrCreatePurchaseOperationKey');
+    expect(form).toContain('clearPurchaseOperationKey');
+    expect(form).not.toMatch(/setIdempotencyKey\(crypto\.randomUUID\(\)\)/);
   });
 
   it('incomplete purchase drafts still persist in localStorage', () => {
