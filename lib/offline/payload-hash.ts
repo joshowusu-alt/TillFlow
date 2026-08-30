@@ -129,3 +129,29 @@ export function invoiceCaptureFingerprint(input: {
     })),
   });
 }
+
+/** Replay identity: product/qty/tenders only. Server-filled prices must not break exact replay. */
+export function offlineReplayIdentityFingerprint(input: {
+  storeId: string;
+  tillId: string;
+  cashierUserId?: string | null;
+  customerId?: string | null;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;
+  payments: Array<{ method: string; amountPence: number }>;
+}): string {
+  return JSON.stringify({
+    storeId: input.storeId,
+    tillId: input.tillId,
+    cashierUserId: input.cashierUserId ?? null,
+    customerId: input.customerId ?? null,
+    lines: sortBy(input.lines, (line) => `${line.productId}:${line.unitId}`).map((line) => ({
+      productId: line.productId,
+      unitId: line.unitId,
+      qtyInUnit: Math.floor(Number(line.qtyInUnit) || 0),
+    })),
+    payments: sortBy(input.payments, (payment) => `${payment.method}:${payment.amountPence}`).map((payment) => ({
+      method: payment.method,
+      amountPence: Math.round(Number(payment.amountPence) || 0),
+    })),
+  });
+}

@@ -6,7 +6,7 @@ import type { PaymentStatus } from '@/lib/services/shared';
 import { parseDiscountValue } from '@/lib/format';
 import {
   hashOfflineSalePayload,
-  invoiceCaptureFingerprint,
+  offlineReplayIdentityFingerprint,
 } from '@/lib/offline/payload-hash';
 
 export const CLOCK_SKEW_REVIEW_MS = 24 * 60 * 60 * 1000;
@@ -80,7 +80,7 @@ function externalRefsFor(payload: OfflineSalePayload): string[] {
 }
 
 function payloadFingerprint(payload: OfflineSalePayload): string {
-  return invoiceCaptureFingerprint({
+  return offlineReplayIdentityFingerprint({
     storeId: payload.storeId,
     tillId: payload.tillId,
     cashierUserId: payload.cashierUserId ?? null,
@@ -204,7 +204,7 @@ export async function processOfflineSale(
   });
 
   if (existingSale) {
-    const existingFingerprint = invoiceCaptureFingerprint({
+    const existingFingerprint = offlineReplayIdentityFingerprint({
       storeId: existingSale.storeId,
       tillId: existingSale.tillId,
       cashierUserId: existingSale.cashierUserId,
@@ -372,7 +372,7 @@ export async function processOfflineSale(
         },
       });
       if (existing) {
-        const existingFingerprint = invoiceCaptureFingerprint({
+        const existingFingerprint = offlineReplayIdentityFingerprint({
           storeId: existing.storeId,
           tillId: existing.tillId,
           cashierUserId: existing.cashierUserId,
