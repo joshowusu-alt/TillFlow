@@ -157,7 +157,7 @@ export async function createOpeningStockAction(
       },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidatePosCatalog(businessId);
+    revalidatePosCatalog(businessId, store.id);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');

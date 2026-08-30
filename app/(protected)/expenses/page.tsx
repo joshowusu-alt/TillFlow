@@ -70,6 +70,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         <div className="card mt-2 p-4 sm:p-5">
           <FormError error={searchParams?.error} />
           <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
+          <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
           <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
           {/* Section: What & How Much */}
           <div className="md:col-span-4 border-t border-black/8 pt-3 mt-0">

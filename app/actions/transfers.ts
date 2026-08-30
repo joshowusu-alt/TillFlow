@@ -115,7 +115,8 @@ export async function approveStockTransferActionSafe(input: {
       },
     });
 
-    revalidatePosCatalog(businessId);
+    revalidatePosCatalog(businessId, transfer.fromStoreId);
+    revalidatePosCatalog(businessId, transfer.toStoreId);
 
     return ok({ transferId: transfer.id });
   });

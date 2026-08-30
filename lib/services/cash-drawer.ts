@@ -63,6 +63,11 @@ export async function getOpenCashShiftForPayment(
     fallbackTillId?: string | null;
   }
 ) {
+  if (input.fallbackTillId) {
+    const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
+    return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
+  }
+
   if (input.userId) {
     const userShift = await tx.shift.findFirst({
       where: {
@@ -79,9 +84,7 @@ export async function getOpenCashShiftForPayment(
     if (userShift) return userShift;
   }
 
-  if (!input.fallbackTillId) return null;
-  const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
-  return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
+  return null;
 }
 
 export type CashPurchasePaymentRef = {

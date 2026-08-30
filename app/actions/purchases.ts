@@ -52,6 +52,14 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       }
     }
 
+    const cashPaid = formInt(formData, 'cashPaid');
+    const cardPaid = formInt(formData, 'cardPaid');
+    const transferPaid = formInt(formData, 'transferPaid');
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (cashPaid + cardPaid + transferPaid > 0 && !idempotencyKey) {
+      redirect('/purchases?error=stale-purchase-form');
+    }
+
     const invoice = await createPurchase({
       businessId,
       storeId,
@@ -59,12 +67,13 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       paymentStatus,
       dueDate,
       payments: [
-        { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
-        { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
-        { method: 'TRANSFER', amountPence: formInt(formData, 'transferPaid') }
+        { method: 'CASH', amountPence: cashPaid },
+        { method: 'CARD', amountPence: cardPaid },
+        { method: 'TRANSFER', amountPence: transferPaid }
       ],
       lines,
-      userId: user.id
+      userId: user.id,
+      idempotencyKey: idempotencyKey || undefined,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));

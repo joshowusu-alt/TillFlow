@@ -114,6 +114,7 @@ export default function PurchaseFormClient({
   const [cashPaid, setCashPaid] = useState('');
   const [cardPaid, setCardPaid] = useState('');
   const [transferPaid, setTransferPaid] = useState('');
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [barcodeLookup, setBarcodeLookup] = useState('');
   const [lookupCameraOpen, setLookupCameraOpen] = useState(false);
   const [quickCameraOpen, setQuickCameraOpen] = useState(false);
@@ -696,6 +697,7 @@ export default function PurchaseFormClient({
 
       <form action={createPurchaseAction} className="space-y-6">
         <input type="hidden" name="storeId" value={storeId} />
+        <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <input type="hidden" name="cart" value={JSON.stringify(cart)} />
         <input type="hidden" name="cashPaid" value={Math.max(0, cashPaidPence)} />
         <input type="hidden" name="cardPaid" value={Math.max(0, cardPaidPence)} />

@@ -259,6 +259,7 @@ beforeEach(() => {
   (prismaMock as any).shift = {
     update: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    findFirst: vi.fn(),
   };
   (prismaMock as any).inventoryBalance = {
     upsert: vi.fn().mockResolvedValue({}),
@@ -1428,5 +1429,30 @@ describe('createSale — open till is mandatory regardless of the stored flag', 
     const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
     expect(createCall.data.shiftId).toBeNull();
     expect(createCall.data.saleSource).toBe('ONLINE_ORDER');
+  });
+
+  it('LATE_OFFLINE does not rebind money or the invoice onto a later OPEN shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    (prismaMock as any).shift.findFirst.mockResolvedValue({ id: 'shift-original' });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+
+    try {
+      await createSale(makeBaseInput({
+        saleSource: 'LATE_OFFLINE',
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('LATE_OFFLINE');
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 });

@@ -897,7 +897,7 @@ async function _runImport(
       details: { ...summary, importId: importRecord.id },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidatePosCatalog(businessId);
+    revalidatePosCatalog(businessId, store.id);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     revalidateTag('control-portfolio');

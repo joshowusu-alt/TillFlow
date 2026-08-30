@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
+  getOpenCashShiftForPayment,
   recordCashDrawerEntryTx,
   summarizeCashDrawerEntries,
 } from './cash-drawer';
@@ -130,5 +131,44 @@ describe('cash drawer writes', () => {
       beforeExpectedCashPence: 1000,
       afterExpectedCashPence: 1250,
     });
+  });
+});
+
+describe('getOpenCashShiftForPayment', () => {
+  it('uses the invoice till and does not consult another user OPEN shift', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'shift-till-1', tillId: 'till-1' }),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      userId: 'user-1',
+      fallbackTillId: 'till-1',
+    });
+
+    expect(result).toEqual({ id: 'shift-till-1', tillId: 'till-1' });
+    expect(tx.shift.findFirst).toHaveBeenCalledTimes(1);
+    expect(tx.shift.findFirst.mock.calls[0][0].where.tillId).toBe('till-1');
+  });
+
+  it('returns null when the invoice till has no OPEN shift even if the user has another', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      userId: 'user-1',
+      fallbackTillId: 'till-1',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.shift.findFirst).toHaveBeenCalledTimes(1);
   });
 });

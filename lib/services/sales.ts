@@ -573,6 +573,12 @@ async function createSaleImpl(input: CreateSaleInput) {
   if (!cashier) throw new UserError('Cashier is not authorised for this business.');
   const lateOfflineShiftId =
     input.saleSource === 'LATE_OFFLINE' ? input.capturedShiftId ?? null : null;
+  // LATE_OFFLINE must never bind money or the invoice to a later OPEN shift
+  // on the same till (silent reassignment).
+  const liveShiftForMoney =
+    lateOfflineShiftId && openShift && openShift.id !== lateOfflineShiftId
+      ? null
+      : openShift;
   if (!openShift && !input.bypassOpenTillRequirement && !lateOfflineShiftId) {
     throw new UserError('Open till is required before recording sales.');
   }
@@ -875,8 +881,8 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
-    let attachedShiftId = openShift?.id ?? null;
-    if (!attachedShiftId && lateOfflineShiftId) {
+    let attachedShiftId = lateOfflineShiftId ? null : (liveShiftForMoney?.id ?? openShift?.id ?? null);
+    if (lateOfflineShiftId) {
       const capturedShift = await tx.shift.findFirst({
         where: {
           id: lateOfflineShiftId,
@@ -1014,14 +1020,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       return idempotentReplayInvoice;
     }
 
-    if (openShift) {
+    if (liveShiftForMoney) {
       if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
         const locked = await tx.$queryRaw<{ id: string }[]>`
           SELECT sh."id"
           FROM "Shift" AS sh
           JOIN "Till" AS t ON t."id" = sh."tillId"
           JOIN "Store" AS st ON st."id" = t."storeId"
-          WHERE sh."id" = ${openShift.id}
+          WHERE sh."id" = ${liveShiftForMoney.id}
             AND sh."tillId" = ${till.id}
             AND sh."status" = ${'OPEN'}
             AND t."active" = TRUE
@@ -1036,7 +1042,7 @@ async function createSaleImpl(input: CreateSaleInput) {
 
       const shiftUpdate = await tx.shift.updateMany({
         where: {
-          id: openShift.id,
+          id: liveShiftForMoney.id,
           tillId: till.id,
           status: 'OPEN',
           till: {
@@ -1095,7 +1101,7 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
-    if (cashPence > 0 && openShift) {
+    if (cashPence > 0 && liveShiftForMoney) {
       txPromises.push(
         measureCheckoutStage(
           'action.checkout.shift-update',
@@ -1108,7 +1114,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 businessId: input.businessId,
                 storeId: input.storeId,
                 tillId: till.id,
-                shiftId: openShift.id,
+                shiftId: liveShiftForMoney.id,
                 createdByUserId: input.cashierUserId,
                 cashierUserId: input.cashierUserId,
                 entryType: 'CASH_SALE',
@@ -1131,7 +1137,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                 SET "expectedCashPence" = sh."expectedCashPence" + ${cashPence}
                 FROM "Till" AS t
                 JOIN "Store" AS st ON st."id" = t."storeId"
-                WHERE sh."id" = ${openShift.id}
+                WHERE sh."id" = ${liveShiftForMoney.id}
                   AND sh."status" = ${'OPEN'}
                   AND sh."tillId" = ${till.id}
                   AND t."id" = sh."tillId"
@@ -1157,7 +1163,7 @@ async function createSaleImpl(input: CreateSaleInput) {
                   ${input.businessId},
                   ${input.storeId},
                   ${till.id},
-                  ${openShift.id},
+                  ${liveShiftForMoney.id},
                   ${input.cashierUserId},
                   ${input.cashierUserId},
                   ${'CASH_SALE'},

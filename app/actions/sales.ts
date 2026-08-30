@@ -151,6 +151,11 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         hasDiscount: Boolean(orderDiscountType && orderDiscountType !== 'NONE') || orderDiscountValue > 0,
       });
 
+      const externalRef = formString(formData, 'externalRef');
+      if (!externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:')) {
+        redirect('/pos?error=missing-sale-reference');
+      }
+
       const invoice = await createSale({
         businessId,
         storeId,
@@ -164,6 +169,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
         discountOverrideReasonCode: discountReasonCode,
         discountOverrideReason: discountReason,
         discountApprovedByUserId,
+        externalRef,
         payments: [
           { method: 'CASH', amountPence: formInt(formData, 'cashPaid') },
           { method: 'CARD', amountPence: formInt(formData, 'cardPaid') },
@@ -194,6 +200,7 @@ export async function createSaleAction(formData: FormData): Promise<void> {
           revalidateTag(`today-sales-${businessId}`);
           revalidateTag(`readiness-${businessId}`);
           revalidateTag('reports');
+          revalidatePosCatalog(businessId, storeId);
           revalidateOwnerDashboardCache();
           revalidatePath('/onboarding');
         },
@@ -375,8 +382,8 @@ export async function completeSaleAction(data: {
     });
 
     const externalRef = data.externalRef?.trim() || null;
-    if (externalRef && !externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:')) {
-      return { success: false, error: 'Invalid sale attempt reference.' };
+    if (!externalRef || (!externalRef.startsWith('POS_ONLINE:') && !externalRef.startsWith('OFFLINE_SYNC:'))) {
+      return { success: false, error: 'This sale attempt is missing a checkout reference. Refresh POS and try again.' };
     }
 
     const invoice = await createSale({
@@ -575,7 +582,11 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       },
     }).catch(() => {});
 
-    revalidatePosCatalog(businessId);
+    const amendedInvoice = await prisma.salesInvoice.findFirst({
+      where: { id: salesInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    revalidatePosCatalog(businessId, amendedInvoice?.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 

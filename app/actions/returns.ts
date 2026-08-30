@@ -1,6 +1,7 @@
 'use server';
 
 import { createSalesReturn, createPurchaseReturn } from '@/lib/services/returns';
+import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
 import { formString, formInt } from '@/lib/form-helpers';
@@ -112,7 +113,7 @@ export async function createSalesReturnAction(formData: FormData): Promise<void>
       },
     });
 
-    revalidatePosCatalog(businessId);
+    revalidatePosCatalog(businessId, salesReturn.storeId ?? undefined);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 
@@ -149,7 +150,11 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });
 
-    revalidatePosCatalog(businessId);
+    const purchaseInvoice = await prisma.purchaseInvoice.findFirst({
+      where: { id: purchaseInvoiceId, businessId },
+      select: { storeId: true },
+    });
+    revalidatePosCatalog(businessId, purchaseInvoice?.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 

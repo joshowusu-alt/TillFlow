@@ -55,6 +55,11 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       amountPaidPence = amountPence;
     }
 
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (amountPaidPence > 0 && !idempotencyKey) {
+      return err('This expense form is out of date. Refresh the page and try again.');
+    }
+
     await createExpense({
       businessId,
       storeId,
@@ -68,7 +73,8 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       vendorName,
       reference,
       attachmentPath,
-      notes
+      notes,
+      idempotencyKey: idempotencyKey || undefined,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'EXPENSE_CREATE', entity: 'Expense', details: { amountPence, vendorName, notes } }).catch((e) => console.error('[audit] expense create failed', e));
