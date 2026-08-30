@@ -54,20 +54,34 @@ export interface OfflineTill {
     name: string;
 }
 
+export type OfflineSaleQueueStatus =
+    | 'pending'
+    | 'synced'
+    | 'already_synced'
+    | 'needs_review'
+    | 'rejected';
+
+export interface OfflineSaleLine {
+    productId: string;
+    unitId: string;
+    qtyInUnit: number;
+    qtyBase?: number;
+    unitPricePence?: number;
+    lineSubtotalPence?: number;
+    discountType: string;
+    discountValue: string;
+}
+
 export interface OfflineSale {
     id: string;
     businessId: string;
     storeId: string;
     tillId: string;
+    shiftId: string | null;
+    cashierUserId: string | null;
     customerId: string | null;
     paymentStatus: 'PAID' | 'PART_PAID' | 'UNPAID';
-    lines: Array<{
-        productId: string;
-        unitId: string;
-        qtyInUnit: number;
-        discountType: string;
-        discountValue: string;
-    }>;
+    lines: OfflineSaleLine[];
     payments: Array<{
         method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
         amountPence: number;
@@ -75,8 +89,31 @@ export interface OfflineSale {
     orderDiscountType: string;
     orderDiscountValue: string;
     createdAt: string;
+    localSaleTime: string;
+    localSequence: number;
+    idempotencyKey: string;
+    payloadHash: string;
+    catalogueVersion?: string | null;
+    inventoryPolicy?: 'enforce' | 'allow-negative';
     synced: boolean;
+    status: OfflineSaleQueueStatus;
+    statusReason?: string;
 }
+
+export type OfflineSaleCaptureInput = Omit<
+    OfflineSale,
+    'id' | 'synced' | 'status' | 'statusReason' | 'localSequence' | 'payloadHash' | 'localSaleTime' | 'shiftId' | 'cashierUserId' | 'idempotencyKey'
+> & {
+    shiftId?: string | null;
+    cashierUserId?: string | null;
+    localSaleTime?: string;
+    localSequence?: number;
+    idempotencyKey?: string;
+    payloadHash?: string;
+    status?: OfflineSaleQueueStatus;
+    statusReason?: string;
+    synced?: boolean;
+};
 
 type SyncMetaRecord = {
     key: string;
@@ -85,8 +122,51 @@ type SyncMetaRecord = {
 };
 
 const DB_NAME = 'pos-offline-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAMES = ['products', 'business', 'store', 'customers', 'tills', 'salesQueue', 'syncMeta'] as const;
+const LOCAL_SEQUENCE_META_PREFIX = 'localSequence:';
+
+/**
+ * Migrate a raw IDB queue row to the immutable-capture shape.
+ * Legacy rows without shiftId are parked as needs_review (never silently rebound).
+ */
+export function migrateQueuedSaleRecord(raw: Partial<OfflineSale> & { id?: string; synced?: boolean }): OfflineSale {
+    const createdAt = raw.createdAt ?? new Date().toISOString();
+    const shiftId = raw.shiftId ?? null;
+    const synced = Boolean(raw.synced);
+    const missingShift = !shiftId;
+    let status: OfflineSaleQueueStatus = raw.status ?? (synced ? 'synced' : 'pending');
+    let statusReason = raw.statusReason;
+    if (!synced && missingShift && status === 'pending') {
+        status = 'needs_review';
+        statusReason = statusReason ?? 'missing_shift';
+    }
+
+    return {
+        id: String(raw.id ?? ''),
+        businessId: String(raw.businessId ?? ''),
+        storeId: String(raw.storeId ?? ''),
+        tillId: String(raw.tillId ?? ''),
+        shiftId,
+        cashierUserId: raw.cashierUserId ?? null,
+        customerId: raw.customerId ?? null,
+        paymentStatus: raw.paymentStatus ?? 'PAID',
+        lines: Array.isArray(raw.lines) ? raw.lines : [],
+        payments: Array.isArray(raw.payments) ? raw.payments : [],
+        orderDiscountType: raw.orderDiscountType ?? 'NONE',
+        orderDiscountValue: raw.orderDiscountValue ?? '',
+        createdAt,
+        localSaleTime: raw.localSaleTime ?? createdAt,
+        localSequence: Number(raw.localSequence) || 0,
+        idempotencyKey: raw.idempotencyKey || String(raw.id ?? ''),
+        payloadHash: raw.payloadHash ?? '',
+        catalogueVersion: raw.catalogueVersion ?? null,
+        inventoryPolicy: raw.inventoryPolicy ?? 'enforce',
+        synced,
+        status,
+        statusReason,
+    };
+}
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -101,7 +181,7 @@ export function getDB(): Promise<IDBPDatabase> {
 
     if (!dbPromise) {
         dbPromise = openDB(DB_NAME, DB_VERSION, {
-            upgrade(db, oldVersion, _newVersion, tx) {
+            async upgrade(db, oldVersion, _newVersion, tx) {
                 if (!db.objectStoreNames.contains('products')) {
                     db.createObjectStore('products', { keyPath: 'id' });
                 }
@@ -135,6 +215,17 @@ export function getDB(): Promise<IDBPDatabase> {
                     for (const storeName of STORE_NAMES) {
                         if (db.objectStoreNames.contains(storeName)) {
                             tx.objectStore(storeName).clear();
+                        }
+                    }
+                }
+
+                if (oldVersion < 3 && db.objectStoreNames.contains('salesQueue')) {
+                    const salesStore = tx.objectStore('salesQueue');
+                    const rows = (await salesStore.getAll()) as Array<Partial<OfflineSale>>;
+                    for (const row of rows) {
+                        const migrated = migrateQueuedSaleRecord(row);
+                        if (migrated.id) {
+                            await salesStore.put(migrated);
                         }
                     }
                 }
@@ -304,14 +395,57 @@ export async function getCachedTills(
     });
 }
 
-export async function queueOfflineSale(sale: Omit<OfflineSale, 'id' | 'synced'>): Promise<string> {
+async function nextLocalSequence(scope: {
+    businessId: string;
+    tillId: string;
+    shiftId?: string | null;
+}): Promise<number> {
+    const key = `${LOCAL_SEQUENCE_META_PREFIX}${scope.businessId}:${scope.tillId}:${scope.shiftId ?? 'none'}`;
+    const current = Number(await getSyncMeta(key)) || 0;
+    const next = current + 1;
+    await updateSyncMeta(key, String(next));
+    return next;
+}
+
+export async function queueOfflineSale(
+    sale: OfflineSaleCaptureInput | Omit<OfflineSale, 'id' | 'synced'>
+): Promise<string> {
     const db = await getDB();
     const id = `offline-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    const offlineSale: OfflineSale = {
+    const localSaleTime = ('localSaleTime' in sale && sale.localSaleTime) || sale.createdAt || new Date().toISOString();
+    const shiftId = 'shiftId' in sale ? sale.shiftId ?? null : null;
+    const cashierUserId = 'cashierUserId' in sale ? sale.cashierUserId ?? null : null;
+    const localSequence =
+        ('localSequence' in sale && sale.localSequence && sale.localSequence > 0)
+            ? sale.localSequence
+            : await nextLocalSequence({
+                businessId: sale.businessId,
+                tillId: sale.tillId,
+                shiftId,
+            });
+    const missingShift = !shiftId;
+    const status: OfflineSaleQueueStatus =
+        sale.status ?? (missingShift ? 'needs_review' : 'pending');
+
+    const offlineSale = migrateQueuedSaleRecord({
         ...sale,
         id,
-        synced: false
-    };
+        shiftId,
+        cashierUserId,
+        localSaleTime,
+        localSequence,
+        idempotencyKey: ('idempotencyKey' in sale && sale.idempotencyKey) || id,
+        payloadHash: ('payloadHash' in sale && sale.payloadHash) || '',
+        synced: false,
+        status,
+        statusReason: sale.statusReason ?? (missingShift && status === 'needs_review' ? 'missing_shift' : undefined),
+    });
+
+    if (!offlineSale.payloadHash) {
+        const { hashOfflineSalePayload } = await import('./payload-hash');
+        offlineSale.payloadHash = await hashOfflineSalePayload(offlineSale);
+    }
+
     await db.put('salesQueue', offlineSale);
     return id;
 }
@@ -319,15 +453,31 @@ export async function queueOfflineSale(sale: Omit<OfflineSale, 'id' | 'synced'>)
 export async function getPendingSales(businessId?: string): Promise<OfflineSale[]> {
     const db = await getDB();
     const resolvedBusinessId = resolveBusinessId(businessId);
-    const all = await db.getAll('salesQueue') as OfflineSale[];
-    return all.filter((sale) => !sale.synced && (!resolvedBusinessId || sale.businessId === resolvedBusinessId));
+    const all = (await db.getAll('salesQueue') as Array<Partial<OfflineSale>>).map(migrateQueuedSaleRecord);
+    return all.filter((sale) => {
+        if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) return false;
+        if (sale.synced) return false;
+        const status = sale.status ?? 'pending';
+        return status === 'pending';
+    });
+}
+
+export async function getReviewSales(businessId?: string): Promise<OfflineSale[]> {
+    const db = await getDB();
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    const all = (await db.getAll('salesQueue') as Array<Partial<OfflineSale>>).map(migrateQueuedSaleRecord);
+    return all.filter((sale) => {
+        if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) return false;
+        return sale.status === 'needs_review' || sale.status === 'rejected';
+    });
 }
 
 export async function getOfflineSale(id: string, businessId?: string): Promise<OfflineSale | undefined> {
     const db = await getDB();
-    const sale = await db.get('salesQueue', id) as OfflineSale | undefined;
-    if (!sale) return undefined;
+    const raw = await db.get('salesQueue', id) as Partial<OfflineSale> | undefined;
+    if (!raw) return undefined;
 
+    const sale = migrateQueuedSaleRecord(raw);
     const resolvedBusinessId = resolveBusinessId(businessId);
     if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
         return undefined;
@@ -352,6 +502,29 @@ export async function markSaleSynced(id: string, businessId?: string): Promise<v
     }
 
     sale.synced = true;
+    sale.status = 'synced';
+    await db.put('salesQueue', migrateQueuedSaleRecord(sale));
+}
+
+export async function markSaleQueueStatus(
+    id: string,
+    status: OfflineSaleQueueStatus,
+    reason?: string,
+    businessId?: string
+): Promise<void> {
+    const db = await getDB();
+    const raw = await db.get('salesQueue', id) as Partial<OfflineSale> | undefined;
+    if (!raw) return;
+
+    const sale = migrateQueuedSaleRecord(raw);
+    const resolvedBusinessId = resolveBusinessId(businessId);
+    if (resolvedBusinessId && sale.businessId !== resolvedBusinessId) {
+        return;
+    }
+
+    sale.status = status;
+    sale.statusReason = reason;
+    sale.synced = status === 'synced' || status === 'already_synced';
     await db.put('salesQueue', sale);
 }
 

@@ -3,6 +3,7 @@
 import {
     getPendingSales,
     markSaleSynced,
+    markSaleQueueStatus,
     removeSyncedSales,
     cacheProducts,
     cacheBusiness,
@@ -11,6 +12,7 @@ import {
     cacheTills,
     setActiveOfflineScope,
     getSyncMeta,
+    type OfflineSaleQueueStatus,
     type OfflineProduct,
     type OfflineBusiness,
     type OfflineStore,
@@ -22,6 +24,7 @@ import {
     getOfflineCacheUrl,
     getOfflineActiveStoreMetaKey
 } from '@/lib/business-scope';
+import { hydrateOfflineCaptureContext } from './capture';
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -71,12 +74,27 @@ async function tryBatchSync(pending: OfflineSale[], businessId?: string): Promis
 
         const data = await response.json() as {
             synced: string[];
-            failed: Array<{ id: string; error: string }>;
+            failed: Array<{ id: string; error: string; status?: OfflineSaleQueueStatus }>;
+            results?: Array<{ id: string; status: OfflineSaleQueueStatus; reason?: string }>;
         };
 
-        // Mark each synced sale individually
-        for (const id of data.synced) {
-            await markSaleSynced(id, businessId);
+        if (data.results?.length) {
+            for (const item of data.results) {
+                if (item.status === 'synced' || item.status === 'already_synced') {
+                    await markSaleQueueStatus(item.id, item.status, item.reason, businessId);
+                } else if (item.status === 'needs_review' || item.status === 'rejected') {
+                    await markSaleQueueStatus(item.id, item.status, item.reason, businessId);
+                }
+            }
+        } else {
+            for (const id of data.synced) {
+                await markSaleSynced(id, businessId);
+            }
+            for (const failed of data.failed) {
+                if (failed.status === 'needs_review' || failed.status === 'rejected') {
+                    await markSaleQueueStatus(failed.id, failed.status, failed.error, businessId);
+                }
+            }
         }
 
         const result: SyncResult = {
@@ -108,12 +126,29 @@ async function syncOneAtATime(pending: OfflineSale[], businessId?: string): Prom
             });
 
             if (response.ok) {
-                await markSaleSynced(sale.id, businessId);
+                const okData = await response.json().catch(() => ({ status: 'synced' })) as {
+                    status?: OfflineSaleQueueStatus;
+                };
+                const status = okData.status === 'already_synced' ? 'already_synced' : 'synced';
+                await markSaleQueueStatus(sale.id, status, undefined, businessId);
                 result.synced++;
             } else {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' })) as {
+                    error?: string;
+                    status?: OfflineSaleQueueStatus;
+                    reason?: string;
+                };
+                const queueStatus = errorData.status;
+                if (queueStatus === 'needs_review' || queueStatus === 'rejected') {
+                    await markSaleQueueStatus(
+                        sale.id,
+                        queueStatus,
+                        errorData.reason ?? errorData.error,
+                        businessId,
+                    );
+                }
                 result.failed++;
-                result.errors.push(`Sale ${sale.id}: ${errorData.error || response.statusText}`);
+                result.errors.push(`Sale ${sale.id}: ${errorData.reason || errorData.error || response.statusText}`);
             }
         } catch (error) {
             result.failed++;
@@ -184,7 +219,8 @@ export async function refreshOfflineCache(
             cacheStore(data.store),
             cacheCustomers(data.business.id, data.customers),
             cacheTills({ businessId: data.business.id, storeId: data.store.id }, data.tills),
-            setActiveOfflineScope({ businessId: data.business.id, storeId: data.store.id })
+            setActiveOfflineScope({ businessId: data.business.id, storeId: data.store.id }),
+            hydrateOfflineCaptureContext(resolvedBusinessId),
         ]);
         return { refreshed: true };
     } catch (error) {
@@ -261,6 +297,7 @@ export function setupAutoSync(
 
     const handleOnline = () => {
         retryCount = 0;
+        void hydrateOfflineCaptureContext();
         attemptSync();
     };
 
@@ -268,6 +305,7 @@ export function setupAutoSync(
 
     // Also attempt sync on setup if already online and there might be pending sales
     if (navigator.onLine) {
+        void hydrateOfflineCaptureContext();
         setTimeout(attemptSync, 1000);
     }
 

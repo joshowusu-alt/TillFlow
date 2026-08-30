@@ -69,7 +69,7 @@ describe('POST /api/offline/batch-sync', () => {
       order.push(`start:${sale.id}`);
       await Promise.resolve();
       order.push(`end:${sale.id}`);
-      return { success: true, invoiceId: `inv-${sale.id}` };
+      return { success: true, status: 'synced' as const, invoiceId: `inv-${sale.id}` };
     });
 
     const response = await POST(
@@ -80,6 +80,11 @@ describe('POST /api/offline/batch-sync', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      results: [
+        { id: 'offline-1', status: 'synced', invoiceId: 'inv-offline-1', reason: undefined },
+        { id: 'offline-2', status: 'synced', invoiceId: 'inv-offline-2', reason: undefined },
+        { id: 'offline-3', status: 'synced', invoiceId: 'inv-offline-3', reason: undefined },
+      ],
       synced: ['offline-1', 'offline-2', 'offline-3'],
       failed: [],
     });
@@ -96,9 +101,9 @@ describe('POST /api/offline/batch-sync', () => {
 
   it('keeps processing later sales after an earlier failure', async () => {
     processOfflineSaleMock
-      .mockResolvedValueOnce({ success: true, invoiceId: 'inv-1' })
-      .mockRejectedValueOnce(new Error('Insufficient on hand'))
-      .mockResolvedValueOnce({ success: true, invoiceId: 'inv-3' });
+      .mockResolvedValueOnce({ success: true, status: 'synced', invoiceId: 'inv-1' })
+      .mockResolvedValueOnce({ success: false, status: 'needs_review', reason: 'insufficient_stock' })
+      .mockResolvedValueOnce({ success: true, status: 'synced', invoiceId: 'inv-3' });
 
     const response = await POST(
       makeRequest({
@@ -108,9 +113,34 @@ describe('POST /api/offline/batch-sync', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      results: [
+        { id: 'offline-1', status: 'synced', invoiceId: 'inv-1', reason: undefined },
+        { id: 'offline-2', status: 'needs_review', invoiceId: undefined, reason: 'insufficient_stock' },
+        { id: 'offline-3', status: 'synced', invoiceId: 'inv-3', reason: undefined },
+      ],
       synced: ['offline-1', 'offline-3'],
-      failed: [{ id: 'offline-2', error: 'Insufficient on hand' }],
+      failed: [{ id: 'offline-2', error: 'insufficient_stock', status: 'needs_review' }],
     });
+  });
+
+  it('one invalid sale does not abort the rest of the batch', async () => {
+    processOfflineSaleMock
+      .mockResolvedValueOnce({ success: false, status: 'rejected', reason: 'tenant_mismatch' })
+      .mockResolvedValueOnce({ success: true, status: 'synced', invoiceId: 'inv-2' });
+
+    const response = await POST(
+      makeRequest({
+        sales: [makeSale('offline-bad'), makeSale('offline-ok')],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.synced).toEqual(['offline-ok']);
+    expect(body.failed).toEqual([
+      { id: 'offline-bad', error: 'tenant_mismatch', status: 'rejected' },
+    ]);
+    expect(body.results).toHaveLength(2);
   });
 
   it('returns 401 when unauthenticated', async () => {

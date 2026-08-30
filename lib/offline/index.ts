@@ -13,9 +13,11 @@ export {
 	getCachedTills,
 	queueOfflineSale,
 	getPendingSales,
+	getReviewSales,
 	getOfflineSale,
 	updateOfflineSale,
 	markSaleSynced,
+	markSaleQueueStatus,
 	removeSyncedSales,
 	getSyncMeta,
 	getLastSyncTime,
@@ -27,7 +29,21 @@ export {
 	type OfflineCustomer,
 	type OfflineTill,
 	type OfflineSale,
+	type OfflineSaleLine,
+	type OfflineSaleQueueStatus,
+	type OfflineSaleCaptureInput,
 } from './storage';
+
+export {
+	buildOfflineSaleCapture,
+	queueCapturedOfflineSale,
+	hydrateOfflineCaptureContext,
+	rememberOfflineCaptureContext,
+	peekOfflineCaptureContext,
+	readPersistedCaptureFields,
+	captureShiftStorageKey,
+	captureCashierStorageKey,
+} from './capture';
 
 export {
 	syncOfflineSales,

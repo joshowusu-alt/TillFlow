@@ -260,7 +260,7 @@ async function moveToDead(payload, statusCode, errorMessage) {
 
 function openOfflineDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('pos-offline-db', 2);
+    const req = indexedDB.open('pos-offline-db', 3);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
     // If DB hasn't been created by client yet, create stores so we don't crash
@@ -293,7 +293,12 @@ function getPendingSalesFromDB(db) {
     const store = tx.objectStore('salesQueue');
     const req = store.getAll();
     const activeBusinessId = await getActiveBusinessIdFromDB(db).catch(() => null);
-    req.onsuccess = () => resolve((req.result || []).filter((s) => !s.synced && (!activeBusinessId || s.businessId === activeBusinessId)));
+    req.onsuccess = () => resolve((req.result || []).filter((s) => {
+      if (s.synced) return false;
+      if (activeBusinessId && s.businessId !== activeBusinessId) return false;
+      const status = s.status || 'pending';
+      return status === 'pending';
+    }));
     req.onerror = () => reject(req.error);
   });
 }
@@ -326,8 +331,14 @@ async function syncSalesDirectly() {
         body: JSON.stringify(sale),
       });
       if (res.status >= 400 && res.status < 500) {
-        // Permanent failure — move to dead-letter, don't retry
-        await moveToDead(sale, res.status, `Server rejected: HTTP ${res.status}`);
+        const body = await res.json().catch(() => ({}));
+        const syncStatus = body && body.status;
+        // needs_review stays in the queue for Recovery centre — do not recreate.
+        if (syncStatus === 'needs_review') {
+          continue;
+        }
+        // Permanent reject — move to dead-letter, don't retry
+        await moveToDead(sale, res.status, body.reason || body.error || `Server rejected: HTTP ${res.status}`);
         continue; // skip markSaleSyncedInDB, don't throw (so Background Sync won't retry)
       }
       if (!res.ok) {
