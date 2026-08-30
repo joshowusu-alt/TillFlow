@@ -141,8 +141,9 @@ function paymentAccountToMethod(account: PurchasePaymentAccount | undefined): Pa
 }
 
 /**
- * recordOpeningInventory has no MoneyIdempotency key. Reserve around it so
- * import retries skip the chunk on exact replay without editing opening-inventory.
+ * Opening equity + MoneyIdempotency must commit together so a crash after stock
+ * cannot be retried as a second inventory apply, and a crash after money cannot
+ * skip stock.
  */
 async function recordOpeningInventoryOnce(input: {
   businessId: string;
@@ -181,42 +182,46 @@ async function recordOpeningInventoryOnce(input: {
     method: null,
   });
 
-  const existing = await findMoneyIdempotency(prisma as any, input.businessId, idempotencyKey);
-  if (existing) {
-    replayOrConflict(existing, { payloadHash, commandKind: 'IMPORT_CHUNK' });
-    return parseIdempotencyResult<RecordOpeningInventoryResult>(existing.resultJson);
-  }
-
-  const openingResult = await recordOpeningInventory({
-    businessId: input.businessId,
-    storeId: input.storeId,
-    userId: input.userId,
-    referenceId: `${input.importRunId}-equity`,
-    description: input.description,
-    lines: input.lines,
-  });
-
   try {
-    await insertMoneyIdempotency(prisma as any, {
-      businessId: input.businessId,
-      key: idempotencyKey,
-      payloadHash,
-      commandKind: 'IMPORT_CHUNK',
-      resultJson: JSON.stringify(openingResult),
+    return await prisma.$transaction(async (tx) => {
+      const existing = await findMoneyIdempotency(tx as any, input.businessId, idempotencyKey);
+      if (existing) {
+        replayOrConflict(existing, { payloadHash, commandKind: 'IMPORT_CHUNK' });
+        return parseIdempotencyResult<RecordOpeningInventoryResult>(existing.resultJson);
+      }
+
+      const openingResult = await recordOpeningInventory(
+        {
+          businessId: input.businessId,
+          storeId: input.storeId,
+          userId: input.userId,
+          referenceId: `${input.importRunId}-equity`,
+          description: input.description,
+          lines: input.lines,
+        },
+        tx,
+      );
+
+      await insertMoneyIdempotency(tx as any, {
+        businessId: input.businessId,
+        key: idempotencyKey,
+        payloadHash,
+        commandKind: 'IMPORT_CHUNK',
+        resultJson: JSON.stringify(openingResult),
+      });
+
+      return openingResult;
     });
-  } catch (insertErr) {
-    if (isPrismaUniqueConstraintOn(insertErr, ['businessId', 'key'])) {
+  } catch (err) {
+    if (isPrismaUniqueConstraintOn(err, ['businessId', 'key'])) {
       const winner = await findMoneyIdempotency(prisma as any, input.businessId, idempotencyKey);
       if (winner) {
         replayOrConflict(winner, { payloadHash, commandKind: 'IMPORT_CHUNK' });
         return parseIdempotencyResult<RecordOpeningInventoryResult>(winner.resultJson);
       }
-    } else {
-      throw insertErr;
     }
+    throw err;
   }
-
-  return openingResult;
 }
 
 // ---------------------------------------------------------------------------

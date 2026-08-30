@@ -22,6 +22,25 @@ describe('import-stock source: durable import-chunk idempotency', () => {
     expect(paidBlock).not.toContain('randomUUID');
   });
 
+  it('paid purchase money and inventory commit in the same transaction', () => {
+    const purchases = readFileSync(join(process.cwd(), 'lib/services/purchases.ts'), 'utf8');
+    expect(purchases).toMatch(
+      /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => \{\s*const created = await runWithMoneyTx\(tx\);\s*return finishInvoice\(created, tx\);/,
+    );
+    expect(purchases).not.toMatch(
+      /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => runWithMoneyTx\(tx\)\);\s*invoice = await finishInvoice\(invoice, prisma\)/,
+    );
+  });
+
+  it('opening equity inventory and MoneyIdempotency share one transaction', () => {
+    const onceStart = importStock.indexOf('async function recordOpeningInventoryOnce');
+    expect(onceStart).toBeGreaterThan(-1);
+    const onceFn = importStock.slice(onceStart, importStock.indexOf('export async function importStockAction'));
+    expect(onceFn).toContain('return await prisma.$transaction(async (tx)');
+    expect(onceFn).toContain('recordOpeningInventory(');
+    expect(onceFn).toContain('insertMoneyIdempotency(tx as any');
+  });
+
   it('productImport.create (run id) occurs before paid createPurchase', () => {
     const createIdx = importStock.indexOf('prisma.productImport.create');
     const paidIdx = importStock.indexOf("operation: 'purchase-paid'");

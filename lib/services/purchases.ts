@@ -695,8 +695,10 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     invoice = await runWithMoneyTx(db);
     invoice = await finishInvoice(invoice, db);
   } else if (needsAtomicMoney) {
-    invoice = await prisma.$transaction(async (tx) => runWithMoneyTx(tx));
-    invoice = await finishInvoice(invoice, prisma);
+    invoice = await prisma.$transaction(async (tx) => {
+      const created = await runWithMoneyTx(tx);
+      return finishInvoice(created, tx);
+    });
   } else {
     invoice = await runWithMoneyTx(prisma);
     invoice = await finishInvoice(invoice, prisma);
