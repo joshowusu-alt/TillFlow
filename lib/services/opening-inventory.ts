@@ -80,7 +80,7 @@ export async function recordOpeningInventory(
   }
 
   const unitIds = [...new Set(lines.map((l) => l.unitId))];
-  const productUnits = await client.productUnit.findMany({
+  const productUnits = await prisma.productUnit.findMany({
     where: {
       productId: { in: [...new Set(lines.map((l) => l.productId))] },
       unitId: { in: unitIds },
