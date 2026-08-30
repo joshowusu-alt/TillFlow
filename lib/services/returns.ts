@@ -8,7 +8,7 @@ import {
   resolveAvgCost,
   upsertInventoryBalance
 } from './shared';
-import { getOpenCashShiftForPayment, getOpenShiftForTill, recordCashDrawerEntryTx } from './cash-drawer';
+import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
 import { assertMoneyMovementTenantChain } from './money-idempotency';
 import { detectVoidFrequencyRisk } from './risk-monitor';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
@@ -159,7 +159,11 @@ async function createSalesReturnImpl(input: {
       if (!invoice.tillId) {
         throw new UserError('Open till is required before recording a cash refund.');
       }
-      const openShift = await getOpenShiftForTill(invoice.businessId, invoice.tillId, tx);
+      const openShift = await getOpenCashShiftForPayment(tx, {
+        businessId: invoice.businessId,
+        storeId: invoice.storeId,
+        tillId: invoice.tillId,
+      });
       if (!openShift) {
         throw new UserError('Open shift is required before recording a cash refund.');
       }

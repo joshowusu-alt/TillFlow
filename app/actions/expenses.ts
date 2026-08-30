@@ -87,7 +87,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
 
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
-    redirect('/expenses');
+    redirect('/expenses?recorded=1');
   }, '/expenses');
 }
 

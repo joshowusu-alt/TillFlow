@@ -341,9 +341,17 @@ test.describe('Reliability journey', () => {
       );
       if (!till3Sale?.invoiceId) blocked('cash refund', 'no Till 3 invoice in reliability snapshot.');
       await page.goto(`/sales/return/${till3Sale.invoiceId}`, { waitUntil: 'domcontentloaded' });
-      const confirm = page.getByRole('button', { name: /Confirm Return/i });
-      await expect(confirm, 'Confirm Return missing').toBeVisible({ timeout: 20_000 });
+      const confirm = page.getByRole('button', { name: /Process Return/i });
+      await expect(confirm, 'Process Return missing').toBeVisible({ timeout: 20_000 });
+      const reason = page.getByLabel(/Reason Code/i);
+      await expect(reason, 'return reason code missing').toBeVisible({ timeout: 15_000 });
+      await reason.selectOption('CUSTOMER_CHANGED_MIND');
       await confirm.click();
+      const confirmReturn = page.getByRole('button', { name: /Confirm Return/i });
+      await expect(confirmReturn, 'Confirm Return missing after reason selection').toBeVisible({
+        timeout: 15_000,
+      });
+      await confirmReturn.click();
       await expect(page).not.toHaveURL(/error=/);
     });
 

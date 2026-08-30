@@ -130,7 +130,7 @@ describe('Customer and Supplier reporting clarity', () => {
     expect(supplierPaymentsSrc).toContain('SupplierPaymentForm');
     expect(supplierPaymentFormSrc).toContain("from '@/app/actions/payments'");
     expect(supplierPaymentFormSrc).toContain('recordSupplierPaymentAction');
-    expect(supplierPaymentFormSrc).toContain('name="idempotencyKey"');
+    expect(supplierPaymentFormSrc).toContain('StableIdempotencyKeyInput');
   });
 
   // ── Customer detail page ───────────────────────────────────────────────

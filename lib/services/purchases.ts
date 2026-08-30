@@ -648,19 +648,21 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     return created;
   };
 
-  const runWithMoneyTx = async (client: any) => {
+  const runWithMoneyTx = async (
+    client: any,
+  ): Promise<{ created: Awaited<ReturnType<typeof _doInvoice>>; replayed: boolean }> => {
     try {
-      return await _doInvoice(client);
+      return { created: await _doInvoice(client), replayed: false };
     } catch (error) {
       if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
         const winner = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
         if (winner) {
           replayOrConflict(winner, { payloadHash, commandKind: 'PURCHASE_CREATE' });
           const parsed = parseIdempotencyResult<{ invoiceId: string }>(winner.resultJson);
-          const replayed = await client.purchaseInvoice.findFirst({
+          const replayedInvoice = await client.purchaseInvoice.findFirst({
             where: { id: parsed.invoiceId, businessId: input.businessId },
           });
-          if (replayed) return replayed;
+          if (replayedInvoice) return { created: replayedInvoice, replayed: true };
         }
         throw new MoneyIdempotencyError(
           MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
@@ -677,16 +679,17 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   // replayable MoneyIdempotency success without stock.
   const needsAtomicMoney = payments.length > 0 || Boolean(idempotencyKey);
   if (db) {
-    invoice = await runWithMoneyTx(db);
-    invoice = await finishInvoice(invoice, db);
+    const { created, replayed } = await runWithMoneyTx(db);
+    invoice = replayed ? created : await finishInvoice(created, db);
   } else if (needsAtomicMoney) {
     invoice = await prisma.$transaction(async (tx) => {
-      const created = await runWithMoneyTx(tx);
+      const { created, replayed } = await runWithMoneyTx(tx);
+      if (replayed) return created;
       return finishInvoice(created, tx);
     });
   } else {
-    invoice = await runWithMoneyTx(prisma);
-    invoice = await finishInvoice(invoice, prisma);
+    const { created, replayed } = await runWithMoneyTx(prisma);
+    invoice = replayed ? created : await finishInvoice(created, prisma);
   }
 
   return invoice;

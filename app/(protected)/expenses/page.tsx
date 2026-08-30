@@ -9,8 +9,9 @@ import { formatMoney, formatDateTime, DEFAULT_PAGE_SIZE } from '@/lib/format';
 import { getFeatures } from '@/lib/features';
 import { createExpenseAction } from '@/app/actions/expenses';
 import { ACCOUNT_CODES } from '@/lib/accounting';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
-export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string } }) {
+export default async function ExpensesPage({ searchParams }: { searchParams?: { error?: string; page?: string; recorded?: string } }) {
   const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
   if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
@@ -78,7 +79,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
         <div className="card mt-2 p-4 sm:p-5">
           <FormError error={searchParams?.error} />
           <form action={createExpenseAction} className="grid gap-4 md:grid-cols-4" encType="multipart/form-data">
-          <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
+          <StableIdempotencyKeyInput scope={`expense-create:${business.id}`} rotate={searchParams?.recorded === '1'} />
           <input type="hidden" name="useSimple" value={features.detailedExpenseCategories ? 'false' : 'true'} />
           {/* Section: What & How Much */}
           <div className="md:col-span-4 border-t border-black/8 pt-3 mt-0">

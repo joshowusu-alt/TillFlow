@@ -25,13 +25,13 @@ describe('import-stock source: durable import-chunk idempotency', () => {
   it('paid purchase money and inventory commit in the same transaction', () => {
     const purchases = readFileSync(join(process.cwd(), 'lib/services/purchases.ts'), 'utf8');
     expect(purchases).toMatch(
-      /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => \{\s*const created = await runWithMoneyTx\(tx\);\s*return finishInvoice\(created, tx\);/,
+      /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => \{\s*const \{ created, replayed \} = await runWithMoneyTx\(tx\);\s*if \(replayed\) return created;\s*return finishInvoice\(created, tx\);/,
     );
     expect(purchases).toContain('await client.$executeRaw`');
     expect(purchases).not.toContain('await prisma.$executeRaw`');
     expect(purchases).toContain('This paid purchase needs a durable idempotency key before money can be recorded.');
     expect(purchases).toContain('totalPaid > 0 && !input.idempotencyKey?.trim()');
-    expect(purchases).toContain('payments.length > 0 || Boolean(idempotencyKey)');
+    expect(purchases).toContain('if (replayed) return created');
     expect(purchases).not.toMatch(
       /needsAtomicMoney[\s\S]*\$transaction\(async \(tx\) => runWithMoneyTx\(tx\)\);\s*invoice = await finishInvoice\(invoice, prisma\)/,
     );

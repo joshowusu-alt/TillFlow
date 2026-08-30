@@ -282,11 +282,16 @@ describe('createSalesReturn', () => {
 
   it('fails closed when a cash refund has no open shift', async () => {
     setupSuccessfulMocks();
-    mockGetOpenShiftForTill.mockResolvedValue(null);
+    mockGetOpenCashShiftForPayment.mockResolvedValue(null);
 
     await expect(createSalesReturn(makeInput())).rejects.toThrow(
       'Open shift is required before recording a cash refund.',
     );
+    expect(mockGetOpenCashShiftForPayment).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ tillId: 'till-1' }),
+    );
+    expect(mockGetOpenShiftForTill).not.toHaveBeenCalled();
     expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
   });
 

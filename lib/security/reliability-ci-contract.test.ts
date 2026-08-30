@@ -64,7 +64,9 @@ describe('reliability CI governance contract', () => {
     expect(spec).not.toMatch(/test\.skip\(\s*!reliabilitySalesAllowed\(\)/);
     expect(spec).not.toMatch(/if \(!captured\?\.shiftId \|\| !captured\.tillId\) return;/);
     expect(spec).not.toContain('imported|Import complete|products');
-    expect(spec).not.toContain('Opening stock|capital|saved|Inventory');
+    expect(spec).toContain('Process Return');
+    expect(spec).toContain('Confirm Return');
+    expect(spec).toContain('CUSTOMER_CHANGED_MIND');
     expect(env).toContain("process.env.RELIABILITY_E2E === '1'");
     expect(env).toContain('www.tillflow.app');
     expect(env).toContain('isProductionPlaywrightTarget');

@@ -23,7 +23,8 @@ export type MoneyCommandKind =
   | 'EXPENSE_PAYMENT'
   | 'EXPENSE_CREATE'
   | 'PURCHASE_CREATE'
-  | 'IMPORT_CHUNK';
+  | 'IMPORT_CHUNK'
+  | 'OPENING_STOCK';
 
 export type MoneyIdempotencyRow = {
   id: string;

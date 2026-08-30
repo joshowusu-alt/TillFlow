@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import SubmitButton from '@/components/SubmitButton';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
 export type OpenTillOption = {
   tillId: string;
@@ -32,16 +32,10 @@ export default function SupplierPaymentForm({
   formClassName = 'grid gap-2 md:grid-cols-2',
   openTills = [],
 }: Props) {
-  const [idempotencyKey] = useState(() =>
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `sp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-
   return (
     <form action={recordSupplierPaymentAction} className={formClassName}>
       <input type="hidden" name="invoiceId" value={invoiceId} />
-      <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+      <StableIdempotencyKeyInput scope={`supplier-payment:${invoiceId}`} />
       {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
       <div>
         <div className="text-xs font-medium text-black/50">Payment method</div>

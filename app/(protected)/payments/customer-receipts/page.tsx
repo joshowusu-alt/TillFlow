@@ -10,6 +10,7 @@ import { computeOutstandingBalance } from '@/lib/accounting';
 import DueDateBadge from '@/components/DueDateBadge';
 import Link from 'next/link';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
 const PAYMENT_LABEL: Record<string, string> = {
   CASH: 'Cash',
@@ -18,7 +19,7 @@ const PAYMENT_LABEL: Record<string, string> = {
   MOBILE_MONEY: 'Mobile Money (MoMo)',
 };
 
-export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string } }) {
+export default async function CustomerReceiptsPage({ searchParams }: { searchParams?: { error?: string; customerId?: string; paid?: string } }) {
   const { business } = await requireBusiness(['MANAGER', 'OWNER']);
   if (!business) return <div className="card p-6">Seed data missing.</div>;
   const customerId = searchParams?.customerId?.trim() || undefined;
@@ -93,7 +94,10 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   const renderPaymentForm = (invoiceId: string) => (
     <form action={recordCustomerPaymentAction} className="grid gap-2 md:grid-cols-2">
       <input type="hidden" name="invoiceId" value={invoiceId} />
-      <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
+      <StableIdempotencyKeyInput
+        scope={`customer-receipt:${invoiceId}`}
+        rotate={searchParams?.paid === invoiceId}
+      />
       {linkedCustomer ? (
         <input type="hidden" name="returnTo" value={`/customers/${linkedCustomer.id}`} />
       ) : null}

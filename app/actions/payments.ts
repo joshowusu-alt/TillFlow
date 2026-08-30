@@ -40,7 +40,8 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     const returnTo = formString(formData, 'returnTo') || '/payments/customer-receipts';
-    redirect(returnTo);
+    const sep = returnTo.includes('?') ? '&' : '?';
+    redirect(`${returnTo}${sep}paid=${encodeURIComponent(invoiceId)}`);
   }, '/payments/customer-receipts');
 }
 

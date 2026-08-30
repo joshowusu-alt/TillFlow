@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { recordExpensePaymentAction } from '@/app/actions/expense-payments';
+import StableIdempotencyKeyInput from '@/components/StableIdempotencyKeyInput';
 
 type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
 
@@ -20,7 +21,7 @@ function ExpensePaymentForm({
   return (
     <form action={recordExpensePaymentAction} className="grid gap-2 sm:grid-cols-2">
       <input type="hidden" name="expenseId" value={expenseId} />
-      <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
+      <StableIdempotencyKeyInput scope={`expense-payment:${expenseId}`} />
       <div>
         <div className="text-xs text-black/50">Payment method</div>
         <select className="input" name="method" defaultValue="CASH">
