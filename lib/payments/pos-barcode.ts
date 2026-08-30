@@ -100,6 +100,8 @@ export function resolveBarcodeScan<TProduct extends PosBarcodeProduct>(
             .map((p) => ({ prefix: normalizeBarcodeDigits(p.barcode!), product: p }))
             .filter((e) => e.prefix.startsWith('2'))
             .sort((a, b) => b.prefix.length - a.prefix.length),
+          bySku: new Map(),
+          searchHaystack: [],
         },
         trimmed
       );

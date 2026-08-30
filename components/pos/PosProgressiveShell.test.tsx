@@ -43,9 +43,9 @@ const products = [
     vatRateBps: 0,
     promoBuyQty: 0,
     promoGetQty: 0,
-    categoryId: null,
+    sku: 'RICE-1',
     categoryName: null,
-    imageUrl: null,
+    isTaxable: true,
     units: [
       {
         id: 'u1',
@@ -54,7 +54,6 @@ const products = [
         conversionToBase: 1,
         isBaseUnit: true,
         sellingPricePence: 1000,
-        defaultCostPence: 500,
       },
     ],
     onHandBase: 5,

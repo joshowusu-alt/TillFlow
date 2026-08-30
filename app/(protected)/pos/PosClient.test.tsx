@@ -50,17 +50,17 @@ vi.mock('./components/CameraScanner', () => ({
 const product = {
   id: 'prod-1',
   name: 'Coca Cola',
+  sku: 'COKE-330',
   barcode: '12345',
   sellingPriceBasePence: 250,
   vatRateBps: 0,
+  isTaxable: true,
   promoBuyQty: 0,
   promoGetQty: 0,
-  categoryId: 'soft-drinks',
   categoryName: 'Soft Drinks',
-  imageUrl: null,
   onHandBase: 30,
   units: [
-    { id: 'bottle', name: 'Bottle', pluralName: 'Bottles', conversionToBase: 1, isBaseUnit: true },
+    { id: 'bottle', name: 'Bottle', pluralName: 'Bottles', conversionToBase: 1, isBaseUnit: true, sellingPricePence: 250 },
   ],
 };
 

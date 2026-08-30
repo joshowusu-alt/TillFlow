@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import PosClient from '@/app/(protected)/pos/PosClient';
+import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
 
 export type PosDeferredPayload = {
   tills: { id: string; name: string }[];
@@ -54,32 +55,20 @@ type PosProgressiveShellProps = {
     loyaltyGhsPerHundredPoints?: number;
   };
   store: { id: string; name: string };
-  products: Array<{
-    id: string;
-    name: string;
-    barcode: string | null;
-    sellingPriceBasePence: number;
-    vatRateBps: number;
-    promoBuyQty: number;
-    promoGetQty: number;
-    categoryId: string | null;
-    categoryName: string | null;
-    imageUrl: string | null;
-    units: Array<{
-      id: string;
-      name: string;
-      pluralName: string;
-      conversionToBase: number;
-      isBaseUnit: boolean;
-      sellingPricePence: number | null;
-      defaultCostPence: number | null;
-    }>;
-    onHandBase: number;
-  }>;
+  products: SellableProductDto[];
+  posCatalogueMode?: PosCatalogueMode;
+  catalogueSize?: number;
   children?: ReactNode;
 };
 
-export function PosProgressiveShell({ business, store, products, children }: PosProgressiveShellProps) {
+export function PosProgressiveShell({
+  business,
+  store,
+  products,
+  posCatalogueMode,
+  catalogueSize,
+  children,
+}: PosProgressiveShellProps) {
   const [deferred, setDeferred] = useState<PosDeferredPayload | null>(null);
 
   const applyDeferred = useCallback((payload: PosDeferredPayload) => {
@@ -99,6 +88,8 @@ export function PosProgressiveShell({ business, store, products, children }: Pos
         business={business}
         store={store}
         products={products}
+        posCatalogueMode={posCatalogueMode}
+        catalogueSize={catalogueSize}
         tills={extras.tills}
         openShiftTillIds={extras.openShiftTillIds}
         customers={extras.customers}

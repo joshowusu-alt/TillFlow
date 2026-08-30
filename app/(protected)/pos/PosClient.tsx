@@ -46,6 +46,10 @@ import {
 } from '@/lib/payments/pos-checkout-state';
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { filterPosProducts } from '@/lib/payments/pos-search';
+import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
+import { resolvePosCatalogueMode } from '@/lib/pos/sellable-dto';
+import type { BarcodeScanResolution } from '@/lib/payments/pos-barcode';
+import type { PosProduct } from '@/lib/payments/pos-cart';
 import { completeSaleAction } from '@/app/actions/sales';
 import { dispatchNavKpiRefresh } from '@/lib/navigation/nav-kpi-events';
 import {
@@ -85,28 +89,7 @@ function formatRelativeTime(timestamp: string) {
   return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 }
 
-type UnitDto = {
-  id: string;
-  name: string;
-  pluralName: string;
-  conversionToBase: number;
-  isBaseUnit: boolean;
-};
-
-type ProductDto = {
-  id: string;
-  name: string;
-  barcode: string | null;
-  sellingPriceBasePence: number;
-  vatRateBps: number;
-  promoBuyQty: number;
-  promoGetQty: number;
-  categoryId: string | null;
-  categoryName: string | null;
-  imageUrl: string | null;
-  units: UnitDto[];
-  onHandBase: number;
-};
+type ProductDto = SellableProductDto;
 
 type CategoryDto = { id: string; name: string; colour: string };
 
@@ -127,6 +110,8 @@ type PosClientProps = {
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
   products: ProductDto[];
+  posCatalogueMode?: PosCatalogueMode;
+  catalogueSize?: number;
   customers: PosCustomerOption[];
   units: { id: string; name: string }[];
   categories: CategoryDto[];
@@ -168,6 +153,8 @@ export default function PosClient({
   tills,
   openShiftTillIds,
   products,
+  posCatalogueMode,
+  catalogueSize,
   customers,
   units,
   categories,
@@ -269,6 +256,7 @@ export default function PosClient({
   const [quickAddBarcode, setQuickAddBarcode] = useState('');
   const [pendingScan, setPendingScan] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [serverSearchMatches, setServerSearchMatches] = useState<ProductDto[]>([]);
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
@@ -372,9 +360,24 @@ export default function PosClient({
     playBeep(true);
   }, [popUndoSnapshot, playBeep, setCart]);
 
+  const urlCatalogueMode = searchParams?.get('posCatalogueMode');
+  const useServerCatalogue =
+    resolvePosCatalogueMode({
+      productCount: catalogueSize ?? productOptions.length,
+      posCatalogueMode: posCatalogueMode ?? urlCatalogueMode,
+    }) === 'paged';
+  const knownCatalogueSize = catalogueSize ?? productOptions.length;
+
   // O(1) product lookup via Map — avoids O(n) find() per cart line
-  const productMap = useMemo(() => buildProductMap(productOptions), [productOptions]);
+  const productMap = useMemo(
+    () => buildProductMap(productOptions as unknown as PosProduct[]),
+    [productOptions]
+  );
   const productIndex = useMemo(() => buildPosProductIndex(productOptions), [productOptions]);
+
+  const mergeProductOption = useCallback((incoming: ProductDto) => {
+    setProductOptions((prev) => (prev.some((product) => product.id === incoming.id) ? prev : [...prev, incoming]));
+  }, []);
 
   const getProduct = useCallback(
     (id: string) => productMap.get(id),
@@ -678,9 +681,38 @@ export default function PosClient({
     setShowSplitPanel(true);
   };
 
+  useEffect(() => {
+    if (!useServerCatalogue) {
+      setServerSearchMatches([]);
+      return;
+    }
+    const q = productSearch.trim();
+    if (!q) {
+      setServerSearchMatches([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ q, storeId: store.id, take: '12' });
+      void fetch(`/api/pos/search?${params}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { products: [] }))
+        .then((data: { products?: ProductDto[] }) => {
+          setServerSearchMatches(Array.isArray(data.products) ? data.products : []);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setServerSearchMatches([]);
+        });
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [productSearch, store.id, useServerCatalogue]);
+
   const filteredProducts = useMemo(() => {
+    if (useServerCatalogue) return serverSearchMatches;
     return filterPosProducts(productOptions, productSearch, 12, productIndex);
-  }, [productOptions, productSearch, productIndex]);
+  }, [useServerCatalogue, serverSearchMatches, productOptions, productSearch, productIndex]);
   const productSearchMatches = filteredProducts.length;
 
   // Viewport sizing for the product dropdown in compact mode is handled by
@@ -716,12 +748,24 @@ export default function PosClient({
     commitStagedProduct,
   } = useStagedProductSelection<ProductDto>({ onAddToCart: addToCart });
 
-  const handleQuickCreated = useCallback((created: { id: string; name: string; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean }[] }, matchedScan: boolean) => {
+  const handleQuickCreated = useCallback((created: { id: string; name: string; sku?: string | null; barcode: string | null; sellingPriceBasePence: number; vatRateBps: number; isTaxable?: boolean; promoBuyQty: number; promoGetQty: number; onHandBase: number; units: { id: string; name: string; pluralName: string; conversionToBase: number; isBaseUnit: boolean; sellingPricePence?: number | null }[] }, matchedScan: boolean) => {
     setQuickAddOpen(false);
     setProductId(created.id);
     const baseUnitId = getProductBaseUnitId(created);
     setUnitId(baseUnitId);
-    setProductOptions((prev) => [...prev, { ...created, categoryId: null, categoryName: null, imageUrl: null }]);
+    setProductOptions((prev) => [
+      ...prev,
+      {
+        ...created,
+        sku: created.sku ?? null,
+        isTaxable: created.isTaxable ?? true,
+        categoryName: null,
+        units: created.units.map((unit) => ({
+          ...unit,
+          sellingPricePence: unit.sellingPricePence ?? null,
+        })),
+      },
+    ]);
     if (matchedScan) {
       addToCart({ productId: created.id, unitId: baseUnitId, qtyInUnit: 1 });
     }
@@ -759,6 +803,17 @@ export default function PosClient({
   const { handleBarcodeScan } = usePosBarcodeHandler({
     products: productOptions,
     productIndex,
+    lookupRemote: useServerCatalogue
+      ? async (code) => {
+          const params = new URLSearchParams({ code, storeId: store.id });
+          const res = await fetch(`/api/pos/barcode?${params}`);
+          if (!res.ok) return null;
+          const data = (await res.json()) as BarcodeScanResolution<ProductDto>;
+          if (data.kind === 'missing' || !('product' in data) || !data.product) return data;
+          mergeProductOption(data.product);
+          return data;
+        }
+      : undefined,
     addToCart: (line) => {
       addToCart(line);
       setProductId(line.productId);
@@ -1455,7 +1510,7 @@ export default function PosClient({
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-black">No products match &ldquo;{productSearch}&rdquo;</div>
-                          <div className="mt-1 text-xs text-black/45">Search across {productOptions.length} products or create a new SKU right away.</div>
+                          <div className="mt-1 text-xs text-black/45">Search across {knownCatalogueSize} products or create a new SKU right away.</div>
                           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
                             <button
                               type="button"
@@ -1475,7 +1530,7 @@ export default function PosClient({
                   ) : (
                     <>
                     <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/5 bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-black/35 backdrop-blur">
-                      <span>{productSearchMatches} of {productOptions.length} products</span>
+                      <span>{productSearchMatches} of {knownCatalogueSize} products</span>
                       {!isPhoneViewport ? (
                         <span className="normal-case tracking-normal text-black/35">Enter adds • F2 scan</span>
                       ) : (
@@ -1495,6 +1550,7 @@ export default function PosClient({
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             if (!baseUnitId || outOfStock) return;
+                            mergeProductOption(product);
                             if (product.units.length > 1) {
                               // Multiple units — stage for unit selection
                               stageProduct(product);
