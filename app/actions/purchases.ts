@@ -11,6 +11,7 @@ import { withBusinessContext, formAction, type ActionResult, safeAction, ok, err
 import { audit } from '@/lib/audit';
 import type { PaymentStatus } from '@/lib/services/shared';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { purchaseNeedsSupplierLink, isOpeningStockMovement } from '@/lib/improve-records-classify';
 import {
   OPENING_STOCK_MOVEMENT_TYPES,
@@ -68,7 +69,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_CREATE', entity: 'PurchaseInvoice', details: { lines: lines.length, supplierId } }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/onboarding');
@@ -282,7 +283,7 @@ export async function changePurchaseProductSupplierLinkAction(formData: FormData
       details: { purchaseInvoiceId: invoice.id, supplierId: invoice.supplierId },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidatePath('/onboarding');
     revalidatePath('/reports/sales-by-supplier');
@@ -363,7 +364,7 @@ export async function deletePurchaseAction(purchaseId: string): Promise<ActionRe
       details: { action: 'DELETE', lines: invoice.lines.length },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId, invoice.storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/onboarding');

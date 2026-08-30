@@ -27,7 +27,7 @@ import { detectExcessiveDiscountRisk, detectNegativeMarginRisk } from './risk-mo
 import { clampLoyaltyRedemption, computePointsEarned } from '@/lib/loyalty';
 import { isDiscountReasonCode } from '@/lib/fraud/reason-codes';
 import { resolveBranchIdForStore } from './branches';
-import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { unstable_cache } from 'next/cache';
@@ -536,7 +536,7 @@ async function createSaleImpl(input: CreateSaleInput) {
         where: {
           id: input.cashierUserId,
           businessId: input.businessId,
-          active: true,
+          ...(input.saleSource === 'LATE_OFFLINE' ? {} : { active: true }),
         },
         select: { id: true },
       }),
@@ -874,7 +874,6 @@ async function createSaleImpl(input: CreateSaleInput) {
         where: {
           id: lateOfflineShiftId,
           tillId: till.id,
-          userId: input.cashierUserId,
           till: {
             storeId: input.storeId,
             store: { businessId: input.businessId },
@@ -1303,7 +1302,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       discountPence: totalDiscountPence,
       grossSalesPence,
       thresholdBps: business.discountApprovalThresholdBps,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'checkout_risk_detection_failed', {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        stage: 'excessive-discount',
+      });
+      void error;
+    });
 
     detectNegativeMarginRisk({
       businessId: input.businessId,
@@ -1311,7 +1317,14 @@ async function createSaleImpl(input: CreateSaleInput) {
       cashierUserId: input.cashierUserId,
       salesInvoiceId: invoice.id,
       grossMarginPence: grossMarginEstimate,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'checkout_risk_detection_failed', {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        stage: 'negative-margin',
+      });
+      void error;
+    });
   }
 
   return invoice;

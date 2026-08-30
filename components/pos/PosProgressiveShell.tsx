@@ -15,6 +15,8 @@ import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dt
 export type PosDeferredPayload = {
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
+  openShifts?: { tillId: string; shiftId: string }[];
+  cashierUserId?: string;
   customers: {
     id: string;
     name: string;
@@ -92,6 +94,8 @@ export function PosProgressiveShell({
         catalogueSize={catalogueSize}
         tills={extras.tills}
         openShiftTillIds={extras.openShiftTillIds}
+        openShifts={extras.openShifts}
+        cashierUserId={extras.cashierUserId}
         customers={extras.customers}
         units={extras.units}
         categories={extras.categories}

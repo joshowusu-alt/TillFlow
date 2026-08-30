@@ -101,8 +101,11 @@ function classifyCreateSaleError(error: unknown): ProcessOfflineSaleResult | nul
   if (message.includes('Open till is required')) {
     return review('shift_closed');
   }
-  if (message.includes('Till not found')) {
-    return reject('till_not_found');
+  if (message.includes('Captured offline shift')) {
+    return review('shift_not_found');
+  }
+  if (message.includes('Cashier is not authorised')) {
+    return review('cashier_revoked');
   }
   if (message.includes('Customer not found')) {
     return reject('customer_not_found');
@@ -114,8 +117,7 @@ function classifyCreateSaleError(error: unknown): ProcessOfflineSaleResult | nul
 }
 
 export function createSaleSupportsLateOfflineHook(): boolean {
-  // Baseline createSale has neither capturedShiftId nor saleSource.
-  return false;
+  return true;
 }
 
 /**
@@ -258,11 +260,6 @@ export async function processOfflineSale(
   }
 
   const shiftClosed = Boolean(capturedShift.closedAt) || capturedShift.status !== 'OPEN';
-  if (shiftClosed) {
-    // createSale would bind to a later OPEN shift. Until capturedShiftId +
-    // saleSource=LATE_OFFLINE exists, fail closed rather than reassign.
-    return review('shift_closed');
-  }
 
   const capturedCashierId = payload.cashierUserId?.trim() || null;
   if (capturedCashierId) {
@@ -339,6 +336,9 @@ export async function processOfflineSale(
       inventoryPolicy,
       payments,
       lines,
+      ...(shiftClosed
+        ? { saleSource: LATE_OFFLINE_SALE_SOURCE, capturedShiftId: capturedShift.id }
+        : {}),
     });
     return { success: true, status: 'synced', invoiceId: invoice.id };
   } catch (error: unknown) {

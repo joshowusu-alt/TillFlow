@@ -10,6 +10,7 @@ const { prismaMock, postJournalEntryMock, recordCashDrawerEntryTxMock } = vi.hoi
   prismaMock: {
     salesInvoice: { findFirst: vi.fn(), update: vi.fn() },
     purchaseInvoice: { findFirst: vi.fn(), update: vi.fn() },
+    moneyIdempotency: { findUnique: vi.fn(), create: vi.fn() },
     salesPayment: { createMany: vi.fn() },
     purchasePayment: { createMany: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
     salesReturn: { findUnique: vi.fn(), create: vi.fn() },
@@ -105,7 +106,8 @@ describe('service tenant query contracts', () => {
   it('scopes store, till, invoice, and shift lookups to the caller business', () => {
     const sales = read('lib/services/sales.ts');
     expect(sales).toContain('where: { id: storeId, businessId }');
-    expect(sales).toContain('where: { id: input.tillId, storeId: input.storeId, active: true }');
+    expect(sales).toContain('where: { id: input.tillId }');
+    expect(sales).toContain("if (till.store.businessId !== input.businessId)");
     expect(sales).toContain('getOpenShiftForTill(input.businessId, input.tillId)');
 
     const payments = read('lib/services/payments.ts');
@@ -129,6 +131,7 @@ describe('adversarial till / store / invoice ids', () => {
     vi.clearAllMocks();
     prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
     prismaMock.purchasePayment.findUnique.mockResolvedValue(null);
+    prismaMock.moneyIdempotency.findUnique.mockResolvedValue(null);
   });
 
   it('getOpenShiftForTill queries the caller business, so a foreign till cannot attach', async () => {
@@ -151,7 +154,9 @@ describe('adversarial till / store / invoice ids', () => {
     prismaMock.salesInvoice.findFirst.mockResolvedValue(null);
 
     await expect(
-      recordCustomerPayment(ACTOR_BIZ, FOREIGN_INVOICE, [{ method: 'CASH', amountPence: 100 }]),
+      recordCustomerPayment(ACTOR_BIZ, FOREIGN_INVOICE, [{ method: 'CASH', amountPence: 100 }], 'user-a', {
+        idempotencyKey: 'idem-foreign-invoice',
+      }),
     ).rejects.toThrow('Invoice not found');
 
     expect(prismaMock.salesInvoice.findFirst).toHaveBeenCalledWith(
@@ -244,9 +249,9 @@ describe('adversarial till / store / invoice ids', () => {
   it('documents that createSale treats a foreign store or till as not found', () => {
     const sales = read('lib/services/sales.ts');
     expect(sales).toMatch(/if \(!store\) throw new Error\('Store not found'\)/);
-    expect(sales).toMatch(/if \(!till\) throw new Error\('Till not found'\)/);
+    expect(sales).toMatch(/if \(!till\) throw new UserError\('Till not found'\)/);
     expect(sales).toContain(`id: storeId, businessId`);
-    expect(sales).toContain(`id: input.tillId, storeId: input.storeId`);
+    expect(sales).toContain('till.store.businessId !== input.businessId');
     void FOREIGN_STORE;
     void FOREIGN_TILL;
   });

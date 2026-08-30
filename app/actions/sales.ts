@@ -15,7 +15,8 @@ import type { DiscountType } from '@/lib/services/sales';
 import { checkAndSendLowStockAlert } from '@/app/actions/stock-alerts';
 import { prisma } from '@/lib/prisma';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
-import { measureServerOperation } from '@/lib/observability';
+import { appLog, measureServerOperation } from '@/lib/observability';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 
 const CHECKOUT_ACTION_STAGE_THRESHOLDS_MS = {
   auditLog: 200,
@@ -405,9 +406,12 @@ export async function completeSaleAction(data: {
       businessId,
       storeId: data.storeId,
       productIds: affectedProductIds,
-    }).catch(() => {});
+    }).catch((error) => {
+      appLog('warn', 'low_stock_alert_failed', { businessId, storeId: data.storeId });
+      void error;
+    });
 
-    // Fire-and-forget: audit + cache revalidation should not block the cashier
+    // Best-effort audit after commit: failures must be logged, never swallowed.
     void measureServerOperation(
       'action.checkout.audit-log',
       async () => audit({
@@ -422,7 +426,10 @@ export async function completeSaleAction(data: {
       }),
       { ...checkoutTimingMetadata, stage: 'audit-log', rowCount: 1 },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.auditLog, operationType: 'action' },
-    ).catch(() => {});
+    ).catch((error) => {
+      appLog('error', 'checkout_audit_failed', { businessId, storeId: data.storeId, invoiceId: invoice.id });
+      void error;
+    });
 
     // Do not block the success response on cache revalidation — sale is already committed.
     void measureServerOperation(
@@ -433,12 +440,16 @@ export async function completeSaleAction(data: {
         revalidateTag(`today-sales-${businessId}`);
         revalidateTag(`readiness-${businessId}`);
         revalidateTag('reports');
+        revalidatePosCatalog(businessId, data.storeId);
         revalidateOwnerDashboardCache();
         revalidatePath('/onboarding');
       },
       { ...checkoutTimingMetadata, stage: 'revalidate' },
       { thresholdMs: CHECKOUT_ACTION_STAGE_THRESHOLDS_MS.revalidate, operationType: 'action' },
-    ).catch(() => {});
+    ).catch((error) => {
+      appLog('error', 'checkout_revalidate_failed', { businessId, storeId: data.storeId });
+      void error;
+    });
 
     return { success: true, data: { receiptId: invoice.id, totalPence: invoice.totalPence, transactionNumber: invoice.transactionNumber ?? null } };
   });
@@ -564,7 +575,7 @@ export async function amendSaleAction(formData: FormData): Promise<void> {
       },
     }).catch(() => {});
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
 

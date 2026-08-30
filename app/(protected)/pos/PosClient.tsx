@@ -109,6 +109,8 @@ type PosClientProps = {
   store: { id: string; name: string };
   tills: { id: string; name: string }[];
   openShiftTillIds: string[];
+  openShifts?: { tillId: string; shiftId: string }[];
+  cashierUserId?: string;
   products: ProductDto[];
   posCatalogueMode?: PosCatalogueMode;
   catalogueSize?: number;
@@ -152,6 +154,8 @@ export default function PosClient({
   store,
   tills,
   openShiftTillIds,
+  openShifts,
+  cashierUserId,
   products,
   posCatalogueMode,
   catalogueSize,
@@ -484,8 +488,15 @@ export default function PosClient({
   useEffect(() => {
     if (typeof window !== 'undefined' && tillId) {
       window.localStorage.setItem(tillStorageKey, tillId);
+      const capturedShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId;
+      if (capturedShiftId) {
+        window.localStorage.setItem(`pos.capture.shift.${business.id}.${tillId}`, capturedShiftId);
+      }
+      if (cashierUserId) {
+        window.localStorage.setItem(`pos.capture.cashier.${business.id}`, cashierUserId);
+      }
     }
-  }, [tillId, tillStorageKey]);
+  }, [tillStorageKey, tillId, openShifts, cashierUserId, business.id]);
 
   // Restore the last online idempotency identity after a remount (e.g. SW reload).
   // Apply after cart hydrate so the sale-identity rotator does not immediately replace it.

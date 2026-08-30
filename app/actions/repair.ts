@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, type ActionResult } from '@/lib/action-utils';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { postJournalEntry, ensureChartOfAccounts, ACCOUNT_CODES } from '@/lib/accounting';
 import { splitPayments, debitCashBankLines, creditCashBankLines, type PaymentMethod } from '@/lib/services/shared';
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -228,7 +229,7 @@ export async function repairInventoryAverageCostsAction(): Promise<
       },
     });
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidatePath('/inventory');
     revalidatePath('/products');
     revalidatePath('/reports/dashboard');
@@ -665,7 +666,7 @@ export async function ownerVoidSaleAction(saleReference: string): Promise<Action
 
     revalidatePath('/sales');
     revalidatePath(`/receipts/${invoice.id}`);
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidatePath('/settings');
     revalidatePath('/settings/data-repair');

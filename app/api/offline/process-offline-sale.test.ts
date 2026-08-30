@@ -70,7 +70,10 @@ async function makePayload(overrides: Partial<OfflineSalePayload> = {}): Promise
   const merged = { ...baseFields(), ...overrides } as OfflineSalePayload;
   if (overrides.lines) merged.lines = overrides.lines;
   if (overrides.payments) merged.payments = overrides.payments;
-  merged.payloadHash = overrides.payloadHash ?? (await hashOfflineSalePayload(merged));
+  merged.payloadHash = overrides.payloadHash ?? (await hashOfflineSalePayload({
+    ...merged,
+    businessId: merged.businessId || USER.businessId,
+  }));
   merged.idempotencyKey = overrides.idempotencyKey ?? 'idem-abc123';
   return merged;
 }
@@ -110,14 +113,22 @@ describe('processOfflineSale — offline lifecycle', () => {
     expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
   });
 
-  it('capture → shift closed → sync does not reassign (needs_review, no createSale)', async () => {
+  it('capture → shift closed → sync attaches LATE_OFFLINE to original shift', async () => {
     prismaMock.shift.findFirst.mockResolvedValue(CLOSED_SHIFT);
+    mockCreateSale.mockResolvedValueOnce({ id: 'inv-late' });
     const payload = await makePayload();
 
     const result = await processOfflineSale(payload, USER);
 
-    expect(result).toEqual({ success: false, status: 'needs_review', reason: 'shift_closed' });
-    expect(mockCreateSale).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true, status: 'synced', invoiceId: 'inv-late' });
+    expect(mockCreateSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        saleSource: 'LATE_OFFLINE',
+        capturedShiftId: 'shift-1',
+        tillId: 'till-1',
+      }),
+    );
+    expect(mockCreateSale.mock.calls[0][0].bypassOpenTillRequirement).toBeUndefined();
   });
 
   it('same payload replay returns already_synced without createSale', async () => {

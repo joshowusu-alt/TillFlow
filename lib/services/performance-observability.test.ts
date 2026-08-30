@@ -235,9 +235,9 @@ describe('Phase C3: performance observability baseline', () => {
     expect(todayKpis).toContain("{ revalidate: 30, tags: ['reports'] }");
     expect(tradingDashboard).toContain("['report-trading-dashboard']");
     expect(tradingDashboard).toContain("{ revalidate: 60, tags: ['reports', 'trading-dashboard'] }");
-    expect(pos).toContain("{ revalidate: 60, tags: ['pos-products'] }");
-    expect(pos).toContain("{ revalidate: 30, tags: ['pos-inventory'] }");
-    expect(pos).toContain("{ revalidate: 10, tags: ['pos-shifts'] }");
+    expect(pos).toContain('posProductsTag(businessId)');
+    expect(pos).toContain('posInventoryTag(businessId, storeId)');
+    expect(pos).toContain('posShiftsTag(businessId, storeId)');
   });
 
   it('keeps routes, action signatures, schemas, providers, and migrations untouched', () => {
@@ -281,10 +281,8 @@ describe('Phase C3: performance observability baseline', () => {
     expect(settings).toContain("revalidateTag('checkout-context')");
 
     // Manual refresh also clears checkout context
-    expect(refresh).toContain("'checkout-context'");
-
-    // Phase A/B existing tags are undisturbed in refresh
-    expect(refresh).toContain("'pos-products'");
+    expect(refresh).toContain('checkoutContextTag(business.id)');
+    expect(refresh).toContain('revalidatePosCatalog');
     expect(refresh).toContain("'reports'");
   });
 

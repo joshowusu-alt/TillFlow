@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, err } from '@/lib/action-utils';
 import { revalidateTag } from 'next/cache';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 
 /**
  * Deletes ALL purchase invoices, their journal entries, stock movements, and
@@ -53,7 +54,7 @@ export async function resetPurchaseData() {
     // 4. Clear inventory balances so stock counts start from 0
     await prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } });
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
 
     return ok({

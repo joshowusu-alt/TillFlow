@@ -86,8 +86,8 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
   });
 
   it('does not touch POS, checkout, cache TTLs, tags, revalidation, or schema', () => {
-    expect(posPage).toContain("{ revalidate: 60, tags: ['pos-products'] }");
-    expect(posPage).toContain("{ revalidate: 30, tags: ['pos-inventory'] }");
+    expect(posPage).toContain('posProductsTag(businessId)');
+    expect(posPage).toContain('posInventoryTag(businessId, storeId)');
     expect(posPage).not.toContain('OwnerReadinessContent');
 
     expect(salesAction).toContain('export async function completeSaleAction(data: {');

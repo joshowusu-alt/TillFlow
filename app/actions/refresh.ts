@@ -1,7 +1,14 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessAndOptionalStore } from '@/lib/auth';
+import {
+  checkoutContextTag,
+  posCategoriesTag,
+  posCustomersTag,
+  revalidatePosCatalog,
+  revalidatePosTillShiftTags,
+} from '@/lib/cache/pos-tags';
 
 function normalizePathname(pathname: string | null | undefined) {
   if (!pathname || !pathname.startsWith('/') || pathname.startsWith('//')) return null;
@@ -10,21 +17,19 @@ function normalizePathname(pathname: string | null | undefined) {
 }
 
 export async function refreshCurrentView(pathname?: string) {
-  const { business } = await requireBusiness();
+  const { business, store } = await requireBusinessAndOptionalStore();
 
-  [
-    'reports',
-    'pos-categories',
-    'pos-customers',
-    'pos-inventory',
-    'pos-products',
-    'pos-shifts',
-    'pos-tills',
-    'pos-units',
-    'checkout-context',
-    `readiness-${business.id}`,
-    `today-sales-${business.id}`,
-  ].forEach((tag) => revalidateTag(tag));
+  revalidatePosCatalog(business.id, store?.id);
+  if (store) {
+    revalidatePosTillShiftTags(business.id, store.id);
+  }
+  revalidateTag(posCategoriesTag(business.id));
+  revalidateTag(posCustomersTag(business.id));
+  revalidateTag(checkoutContextTag(business.id));
+  revalidateTag('pos-units');
+  revalidateTag('reports');
+  revalidateTag(`readiness-${business.id}`);
+  revalidateTag(`today-sales-${business.id}`);
 
   revalidatePath('/', 'layout');
 

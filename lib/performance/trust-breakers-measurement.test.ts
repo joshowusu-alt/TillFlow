@@ -79,10 +79,10 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
     expect(salesService).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
     expect(salesService).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
 
-    expect(posPage).toContain("{ revalidate: 60, tags: ['pos-products'] }");
-    expect(posPage).toContain("{ revalidate: 30, tags: ['pos-inventory'] }");
+    expect(posPage).toContain('posProductsTag(businessId)');
+    expect(posPage).toContain('posInventoryTag(businessId, storeId)');
     expect(read('app/(protected)/pos/PosDeferredSection.tsx')).toContain(
-      "{ revalidate: 10, tags: ['pos-shifts'] }",
+      'posShiftsTag(businessId, storeId)',
     );
 
     expect(read('prisma/schema.prisma')).toMatch(/provider\s+=\s+"sqlite"/);

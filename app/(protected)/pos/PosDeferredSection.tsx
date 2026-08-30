@@ -2,57 +2,73 @@ import { prisma } from '@/lib/prisma';
 import { unstable_cache } from 'next/cache';
 import PosWelcomeShelf from '@/components/pos/PosWelcomeShelf';
 import { PosDeferredApply, type PosDeferredPayload } from '@/components/pos/PosProgressiveShell';
-import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
 import HomeSectionErrorBoundary from '@/components/owner-home/HomeSectionErrorBoundary';
+import {
+  posCategoriesTag,
+  posCustomersTag,
+  posShiftsTag,
+  posTillsTag,
+} from '@/lib/cache/pos-tags';
 
-const getCachedUnits = unstable_cache(
-  (_businessId: string) => prisma.unit.findMany({ select: { id: true, name: true } }),
-  ['pos-units'],
-  { revalidate: 300, tags: ['pos-units'] },
-);
+function getCachedUnits(businessId: string) {
+  return unstable_cache(
+    () => prisma.unit.findMany({ select: { id: true, name: true } }),
+    ['pos-units', businessId],
+    { revalidate: 300, tags: ['pos-units'] },
+  )();
+}
 
-const getCachedCategories = unstable_cache(
-  (businessId: string) =>
-    prisma.category.findMany({
-      where: { businessId },
-      orderBy: { sortOrder: 'asc' },
-      select: { id: true, name: true, colour: true },
-    }),
-  ['pos-categories'],
-  { revalidate: 120, tags: ['pos-categories'] },
-);
+function getCachedCategories(businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.category.findMany({
+        where: { businessId },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true, colour: true },
+      }),
+    ['pos-categories', businessId],
+    { revalidate: 120, tags: [posCategoriesTag(businessId)] },
+  )();
+}
 
-const getCachedTills = unstable_cache(
-  (storeId: string) =>
-    prisma.till.findMany({
-      where: { storeId, active: true },
-      select: { id: true, name: true },
-    }),
-  ['pos-tills'],
-  { revalidate: 300, tags: ['pos-tills'] },
-);
+function getCachedTills(businessId: string, storeId: string) {
+  return unstable_cache(
+    () =>
+      prisma.till.findMany({
+        where: { storeId, active: true },
+        select: { id: true, name: true },
+      }),
+    ['pos-tills', businessId, storeId],
+    { revalidate: 300, tags: [posTillsTag(businessId, storeId)] },
+  )();
+}
 
-const getCachedCustomers = unstable_cache(
-  (businessId: string) =>
-    prisma.customer.findMany({
-      where: { businessId },
-      select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ['pos-customers'],
-  { revalidate: 60, tags: ['pos-customers'] },
-);
+function getCachedCustomers(businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.customer.findMany({
+        where: { businessId },
+        select: { id: true, name: true, creditLimitPence: true, loyaltyPointsBalance: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ['pos-customers', businessId],
+    { revalidate: 60, tags: [posCustomersTag(businessId)] },
+  )();
+}
 
-const getCachedShifts = unstable_cache(
-  (storeId: string) =>
-    prisma.shift.findMany({
-      where: { till: { storeId }, status: 'OPEN' },
-      select: { tillId: true },
-    }),
-  ['pos-shifts'],
-  { revalidate: 10, tags: ['pos-shifts'] },
-);
+function getCachedShifts(businessId: string, storeId: string) {
+  return unstable_cache(
+    () =>
+      prisma.shift.findMany({
+        where: { till: { storeId }, status: 'OPEN' },
+        select: { id: true, tillId: true },
+      }),
+    ['pos-shifts', businessId, storeId],
+    { revalidate: 10, tags: [posShiftsTag(businessId, storeId)] },
+  )();
+}
 
 type PosDeferredSectionProps = {
   businessId: string;
@@ -72,7 +88,14 @@ async function loadSettled<T>(label: string, meta: Record<string, string>, run: 
       { ...meta, cacheState: 'cached-wrapper' },
       { thresholdMs: PERFORMANCE_THRESHOLDS_MS.route, operationType: 'route' },
     );
-  } catch {
+  } catch (error) {
+    appLog('error', 'pos_deferred_load_failed', {
+      businessId: meta.businessId,
+      storeId: meta.storeId,
+      stage: label,
+      status: 'unavailable',
+    });
+    void error;
     return null;
   }
 }
@@ -97,8 +120,8 @@ export default async function PosDeferredSection({
     async () => {
       const [tills, openShifts, units, categories, customers, requestedCustomer, userOpenShift] =
         await Promise.all([
-          loadSettled('page.pos.tills-load', meta, () => getCachedTills(storeId)),
-          loadSettled('page.pos.shifts-load', meta, () => getCachedShifts(storeId)),
+          loadSettled('page.pos.tills-load', meta, () => getCachedTills(businessId, storeId)),
+          loadSettled('page.pos.shifts-load', meta, () => getCachedShifts(businessId, storeId)),
           loadSettled('page.pos.units-load', meta, () => getCachedUnits(businessId)),
           loadSettled('page.pos.categories-load', meta, () => getCachedCategories(businessId)),
           loadSettled('page.pos.customers-load', meta, () => getCachedCustomers(businessId)),
@@ -124,7 +147,16 @@ export default async function PosDeferredSection({
               }),
             { ...meta, cacheState: 'uncached-page-load' },
             { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
-          ).catch(() => null),
+          ).catch((error) => {
+            appLog('error', 'pos_deferred_load_failed', {
+              businessId,
+              storeId,
+              stage: 'page.pos.open-shift-load',
+              status: 'unavailable',
+            });
+            void error;
+            return null;
+          }),
         ]);
 
       const customersUnavailable = customers === null;
@@ -138,6 +170,8 @@ export default async function PosDeferredSection({
       const payload: PosDeferredPayload = {
         tills: (tills ?? []).map((till) => ({ id: till.id, name: till.name })),
         openShiftTillIds: (openShifts ?? []).map((shift) => shift.tillId),
+        openShifts: (openShifts ?? []).map((shift) => ({ tillId: shift.tillId, shiftId: shift.id })),
+        cashierUserId: userId,
         customers: withRequested.map((customer) => ({
           id: customer.id,
           name: customer.name,

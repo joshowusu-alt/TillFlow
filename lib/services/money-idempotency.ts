@@ -264,12 +264,7 @@ export function parseIdempotencyResult<T extends Record<string, unknown>>(result
  * actor when the till's single OPEN shift was opened by another user.
  */
 export async function assertMoneyMovementTenantChain(
-  tx: {
-    store: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
-    user: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
-    till: { findFirst: (args: unknown) => Promise<{ id: string; storeId: string } | null> };
-    shift: { findFirst: (args: unknown) => Promise<{ id: string; tillId: string } | null> };
-  },
+  tx: any,
   input: {
     businessId: string;
     storeId: string;

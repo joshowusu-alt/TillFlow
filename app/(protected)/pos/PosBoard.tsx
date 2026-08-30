@@ -13,26 +13,31 @@ import {
   resolvePosCatalogueMode,
   toSellableProductDto,
 } from '@/lib/pos/sellable-dto';
+import { posInventoryTag, posProductsTag } from '@/lib/cache/pos-tags';
 
-const getCachedProducts = unstable_cache(
-  (businessId: string) =>
-    prisma.product.findMany({
-      where: { businessId, active: true },
-      select: SELLABLE_PRODUCT_SELECT,
-    }),
-  ['pos-products'],
-  { revalidate: 60, tags: ['pos-products'] },
-);
+function getCachedProducts(businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.product.findMany({
+        where: { businessId, active: true },
+        select: SELLABLE_PRODUCT_SELECT,
+      }),
+    ['pos-products', businessId],
+    { revalidate: 60, tags: [posProductsTag(businessId)] },
+  )();
+}
 
-const getCachedInventory = unstable_cache(
-  (storeId: string) =>
-    prisma.inventoryBalance.findMany({
-      where: { storeId },
-      select: { productId: true, qtyOnHandBase: true },
-    }),
-  ['pos-inventory'],
-  { revalidate: 30, tags: ['pos-inventory'] },
-);
+function getCachedInventory(businessId: string, storeId: string) {
+  return unstable_cache(
+    () =>
+      prisma.inventoryBalance.findMany({
+        where: { storeId },
+        select: { productId: true, qtyOnHandBase: true },
+      }),
+    ['pos-inventory', businessId, storeId],
+    { revalidate: 30, tags: [posInventoryTag(businessId, storeId)] },
+  )();
+}
 
 type RequireBusinessStoreResult = Awaited<ReturnType<typeof requireBusinessStore>>;
 
@@ -82,7 +87,7 @@ export default async function PosBoard({
         'page.pos.initial-data-load',
         () =>
           Promise.all([
-            measurePosFetch('page.pos.inventory-load', () => getCachedInventory(baseStore.id), 'cached-wrapper'),
+            measurePosFetch('page.pos.inventory-load', () => getCachedInventory(business.id, baseStore.id), 'cached-wrapper'),
             measurePosFetch(
               'page.pos.products-load',
               async () => {

@@ -10,7 +10,8 @@ import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/servi
 import { performShiftClose } from '@/lib/services/shifts';
 import { sendCashVarianceAlert } from '@/app/actions/stock-alerts';
 import { revalidateOwnerDashboardCache } from '@/lib/reports/cache-revalidation';
-import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib/observability';
+import { revalidatePosTillShiftTags } from '@/lib/cache/pos-tags';
 
 const ADD_CASH_REASON_LABELS: Record<string, string> = {
   SAFE: 'Cash from safe / cash box',
@@ -79,7 +80,7 @@ export async function addCashToTillAction(
       { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'action' },
     );
 
-    revalidateTag('pos-shifts');
+    revalidatePosTillShiftTags(businessId, storeId);
     revalidateTag('reports');
     revalidateOwnerDashboardCache();
     revalidatePath('/shifts');
@@ -168,7 +169,7 @@ export async function openShiftAction(
       },
     });
 
-    revalidateTag('pos-shifts');
+    revalidatePosTillShiftTags(businessId, storeId);
     revalidatePath('/shifts');
     revalidatePath('/pos');
     return ok({ id: shift.id, tillId: till.id });
@@ -179,7 +180,7 @@ export async function closeShiftAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    const { user, businessId, storeId } = await withBusinessStoreContext();
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.max(0, toPence(formData.get('actualCash')));
@@ -205,8 +206,11 @@ export async function closeShiftAction(
         varianceReason,
         approval: { mode: 'PIN', approvingManagerId: manager.id },
       });
-      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
-      revalidateTag('pos-shifts');
+      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch((error) => {
+        appLog('warn', 'cash_variance_alert_failed', { businessId, stage: 'shift-close' });
+        void error;
+      });
+      revalidatePosTillShiftTags(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       revalidatePath('/shifts');
@@ -282,7 +286,7 @@ export async function closeShiftOwnerOverrideAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['OWNER']);
+    const { user, businessId, storeId } = await withBusinessStoreContext(['OWNER']);
 
     const shiftId = formString(formData, 'shiftId');
     const actualCash = Math.max(0, toPence(formData.get('actualCash')));
@@ -324,8 +328,11 @@ export async function closeShiftOwnerOverrideAction(
           overrideJustification,
         },
       });
-      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch(() => {});
-      revalidateTag('pos-shifts');
+      void sendCashVarianceAlert({ shiftId: result.id, businessId }).catch((error) => {
+        appLog('warn', 'cash_variance_alert_failed', { businessId, stage: 'shift-close' });
+        void error;
+      });
+      revalidatePosTillShiftTags(businessId, storeId);
       revalidateTag('reports');
       revalidateOwnerDashboardCache();
       revalidatePath('/shifts');

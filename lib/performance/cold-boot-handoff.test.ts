@@ -91,7 +91,7 @@ describe('Trust Breakers T2b: cold boot launch handoff', () => {
   it('does not touch POS, manifest, service worker, cache, or schema', () => {
     expect(posPage).not.toContain('RootLaunchLoading');
     expect(posPage).toContain('LaunchSessionCompletion');
-    expect(posPage).toContain("{ revalidate: 60, tags: ['pos-products'] }");
+    expect(posPage).toContain('posProductsTag(businessId)');
 
     expect(read('public/manifest.json')).toContain('"/launch"');
     expect(read('public/sw.js')).toContain('self.addEventListener');

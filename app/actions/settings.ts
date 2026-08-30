@@ -355,7 +355,7 @@ export async function createTillAction(formData: FormData): Promise<ActionResult
   if (existing >= 10) return { success: false, error: 'Maximum of 10 active tills per store.' };
 
   await prisma.till.create({ data: { storeId, name } });
-  revalidatePosTillShiftTags();
+  revalidatePosTillShiftTags(businessId, storeId);
 
   audit({
     businessId,
@@ -384,7 +384,7 @@ export async function deactivateTillAction(tillId: string): Promise<ActionResult
   if (openShift) return { success: false, error: 'This till has an open shift. Close the shift before deactivating.' };
 
   await prisma.till.update({ where: { id: tillId }, data: { active: false } });
-  revalidatePosTillShiftTags();
+  revalidatePosTillShiftTags(businessId, storeId);
 
   audit({
     businessId,

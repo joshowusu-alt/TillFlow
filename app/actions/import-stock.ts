@@ -6,6 +6,7 @@ import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/l
 import { createPurchase } from '@/lib/services/purchases';
 import type { SupplierProductLinkSummary, SupplierProductLinkSkippedProduct } from '@/lib/services/purchases';
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 import { buildProductUnitCreates } from '@/lib/services/products';
 import { ensureChartOfAccounts } from '@/lib/accounting';
 import { audit } from '@/lib/audit';
@@ -896,7 +897,7 @@ async function _runImport(
       details: { ...summary, importId: importRecord.id },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     revalidateTag('control-portfolio');

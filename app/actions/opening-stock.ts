@@ -6,6 +6,7 @@ import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/l
 import { recordOpeningInventory } from '@/lib/services/opening-inventory';
 import { createPurchase } from '@/lib/services/purchases';
 import { audit } from '@/lib/audit';
+import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
 
 export type OpeningStockLine = {
   productId: string;
@@ -156,7 +157,7 @@ export async function createOpeningStockAction(
       },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidateTag('pos-products');
+    revalidatePosCatalog(businessId);
     revalidateTag('reports');
     revalidateTag(`readiness-${businessId}`);
     const { revalidateImproveRecordsHome } = await import('@/lib/improve-records-revalidate');
