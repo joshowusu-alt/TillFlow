@@ -93,6 +93,7 @@ export default async function CustomerReceiptsPage({ searchParams }: { searchPar
   const renderPaymentForm = (invoiceId: string) => (
     <form action={recordCustomerPaymentAction} className="grid gap-2 md:grid-cols-2">
       <input type="hidden" name="invoiceId" value={invoiceId} />
+      <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
       {linkedCustomer ? (
         <input type="hidden" name="returnTo" value={`/customers/${linkedCustomer.id}`} />
       ) : null}

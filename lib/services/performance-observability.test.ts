@@ -260,11 +260,10 @@ describe('Phase C3: performance observability baseline', () => {
     const sales = read('lib/services/sales.ts');
 
     // Cache functions present with correct keys and TTLs
-    expect(sales).toContain("['checkout-context-business']");
-    expect(sales).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
-    expect(sales).toContain("['checkout-context-store']");
-    expect(sales).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
-    expect(sales).toContain("['checkout-context-accounts']");
+    expect(sales).toContain("['checkout-context-business'");
+    expect(sales).toContain('checkoutContextTag(businessId)');
+    expect(sales).toContain("['checkout-context-store'");
+    expect(sales).toContain("['checkout-context-accounts'");
 
     // C5 checkout timing instrumentation is untouched
     expect(sales).toContain('action.checkout.context');
@@ -278,7 +277,7 @@ describe('Phase C3: performance observability baseline', () => {
     const refresh = read('app/actions/refresh.ts');
 
     // Tag present in settings mutations that affect checkout business logic
-    expect(settings).toContain("revalidateTag('checkout-context')");
+    expect(settings).toContain('checkoutContextTag(businessId)');
 
     // Manual refresh also clears checkout context
     expect(refresh).toContain('checkoutContextTag(business.id)');

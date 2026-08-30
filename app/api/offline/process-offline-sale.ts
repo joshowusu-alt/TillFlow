@@ -167,7 +167,10 @@ export async function processOfflineSale(
     orderDiscountValue: payload.orderDiscountValue,
     inventoryPolicy: payload.inventoryPolicy ?? 'enforce',
   });
-  if (payload.payloadHash && payload.payloadHash !== expectedHash) {
+  if (!payload.payloadHash) {
+    return reject('payload_mismatch');
+  }
+  if (payload.payloadHash !== expectedHash) {
     return reject('payload_mismatch');
   }
 

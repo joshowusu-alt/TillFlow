@@ -1,6 +1,5 @@
 'use server';
 
-import { randomUUID } from 'crypto';
 import { recordExpensePayment } from '@/lib/services/expensePayments';
 import { redirect } from 'next/navigation';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
@@ -15,6 +14,10 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
     const method = (formString(formData, 'method') || 'CASH') as PaymentMethod;
     const amountPence = formPence(formData, 'amount');
     const reference = formOptionalString(formData, 'reference');
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (!idempotencyKey) {
+      throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
+    }
 
     await recordExpensePayment({
       businessId,
@@ -24,7 +27,7 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
       method,
       amountPence,
       reference,
-      idempotencyKey: formString(formData, 'idempotencyKey') || randomUUID(),
+      idempotencyKey,
     });
 
     redirect('/payments/expense-payments');

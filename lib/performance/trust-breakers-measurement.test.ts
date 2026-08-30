@@ -76,8 +76,7 @@ describe('Trust Breakers T1: cold boot and POS measurement', () => {
   it('does not change checkout, sale creation, cache TTLs, or schema', () => {
     expect(salesAction).toContain('export async function completeSaleAction(data: {');
     expect(salesService).toContain('action.checkout.create-sale');
-    expect(salesService).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
-    expect(salesService).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
+    expect(salesService).toContain('checkoutContextTag(businessId)');
 
     expect(posPage).toContain('posProductsTag(businessId)');
     expect(posPage).toContain('posInventoryTag(businessId, storeId)');

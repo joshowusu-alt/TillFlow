@@ -12,6 +12,7 @@ function ExpensePaymentForm({ expenseId }: { expenseId: string }) {
   return (
     <form action={recordExpensePaymentAction} className="grid gap-2 sm:grid-cols-2">
       <input type="hidden" name="expenseId" value={expenseId} />
+      <input type="hidden" name="idempotencyKey" value={crypto.randomUUID()} />
       <div>
         <div className="text-xs text-black/50">Payment method</div>
         <select className="input" name="method" defaultValue="CASH">

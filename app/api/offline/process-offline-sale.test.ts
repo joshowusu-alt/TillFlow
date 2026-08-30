@@ -356,6 +356,15 @@ describe('processOfflineSale — offline lifecycle', () => {
     expect(mockCreateSale).not.toHaveBeenCalled();
   });
 
+  it('omitted payloadHash is rejected', async () => {
+    const payload = await makePayload({ payloadHash: '' });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toEqual({ success: false, status: 'rejected', reason: 'payload_mismatch' });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
   it('duplicate local sequence in the same batch is needs_review for the second item', async () => {
     mockCreateSale.mockResolvedValue({ id: 'inv-seq' });
     const first = await makePayload({ id: 'offline-1', idempotencyKey: 'idem-1', localSequence: 4 });

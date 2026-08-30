@@ -537,10 +537,9 @@ describe('C11 — unchanged checkout paths', () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const source = readFileSync(join(process.cwd(), 'lib/services/sales.ts'), 'utf8');
-    expect(source).toContain("['checkout-context-business']");
-    expect(source).toContain("{ revalidate: 60, tags: ['checkout-context'] }");
-    expect(source).toContain("['checkout-context-accounts']");
-    expect(source).toContain("{ revalidate: 300, tags: ['checkout-context'] }");
+    expect(source).toContain("['checkout-context-business', businessId]");
+    expect(source).toContain('checkoutContextTag(businessId)');
+    expect(source).toContain("['checkout-context-accounts', businessId]");
   });
 
   it('no schema files changed', async () => {

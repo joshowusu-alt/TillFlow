@@ -31,6 +31,7 @@ import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS, appLog } from '@/lib
 import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 import { RECEIPT_ORIGIN } from '@/lib/payments/receipt-origin';
 import { unstable_cache } from 'next/cache';
+import { checkoutContextTag } from '@/lib/cache/pos-tags';
 
 // Account codes fetched on every checkout — extracted to module level so the
 // unstable_cache key is stable across calls.
@@ -49,37 +50,43 @@ const CHECKOUT_ACCOUNT_CODES = [
 // (business settings, store existence, chart of accounts). Caching them
 // eliminates 2–3 serialised Neon RTTs per checkout (~300–450 ms at iad1).
 //
-// Tag: 'checkout-context' — invalidated by app/actions/settings.ts whenever
-// business settings change, and by refreshCurrentView for manual resets.
+// Tag: checkoutContextTag(businessId) — invalidated by app/actions/settings.ts
+// whenever that business's settings change, and by refreshCurrentView.
 //
 // NOT cached: till (active-flag safety gate), branchId (active-flag risk),
 // openShift (changes on shift open/close), inventoryMap (changes every sale),
 // productUnits (cart-dependent), momoResult, customerResult (per-checkout).
 
-const getCachedBusiness = unstable_cache(
-  async (businessId: string) => prisma.business.findUnique({ where: { id: businessId } }),
-  ['checkout-context-business'],
-  { revalidate: 60, tags: ['checkout-context'] },
-);
+function getCachedBusiness(businessId: string) {
+  return unstable_cache(
+    () => prisma.business.findUnique({ where: { id: businessId } }),
+    ['checkout-context-business', businessId],
+    { revalidate: 60, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
-const getCachedStore = unstable_cache(
-  async (storeId: string, businessId: string) =>
-    prisma.store.findFirst({
-      where: { id: storeId, businessId },
-      select: { id: true },
-    }),
-  ['checkout-context-store'],
-  { revalidate: 300, tags: ['checkout-context'] },
-);
+function getCachedStore(storeId: string, businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.store.findFirst({
+        where: { id: storeId, businessId },
+        select: { id: true },
+      }),
+    ['checkout-context-store', businessId, storeId],
+    { revalidate: 300, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
-const getCachedCheckoutAccounts = unstable_cache(
-  async (businessId: string) =>
-    prisma.account.findMany({
-      where: { businessId, code: { in: [...CHECKOUT_ACCOUNT_CODES] } },
-    }),
-  ['checkout-context-accounts'],
-  { revalidate: 300, tags: ['checkout-context'] },
-);
+function getCachedCheckoutAccounts(businessId: string) {
+  return unstable_cache(
+    () =>
+      prisma.account.findMany({
+        where: { businessId, code: { in: [...CHECKOUT_ACCOUNT_CODES] } },
+      }),
+    ['checkout-context-accounts', businessId],
+    { revalidate: 300, tags: [checkoutContextTag(businessId)] },
+  )();
+}
 
 function computeDiscount(
   subtotal: number,

@@ -1,6 +1,5 @@
 'use server';
 
-import { randomUUID } from 'crypto';
 import { recordCustomerPayment, recordSupplierPayment } from '@/lib/services/payments';
 import { redirect } from 'next/navigation';
 import { revalidateTag } from 'next/cache';
@@ -31,7 +30,10 @@ export async function recordCustomerPaymentAction(formData: FormData): Promise<v
 
     const invoiceId = formString(formData, 'invoiceId');
     const payments = parsePayments(formData);
-    const idempotencyKey = formString(formData, 'idempotencyKey') || randomUUID();
+    const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (!idempotencyKey) {
+      throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
+    }
 
     await recordCustomerPayment(businessId, invoiceId, payments, user.id, { idempotencyKey });
     revalidateTag('reports');
@@ -51,6 +53,9 @@ export async function recordSupplierPaymentAction(formData: FormData): Promise<v
     const paidAt = paidAtStr ? new Date(paidAtStr) : undefined;
     const notes = formString(formData, 'notes') || undefined;
     const idempotencyKey = formString(formData, 'idempotencyKey');
+    if (!idempotencyKey) {
+      throw new Error('This payment form is out of date. Refresh the page or reopen the payment form, then try again.');
+    }
 
     await recordSupplierPayment(businessId, invoiceId, payments, {
       paidAt,

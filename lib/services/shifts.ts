@@ -147,6 +147,8 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
       }
     }
     const lockedExpectedCash = lockedShift.expectedCashPence;
+    // Expected cash is the drawer running balance (float + cash sales + receipts
+    // + additions − supplier/expense/refunds/removals), not invoice CASH re-sum.
     const lockedVariance = actualCash - lockedExpectedCash;
     if (
       lockedVariance !== 0 &&
