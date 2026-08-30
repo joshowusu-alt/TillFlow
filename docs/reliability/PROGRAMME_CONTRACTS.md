@@ -176,3 +176,57 @@ No edits.
 
 ## Integration order
 A → C → B → E → D → F → G review → gates → PR → Preview only.
+
+---
+
+## Blocker-closure contracts (2026-08-30, SHA `2d758385`)
+
+These are P1 until disproved. Agents must not invent a later OPEN till.
+
+### P11. Explicit cash-drawer destination
+Every till-funded cash movement MUST identify one exact active till and one OPEN shift in the same business/store.
+
+- Cash expense create/pay and cash supplier payment (including cash purchase create) require `tillId` (and optional `shiftId`).
+- Server validates: business, store, active till, OPEN shift on that till, authorised actor, tenant chain.
+- `getOpenCashShiftForPayment` MUST NOT fall back to the user's newest OPEN shift.
+- Invoice-till fallback (`fallbackTillId`) is allowed only when the economic event has an authoritative invoice till (customer receipt, sales cash refund). Purchase cash refunds must also pass an explicit till or the purchase store's selected till — never user-newest.
+- If no suitable OPEN shift: reject with a clear operational message.
+- Non-cash methods create no drawer entries.
+- Exact replay must not duplicate drawer or journal.
+
+### P12. Import chunk idempotency
+Paid (and unpaid purchase) import chunks MUST use a deterministic key, never `randomUUID()` per retry:
+
+`IMPORT:{businessId}:{importRunId}:{mode}:{op}:{supplierOrEquity}:{chunkIndex}`
+
+Create the `ProductImport` row **before** chunk writes so `importRunId` exists. Payload hash covers lines, amounts, method, store. Exact retry returns prior invoice. Same key/different payload rejects. Partial failure resumes later chunks without duplicating earlier ones. Cross-business key injection rejects.
+
+### P13. LATE_OFFLINE decision is in-transaction
+`process-offline-sale` always passes `capturedShiftId`. It MUST NOT decide `saleSource` from a pre-transaction shift read.
+
+Inside `createSale`'s transaction:
+1. Lock the captured shift row (`FOR UPDATE` on Postgres; equivalent serialize on SQLite).
+2. Re-read status.
+3. If OPEN and still the till's valid shift → attach and update **that** shift (ordinary sync).
+4. If CLOSED → `saleSource = LATE_OFFLINE`, invoice.shiftId = captured id, no tender/drawer on a later OPEN shift.
+5. Concurrent close/reopen: exactly one valid ordering. Replay remains exact-once.
+
+### P14. Inventory writers must pass storeId
+`revalidatePosCatalog(businessId)` without storeId does **not** evict `pos-inventory:{biz}:{store}`. Every inventory-qty writer must call a helper that requires storeId (or both stores for transfers). Product-only mutations may skip the inventory tag.
+
+### P15. Paged POS must not load all inventory
+When `catalogueMode === 'paged'`: do not `inventoryBalance.findMany` for the whole store; do not hydrate all products. Barcode and search join balances only for returned product IDs. Offline cap remains 5,000 with honest UI copy.
+
+### Blocker-closure file ownership (exclusive)
+
+**WS1 explicit drawer** — `lib/services/cash-drawer.ts` (+test), `expenses.ts`, `expensePayments.ts`, `payments.ts` (+tests), `purchases.ts` (tillId on cash only), `purchase-cash-drawer.test.ts`, `expenses-cash-drawer.test.ts`, `returns.ts` purchase-refund till only, `app/actions/expenses.ts`, `expense-payments.ts`, `payments.ts`, `purchases.ts`, `app/(protected)/expenses/page.tsx`, `payments/expense-payments/page.tsx`, `payments/supplier-payments/page.tsx`, `components/SupplierPaymentForm.tsx`, `app/(protected)/purchases/PurchaseFormClient.tsx` (till field only). Do not edit sales.ts, process-offline-sale, import-stock, PosBoard, pos-tags.
+
+**WS2 import idempotency** — `app/actions/import-stock.ts`, `lib/import/import-chunk-identity.ts` (NEW), `lib/services/money-idempotency.ts` (add IMPORT hash + kind only), import tests. Do not edit cash-drawer, expenses, payments services, sales.ts, PosBoard.
+
+**WS3 LATE_OFFLINE tx** — `lib/services/sales.ts`, `lib/services/sales.test.ts`, `app/api/offline/process-offline-sale.ts` (+test). Do not edit cash-drawer, import-stock, PosBoard, pos-tags.
+
+**WS4 cache** — `lib/cache/pos-tags.ts` (+test), `app/actions/products.ts`, `repair.ts`, `reorder.ts`, `reset-purchase-data.ts`, inventory/stocktake if missing storeId. Do not edit PosBoard queries, sales.ts, import-stock, cash-drawer.
+
+**WS5 paged inventory** — `app/(protected)/pos/PosBoard.tsx`, `lib/pos/sellable-dto.ts`, `app/api/pos/search/route.ts`, `app/api/pos/barcode/route.ts`, related pos tests, offline cache-data cap copy. Do not edit sales.ts, payments, import-stock, cash-drawer.
+
+Integration order: WS1 → WS3 → WS2 → WS4 → WS5 → WS6 benches → WS7 Phase 9 → Agent G.
