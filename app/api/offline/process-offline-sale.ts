@@ -6,7 +6,7 @@ import type { PaymentStatus } from '@/lib/services/shared';
 import { parseDiscountValue } from '@/lib/format';
 import {
   hashOfflineSalePayload,
-  offlineReplayIdentityFingerprint,
+  offlineReplayMatches,
 } from '@/lib/offline/payload-hash';
 
 export const CLOCK_SKEW_REVIEW_MS = 24 * 60 * 60 * 1000;
@@ -79,8 +79,18 @@ function externalRefsFor(payload: OfflineSalePayload): string[] {
   return [...new Set(refs)];
 }
 
-function payloadFingerprint(payload: OfflineSalePayload): string {
-  return offlineReplayIdentityFingerprint({
+function replayMatchesExisting(
+  existing: {
+    storeId: string;
+    tillId: string;
+    cashierUserId?: string | null;
+    customerId?: string | null;
+    lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;
+    payments: Array<{ method: string; amountPence: number }>;
+  },
+  payload: OfflineSalePayload,
+): boolean {
+  return offlineReplayMatches(existing, {
     storeId: payload.storeId,
     tillId: payload.tillId,
     cashierUserId: payload.cashierUserId ?? null,
@@ -204,15 +214,7 @@ export async function processOfflineSale(
   });
 
   if (existingSale) {
-    const existingFingerprint = offlineReplayIdentityFingerprint({
-      storeId: existingSale.storeId,
-      tillId: existingSale.tillId,
-      cashierUserId: existingSale.cashierUserId,
-      customerId: existingSale.customerId,
-      lines: existingSale.lines,
-      payments: existingSale.payments,
-    });
-    if (existingFingerprint === payloadFingerprint(payload)) {
+    if (replayMatchesExisting(existingSale, payload)) {
       return {
         success: true,
         status: 'already_synced',
@@ -372,15 +374,7 @@ export async function processOfflineSale(
         },
       });
       if (existing) {
-        const existingFingerprint = offlineReplayIdentityFingerprint({
-          storeId: existing.storeId,
-          tillId: existing.tillId,
-          cashierUserId: existing.cashierUserId,
-          customerId: existing.customerId,
-          lines: existing.lines,
-          payments: existing.payments,
-        });
-        if (existingFingerprint === payloadFingerprint(payload)) {
+        if (replayMatchesExisting(existing, payload)) {
           return {
             success: true,
             status: 'already_synced',

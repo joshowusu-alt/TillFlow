@@ -203,6 +203,39 @@ describe('processOfflineSale — offline lifecycle', () => {
     expect(mockCreateSale).not.toHaveBeenCalled();
   });
 
+  it('replay of a cash tender that included change still returns already_synced', async () => {
+    const payload = await makePayload({
+      payments: [{ method: 'CASH', amountPence: 10000 }],
+    });
+    prismaMock.salesInvoice.findFirst.mockResolvedValue({
+      id: 'inv-change',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      cashierUserId: 'cashier-1',
+      customerId: null,
+      lines: [
+        {
+          productId: 'prod-1',
+          unitId: 'unit-1',
+          qtyInUnit: 2,
+          unitPricePence: 2500,
+          lineSubtotalPence: 5000,
+        },
+      ],
+      payments: [{ method: 'CASH', amountPence: 5000 }],
+    });
+
+    const result = await processOfflineSale(payload, USER);
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'already_synced',
+      invoiceId: 'inv-change',
+    });
+    expect(mockCreateSale).not.toHaveBeenCalled();
+  });
+
   it('same key different payload is rejected', async () => {
     const payload = await makePayload({
       lines: [
