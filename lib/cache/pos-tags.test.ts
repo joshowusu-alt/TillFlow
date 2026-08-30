@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { revalidateTag } from 'next/cache';
 import {
   checkoutContextTag,
   posCategoriesTag,
@@ -9,7 +10,13 @@ import {
   posProductsTag,
   posShiftsTag,
   posTillsTag,
+  revalidatePosCatalog,
+  revalidatePosInventory,
 } from '@/lib/cache/pos-tags';
+
+vi.mock('next/cache', () => ({
+  revalidateTag: vi.fn(),
+}));
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
@@ -38,5 +45,33 @@ describe('tenant-scoped POS cache tags', () => {
     expect(read('app/actions/opening-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/import-stock.ts')).toContain('revalidatePosCatalog(businessId, store.id)');
     expect(read('app/actions/sales.ts')).toContain('revalidatePosCatalog(businessId, amendedInvoice?.storeId)');
+  });
+
+  it('revalidatePosInventory requires both ids and evicts products + store inventory', () => {
+    vi.mocked(revalidateTag).mockClear();
+    revalidatePosInventory('biz-a', 'store-1');
+    expect(revalidateTag).toHaveBeenCalledWith('pos-products:biz-a');
+    expect(revalidateTag).toHaveBeenCalledWith('pos-inventory:biz-a:store-1');
+    expect(revalidateTag).not.toHaveBeenCalledWith('pos-inventory');
+  });
+
+  it('revalidatePosInventory throws when storeId is missing', () => {
+    expect(() => revalidatePosInventory('biz-a', '')).toThrow(/storeId/);
+    expect(() => revalidatePosInventory('biz-a', '   ')).toThrow(/storeId/);
+    expect(() => revalidatePosInventory('', 'store-1')).toThrow(/businessId/);
+  });
+
+  it('revalidatePosCatalog without storeId only evicts products', () => {
+    vi.mocked(revalidateTag).mockClear();
+    revalidatePosCatalog('biz-a');
+    expect(revalidateTag).toHaveBeenCalledWith('pos-products:biz-a');
+    expect(revalidateTag).not.toHaveBeenCalledWith(expect.stringMatching(/^pos-inventory/));
+  });
+
+  it('revalidatePosCatalog with storeId delegates to store-scoped inventory eviction', () => {
+    vi.mocked(revalidateTag).mockClear();
+    revalidatePosCatalog('biz-a', 'store-1');
+    expect(revalidateTag).toHaveBeenCalledWith('pos-products:biz-a');
+    expect(revalidateTag).toHaveBeenCalledWith('pos-inventory:biz-a:store-1');
   });
 });
