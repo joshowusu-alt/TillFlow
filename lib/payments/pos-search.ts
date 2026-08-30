@@ -6,6 +6,7 @@ export type PosSearchProduct = {
   name: string;
   barcode: string | null;
   categoryName: string | null;
+  sku?: string | null;
 };
 
 const MAX_SCAN_PREFIX_MATCHES = 8;
@@ -37,31 +38,32 @@ export function filterPosProducts<TProduct extends PosSearchProduct>(
     }
   }
 
-  if (normalized.length >= 3 && products.length > 200) {
+  if (index?.searchHaystack?.length) {
+    const skuHit = index.bySku.get(normalized);
+    if (skuHit) return [skuHit as TProduct];
+
     const matches: TProduct[] = [];
-    for (let i = 0; i < products.length && matches.length < limit; i++) {
-      const product = products[i];
-      if (product.name.toLowerCase().includes(normalized)) {
-        matches.push(product);
-        continue;
-      }
-      if (product.barcode && product.barcode.toLowerCase().includes(normalized)) {
-        matches.push(product);
-        continue;
-      }
-      if (product.categoryName && product.categoryName.toLowerCase().includes(normalized)) {
-        matches.push(product);
-      }
+    for (let i = 0; i < index.searchHaystack.length && matches.length < limit; i++) {
+      const row = index.searchHaystack[i];
+      if (row.hay.includes(normalized)) matches.push(row.product as TProduct);
     }
     return matches;
   }
 
-  return products
-    .filter(
-      (product) =>
-        product.name.toLowerCase().includes(normalized) ||
-        (product.barcode && product.barcode.toLowerCase().includes(normalized)) ||
-        (product.categoryName && product.categoryName.toLowerCase().includes(normalized))
-    )
-    .slice(0, limit);
+  const matchesName = (product: TProduct) =>
+    product.name.toLowerCase().includes(normalized) ||
+    (product.sku && product.sku.toLowerCase().includes(normalized)) ||
+    (product.barcode && product.barcode.toLowerCase().includes(normalized)) ||
+    (product.categoryName && product.categoryName.toLowerCase().includes(normalized));
+
+  if (normalized.length >= 3 && products.length > 200) {
+    const matches: TProduct[] = [];
+    for (let i = 0; i < products.length && matches.length < limit; i++) {
+      const product = products[i];
+      if (matchesName(product)) matches.push(product);
+    }
+    return matches;
+  }
+
+  return products.filter(matchesName).slice(0, limit);
 }

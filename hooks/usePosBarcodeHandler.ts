@@ -2,7 +2,11 @@
 
 import { useCallback } from 'react';
 
-import { getProductBaseUnitId, resolveBarcodeScan } from '@/lib/payments/pos-barcode';
+import {
+  getProductBaseUnitId,
+  resolveBarcodeScan,
+  type BarcodeScanResolution,
+} from '@/lib/payments/pos-barcode';
 import type { PosProductIndex } from '@/lib/pos/product-index';
 
 type BarcodeProduct = {
@@ -30,6 +34,7 @@ type UsePosBarcodeHandlerOptions<TProduct extends BarcodeProduct> = {
   onMatched?: (product: TProduct, baseUnitId: string) => void;
   onMissing: (code: string) => void;
   onWeighed?: (product: TProduct, weightGrams: number, subtotalPence: number) => void;
+  lookupRemote?: (code: string) => Promise<BarcodeScanResolution<TProduct> | null>;
 };
 
 export function formatWeighedLabel(weightGrams: number): string {
@@ -48,12 +53,10 @@ export function usePosBarcodeHandler<TProduct extends BarcodeProduct>({
   onMatched,
   onMissing,
   onWeighed,
+  lookupRemote,
 }: UsePosBarcodeHandlerOptions<TProduct>) {
-  const handleBarcodeScan = useCallback(
-    (code: string) => {
-      const resolution = resolveBarcodeScan(code, products, productIndex);
-      if (!resolution) return;
-
+  const applyResolution = useCallback(
+    (resolution: BarcodeScanResolution<TProduct>) => {
       if (resolution.kind === 'matched') {
         const { product, baseUnitId } = resolution;
         playBeep(true);
@@ -86,7 +89,24 @@ export function usePosBarcodeHandler<TProduct extends BarcodeProduct>({
       playBeep(false);
       onMissing(resolution.code);
     },
-    [addToCart, onMatched, onMissing, onWeighed, playBeep, productIndex, products]
+    [addToCart, onMatched, onMissing, onWeighed, playBeep]
+  );
+
+  const handleBarcodeScan = useCallback(
+    (code: string) => {
+      const resolution = resolveBarcodeScan(code, products, productIndex);
+      if (!resolution) return;
+
+      if (resolution.kind === 'missing' && lookupRemote) {
+        void lookupRemote(code).then((remote) => {
+          applyResolution(remote ?? resolution);
+        });
+        return;
+      }
+
+      applyResolution(resolution);
+    },
+    [applyResolution, lookupRemote, productIndex, products]
   );
 
   return { handleBarcodeScan, getProductBaseUnitId };

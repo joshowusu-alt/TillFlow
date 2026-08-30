@@ -8,33 +8,17 @@ import {
 } from '@/components/pos/PosProgressiveShell';
 import PosDeferredSection from './PosDeferredSection';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  SELLABLE_PRODUCT_SELECT,
+  resolvePosCatalogueMode,
+  toSellableProductDto,
+} from '@/lib/pos/sellable-dto';
 
 const getCachedProducts = unstable_cache(
   (businessId: string) =>
     prisma.product.findMany({
       where: { businessId, active: true },
-      select: {
-        id: true,
-        name: true,
-        barcode: true,
-        sellingPriceBasePence: true,
-        vatRateBps: true,
-        promoBuyQty: true,
-        promoGetQty: true,
-        categoryId: true,
-        imageUrl: true,
-        category: { select: { name: true } },
-        productUnits: {
-          select: {
-            unitId: true,
-            conversionToBase: true,
-            isBaseUnit: true,
-            sellingPricePence: true,
-            defaultCostPence: true,
-            unit: { select: { name: true, pluralName: true } },
-          },
-        },
-      },
+      select: SELLABLE_PRODUCT_SELECT,
     }),
   ['pos-products'],
   { revalidate: 60, tags: ['pos-products'] },
@@ -94,12 +78,29 @@ export default async function PosBoard({
           posRouteTiming,
         );
 
-      const [inventory, products] = await measureServerOperation(
+      const [inventory, productLoad] = await measureServerOperation(
         'page.pos.initial-data-load',
         () =>
           Promise.all([
             measurePosFetch('page.pos.inventory-load', () => getCachedInventory(baseStore.id), 'cached-wrapper'),
-            measurePosFetch('page.pos.products-load', () => getCachedProducts(business.id), 'cached-wrapper'),
+            measurePosFetch(
+              'page.pos.products-load',
+              async () => {
+                const productCount = await prisma.product.count({
+                  where: { businessId: business.id, active: true },
+                });
+                const catalogueMode = resolvePosCatalogueMode({
+                  productCount,
+                  posCatalogueMode: process.env.POS_CATALOGUE_MODE,
+                });
+                if (catalogueMode === 'paged') {
+                  return { products: [] as Awaited<ReturnType<typeof getCachedProducts>>, productCount, catalogueMode };
+                }
+                const products = await getCachedProducts(business.id);
+                return { products, productCount: products.length, catalogueMode };
+              },
+              'cached-wrapper',
+            ),
           ]),
         { ...posRouteMeta, cacheState: 'cached-wrapper' },
         posRouteTiming,
@@ -109,30 +110,11 @@ export default async function PosBoard({
         'page.pos.dto-map',
         async () => {
           const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-          return products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            barcode: product.barcode,
-            sellingPriceBasePence: product.sellingPriceBasePence,
-            vatRateBps: product.vatRateBps,
-            promoBuyQty: product.promoBuyQty,
-            promoGetQty: product.promoGetQty,
-            categoryId: product.categoryId,
-            categoryName: product.category?.name ?? null,
-            imageUrl: product.imageUrl,
-            units: product.productUnits.map((pu) => ({
-              id: pu.unitId,
-              name: pu.unit.name,
-              pluralName: pu.unit.pluralName,
-              conversionToBase: pu.conversionToBase,
-              isBaseUnit: pu.isBaseUnit,
-              sellingPricePence: pu.sellingPricePence,
-              defaultCostPence: pu.defaultCostPence,
-            })),
-            onHandBase: inventoryMap.get(product.id) ?? 0,
-          }));
+          return productLoad.products.map((product) =>
+            toSellableProductDto(product, inventoryMap.get(product.id) ?? 0)
+          );
         },
-        { ...posRouteMeta, cacheState: 'cpu-map', rowCount: products.length },
+        { ...posRouteMeta, cacheState: 'cpu-map', rowCount: productLoad.products.length },
         { thresholdMs: PERFORMANCE_THRESHOLDS_MS.action, operationType: 'route' },
       );
 
@@ -152,6 +134,8 @@ export default async function PosBoard({
           }}
           store={{ id: baseStore.id, name: baseStore.name }}
           products={productDtos}
+          posCatalogueMode={productLoad.catalogueMode}
+          catalogueSize={productLoad.productCount}
         >
           <Suspense fallback={<PosDeferredLoadingHint />}>
             <PosDeferredSection
