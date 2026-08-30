@@ -1085,17 +1085,24 @@ export default function PosClient({
             businessId: business.id,
             storeId: store.id,
             tillId,
+            shiftId: window.localStorage.getItem(`pos.capture.shift.${business.id}.${tillId}`),
+            cashierUserId: window.localStorage.getItem(`pos.capture.cashier.${business.id}`),
             customerId: saleSnapshot.customerId || null,
             paymentStatus,
-            lines: saleSnapshot.cart.map((l) => ({
-              productId: l.productId,
-              unitId: l.unitId,
-              qtyInUnit: l.qtyInUnit,
-              qtyBase: l.qtyBase,
-              lineSubtotalPence: l.lineSubtotalPence,
-              discountType: l.discountType ?? 'NONE',
-              discountValue: l.discountValue ?? '',
-            })),
+            lines: saleSnapshot.cart.map((l) => {
+              const product = saleSnapshot.productOptions.find((p) => p.id === l.productId);
+              const unitPricePence = product?.sellingPriceBasePence;
+              return {
+                productId: l.productId,
+                unitId: l.unitId,
+                qtyInUnit: l.qtyInUnit,
+                qtyBase: l.qtyBase,
+                unitPricePence,
+                lineSubtotalPence: l.lineSubtotalPence,
+                discountType: l.discountType ?? 'NONE',
+                discountValue: l.discountValue ?? '',
+              };
+            }),
             payments: buildOfflinePayments({
               cashApplied: submitCashPaid,
               cardPaidValue: submitCardPaid,
@@ -1105,6 +1112,8 @@ export default function PosClient({
             orderDiscountType,
             orderDiscountValue: orderDiscountInput,
             createdAt: new Date().toISOString(),
+            localSaleTime: new Date().toISOString(),
+            idempotencyKey: saleAttemptId,
           });
           const stockDecrements = buildOptimisticStockDecrements(saleSnapshot.cart, saleSnapshot.productOptions);
           setProductOptions((prev) => applyOptimisticStock(prev, stockDecrements));

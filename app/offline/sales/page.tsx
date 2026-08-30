@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   getPendingSales,
+  getReviewSales,
   getOfflineSale,
   updateOfflineSale,
   getCachedProducts,
@@ -11,6 +12,7 @@ import {
   type OfflineSale,
   type OfflineProduct,
 } from '@/lib/offline/storage';
+import { hashOfflineSalePayload } from '@/lib/offline/payload-hash';
 import {
   getDeadLetterSales,
   retryDeadLetterSale,
@@ -66,12 +68,20 @@ export default function OfflineSalesPage() {
   const refresh = useCallback(async () => {
     try {
       const activeBusinessId = getClientActiveBusinessId() ?? undefined;
-      const [pending, cached, failed] = await Promise.all([
+      const [pending, review, cached, failed] = await Promise.all([
         getPendingSales(activeBusinessId),
+        getReviewSales(activeBusinessId).catch(() => [] as OfflineSale[]),
         getCachedProducts(activeBusinessId),
         getDeadLetterSales().catch(() => [] as DeadLetterRecord[]),
       ]);
-      setSales(pending);
+      const seen = new Set<string>();
+      const merged: OfflineSale[] = [];
+      for (const sale of [...review, ...pending]) {
+        if (seen.has(sale.id)) continue;
+        seen.add(sale.id);
+        merged.push(sale);
+      }
+      setSales(merged);
       setProducts(cached);
       setDeadLetters(failed);
 
@@ -250,9 +260,15 @@ export default function OfflineSalesPage() {
         discountType: 'NONE',
         discountValue: '0',
       }));
+      const lines = [...kept, ...added];
+      const payloadHash = await hashOfflineSalePayload({
+        ...amending.sale,
+        lines,
+      });
       const updatedSale: OfflineSale = {
         ...amending.sale,
-        lines: [...kept, ...added],
+        lines,
+        payloadHash,
       };
       await updateOfflineSale(updatedSale);
       setAmending(null);
@@ -563,6 +579,7 @@ export default function OfflineSalesPage() {
         <div className="font-semibold">Recovery centre for offline sales</div>
         <p className="mt-1 text-amber-800">
           Use this page when sync is delayed, a cashier needs to amend a queued sale, or you want to verify what is still waiting on this device.
+          Do not recreate a sale from memory. Retry sync first so the original idempotency key can be checked — a second checkout can charge the customer twice.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link href="/settings/system-health" className="btn-secondary min-h-11 text-xs">
@@ -584,7 +601,7 @@ export default function OfflineSalesPage() {
                   {deadLetters.length} sale{deadLetters.length === 1 ? '' : 's'} rejected by the server
                 </div>
                 <p className="mt-1 text-rose-800">
-                  These sales were saved offline but the server refused them when sync retried (usually because a product, price, or stock state changed in the meantime). Review each one and decide whether to retry or remove.
+                  These sales were saved offline but the server refused them when sync retried (usually because a product, price, or stock state changed in the meantime). Retry sync to re-check the original idempotency key. Do not recreate the sale unless Recovery confirms that key was never posted.
                 </p>
               </div>
               {deadLetters.length > 1 && (
@@ -722,8 +739,11 @@ export default function OfflineSalesPage() {
                     </span>
                   </div>
                   <div className="text-xs text-black/40">
-                    {new Date(sale.createdAt).toLocaleString()}
+                    {new Date(sale.localSaleTime || sale.createdAt).toLocaleString()}
                     {sale.customerId && ' · Has customer'}
+                    {sale.status === 'needs_review' && ' · Needs review'}
+                    {sale.status === 'rejected' && ' · Rejected'}
+                    {sale.statusReason ? ` · ${sale.statusReason}` : ''}
                   </div>
                   <div className="mt-1 flex gap-1 flex-wrap">
                     {sale.lines.slice(0, 3).map((line: OfflineSaleLine, i: number) => (

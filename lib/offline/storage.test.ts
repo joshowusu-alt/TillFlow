@@ -130,3 +130,58 @@ describe('Offline Sale Queue', () => {
         expect(id1).not.toBe(id2);
     });
 });
+
+describe('migrateQueuedSaleRecord', () => {
+    it('marks legacy rows without shiftId as needs_review', async () => {
+        const { migrateQueuedSaleRecord } = await import('./storage');
+        const migrated = migrateQueuedSaleRecord({
+            id: 'offline-legacy',
+            businessId: 'biz-1',
+            storeId: 'store-1',
+            tillId: 'till-1',
+            customerId: null,
+            paymentStatus: 'PAID',
+            lines: [],
+            payments: [],
+            orderDiscountType: 'NONE',
+            orderDiscountValue: '',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            synced: false,
+        });
+
+        expect(migrated.shiftId).toBeNull();
+        expect(migrated.status).toBe('needs_review');
+        expect(migrated.statusReason).toBe('missing_shift');
+        expect(migrated.idempotencyKey).toBe('offline-legacy');
+        expect(migrated.inventoryPolicy).toBe('enforce');
+    });
+
+    it('keeps captured shift rows pending', async () => {
+        const { migrateQueuedSaleRecord } = await import('./storage');
+        const migrated = migrateQueuedSaleRecord({
+            id: 'offline-ok',
+            businessId: 'biz-1',
+            storeId: 'store-1',
+            tillId: 'till-1',
+            shiftId: 'shift-1',
+            cashierUserId: 'cashier-1',
+            customerId: null,
+            paymentStatus: 'PAID',
+            lines: [],
+            payments: [],
+            orderDiscountType: 'NONE',
+            orderDiscountValue: '',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            localSaleTime: '2026-01-01T00:00:00.000Z',
+            localSequence: 3,
+            idempotencyKey: 'idem-1',
+            payloadHash: 'abc',
+            synced: false,
+            status: 'pending',
+        });
+
+        expect(migrated.status).toBe('pending');
+        expect(migrated.shiftId).toBe('shift-1');
+        expect(migrated.localSequence).toBe(3);
+    });
+});

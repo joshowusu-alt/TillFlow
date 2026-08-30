@@ -168,7 +168,7 @@ export default function NetworkStatus() {
         if (deadLetterCount > 0) return {
             bg: 'bg-rose-700',
             text: `${deadLetterCount} sale${deadLetterCount !== 1 ? 's' : ''} rejected`,
-            sub: 'Needs review',
+            sub: 'Needs review — retry, do not recreate',
         };
         if (!online) return {
             bg: 'bg-red-600',
@@ -304,7 +304,7 @@ export default function NetworkStatus() {
                                 {deadLetterCount} sale{deadLetterCount !== 1 ? 's' : ''} rejected by the server
                             </div>
                             <p className="mt-1 text-rose-700">
-                                Open Recovery centre to retry or remove.
+                                Open Recovery centre to retry sync. Do not recreate until the original idempotency key is checked.
                             </p>
                             <a
                                 href="/offline/sales"
