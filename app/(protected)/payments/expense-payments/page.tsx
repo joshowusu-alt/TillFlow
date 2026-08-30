@@ -32,15 +32,18 @@ function ExpensePaymentForm({
       </div>
       <div>
         <div className="text-xs text-black/50">Till (cash from this drawer)</div>
-        <select className="input" name="tillId" required={openTills.length > 0} defaultValue={openTills[0]?.tillId ?? ''}>
+        <select className="input" name="tillId" required={openTills.length > 0} defaultValue={openTills.length === 1 ? openTills[0].tillId : ''}>
           {openTills.length === 0 ? (
             <option value="">No open till — open a till for cash</option>
           ) : (
-            openTills.map((till) => (
-              <option key={till.tillId} value={till.tillId}>
-                {till.tillName}
-              </option>
-            ))
+            <>
+              {openTills.length > 1 ? <option value="">Select till…</option> : null}
+              {openTills.map((till) => (
+                <option key={till.tillId} value={till.tillId}>
+                  {till.tillName}
+                </option>
+              ))}
+            </>
           )}
         </select>
       </div>

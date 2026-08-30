@@ -767,6 +767,9 @@ async function _runImport(
     // ProductImport must exist before chunk writes so importRunId is durable.
     // Prefer a stable clientImportKey (same submit retry); otherwise the row id.
     const normalizedClientImportKey = meta.clientImportKey?.trim() || '';
+    if ((importMode === 'PURCHASES' || importMode === 'OPENING_STOCK') && !normalizedClientImportKey) {
+      return err('This import form is out of date. Reload the file and try again so paid chunks can replay safely.');
+    }
     const importRecord = await prisma.productImport.create({
       data: {
         businessId,

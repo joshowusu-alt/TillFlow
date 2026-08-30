@@ -130,4 +130,12 @@ describe('ImportStockClient retry identity', () => {
     expect(src).toContain('setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`)');
     expect(src).not.toContain('Math.random().toString(36).slice(2, 8)');
   });
+
+  it('rejects paid/opening imports without a clientImportKey', () => {
+    const action = readFileSync(join(process.cwd(), 'app/actions/import-stock.ts'), 'utf8');
+    const api = readFileSync(join(process.cwd(), 'app/api/import-stock/route.ts'), 'utf8');
+    expect(action).toContain("importMode === 'PURCHASES' || importMode === 'OPENING_STOCK'");
+    expect(action).toContain('normalizedClientImportKey');
+    expect(api).toContain('clientImportKey');
+  });
 });

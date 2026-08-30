@@ -138,15 +138,18 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
           </div>
           <div>
             <label className="label">Till (cash from this drawer)</label>
-            <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts[0]?.tillId ?? ''}>
+            <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts.length === 1 ? openShifts[0].tillId : ''}>
               {openShifts.length === 0 ? (
                 <option value="">No open till — open a till for cash</option>
               ) : (
-                openShifts.map((shift) => (
-                  <option key={shift.tillId} value={shift.tillId}>
-                    {shift.till.name}
-                  </option>
-                ))
+                <>
+                  {openShifts.length > 1 ? <option value="">Select till…</option> : null}
+                  {openShifts.map((shift) => (
+                    <option key={shift.tillId} value={shift.tillId}>
+                      {shift.till.name}
+                    </option>
+                  ))}
+                </>
               )}
             </select>
           </div>
