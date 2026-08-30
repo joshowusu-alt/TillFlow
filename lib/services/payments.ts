@@ -9,7 +9,11 @@ import {
   debitCashBankLines,
   type JournalLine
 } from './shared';
-import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import {
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  getOpenCashShiftForPayment,
+  recordCashDrawerEntryTx,
+} from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { UserError } from '@/lib/action-utils';
 import type { Role } from '@/lib/auth';
@@ -55,6 +59,9 @@ export type RecordSupplierPaymentOptions = {
   actorName?: string | null;
   notes?: string;
   idempotencyKey: string;
+  /** Required when any payment line is CASH. */
+  tillId?: string | null;
+  shiftId?: string | null;
 };
 
 export type RecordSupplierPaymentResult = {
@@ -500,16 +507,20 @@ async function recordSupplierPaymentImpl(
         throw new Error('Payment exceeds outstanding balance');
       }
 
-      const openShift = split.cashPence > 0
-        ? await getOpenCashShiftForPayment(tx, {
-            businessId,
-            storeId: invoice.storeId,
-            userId: recordedByUserId,
-          })
-        : null;
-
-      if (split.cashPence > 0 && !openShift) {
-        throw new Error('Open shift is required before recording cash supplier payments.');
+      let openShift: { id: string; tillId: string } | null = null;
+      if (split.cashPence > 0) {
+        if (!options.tillId) {
+          throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+        }
+        openShift = await getOpenCashShiftForPayment(tx, {
+          businessId,
+          storeId: invoice.storeId,
+          tillId: options.tillId,
+          shiftId: options.shiftId,
+        });
+        if (!openShift) {
+          throw new Error('Open shift is required before recording cash supplier payments.');
+        }
       }
 
       await assertMoneyMovementTenantChain(tx as any, {

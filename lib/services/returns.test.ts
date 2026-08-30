@@ -361,6 +361,7 @@ describe('createPurchaseReturn cash drawer', () => {
       refundMethod: 'CASH',
       refundAmountPence: 5000,
       type: 'RETURN',
+      tillId: 'till-1',
     });
 
     expect(mockRecordCashDrawerEntryTx).toHaveBeenCalledWith(
@@ -385,8 +386,24 @@ describe('createPurchaseReturn cash drawer', () => {
         refundMethod: 'CASH',
         refundAmountPence: 5000,
         type: 'RETURN',
+        tillId: 'till-1',
       }),
     ).rejects.toThrow('Open shift is required before recording a cash purchase refund.');
+    expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a cash purchase return has no tillId', async () => {
+    await expect(
+      createPurchaseReturn({
+        businessId: 'biz-1',
+        purchaseInvoiceId: 'pinv-1',
+        userId: 'user-1',
+        refundMethod: 'CASH',
+        refundAmountPence: 5000,
+        type: 'RETURN',
+      }),
+    ).rejects.toThrow('Select an open till before recording a cash purchase refund.');
+    expect(mockGetOpenCashShiftForPayment).not.toHaveBeenCalled();
     expect(mockRecordCashDrawerEntryTx).not.toHaveBeenCalled();
   });
 });

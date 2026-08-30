@@ -18,7 +18,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
   const page = Math.max(1, parseInt(searchParams?.page ?? '1', 10) || 1);
 
   // Run all queries in parallel
-  const [expenseAccounts, expenseCount, expenses] = await Promise.all([
+  const [expenseAccounts, expenseCount, expenses, openShifts] = await Promise.all([
     prisma.account.findMany({
       where: {
         businessId: business.id,
@@ -46,6 +46,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
       take: DEFAULT_PAGE_SIZE,
+    }),
+    prisma.shift.findMany({
+      where: {
+        status: 'OPEN',
+        till: { storeId: store.id, active: true, store: { businessId: business.id } },
+      },
+      select: { id: true, tillId: true, till: { select: { name: true } } },
+      orderBy: { openedAt: 'desc' },
     }),
   ]);
 
@@ -126,6 +134,20 @@ export default async function ExpensesPage({ searchParams }: { searchParams?: { 
               <option value="CARD">Card</option>
               <option value="TRANSFER">Transfer</option>
               <option value="MOBILE_MONEY">Mobile Money</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Till (cash from this drawer)</label>
+            <select className="input" name="tillId" required={openShifts.length > 0} defaultValue={openShifts[0]?.tillId ?? ''}>
+              {openShifts.length === 0 ? (
+                <option value="">No open till — open a till for cash</option>
+              ) : (
+                openShifts.map((shift) => (
+                  <option key={shift.tillId} value={shift.tillId}>
+                    {shift.till.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           {/* Section: Details */}

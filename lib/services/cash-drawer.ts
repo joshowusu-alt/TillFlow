@@ -54,37 +54,67 @@ export async function getOpenShiftForTill(
   });
 }
 
+export const EXPLICIT_CASH_TILL_REQUIRED_MSG =
+  'Select an open till before recording this cash payment. Cash from the till cannot be guessed from another till.';
+
+export type OpenCashShiftLookup = {
+  businessId: string;
+  storeId: string;
+  /** Explicit destination till. Takes precedence over fallbackTillId. */
+  tillId?: string | null;
+  /** When set, must be the OPEN shift on the resolved till. */
+  shiftId?: string | null;
+  /**
+   * Invoice-till fallback only (customer receipt / sales cash refund).
+   * Never used to guess the user's newest OPEN shift.
+   */
+  fallbackTillId?: string | null;
+  /** Ignored for drawer resolution. Kept so callers do not silently reintroduce user-newest. */
+  userId?: string | null;
+};
+
+/**
+ * Resolve one exact active till + OPEN shift. Never infers the drawer from
+ * the actor's newest OPEN shift. Without tillId / shiftId / fallbackTillId,
+ * returns null even if the user has an OPEN shift.
+ */
 export async function getOpenCashShiftForPayment(
   tx: any,
-  input: {
-    businessId: string;
-    storeId: string;
-    userId?: string | null;
-    fallbackTillId?: string | null;
-  }
-) {
-  if (input.fallbackTillId) {
-    const tillShift = await getOpenShiftForTill(input.businessId, input.fallbackTillId, tx);
-    return tillShift ? { id: tillShift.id, tillId: tillShift.tillId } : null;
+  input: OpenCashShiftLookup
+): Promise<{ id: string; tillId: string } | null> {
+  const targetTillId = input.tillId || input.fallbackTillId || null;
+  if (!targetTillId && !input.shiftId) {
+    return null;
   }
 
-  if (input.userId) {
-    const userShift = await tx.shift.findFirst({
-      where: {
-        status: 'OPEN',
-        userId: input.userId,
-        till: {
-          storeId: input.storeId,
-          store: { businessId: input.businessId },
-        },
+  const shift = await tx.shift.findFirst({
+    where: {
+      ...(input.shiftId ? { id: input.shiftId } : {}),
+      ...(targetTillId ? { tillId: targetTillId } : {}),
+      status: 'OPEN',
+      till: {
+        ...(targetTillId ? { id: targetTillId } : {}),
+        active: true,
+        storeId: input.storeId,
+        store: { businessId: input.businessId },
       },
-      select: { id: true, tillId: true },
-      orderBy: { openedAt: 'desc' },
-    });
-    if (userShift) return userShift;
-  }
+    },
+    select: { id: true, tillId: true },
+    orderBy: { openedAt: 'desc' },
+  });
 
-  return null;
+  return shift;
+}
+
+export async function requireOpenCashShiftForTill(
+  tx: any,
+  input: OpenCashShiftLookup
+): Promise<{ id: string; tillId: string }> {
+  const shift = await getOpenCashShiftForPayment(tx, input);
+  if (!shift) {
+    throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+  }
+  return shift;
 }
 
 export type CashPurchasePaymentRef = {

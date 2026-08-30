@@ -4,11 +4,19 @@ import SubmitButton from '@/components/SubmitButton';
 import ResponsiveDataTable from '@/components/ResponsiveDataTable';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import { prisma } from '@/lib/prisma';
-import { requireBusiness } from '@/lib/auth';
+import { requireBusinessStore } from '@/lib/auth';
 import { formatMoney, formatDateTime } from '@/lib/format';
 import { recordExpensePaymentAction } from '@/app/actions/expense-payments';
 
-function ExpensePaymentForm({ expenseId }: { expenseId: string }) {
+type OpenTillOption = { tillId: string; tillName: string; shiftId: string };
+
+function ExpensePaymentForm({
+  expenseId,
+  openTills,
+}: {
+  expenseId: string;
+  openTills: OpenTillOption[];
+}) {
   return (
     <form action={recordExpensePaymentAction} className="grid gap-2 sm:grid-cols-2">
       <input type="hidden" name="expenseId" value={expenseId} />
@@ -20,6 +28,20 @@ function ExpensePaymentForm({ expenseId }: { expenseId: string }) {
           <option value="CARD">Card</option>
           <option value="TRANSFER">Transfer</option>
           <option value="MOBILE_MONEY">Mobile Money</option>
+        </select>
+      </div>
+      <div>
+        <div className="text-xs text-black/50">Till (cash from this drawer)</div>
+        <select className="input" name="tillId" required={openTills.length > 0} defaultValue={openTills[0]?.tillId ?? ''}>
+          {openTills.length === 0 ? (
+            <option value="">No open till — open a till for cash</option>
+          ) : (
+            openTills.map((till) => (
+              <option key={till.tillId} value={till.tillId}>
+                {till.tillName}
+              </option>
+            ))
+          )}
         </select>
       </div>
       <div>
@@ -48,21 +70,37 @@ function ExpensePaymentForm({ expenseId }: { expenseId: string }) {
 }
 
 export default async function ExpensePaymentsPage({ searchParams }: { searchParams?: { error?: string } }) {
-  const { business } = await requireBusiness(['MANAGER', 'OWNER']);
-  if (!business) return <div className="card p-6">Seed data missing.</div>;
+  const { business, store } = await requireBusinessStore(['MANAGER', 'OWNER']);
+  if (!business || !store) return <div className="card p-6">Seed data missing.</div>;
 
-  const expenses = await prisma.expense.findMany({
-    where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
-    select: {
-      id: true,
-      createdAt: true,
-      amountPence: true,
-      paymentStatus: true,
-      account: { select: { name: true } },
-      payments: { select: { amountPence: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const [expenses, openShifts] = await Promise.all([
+    prisma.expense.findMany({
+      where: { businessId: business.id, paymentStatus: { in: ['UNPAID', 'PART_PAID'] } },
+      select: {
+        id: true,
+        createdAt: true,
+        amountPence: true,
+        paymentStatus: true,
+        account: { select: { name: true } },
+        payments: { select: { amountPence: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.shift.findMany({
+      where: {
+        status: 'OPEN',
+        till: { storeId: store.id, active: true, store: { businessId: business.id } },
+      },
+      select: { id: true, tillId: true, till: { select: { name: true } } },
+      orderBy: { openedAt: 'desc' },
+    }),
+  ]);
+
+  const openTills = openShifts.map((shift) => ({
+    tillId: shift.tillId,
+    tillName: shift.till.name,
+    shiftId: shift.id,
+  }));
 
   return (
     <div className="space-y-6">
@@ -94,7 +132,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                           {formatMoney(outstanding, business.currency)}
                         </td>
                         <td className="px-3 py-3">
-                          <ExpensePaymentForm expenseId={expense.id} />
+                          <ExpensePaymentForm expenseId={expense.id} openTills={openTills} />
                         </td>
                       </tr>
                     );
@@ -148,7 +186,7 @@ export default async function ExpensePaymentsPage({ searchParams }: { searchPara
                       />
                     </div>
                     <DataCardActions className="flex-col">
-                      <ExpensePaymentForm expenseId={expense.id} />
+                      <ExpensePaymentForm expenseId={expense.id} openTills={openTills} />
                     </DataCardActions>
                   </DataCard>
                 );

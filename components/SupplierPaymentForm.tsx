@@ -4,6 +4,12 @@ import { useState } from 'react';
 import SubmitButton from '@/components/SubmitButton';
 import { recordSupplierPaymentAction } from '@/app/actions/payments';
 
+export type OpenTillOption = {
+  tillId: string;
+  tillName: string;
+  shiftId: string;
+};
+
 type Props = {
   invoiceId: string;
   returnTo?: string;
@@ -11,6 +17,7 @@ type Props = {
   amountPlaceholder?: string;
   /** Optional form layout class; defaults to supplier-payments grid. */
   formClassName?: string;
+  openTills?: OpenTillOption[];
 };
 
 /**
@@ -23,6 +30,7 @@ export default function SupplierPaymentForm({
   today,
   amountPlaceholder = '0.00',
   formClassName = 'grid gap-2 md:grid-cols-2',
+  openTills = [],
 }: Props) {
   const [idempotencyKey] = useState(() =>
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -42,6 +50,25 @@ export default function SupplierPaymentForm({
           <option value="CARD">Card</option>
           <option value="TRANSFER">Bank Transfer</option>
           <option value="MOBILE_MONEY">Mobile Money (MoMo)</option>
+        </select>
+      </div>
+      <div>
+        <div className="text-xs font-medium text-black/50">Till (cash from this drawer)</div>
+        <select
+          className="input"
+          name="tillId"
+          required={openTills.length > 0}
+          defaultValue={openTills[0]?.tillId ?? ''}
+        >
+          {openTills.length === 0 ? (
+            <option value="">No open till — open a till for cash</option>
+          ) : (
+            openTills.map((till) => (
+              <option key={till.tillId} value={till.tillId}>
+                {till.tillName}
+              </option>
+            ))
+          )}
         </select>
       </div>
       <div>

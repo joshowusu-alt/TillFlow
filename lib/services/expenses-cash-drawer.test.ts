@@ -65,6 +65,7 @@ const baseExpenseInput = {
   paymentStatus: 'PAID' as const,
   method: 'CASH' as const,
   amountPaidPence: 50000,
+  tillId: 'till-1',
 };
 
 describe('expense cash drawer linkage', () => {
@@ -124,6 +125,27 @@ describe('expense cash drawer linkage', () => {
       };
     });
     prismaMock.cashDrawerEntry.findFirst.mockResolvedValue(null);
+  });
+
+  it('uses the explicit Till 3 OPEN shift when the user also has Till 1 open', async () => {
+    getOpenCashShiftForPaymentMock.mockResolvedValue({ id: 'shift-3', tillId: 'till-3' });
+    prismaMock.shift.findFirst.mockResolvedValue({ id: 'shift-3', tillId: 'till-3' });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-3', storeId });
+
+    await createExpense({ ...baseExpenseInput, tillId: 'till-3' });
+
+    expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ businessId: bizId, storeId, tillId: 'till-3' }),
+    );
+    expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.not.objectContaining({ fallbackTillId: expect.anything() }),
+    );
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ tillId: 'till-3', shiftId: 'shift-3' }),
+    );
   });
 
   it('1. PAID Cash expense during open shift creates PAID_OUT_EXPENSE', async () => {
@@ -242,12 +264,13 @@ describe('expense cash drawer linkage', () => {
       expenseId,
       method: 'CASH',
       amountPence: 25000,
+      tillId: 'till-1',
       idempotencyKey: 'idem-exp-cash',
     });
 
     expect(getOpenCashShiftForPaymentMock).toHaveBeenCalledWith(
       prismaMock,
-      expect.objectContaining({ businessId: bizId, storeId, userId }),
+      expect.objectContaining({ businessId: bizId, storeId, tillId: 'till-1' }),
     );
     expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
       prismaMock,
@@ -268,6 +291,7 @@ describe('expense cash drawer linkage', () => {
       expenseId,
       method: 'CASH',
       amountPence: 25000,
+      tillId: 'till-1',
       idempotencyKey: 'idem-exp-drawer',
     });
 
@@ -329,6 +353,7 @@ describe('expense cash drawer linkage', () => {
         expenseId,
         method: 'CASH',
         amountPence: 25000,
+        tillId: 'till-1',
         idempotencyKey: 'idem-exp-noshift',
       }),
     ).rejects.toThrow(CASH_EXPENSE_SHIFT_REQUIRED_MSG);
@@ -368,6 +393,7 @@ describe('expense cash drawer linkage', () => {
         expenseId,
         method: 'CASH',
         amountPence: 25000,
+        tillId: 'till-1',
         idempotencyKey: 'idem-exp-drawer-fail',
       }),
     ).rejects.toThrow('drawer write failed');

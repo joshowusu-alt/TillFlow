@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
   getOpenCashShiftForPayment,
   recordCashDrawerEntryTx,
+  requireOpenCashShiftForTill,
   summarizeCashDrawerEntries,
 } from './cash-drawer';
 import { vi } from 'vitest';
@@ -170,5 +172,118 @@ describe('getOpenCashShiftForPayment', () => {
 
     expect(result).toBeNull();
     expect(tx.shift.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null with only userId even if the user has an OPEN shift', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'shift-user', tillId: 'till-1' }),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      userId: 'user-1',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.shift.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('resolves the explicit till OPEN shift, not another open till', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockImplementation(async ({ where }: any) => {
+          if (where.tillId === 'till-3' && where.status === 'OPEN') {
+            return { id: 'shift-3', tillId: 'till-3' };
+          }
+          if (where.tillId === 'till-1') {
+            return { id: 'shift-1', tillId: 'till-1' };
+          }
+          return null;
+        }),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      userId: 'user-1',
+      tillId: 'till-3',
+    });
+
+    expect(result).toEqual({ id: 'shift-3', tillId: 'till-3' });
+    expect(tx.shift.findFirst.mock.calls[0][0].where.tillId).toBe('till-3');
+    expect(tx.shift.findFirst.mock.calls[0][0].where.till.active).toBe(true);
+    expect(tx.shift.findFirst.mock.calls[0][0].where.till.storeId).toBe('store-1');
+  });
+
+  it('rejects a closed shiftId even when the till has no other lookup', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-closed',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.shift.findFirst.mock.calls[0][0].where).toMatchObject({
+      id: 'shift-closed',
+      tillId: 'till-1',
+      status: 'OPEN',
+    });
+  });
+
+  it('rejects an inactive till', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      tillId: 'till-inactive',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.shift.findFirst.mock.calls[0][0].where.till.active).toBe(true);
+  });
+
+  it('rejects a till from another store', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    const result = await getOpenCashShiftForPayment(tx, {
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      tillId: 'till-other-store',
+    });
+
+    expect(result).toBeNull();
+    expect(tx.shift.findFirst.mock.calls[0][0].where.till.storeId).toBe('store-1');
+  });
+
+  it('requireOpenCashShiftForTill throws when the till cannot be resolved', async () => {
+    const tx = { shift: { findFirst: vi.fn().mockResolvedValue(null) } };
+
+    await expect(
+      requireOpenCashShiftForTill(tx, {
+        businessId: 'biz-1',
+        storeId: 'store-1',
+        userId: 'user-1',
+      }),
+    ).rejects.toThrow(EXPLICIT_CASH_TILL_REQUIRED_MSG);
   });
 });

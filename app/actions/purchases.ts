@@ -1,6 +1,7 @@
 'use server';
 
 import { createPurchase } from '@/lib/services/purchases';
+import { EXPLICIT_CASH_TILL_REQUIRED_MSG } from '@/lib/services/cash-drawer';
 import { createSupplier } from '@/lib/services/suppliers';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
@@ -55,9 +56,15 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
     const cashPaid = formInt(formData, 'cashPaid');
     const cardPaid = formInt(formData, 'cardPaid');
     const transferPaid = formInt(formData, 'transferPaid');
+    const tillId = formString(formData, 'tillId');
     const idempotencyKey = formString(formData, 'idempotencyKey');
     if (cashPaid + cardPaid + transferPaid > 0 && !idempotencyKey) {
       redirect('/purchases?error=stale-purchase-form');
+    }
+    const willUseCash =
+      cashPaid > 0 || (paymentStatus === 'PAID' && cashPaid + cardPaid + transferPaid === 0);
+    if (willUseCash && !tillId) {
+      return err(EXPLICIT_CASH_TILL_REQUIRED_MSG);
     }
 
     const invoice = await createPurchase({
@@ -73,6 +80,7 @@ export async function createPurchaseAction(formData: FormData): Promise<void> {
       ],
       lines,
       userId: user.id,
+      tillId: tillId || undefined,
       idempotencyKey: idempotencyKey || undefined,
     });
 

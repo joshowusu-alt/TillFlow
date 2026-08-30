@@ -256,6 +256,10 @@ export async function createPurchaseReturn(input: {
   refundAmountPence?: number | null;
   reason?: string | null;
   type: 'RETURN' | 'VOID';
+  /** Required for cash refunds. Purchase invoices have no till — the action must pass tillId. */
+  tillId?: string | null;
+  shiftId?: string | null;
+  fallbackTillId?: string | null;
 }) {
   return measureServerOperation(
     'action.purchase-return.create',
@@ -277,6 +281,9 @@ async function createPurchaseReturnImpl(input: {
   refundAmountPence?: number | null;
   reason?: string | null;
   type: 'RETURN' | 'VOID';
+  tillId?: string | null;
+  shiftId?: string | null;
+  fallbackTillId?: string | null;
 }) {
   const invoice = await prisma.purchaseInvoice.findFirst({
     where: { id: input.purchaseInvoiceId, businessId: input.businessId },
@@ -334,10 +341,16 @@ async function createPurchaseReturnImpl(input: {
     });
 
     if (refundAmount > 0 && refundMethod === 'CASH') {
+      // Action must pass tillId; PurchaseInvoice has no invoice till to fall back to.
+      if (!input.tillId && !input.fallbackTillId) {
+        throw new UserError('Select an open till before recording a cash purchase refund.');
+      }
       const openShift = await getOpenCashShiftForPayment(tx, {
         businessId: invoice.businessId,
         storeId: invoice.storeId,
-        userId: input.userId,
+        tillId: input.tillId,
+        shiftId: input.shiftId,
+        fallbackTillId: input.fallbackTillId,
       });
       if (!openShift) {
         throw new UserError('Open shift is required before recording a cash purchase refund.');

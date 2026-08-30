@@ -130,6 +130,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 8000 }],
       lines,
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
@@ -164,6 +165,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 2500 }],
       lines,
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.purchaseInvoiceLine.createMany).toHaveBeenCalledTimes(1);
@@ -226,6 +228,7 @@ describe('purchase unit conversion', () => {
         payments: [{ method: 'CASH', amountPence: 999999 }],
         lines: [{ productId: 'prod-1', unitId: 'unit-1', qtyInUnit: 1, unitCostPence: 100 }],
         userId,
+        tillId: 'till-1',
       })
     ).rejects.toThrow('Payment exceeds total due');
   });
@@ -252,6 +255,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 1050 }],
       lines: [{ productId, unitId: quarterPackUnitId, qtyInUnit: 2 }],
       userId,
+      tillId: 'till-1',
     });
 
     const createManyCall = prismaMock.purchaseInvoiceLine.createMany.mock.calls[0][0];
@@ -280,6 +284,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith({
@@ -318,6 +323,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -357,6 +363,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
@@ -427,6 +434,7 @@ describe('purchase unit conversion', () => {
         { productId: 'prod-3', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 },
       ],
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.product.updateMany).toHaveBeenCalledWith(
@@ -474,6 +482,7 @@ describe('purchase unit conversion', () => {
       payments: [{ method: 'CASH', amountPence: 100 }],
       lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
       userId,
+      tillId: 'till-1',
     });
 
     expect(prismaMock.product.findMany).not.toHaveBeenCalled();

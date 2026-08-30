@@ -25,6 +25,9 @@ export type ExpensePaymentInput = {
   expenseId: string;
   method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY';
   amountPence: number;
+  /** Required when method is CASH. */
+  tillId?: string | null;
+  shiftId?: string | null;
   reference?: string | null;
   idempotencyKey: string;
 };
@@ -110,7 +113,8 @@ export async function recordExpensePayment(input: ExpensePaymentInput) {
           ? await getOpenCashShiftForPayment(tx, {
               businessId: input.businessId,
               storeId: input.storeId,
-              userId: input.userId,
+              tillId: input.tillId,
+              shiftId: input.shiftId,
             })
           : null;
 

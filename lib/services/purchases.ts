@@ -12,7 +12,11 @@ import {
   type JournalLine
 } from './shared';
 import { fetchInventoryMap, incrementInventoryBalance } from './shared';
-import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import {
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  getOpenCashShiftForPayment,
+  recordCashDrawerEntryTx,
+} from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import {
   assertMoneyMovementTenantChain,
@@ -58,6 +62,9 @@ export type CreatePurchaseInput = {
    * Cash drawer PAID_OUT entries are still recorded when a shift is open.
    */
   skipCashDrawerRequirement?: boolean;
+  /** Required when cash payments are recorded and skipCashDrawerRequirement is not set. */
+  tillId?: string | null;
+  shiftId?: string | null;
   /** Required for durable replay when embedded payments are externally repeatable. */
   idempotencyKey?: string;
 };
@@ -213,26 +220,39 @@ async function createPurchaseInvoicePayments(
     recordedByUserId?: string | null;
     supplierName?: string | null;
     skipCashDrawerRequirement?: boolean;
+    tillId?: string | null;
+    shiftId?: string | null;
   }
 ) {
   if (input.payments.length === 0) return;
 
   const cashSplit = splitPayments(input.payments);
-  const openShift =
-    cashSplit.cashPence > 0
-      ? await getOpenCashShiftForPayment(client, {
-          businessId: input.businessId,
-          storeId: input.storeId,
-          userId: input.recordedByUserId,
-        })
-      : null;
-
-  if (
-    cashSplit.cashPence > 0 &&
-    !input.skipCashDrawerRequirement &&
-    (!input.recordedByUserId || !openShift)
-  ) {
-    throw new Error('Open shift is required before recording cash supplier payments.');
+  let openShift: { id: string; tillId: string } | null = null;
+  if (cashSplit.cashPence > 0) {
+    if (input.skipCashDrawerRequirement) {
+      // Imports post Cash to GL without a till. Do not guess a user shift.
+      openShift = input.tillId
+        ? await getOpenCashShiftForPayment(client, {
+            businessId: input.businessId,
+            storeId: input.storeId,
+            tillId: input.tillId,
+            shiftId: input.shiftId,
+          })
+        : null;
+    } else {
+      if (!input.tillId) {
+        throw new Error(EXPLICIT_CASH_TILL_REQUIRED_MSG);
+      }
+      openShift = await getOpenCashShiftForPayment(client, {
+        businessId: input.businessId,
+        storeId: input.storeId,
+        tillId: input.tillId,
+        shiftId: input.shiftId,
+      });
+      if (!input.recordedByUserId || !openShift) {
+        throw new Error('Open shift is required before recording cash supplier payments.');
+      }
+    }
   }
 
   await assertMoneyMovementTenantChain(client, {
@@ -515,6 +535,8 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
         recordedByUserId: input.userId ?? null,
         supplierName: supplier?.name ?? null,
         skipCashDrawerRequirement: input.skipCashDrawerRequirement,
+        tillId: input.tillId,
+        shiftId: input.shiftId,
       });
     }
 

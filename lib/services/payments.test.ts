@@ -192,7 +192,7 @@ describe('payments service', () => {
       'biz-1',
       'purchase-1',
       [{ method: 'CASH', amountPence: 50000 }],
-      { ...ownerOpts, idempotencyKey: 'idem-cash-1' },
+      { ...ownerOpts, idempotencyKey: 'idem-cash-1', tillId: 'till-1' },
     );
 
     expect(prismaMock.purchasePayment.create).toHaveBeenCalledWith({
@@ -828,6 +828,7 @@ describe('supplier payment GH₵1,400 expected-cash reconciliation (unit)', () =
         actorRole: 'OWNER',
         actorName: 'Owner',
         idempotencyKey: 'idem-1400',
+        tillId: 'till-1',
       },
     );
 
@@ -869,6 +870,7 @@ describe('supplier payment GH₵1,400 expected-cash reconciliation (unit)', () =
         actorRole: 'OWNER',
         actorName: 'Owner',
         idempotencyKey: 'idem-1400',
+        tillId: 'till-1',
       },
     );
 
@@ -881,5 +883,141 @@ describe('supplier payment GH₵1,400 expected-cash reconciliation (unit)', () =
       60000 -
       (replay.invoice?.payments.reduce((s: number, p: { amountPence: number }) => s + p.amountPence, 0) ?? 0);
     expect(outstanding).toBe(30000);
+  });
+
+  it('uses explicit Till 3 for a cash supplier payment when Till 1 is also open', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 50000,
+      payments: [],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
+    });
+    prismaMock.shift.findFirst.mockImplementation(async ({ where }: any) => {
+      if (where.id === 'shift-3' || where.tillId === 'till-3') {
+        return { id: 'shift-3', tillId: 'till-3' };
+      }
+      if (where.id === 'shift-1' || where.tillId === 'till-1') {
+        return { id: 'shift-1', tillId: 'till-1' };
+      }
+      return null;
+    });
+    prismaMock.till.findFirst.mockResolvedValue({ id: 'till-3', storeId: 'store-1' });
+    prismaMock.purchaseInvoice.update.mockResolvedValue({
+      id: 'purchase-1',
+      paymentStatus: 'PAID',
+      payments: [{ amountPence: 50000 }],
+    });
+
+    await recordSupplierPayment(
+      'biz-1',
+      'purchase-1',
+      [{ method: 'CASH', amountPence: 50000 }],
+      { ...ownerOpts, idempotencyKey: 'idem-till-3', tillId: 'till-3' },
+    );
+
+    expect(recordCashDrawerEntryTxMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ tillId: 'till-3', shiftId: 'shift-3' }),
+    );
+  });
+
+  it('rejects a cash supplier payment against a till from another store', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 50000,
+      payments: [],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
+    });
+    prismaMock.shift.findFirst.mockResolvedValue(null);
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CASH', amountPence: 50000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-wrong-store', tillId: 'till-other-store' },
+      ),
+    ).rejects.toThrow('Open shift is required before recording cash supplier payments.');
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cash supplier payment when the supplied shift is closed', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 50000,
+      payments: [],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
+    });
+    prismaMock.shift.findFirst.mockResolvedValue(null);
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CASH', amountPence: 50000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-closed', tillId: 'till-1', shiftId: 'shift-closed' },
+      ),
+    ).rejects.toThrow('Open shift is required before recording cash supplier payments.');
+    expect(prismaMock.shift.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-closed', status: 'OPEN' }),
+      }),
+    );
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cash supplier payment against an inactive till', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 50000,
+      payments: [],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
+    });
+    prismaMock.shift.findFirst.mockResolvedValue(null);
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CASH', amountPence: 50000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-inactive', tillId: 'till-inactive' },
+      ),
+    ).rejects.toThrow('Open shift is required before recording cash supplier payments.');
+    expect(prismaMock.shift.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ till: expect.objectContaining({ active: true }) }),
+      }),
+    );
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit tillId for cash supplier payments', async () => {
+    prismaMock.purchaseInvoice.findFirst.mockResolvedValue({
+      id: 'purchase-1',
+      businessId: 'biz-1',
+      storeId: 'store-1',
+      totalPence: 50000,
+      payments: [],
+      supplier: { id: 'supplier-1', name: 'Supplier A' },
+    });
+
+    await expect(
+      recordSupplierPayment(
+        'biz-1',
+        'purchase-1',
+        [{ method: 'CASH', amountPence: 50000 }],
+        { ...ownerOpts, idempotencyKey: 'idem-no-till' },
+      ),
+    ).rejects.toThrow('Select an open till before recording this cash payment');
+    expect(prismaMock.shift.findFirst).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
   });
 });

@@ -71,7 +71,7 @@ export default async function PurchasesPage({
             ...(selectedStoreId ? { storeId: selectedStoreId } : {}),
           };
 
-  const [products, suppliers, units, purchaseCount, purchases] = await Promise.all([
+  const [products, suppliers, units, purchaseCount, purchases, openShifts] = await Promise.all([
     prisma.product.findMany({
       where: { businessId: business.id, active: true },
       select: {
@@ -132,7 +132,23 @@ export default async function PurchasesPage({
       skip: (page - 1) * DEFAULT_PAGE_SIZE,
       take: DEFAULT_PAGE_SIZE,
     }),
+    selectedStoreId
+      ? prisma.shift.findMany({
+          where: {
+            status: 'OPEN',
+            till: { storeId: selectedStoreId, active: true, store: { businessId: business.id } },
+          },
+          select: { id: true, tillId: true, till: { select: { name: true } } },
+          orderBy: { openedAt: 'desc' },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const openTills = openShifts.map((shift) => ({
+    tillId: shift.tillId,
+    tillName: shift.till.name,
+    shiftId: shift.id,
+  }));
 
   const totalPages = Math.max(1, Math.ceil(purchaseCount / DEFAULT_PAGE_SIZE));
   const purchaseRows = purchases.map((purchase) => {
@@ -311,6 +327,7 @@ export default async function PurchasesPage({
               storeId={selectedStoreId}
               currency={business.currency}
               vatEnabled={business.vatEnabled}
+              openTills={openTills}
               units={units.map((unit) => ({ id: unit.id, name: unit.name }))}
               suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
               products={products.map((product) => ({

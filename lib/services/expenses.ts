@@ -1,7 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { ACCOUNT_CODES, postJournalEntry } from '@/lib/accounting';
 import { creditCashBankLines, derivePaymentStatus, splitPayments, type JournalLine } from './shared';
-import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
+import {
+  EXPLICIT_CASH_TILL_REQUIRED_MSG,
+  getOpenCashShiftForPayment,
+  recordCashDrawerEntryTx,
+} from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import {
   assertMoneyMovementTenantChain,
@@ -17,8 +21,7 @@ import {
   sumAmountPence,
 } from './money-idempotency';
 
-export const CASH_EXPENSE_SHIFT_REQUIRED_MSG =
-  'Open a shift before recording a cash expense from the till.';
+export const CASH_EXPENSE_SHIFT_REQUIRED_MSG = EXPLICIT_CASH_TILL_REQUIRED_MSG;
 
 export type ExpenseInput = {
   businessId: string;
@@ -29,6 +32,9 @@ export type ExpenseInput = {
   paymentStatus: 'PAID' | 'PART_PAID' | 'UNPAID';
   method?: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_MONEY' | null;
   amountPaidPence?: number;
+  /** Required when the first payment is CASH. */
+  tillId?: string | null;
+  shiftId?: string | null;
   dueDate?: Date | null;
   vendorName?: string | null;
   reference?: string | null;
@@ -116,7 +122,8 @@ async function createExpenseImpl(input: ExpenseInput) {
         ? await getOpenCashShiftForPayment(tx, {
             businessId: input.businessId,
             storeId: input.storeId,
-            userId: input.userId,
+            tillId: input.tillId,
+            shiftId: input.shiftId,
           })
         : null;
 
