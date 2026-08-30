@@ -22,7 +22,8 @@ export type MoneyCommandKind =
   | 'CUSTOMER_RECEIPT'
   | 'EXPENSE_PAYMENT'
   | 'EXPENSE_CREATE'
-  | 'PURCHASE_CREATE';
+  | 'PURCHASE_CREATE'
+  | 'IMPORT_CHUNK';
 
 export type MoneyIdempotencyRow = {
   id: string;
@@ -141,6 +142,37 @@ export function buildPurchaseCreatePayloadHash(parts: {
     paymentCanon(parts.payments),
     lineCanon,
     parts.userId,
+  ]);
+}
+
+/** Additive IMPORT_CHUNK hash — existing command hashes above stay unchanged. */
+export function buildImportChunkPayloadHash(parts: {
+  businessId: string;
+  storeId: string;
+  importRunId: string;
+  mode: string;
+  operation: string;
+  supplierKey: string;
+  chunkIndex: number;
+  lines: Array<{ productId: string; unitId: string; qtyInUnit: number; unitCostPence?: number | null }>;
+  amountPence: number;
+  method?: string | null;
+}): string {
+  const lineCanon = parts.lines
+    .map((l) => `${l.productId}:${l.unitId}:${l.qtyInUnit}:${l.unitCostPence ?? ''}`)
+    .join('|');
+  return hashCanonicalParts([
+    parts.businessId,
+    'IMPORT_CHUNK',
+    parts.storeId,
+    parts.importRunId,
+    parts.mode,
+    parts.operation,
+    parts.supplierKey,
+    String(parts.chunkIndex),
+    lineCanon,
+    String(parts.amountPence),
+    parts.method ?? '',
   ]);
 }
 
