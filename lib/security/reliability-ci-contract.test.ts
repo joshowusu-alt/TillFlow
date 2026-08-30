@@ -55,9 +55,20 @@ describe('reliability CI governance contract', () => {
     expect(config).toMatch(/reliability-journey\\.spec\\.ts/);
     expect(spec).toContain('shouldRunReliabilityJourney');
     expect(spec).toContain('reliabilitySalesAllowed');
+    expect(spec).toContain('/api/qa/deploy-sha');
+    expect(spec).toContain('LATE_OFFLINE');
     expect(env).toContain("process.env.RELIABILITY_E2E === '1'");
     expect(env).toContain('www.tillflow.app');
     expect(env).toContain('isProductionPlaywrightTarget');
+  });
+
+  it('keeps Preview deploy-sha and identity snapshot off Production', () => {
+    const sha = read('app/api/qa/deploy-sha/route.ts');
+    const snap = read('app/api/qa/reliability-snapshot/route.ts');
+    expect(sha).toContain("process.env.VERCEL_ENV === 'production'");
+    expect(sha).toContain("return NextResponse.json({ error: 'not_available' }, { status: 404 })");
+    expect(snap).toContain('deployedSha');
+    expect(snap).toContain("process.env.VERCEL_ENV === 'production'");
   });
 
   it('documents sqlite CI build vs Preview Postgres build:vercel', () => {

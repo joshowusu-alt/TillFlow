@@ -85,9 +85,38 @@ export async function GET() {
       })
     : [];
 
+  const invoiceIds = invoices.map((row) => row.id);
+  const journals = invoiceIds.length
+    ? await prisma.journalEntry.findMany({
+        where: {
+          businessId: user.businessId,
+          referenceId: { in: invoiceIds },
+        },
+        select: { id: true, referenceType: true, referenceId: true },
+      })
+    : [];
+
+  const moneyKeys = await prisma.moneyIdempotency.findMany({
+    where: { businessId: user.businessId },
+    orderBy: { createdAt: 'desc' },
+    take: 40,
+    select: { commandKind: true, createdAt: true },
+  });
+
+  const productCount = await prisma.product.count({
+    where: { businessId: user.businessId, active: true },
+  });
+
   return NextResponse.json({
+    deployedSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
     businessId: user.businessId,
     userId: user.id,
+    productCount,
+    moneyIdempotency: moneyKeys.map((row) => ({
+      commandKind: row.commandKind,
+      createdAt: row.createdAt,
+    })),
     invoices: invoices.map((invoice) => ({
       invoiceId: invoice.id,
       transactionNumber: invoice.transactionNumber,
@@ -96,13 +125,19 @@ export async function GET() {
       tillId: invoice.tillId,
       tillName: invoice.till?.name ?? null,
       shiftId: invoice.shiftId,
+      shiftTillId: invoice.shift?.tillId ?? null,
       shiftStatus: invoice.shift?.status ?? null,
       cashierUserId: invoice.cashierUserId,
       saleSource: invoice.saleSource,
       totalPence: invoice.totalPence,
+      expectedCashPence: invoice.shift?.expectedCashPence ?? null,
+      cardTotalPence: invoice.shift?.cardTotalPence ?? null,
+      transferTotalPence: invoice.shift?.transferTotalPence ?? null,
+      momoTotalPence: invoice.shift?.momoTotalPence ?? null,
       payments: invoice.payments,
       drawer: drawers.filter((row) => row.shiftId === invoice.shiftId),
       stockMovements: stock.filter((row) => row.referenceId === invoice.id),
+      journals: journals.filter((row) => row.referenceId === invoice.id),
     })),
   });
 }
