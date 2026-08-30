@@ -28,6 +28,7 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
   let invoiceId = '';
   let userId = '';
   let supplierId = '';
+  let tillId = '';
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl!;
@@ -79,6 +80,7 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
     const till = await prisma.till.create({
       data: { storeId, name: `Till ${suffix}` },
     });
+    tillId = till.id;
 
     // Opening float GH₵500 + cash sale GH₵1,000 + customer receipt GH₵200 = GH₵1,700 before supplier out.
     await prisma.shift.create({
@@ -135,6 +137,7 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
       actorRole: 'OWNER',
       actorName: 'Owner',
       idempotencyKey: key,
+      tillId,
     } as const;
 
     const [a, b] = await Promise.all([
@@ -174,7 +177,7 @@ describeConcurrency('supplier payment overlapping transactions (Postgres)', () =
     expect(audits).toHaveLength(1);
 
     const shift = await prisma.shift.findFirst({
-      where: { userId, status: 'OPEN' },
+      where: { tillId, status: 'OPEN' },
     });
     expect(shift?.expectedCashPence).toBe(140000);
 
