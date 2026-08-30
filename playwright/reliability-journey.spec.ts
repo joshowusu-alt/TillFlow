@@ -197,9 +197,15 @@ test.describe('Reliability journey', () => {
       const confirm = page.getByRole('button', { name: /Confirm Import/i });
       await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({ timeout: 30_000 });
       await confirm.click();
-      await expect(page.getByText(/imported|Import complete|products/i).first()).toBeVisible({
+      await expect(page.getByRole('heading', { name: 'Import complete!' })).toBeVisible({
         timeout: 60_000,
       });
+      await expect(page.getByText('Products imported')).toBeVisible();
+      await page.goto('/products', { waitUntil: 'domcontentloaded' });
+      await expect(
+        page.getByText(IMPORT_PRODUCT_NAME, { exact: true }).first(),
+        `imported product ${IMPORT_PRODUCT_NAME} is not on /products`,
+      ).toBeVisible({ timeout: 30_000 });
     });
 
     await test.step('record opening stock', async () => {
@@ -207,9 +213,14 @@ test.describe('Reliability journey', () => {
       const addItem = page.getByRole('button', { name: /\+ Add stock item/i });
       if ((await addItem.count()) === 0) blocked('opening stock', '+ Add stock item is not visible.');
       await addItem.click();
+      const productSelect = page.locator('select').filter({ hasText: PRODUCT_NAME }).first();
+      if ((await productSelect.count()) === 0) {
+        blocked('opening stock', `${PRODUCT_NAME} is not on the opening-stock form.`);
+      }
+      await productSelect.selectOption({ label: PRODUCT_NAME });
       await page.getByRole('button', { name: /Save Opening Capital/i }).click();
-      await expect(page.getByText(/Opening stock|capital|saved|Inventory/i).first()).toBeVisible({
-        timeout: 20_000,
+      await expect(page.getByRole('heading', { name: 'Opening capital recorded!' })).toBeVisible({
+        timeout: 30_000,
       });
     });
 
@@ -481,9 +492,31 @@ test.describe('Reliability journey', () => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: 390, height: 844 });
     await ensureOwnerSession(page);
+
+    await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
+    const tillSelect = page.locator('select').first();
+    await expect(tillSelect, 'mobile flow needs a till selector on /shifts').toBeVisible({
+      timeout: 30_000,
+    });
+    const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
+    if (!till3Value) blocked('mobile POS', 'Till 3 is not available to reopen after close.');
+    await tillSelect.selectOption(till3Value);
+    await page.getByPlaceholder('0.00').fill('20');
+    await page.getByRole('button', { name: /Open Shift/i }).click();
+    await expect(page.getByText(/Shift Active|Till 3/i).first()).toBeVisible({ timeout: 30_000 });
+
     await gotoPos(page);
     await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByText(/Till 3/i).first()).toBeVisible({ timeout: 15_000 });
     await addJourneyProduct(page);
     await completeSaleAndReset(page, /Complete Cash Sale|Complete Sale/i);
+
+    await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
+    const close = page.getByRole('button', { name: /Close Shift/i }).first();
+    await expect(close, 'Close Shift missing after mobile Till 3 sale').toBeVisible({ timeout: 20_000 });
+    await close.click();
+    const actualCash = page.getByLabel(/actual cash|counted cash/i).or(page.locator('input[type="number"]').nth(1));
+    if ((await actualCash.count()) > 0) await actualCash.first().fill('20');
+    await page.getByRole('button', { name: /Close Shift/i }).last().click();
   });
 });

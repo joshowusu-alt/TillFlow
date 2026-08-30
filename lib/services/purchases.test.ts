@@ -557,6 +557,34 @@ describe('purchase unit conversion', () => {
     expect(prismaMock.purchaseInvoice.create).toHaveBeenCalledTimes(1);
     expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
     expect(prismaMock.moneyIdempotency.create).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('commits keyed unpaid purchases in one transaction so inventory cannot lag the money row', async () => {
+    prismaMock.productUnit.findMany.mockResolvedValue([
+      {
+        productId: 'prod-1',
+        unitId: 'unit-piece',
+        conversionToBase: 1,
+        product: { defaultCostBasePence: 100, vatRateBps: 0 },
+        unit: { name: 'Piece' },
+      },
+    ]);
+
+    await createPurchase({
+      businessId: bizId,
+      storeId,
+      paymentStatus: 'UNPAID',
+      payments: [],
+      lines: [{ productId: 'prod-1', unitId: 'unit-piece', qtyInUnit: 1, unitCostPence: 100 }],
+      userId,
+      idempotencyKey: 'po-unpaid-key',
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(prismaMock.moneyIdempotency.create).toHaveBeenCalled();
+    expect(prismaMock.purchasePayment.create).not.toHaveBeenCalled();
+    expect(prismaMock.stockMovement.createMany).toHaveBeenCalled();
   });
 
   it('replays an exact paid purchase key and rejects a payload change', async () => {

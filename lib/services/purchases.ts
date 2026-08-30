@@ -672,7 +672,10 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   };
 
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
-  const needsAtomicMoney = payments.length > 0;
+  // Paid money always needs one commit. A supplied key on unpaid/credit
+  // also needs one commit so a later inventory failure cannot leave a
+  // replayable MoneyIdempotency success without stock.
+  const needsAtomicMoney = payments.length > 0 || Boolean(idempotencyKey);
   if (db) {
     invoice = await runWithMoneyTx(db);
     invoice = await finishInvoice(invoice, db);

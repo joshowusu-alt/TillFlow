@@ -251,4 +251,29 @@ describeConcurrency('paid createPurchase overlapping transactions (Postgres)', (
     expect(await prisma.moneyIdempotency.count({ where: { businessId, key } })).toBe(0);
     expect(await prisma.purchaseInvoice.count({ where: { businessId } })).toBe(beforeInvoices);
   });
+
+  it('commits keyed unpaid purchases once including stock and the money row', async () => {
+    const key = `po-unpaid-${suffix}`;
+    const opts = {
+      businessId,
+      storeId,
+      supplierId,
+      paymentStatus: 'UNPAID' as const,
+      payments: [] as { method: 'CASH'; amountPence: number }[],
+      lines: line(),
+      userId,
+      idempotencyKey: key,
+    };
+    const [a, b] = await Promise.allSettled([createPurchase(opts), createPurchase(opts)]);
+    const fulfilled = [a, b].filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
+      Awaited<ReturnType<typeof createPurchase>>
+    >[];
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    const invoiceId = fulfilled[0]!.value.id;
+    fulfilled.forEach((row) => expect(row.value.id).toBe(invoiceId));
+    expect(await prisma.purchaseInvoice.count({ where: { businessId, id: invoiceId } })).toBe(1);
+    expect(await prisma.purchasePayment.count({ where: { purchaseInvoiceId: invoiceId } })).toBe(0);
+    expect(await prisma.moneyIdempotency.count({ where: { businessId, key } })).toBe(1);
+    expect(await prisma.stockMovement.count({ where: { storeId, referenceId: invoiceId } })).toBe(1);
+  }, 60000);
 });
