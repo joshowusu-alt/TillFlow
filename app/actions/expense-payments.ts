@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'crypto';
 import { recordExpensePayment } from '@/lib/services/expensePayments';
 import { redirect } from 'next/navigation';
 import { formString, formPence, formOptionalString } from '@/lib/form-helpers';
@@ -22,7 +23,8 @@ export async function recordExpensePaymentAction(formData: FormData): Promise<vo
       expenseId,
       method,
       amountPence,
-      reference
+      reference,
+      idempotencyKey: formString(formData, 'idempotencyKey') || randomUUID(),
     });
 
     redirect('/payments/expense-payments');

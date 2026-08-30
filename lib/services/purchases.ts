@@ -14,6 +14,18 @@ import {
 import { fetchInventoryMap, incrementInventoryBalance } from './shared';
 import { getOpenCashShiftForPayment, recordCashDrawerEntryTx } from './cash-drawer';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import {
+  assertMoneyMovementTenantChain,
+  buildPurchaseCreatePayloadHash,
+  findMoneyIdempotency,
+  insertMoneyIdempotency,
+  isPrismaUniqueConstraintOn,
+  MoneyIdempotencyError,
+  MONEY_IDEMPOTENCY_ERROR,
+  normalizeMoneyIdempotencyKey,
+  parseIdempotencyResult,
+  replayOrConflict,
+} from './money-idempotency';
 
 export type PurchasePaymentInput = PaymentInput;
 
@@ -46,6 +58,8 @@ export type CreatePurchaseInput = {
    * Cash drawer PAID_OUT entries are still recorded when a shift is open.
    */
   skipCashDrawerRequirement?: boolean;
+  /** Required for durable replay when embedded payments are externally repeatable. */
+  idempotencyKey?: string;
 };
 
 export type SupplierProductLinkSkippedProduct = {
@@ -221,9 +235,18 @@ async function createPurchaseInvoicePayments(
     throw new Error('Open shift is required before recording cash supplier payments.');
   }
 
+  await assertMoneyMovementTenantChain(client, {
+    businessId: input.businessId,
+    storeId: input.storeId,
+    userId: input.recordedByUserId,
+    tillId: openShift?.tillId,
+    shiftId: openShift?.id,
+  });
+
   for (const payment of input.payments) {
     const createdPayment = await client.purchasePayment.create({
       data: {
+        businessId: input.businessId,
         purchaseInvoiceId: input.invoiceId,
         method: payment.method,
         amountPence: payment.amountPence,
@@ -388,6 +411,33 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
   const split = splitPayments(payments);
   const apAmount = total - split.totalPence;
 
+  const idempotencyKey = input.idempotencyKey
+    ? normalizeMoneyIdempotencyKey(input.idempotencyKey)
+    : null;
+  const payloadHash = idempotencyKey
+    ? buildPurchaseCreatePayloadHash({
+        businessId: input.businessId,
+        storeId: input.storeId,
+        supplierId: input.supplierId ?? '',
+        payments,
+        lines: input.lines,
+        userId: input.userId ?? '',
+      })
+    : null;
+
+  if (idempotencyKey && payloadHash) {
+    const existing = await findMoneyIdempotency((db ?? prisma) as any, input.businessId, idempotencyKey);
+    if (existing) {
+      replayOrConflict(existing, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+      const parsed = parseIdempotencyResult<{ invoiceId: string }>(existing.resultJson);
+      const replayed = await (db ?? prisma).purchaseInvoice.findFirst({
+        where: { id: parsed.invoiceId, businessId: input.businessId },
+      });
+      if (!replayed) throw new Error('Purchase invoice not found');
+      return replayed;
+    }
+  }
+
   const journalLines: JournalLine[] = [
     { accountCode: ACCOUNT_CODES.inventory, debitPence: subtotal },
     business.vatEnabled && vatTotal > 0
@@ -478,6 +528,16 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
       prismaClient: client as any,
       accountMap: preloadedAccountMap,
     });
+
+    if (idempotencyKey && payloadHash) {
+      await insertMoneyIdempotency(client, {
+        businessId: input.businessId,
+        key: idempotencyKey,
+        payloadHash,
+        commandKind: 'PURCHASE_CREATE',
+        resultJson: JSON.stringify({ invoiceId: created.id }),
+      });
+    }
 
     return created;
   };
@@ -574,34 +634,50 @@ async function createPurchaseImpl(input: CreatePurchaseInput, db?: any) {
     });
   };
 
+  const finishInvoice = async (created: Awaited<ReturnType<typeof _doInvoice>>, client: any) => {
+    await _doInventory(client, created.id);
+    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(client, {
+      ...input,
+      supplierName: supplier?.name ?? null,
+    });
+    (created as any).supplierProductLinkSummary = supplierProductLinkSummary;
+    return created;
+  };
+
+  const runWithMoneyTx = async (client: any) => {
+    try {
+      return await _doInvoice(client);
+    } catch (error) {
+      if (idempotencyKey && payloadHash && isPrismaUniqueConstraintOn(error, ['businessId', 'key'])) {
+        const winner = await findMoneyIdempotency(client, input.businessId, idempotencyKey);
+        if (winner) {
+          replayOrConflict(winner, { payloadHash, commandKind: 'PURCHASE_CREATE' });
+          const parsed = parseIdempotencyResult<{ invoiceId: string }>(winner.resultJson);
+          const replayed = await client.purchaseInvoice.findFirst({
+            where: { id: parsed.invoiceId, businessId: input.businessId },
+          });
+          if (replayed) return replayed;
+        }
+        throw new MoneyIdempotencyError(
+          MONEY_IDEMPOTENCY_ERROR.IDEMPOTENCY_CONFLICT,
+          'This payment request conflicts with a previous submission.',
+        );
+      }
+      throw error;
+    }
+  };
+
   let invoice: Awaited<ReturnType<typeof _doInvoice>>;
-  const needsCashDrawerTransaction = split.cashPence > 0;
+  const needsAtomicMoney = payments.length > 0;
   if (db) {
-    // Called inside a caller-supplied transaction — all writes in the same tx.
-    invoice = await _doInvoice(db);
-    await _doInventory(db, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(db, {
-      ...input,
-      supplierName: supplier?.name ?? null,
-    });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
-  } else if (needsCashDrawerTransaction) {
-    invoice = await prisma.$transaction(async (tx) => _doInvoice(tx));
-    await _doInventory(prisma as any, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
-      ...input,
-      supplierName: supplier?.name ?? null,
-    });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
+    invoice = await runWithMoneyTx(db);
+    invoice = await finishInvoice(invoice, db);
+  } else if (needsAtomicMoney) {
+    invoice = await prisma.$transaction(async (tx) => runWithMoneyTx(tx));
+    invoice = await finishInvoice(invoice, prisma);
   } else {
-    // Normal path: no outer $transaction needed — createMany = 1 RTT per step.
-    invoice = await _doInvoice(prisma);
-    await _doInventory(prisma as any, invoice.id);
-    const supplierProductLinkSummary = await linkPurchasedProductsToSupplier(prisma, {
-      ...input,
-      supplierName: supplier?.name ?? null,
-    });
-    (invoice as any).supplierProductLinkSummary = supplierProductLinkSummary;
+    invoice = await runWithMoneyTx(prisma);
+    invoice = await finishInvoice(invoice, prisma);
   }
 
   return invoice;
