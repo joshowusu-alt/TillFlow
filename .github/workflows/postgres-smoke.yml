@@ -26,6 +26,14 @@ on:
       - 'docs/payments/**'
       - 'lib/migration/**'
       - 'lib/services/migration/**'
+      - 'lib/services/sales.ts'
+      - 'lib/services/shifts.ts'
+      - 'lib/services/cash-drawer.ts'
+      - 'lib/services/returns.ts'
+      - 'lib/services/payments.ts'
+      - 'lib/services/expensePayments.ts'
+      - 'lib/services/purchases.ts'
+      - 'app/api/offline/**'
       - '.github/workflows/postgres-smoke.yml'
 
 permissions:
@@ -53,6 +61,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      TZ: Africa/Accra
       POSTGRES_PRISMA_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
       POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
     steps:
@@ -104,3 +113,30 @@ jobs:
 
       - name: SQL-only constraint-contract introspection
         run: node scripts/migration-p1-sql-only-constraint-contract.cjs
+
+      - name: Checkout, shift, and payment concurrency (Postgres)
+        env:
+          TZ: Africa/Accra
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          POSTGRES_URL_NON_POOLING: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+          SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public
+        run: |
+          set -euo pipefail
+          files=(
+            lib/services/checkout-shift-cashdrawer-rtx.test.ts
+            lib/services/payments-concurrency.test.ts
+            lib/services/sales.test.ts
+          )
+          present=()
+          for f in "${files[@]}"; do
+            if [ -f "$f" ]; then
+              present+=("$f")
+            else
+              echo "skip missing $f"
+            fi
+          done
+          if [ "${#present[@]}" -eq 0 ]; then
+            echo "No checkout/shift/concurrency tests present"
+            exit 0
+          fi
+          npx vitest run --reporter=dot "${present[@]}"

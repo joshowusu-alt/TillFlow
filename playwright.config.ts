@@ -125,5 +125,11 @@ export default defineConfig({
         storageState: 'playwright/.auth/owner.json',
       },
     },
+    {
+      name: 'reliability-journey',
+      testDir: './playwright',
+      testMatch: /reliability-journey\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
 });
