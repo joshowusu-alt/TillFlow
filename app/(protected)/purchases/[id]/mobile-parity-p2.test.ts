@@ -34,7 +34,7 @@ describe('P2 purchase-detail mobile presentation', () => {
     expect(src).toContain('pb-28 lg:pb-6');
     expect(src).toContain('pb-24 lg:pb-0');
     expect(src).not.toContain('pb-24 sm:pb-6');
-    expect(paymentForm).toContain('idempotencyKey');
+    expect(paymentForm).toContain('StableIdempotencyKeyInput');
     expect(paymentForm).toContain('recordSupplierPaymentAction');
     expect(paymentForm).not.toContain('freeze'); // freeze lives in the action/service layer
   });
