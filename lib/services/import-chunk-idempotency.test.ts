@@ -120,3 +120,14 @@ describe('findMoneyIdempotency is scoped by businessId', () => {
     expect(createPurchase).not.toHaveBeenCalled();
   });
 });
+
+describe('ImportStockClient retry identity', () => {
+  it('derives clientImportKey from file fingerprint instead of mount-time randomness', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'app/(protected)/settings/import-stock/ImportStockClient.tsx'),
+      'utf8',
+    );
+    expect(src).toContain('setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`)');
+    expect(src).not.toContain('Math.random().toString(36).slice(2, 8)');
+  });
+});

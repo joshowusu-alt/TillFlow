@@ -137,6 +137,7 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       redirect('/purchases?error=invalid-refund-method');
     }
     const reason = formString(formData, 'reason') || null;
+    const tillId = formString(formData, 'tillId');
 
     await createPurchaseReturn({
       businessId,
@@ -145,7 +146,8 @@ export async function createPurchaseReturnAction(formData: FormData): Promise<vo
       refundMethod: refundMethod || null,
       refundAmountPence,
       reason,
-      type
+      type,
+      tillId: tillId || null,
     });
 
     audit({ businessId, userId: user.id, userName: user.name, userRole: user.role, action: 'PURCHASE_RETURN', entity: 'PurchaseInvoice', entityId: purchaseInvoiceId, details: { type, reason, refundAmountPence } });

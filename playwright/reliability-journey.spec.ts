@@ -167,6 +167,49 @@ test.describe('Reliability journey', () => {
       await completeSaleAndReset(page, /Complete Sale/i);
     });
 
+    await test.step('cash expense explicitly against Till 3', async () => {
+      test.skip(!reliabilitySalesAllowed(), 'Expense skipped without QA sale allow.');
+      await page.goto('/expenses', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByText(/Record expense/i).first()).toBeVisible({ timeout: 30_000 });
+      await page.locator('input[name="amount"]').first().fill('1.00');
+      const tillSelect = page.locator('select[name="tillId"]');
+      if ((await tillSelect.count()) > 0) {
+        const till3 = tillSelect.locator('option', { hasText: /Till 3/i }).first();
+        const value = await till3.getAttribute('value');
+        if (value) await tillSelect.selectOption(value);
+      }
+      await page.getByRole('button', { name: /Record expense|Save expense|Add expense/i }).first().click();
+      await expect(page).not.toHaveURL(/error=/);
+    });
+
+    await test.step('persisted Till 3 identity snapshot (no PII)', async () => {
+      test.skip(!reliabilitySalesAllowed(), 'Snapshot skipped without QA sale allow.');
+      const snapshot = await page.request.get('/api/qa/reliability-snapshot');
+      expect(snapshot.ok(), `reliability snapshot HTTP ${snapshot.status()}`).toBeTruthy();
+      const body = await snapshot.json();
+      expect(body.businessId).toBeTruthy();
+      const till3Sales = (body.invoices ?? []).filter((row: { tillName?: string }) => row.tillName === 'Till 3');
+      expect(till3Sales.length).toBeGreaterThan(0);
+      for (const sale of till3Sales) {
+        expect(sale.tillId).toBeTruthy();
+        expect(sale.shiftId).toBeTruthy();
+        expect(sale.shiftId).toBe(sale.shiftId);
+        expect(sale.payments?.length).toBeGreaterThan(0);
+        for (const payment of sale.payments) {
+          expect(payment.amountPence).toBeGreaterThan(0);
+        }
+        const cashDrawer = (sale.drawer ?? []).filter((row: { entryType: string }) => row.entryType === 'CASH_SALE');
+        for (const entry of cashDrawer) {
+          expect(entry.tillId).toBe(sale.tillId);
+          expect(entry.shiftId).toBe(sale.shiftId);
+        }
+      }
+      test.info().annotations.push({
+        type: 'till3-evidence',
+        description: `${till3Sales.length} Till 3 invoices; ids redacted in CI logs`,
+      });
+    });
+
     await test.step('close Till 3 shift', async () => {
       await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
       const close = page.getByRole('button', { name: /Close Shift/i }).first();
@@ -185,5 +228,18 @@ test.describe('Reliability journey', () => {
       const confirm = page.getByRole('button', { name: /Close Shift/i }).last();
       await confirm.click();
     });
+  });
+
+  test('core Till 3 POS flow on mobile viewport', async ({ page }) => {
+    test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+    test.skip(!reliabilitySalesAllowed(), 'Mobile sales skipped without QA sale allow.');
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsRole(page, 'owner');
+    await waitForProtectedShell(page);
+    await gotoPos(page);
+    await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
+    await addJourneyProduct(page);
+    await completeSaleAndReset(page, /Complete Cash Sale|Complete Sale/i);
   });
 });

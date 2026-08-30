@@ -267,7 +267,7 @@ export default function ImportStockClient({
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
   const [importMode, setImportMode] = useState<ImportMode | null>(initialMode);
   const [legacyPaymentStatusColumn, setLegacyPaymentStatusColumn] = useState(false);
-  const [clientImportKey] = useState(() => `imp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [clientImportKey, setClientImportKey] = useState('');
   const [parseError, setParseError] = useState<string | null>(null);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [result, setResult] = useState<ImportStockResult | null>(null);
@@ -292,6 +292,8 @@ export default function ImportStockClient({
       }
       setParseError(null);
       setFileName(file.name);
+      const safeName = file.name.replace(/[^\w.-]/g, '_').slice(0, 40);
+      setClientImportKey(`imp:${importMode}:${file.size}:${file.lastModified}:${safeName}`);
       try {
         const detailed = await parseStockFileDetailed(file);
         if (!detailed.rows.length) {
