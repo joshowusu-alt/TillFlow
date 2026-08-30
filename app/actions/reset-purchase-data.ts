@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { withBusinessContext, safeAction, ok, err } from '@/lib/action-utils';
 import { revalidateTag } from 'next/cache';
-import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 
 /**
  * Deletes ALL purchase invoices, their journal entries, stock movements, and
@@ -51,10 +51,21 @@ export async function resetPurchaseData() {
     await prisma.purchaseInvoiceLine.deleteMany({ where: { purchaseInvoice: { businessId } } });
     await prisma.purchaseInvoice.deleteMany({ where: { businessId } });
 
+    const storeIds = await prisma.store.findMany({
+      where: { businessId },
+      select: { id: true },
+    });
+
     // 4. Clear inventory balances so stock counts start from 0
     await prisma.inventoryBalance.deleteMany({ where: { store: { businessId } } });
 
-    revalidatePosCatalog(businessId);
+    if (storeIds.length === 0) {
+      revalidatePosCatalog(businessId);
+    } else {
+      for (const store of storeIds) {
+        revalidatePosInventory(businessId, store.id);
+      }
+    }
     revalidateTag('reports');
 
     return ok({

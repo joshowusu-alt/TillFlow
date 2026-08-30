@@ -41,9 +41,26 @@ export function revalidatePosTillShiftTags(businessId?: string, storeId?: string
   }
 }
 
-export function revalidatePosCatalog(businessId: string, storeId?: string | null) {
-  revalidateTag(posProductsTag(businessId));
-  if (storeId) {
-    revalidateTag(posInventoryTag(businessId, storeId));
+/**
+ * Evict POS product list + store inventory. Both ids are required so writers
+ * cannot skip `pos-inventory:{biz}:{store}` (P14). Never a global inventory tag.
+ */
+export function revalidatePosInventory(businessId: string, storeId: string) {
+  if (!businessId?.trim()) {
+    throw new Error('revalidatePosInventory requires businessId');
   }
+  if (!storeId?.trim()) {
+    throw new Error('revalidatePosInventory requires storeId (pos-inventory is store-scoped)');
+  }
+  revalidateTag(posProductsTag(businessId));
+  revalidateTag(posInventoryTag(businessId, storeId));
+}
+
+/** Always products tag; inventory tag only when storeId is present. Prefer revalidatePosInventory at qty writers. */
+export function revalidatePosCatalog(businessId: string, storeId?: string | null) {
+  if (storeId) {
+    revalidatePosInventory(businessId, storeId);
+    return;
+  }
+  revalidateTag(posProductsTag(businessId));
 }

@@ -23,7 +23,7 @@ import {
   type ProductUnitInput,
   type QuickCreateProductInput,
 } from '@/lib/services/products';
-import { revalidatePosCatalog } from '@/lib/cache/pos-tags';
+import { revalidatePosCatalog, revalidatePosInventory } from '@/lib/cache/pos-tags';
 import { saveProductImageFile, validateExternalProductImageUrl } from '@/lib/services/storage';
 import { createPurchase } from '@/lib/services/purchases';
 import { persistActivationSnapshot } from '@/lib/activation-snapshot';
@@ -150,6 +150,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
 
     const product = await createProduct(businessId, fields);
 
+    let openingStockStoreId: string | null = null;
     if (openingStockQty > 0 && openingStockUnitId) {
       const store = await prisma.store.findFirst({
         where: { businessId },
@@ -174,6 +175,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
           userId: user.id,
           stockMovementType: 'OPENING',
         });
+        openingStockStoreId = store.id;
       }
     }
 
@@ -190,7 +192,11 @@ export async function createProductAction(formData: FormData): Promise<void> {
       details: { name: fields.name, price: fields.sellingPriceBasePence, minimumMarginThresholdBps: fields.minimumMarginThresholdBps },
     }).catch((e) => console.error('[audit]', e));
 
-    revalidatePosCatalog(businessId);
+    if (openingStockStoreId) {
+      revalidatePosInventory(businessId, openingStockStoreId);
+    } else {
+      revalidatePosCatalog(businessId);
+    }
     revalidateTag(`readiness-${businessId}`);
     revalidateOwnerDashboardCache();
     revalidatePath('/inventory', 'layout');
