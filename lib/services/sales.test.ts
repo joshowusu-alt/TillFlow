@@ -1431,15 +1431,124 @@ describe('createSale — open till is mandatory regardless of the stored flag', 
     expect(createCall.data.saleSource).toBe('ONLINE_ORDER');
   });
 
-  it('LATE_OFFLINE does not rebind money or the invoice onto a later OPEN shift', async () => {
+  it('capturedShiftId + locked CLOSED is LATE_OFFLINE even if getOpenShiftForTill returns a later OPEN shift', async () => {
     getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
-    (prismaMock as any).shift.findFirst.mockResolvedValue({ id: 'shift-original' });
     const previousDatabaseUrl = process.env.DATABASE_URL;
     process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'CLOSED', openKey: null }];
+      }
+      return [{ id: 'shift-later' }];
+    });
 
     try {
       await createSale(makeBaseInput({
-        saleSource: 'LATE_OFFLINE',
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('LATE_OFFLINE');
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    const lockSql = (prismaMock.$queryRaw.mock.calls[0]?.[0] as string[] | undefined)?.join(' ') ?? '';
+    expect(lockSql).toContain('FOR UPDATE');
+    expect(lockSql).toContain('"openKey"');
+    expect(prismaMock.$queryRaw.mock.calls.some((call) => {
+      const sql = Array.isArray(call[0]) ? (call[0] as string[]).join(' ') : String(call[0] ?? '');
+      return sql.includes('CASH_SALE');
+    })).toBe(false);
+  });
+
+  it('capturedShiftId + locked OPEN applies live money on the captured shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-original', expectedCashPence: 4000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'OPEN', openKey: TILL_ID }];
+      }
+      return [{ id: 'shift-original' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+  });
+
+  it('capturedShiftId + locked OPEN never binds money to a later OPEN shift from getOpenShiftForTill', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings ?? '');
+      if (sql.includes('"openKey"') && sql.includes('FOR UPDATE')) {
+        return [{ id: 'shift-original', status: 'OPEN', openKey: TILL_ID }];
+      }
+      return [{ id: 'shift-original' }];
+    });
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-later' }),
+      }),
+    );
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+  });
+
+  it('capturedShiftId + SQLite findFirst CLOSED is LATE_OFFLINE with no drawer', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-later', expectedCashPence: 8000 });
+    (prismaMock as any).shift.findFirst.mockResolvedValue({
+      id: 'shift-original',
+      status: 'CLOSED',
+      openKey: null,
+    });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'file:./dev.db';
+
+    try {
+      await createSale(makeBaseInput({
         capturedShiftId: 'shift-original',
         payments: [{ method: 'CASH', amountPence: 500 }],
         lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
@@ -1454,5 +1563,59 @@ describe('createSale — open till is mandatory regardless of the stored flag', 
     expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
     expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
+    expect((prismaMock as any).shift.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original', tillId: TILL_ID }),
+      }),
+    );
+  });
+
+  it('capturedShiftId + SQLite findFirst OPEN applies live money on the captured shift', async () => {
+    getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-original', expectedCashPence: 4000 });
+    (prismaMock as any).shift.findFirst.mockResolvedValue({
+      id: 'shift-original',
+      status: 'OPEN',
+      openKey: TILL_ID,
+    });
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'file:./dev.db';
+
+    try {
+      await createSale(makeBaseInput({
+        capturedShiftId: 'shift-original',
+        payments: [{ method: 'CARD', amountPence: 500 }],
+        lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
+      }));
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBe('shift-original');
+    expect(createCall.data.saleSource).toBe('POS');
+    expect((prismaMock as any).shift.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'shift-original' }),
+      }),
+    );
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('rejects a captured shift that fails the tenant-scoped lock', async () => {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/tillflow_ci?schema=public';
+    prismaMock.$queryRaw.mockResolvedValue([]);
+
+    try {
+      await expect(createSale(makeBaseInput({
+        capturedShiftId: 'shift-missing',
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }))).rejects.toThrow('Captured offline shift does not match this sale context.');
+    } finally {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+
+    expect(prismaMock.salesInvoice.create).not.toHaveBeenCalled();
+    expect((prismaMock as any).shift.updateMany).not.toHaveBeenCalled();
   });
 });
