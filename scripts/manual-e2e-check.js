@@ -24,6 +24,45 @@ async function ensureCashierPassword() {
   } catch (e) { /* best effort */ }
 }
 
+const { createHash } = require('crypto');
+
+/** Must match lib/offline/payload-hash.ts canonicalizeOfflineSalePayload. */
+function hashOfflineSalePayload(input) {
+  const lines = [...(input.lines || [])]
+    .sort((a, b) => `${a.productId}:${a.unitId}`.localeCompare(`${b.productId}:${b.unitId}`))
+    .map((line) => ({
+      productId: String(line.productId ?? ''),
+      unitId: String(line.unitId ?? ''),
+      qtyInUnit: Math.floor(Number(line.qtyInUnit) || 0),
+      qtyBase: line.qtyBase != null ? Math.round(Number(line.qtyBase)) : null,
+      unitPricePence: line.unitPricePence != null ? Math.round(Number(line.unitPricePence)) : null,
+      lineSubtotalPence: line.lineSubtotalPence != null ? Math.round(Number(line.lineSubtotalPence)) : null,
+      discountType: String(line.discountType ?? 'NONE'),
+      discountValue: String(line.discountValue ?? ''),
+    }));
+  const payments = [...(input.payments || [])]
+    .sort((a, b) => `${a.method}:${a.amountPence}`.localeCompare(`${b.method}:${b.amountPence}`))
+    .map((payment) => ({
+      method: String(payment.method ?? ''),
+      amountPence: Math.round(Number(payment.amountPence) || 0),
+    }));
+  const canonical = JSON.stringify({
+    businessId: String(input.businessId ?? ''),
+    storeId: String(input.storeId ?? ''),
+    tillId: String(input.tillId ?? ''),
+    shiftId: input.shiftId ?? null,
+    cashierUserId: input.cashierUserId ?? null,
+    customerId: input.customerId ?? null,
+    paymentStatus: String(input.paymentStatus ?? ''),
+    lines,
+    payments,
+    orderDiscountType: String(input.orderDiscountType ?? 'NONE'),
+    orderDiscountValue: String(input.orderDiscountValue ?? ''),
+    inventoryPolicy: input.inventoryPolicy ?? 'enforce',
+  });
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
 /** Operational POS sales require an OPEN shift. Seed does not open one. */
 async function ensureOpenShift(email) {
   const user = await prisma.user.findFirst({ where: { email } });
@@ -38,9 +77,9 @@ async function ensureOpenShift(email) {
   const existing = await prisma.shift.findFirst({
     where: { tillId: till.id, status: 'OPEN' },
   });
-  if (existing) return existing;
+  if (existing) return { user, store, till, shift: existing };
   const openingCashPence = 10000;
-  return prisma.shift.create({
+  const shift = await prisma.shift.create({
     data: {
       tillId: till.id,
       userId: user.id,
@@ -50,6 +89,7 @@ async function ensureOpenShift(email) {
       openKey: till.id,
     },
   });
+  return { user, store, till, shift };
 }
 
 async function captureFailureArtifacts(page, stage, extra = {}) {
@@ -156,7 +196,7 @@ async function run() {
     await ensureCashierPassword();
 
     stage = 'ensure-open-shift';
-    await ensureOpenShift(CASHIER_EMAIL);
+    const openContext = await ensureOpenShift(CASHIER_EMAIL);
 
     stage = 'login';
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
@@ -428,14 +468,18 @@ async function run() {
     if (!product) throw new Error('Could not find syncable product');
     const unit = product.units.find((u) => u.isBaseUnit) || product.units[0];
     if (!unit) throw new Error('Could not find unit for syncable product');
-    const till = cacheData.tills?.[0];
-    if (!till?.id) throw new Error('No till available for offline sync payload');
-
+    const tillId = openContext.till.id;
+    const storeId = openContext.store.id;
     const offlineSaleId = `offline-e2e-${Date.now()}`;
-    const payload = {
+    const createdAt = new Date().toISOString();
+    const amountPence = Math.max(100, Number(product.sellingPriceBasePence) || 100) * 2;
+    const payloadBase = {
       id: offlineSaleId,
-      storeId: cacheData.store.id,
-      tillId: till.id,
+      businessId: openContext.user.businessId,
+      storeId,
+      tillId,
+      shiftId: openContext.shift.id,
+      cashierUserId: openContext.user.id,
       customerId: null,
       paymentStatus: 'PAID',
       lines: [
@@ -447,10 +491,16 @@ async function run() {
           discountValue: '',
         },
       ],
-      payments: [{ method: 'CASH', amountPence: 1000000 }],
+      payments: [{ method: 'CASH', amountPence }],
       orderDiscountType: 'NONE',
       orderDiscountValue: '',
-      createdAt: new Date().toISOString(),
+      createdAt,
+      localSaleTime: createdAt,
+      idempotencyKey: offlineSaleId,
+    };
+    const payload = {
+      ...payloadBase,
+      payloadHash: hashOfflineSalePayload(payloadBase),
     };
 
     const syncResp1 = await page.request.post(`${BASE_URL}/api/offline/sync-sale`, { data: payload });
