@@ -214,7 +214,7 @@ export default function OpeningStockClient({
         {products.length === 0 ? (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             No products found.{' '}
-            <Link href="/products" className="underline font-medium">
+            <Link href="/products#product-create" className="underline font-medium">
               Add your products first
             </Link>
             , then come back here.

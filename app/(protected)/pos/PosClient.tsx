@@ -23,6 +23,7 @@ import { usePosUndoHistory } from '@/hooks/usePosUndoHistory';
 import { useStagedProductSelection } from '@/hooks/useStagedProductSelection';
 import { getProductBaseUnitId } from '@/lib/payments/pos-barcode';
 import { buildPosProductIndex } from '@/lib/pos/product-index';
+import { resolvePosTillId } from '@/lib/pos/till-context';
 import { usePosBarcodeHandler } from '@/hooks/usePosBarcodeHandler';
 import { usePosLoyaltyRedemption } from '@/hooks/usePosLoyaltyRedemption';
 import LoyaltyRedemptionPanel from './components/LoyaltyRedemptionPanel';
@@ -184,15 +185,11 @@ export default function PosClient({
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PART_PAID' | 'UNPAID'>('PAID');
   const [barcode, setBarcode] = useState('');
   const [tillId, setTillId] = useState(() => {
-    // Priority 1: explicit URL param (allows deep-link to a specific till)
-    const urlTillId = searchParams?.get('tillId');
-    if (urlTillId && tills.some((t) => t.id === urlTillId)) return urlTillId;
-    // Priority 2: till with an open shift (when exactly one is open)
-    if (openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])) {
-      return openShiftTillIds[0];
-    }
-    // Priority 3: first till (fallback — localStorage override happens in useEffect after mount)
-    return tills[0]?.id ?? '';
+    return resolvePosTillId({
+      requestedTillId: searchParams?.get('till') ?? searchParams?.get('tillId'),
+      tills,
+      openShiftTillIds,
+    });
   });
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(['CASH']);
   const [cashTendered, setCashTendered] = useState('');
@@ -463,47 +460,19 @@ export default function PosClient({
     if (typeof window === 'undefined') return;
     if (tills.length === 0) return;
 
-    const urlTillId = searchParams?.get('tillId');
-    if (urlTillId && tills.some((t) => t.id === urlTillId)) {
-      setTillId(urlTillId);
-      return;
-    }
-
-    const singleOpenTillId =
-      openShiftTillIds.length === 1 && tills.some((t) => t.id === openShiftTillIds[0])
-        ? openShiftTillIds[0]
-        : '';
-
-    if (business.requireOpenTillForSales && singleOpenTillId) {
-      setTillId(singleOpenTillId);
-      return;
-    }
-
     const saved = window.localStorage.getItem(tillStorageKey);
-    if (
-      saved &&
-      tills.some((t) => t.id === saved) &&
-      (!business.requireOpenTillForSales || openShiftTillIds.includes(saved))
-    ) {
-      setTillId(saved);
-      return;
-    }
-
-    setTillId((current) => {
-      if (current && tills.some((t) => t.id === current)) {
-        if (!business.requireOpenTillForSales || openShiftTillIds.includes(current)) {
-          return current;
-        }
-      }
-      if (singleOpenTillId) return singleOpenTillId;
-      if (!business.requireOpenTillForSales) return tills[0]?.id ?? '';
-      const firstOpen = openShiftTillIds.find((id) => tills.some((t) => t.id === id));
-      return firstOpen ?? '';
-    });
+    setTillId((current) =>
+      resolvePosTillId({
+        requestedTillId: searchParams?.get('till') ?? searchParams?.get('tillId'),
+        savedTillId: saved,
+        currentTillId: current,
+        tills,
+        openShiftTillIds,
+      }),
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tillStorageKey,
-    business.requireOpenTillForSales,
     openShiftTillIds.join('|'),
     tills.map((t) => t.id).join('|'),
   ]);
@@ -1213,7 +1182,7 @@ export default function PosClient({
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     tillSelected &&
-    (!business.requireOpenTillForSales || openShiftTillIds.includes(tillId));
+    openShiftTillIds.includes(tillId);
   const canSubmit = Boolean(
     saleAttemptReady &&
     checkoutExtrasReady &&
@@ -1292,10 +1261,8 @@ export default function PosClient({
     checkoutExtrasReady &&
     !checkoutUnavailable &&
     (tills.length === 0 ||
-      (Boolean(business.requireOpenTillForSales) && openShiftTillIds.length === 0) ||
-      (Boolean(business.requireOpenTillForSales) &&
-        tillSelected &&
-        !openShiftTillIds.includes(tillId)));
+      openShiftTillIds.length === 0 ||
+      (tillSelected && !openShiftTillIds.includes(tillId)));
   // Phone empty-cart keeps checkout collapsed; loading uses the compact till chip instead of the full panel.
   const showCheckoutPanel =
     !isPhoneViewport || cart.length > 0 || checkoutUnavailable;
@@ -1393,6 +1360,7 @@ export default function PosClient({
             : 'pb-4'
       }`}
       data-pos-mobile-phase="2"
+      data-selected-till-id={tillId}
     >
       <div className="space-y-3 sm:space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
@@ -2156,7 +2124,7 @@ export default function PosClient({
               >
                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-600" aria-hidden="true" />
                 <span className="text-xs font-semibold text-emerald-900">
-                  {selectedTillName ?? 'Till'} · {business.requireOpenTillForSales ? 'Open' : 'Ready'}
+                  {selectedTillName ?? 'Till'} · Open
                 </span>
                 <label className="sr-only" htmlFor="pos-till-select">Till</label>
                 <select
@@ -2226,16 +2194,12 @@ export default function PosClient({
                   <div className="mt-1 text-xs text-amber-800" data-checkout-state="empty">
                     No tills are configured for this store
                   </div>
-                ) : business.requireOpenTillForSales ? (
+                ) : (
                   <div
                     className={`mt-1 text-xs ${tillReady ? 'text-emerald-700' : 'text-rose'}`}
                     data-checkout-state={tillReady ? 'ready' : 'closed'}
                   >
                     {tillReady ? 'Till is open' : 'Till is not open'}
-                  </div>
-                ) : (
-                  <div className="mt-1 text-xs text-emerald-700" data-checkout-state="ready">
-                    Till ready
                   </div>
                 )}
               </div>

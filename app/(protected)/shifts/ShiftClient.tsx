@@ -56,18 +56,30 @@ type OtherOpenShift = {
 
 type Props = {
   tills: Till[];
-  openShift: OpenShift | null;
+  openShifts?: OpenShift[];
+  /** @deprecated compatibility for older callers; server page supplies openShifts. */
+  openShift?: OpenShift | null;
   otherOpenShifts?: OtherOpenShift[];
   recentShifts: RecentShift[];
   currency: string;
   userRole?: string;
 };
 
-export default function ShiftClient({ tills, openShift, otherOpenShifts = [], recentShifts, currency, userRole }: Props) {
+export default function ShiftClient({
+  tills,
+  openShifts: openShiftList,
+  openShift: legacyOpenShift,
+  otherOpenShifts = [],
+  recentShifts,
+  currency,
+  userRole,
+}: Props) {
+  const openShifts = openShiftList ?? (legacyOpenShift ? [legacyOpenShift] : []);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selectedTill, setSelectedTill] = useState(tills[0]?.id ?? '');
+  const [selectedOpenShiftId, setSelectedOpenShiftId] = useState(openShifts[0]?.id ?? '');
   const [openingCash, setOpeningCash] = useState('');
   const [actualCash, setActualCash] = useState('');
   const [closeNotes, setCloseNotes] = useState('');
@@ -89,6 +101,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
   const [addCashNote, setAddCashNote] = useState('');
   const [addCashError, setAddCashError] = useState<string | null>(null);
   const [addCashSuccess, setAddCashSuccess] = useState(false);
+  const openShift = openShifts.find((shift) => shift.id === selectedOpenShiftId) ?? openShifts[0] ?? null;
 
   // Lock background scroll when close-shift modal is open
   useEffect(() => {
@@ -138,6 +151,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
     formData.set('amount', addCashAmount);
     formData.set('reasonCode', addCashReasonCode);
     formData.set('note', addCashNote);
+    if (openShift) formData.set('shiftId', openShift.id);
     startTransition(async () => {
       try {
         const result = await addCashToTillAction(formData);
@@ -168,7 +182,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
           return;
         }
         setOpeningCash('');
-        router.refresh();
+        router.push(`/pos?till=${encodeURIComponent(result.data.tillId)}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to open shift');
       }
@@ -284,6 +298,24 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
       )}
 
       {openShift ? (
+        <div className="space-y-3">
+          {openShifts.length > 1 ? (
+            <div className="card p-4">
+              <h2 className="text-sm font-semibold">Your open shifts</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {openShifts.map((shift) => (
+                  <button
+                    key={shift.id}
+                    type="button"
+                    className={shift.id === openShift.id ? 'btn-primary text-sm' : 'btn-ghost border border-black/10 text-sm'}
+                    onClick={() => setSelectedOpenShiftId(shift.id)}
+                  >
+                    {shift.till.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -444,6 +476,7 @@ export default function ShiftClient({ tills, openShift, otherOpenShifts = [], re
               )}
             </div>
           )}
+        </div>
         </div>
       ) : (
         <>

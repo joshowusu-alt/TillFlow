@@ -287,6 +287,7 @@ function resolveSaleUnitCostBasePence(
 }
 
 export type SalePaymentInput = PaymentInput;
+export type SaleSource = 'POS' | 'ONLINE_ORDER' | 'LATE_OFFLINE' | 'UNRECONCILED_LEGACY';
 
 export type DiscountType = 'NONE' | 'PERCENT' | 'AMOUNT';
 
@@ -323,11 +324,19 @@ export type CreateSaleInput = {
   inventoryPolicy?: 'enforce' | 'allow-negative';
   skipInventoryMovements?: boolean;
   /**
-   * Set true for system-driven sales (e.g. online orders) where no human cashier
-   * has an open till. The require-open-till business setting still applies to
-   * staff-initiated sales.
+   * Allowed only for `lib/services/online-order-commit.ts`. Operational POS
+   * sales always require an OPEN shift; this flag is ignored as a way to
+   * persist `shiftId = null` from POS or offline sync.
    */
   bypassOpenTillRequirement?: boolean;
+  /** Auditable origin. Default POS for new operational sales. */
+  saleSource?: SaleSource;
+  /**
+   * Agent B hook: immutable shift captured when the sale was queued offline.
+   * LATE_OFFLINE may attach this original shift even after it has closed.
+   * Do not invent a later open shift when this is set.
+   */
+  capturedShiftId?: string | null;
   /** Points to redeem at checkout (requires customerId). */
   loyaltyPointsToRedeem?: number;
   /** Actual cash tendered (may exceed applied cash when change is due). */
@@ -483,7 +492,7 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   // ── SINGLE BATCH: fire ALL lookups in parallel (was 5 sequential batches) ──
   const [
-    business, store, productUnits, till, branchId, openShift,
+    business, store, productUnits, till, cashier, branchId, openShift,
     accounts, inventoryMap, momoResult, customerResult,
   ] = await measureCheckoutStage(
     'action.checkout.context',
@@ -515,7 +524,20 @@ async function createSaleImpl(input: CreateSaleInput) {
         },
       }),
       prisma.till.findFirst({
-        where: { id: input.tillId, storeId: input.storeId, active: true },
+        where: { id: input.tillId },
+        select: {
+          id: true,
+          active: true,
+          storeId: true,
+          store: { select: { businessId: true } },
+        },
+      }),
+      prisma.user.findFirst({
+        where: {
+          id: input.cashierUserId,
+          businessId: input.businessId,
+          active: true,
+        },
         select: { id: true },
       }),
       resolveBranchIdForStore({ businessId: input.businessId, storeId: input.storeId }),
@@ -531,9 +553,24 @@ async function createSaleImpl(input: CreateSaleInput) {
 
   if (!business) throw new Error('Business not found');
   if (!store) throw new Error('Store not found');
-  if (!till) throw new Error('Till not found');
-  if (business.requireOpenTillForSales && !openShift && !input.bypassOpenTillRequirement) {
+  if (!till) throw new UserError('Till not found');
+  if (till.store.businessId !== input.businessId) {
+    throw new UserError('Till does not belong to this business.');
+  }
+  if (till.storeId !== input.storeId) {
+    throw new UserError('Till does not belong to this store.');
+  }
+  if (!till.active) {
+    throw new UserError('Till is inactive.');
+  }
+  if (!cashier) throw new UserError('Cashier is not authorised for this business.');
+  const lateOfflineShiftId =
+    input.saleSource === 'LATE_OFFLINE' ? input.capturedShiftId ?? null : null;
+  if (!openShift && !input.bypassOpenTillRequirement && !lateOfflineShiftId) {
     throw new UserError('Open till is required before recording sales.');
+  }
+  if (input.bypassOpenTillRequirement && input.saleSource && input.saleSource !== 'ONLINE_ORDER') {
+    throw new Error('Open-till bypass is restricted to online-order commits.');
   }
   if (input.customerId) {
     if (!customerResult) throw new Error('Customer not found');
@@ -694,6 +731,15 @@ async function createSaleImpl(input: CreateSaleInput) {
       .filter((p) => p.method !== 'CASH' && p.amountPence > 0)
       .map((p) => ({ ...p })),
   ];
+  const cardPence = payments
+    .filter((payment) => payment.method === 'CARD')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const transferPence = payments
+    .filter((payment) => payment.method === 'TRANSFER')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
+  const liveMomoPence = payments
+    .filter((payment) => payment.method === 'MOBILE_MONEY')
+    .reduce((sum, payment) => sum + payment.amountPence, 0);
 
   let confirmedMomoCollection:
     | {
@@ -822,12 +868,35 @@ async function createSaleImpl(input: CreateSaleInput) {
       );
     }
 
+    let attachedShiftId = openShift?.id ?? null;
+    if (!attachedShiftId && lateOfflineShiftId) {
+      const capturedShift = await tx.shift.findFirst({
+        where: {
+          id: lateOfflineShiftId,
+          tillId: till.id,
+          userId: input.cashierUserId,
+          till: {
+            storeId: input.storeId,
+            store: { businessId: input.businessId },
+          },
+        },
+        select: { id: true },
+      });
+      if (!capturedShift) {
+        throw new UserError('Captured offline shift does not match this sale context.');
+      }
+      attachedShiftId = capturedShift.id;
+    }
+
     const invoiceCreateData = {
       businessId: input.businessId,
       storeId: store.id,
       branchId,
       tillId: till.id,
-      shiftId: openShift?.id ?? null,
+      shiftId: attachedShiftId,
+      saleSource: input.bypassOpenTillRequirement
+        ? 'ONLINE_ORDER'
+        : (input.saleSource ?? 'POS'),
       cashierUserId: input.cashierUserId,
       customerId: input.customerId || null,
       paymentStatus: finalStatus,
@@ -937,6 +1006,50 @@ async function createSaleImpl(input: CreateSaleInput) {
     if (idempotentReplayInvoice) {
       idempotentExternalRefReplay = true;
       return idempotentReplayInvoice;
+    }
+
+    if (openShift) {
+      if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+        const locked = await tx.$queryRaw<{ id: string }[]>`
+          SELECT sh."id"
+          FROM "Shift" AS sh
+          JOIN "Till" AS t ON t."id" = sh."tillId"
+          JOIN "Store" AS st ON st."id" = t."storeId"
+          WHERE sh."id" = ${openShift.id}
+            AND sh."tillId" = ${till.id}
+            AND sh."status" = ${'OPEN'}
+            AND t."active" = TRUE
+            AND st."id" = ${input.storeId}
+            AND st."businessId" = ${input.businessId}
+          FOR UPDATE
+        `;
+        if (locked.length === 0) {
+          throw new UserError('The till shift closed during checkout. Reopen the till and try again.');
+        }
+      }
+
+      const shiftUpdate = await tx.shift.updateMany({
+        where: {
+          id: openShift.id,
+          tillId: till.id,
+          status: 'OPEN',
+          till: {
+            active: true,
+            storeId: input.storeId,
+            store: { businessId: input.businessId },
+          },
+        },
+        data: {
+          cardTotalPence: { increment: cardPence },
+          transferTotalPence: { increment: transferPence },
+          momoTotalPence: { increment: liveMomoPence },
+        },
+      });
+      if (shiftUpdate.count !== 1) {
+        throw new UserError('The till shift closed during checkout. Reopen the till and try again.');
+      }
+    } else if (!input.bypassOpenTillRequirement && !lateOfflineShiftId) {
+      throw new UserError('Open till is required before recording sales.');
     }
 
     // Parallelise: MoMo, cash-drawer, inventory updates and stock movements
@@ -1104,6 +1217,36 @@ async function createSaleImpl(input: CreateSaleInput) {
       }
     }
 
+    if (shouldApplyInventoryMovements) {
+      txPromises.push(
+        measureCheckoutStage(
+          'action.checkout.stock-movements',
+          input,
+          async () => tx.stockMovement.createMany({
+            data: lineDetails.map((line) => {
+              const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
+              return {
+                storeId: input.storeId,
+                productId: line.productId,
+                qtyBase: -line.qtyBase,
+                beforeQtyBase,
+                afterQtyBase: beforeQtyBase - line.qtyBase,
+                unitCostBasePence:
+                  costByProduct.get(line.productId) ??
+                  line.productUnit.product.defaultCostBasePence,
+                type: 'SALE' as const,
+                referenceType: 'SALES_INVOICE' as const,
+                referenceId: created.id,
+                userId: input.cashierUserId,
+              };
+            }),
+          }),
+          { stage: 'stock-movements', rowCount: lineDetails.length },
+          CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
+        ),
+      );
+    }
+
     // Journal entry inside tx — accounting must be atomic with the sale
     const paymentSplit = splitPayments(payments);
     const arAmount = total - paymentSplit.totalPence;
@@ -1149,35 +1292,6 @@ async function createSaleImpl(input: CreateSaleInput) {
     { stage: 'transaction-total', rowCount: input.lines.length },
     CHECKOUT_STAGE_THRESHOLDS_MS.transactionTotal,
   );
-
-  // Post-tx: stock movement audit trail — non-critical, fire-and-forget.
-  // Skip on idempotent externalRef replay — the winning request already applied effects.
-  if (shouldApplyInventoryMovements && !idempotentExternalRefReplay) {
-    void measureCheckoutStage(
-      'action.checkout.stock-movements',
-      input,
-      async () => prisma.stockMovement.createMany({
-        data: lineDetails.map((line) => {
-          const beforeQtyBase = stockMovementInventoryMap.get(line.productId)?.qtyOnHandBase ?? 0;
-          const afterQtyBase = beforeQtyBase - line.qtyBase;
-          return {
-            storeId: input.storeId,
-            productId: line.productId,
-            qtyBase: -line.qtyBase,
-            beforeQtyBase,
-            afterQtyBase,
-            unitCostBasePence: costByProduct.get(line.productId) ?? line.productUnit.product.defaultCostBasePence,
-            type: 'SALE' as const,
-            referenceType: 'SALES_INVOICE' as const,
-            referenceId: invoice.id,
-            userId: input.cashierUserId,
-          };
-        }),
-      }),
-      { stage: 'stock-movements', rowCount: lineDetails.length },
-      CHECKOUT_STAGE_THRESHOLDS_MS.stockMovements,
-    ).catch(() => {});
-  }
 
   // Fire-and-forget: risk detection is non-critical, don't block the sale
   if (!idempotentExternalRefReplay) {

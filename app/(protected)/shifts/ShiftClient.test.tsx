@@ -53,7 +53,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={{
+        openShifts={[{
           id: 'shift-1',
           till: { name: 'Till 1' },
           openedAt: new Date('2026-03-18T08:00:00.000Z'),
@@ -65,7 +65,7 @@ describe('ShiftClient', () => {
           transferTotal: 0,
           momoTotal: 0,
           cashByType: {},
-        }}
+        }]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -92,11 +92,29 @@ describe('ShiftClient', () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
+  it('lists every current-user open shift so each can be closed', () => {
+    render(
+      <ShiftClient
+        tills={[{ id: 'till-1', name: 'Till 1' }, { id: 'till-3', name: 'Till 3' }]}
+        openShifts={[
+          baseOpenShift,
+          { ...baseOpenShift, id: 'shift-3', till: { name: 'Till 3' } },
+        ]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Till 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Till 3' })).toBeInTheDocument();
+  });
+
   it('shows Add cash to till button for OWNER when a shift is open', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -110,7 +128,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -124,7 +142,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -138,7 +156,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -156,7 +174,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -177,7 +195,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -197,7 +215,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={{ ...baseOpenShift, expectedCash: -590350, openingCashPence: 0 }}
+        openShifts={[{ ...baseOpenShift, expectedCash: -590350, openingCashPence: 0 }]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -212,7 +230,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={{ ...baseOpenShift, expectedCash: -590350, openingCashPence: 50000 }}
+        openShifts={[{ ...baseOpenShift, expectedCash: -590350, openingCashPence: 50000 }]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -227,7 +245,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={baseOpenShift}
+        openShifts={[baseOpenShift]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -241,7 +259,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={{
+        openShifts={[{
           ...baseOpenShift,
           openingCashPence: 0,
           expectedCash: 176550,
@@ -250,7 +268,7 @@ describe('ShiftClient', () => {
             CASH_SALE: 86550,
             CASH_ADJUSTMENT: 90000,
           },
-        }}
+        }]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"
@@ -265,7 +283,7 @@ describe('ShiftClient', () => {
     render(
       <ShiftClient
         tills={[{ id: 'till-1', name: 'Till 1' }]}
-        openShift={{
+        openShifts={[{
           id: 'shift-1',
           till: { name: 'Till 1' },
           openedAt: new Date('2026-03-18T08:00:00.000Z'),
@@ -285,7 +303,7 @@ describe('ShiftClient', () => {
             CASH_REFUND: 0,
             CASH_ADJUSTMENT: 0,
           },
-        }}
+        }]}
         otherOpenShifts={[]}
         recentShifts={[]}
         currency="GHS"

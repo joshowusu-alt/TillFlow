@@ -3,6 +3,7 @@ import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/servi
 import { detectCashVarianceRisk } from '@/lib/services/risk-monitor';
 import { audit } from '@/lib/audit';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
+import { isSqliteDatabaseUrl } from '@/lib/database-runtime';
 
 export type CloseShiftApproval =
   | { mode: 'PIN'; approvingManagerId: string }
@@ -23,6 +24,51 @@ export type CloseShiftInput = {
   varianceReason: string | null;
   approval: CloseShiftApproval;
 };
+
+export type OpenShiftForUserRow = {
+  id: string;
+  openedAt: Date;
+  openingCashPence: number;
+  expectedCashPence: number;
+  till: { name: string };
+  cashDrawerEntries: Array<{ entryType: string; amountPence: number }>;
+  salesInvoices: Array<{
+    totalPence: number;
+    payments: Array<{ method: string; amountPence: number }>;
+  }>;
+};
+
+export async function getOpenShiftsForUserInStore(
+  userId: string,
+  storeId: string,
+  db: any = prisma,
+): Promise<OpenShiftForUserRow[]> {
+  return db.shift.findMany({
+    where: {
+      userId,
+      status: 'OPEN',
+      till: { storeId },
+    },
+    select: {
+      id: true,
+      openedAt: true,
+      openingCashPence: true,
+      expectedCashPence: true,
+      till: { select: { name: true } },
+      cashDrawerEntries: {
+        select: { entryType: true, amountPence: true },
+      },
+      salesInvoices: {
+        where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } },
+        select: {
+          totalPence: true,
+          payments: { select: { method: true, amountPence: true } },
+        },
+      },
+    },
+    orderBy: { openedAt: 'asc' },
+  }) as Promise<OpenShiftForUserRow[]>;
+}
 
 export async function performShiftClose(input: CloseShiftInput): Promise<{ id: string }> {
   return measureServerOperation(
@@ -61,95 +107,121 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     select: { varianceReasonRequired: true, cashVarianceRiskThresholdPence: true },
   });
 
-  const expectedCash = shift.expectedCashPence;
-  const variance = actualCash - expectedCash;
-  if (variance !== 0 && business?.varianceReasonRequired && !varianceReasonCode && !varianceReason) {
-    throw new Error('Variance reason is required when counted cash differs from expected.');
-  }
-
-  let cardTotal = 0;
-  let transferTotal = 0;
-  let momoTotal = 0;
-  for (const invoice of shift.salesInvoices) {
-    for (const payment of invoice.payments) {
-      if (payment.method === 'CARD') cardTotal += payment.amountPence;
-      else if (payment.method === 'TRANSFER') transferTotal += payment.amountPence;
-      else if (payment.method === 'MOBILE_MONEY') momoTotal += payment.amountPence;
-    }
-  }
-
-  const entriesSummary = summarizeCashDrawerEntries(shift.cashDrawerEntries);
-
-  const snapshotBase = {
-    shiftId: shift.id,
-    tillId: shift.tillId,
-    tillName: shift.till.name,
-    openedAt: shift.openedAt.toISOString(),
-    closedAt: new Date().toISOString(),
-    openingCashPence: shift.openingCashPence,
-    expectedCashPence: expectedCash,
-    countedCashPence: actualCash,
-    variancePence: variance,
-    varianceReasonCode,
-    varianceReason,
-    cardTotalPence: cardTotal,
-    transferTotalPence: transferTotal,
-    momoTotalPence: momoTotal,
-    cashEntriesByType: entriesSummary.byType,
-    cashEntriesTotalPence: entriesSummary.totalPence,
-  };
-
-  const snapshot =
-    approval.mode === 'OWNER_OVERRIDE'
-      ? {
-          ...snapshotBase,
-          ownerOverride: true,
-          ownerOverrideReasonCode: approval.overrideReasonCode,
-          ownerOverrideJustification: approval.overrideJustification,
-          overrideByUserId: actor.userId,
-        }
-      : {
-          ...snapshotBase,
-          managerApprovedByUserId: approval.approvingManagerId,
-        };
-
   const defaultCloseReason =
     approval.mode === 'OWNER_OVERRIDE' ? 'Till closed (owner override)' : 'Till closed';
 
-  await prisma.$transaction(async (tx) => {
+  const closedState = await prisma.$transaction(async (tx) => {
+    if (!isSqliteDatabaseUrl(process.env.DATABASE_URL)) {
+      await tx.$queryRaw`SELECT "id" FROM "Shift" WHERE "id" = ${shift.id} FOR UPDATE`;
+    }
+
+    const lockedShift = await tx.shift.findFirst({
+      where: {
+        id: shift.id,
+        status: 'OPEN',
+        till: { store: { businessId } },
+      },
+      include: {
+        till: { select: { id: true, storeId: true, name: true } },
+        salesInvoices: {
+          where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } },
+          include: { payments: true },
+        },
+        cashDrawerEntries: {
+          select: { id: true, entryType: true, amountPence: true, createdAt: true },
+        },
+      },
+    });
+    if (!lockedShift) {
+      throw new Error('Shift was already closed by another request');
+    }
+
+    let lockedCardTotal = 0;
+    let lockedTransferTotal = 0;
+    let lockedMomoTotal = 0;
+    for (const invoice of lockedShift.salesInvoices) {
+      for (const payment of invoice.payments) {
+        if (payment.method === 'CARD') lockedCardTotal += payment.amountPence;
+        else if (payment.method === 'TRANSFER') lockedTransferTotal += payment.amountPence;
+        else if (payment.method === 'MOBILE_MONEY') lockedMomoTotal += payment.amountPence;
+      }
+    }
+    const lockedExpectedCash = lockedShift.expectedCashPence;
+    const lockedVariance = actualCash - lockedExpectedCash;
+    if (
+      lockedVariance !== 0 &&
+      business?.varianceReasonRequired &&
+      !varianceReasonCode &&
+      !varianceReason
+    ) {
+      throw new Error('Variance reason is required when counted cash differs from expected.');
+    }
+    const lockedEntriesSummary = summarizeCashDrawerEntries(lockedShift.cashDrawerEntries);
+    const lockedSnapshotBase = {
+      shiftId: lockedShift.id,
+      tillId: lockedShift.tillId,
+      tillName: lockedShift.till.name,
+      openedAt: lockedShift.openedAt.toISOString(),
+      closedAt: new Date().toISOString(),
+      openingCashPence: lockedShift.openingCashPence,
+      expectedCashPence: lockedExpectedCash,
+      countedCashPence: actualCash,
+      variancePence: lockedVariance,
+      varianceReasonCode,
+      varianceReason,
+      cardTotalPence: lockedCardTotal,
+      transferTotalPence: lockedTransferTotal,
+      momoTotalPence: lockedMomoTotal,
+      cashEntriesByType: lockedEntriesSummary.byType,
+      cashEntriesTotalPence: lockedEntriesSummary.totalPence,
+    };
+    const lockedSnapshot =
+      approval.mode === 'OWNER_OVERRIDE'
+        ? {
+            ...lockedSnapshotBase,
+            ownerOverride: true,
+            ownerOverrideReasonCode: approval.overrideReasonCode,
+            ownerOverrideJustification: approval.overrideJustification,
+            overrideByUserId: actor.userId,
+          }
+        : {
+            ...lockedSnapshotBase,
+            managerApprovedByUserId: approval.approvingManagerId,
+          };
+
     await recordCashDrawerEntryTx(tx, {
       businessId,
-      storeId: shift.till.storeId,
-      tillId: shift.tillId,
-      shiftId: shift.id,
+      storeId: lockedShift.till.storeId,
+      tillId: lockedShift.tillId,
+      shiftId: lockedShift.id,
       createdByUserId: actor.userId,
       cashierUserId: actor.userId,
       entryType: 'CLOSE_RECONCILIATION',
       amountPence: 0,
-      reasonCode: variance === 0 ? 'RECONCILED' : variance > 0 ? 'OVER' : 'SHORT',
+      reasonCode: lockedVariance === 0 ? 'RECONCILED' : lockedVariance > 0 ? 'OVER' : 'SHORT',
       reason: varianceReason ?? notes ?? defaultCloseReason,
       referenceType: 'SHIFT',
-      referenceId: shift.id,
+      referenceId: lockedShift.id,
       actor: { userId: actor.userId, userName: actor.userName ?? 'Unknown', userRole: actor.userRole },
     });
 
     const updateResult = await tx.shift.updateMany({
-      where: { id: shift.id, status: 'OPEN' },
+      where: { id: lockedShift.id, status: 'OPEN' },
       data: {
         closedAt: new Date(),
-        expectedCashPence: expectedCash,
+        expectedCashPence: lockedExpectedCash,
         actualCashPence: actualCash,
-        cardTotalPence: cardTotal,
-        transferTotalPence: transferTotal,
-        momoTotalPence: momoTotal,
-        variance,
+        cardTotalPence: lockedCardTotal,
+        transferTotalPence: lockedTransferTotal,
+        momoTotalPence: lockedMomoTotal,
+        variance: lockedVariance,
         varianceReasonCode,
         varianceReason,
         notes,
         closedByUserId: actor.userId,
         closeManagerApprovedByUserId: approval.approvingManagerId,
         closeManagerApprovalMode: approval.mode === 'PIN' ? 'PIN' : 'OWNER_OVERRIDE',
-        closureSnapshotJson: JSON.stringify(snapshot),
+        closureSnapshotJson: JSON.stringify(lockedSnapshot),
         status: 'CLOSED',
         openKey: null,
         ...(approval.mode === 'OWNER_OVERRIDE' && {
@@ -162,23 +234,27 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     if (updateResult.count === 0) {
       throw new Error('Shift was already closed by another request');
     }
+    return {
+      expectedCashPence: lockedExpectedCash,
+      variancePence: lockedVariance,
+    };
   });
 
   const auditDetails =
     approval.mode === 'OWNER_OVERRIDE'
       ? {
-          expectedCashPence: expectedCash,
+          expectedCashPence: closedState.expectedCashPence,
           countedCashPence: actualCash,
-          variancePence: variance,
+          variancePence: closedState.variancePence,
           varianceReasonCode,
           ownerOverride: true,
           overrideReasonCode: approval.overrideReasonCode,
           overrideJustification: approval.overrideJustification,
         }
       : {
-          expectedCashPence: expectedCash,
+          expectedCashPence: closedState.expectedCashPence,
           countedCashPence: actualCash,
-          variancePence: variance,
+          variancePence: closedState.variancePence,
           varianceReasonCode,
           managerApprovedByUserId: approval.approvingManagerId,
         };
@@ -199,7 +275,7 @@ async function performShiftCloseImpl(input: CloseShiftInput): Promise<{ id: stri
     storeId: shift.till.storeId,
     cashierUserId: shift.userId,
     shiftId: shift.id,
-    variancePence: variance,
+    variancePence: closedState.variancePence,
     thresholdPence: business?.cashVarianceRiskThresholdPence ?? 2000,
   });
 

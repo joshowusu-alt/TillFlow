@@ -966,7 +966,7 @@ export default function ReadinessJourney({ initial }: { initial: ReadinessData }
 
                 {stage.key === 'products' && isCurrent ? (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Link href="/products/new" className="btn-primary py-2.5 text-center text-sm">
+                    <Link href="/products#product-create" className="btn-primary py-2.5 text-center text-sm">
                       Add a product manually
                     </Link>
                     <Link

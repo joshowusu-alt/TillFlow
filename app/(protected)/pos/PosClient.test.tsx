@@ -3,8 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PosClient from './PosClient';
-import { getParkedCartsStorageKey } from '@/lib/business-scope';
+import { getParkedCartsStorageKey, getPosTillStorageKey } from '@/lib/business-scope';
 import { completeSaleAction } from '@/app/actions/sales';
+
+const searchParamsGet = vi.hoisted(() => vi.fn((_key?: string) => null as string | null));
 
 vi.mock('next/link', () => ({
   default: ({ children, href, ...props }: { children: React.ReactNode; href: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
@@ -13,7 +15,7 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useSearchParams: () => ({ get: () => null }),
+  useSearchParams: () => ({ get: (key: string) => searchParamsGet(key) }),
   useRouter: () => ({ prefetch: vi.fn() }),
 }));
 
@@ -85,6 +87,7 @@ describe('PosClient desktop layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -412,6 +415,7 @@ describe('PosClient mobile phase 1 layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
   });
 
@@ -546,6 +550,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
   beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
   });
 
@@ -726,6 +731,7 @@ describe('PosClient P0 transaction safety', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     vi.clearAllMocks();
+    searchParamsGet.mockReturnValue(null);
     mockPhoneViewport(true);
     document.documentElement.removeAttribute('data-pos-txn-active');
   });
@@ -883,5 +889,68 @@ describe('PosClient P0 transaction safety', () => {
     fireEvent.click(complete!);
     await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
     expect(mockedCompleteSaleAction.mock.calls[0][0].externalRef).toBe('POS_ONLINE:restored-attempt-id');
+  });
+});
+
+describe('PosClient till selection', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    searchParamsGet.mockImplementation((key?: string) => (key === 'till' ? 'till-3' : null));
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    searchParamsGet.mockReturnValue(null);
+  });
+
+  const tills = [
+    { id: 'till-1', name: 'Till 1' },
+    { id: 'till-3', name: 'Till 3' },
+  ];
+
+  it('prefers the till query param when that till is active and has an open shift', async () => {
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-1', 'till-3']}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-3"]')).not.toBeNull();
+    });
+  });
+
+  it('ignores localStorage when the saved till has no open shift', async () => {
+    searchParamsGet.mockReturnValue(null);
+    window.localStorage.setItem(
+      getPosTillStorageKey({ businessId: 'biz-1', storeId: 'store-1' }),
+      'till-1',
+    );
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-3']}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-3"]')).not.toBeNull();
+    });
+  });
+
+  it('blocks sales when no till is open even if requireOpenTillForSales is false', async () => {
+    searchParamsGet.mockReturnValue(null);
+    render(
+      <PosClient
+        {...baseProps}
+        business={{ ...baseProps.business, requireOpenTillForSales: false }}
+        openShiftTillIds={[]}
+      />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-till-block="true"]')).not.toBeNull();
+    });
   });
 });

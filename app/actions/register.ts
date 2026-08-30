@@ -70,6 +70,7 @@ export async function register(formData: FormData) {
         ...createTrialSubscription(plan, { addonOnlineStorefront, billingInterval }),
         vatEnabled: false,
         mode: 'SIMPLE',
+        requireOpenTillForSales: true,
       },
     });
 
