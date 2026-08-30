@@ -303,14 +303,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: { 
             <h2 className="text-base font-display font-semibold">Operations & risk controls</h2>
             <p className="mt-1 text-sm text-black/55">Guardrails for till opening, variances, discounts, and stock adjustments.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              className="h-4 w-4"
-              type="checkbox"
-              name="requireOpenTillForSales"
-              defaultChecked={(business as any).requireOpenTillForSales ?? false}
-            />
-            <label className="text-sm">Block sales until till is opened</label>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <div className="text-sm font-semibold text-emerald-900">Sales require an open till</div>
+            <div className="mt-0.5 text-xs text-emerald-800">
+              Always on for POS sales so every sale is assigned to an active till and shift.
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <input

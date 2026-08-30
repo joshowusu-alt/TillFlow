@@ -237,8 +237,29 @@ export async function recordCashDrawerEntryTx(
     throw new Error('No open shift for this till. Open till before cash operations.');
   }
 
-  const beforeExpectedCashPence = shift.expectedCashPence ?? 0;
-  const afterExpectedCashPence = beforeExpectedCashPence + input.amountPence;
+  const updateResult = await tx.shift.updateMany({
+    where: {
+      id: shift.id,
+      tillId: input.tillId,
+      status: 'OPEN',
+    },
+    data: {
+      expectedCashPence: { increment: input.amountPence },
+    },
+  });
+  if (updateResult.count !== 1) {
+    throw new Error('No open shift for this till. Open till before cash operations.');
+  }
+
+  const updatedShift = await tx.shift.findUnique({
+    where: { id: shift.id },
+    select: { expectedCashPence: true },
+  });
+  if (!updatedShift) {
+    throw new Error('Shift disappeared while recording the cash movement.');
+  }
+  const afterExpectedCashPence = updatedShift.expectedCashPence;
+  const beforeExpectedCashPence = afterExpectedCashPence - input.amountPence;
 
   const entry = await tx.cashDrawerEntry.create({
     data: {
@@ -257,11 +278,6 @@ export async function recordCashDrawerEntryTx(
       beforeExpectedCashPence,
       afterExpectedCashPence,
     },
-  });
-
-  await tx.shift.update({
-    where: { id: shift.id },
-    data: { expectedCashPence: afterExpectedCashPence },
   });
 
   let actor = input.actor;

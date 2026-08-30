@@ -229,7 +229,13 @@ beforeEach(() => {
     discountApprovalThresholdBps: 5000,
   });
   prismaMock.store.findFirst.mockResolvedValue({ id: STORE_ID });
-  prismaMock.till.findFirst.mockResolvedValue({ id: TILL_ID });
+  prismaMock.till.findFirst.mockResolvedValue({
+    id: TILL_ID,
+    active: true,
+    storeId: STORE_ID,
+    store: { businessId: BIZ_ID },
+  });
+  prismaMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
   prismaMock.account.findMany.mockResolvedValue(defaultAccounts);
   prismaMock.customer.findFirst.mockResolvedValue(null);
   prismaMock.mobileMoneyCollection.findFirst.mockResolvedValue(null);
@@ -250,7 +256,10 @@ beforeEach(() => {
   prismaMock.$queryRaw.mockResolvedValue([{ id: 'cde-1' }]);
   // Additional tx models used inside the transaction
   (prismaMock as any).cashDrawerEntry = { create: vi.fn().mockResolvedValue({}) };
-  (prismaMock as any).shift = { update: vi.fn().mockResolvedValue({}) };
+  (prismaMock as any).shift = {
+    update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
   (prismaMock as any).inventoryBalance = {
     upsert: vi.fn().mockResolvedValue({}),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -261,7 +270,7 @@ beforeEach(() => {
   );
   decrementInventoryBalanceMock.mockResolvedValue(97);
   batchDecrementInventoryBalanceMock.mockResolvedValue(undefined);
-  getOpenShiftForTillMock.mockResolvedValue(null);
+  getOpenShiftForTillMock.mockResolvedValue({ id: 'shift-1', expectedCashPence: 0 });
   recordCashDrawerEntryTxMock.mockResolvedValue(undefined);
   detectExcessiveDiscountRiskMock.mockResolvedValue(undefined);
   detectNegativeMarginRiskMock.mockResolvedValue(undefined);
@@ -652,8 +661,8 @@ describe('createSale — payments & stock', () => {
         lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
       }));
 
-      // C11: shift + cash drawer are consolidated into one $queryRaw CTE call.
-      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+      // Lock (FOR UPDATE) plus the cash-drawer CTE.
+      expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
       // The old two-call path must not be used on Postgres.
       expect(recordCashDrawerEntryTxMock).not.toHaveBeenCalled();
       expect((prismaMock as any).cashDrawerEntry?.create).not.toHaveBeenCalled();
@@ -694,13 +703,12 @@ describe('createSale — payments & stock', () => {
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 
-  it('skips shift/cash-drawer CTE when no open shift', async () => {
+  it('rejects a POS sale without an open shift even when the stored flag is false', async () => {
     getOpenShiftForTillMock.mockResolvedValue(null);
 
-    await createSale(makeBaseInput({
-      payments: [{ method: 'CASH', amountPence: 500 }],
-      lines: [{ productId: PRODUCT_ID, unitId: UNIT_ID, qtyInUnit: 1 }],
-    }));
+    await expect(createSale(makeBaseInput({
+      payments: [{ method: 'CARD', amountPence: 500 }],
+    }))).rejects.toThrow('Open till is required');
 
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
@@ -1375,5 +1383,39 @@ describe('createSale — discount clamping', () => {
 
     const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
     expect(createCall.data.totalPence).toBe(1000); // full price
+  });
+});
+
+describe('createSale — open till is mandatory regardless of the stored flag', () => {
+  it.each([true, false])(
+    'rejects a POS sale with no shift when requireOpenTillForSales is %s',
+    async (requireOpenTillForSales) => {
+      prismaMock.business.findUnique.mockResolvedValue({
+        id: BIZ_ID,
+        vatEnabled: false,
+        currency: 'GHS',
+        requireOpenTillForSales,
+        discountApprovalThresholdBps: 5000,
+      });
+      getOpenShiftForTillMock.mockResolvedValue(null);
+
+      await expect(createSale(makeBaseInput({
+        payments: [{ method: 'CASH', amountPence: 500 }],
+      }))).rejects.toThrow('Open till is required');
+    },
+  );
+
+  it('allows the online-order bypass to persist shiftId null', async () => {
+    getOpenShiftForTillMock.mockResolvedValue(null);
+
+    await createSale(makeBaseInput({
+      bypassOpenTillRequirement: true,
+      saleSource: 'ONLINE_ORDER',
+      payments: [{ method: 'MOBILE_MONEY', amountPence: 500 }],
+    }));
+
+    const createCall = prismaMock.salesInvoice.create.mock.calls[0][0];
+    expect(createCall.data.shiftId).toBeNull();
+    expect(createCall.data.saleSource).toBe('ONLINE_ORDER');
   });
 });

@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { formString, toPence } from '@/lib/form-helpers';
-import { withBusinessContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
+import { withBusinessContext, withBusinessStoreContext, safeAction, ok, err, type ActionResult } from '@/lib/action-utils';
 import { audit } from '@/lib/audit';
 import { verifyManagerPin } from '@/lib/security/pin';
 import { recordCashDrawerEntryTx, summarizeCashDrawerEntries } from '@/lib/services/cash-drawer';
@@ -23,9 +23,10 @@ export async function addCashToTillAction(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext(['MANAGER', 'OWNER']);
+    const { user, businessId, storeId } = await withBusinessStoreContext(['MANAGER', 'OWNER']);
 
     const amountRaw = formData.get('amount');
+    const shiftId = formString(formData, 'shiftId');
     const reasonCode = formString(formData, 'reasonCode');
     const note = formString(formData, 'note') || null;
 
@@ -37,9 +38,10 @@ export async function addCashToTillAction(
 
     const openShift = await prisma.shift.findFirst({
       where: {
+        ...(shiftId ? { id: shiftId } : {}),
         status: 'OPEN',
         userId: user.id,
-        till: { store: { businessId } },
+        till: { storeId, store: { businessId } },
       },
       select: { id: true, tillId: true, till: { select: { storeId: true } } },
       orderBy: { openedAt: 'desc' },
@@ -89,9 +91,9 @@ export async function addCashToTillAction(
 
 export async function openShiftAction(
   formData: FormData
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; tillId: string }>> {
   return safeAction(async () => {
-    const { user, businessId } = await withBusinessContext();
+    const { user, businessId, storeId } = await withBusinessStoreContext();
 
     const tillId = formString(formData, 'tillId');
     const openingCash = Math.max(0, toPence(formData.get('openingCash')));
@@ -99,10 +101,10 @@ export async function openShiftAction(
     if (!tillId) return err('Please select a till first.');
 
     const till = await prisma.till.findFirst({
-      where: { id: tillId, store: { businessId } },
-      select: { id: true, storeId: true },
+      where: { id: tillId, active: true, storeId, store: { businessId } },
+      select: { id: true, storeId: true, store: { select: { businessId: true } } },
     });
-    if (!till) return err('Till not found for your business.');
+    if (!till || till.store.businessId !== businessId) return err('Till not found for your business.');
 
     const shift = await measureServerOperation(
       'action.shift.open',
@@ -169,7 +171,7 @@ export async function openShiftAction(
     revalidateTag('pos-shifts');
     revalidatePath('/shifts');
     revalidatePath('/pos');
-    return ok({ id: shift.id });
+    return ok({ id: shift.id, tillId: till.id });
   });
 }
 
@@ -218,9 +220,9 @@ export async function closeShiftAction(
 }
 
 export async function getOpenShift(tillId: string) {
-  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
+  const { businessId, storeId } = await withBusinessStoreContext(undefined, undefined, { requireWrite: false });
   return prisma.shift.findFirst({
-    where: { tillId, status: 'OPEN', till: { store: { businessId } } },
+    where: { tillId, status: 'OPEN', till: { storeId, store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } },
@@ -229,9 +231,9 @@ export async function getOpenShift(tillId: string) {
 }
 
 export async function getShiftSummary(shiftId: string) {
-  const { businessId } = await withBusinessContext(undefined, { requireWrite: false });
+  const { businessId, storeId } = await withBusinessStoreContext(undefined, undefined, { requireWrite: false });
   const shift = await prisma.shift.findFirst({
-    where: { id: shiftId, till: { store: { businessId } } },
+    where: { id: shiftId, till: { storeId, store: { businessId } } },
     include: {
       user: { select: { name: true } },
       till: { select: { name: true } },

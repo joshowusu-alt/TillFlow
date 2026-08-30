@@ -16,6 +16,7 @@ import {
   normalizeMerchantBrandPrimaryColor,
 } from '@/lib/merchant-branding';
 import { invalidateStorefrontBusinessCache } from '@/lib/services/online-orders';
+import { revalidatePosTillShiftTags } from '@/lib/cache/pos-tags';
 
 function parseOptionalDate(value: string | null | undefined) {
   if (!value?.trim()) return null;
@@ -72,7 +73,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
     const momoEnabled = formData.get('momoEnabled') === 'on';
     const momoProvider = formOptionalString(formData, 'momoProvider');
     const momoNumber = formOptionalString(formData, 'momoNumber');
-    const requireOpenTillForSales = formData.get('requireOpenTillForSales') === 'on';
     const varianceReasonRequired = formData.get('varianceReasonRequired') === 'on';
     const discountApprovalThresholdBps = Math.max(
       0,
@@ -121,7 +121,6 @@ export async function updateBusinessAction(formData: FormData): Promise<void> {
         momoProvider,
         momoNumber,
         openingCapitalPence,
-        requireOpenTillForSales,
         varianceReasonRequired,
         discountApprovalThresholdBps,
         minimumMarginThresholdBps,
@@ -356,6 +355,7 @@ export async function createTillAction(formData: FormData): Promise<ActionResult
   if (existing >= 10) return { success: false, error: 'Maximum of 10 active tills per store.' };
 
   await prisma.till.create({ data: { storeId, name } });
+  revalidatePosTillShiftTags();
 
   audit({
     businessId,
@@ -384,6 +384,7 @@ export async function deactivateTillAction(tillId: string): Promise<ActionResult
   if (openShift) return { success: false, error: 'This till has an open shift. Close the shift before deactivating.' };
 
   await prisma.till.update({ where: { id: tillId }, data: { active: false } });
+  revalidatePosTillShiftTags();
 
   audit({
     businessId,

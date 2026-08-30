@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { requireBusinessStore } from '@/lib/auth';
+import { getOpenShiftsForUserInStore } from '@/lib/services/shifts';
 import ShiftClient from './ShiftClient';
 
 export default async function ShiftsPage() {
@@ -7,32 +8,13 @@ export default async function ShiftsPage() {
 
   const isOwner = user.role === 'OWNER';
 
-  // Run all queries in parallel — tills, open shift, and recent shifts
-  const [tills, openShift, recentShifts] = await Promise.all([
+  // Run all queries in parallel — tills, every current-user open shift, and recent shifts.
+  const [tills, openShifts, recentShifts] = await Promise.all([
     prisma.till.findMany({
       where: { storeId: baseStore.id },
       select: { id: true, name: true, active: true }
     }),
-    prisma.shift.findFirst({
-      where: { userId: user.id, status: 'OPEN' },
-      select: {
-        id: true,
-        openedAt: true,
-        openingCashPence: true,
-        expectedCashPence: true,
-        till: { select: { name: true } },
-        cashDrawerEntries: {
-          select: { entryType: true, amountPence: true }
-        },
-        salesInvoices: {
-          where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } },
-          select: {
-            totalPence: true,
-            payments: { select: { method: true, amountPence: true } }
-          }
-        }
-      }
-    }),
+    getOpenShiftsForUserInStore(user.id, baseStore.id),
     prisma.shift.findMany({
       where: { till: { storeId: baseStore.id } },
       orderBy: { openedAt: 'desc' },
@@ -56,9 +38,7 @@ export default async function ShiftsPage() {
     }),
   ]);
 
-  // Calculate open shift summary
-  let openShiftSummary = null;
-  if (openShift) {
+  const openShiftSummaries = openShifts.map((openShift) => {
     let cardTotal = 0;
     let transferTotal = 0;
     let momoTotal = 0;
@@ -79,7 +59,7 @@ export default async function ShiftsPage() {
       return acc;
     }, {});
 
-    openShiftSummary = {
+    return {
       ...openShift,
       salesCount,
       salesTotal,
@@ -89,7 +69,7 @@ export default async function ShiftsPage() {
       momoTotal,
       cashByType
     };
-  }
+  });
 
   // For owners: fetch open shifts belonging to other users on this store's tills
   let otherOpenShiftSummaries: {
@@ -177,7 +157,7 @@ export default async function ShiftsPage() {
 
       <ShiftClient
         tills={tills}
-        openShift={openShiftSummary}
+        openShifts={openShiftSummaries}
         otherOpenShifts={otherOpenShiftSummaries}
         recentShifts={recentShifts.map((s) => ({
           id: s.id,

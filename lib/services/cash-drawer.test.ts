@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   CASH_DRAWER_BREAKDOWN_ORDER,
   CASH_DRAWER_ENTRY_LABELS,
+  recordCashDrawerEntryTx,
   summarizeCashDrawerEntries,
 } from './cash-drawer';
+import { vi } from 'vitest';
+
+vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
 describe('cash drawer summaries', () => {
   it('summarizes the standard shift expected-cash formula categories', () => {
@@ -90,5 +94,41 @@ describe('cash drawer summaries', () => {
       { entryType: 'CASH_ADJUSTMENT', amountPence: 0 },
     ]);
     expect(summary.totalPence).toBe(100000);
+  });
+});
+
+describe('cash drawer writes', () => {
+  it('atomically increments expected cash only while the shift is open', async () => {
+    const tx = {
+      shift: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'shift-1', expectedCashPence: 1000 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findUnique: vi.fn().mockResolvedValue({ expectedCashPence: 1250 }),
+      },
+      cashDrawerEntry: {
+        create: vi.fn().mockResolvedValue({ id: 'entry-1' }),
+      },
+      auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
+      user: { findUnique: vi.fn() },
+    };
+
+    const result = await recordCashDrawerEntryTx(tx, {
+      businessId: 'business-1',
+      storeId: 'store-1',
+      tillId: 'till-1',
+      shiftId: 'shift-1',
+      createdByUserId: 'user-1',
+      entryType: 'CASH_SALE',
+      amountPence: 250,
+    });
+
+    expect(tx.shift.updateMany).toHaveBeenCalledWith({
+      where: { id: 'shift-1', tillId: 'till-1', status: 'OPEN' },
+      data: { expectedCashPence: { increment: 250 } },
+    });
+    expect(result).toMatchObject({
+      beforeExpectedCashPence: 1000,
+      afterExpectedCashPence: 1250,
+    });
   });
 });
