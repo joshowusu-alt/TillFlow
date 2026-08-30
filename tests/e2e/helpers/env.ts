@@ -75,3 +75,57 @@ export function missingRoleEnvMessage(role: QaRole) {
   const keys = ROLE_ENV[role];
   return `Set ${keys.email} and ${keys.password}`;
 }
+
+function hostnameOf(url: string) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/** Production hosts — reliability journey must never run here. */
+export function isProductionPlaywrightTarget(url = getBaseUrl()) {
+  const host = hostnameOf(url);
+  return host === 'tillflow.app' || host === 'www.tillflow.app';
+}
+
+/** Hosted Preview (Vercel or tillflow preview hosts), never Production. */
+export function isPreviewPlaywrightTarget(url = getBaseUrl()) {
+  if (isProductionPlaywrightTarget(url)) return false;
+  const host = hostnameOf(url);
+  if (!host || host === 'localhost' || host === '127.0.0.1') return false;
+  return host.endsWith('.vercel.app') || host.includes('preview') || host.endsWith('.tillflow.app');
+}
+
+/**
+ * Opt-in only. Default CI stays green.
+ * Runs when RELIABILITY_E2E=1, or when a Preview base URL plus owner creds exist.
+ * Always false for Production.
+ */
+export function shouldRunReliabilityJourney() {
+  if (isProductionPlaywrightTarget()) return false;
+  if (process.env.RELIABILITY_E2E === '1') return true;
+  return isPreviewPlaywrightTarget() && hasRoleCredentials('owner');
+}
+
+export function reliabilityJourneySkipReason() {
+  if (isProductionPlaywrightTarget()) {
+    return 'Reliability journey is blocked against Production.';
+  }
+  if (process.env.RELIABILITY_E2E === '1') return '';
+  if (!isPreviewPlaywrightTarget()) {
+    return 'Set RELIABILITY_E2E=1 (local/Preview) or a Preview PLAYWRIGHT_BASE_URL with owner credentials.';
+  }
+  if (!hasRoleCredentials('owner')) {
+    return missingRoleEnvMessage('owner');
+  }
+  return '';
+}
+
+/** Completing live sales requires an explicit sale allow, except local RELIABILITY_E2E=1. */
+export function reliabilitySalesAllowed() {
+  if (isProductionPlaywrightTarget()) return false;
+  if (qaSaleAllowed()) return true;
+  return process.env.RELIABILITY_E2E === '1' && !isPreviewPlaywrightTarget();
+}
