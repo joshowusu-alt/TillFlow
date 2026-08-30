@@ -47,7 +47,11 @@ import {
 import { buildAvailableBaseMap, buildCartDetails, buildProductMap, formatAvailable, getAvailableBase as getAvailableBaseForCart, getUnitFromProduct, sumCartTotals } from '@/lib/payments/pos-cart';
 import { filterPosProducts } from '@/lib/payments/pos-search';
 import type { PosCatalogueMode, SellableProductDto } from '@/lib/pos/sellable-dto';
-import { resolvePosCatalogueMode } from '@/lib/pos/sellable-dto';
+import {
+  POS_OFFLINE_CATALOGUE_LIMIT_MESSAGE,
+  resolvePosCatalogueMode,
+  showOfflineCatalogueLimit,
+} from '@/lib/pos/sellable-dto';
 import type { BarcodeScanResolution } from '@/lib/payments/pos-barcode';
 import type { PosProduct } from '@/lib/payments/pos-cart';
 import { completeSaleAction } from '@/app/actions/sales';
@@ -1643,6 +1647,13 @@ export default function PosClient({
               ) : null}
             </div>
           </div>
+
+          {showOfflineCatalogueLimit({
+            catalogueMode: posCatalogueMode ?? urlCatalogueMode,
+            catalogueSize: knownCatalogueSize,
+          }) ? (
+            <p className="mt-2 text-xs text-black/45">{POS_OFFLINE_CATALOGUE_LIMIT_MESSAGE}</p>
+          ) : null}
 
           {barcodeAlert && (
             <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-900 shadow-sm">

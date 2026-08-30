@@ -132,6 +132,17 @@ export function capOfflineCatalogue<T>(products: T[], max = POS_OFFLINE_CATALOGU
   return products.slice(0, max);
 }
 
+export const POS_OFFLINE_CATALOGUE_LIMIT_MESSAGE =
+  'Offline selling is limited to 5,000 products. Live search and scan cover the rest.';
+
+export function showOfflineCatalogueLimit(options: {
+  catalogueMode?: PosCatalogueMode | string | null;
+  catalogueSize?: number | null;
+}): boolean {
+  if (options.catalogueMode === 'paged') return true;
+  return (options.catalogueSize ?? 0) > POS_OFFLINE_CATALOGUE_MAX;
+}
+
 export function jsonByteSize(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf8');
 }

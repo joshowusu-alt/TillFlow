@@ -84,29 +84,32 @@ export async function GET(request: NextRequest) {
         const updatedSince = updatedSinceRaw ? new Date(updatedSinceRaw) : null;
         const updatedSinceValid = updatedSince && !Number.isNaN(updatedSince.getTime());
 
-        const [catalogueSize, catalogVersionRow, inventory] = await Promise.all([
+        const [catalogueSize, catalogVersionRow, products] = await Promise.all([
             prisma.product.count({ where: { businessId: business.id, active: true } }),
             prisma.product.aggregate({
                 where: { businessId: business.id, active: true },
                 _max: { updatedAt: true },
             }),
-            prisma.inventoryBalance.findMany({
-                where: { storeId: store.id },
-                select: { productId: true, qtyOnHandBase: true }
+            prisma.product.findMany({
+                where: {
+                    businessId: business.id,
+                    active: true,
+                    ...(updatedSinceValid ? { updatedAt: { gt: updatedSince } } : {}),
+                },
+                select: SELLABLE_PRODUCT_SELECT,
+                orderBy: { updatedAt: 'desc' },
+                take: POS_OFFLINE_CATALOGUE_MAX,
             }),
         ]);
+        const snapshotProductIds = products.map((product) => product.id);
+        // InventoryBalance is @@unique([storeId, productId]) — only the 5,000-SKU snapshot, never the whole store.
+        const inventory = snapshotProductIds.length
+            ? await prisma.inventoryBalance.findMany({
+                where: { storeId: store.id, productId: { in: snapshotProductIds } },
+                select: { productId: true, qtyOnHandBase: true }
+            })
+            : [];
         const inventoryMap = new Map(inventory.map((item) => [item.productId, item.qtyOnHandBase]));
-
-        const products = await prisma.product.findMany({
-            where: {
-                businessId: business.id,
-                active: true,
-                ...(updatedSinceValid ? { updatedAt: { gt: updatedSince } } : {}),
-            },
-            select: SELLABLE_PRODUCT_SELECT,
-            orderBy: { updatedAt: 'desc' },
-            take: POS_OFFLINE_CATALOGUE_MAX,
-        });
 
         const sellable = capOfflineCatalogue(
             products.map((product) => ({
