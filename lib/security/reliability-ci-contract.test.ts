@@ -116,10 +116,16 @@ describe('reliability CI governance contract', () => {
   it('keeps Preview deploy-sha and identity snapshot off Production', () => {
     const sha = read('app/api/qa/deploy-sha/route.ts');
     const snap = read('app/api/qa/reliability-snapshot/route.ts');
+    const mw = read('middleware.ts');
     expect(sha).toContain("process.env.VERCEL_ENV === 'production'");
     expect(sha).toContain("return NextResponse.json({ error: 'not_available' }, { status: 404 })");
     expect(snap).toContain('deployedSha');
     expect(snap).toContain("process.env.VERCEL_ENV === 'production'");
+    expect(mw).toContain("pathname === PUBLIC_DEPLOY_SHA_PATH");
+    expect(mw).toContain("export const PUBLIC_DEPLOY_SHA_PATH = '/api/qa/deploy-sha'");
+    expect(mw).not.toMatch(/pathname\.startsWith\(\s*['"]\/api\/qa/);
+    expect(mw).not.toMatch(/startsWith\(\s*['"]\/api\/qa\/deploy-sha/);
+    expect(mw).not.toMatch(/['"]\/api\/qa['"]/);
   });
 
   it('documents sqlite CI build vs Preview Postgres build:vercel', () => {
