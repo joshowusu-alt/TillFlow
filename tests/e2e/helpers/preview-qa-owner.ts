@@ -1,9 +1,10 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   RELIABILITY_PREVIEW_QA_BUSINESS_NAME,
   RELIABILITY_PREVIEW_QA_OWNER_NAME,
   RELIABILITY_PREVIEW_QA_TAG,
 } from '../../../lib/reliability/preview-qa-tag';
+import { diagnoseDisabledRegisterAdvance } from '../../../lib/register/advance';
 import { getBaseUrl, isProductionPlaywrightTarget } from './env';
 import { waitForProtectedShell } from './login';
 import { isVercelPreviewPlaywrightTarget } from './vercel-preview-bypass';
@@ -151,6 +152,50 @@ export const previewQaOwnerPageOutcomes = {
   redactCredentialNoise,
 };
 
+const REGISTER_STEP_TIMEOUT_MS = 8_000;
+
+async function fillReactInput(locator: Locator, value: string) {
+  await locator.waitFor({ state: 'visible', timeout: 15_000 });
+  await locator.click();
+  await locator.evaluate((el, nextValue) => {
+    const input = el as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, nextValue);
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, data: nextValue, inputType: 'insertText' }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+}
+
+async function visibleRegisterErrors(page: Page) {
+  const texts = await page.locator('.border-rose-300, [role="alert"]').allTextContents();
+  return texts.map((text) => text.trim()).filter(Boolean);
+}
+
+async function clickEnabledRegisterNext(locator: Locator, diagnosis: string) {
+  const deadline = Date.now() + REGISTER_STEP_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await locator.isEnabled().catch(() => false)) {
+      await locator.click({ timeout: 5_000 });
+      return;
+    }
+    await locator.page().waitForTimeout(100);
+  }
+  throw new PreviewQaOwnerBlockedError(diagnosis);
+}
+
+export type Phase9SharedSetup = {
+  ownerReady: boolean;
+  till3Ready: boolean;
+};
+
+export function assertMobilePhase9Prereqs(setup: Phase9SharedSetup) {
+  if (!setup.ownerReady || !setup.till3Ready) {
+    throw new PreviewQaOwnerBlockedError(
+      'Blocked: mobile Phase 9 cannot start because desktop provisioning/Till 3 setup did not complete.',
+    );
+  }
+}
+
 export async function createPlaywrightPreviewQaOwnerDriver(page: Page): Promise<PreviewQaOwnerDriver> {
   return {
     async getIdentity() {
@@ -163,9 +208,9 @@ export async function createPlaywrightPreviewQaOwnerDriver(page: Page): Promise<
       };
     },
     async login(credentials) {
-      await page.goto('/login', { waitUntil: 'domcontentloaded' });
-      await page.locator('input[name="email"]').fill(credentials.email);
-      await page.locator('input[name="password"]').fill(credentials.password);
+      await page.goto('/login', { waitUntil: 'load' });
+      await fillReactInput(page.locator('input[name="email"]'), credentials.email);
+      await fillReactInput(page.locator('input[name="password"]'), credentials.password);
       await page.getByRole('button', { name: /sign in/i }).click();
       const deadline = Date.now() + 45_000;
       while (Date.now() < deadline) {
@@ -181,18 +226,48 @@ export async function createPlaywrightPreviewQaOwnerDriver(page: Page): Promise<
       return 'failed';
     },
     async register(credentials) {
-      await page.goto('/register', { waitUntil: 'domcontentloaded' });
-      await page.getByPlaceholder(/El-Shaddai Supermarket/i).fill(RELIABILITY_PREVIEW_QA_BUSINESS_NAME);
-      await page.getByPlaceholder(/Kingsley Atakorah/i).fill(RELIABILITY_PREVIEW_QA_OWNER_NAME);
-      await page.getByRole('button', { name: /Next — Account Details/i }).click();
-      await page.getByPlaceholder(/you@yourstore.com/i).fill(credentials.email);
-      await page.getByPlaceholder(/At least 6 characters/i).fill(credentials.password);
-      await page.getByRole('button', { name: /Next — Choose Plan/i }).click();
-      await page.getByRole('button', { name: /Next — Currency/i }).click();
+      await page.goto('/register', { waitUntil: 'load' });
+      const nextAccount = page.getByRole('button', { name: /Next — Account Details/i });
+      await nextAccount.waitFor({ state: 'visible', timeout: 15_000 });
+      const business = page.getByPlaceholder(/El-Shaddai Supermarket/i);
+      const owner = page.getByPlaceholder(/Kingsley Atakorah/i);
+      await fillReactInput(business, RELIABILITY_PREVIEW_QA_BUSINESS_NAME);
+      await fillReactInput(owner, RELIABILITY_PREVIEW_QA_OWNER_NAME);
+      await clickEnabledRegisterNext(
+        nextAccount,
+        diagnoseDisabledRegisterAdvance({
+          step: 1,
+          nextDisabled: true,
+          businessName: await business.inputValue().catch(() => ''),
+          ownerName: await owner.inputValue().catch(() => ''),
+          visibleErrors: await visibleRegisterErrors(page),
+        }),
+      );
+
+      const emailField = page.getByPlaceholder(/you@yourstore.com/i);
+      const passwordField = page.getByPlaceholder(/At least 6 characters/i);
+      await emailField.waitFor({ state: 'visible', timeout: 15_000 });
+      await fillReactInput(emailField, credentials.email);
+      await fillReactInput(passwordField, credentials.password);
+      const passwordLength = (await passwordField.inputValue().catch(() => '')).length;
+      await clickEnabledRegisterNext(
+        page.getByRole('button', { name: /Next — Choose Plan/i }),
+        diagnoseDisabledRegisterAdvance({
+          step: 2,
+          nextDisabled: true,
+          businessName: RELIABILITY_PREVIEW_QA_BUSINESS_NAME,
+          ownerName: RELIABILITY_PREVIEW_QA_OWNER_NAME,
+          email: (await emailField.inputValue().catch(() => '')).trim() ? '[redacted-email]' : '',
+          passwordLength,
+          visibleErrors: await visibleRegisterErrors(page),
+        }),
+      );
+
+      await page.getByRole('button', { name: /Next — Currency/i }).click({ timeout: REGISTER_STEP_TIMEOUT_MS });
       await page.locator('input[name="qaTag"]').evaluate((el, tag) => {
         (el as HTMLInputElement).value = tag;
       }, RELIABILITY_PREVIEW_QA_TAG);
-      await page.getByRole('button', { name: /Create My Business/i }).click();
+      await page.getByRole('button', { name: /Create My Business/i }).click({ timeout: REGISTER_STEP_TIMEOUT_MS });
       const deadline = Date.now() + 60_000;
       while (Date.now() < deadline) {
         const outcome = classifyRegisterPage(page.url());

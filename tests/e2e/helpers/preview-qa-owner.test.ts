@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   PreviewQaOwnerBlockedError,
+  assertMobilePhase9Prereqs,
   previewQaOwnerPageOutcomes,
   provisionPreviewQaOwner,
   readPreviewQaOwnerCredentials,
@@ -133,6 +134,16 @@ describe('Preview QA owner provisioning', () => {
     expect(mobile.mode).toBe('existing-login');
     expect(registers).toBe(1);
     expect(logins).toBe(2);
+  });
+
+  it('fails mobile immediately when desktop provisioning did not complete', () => {
+    expect(() => assertMobilePhase9Prereqs({ ownerReady: false, till3Ready: false })).toThrow(
+      /desktop provisioning\/Till 3 setup did not complete/,
+    );
+    expect(() => assertMobilePhase9Prereqs({ ownerReady: true, till3Ready: false })).toThrow(
+      /desktop provisioning\/Till 3 setup did not complete/,
+    );
+    expect(() => assertMobilePhase9Prereqs({ ownerReady: true, till3Ready: true })).not.toThrow();
   });
 
   it('never hardcodes owner credentials and keeps them out of errors', () => {

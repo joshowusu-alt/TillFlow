@@ -55,6 +55,11 @@ describe('reliability CI governance contract', () => {
     expect(config).toContain("name: 'reliability-journey'");
     expect(config).toMatch(/reliability-journey\\.spec\\.ts/);
     expect(spec).toContain('ensurePreviewQaOwner');
+    expect(spec).toContain('assertMobilePhase9Prereqs');
+    expect(spec).toContain("mode: 'serial'");
+    expect(spec).toContain('phase9Setup.till3Ready');
+    expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('fillReactInput');
+    expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('diagnoseDisabledRegisterAdvance');
     expect(spec).not.toContain('reliability-${stamp}@example.com');
     expect(spec).not.toContain('Pass1234!');
     expect(spec).toContain('reliabilitySalesAllowed');

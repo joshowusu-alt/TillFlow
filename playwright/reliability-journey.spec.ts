@@ -13,13 +13,15 @@ import {
   reliabilitySalesAllowed,
   shouldRunReliabilityJourney,
 } from '../tests/e2e/helpers/env';
-import { ensurePreviewQaOwner } from '../tests/e2e/helpers/preview-qa-owner';
+import { ensurePreviewQaOwner, assertMobilePhase9Prereqs } from '../tests/e2e/helpers/preview-qa-owner';
 import { waitForProtectedShell } from '../tests/e2e/helpers/login';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
 const PRODUCT_NAME = 'Reliability SKU';
 const IMPORT_PRODUCT_NAME = 'Reliability Import SKU';
 const EXPECTED_PREVIEW_SHA = process.env.RELIABILITY_EXPECTED_SHA?.trim() ?? '';
+
+const phase9Setup = { ownerReady: false, till3Ready: false };
 
 function blocked(step: string, detail: string): never {
   throw new Error(`Phase 9 blocked at ${step}: ${detail}`);
@@ -115,6 +117,7 @@ async function fetchSnapshot(page: Page) {
 }
 
 test.describe('Reliability journey', () => {
+  test.describe.configure({ mode: 'serial' });
   test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
 
   test('register, three tills, product, Till 3 tenders, close', async ({ page }) => {
@@ -126,6 +129,7 @@ test.describe('Reliability journey', () => {
 
     await test.step('register or sign in (never Production)', async () => {
       await ensureOwnerSession(page);
+      phase9Setup.ownerReady = true;
     });
 
     await test.step('complete business type', async () => {
@@ -148,6 +152,7 @@ test.describe('Reliability journey', () => {
         await page.getByRole('button', { name: /Add till/i }).click();
       }
       await expect(page.getByText('Till 3', { exact: true })).toBeVisible({ timeout: 20_000 });
+      phase9Setup.till3Ready = true;
     });
 
     await test.step('create sellable product', async () => {
@@ -481,6 +486,7 @@ test.describe('Reliability journey', () => {
 
   test('core Till 3 POS flow on mobile viewport', async ({ page }) => {
     test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+    assertMobilePhase9Prereqs(phase9Setup);
     await requireSalesAllowed('mobile POS');
     test.setTimeout(180_000);
     await page.setViewportSize({ width: 390, height: 844 });
