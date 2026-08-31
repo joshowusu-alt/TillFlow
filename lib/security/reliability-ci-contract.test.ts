@@ -72,6 +72,26 @@ describe('reliability CI governance contract', () => {
     expect(env).toContain('isProductionPlaywrightTarget');
   });
 
+  it('injects Vercel Preview bypass headers fail-closed and never hardcodes the secret', () => {
+    const config = read('playwright.config.ts');
+    const helper = read('tests/e2e/helpers/vercel-preview-bypass.ts');
+    expect(config).toContain('resolveVercelPreviewBypass');
+    expect(config).toContain('env: process.env');
+    expect(config).toContain('extraHTTPHeaders');
+    expect(config).toContain("bypass.disableCapturingArtifacts ? 'off'");
+    expect(helper).toContain('x-vercel-protection-bypass');
+    expect(helper).toContain('x-vercel-set-bypass-cookie');
+    expect(helper).toContain('env.VERCEL_AUTOMATION_BYPASS_SECRET');
+    expect(helper).toContain('tillflow.app');
+    expect(helper).toContain('www.tillflow.app');
+    expect(helper).toContain('.vercel.app');
+    expect(helper).toContain('PLAYWRIGHT_ALLOW_LOCAL_BYPASS');
+    expect(helper).not.toMatch(
+      /x-vercel-protection-bypass['"]\s*:\s*['"][A-Za-z0-9_-]{12,}/,
+    );
+    expect(helper).not.toContain('console.log');
+  });
+
   it('keeps Preview deploy-sha and identity snapshot off Production', () => {
     const sha = read('app/api/qa/deploy-sha/route.ts');
     const snap = read('app/api/qa/reliability-snapshot/route.ts');
