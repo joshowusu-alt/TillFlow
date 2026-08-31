@@ -24,9 +24,11 @@ async function screenshotStep(page, name) {
 }
 
 async function fillVisiblePaymentForm(page, amount) {
-  const amountInput = page.locator('input[name="amount"]:visible').first();
-  await amountInput.fill(amount, { timeout: 30000 });
-  await amountInput.locator('xpath=ancestor::form[1]').getByRole('button', { name: /Record payment/i }).click();
+  const record = page.getByRole('button', { name: /Record payment/i }).first();
+  await record.waitFor({ state: 'visible', timeout: 20000 });
+  const form = record.locator('xpath=ancestor::form[1]');
+  await form.locator('input[name="amount"]').fill(amount);
+  await record.click();
 }
 
 /** Poll page URL until it matches the pattern (30s timeout by default) */
@@ -417,7 +419,7 @@ async function run() {
     await page.waitForTimeout(500);
     await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
     await page.locator('#record-purchase-form').getByRole('button', { name: /Record purchase|Receive Purchase/i }).click();
-    await page.waitForTimeout(5000);
+    await page.waitForURL(/\/purchases\/[^/?]+(\?|$)/, { timeout: 30000 });
     step('6b/12 Create unpaid purchase OK');
 
     // Sales (paid, multi-line) -> receipt open -> amend

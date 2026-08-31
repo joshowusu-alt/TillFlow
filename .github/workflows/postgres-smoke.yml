@@ -1,5 +1,8 @@
 name: Postgres Smoke
 
+# Path filter includes purchase concurrency coverage so paid createPurchase
+# exact-once tests run on every reliability money-path change.
+
 on:
   workflow_dispatch:
   pull_request:
