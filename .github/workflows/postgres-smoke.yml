@@ -3,8 +3,9 @@ name: Postgres Smoke
 # Path filter includes purchase concurrency coverage so paid createPurchase
 # exact-once tests run on every reliability money-path change.
 # POS-safety uses the same Preview-forbidden local SQLite app as CI.
-# Playwright Preview automation bypass is fail-closed in playwright.config.ts;
-# this comment keeps Postgres Smoke on SHAs that land that test infrastructure.
+# Playwright Preview automation bypass is fail-closed in playwright.config.ts
+# (process.env is accepted as the bypass env). This comment keeps Postgres Smoke
+# on SHAs that land that test infrastructure.
 
 on:
   workflow_dispatch:

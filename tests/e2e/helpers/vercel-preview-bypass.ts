@@ -20,6 +20,7 @@ export class VercelPreviewBypassBlockedError extends Error {
 }
 
 export type VercelPreviewBypassEnv = {
+  [key: string]: string | undefined;
   VERCEL_AUTOMATION_BYPASS_SECRET?: string;
   PLAYWRIGHT_ALLOW_LOCAL_BYPASS?: string;
 };
