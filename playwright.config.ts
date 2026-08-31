@@ -8,6 +8,8 @@ const bypass = resolveVercelPreviewBypass({
   baseURL,
   env: process.env,
 });
+const disableCapturingArtifacts =
+  bypass.disableCapturingArtifacts || Boolean(process.env.PLAYWRIGHT_OWNER_PASSWORD?.trim());
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -17,7 +19,7 @@ export default defineConfig({
   workers: 1,
   timeout: isCi ? 120_000 : 90_000,
   expect: { timeout: isCi ? 30_000 : 20_000 },
-  reporter: bypass.disableCapturingArtifacts
+  reporter: disableCapturingArtifacts
     ? [['list']]
     : [['list'], ['json', { outputFile: 'playwright/report.json' }]],
   outputDir: 'playwright/test-results',
@@ -31,8 +33,8 @@ export default defineConfig({
     // Fresh Playwright contexts can hit a service-worker controllerchange reload
     // mid server-action login and abort the POST before session cookies are set.
     serviceWorkers: 'block',
-    trace: bypass.disableCapturingArtifacts ? 'off' : 'retain-on-failure',
-    screenshot: bypass.disableCapturingArtifacts ? 'off' : 'only-on-failure',
+    trace: disableCapturingArtifacts ? 'off' : 'retain-on-failure',
+    screenshot: disableCapturingArtifacts ? 'off' : 'only-on-failure',
     video: 'off',
     ...(bypass.extraHTTPHeaders ? { extraHTTPHeaders: bypass.extraHTTPHeaders } : {}),
   },

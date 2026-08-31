@@ -54,7 +54,9 @@ describe('reliability CI governance contract', () => {
     const config = read('playwright.config.ts');
     expect(config).toContain("name: 'reliability-journey'");
     expect(config).toMatch(/reliability-journey\\.spec\\.ts/);
-    expect(spec).toContain('shouldRunReliabilityJourney');
+    expect(spec).toContain('ensurePreviewQaOwner');
+    expect(spec).not.toContain('reliability-${stamp}@example.com');
+    expect(spec).not.toContain('Pass1234!');
     expect(spec).toContain('reliabilitySalesAllowed');
     expect(spec).toContain('/api/qa/deploy-sha');
     expect(spec).toContain('LATE_OFFLINE');
@@ -78,7 +80,7 @@ describe('reliability CI governance contract', () => {
     expect(config).toContain('resolveVercelPreviewBypass');
     expect(config).toContain('env: process.env');
     expect(config).toContain('extraHTTPHeaders');
-    expect(config).toContain("bypass.disableCapturingArtifacts ? 'off'");
+    expect(config).toContain("disableCapturingArtifacts ? 'off'");
     expect(helper).toContain('x-vercel-protection-bypass');
     expect(helper).toContain('x-vercel-set-bypass-cookie');
     expect(helper).toContain('env.VERCEL_AUTOMATION_BYPASS_SECRET');
@@ -90,6 +92,25 @@ describe('reliability CI governance contract', () => {
       /x-vercel-protection-bypass['"]\s*:\s*['"][A-Za-z0-9_-]{12,}/,
     );
     expect(helper).not.toContain('console.log');
+  });
+
+  it('provisions a dedicated Preview QA owner idempotently and never hardcodes credentials', () => {
+    const spec = read('playwright/reliability-journey.spec.ts');
+    const helper = read('tests/e2e/helpers/preview-qa-owner.ts');
+    const register = read('app/actions/register.ts');
+    const config = read('playwright.config.ts');
+    expect(spec).toContain('ensurePreviewQaOwner');
+    expect(spec).toContain("test('core Till 3 POS flow on mobile viewport'");
+    expect(helper).toContain('PLAYWRIGHT_OWNER_EMAIL');
+    expect(helper).toContain('PLAYWRIGHT_OWNER_PASSWORD');
+    expect(helper).toContain('first-time-provision');
+    expect(helper).toContain('existing-login');
+    expect(helper).toContain('Password was not overwritten');
+    expect(helper).toContain('cannot run against Production');
+    expect(helper).toContain('RELIABILITY_EXPECTED_SHA');
+    expect(helper).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(register).toContain('resolveRegisterQaTag');
+    expect(config).toContain('PLAYWRIGHT_OWNER_PASSWORD');
   });
 
   it('keeps Preview deploy-sha and identity snapshot off Production', () => {

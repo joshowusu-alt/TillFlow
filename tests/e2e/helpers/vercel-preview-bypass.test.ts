@@ -152,6 +152,6 @@ describe('Vercel Preview Playwright bypass', () => {
     expect(helper).not.toContain('console.error');
     expect(config).toContain('resolveVercelPreviewBypass');
     expect(config).toContain('env: process.env');
-    expect(config).toContain("bypass.disableCapturingArtifacts ? 'off'");
+    expect(config).toContain("disableCapturingArtifacts ? 'off'");
   });
 });

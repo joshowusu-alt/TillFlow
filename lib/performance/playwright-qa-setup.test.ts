@@ -15,6 +15,7 @@ describe('Authenticated Playwright QA setup', () => {
     const gitignore = read('.gitignore');
     expect(gitignore).toContain('playwright/.auth/');
     expect(gitignore).toContain('.playwright-qa.local.env');
+    expect(gitignore).toContain('.playwright-preview-qa.local.env');
     expect(gitignore).toContain('playwright/report.json');
     expect(gitignore).toContain('playwright/test-results/');
   });

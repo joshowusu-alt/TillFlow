@@ -393,6 +393,7 @@ export default function RegisterForm({ error }: RegisterFormProps) {
           <input type="hidden" name="referredByName" value={referredByName} />
           <input type="hidden" name="referredByPhone" value={referredByPhone} />
           <input type="hidden" name="sourceChannel" value="INBOUND" />
+          <input type="hidden" name="qaTag" value="" />
 
           <details className="rounded-xl border border-black/8 bg-white/80 px-4 py-3 text-sm">
             <summary className="cursor-pointer font-semibold text-black/70">How did you hear about TillFlow? (optional)</summary>

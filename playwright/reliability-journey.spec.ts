@@ -8,13 +8,13 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-  hasRoleCredentials,
   isPreviewPlaywrightTarget,
   reliabilityJourneySkipReason,
   reliabilitySalesAllowed,
   shouldRunReliabilityJourney,
 } from '../tests/e2e/helpers/env';
-import { loginAsRole, waitForProtectedShell } from '../tests/e2e/helpers/login';
+import { ensurePreviewQaOwner } from '../tests/e2e/helpers/preview-qa-owner';
+import { waitForProtectedShell } from '../tests/e2e/helpers/login';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
 const PRODUCT_NAME = 'Reliability SKU';
@@ -63,22 +63,7 @@ async function confirmPreviewSha(page: Page) {
 }
 
 async function ensureOwnerSession(page: Page) {
-  if (process.env.RELIABILITY_E2E === '1' && !hasRoleCredentials('owner')) {
-    const stamp = Date.now();
-    await page.goto('/register', { waitUntil: 'domcontentloaded' });
-    await page.getByPlaceholder(/El-Shaddai Supermarket/i).fill(`Reliability ${stamp}`);
-    await page.getByPlaceholder(/Kingsley Atakorah/i).fill('Reliability Owner');
-    await page.getByRole('button', { name: /Next — Account Details/i }).click();
-    await page.getByPlaceholder(/you@yourstore.com/i).fill(`reliability-${stamp}@example.com`);
-    await page.getByPlaceholder(/At least 6 characters/i).fill('Pass1234!');
-    await page.getByRole('button', { name: /Next — Choose Plan/i }).click();
-    await page.getByRole('button', { name: /Next — Currency/i }).click();
-    await page.getByRole('button', { name: /Create My Business/i }).click();
-    await waitForProtectedShell(page);
-    return;
-  }
-
-  await loginAsRole(page, 'owner');
+  await ensurePreviewQaOwner(page);
   await waitForProtectedShell(page);
 }
 
