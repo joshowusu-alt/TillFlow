@@ -1,5 +1,6 @@
 /**
  * Overlapping-transaction concurrency evidence for paid createPurchase.
+ * Listed in .github/workflows/postgres-smoke.yml.
  *
  * Requires a real Postgres DATABASE_URL (or SUPPLIER_PAYMENT_CONCURRENCY_DATABASE_URL).
  */

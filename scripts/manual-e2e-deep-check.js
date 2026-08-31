@@ -23,6 +23,12 @@ async function screenshotStep(page, name) {
   } catch (_) { /* best effort */ }
 }
 
+async function fillVisiblePaymentForm(page, amount) {
+  const amountInput = page.locator('input[name="amount"]:visible').first();
+  await amountInput.fill(amount, { timeout: 30000 });
+  await amountInput.locator('xpath=ancestor::form[1]').getByRole('button', { name: /Record payment/i }).click();
+}
+
 /** Poll page URL until it matches the pattern (30s timeout by default) */
 async function waitForURLPattern(page, pattern, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
@@ -516,9 +522,7 @@ async function run() {
 
     await page.goto(`${BASE_URL}/payments/customer-receipts`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
-    const customerPayRow = page.locator('tbody tr').first();
-    await customerPayRow.locator('input[name="amount"]').fill('0.10');
-    await customerPayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.customerReceipt = true;
     step('10/12 Customer payment OK');
@@ -527,9 +531,7 @@ async function run() {
     step('11/12 Supplier payment');
     await page.goto(`${BASE_URL}/payments/supplier-payments`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
-    const supplierPayRow = page.locator('tbody tr').first();
-    await supplierPayRow.locator('input[name="amount"]').fill('0.10');
-    await supplierPayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.supplierPayment = true;
     step('11/12 Supplier payment OK');
@@ -551,9 +553,7 @@ async function run() {
       await page.goto(`${BASE_URL}/payments/expense-payments`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1000);
     }
-    const expensePayRow = page.locator('tbody tr').first();
-    await expensePayRow.locator('input[name="amount"]').fill('0.10');
-    await expensePayRow.getByRole('button', { name: /Record payment/i }).click();
+    await fillVisiblePaymentForm(page, '0.10');
     await page.waitForTimeout(3000);
     report.payments.expensePayment = true;
     step('12/12 Expense payment OK');

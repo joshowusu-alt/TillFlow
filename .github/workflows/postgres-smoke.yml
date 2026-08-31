@@ -33,6 +33,7 @@ on:
       - 'lib/services/payments.ts'
       - 'lib/services/expensePayments.ts'
       - 'lib/services/purchases.ts'
+      - 'lib/services/purchases-concurrency.test.ts'
       - 'app/api/offline/**'
       - '.github/workflows/postgres-smoke.yml'
 
