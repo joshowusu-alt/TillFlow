@@ -2,6 +2,7 @@ name: Postgres Smoke
 
 # Path filter includes purchase concurrency coverage so paid createPurchase
 # exact-once tests run on every reliability money-path change.
+# POS-safety uses the same Preview-forbidden local SQLite app as CI.
 
 on:
   workflow_dispatch:

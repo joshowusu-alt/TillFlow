@@ -146,8 +146,12 @@ export default function PurchaseFormClient({
   }, [productSearch, productOptions]);
 
   useEffect(() => {
-    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, current));
-  }, [storeId]);
+    const isRetry = Boolean(searchParams?.get('error'));
+    if (!isRetry) {
+      clearPurchaseOperationKey(storeId);
+    }
+    setIdempotencyKey((current) => readOrCreatePurchaseOperationKey(storeId, isRetry ? current : undefined));
+  }, [storeId, searchParams]);
 
   const resetPurchaseForm = useCallback(() => {
     clearPurchaseDraft(storeId);
