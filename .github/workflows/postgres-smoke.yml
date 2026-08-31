@@ -5,7 +5,8 @@ name: Postgres Smoke
 # POS-safety uses the same Preview-forbidden local SQLite app as CI.
 # Playwright Preview automation bypass is fail-closed in playwright.config.ts
 # (process.env is accepted as the bypass env). Preview QA owner provisioning is
-# idempotent and Preview-only. This comment keeps Postgres Smoke on those SHAs.
+# idempotent and Preview-only. Reliability-journey retries stay 0 so a timeout
+# cannot repeat Preview money writes. This comment keeps Postgres Smoke on those SHAs.
 
 on:
   workflow_dispatch:

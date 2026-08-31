@@ -4,9 +4,14 @@ import { join } from 'node:path';
 import {
   PreviewQaOwnerBlockedError,
   assertMobilePhase9Prereqs,
+  ownerSessionLocatorHints,
   previewQaOwnerPageOutcomes,
   provisionPreviewQaOwner,
   readPreviewQaOwnerCredentials,
+  shouldAddNamedTill,
+  wrapPreviewQaOwnerFailure,
+  classifyOnboardingBusinessType,
+  classifyTill3ShiftState,
   type PreviewQaOwnerDriver,
 } from './preview-qa-owner';
 
@@ -163,5 +168,151 @@ describe('Preview QA owner provisioning', () => {
     );
     expect(redacted).not.toContain(EMAIL);
     expect(redacted).not.toContain(PASSWORD);
+  });
+
+  it('wraps a closed-browser login failure with the login submitted stage', async () => {
+    try {
+      await provisionPreviewQaOwner({
+        baseURL: PREVIEW_URL,
+        env,
+        driver: driver({
+          login: async () => {
+            throw new Error('locator.waitFor: Target page, context or browser has been closed');
+          },
+        }),
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(PreviewQaOwnerBlockedError);
+      const blocked = error as PreviewQaOwnerBlockedError;
+      expect(blocked.stage).toBe('login submitted');
+      expect(blocked.message).toMatch(/Blocked at login submitted/);
+      expect(blocked.message).toMatch(/test timeout closed the browser/i);
+      expect(blocked.message).not.toContain(EMAIL);
+      expect(blocked.message).not.toContain(PASSWORD);
+    }
+  });
+
+  it('preserves Playwright test timeout instead of replacing it with page-closed', () => {
+    const wrapped = wrapPreviewQaOwnerFailure({
+      error: new Error('Test timeout of 480000ms exceeded'),
+      stage: 'login submitted',
+      credentials: { email: EMAIL, password: PASSWORD },
+    });
+    expect(wrapped).toBeInstanceOf(PreviewQaOwnerBlockedError);
+    expect(wrapped.stage).toBe('login submitted');
+    expect(wrapped.message).toContain('Blocked at login submitted');
+    expect(wrapped.message).toContain('Test timeout of 480000ms exceeded');
+    expect(wrapped.message).not.toMatch(/page\/context\/browser has been closed/i);
+    expect(wrapped.message).not.toContain(EMAIL);
+    expect(wrapped.message).not.toContain(PASSWORD);
+  });
+
+  it('names the last stage when a waitFor is interrupted by a closed browser', () => {
+    const wrapped = wrapPreviewQaOwnerFailure({
+      error: new Error(
+        `locator.waitFor: Target page, context or browser has been closed after ${EMAIL}`,
+      ),
+      stage: 'login submitted',
+      credentials: { email: EMAIL, password: PASSWORD },
+    });
+    expect(wrapped.stage).toBe('login submitted');
+    expect(wrapped.message).toMatch(/Blocked at login submitted/);
+    expect(wrapped.message).toMatch(/test timeout closed the browser/i);
+    expect(wrapped.message).toMatch(/Last stage: login submitted/);
+    expect(wrapped.message).toContain('Original:');
+    expect(wrapped.message).not.toContain(EMAIL);
+    expect(wrapped.message).not.toContain(PASSWORD);
+  });
+
+  it('records redacted stage breadcrumbs for existing-owner recovery', async () => {
+    const stages: string[] = [];
+    const result = await provisionPreviewQaOwner({
+      baseURL: PREVIEW_URL,
+      env,
+      onStage: (stage) => stages.push(stage),
+      driver: driver({
+        login: async () => 'ok',
+        register: async () => {
+          throw new Error('register must not run for an existing owner');
+        },
+      }),
+    });
+    expect(result.mode).toBe('existing-login');
+    expect(stages).toEqual(['identity', 'login submitted', 'owner session established']);
+    expect(stages.join(' ')).not.toContain(EMAIL);
+  });
+
+  it('recovers a partial tenant by adding only missing Till 3', () => {
+    expect(shouldAddNamedTill(['Till 1', 'Till 2'], 'Till 3')).toBe(true);
+    expect(shouldAddNamedTill(['Till 1', 'Till 2', 'Till 3'], 'Till 3')).toBe(false);
+    expect(shouldAddNamedTill(['till 3'], 'Till 3')).toBe(false);
+  });
+
+  it('does not treat a missing onboarding picker as a saved business type', () => {
+    expect(
+      classifyOnboardingBusinessType({
+        pickerCount: 0,
+        selectedValue: '',
+        editVisible: false,
+      }),
+    ).toBe('not-ready');
+    expect(
+      classifyOnboardingBusinessType({
+        pickerCount: 1,
+        selectedValue: '',
+        editVisible: false,
+      }),
+    ).toBe('needs-selection');
+    expect(
+      classifyOnboardingBusinessType({
+        pickerCount: 1,
+        selectedValue: 'SUPERMARKET',
+        editVisible: false,
+      }),
+    ).toBe('needs-persist');
+    expect(
+      classifyOnboardingBusinessType({
+        pickerCount: 0,
+        selectedValue: '',
+        editVisible: true,
+      }),
+    ).toBe('already-complete');
+  });
+
+  it('does not treat another open till as Till 3 recovery', () => {
+    expect(classifyTill3ShiftState({ shiftActiveVisible: true, till3Visible: false })).toBe(
+      'other-till-open',
+    );
+    expect(classifyTill3ShiftState({ shiftActiveVisible: true, till3Visible: true })).toBe('till-3-open');
+    expect(classifyTill3ShiftState({ shiftActiveVisible: false, till3Visible: true })).toBe('closed');
+  });
+
+  it('keeps stage locator hints free of credential values', () => {
+    const hints = ownerSessionLocatorHints({
+      pathname: '/onboarding',
+      mainContentCount: 1,
+      signOutCount: 1,
+      loginEmailCount: 0,
+      headingReadyCount: 1,
+    });
+    expect(hints).toContain('pathname=/onboarding');
+    expect(hints).toContain('field=main-content');
+    expect(hints).toContain('field=Sign out');
+    expect(hints).not.toContain(EMAIL);
+    expect(hints).not.toContain(PASSWORD);
+  });
+
+  it('disables automatic retries on the hosted reliability-journey project', () => {
+    const config = source('playwright.config.ts');
+    const start = config.indexOf("name: 'reliability-journey'");
+    expect(start).toBeGreaterThan(-1);
+    const project = config.slice(start, start + 500);
+    expect(project).toMatch(/retries:\s*0/);
+    expect(source('playwright/reliability-journey.spec.ts')).toContain('shouldAddNamedTill');
+    expect(source('playwright/reliability-journey.spec.ts')).toContain('completeOnboardingBusinessType');
+    expect(source('tests/e2e/helpers/preview-qa-owner.ts')).toContain("waitUntil: 'domcontentloaded'");
+    expect(source('tests/e2e/helpers/preview-qa-owner.ts')).toContain('noWaitAfter: true');
+    expect(source('tests/e2e/helpers/preview-qa-owner.ts')).not.toMatch(/waitUntil:\s*'load'/);
   });
 });

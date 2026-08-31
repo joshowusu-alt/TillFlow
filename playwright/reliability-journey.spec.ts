@@ -13,8 +13,14 @@ import {
   reliabilitySalesAllowed,
   shouldRunReliabilityJourney,
 } from '../tests/e2e/helpers/env';
-import { ensurePreviewQaOwner, assertMobilePhase9Prereqs } from '../tests/e2e/helpers/preview-qa-owner';
-import { waitForProtectedShell } from '../tests/e2e/helpers/login';
+import {
+  assertMobilePhase9Prereqs,
+  completeOnboardingBusinessType,
+  ensurePreviewQaOwner,
+  shouldAddNamedTill,
+  waitForOwnerSession,
+  classifyTill3ShiftState,
+} from '../tests/e2e/helpers/preview-qa-owner';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
 const PRODUCT_NAME = 'Reliability SKU';
@@ -66,7 +72,7 @@ async function confirmPreviewSha(page: Page) {
 
 async function ensureOwnerSession(page: Page) {
   await ensurePreviewQaOwner(page);
-  await waitForProtectedShell(page);
+  await waitForOwnerSession(page);
 }
 
 async function clearRestoredCart(page: Page) {
@@ -133,13 +139,7 @@ test.describe('Reliability journey', () => {
     });
 
     await test.step('complete business type', async () => {
-      await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
-      const picker = page.getByLabel(/Business type/i);
-      if ((await picker.count()) === 0) {
-        blocked('business type', 'Business type picker is not on /onboarding.');
-      }
-      await picker.selectOption('SUPERMARKET');
-      await page.getByRole('button', { name: /Save business type/i }).click();
+      await completeOnboardingBusinessType(page);
     });
 
     await test.step('confirm two default tills and add Till 3', async () => {
@@ -147,7 +147,14 @@ test.describe('Reliability journey', () => {
       await expect(page.getByText('Till Management')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByText('Till 1', { exact: true })).toBeVisible({ timeout: 20_000 });
       await expect(page.getByText('Till 2', { exact: true })).toBeVisible({ timeout: 5_000 });
-      if ((await page.getByText('Till 3', { exact: true }).count()) === 0) {
+      const tillLabels = (
+        await Promise.all(
+          ['Till 1', 'Till 2', 'Till 3'].map(async (name) =>
+            (await page.getByText(name, { exact: true }).count()) > 0 ? name : '',
+          ),
+        )
+      ).filter(Boolean);
+      if (shouldAddNamedTill(tillLabels, 'Till 3')) {
         await page.getByPlaceholder(/New till name e\.g\. Till 3/i).fill('Till 3');
         await page.getByRole('button', { name: /Add till/i }).click();
       }
@@ -173,25 +180,28 @@ test.describe('Reliability journey', () => {
     });
 
     await test.step('import products', async () => {
-      await page.goto('/settings/import-stock', { waitUntil: 'domcontentloaded' });
-      await page.getByRole('button', { name: /Product catalogue/i }).click();
-      const csv = [
-        'name,sku,barcode,category,selling_price,cost_price,base_unit,pack_unit,pack_size,supplier_name,reorder_point,storefront_published,image_url,notes',
-        `${IMPORT_PRODUCT_NAME},REL-IMP-1,RELIMP${Date.now()},Drinks,4.00,2.00,Piece,,,,,yes,,`,
-      ].join('\r\n');
-      await page.getByTestId('import-stock-file-input').setInputFiles({
-        name: 'reliability-catalogue.csv',
-        mimeType: 'text/csv',
-        buffer: Buffer.from(csv, 'utf8'),
-      });
-      const confirm = page.getByRole('button', { name: /Confirm Import/i });
-      await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({ timeout: 30_000 });
-      await confirm.click();
-      await expect(page.getByRole('heading', { name: 'Import complete!' })).toBeVisible({
-        timeout: 60_000,
-      });
-      await expect(page.getByText('Products imported')).toBeVisible();
       await page.goto('/products', { waitUntil: 'domcontentloaded' });
+      if ((await page.getByText(IMPORT_PRODUCT_NAME, { exact: true }).count()) === 0) {
+        await page.goto('/settings/import-stock', { waitUntil: 'domcontentloaded' });
+        await page.getByRole('button', { name: /Product catalogue/i }).click();
+        const csv = [
+          'name,sku,barcode,category,selling_price,cost_price,base_unit,pack_unit,pack_size,supplier_name,reorder_point,storefront_published,image_url,notes',
+          `${IMPORT_PRODUCT_NAME},REL-IMP-1,RELIMP1,Drinks,4.00,2.00,Piece,,,,,yes,,`,
+        ].join('\r\n');
+        await page.getByTestId('import-stock-file-input').setInputFiles({
+          name: 'reliability-catalogue.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from(csv, 'utf8'),
+        });
+        const confirm = page.getByRole('button', { name: /Confirm Import/i });
+        await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({ timeout: 30_000 });
+        await confirm.click();
+        await expect(page.getByRole('heading', { name: 'Import complete!' })).toBeVisible({
+          timeout: 60_000,
+        });
+        await expect(page.getByText('Products imported')).toBeVisible();
+        await page.goto('/products', { waitUntil: 'domcontentloaded' });
+      }
       await expect(
         page.getByText(IMPORT_PRODUCT_NAME, { exact: true }).first(),
         `imported product ${IMPORT_PRODUCT_NAME} is not on /products`,
@@ -216,14 +226,24 @@ test.describe('Reliability journey', () => {
 
     await test.step('open Till 3 with float', async () => {
       await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-      const tillSelect = page.locator('select').first();
-      await expect(tillSelect).toBeVisible({ timeout: 30_000 });
-      const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
-      if (!till3Value) blocked('open Till 3', 'Till 3 is not available on /shifts');
-      await tillSelect.selectOption(till3Value);
-      await page.getByPlaceholder('0.00').fill('100');
-      await page.getByRole('button', { name: /Open Shift/i }).click();
-      await expect(page.getByText(/Shift Active|Till 3/i).first()).toBeVisible({ timeout: 30_000 });
+      const shiftState = classifyTill3ShiftState({
+        shiftActiveVisible: await page.getByText(/Shift Active/i).first().isVisible().catch(() => false),
+        till3Visible: await page.getByText(/Till 3/i).first().isVisible().catch(() => false),
+      });
+      if (shiftState === 'other-till-open') {
+        blocked('open Till 3', 'another till is already open; Till 3 was not opened.');
+      }
+      if (shiftState === 'closed') {
+        const tillSelect = page.locator('select').first();
+        await expect(tillSelect).toBeVisible({ timeout: 30_000 });
+        const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
+        if (!till3Value) blocked('open Till 3', 'Till 3 is not available on /shifts');
+        await tillSelect.selectOption(till3Value);
+        await page.getByPlaceholder('0.00').fill('100');
+        await page.getByRole('button', { name: /Open Shift/i }).click();
+      }
+      await expect(page.getByText(/Shift Active/i).first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/Till 3/i).first()).toBeVisible({ timeout: 15_000 });
     });
 
     await test.step('cash / card / momo / transfer / split / receipt on Till 3', async () => {

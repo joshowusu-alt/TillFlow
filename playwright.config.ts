@@ -139,6 +139,9 @@ export default defineConfig({
       name: 'reliability-journey',
       testDir: './playwright',
       testMatch: /reliability-journey\.spec\.ts/,
+      // Financial E2E: never auto-retry. Setup writes (business, tills, products,
+      // shifts, invoices, drawer) are not proven idempotent end-to-end.
+      retries: 0,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

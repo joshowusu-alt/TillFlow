@@ -58,6 +58,7 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('assertMobilePhase9Prereqs');
     expect(spec).toContain("mode: 'serial'");
     expect(spec).toContain('phase9Setup.till3Ready');
+    expect(config).toMatch(/name: 'reliability-journey'[\s\S]*?retries:\s*0/);
     expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('fillReactInput');
     expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('diagnoseDisabledRegisterAdvance');
     expect(spec).not.toContain('reliability-${stamp}@example.com');
@@ -110,6 +111,10 @@ describe('reliability CI governance contract', () => {
     expect(helper).toContain('PLAYWRIGHT_OWNER_PASSWORD');
     expect(helper).toContain('first-time-provision');
     expect(helper).toContain('existing-login');
+    expect(helper).toContain('wrapPreviewQaOwnerFailure');
+    expect(helper).toContain('PREVIEW_QA_STAGE_TIMEOUT_MS');
+    expect(helper).toContain('shouldAddNamedTill');
+    expect(config).toMatch(/name: 'reliability-journey'[\s\S]*?retries:\s*0/);
     expect(helper).toContain('Password was not overwritten');
     expect(helper).toContain('cannot run against Production');
     expect(helper).toContain('RELIABILITY_EXPECTED_SHA');
