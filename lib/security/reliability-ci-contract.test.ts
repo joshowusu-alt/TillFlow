@@ -179,6 +179,28 @@ describe('reliability CI governance contract', () => {
     expect(env).toContain('isProductionPlaywrightTarget');
   });
 
+  it('asserts QA products via a unique table row or table link, never getByText().first()', () => {
+    const spec = read('playwright/reliability-journey.spec.ts');
+    const helper = read('tests/e2e/helpers/preview-qa-product.ts');
+    const config = read('playwright.config.ts');
+    expect(spec).toContain('ensureSellableQaProduct');
+    expect(spec).toContain('ensureImportedQaProduct');
+    expect(spec).toContain('RELIABILITY_SELLABLE_PRODUCT');
+    expect(helper).toContain("sku: 'REL-SKU-1'");
+    expect(helper).toContain("barcode: 'RELSKU1'");
+    expect(helper).toContain("getByRole('table')");
+    expect(helper).toContain("getByRole('row')");
+    expect(helper).toContain("getByRole('link'");
+    expect(helper).toContain('exact: true');
+    expect(helper).toContain('Genuine duplicates — do not pick a visible one');
+    expect(helper).not.toMatch(/getByText\([^;\n]*\)\.first\(\)/);
+    expect(spec).not.toMatch(/getByText\(\s*PRODUCT_NAME\s*\)\.first\(\)/);
+    expect(spec).not.toMatch(/getByText\(\s*IMPORT_PRODUCT_NAME[^)]*\)\.first\(\)/);
+    expect(config).toMatch(/name: 'reliability-journey'[\s\S]*?retries:\s*0/);
+    expect(spec).toContain('assertMobilePhase9Prereqs');
+    expect(config).toMatch(/name: 'reliability-provisioning'[\s\S]*?retries:\s*0/);
+  });
+
   it('injects Vercel Preview bypass headers fail-closed and never hardcodes the secret', () => {
     const config = read('playwright.config.ts');
     const helper = read('tests/e2e/helpers/vercel-preview-bypass.ts');

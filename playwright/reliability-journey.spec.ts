@@ -21,10 +21,16 @@ import {
   waitForOwnerSession,
   classifyTill3ShiftState,
 } from '../tests/e2e/helpers/preview-qa-owner';
+import {
+  RELIABILITY_IMPORT_PRODUCT,
+  RELIABILITY_SELLABLE_PRODUCT,
+  ensureImportedQaProduct,
+  ensureSellableQaProduct,
+} from '../tests/e2e/helpers/preview-qa-product';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
-const PRODUCT_NAME = 'Reliability SKU';
-const IMPORT_PRODUCT_NAME = 'Reliability Import SKU';
+const PRODUCT_NAME = RELIABILITY_SELLABLE_PRODUCT.name;
+const IMPORT_PRODUCT_NAME = RELIABILITY_IMPORT_PRODUCT.name;
 const EXPECTED_PREVIEW_SHA = process.env.RELIABILITY_EXPECTED_SHA?.trim() ?? '';
 
 const phase9Setup = { ownerReady: false, till3Ready: false };
@@ -170,23 +176,17 @@ test.describe('Reliability journey', () => {
         await page.locator('#product-create').click();
       }
       await expect(page.locator('input[name="name"]').first()).toBeVisible({ timeout: 15_000 });
-      if ((await page.getByText(PRODUCT_NAME, { exact: true }).count()) === 0) {
-        await page.locator('input[name="name"]').first().fill(PRODUCT_NAME);
-        await page.locator('input[name="sellingPriceBasePence"]').fill('5.00');
-        await page.locator('input[name="defaultCostBasePence"]').fill('2.00');
-        await page.getByRole('button', { name: /Create product/i }).click();
-      }
-      await expect(page.getByText(PRODUCT_NAME).first()).toBeVisible({ timeout: 30_000 });
+      await ensureSellableQaProduct(page);
     });
 
     await test.step('import products', async () => {
       await page.goto('/products', { waitUntil: 'domcontentloaded' });
-      if ((await page.getByText(IMPORT_PRODUCT_NAME, { exact: true }).count()) === 0) {
+      await ensureImportedQaProduct(page, async () => {
         await page.goto('/settings/import-stock', { waitUntil: 'domcontentloaded' });
         await page.getByRole('button', { name: /Product catalogue/i }).click();
         const csv = [
           'name,sku,barcode,category,selling_price,cost_price,base_unit,pack_unit,pack_size,supplier_name,reorder_point,storefront_published,image_url,notes',
-          `${IMPORT_PRODUCT_NAME},REL-IMP-1,RELIMP1,Drinks,4.00,2.00,Piece,,,,,yes,,`,
+          `${IMPORT_PRODUCT_NAME},${RELIABILITY_IMPORT_PRODUCT.sku},${RELIABILITY_IMPORT_PRODUCT.barcode},Drinks,4.00,2.00,Piece,,,,,yes,,`,
         ].join('\r\n');
         await page.getByTestId('import-stock-file-input').setInputFiles({
           name: 'reliability-catalogue.csv',
@@ -200,12 +200,7 @@ test.describe('Reliability journey', () => {
           timeout: 60_000,
         });
         await expect(page.getByText('Products imported')).toBeVisible();
-        await page.goto('/products', { waitUntil: 'domcontentloaded' });
-      }
-      await expect(
-        page.getByText(IMPORT_PRODUCT_NAME, { exact: true }).first(),
-        `imported product ${IMPORT_PRODUCT_NAME} is not on /products`,
-      ).toBeVisible({ timeout: 30_000 });
+      });
     });
 
     await test.step('record opening stock', async () => {
