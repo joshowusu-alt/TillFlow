@@ -51,6 +51,13 @@ export type PreviewQaOwnerMode = 'existing-login' | 'first-time-provision';
 /** Short per-stage bound. Do not raise this to absorb Preview load hangs. */
 export const PREVIEW_QA_STAGE_TIMEOUT_MS = 15_000;
 const REGISTER_STEP_TIMEOUT_MS = 8_000;
+/**
+ * Snapshot / poll probe. Playwright `timeout: 0` inherits the test timeout
+ * (480s on reliability-journey), so Date.now() loops are not a real bound
+ * unless every inner locator call passes a positive timeout.
+ */
+export const PREVIEW_QA_PROBE_TIMEOUT_MS = 2_000;
+const probeTimeout = { timeout: PREVIEW_QA_PROBE_TIMEOUT_MS } as const;
 
 export function redactCredentialNoise(text: string, credentials?: PreviewQaOwnerCredentials) {
   let safe = text;
@@ -296,7 +303,7 @@ async function fillReactInput(locator: Locator, value: string, fieldName: string
     setter?.call(input, nextValue);
     input.dispatchEvent(new InputEvent('input', { bubbles: true, data: nextValue, inputType: 'insertText' }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, value);
+  }, value, { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
 }
 
 async function visibleRegisterErrors(page: Page) {
@@ -307,7 +314,7 @@ async function visibleRegisterErrors(page: Page) {
 async function clickEnabledRegisterNext(locator: Locator, diagnosis: string) {
   const deadline = Date.now() + REGISTER_STEP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (await locator.isEnabled().catch(() => false)) {
+    if (await locator.isEnabled(probeTimeout).catch(() => false)) {
       await locator.click({ timeout: REGISTER_STEP_TIMEOUT_MS, noWaitAfter: true });
       return;
     }
@@ -334,11 +341,12 @@ export async function ownerSessionAlreadyReady(page: Page) {
   const signOut = page.getByRole('button', { name: /Sign out/i });
   const main = page.locator('#main-content');
   const ready = page.getByRole('heading', { name: /Getting ready/i });
-  return (
-    (await signOut.isVisible().catch(() => false)) ||
-    (await main.isVisible().catch(() => false)) ||
-    (await ready.isVisible().catch(() => false))
-  );
+  const [signOutVisible, mainVisible, readyVisible] = await Promise.all([
+    signOut.isVisible(probeTimeout).catch(() => false),
+    main.isVisible(probeTimeout).catch(() => false),
+    ready.isVisible(probeTimeout).catch(() => false),
+  ]);
+  return signOutVisible || mainVisible || readyVisible;
 }
 
 export async function waitForOwnerSession(page: Page) {
@@ -369,6 +377,11 @@ export function classifyOnboardingBusinessType(input: {
   return 'needs-persist';
 }
 
+/** Missing picker must not be probed with inputValue (that wait inherits the test timeout). */
+export function shouldReadOnboardingPickerValue(pickerCount: number) {
+  return pickerCount > 0;
+}
+
 export function classifyTill3ShiftState(input: {
   shiftActiveVisible: boolean;
   till3Visible: boolean;
@@ -381,59 +394,72 @@ export function classifyTill3ShiftState(input: {
 async function readOnboardingBusinessTypeState(page: Page) {
   const picker = page.getByLabel(/Business type/i);
   const save = page.getByRole('button', { name: /^(Save business type|Save|Saving…)$/ });
+  const [pickerCount, editVisible] = await Promise.all([
+    picker.count().catch(() => 0),
+    page.getByRole('button', { name: /^Edit$/i }).first().isVisible(probeTimeout).catch(() => false),
+  ]);
+  // Hosted already-complete: Edit visible, Business type combobox gone.
+  // Do not call inputValue when pickerCount is 0 — that wait uses the test timeout.
+  const selectedValue = shouldReadOnboardingPickerValue(pickerCount)
+    ? (await picker.inputValue(probeTimeout).catch(() => '')) || ''
+    : '';
   return {
     picker,
     save,
     state: classifyOnboardingBusinessType({
-      pickerCount: await picker.count().catch(() => 0),
-      selectedValue: (await picker.inputValue().catch(() => '')) || '',
-      editVisible: await page.getByRole('button', { name: /^Edit$/i }).isVisible().catch(() => false),
+      pickerCount,
+      selectedValue,
+      editVisible,
     }),
   };
 }
 
 export async function completeOnboardingBusinessType(page: Page) {
-  await gotoStage(page, '/onboarding');
-  let deadline = Date.now() + PREVIEW_QA_STAGE_TIMEOUT_MS;
-  let saveClicked = false;
-  while (Date.now() < deadline) {
-    const current = await readOnboardingBusinessTypeState(page);
-    if (current.state === 'already-complete') return;
-    if (current.state === 'needs-selection') {
-      await current.picker.selectOption('SUPERMARKET', { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
-      continue;
-    }
-    if (current.state === 'needs-persist' && !saveClicked) {
-      const enableDeadline = Date.now() + REGISTER_STEP_TIMEOUT_MS;
-      while (Date.now() < enableDeadline) {
-        if (await current.save.isEnabled().catch(() => false)) {
-          await current.save.click({ timeout: PREVIEW_QA_STAGE_TIMEOUT_MS, noWaitAfter: true });
-          saveClicked = true;
-          deadline = Date.now() + PREVIEW_QA_STAGE_TIMEOUT_MS;
-          break;
+  try {
+    await gotoStage(page, '/onboarding');
+    let deadline = Date.now() + PREVIEW_QA_STAGE_TIMEOUT_MS;
+    let saveClicked = false;
+    while (Date.now() < deadline) {
+      const current = await readOnboardingBusinessTypeState(page);
+      if (current.state === 'already-complete') return;
+      if (current.state === 'needs-selection') {
+        await current.picker.selectOption('SUPERMARKET', { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
+        continue;
+      }
+      if (current.state === 'needs-persist' && !saveClicked) {
+        const enableDeadline = Date.now() + REGISTER_STEP_TIMEOUT_MS;
+        while (Date.now() < enableDeadline) {
+          if (await current.save.isEnabled(probeTimeout).catch(() => false)) {
+            await current.save.click({ timeout: PREVIEW_QA_STAGE_TIMEOUT_MS, noWaitAfter: true });
+            saveClicked = true;
+            deadline = Date.now() + PREVIEW_QA_STAGE_TIMEOUT_MS;
+            break;
+          }
+          await page.waitForTimeout(100);
         }
-        await page.waitForTimeout(100);
+        if (!saveClicked) {
+          throw new PreviewQaOwnerBlockedError(
+            'Blocked at business creation: Save stayed disabled after selecting SUPERMARKET. field=Business type status=disabled',
+            { stage: 'business creation' },
+          );
+        }
+        continue;
       }
-      if (!saveClicked) {
-        throw new PreviewQaOwnerBlockedError(
-          'Blocked at business creation: Save stayed disabled after selecting SUPERMARKET. field=Business type status=disabled',
-          { stage: 'business creation' },
-        );
-      }
-      continue;
+      await page.waitForTimeout(100);
     }
-    await page.waitForTimeout(100);
-  }
-  if (saveClicked) {
+    if (saveClicked) {
+      throw new PreviewQaOwnerBlockedError(
+        'Blocked at business creation: Save was clicked but SUPERMARKET did not persist. field=Business type status=unconfirmed',
+        { stage: 'business creation' },
+      );
+    }
     throw new PreviewQaOwnerBlockedError(
-      'Blocked at business creation: Save was clicked but SUPERMARKET did not persist. field=Business type status=unconfirmed',
+      'Blocked at business creation: Business type picker did not become ready. field=Business type status=missing',
       { stage: 'business creation' },
     );
+  } catch (error) {
+    throw wrapPreviewQaOwnerFailure({ error, stage: 'business creation' });
   }
-  throw new PreviewQaOwnerBlockedError(
-    'Blocked at business creation: Business type picker did not become ready. field=Business type status=missing',
-    { stage: 'business creation' },
-  );
 }
 
 export type Phase9SharedSetup = {
@@ -492,7 +518,7 @@ export async function createPlaywrightPreviewQaOwnerDriver(
           credentials,
         });
       }
-      if (!(await signIn.isEnabled())) {
+      if (!(await signIn.isEnabled(probeTimeout).catch(() => false))) {
         throw new PreviewQaOwnerBlockedError(
           'Blocked at login submitted: Sign in is disabled. field=Sign in status=disabled',
           { stage: 'login submitted' },
@@ -507,7 +533,7 @@ export async function createPlaywrightPreviewQaOwnerDriver(
           return 'ok';
         }
         const banner =
-          (await page.locator('.border-rose-300, [role="alert"]').first().textContent().catch(() => null))?.trim() ??
+          (await page.locator('.border-rose-300, [role="alert"]').first().textContent(probeTimeout).catch(() => null))?.trim() ??
           null;
         const outcome = classifyLoginPage(page.url(), banner);
         if (outcome === 'invalid') return 'invalid';
@@ -556,8 +582,8 @@ export async function createPlaywrightPreviewQaOwnerDriver(
         diagnoseDisabledRegisterAdvance({
           step: 1,
           nextDisabled: true,
-          businessName: await business.inputValue().catch(() => ''),
-          ownerName: await owner.inputValue().catch(() => ''),
+          businessName: await business.inputValue(probeTimeout).catch(() => ''),
+          ownerName: await owner.inputValue(probeTimeout).catch(() => ''),
           visibleErrors: await visibleRegisterErrors(page),
         }),
       );
@@ -579,7 +605,7 @@ export async function createPlaywrightPreviewQaOwnerDriver(
       }
       await fillReactInput(emailField, credentials.email, 'account details');
       await fillReactInput(passwordField, credentials.password, 'account details');
-      const passwordLength = (await passwordField.inputValue().catch(() => '')).length;
+      const passwordLength = (await passwordField.inputValue(probeTimeout).catch(() => '')).length;
       await clickEnabledRegisterNext(
         page.getByRole('button', { name: /Next — Choose Plan/i }),
         diagnoseDisabledRegisterAdvance({
@@ -587,7 +613,7 @@ export async function createPlaywrightPreviewQaOwnerDriver(
           nextDisabled: true,
           businessName: RELIABILITY_PREVIEW_QA_BUSINESS_NAME,
           ownerName: RELIABILITY_PREVIEW_QA_OWNER_NAME,
-          email: (await emailField.inputValue().catch(() => '')).trim() ? '[redacted-email]' : '',
+          email: (await emailField.inputValue(probeTimeout).catch(() => '')).trim() ? '[redacted-email]' : '',
           passwordLength,
           visibleErrors: await visibleRegisterErrors(page),
         }),
@@ -600,7 +626,7 @@ export async function createPlaywrightPreviewQaOwnerDriver(
       });
       await page.locator('input[name="qaTag"]').evaluate((el, tag) => {
         (el as HTMLInputElement).value = tag;
-      }, RELIABILITY_PREVIEW_QA_TAG);
+      }, RELIABILITY_PREVIEW_QA_TAG, { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
       await page.getByRole('button', { name: /Create My Business/i }).click({
         timeout: REGISTER_STEP_TIMEOUT_MS,
         noWaitAfter: true,

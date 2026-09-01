@@ -1,9 +1,108 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+
+const PROVISIONING_PROJECT = 'reliability-provisioning';
+const PUBLIC_API_PREFIXES = [
+  '/api/health',
+  '/api/icon',
+  '/api/storefront',
+  '/api/uploads',
+  '/api/payments/momo/webhook/mtn',
+  '/api/notifications/webhook/meta',
+] as const;
+const ALLOWED_QA_ROUTES = ['deploy-sha', 'reliability-snapshot'] as const;
+
+/** UI / write labels the provisioning-only project must never perform. */
+const FORBIDDEN_PROVISIONING_FINANCIAL_ACTIONS = [
+  { name: 'Create product', pattern: /Create product/i },
+  { name: 'Complete Sale', pattern: /Complete Sale/i },
+  { name: 'Open Shift with float', pattern: /Open Shift/i },
+  { name: 'opening capital', pattern: /opening capital/i },
+  { name: 'import confirm', pattern: /Import complete!?|import confirm/i },
+  { name: 'refund', pattern: /Process Return|Confirm Return|cash refund|\brefund\b/i },
+  { name: 'expense', pattern: /Record expense|Save expense|Add expense|\/expenses\b/i },
+] as const;
+
+function extractBalancedObject(source: string, nameLiteralIndex: number): string {
+  let start = nameLiteralIndex;
+  while (start > 0 && source[start] !== '{') start -= 1;
+  if (source[start] !== '{') {
+    throw new Error('Could not find opening brace for Playwright project object.');
+  }
+  let depth = 0;
+  for (let end = start; end < source.length; end += 1) {
+    const ch = source[end];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, end + 1);
+    }
+  }
+  throw new Error('Unbalanced Playwright project object.');
+}
+
+function extractPlaywrightProject(config: string, name: string): string {
+  const nameRe = new RegExp(`name:\\s*['"]${name}['"]`);
+  const match = nameRe.exec(config);
+  if (!match || match.index === undefined) {
+    throw new Error(`Playwright project '${name}' is missing from playwright.config.ts`);
+  }
+  return extractBalancedObject(config, match.index);
+}
+
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
+function extractPublicPaths(middlewareSource: string): string[] {
+  const block = middlewareSource.match(/const PUBLIC_PATHS = \[([\s\S]*?)\];/);
+  if (!block) throw new Error('PUBLIC_PATHS array is missing from middleware.ts');
+  return [...block[1].matchAll(/['"](\/[^'"]+)['"]/g)].map((m) => m[1]);
+}
+
+function listQaRouteDirs(): string[] {
+  const qaRoot = join(root, 'app', 'api', 'qa');
+  if (!existsSync(qaRoot)) return [];
+  return readdirSync(qaRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function resolveProvisioningSpecRel(project: string): string {
+  const testDir = project.match(/testDir:\s*['"]([^'"]+)['"]/)?.[1] ?? './playwright';
+  const regexMatch = project.match(/testMatch:\s*\/([^/]+)\//);
+  const stringMatch = project.match(/testMatch:\s*['"]([^'"]+)['"]/);
+  const raw = regexMatch?.[1] ?? stringMatch?.[1];
+  if (!raw) {
+    throw new Error(`Playwright project '${PROVISIONING_PROJECT}' has no testMatch`);
+  }
+  const fileName = raw
+    .replace(/\\\./g, '.')
+    .replace(/^\*\*\//, '')
+    .replace(/\\/g, '')
+    .split('/')
+    .pop();
+  if (!fileName) {
+    throw new Error(`Could not resolve spec filename from testMatch '${raw}'`);
+  }
+  const candidates = [
+    join(testDir, fileName).replace(/\\/g, '/'),
+    `playwright/${fileName}`,
+    `tests/e2e/${fileName}`,
+  ];
+  const hit = candidates.find((rel) => existsSync(join(root, rel)));
+  if (!hit) {
+    throw new Error(
+      `Provisioning spec '${fileName}' is missing (looked in ${candidates.join(', ')})`,
+    );
+  }
+  return hit;
+}
 
 describe('reliability CI governance contract', () => {
   it('pins TZ=Africa/Accra on CI, postgres-smoke, and authenticated-qa', () => {
@@ -113,6 +212,8 @@ describe('reliability CI governance contract', () => {
     expect(helper).toContain('existing-login');
     expect(helper).toContain('wrapPreviewQaOwnerFailure');
     expect(helper).toContain('PREVIEW_QA_STAGE_TIMEOUT_MS');
+    expect(helper).toContain('PREVIEW_QA_PROBE_TIMEOUT_MS');
+    expect(helper).toContain('shouldReadOnboardingPickerValue');
     expect(helper).toContain('shouldAddNamedTill');
     expect(config).toMatch(/name: 'reliability-journey'[\s\S]*?retries:\s*0/);
     expect(helper).toContain('Password was not overwritten');
@@ -131,11 +232,37 @@ describe('reliability CI governance contract', () => {
     expect(sha).toContain("return NextResponse.json({ error: 'not_available' }, { status: 404 })");
     expect(snap).toContain('deployedSha');
     expect(snap).toContain("process.env.VERCEL_ENV === 'production'");
+    expect(snap).toContain('getUser');
+    expect(snap).toContain("user.role !== 'OWNER'");
     expect(mw).toContain("pathname === PUBLIC_DEPLOY_SHA_PATH");
     expect(mw).toContain("export const PUBLIC_DEPLOY_SHA_PATH = '/api/qa/deploy-sha'");
     expect(mw).not.toMatch(/pathname\.startsWith\(\s*['"]\/api\/qa/);
     expect(mw).not.toMatch(/startsWith\(\s*['"]\/api\/qa\/deploy-sha/);
     expect(mw).not.toMatch(/['"]\/api\/qa['"]/);
+  });
+
+  it('does not add a new public QA HTTP surface or weaken PUBLIC_PATHS', () => {
+    const mw = read('middleware.ts');
+    const publicPaths = extractPublicPaths(mw);
+    expect(listQaRouteDirs()).toEqual([...ALLOWED_QA_ROUTES]);
+    expect(publicPaths.filter((path) => path.startsWith('/api/qa'))).toEqual([]);
+    expect(publicPaths.filter((path) => path.startsWith('/api/'))).toEqual([...PUBLIC_API_PREFIXES]);
+    expect(mw).toContain("pathname === PUBLIC_DEPLOY_SHA_PATH || PUBLIC_PATHS.some((p) => pathname.startsWith(p))");
+    expect(mw).not.toMatch(/PUBLIC_PATHS\.push/);
+    expect(mw).not.toMatch(/startsWith\(\s*['"]\/api\/qa/);
+  });
+
+  it('redacts Playwright traces, screenshots, and reports when bypass or owner password is present', () => {
+    const config = read('playwright.config.ts');
+    expect(config).toContain('bypass.disableCapturingArtifacts');
+    expect(config).toContain('PLAYWRIGHT_OWNER_PASSWORD');
+    expect(config).toContain('disableCapturingArtifacts || Boolean(process.env.PLAYWRIGHT_OWNER_PASSWORD');
+    expect(config).toContain("trace: disableCapturingArtifacts ? 'off'");
+    expect(config).toContain("screenshot: disableCapturingArtifacts ? 'off'");
+    expect(config).toMatch(/reporter:\s*disableCapturingArtifacts/);
+    expect(read('tests/e2e/helpers/vercel-preview-bypass.ts')).toContain(
+      'disableCapturingArtifacts: true',
+    );
   });
 
   it('documents sqlite CI build vs Preview Postgres build:vercel', () => {
@@ -147,5 +274,64 @@ describe('reliability CI governance contract', () => {
     expect(read('package.json')).toContain(
       'prisma generate --schema=prisma/schema.postgres.prisma',
     );
+  });
+});
+
+describe('reliability-provisioning Playwright project contract', () => {
+  const config = read('playwright.config.ts');
+
+  it('preserves Preview host/SHA gates and Production denial in shared helpers', () => {
+    const env = read('tests/e2e/helpers/env.ts');
+    const owner = read('tests/e2e/helpers/preview-qa-owner.ts');
+    const bypass = read('tests/e2e/helpers/vercel-preview-bypass.ts');
+    expect(env).toContain('isProductionPlaywrightTarget');
+    expect(env).toContain('tillflow.app');
+    expect(env).toContain('www.tillflow.app');
+    expect(owner).toContain('cannot run against Production');
+    expect(owner).toContain('RELIABILITY_EXPECTED_SHA');
+    expect(owner).toContain('/api/qa/deploy-sha');
+    expect(bypass).toContain('isProductionPlaywrightHost');
+    expect(bypass).toContain('tillflow.app');
+    expect(bypass).toContain('www.tillflow.app');
+    expect(bypass).not.toMatch(
+      /x-vercel-protection-bypass['"]\s*:\s*['"][A-Za-z0-9_-]{12,}/,
+    );
+  });
+
+  it('declares a separate provisioning-only project with retries 0 and a 180s ceiling', () => {
+    expect(config).toContain(`name: '${PROVISIONING_PROJECT}'`);
+    const project = extractPlaywrightProject(config, PROVISIONING_PROJECT);
+    expect(project).toMatch(/retries:\s*0\b/);
+    expect(project).not.toMatch(/retries:\s*(?:isCi|1|[1-9]\d*)\b/);
+    expect(project).toMatch(/timeout:\s*(?:180_000|180000)\b/);
+    expect(project).not.toMatch(/timeout:\s*(?:480_000|480000|[2-9]\d{5,})\b/);
+    expect(project).not.toMatch(/dependencies:\s*\[[^\]]*reliability-journey/);
+    expect(project).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
+  });
+
+  it('fails CI if the provisioning spec targets Production or performs financial writes', () => {
+    const project = extractPlaywrightProject(config, PROVISIONING_PROJECT);
+    const specRel = resolveProvisioningSpecRel(project);
+    const spec = read(specRel);
+    const scanned = stripComments(`${project}\n${spec}`);
+
+    expect(specRel).toMatch(/reliability-provisioning/);
+    expect(scanned).toContain('/api/qa/deploy-sha');
+    expect(scanned).toMatch(/RELIABILITY_EXPECTED_SHA|confirmPreviewSha|getIdentity/);
+    expect(scanned).toMatch(
+      /isProductionPlaywrightTarget|assertPreviewQaOwnerTarget|ensurePreviewQaOwner|cannot run against Production|Production is forbidden/,
+    );
+    expect(scanned).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
+    expect(scanned).not.toMatch(/PLAYWRIGHT_BASE_URL\s*=\s*['"]https:\/\/(?:www\.)?tillflow\.app/);
+    expect(scanned).not.toMatch(/baseURL:\s*['"]https:\/\/(?:www\.)?tillflow\.app/);
+    expect(scanned).not.toMatch(/goto\(\s*['"]https:\/\/(?:www\.)?tillflow\.app/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(spec).not.toMatch(/test\.setTimeout\(\s*(?:480_000|480000|[2-9]\d{5,})\s*\)/);
+
+    for (const action of FORBIDDEN_PROVISIONING_FINANCIAL_ACTIONS) {
+      expect(scanned, `provisioning project must not perform ${action.name}`).not.toMatch(
+        action.pattern,
+      );
+    }
   });
 });

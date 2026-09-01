@@ -12,6 +12,9 @@ import {
   wrapPreviewQaOwnerFailure,
   classifyOnboardingBusinessType,
   classifyTill3ShiftState,
+  shouldReadOnboardingPickerValue,
+  PREVIEW_QA_PROBE_TIMEOUT_MS,
+  PREVIEW_QA_STAGE_TIMEOUT_MS,
   type PreviewQaOwnerDriver,
 } from './preview-qa-owner';
 
@@ -208,6 +211,21 @@ describe('Preview QA owner provisioning', () => {
     expect(wrapped.message).not.toContain(PASSWORD);
   });
 
+  it('preserves Test timeout when the interrupt is also page-closed', () => {
+    const wrapped = wrapPreviewQaOwnerFailure({
+      error: new Error(
+        'Test timeout of 480000ms exceeded\npage.waitForTimeout: Target page, context or browser has been closed',
+      ),
+      stage: 'business creation',
+      credentials: { email: EMAIL, password: PASSWORD },
+    });
+    expect(wrapped.stage).toBe('business creation');
+    expect(wrapped.message).toContain('Test timeout of 480000ms exceeded');
+    expect(wrapped.message).not.toMatch(/test timeout closed the browser/i);
+    expect(wrapped.message).not.toContain(EMAIL);
+    expect(wrapped.message).not.toContain(PASSWORD);
+  });
+
   it('names the last stage when a waitFor is interrupted by a closed browser', () => {
     const wrapped = wrapPreviewQaOwnerFailure({
       error: new Error(
@@ -271,6 +289,9 @@ describe('Preview QA owner provisioning', () => {
         editVisible: false,
       }),
     ).toBe('needs-persist');
+  });
+
+  it('classifies already-complete when Edit is visible and the Business type combobox is gone', () => {
     expect(
       classifyOnboardingBusinessType({
         pickerCount: 0,
@@ -278,6 +299,40 @@ describe('Preview QA owner provisioning', () => {
         editVisible: true,
       }),
     ).toBe('already-complete');
+    expect(shouldReadOnboardingPickerValue(0)).toBe(false);
+    expect(shouldReadOnboardingPickerValue(1)).toBe(true);
+  });
+
+  it('does not call inputValue when pickerCount is 0', () => {
+    const helper = source('tests/e2e/helpers/preview-qa-owner.ts');
+    const start = helper.indexOf('async function readOnboardingBusinessTypeState');
+    const end = helper.indexOf('export async function completeOnboardingBusinessType');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const fn = helper.slice(start, end);
+    expect(fn).toContain('picker.count()');
+    expect(fn).toContain('shouldReadOnboardingPickerValue(pickerCount)');
+    expect(fn).toMatch(
+      /shouldReadOnboardingPickerValue\(pickerCount\)\s*\?\s*\(await picker\.inputValue\(probeTimeout\)/,
+    );
+    expect(fn).not.toMatch(/inputValue\(\s*\)/);
+    expect(helper).toMatch(/export function shouldReadOnboardingPickerValue/);
+    expect(PREVIEW_QA_PROBE_TIMEOUT_MS).toBeGreaterThanOrEqual(1_000);
+    expect(PREVIEW_QA_PROBE_TIMEOUT_MS).toBeLessThanOrEqual(3_000);
+    expect(PREVIEW_QA_STAGE_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it('bounds every waiting locator action so Date.now loops cannot inherit the 480s test timeout', () => {
+    const helper = source('tests/e2e/helpers/preview-qa-owner.ts');
+    for (const method of ['inputValue', 'isEnabled', 'waitFor', 'selectOption', 'textContent'] as const) {
+      const calls = [...helper.matchAll(new RegExp(`\\.${method}\\(([^)]*)\\)`, 'g'))];
+      expect(calls.length, method).toBeGreaterThan(0);
+      for (const [, args] of calls) {
+        expect(args, `${method}(${args})`).toMatch(/timeout:|probeTimeout/);
+      }
+    }
+    expect(helper).not.toMatch(/\.inputValue\(\s*\)/);
+    expect(helper).not.toMatch(/\.isEnabled\(\s*\)/);
   });
 
   it('does not treat another open till as Till 3 recovery', () => {

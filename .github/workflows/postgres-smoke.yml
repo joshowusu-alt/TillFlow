@@ -6,7 +6,9 @@ name: Postgres Smoke
 # Playwright Preview automation bypass is fail-closed in playwright.config.ts
 # (process.env is accepted as the bypass env). Preview QA owner provisioning is
 # idempotent and Preview-only. Reliability-journey retries stay 0 so a timeout
-# cannot repeat Preview money writes. This comment keeps Postgres Smoke on those SHAs.
+# cannot repeat Preview money writes. Reliability provisioning-only Playwright
+# project (retries 0, 180s, zero financial writes) is the next hosted gate.
+# This comment keeps Postgres Smoke on those SHAs.
 
 on:
   workflow_dispatch:
