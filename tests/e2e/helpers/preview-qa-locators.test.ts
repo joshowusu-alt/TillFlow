@@ -57,7 +57,8 @@ describe('Reliability unique-visible locators', () => {
     expect(opening).toContain('aria-label="Unit"');
     expect(receipts).toContain('ResponsiveDataTable');
     expect(receipts).toContain('name="amount"');
-    expect(pos).toContain('completeLabel');
+    expect(pos).toContain('data-testid="pos-complete-checkout"');
+    expect(pos).toContain('data-testid="pos-complete-sheet"');
     expect(pos).toContain('lg:hidden');
     expect(pos).toContain('hidden lg:block');
     expect(shifts).toContain('lg:hidden');

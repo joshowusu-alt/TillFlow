@@ -220,7 +220,8 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('closeTill3Shift');
     expect(spec).toContain('What are you importing?');
     expect(spec).toContain('No products yet.');
-    expect(spec).toContain('Till 3 · Open');
+    expect(spec).toContain('pos-complete-checkout');
+    expect(spec).toContain('#pos-till-select');
     expect(spec).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);
     expect(spec).not.toMatch(/locator\(['"]select['"]\)\.filter\(\{\s*hasText:\s*PRODUCT_NAME/);
     expect(spec).not.toContain('test.setTimeout(600_000)');

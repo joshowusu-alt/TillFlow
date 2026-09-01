@@ -546,8 +546,9 @@ export default function ShiftClient({
               </select>
             </div>
             <div>
-              <label className="label">Opening Cash (in drawer)</label>
+              <label className="label" htmlFor="opening-cash">Opening Cash (in drawer)</label>
               <input
+                id="opening-cash"
                 className="input"
                 type="number"
                 step="0.01"
@@ -864,8 +865,9 @@ export default function ShiftClient({
             )}
 
             <div className="mt-4">
-              <label className="label">Actual Cash Counted</label>
+              <label className="label" htmlFor="actual-cash-counted">Actual Cash Counted</label>
               <input
+                id="actual-cash-counted"
                 className="input text-lg font-semibold"
                 type="number"
                 step="0.01"
@@ -955,8 +957,9 @@ export default function ShiftClient({
               <div className="mt-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">Owner Override</div>
                 <div>
-                  <label className="label">Your Password</label>
+                  <label className="label" htmlFor="owner-override-password">Your Password</label>
                   <input
+                    id="owner-override-password"
                     className="input"
                     type="password"
                     value={ownerPassword}
@@ -965,8 +968,9 @@ export default function ShiftClient({
                   />
                 </div>
                 <div>
-                  <label className="label">Reason Code</label>
+                  <label className="label" htmlFor="owner-override-reason">Reason Code</label>
                   <select
+                    id="owner-override-reason"
                     className="input"
                     value={overrideReasonCode}
                     onChange={(e) => setOverrideReasonCode(e.target.value)}
@@ -979,8 +983,9 @@ export default function ShiftClient({
                   </select>
                 </div>
                 <div>
-                  <label className="label">Justification</label>
+                  <label className="label" htmlFor="owner-override-justification">Justification</label>
                   <textarea
+                    id="owner-override-justification"
                     className="input"
                     rows={2}
                     value={overrideJustification}

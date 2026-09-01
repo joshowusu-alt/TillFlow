@@ -2511,6 +2511,7 @@ export default function PosClient({
                   paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                 }`}
                 type="button"
+                data-testid="pos-complete-checkout"
                 disabled={!canSubmit || isCompletingSale}
                 onClick={handleCompleteSale}
               >
@@ -2585,6 +2586,7 @@ export default function PosClient({
                           </button>
                           <button
                             type="button"
+                            data-testid="pos-complete-sheet"
                             className={`btn-primary flex-1 px-5 py-3 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                               paymentStatus !== 'PAID' ? 'bg-amber-600 hover:bg-amber-700' : ''
                             }`}

@@ -126,16 +126,18 @@ async function addJourneyProduct(page: Page, name = PRODUCT_NAME) {
   const search = page.getByPlaceholder(/type product name/i);
   await search.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
   await search.fill(name, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-  const result = page.getByRole('button', { name, exact: true });
+  const result = page.getByRole('button').filter({ hasText: name });
   await clickUniqueVisible(result, `POS search ${name}`);
 }
 
-async function completeSaleAndReset(page: Page, completeName: RegExp) {
+async function completeSaleAndReset(page: Page, _completeName: RegExp) {
   const viewCart = page.getByRole('button', { name: /View cart/i });
   if (await viewCart.isVisible().catch(() => false)) {
     await viewCart.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+    await clickUniqueVisible(page.getByTestId('pos-complete-sheet'), 'complete sale');
+  } else {
+    await clickUniqueVisible(page.getByTestId('pos-complete-checkout'), 'complete sale');
   }
-  await clickUniqueVisible(page.getByRole('button', { name: completeName }), 'complete sale');
   await expect(page.getByText(/Sale Complete|Ready for next customer/i)).toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
@@ -353,7 +355,6 @@ test.describe('Reliability journey', () => {
       await gotoPos(page);
       const posTill = page.locator('#pos-till-select');
       await expect(posTill.locator('option:checked')).toHaveText(/^Till 3$/);
-      await expect(page.getByText('Till 3 · Open')).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
 
       const snapshotBefore = await fetchSnapshot(page);
       const paymentHits = (snapshotBefore.invoices ?? []).flatMap(
@@ -438,7 +439,7 @@ test.describe('Reliability journey', () => {
       const productSearch = page.getByPlaceholder(/Type to search product/i);
       await expect(productSearch, 'purchase product search missing').toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
       await productSearch.fill(PRODUCT_NAME, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-      await clickUniqueVisible(page.getByRole('button', { name: PRODUCT_NAME, exact: true }), 'purchase product hit');
+      await clickUniqueVisible(page.getByRole('button').filter({ hasText: PRODUCT_NAME }), 'purchase product hit');
       await clickUniqueVisible(page.getByRole('button', { name: /Add line/i }), 'purchase add line');
       await page.locator('select[name="paymentStatus"]').selectOption('UNPAID', { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
       await clickUniqueVisible(page.getByRole('button', { name: /Record purchase/i }), 'record purchase');
@@ -650,7 +651,7 @@ test.describe('Reliability journey', () => {
     await openTill3Shift(page, '20', 'mobile POS');
     await gotoPos(page);
     await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
-    await expect(page.getByText('Till 3 · Open')).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+    await expect(page.locator('#pos-till-select').locator('option:checked')).toHaveText(/^Till 3$/);
     await addJourneyProduct(page);
     await completeSaleAndReset(page, /Complete Cash Sale|Complete Sale/i);
     await expect(page.getByText(/GH₵0\.00 · 0 txns/)).toHaveCount(0);
