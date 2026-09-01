@@ -25,6 +25,13 @@ describe('Till 3 accounting helper', () => {
     expect(helper).toContain('ensureSellableQaOnHand');
     expect(helper).toContain('#record-purchase-form');
     expect(helper).toContain('UNPAID');
+    expect(helper).toContain('classifyPersistedTill3OpenShifts');
+    expect(helper).toContain('Close Shift');
+    expect(helper).toContain("waitUntil: 'load'");
+    expect(helper).not.toMatch(/getByText\('Shift Active', \{ exact: true \}\)\.toBeVisible/);
+    const summaryFn = helper.slice(helper.indexOf('export async function assertTill3ShiftSummaryUi'));
+    expect(summaryFn).toContain("goto('/shifts'");
+    expect(summaryFn).not.toContain('proveTill3OpenShiftChrome');
     expect(spec).not.toContain('Process Return');
     expect(spec).not.toContain('LATE_OFFLINE');
     expect(spec).not.toContain('PLAYWRIGHT_ONBOARDING_OWNER_EMAIL_2');

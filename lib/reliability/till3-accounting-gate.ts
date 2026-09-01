@@ -52,9 +52,82 @@ export type Till3AccountingInvoice = {
   drawer?: Till3AccountingDrawer[];
 };
 
+export type Till3OpenShiftRow = {
+  id?: string | null;
+  tillId?: string | null;
+  tillName?: string | null;
+  status?: string | null;
+  openingCashPence?: number | null;
+  expectedCashPence?: number | null;
+  cardTotalPence?: number | null;
+  momoTotalPence?: number | null;
+  transferTotalPence?: number | null;
+  ownedByCurrentUser?: boolean | null;
+  openFloatCount?: number | null;
+  salesCount?: number | null;
+};
+
 export type Till3AccountingSnapshot = {
   invoices?: Till3AccountingInvoice[];
   sellableProduct?: { name?: string | null; sku?: string | null; qtyOnHandBase?: number | null } | null;
+  openShifts?: Till3OpenShiftRow[];
+  purchaseInvoiceCount?: number | null;
+  saleInvoiceCount?: number | null;
+  salesPaymentCount?: number | null;
+  cashSaleDrawerCount?: number | null;
+  purchaseInvoices?: Array<{
+    id?: string | null;
+    paymentStatus?: string | null;
+    totalPence?: number | null;
+    qaTag?: string | null;
+  }>;
+};
+
+/**
+ * Hosted SHA 4728edba error-context.md: still on /shifts closed form after Open Shift click.
+ * Real ShiftClient success navigates to /pos?till=, it does not remain on "Shift Active".
+ */
+export const HOSTED_4728EDBA_TILL3_SHIFT_PAGE = {
+  path: '/shifts',
+  heading: 'Shift Reconciliation',
+  startNewShiftVisible: true,
+  shiftActiveVisible: false,
+  closeShiftVisible: false,
+  till3Selected: true,
+  till3HeadingVisible: false,
+  openShiftButtonVisible: true,
+  openingCashValue: '100',
+  recentShiftsEmpty: true,
+  openShiftPending: false,
+  navigatedToPos: false,
+} as const;
+
+export type HostedTill3ShiftPageView = {
+  path: string;
+  heading: string;
+  startNewShiftVisible: boolean;
+  shiftActiveVisible: boolean;
+  closeShiftVisible: boolean;
+  till3Selected: boolean;
+  till3HeadingVisible: boolean;
+  openShiftButtonVisible: boolean;
+  openingCashValue: string;
+  recentShiftsEmpty: boolean;
+  openShiftPending: boolean;
+  navigatedToPos: boolean;
+};
+
+export type Till3OpenShiftDefectClass =
+  | 'outdated-exact-text-only'
+  | 'till-selection'
+  | 'open-shift-write'
+  | 'redirect-navigation-timing';
+
+export type PersistedTill3OpenShift = {
+  state: 'till-3-open' | 'closed' | 'ambiguous';
+  shiftId: string | null;
+  tillId: string | null;
+  openFloatCount: number;
 };
 
 function blocked(detail: string): never {
@@ -99,6 +172,85 @@ export function formatTill3AccountingTable(invoice: Till3AccountingInvoice) {
     `shiftExpectedCashPence=${invoice.expectedCashPence ?? 0} shiftCardPence=${invoice.cardTotalPence ?? 0} shiftMomoPence=${invoice.momoTotalPence ?? 0} shiftTransferPence=${invoice.transferTotalPence ?? 0}`,
     `cashSaleDrawerPence=${cashSale}`,
   ].join('\n');
+}
+
+export function classifyPersistedTill3OpenShifts(
+  rows: Till3OpenShiftRow[] | null | undefined,
+): PersistedTill3OpenShift {
+  const open = (rows ?? []).filter((row) => (row.status ?? 'OPEN').toUpperCase() === 'OPEN');
+  const unnamed = open.filter((row) => !(row.tillName ?? '').trim());
+  if (unnamed.length > 0) {
+    return { state: 'ambiguous', shiftId: null, tillId: null, openFloatCount: 0 };
+  }
+  const till3 = open.filter((row) => (row.tillName ?? '').trim() === TILL3_ACCOUNTING_TILL_NAME);
+  if (till3.length > 1) {
+    return { state: 'ambiguous', shiftId: null, tillId: null, openFloatCount: 0 };
+  }
+  if (till3.length === 1) {
+    const row = till3[0]!;
+    if (row.ownedByCurrentUser === false || !row.id || !row.tillId) {
+      return { state: 'ambiguous', shiftId: null, tillId: null, openFloatCount: 0 };
+    }
+    return {
+      state: 'till-3-open',
+      shiftId: row.id,
+      tillId: row.tillId,
+      openFloatCount: row.openFloatCount ?? 1,
+    };
+  }
+  return { state: 'closed', shiftId: null, tillId: null, openFloatCount: 0 };
+}
+
+export function classifyHostedTill3OpenShiftFailure(page: HostedTill3ShiftPageView): {
+  till3WasSelected: boolean;
+  openShiftClickSucceeded: boolean;
+  persistedOpenShiftFromUi: boolean;
+  visibleWording: 'Start New Shift' | 'Shift Active' | 'POS' | 'ambiguous';
+  defectClass: Till3OpenShiftDefectClass;
+} {
+  const onPos = page.navigatedToPos || page.path.startsWith('/pos');
+  const openChrome = page.closeShiftVisible && page.till3HeadingVisible;
+  const stillClosedForm =
+    page.startNewShiftVisible &&
+    page.openShiftButtonVisible &&
+    !page.openShiftPending &&
+    !onPos &&
+    !openChrome;
+
+  if (!page.till3Selected && stillClosedForm) {
+    return {
+      till3WasSelected: false,
+      openShiftClickSucceeded: false,
+      persistedOpenShiftFromUi: false,
+      visibleWording: 'Start New Shift',
+      defectClass: 'till-selection',
+    };
+  }
+  if (onPos || openChrome) {
+    return {
+      till3WasSelected: page.till3Selected || page.till3HeadingVisible,
+      openShiftClickSucceeded: true,
+      persistedOpenShiftFromUi: true,
+      visibleWording: onPos ? 'POS' : 'Shift Active',
+      defectClass: 'outdated-exact-text-only',
+    };
+  }
+  if (stillClosedForm) {
+    return {
+      till3WasSelected: page.till3Selected,
+      openShiftClickSucceeded: false,
+      persistedOpenShiftFromUi: false,
+      visibleWording: 'Start New Shift',
+      defectClass: 'redirect-navigation-timing',
+    };
+  }
+  return {
+    till3WasSelected: page.till3Selected,
+    openShiftClickSucceeded: false,
+    persistedOpenShiftFromUi: false,
+    visibleWording: 'ambiguous',
+    defectClass: 'open-shift-write',
+  };
 }
 
 /**

@@ -5,13 +5,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ShiftClient from './ShiftClient';
 
 const refreshMock = vi.fn();
+const pushMock = vi.fn();
 const openShiftActionMock = vi.fn();
 const closeShiftActionMock = vi.fn();
 const closeShiftOwnerOverrideActionMock = vi.fn();
 const addCashToTillActionMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: refreshMock }),
+  useRouter: () => ({ refresh: refreshMock, push: pushMock }),
 }));
 
 vi.mock('@/app/actions/shifts', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/app/actions/shifts', () => ({
 describe('ShiftClient', () => {
   beforeEach(() => {
     refreshMock.mockReset();
+    pushMock.mockReset();
     openShiftActionMock.mockReset();
     closeShiftActionMock.mockReset();
     closeShiftOwnerOverrideActionMock.mockReset();
@@ -320,5 +322,30 @@ describe('ShiftClient', () => {
     expect(screen.getByText('Expenses paid from till')).toBeInTheDocument();
     expect(screen.getAllByText('Expected Cash').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('GH₵2,600.00').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('opens a shift by navigating to POS for that till, not by remaining on Start New Shift', async () => {
+    openShiftActionMock.mockResolvedValue({ success: true, data: { id: 'shift-3', tillId: 'till-3' } });
+    render(
+      <ShiftClient
+        tills={[{ id: 'till-1', name: 'Till 1' }, { id: 'till-3', name: 'Till 3' }]}
+        openShifts={[]}
+        otherOpenShifts={[]}
+        recentShifts={[]}
+        currency="GHS"
+        userRole="OWNER"
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Start New Shift' })).toBeInTheDocument();
+    expect(screen.queryByText('Shift Active')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Till'), { target: { value: 'till-3' } });
+    fireEvent.change(screen.getByLabelText(/Opening Cash/i), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Shift' }));
+
+    await waitFor(() => {
+      expect(openShiftActionMock).toHaveBeenCalledTimes(1);
+    });
+    expect(pushMock).toHaveBeenCalledWith('/pos?till=till-3');
   });
 });

@@ -11,7 +11,6 @@ import {
 import {
   PreviewQaOwnerBlockedError,
   assertPreviewQaOwnerTarget,
-  classifyTill3ShiftState,
   shouldAddNamedTill,
 } from './preview-qa-owner';
 import {
@@ -22,6 +21,7 @@ import {
   requireExactlyOneVisible,
   selectUniqueVisible,
   till3OpenSelect,
+  visibleOnly,
 } from './preview-qa-locators';
 import { RELIABILITY_SELLABLE_PRODUCT } from './preview-qa-product';
 import {
@@ -30,8 +30,11 @@ import {
   TILL3_ACCOUNTING_SPLIT,
   TILL3_ACCOUNTING_TILL_NAME,
   assertTill3AccountingPersisted,
+  classifyPersistedTill3OpenShifts,
   formatTill3AccountingTable,
   paymentHits,
+  type HostedTill3ShiftPageView,
+  type PersistedTill3OpenShift,
   type Till3AccountingSnapshot,
 } from '../../../lib/reliability/till3-accounting-gate';
 import {
@@ -102,40 +105,141 @@ export async function ensureTill3Exists(page: Page) {
   });
 }
 
-export async function openTill3ShiftForAccounting(page: Page) {
+async function visibleCount(locator: Locator) {
+  return visibleOnly(locator).count();
+}
+
+function isPosPath(page: Page) {
+  try {
+    const path = new URL(page.url()).pathname;
+    return path === '/pos' || path.startsWith('/pos/');
+  } catch {
+    return /\/pos(?:\/|\?|$)/.test(page.url());
+  }
+}
+
+export async function readHostedTill3ShiftPage(page: Page): Promise<HostedTill3ShiftPageView> {
+  const url = new URL(page.url());
+  const heading = (
+    (await page.getByRole('heading', { name: 'Shift Reconciliation', exact: true }).textContent().catch(() => '')) ??
+    (await page.getByRole('heading', { level: 1 }).first().textContent().catch(() => '')) ??
+    ''
+  ).trim();
+  const checkedTill = (
+    (await page.getByRole('combobox', { name: 'Till' }).locator('option:checked').textContent().catch(() => '')) ?? ''
+  ).trim();
+  return {
+    path: url.pathname,
+    heading,
+    startNewShiftVisible: (await visibleCount(page.getByRole('heading', { name: 'Start New Shift', exact: true }))) === 1,
+    shiftActiveVisible: (await visibleCount(page.getByText('Shift Active', { exact: true }))) === 1,
+    closeShiftVisible: (await visibleCount(page.getByRole('button', { name: 'Close Shift', exact: true }))) === 1,
+    till3Selected: checkedTill === TILL3_ACCOUNTING_TILL_NAME,
+    till3HeadingVisible:
+      (await visibleCount(page.getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true }))) === 1,
+    openShiftButtonVisible: (await visibleCount(page.getByRole('button', { name: 'Open Shift', exact: true }))) === 1,
+    openingCashValue: await page.getByLabel(/Opening Cash/i).inputValue().catch(() => ''),
+    recentShiftsEmpty: (await visibleCount(page.getByText('No shifts recorded yet', { exact: true }))) === 1,
+    openShiftPending: (await visibleCount(page.getByRole('button', { name: 'Opening...', exact: true }))) === 1,
+    navigatedToPos: isPosPath(page),
+  };
+}
+
+async function requirePersistedTill3OpenShift(page: Page): Promise<PersistedTill3OpenShift> {
+  const persisted = classifyPersistedTill3OpenShifts((await fetchTill3AccountingSnapshot(page)).openShifts);
+  if (persisted.state !== 'till-3-open' || !persisted.shiftId || !persisted.tillId) {
+    blocked('no unique OPEN Till 3 shift owned by the current user; will not open another shift.');
+  }
+  return persisted;
+}
+
+async function proveTill3OpenShiftChrome(page: Page, persisted: PersistedTill3OpenShift) {
+  if (persisted.state !== 'till-3-open' || !persisted.shiftId || !persisted.tillId) {
+    blocked('Till 3 shift identity is incomplete.');
+  }
+  if (isPosPath(page)) return persisted;
+
   await page.goto('/shifts', {
-    waitUntil: 'domcontentloaded',
+    waitUntil: 'load',
     timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
   });
-  const shiftState = classifyTill3ShiftState({
-    shiftActiveVisible: await page.getByText('Shift Active', { exact: true }).isVisible().catch(() => false),
-    till3Visible: await page
-      .getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true })
-      .isVisible()
-      .catch(() => false),
+  await expect(page.getByRole('heading', { name: 'Shift Reconciliation', exact: true })).toBeVisible({
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
   });
+  const ui = await readHostedTill3ShiftPage(page);
+  if (ui.startNewShiftVisible && ui.openShiftButtonVisible) {
+    blocked(
+      `persisted Till 3 shift ${persisted.shiftId} but /shifts still shows Start New Shift / Open Shift.`,
+    );
+  }
+  await requireExactlyOneVisible(
+    page.getByRole('button', { name: 'Close Shift', exact: true }),
+    'Till 3 Close Shift',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  );
+  await requireExactlyOneVisible(
+    page.getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true }),
+    'Till 3 open heading',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  );
+  return persisted;
+}
+
+export async function openTill3ShiftForAccounting(page: Page) {
+  await page.goto('/shifts', {
+    waitUntil: 'load',
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  });
+  await expect(page.getByRole('heading', { name: 'Shift Reconciliation', exact: true })).toBeVisible({
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  });
+
+  const before = classifyPersistedTill3OpenShifts((await fetchTill3AccountingSnapshot(page)).openShifts);
+  if (before.state === 'ambiguous') {
+    blocked('cannot tell which OPEN shift belongs to Till 3; fail closed.');
+  }
   const openDecision = assertRerunDecision(
     'open Till 3',
     classifyTill3DrawerOpenRerun({
-      shiftState,
+      shiftState: before.state === 'till-3-open' ? 'till-3-open' : 'closed',
       needsOpenShift: true,
+      openFloatCountOnCurrentShift: before.openFloatCount,
     }),
   );
-  if (openDecision === 'create') {
-    await selectUniqueVisible(till3OpenSelect(page), { label: TILL3_ACCOUNTING_TILL_NAME }, 'open Till 3');
-    await fillUniqueVisible(
-      page.getByLabel(/Opening Cash/i),
-      String(TILL3_ACCOUNTING_OPEN_FLOAT_PENCE / 100),
-      'open Till 3 float',
-    );
-    await clickUniqueVisible(page.getByRole('button', { name: /Open Shift/i }), 'open Till 3');
+
+  if (openDecision === 'skip') {
+    return proveTill3OpenShiftChrome(page, before);
   }
-  await expect(page.getByText('Shift Active', { exact: true })).toBeVisible({
+
+  await expect(page.getByRole('heading', { name: 'Start New Shift', exact: true })).toBeVisible({
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  });
+  const tillSelect = till3OpenSelect(page);
+  await selectUniqueVisible(tillSelect, { label: TILL3_ACCOUNTING_TILL_NAME }, 'open Till 3');
+  await expect(tillSelect.locator('option:checked')).toHaveText(new RegExp(`^${TILL3_ACCOUNTING_TILL_NAME}$`), {
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
-  await expect(page.getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true })).toBeVisible({
-    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-  });
+  await fillUniqueVisible(
+    page.getByLabel(/Opening Cash/i),
+    String(TILL3_ACCOUNTING_OPEN_FLOAT_PENCE / 100),
+    'open Till 3 float',
+  );
+  const openShiftButton = page.getByRole('button', { name: 'Open Shift', exact: true });
+  await expect(openShiftButton).toBeEnabled({ timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
+  await clickUniqueVisible(openShiftButton, 'open Till 3');
+
+  await expect
+    .poll(
+      async () => classifyPersistedTill3OpenShifts((await fetchTill3AccountingSnapshot(page)).openShifts).state,
+      {
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+        message: 'persisted OPEN Till 3 shift after Open Shift',
+      },
+    )
+    .toBe('till-3-open');
+
+  const persisted = await requirePersistedTill3OpenShift(page);
+  return proveTill3OpenShiftChrome(page, persisted);
 }
 
 async function selectTill3(locator: Locator, step: string) {
@@ -319,16 +423,30 @@ export async function completeTill3AccountingTenders(page: Page) {
 }
 
 export async function assertTill3ShiftSummaryUi(page: Page) {
+  const persisted = await requirePersistedTill3OpenShift(page);
   await page.goto('/shifts', {
-    waitUntil: 'domcontentloaded',
+    waitUntil: 'load',
     timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
   });
-  await expect(page.getByText('Shift Active', { exact: true })).toBeVisible({
-    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  await expect(page.getByRole('heading', { name: 'Shift Reconciliation', exact: true })).toBeVisible({
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
   });
-  await expect(page.getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true })).toBeVisible({
-    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-  });
+  const ui = await readHostedTill3ShiftPage(page);
+  if (ui.startNewShiftVisible && ui.openShiftButtonVisible) {
+    blocked(
+      `persisted Till 3 shift ${persisted.shiftId} but /shifts still shows Start New Shift / Open Shift.`,
+    );
+  }
+  await requireExactlyOneVisible(
+    page.getByRole('button', { name: 'Close Shift', exact: true }),
+    'Till 3 Close Shift',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  );
+  await requireExactlyOneVisible(
+    page.getByRole('heading', { name: TILL3_ACCOUNTING_TILL_NAME, exact: true }),
+    'Till 3 open heading',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  );
   const expectedCash = page
     .locator('.rounded-xl')
     .filter({ has: page.getByText('Expected Cash', { exact: true }) })

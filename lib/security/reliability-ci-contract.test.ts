@@ -629,6 +629,10 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     expect(spec).not.toMatch(/test\.setTimeout\(\s*(?:480_000|480000|[4-9]\d{5,})\s*\)/);
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('sellableProduct');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('expectedCashPence');
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('openShifts');
+    expect(read('lib/reliability/till3-accounting-gate.ts')).toContain('HOSTED_4728EDBA_TILL3_SHIFT_PAGE');
+    expect(scanned).toContain('classifyPersistedTill3OpenShifts');
+    expect(scanned).toContain('Close Shift');
 
     for (const action of FORBIDDEN_TILL3_ACCOUNTING_STAGES) {
       expect(scanned, `till3-accounting project must not perform ${action.name}`).not.toMatch(

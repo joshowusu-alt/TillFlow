@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
   TILL3_ACCOUNTING_REFS,
   TILL3_ACCOUNTING_SPLIT,
   assertTill3AccountingPersisted,
+  classifyHostedTill3OpenShiftFailure,
+  classifyPersistedTill3OpenShifts,
   findTill3AccountingInvoice,
   formatTill3AccountingTable,
 } from './till3-accounting-gate';
@@ -76,6 +79,114 @@ describe('Till 3 accounting gate', () => {
         invoices: [invoice({ payments: [{ method: 'CASH', amountPence: 500, reference: null }] })],
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('hosted Till 3 open-shift artifact (SHA 4728edba)', () => {
+  it('classifies the error-context page as Till 3 selected, click not persisted, Start New Shift still showing', () => {
+    const classified = classifyHostedTill3OpenShiftFailure(HOSTED_4728EDBA_TILL3_SHIFT_PAGE);
+    expect(HOSTED_4728EDBA_TILL3_SHIFT_PAGE.heading).toBe('Shift Reconciliation');
+    expect(HOSTED_4728EDBA_TILL3_SHIFT_PAGE.path).toBe('/shifts');
+    expect(classified.till3WasSelected).toBe(true);
+    expect(classified.openShiftClickSucceeded).toBe(false);
+    expect(classified.persistedOpenShiftFromUi).toBe(false);
+    expect(classified.visibleWording).toBe('Start New Shift');
+    expect(classified.defectClass).toBe('redirect-navigation-timing');
+  });
+
+  it('does not treat exact Shift Active text as success when the closed form is still on screen', () => {
+    expect(
+      classifyHostedTill3OpenShiftFailure({
+        ...HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
+        shiftActiveVisible: false,
+      }).defectClass,
+    ).not.toBe('outdated-exact-text-only');
+  });
+
+  it('treats POS redirect or Close Shift + Till 3 heading as the real open-shift success path', () => {
+    expect(
+      classifyHostedTill3OpenShiftFailure({
+        ...HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
+        path: '/pos',
+        navigatedToPos: true,
+        startNewShiftVisible: false,
+        openShiftButtonVisible: false,
+        till3Selected: false,
+      }).defectClass,
+    ).toBe('outdated-exact-text-only');
+    expect(
+      classifyHostedTill3OpenShiftFailure({
+        ...HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
+        startNewShiftVisible: false,
+        openShiftButtonVisible: false,
+        closeShiftVisible: true,
+        till3HeadingVisible: true,
+        shiftActiveVisible: true,
+      }).visibleWording,
+    ).toBe('Shift Active');
+  });
+
+  it('reuses a unique persisted Till 3 OPEN shift and fails closed when identity is ambiguous', () => {
+    expect(
+      classifyPersistedTill3OpenShifts([
+        {
+          id: 'shift-3',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: true,
+          openFloatCount: 1,
+        },
+      ]),
+    ).toEqual({
+      state: 'till-3-open',
+      shiftId: 'shift-3',
+      tillId: 'till-3',
+      openFloatCount: 1,
+    });
+    expect(classifyPersistedTill3OpenShifts([])).toEqual({
+      state: 'closed',
+      shiftId: null,
+      tillId: null,
+      openFloatCount: 0,
+    });
+    expect(
+      classifyPersistedTill3OpenShifts([
+        {
+          id: 'shift-3a',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: true,
+        },
+        {
+          id: 'shift-3b',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: true,
+        },
+      ]).state,
+    ).toBe('ambiguous');
+    expect(
+      classifyPersistedTill3OpenShifts([
+        {
+          id: 'shift-3',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: false,
+        },
+      ]).state,
+    ).toBe('ambiguous');
+  });
+
+  it('keeps the original unique payment references', () => {
+    expect(TILL3_ACCOUNTING_REFS).toEqual({
+      card: 'CARD-REL-T3ACC-1',
+      momo: 'MOMO-REL-T3ACC-1',
+      transfer: 'BT-REL-T3ACC-1',
+    });
   });
 });
 

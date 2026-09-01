@@ -200,6 +200,56 @@ export async function GET() {
     },
   });
 
+  const [
+    openShifts,
+    purchaseInvoiceCount,
+    saleInvoiceCount,
+    salesPaymentCount,
+    cashSaleDrawerCount,
+    recentPurchases,
+  ] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        status: 'OPEN',
+        till: { store: { businessId: user.businessId } },
+      },
+      orderBy: { openedAt: 'asc' },
+      take: 20,
+      select: {
+        id: true,
+        tillId: true,
+        userId: true,
+        status: true,
+        openingCashPence: true,
+        expectedCashPence: true,
+        cardTotalPence: true,
+        transferTotalPence: true,
+        momoTotalPence: true,
+        till: { select: { name: true } },
+        _count: {
+          select: {
+            salesInvoices: { where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } } },
+          },
+        },
+        cashDrawerEntries: { select: { entryType: true } },
+      },
+    }),
+    prisma.purchaseInvoice.count({ where: { businessId: user.businessId } }),
+    prisma.salesInvoice.count({ where: { businessId: user.businessId } }),
+    prisma.salesPayment.count({
+      where: { salesInvoice: { businessId: user.businessId } },
+    }),
+    prisma.cashDrawerEntry.count({
+      where: { businessId: user.businessId, entryType: 'CASH_SALE' },
+    }),
+    prisma.purchaseInvoice.findMany({
+      where: { businessId: user.businessId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, paymentStatus: true, totalPence: true, qaTag: true },
+    }),
+  ]);
+
   return NextResponse.json({
     deployedSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
     vercelEnv: process.env.VERCEL_ENV ?? null,
@@ -257,6 +307,30 @@ export async function GET() {
           ),
         }
       : null,
+    openShifts: openShifts.map((shift) => ({
+      id: shift.id,
+      tillId: shift.tillId,
+      tillName: shift.till.name,
+      status: shift.status,
+      openingCashPence: shift.openingCashPence,
+      expectedCashPence: shift.expectedCashPence,
+      cardTotalPence: shift.cardTotalPence,
+      momoTotalPence: shift.momoTotalPence,
+      transferTotalPence: shift.transferTotalPence,
+      ownedByCurrentUser: shift.userId === user.id,
+      openFloatCount: shift.cashDrawerEntries.filter((row) => row.entryType === 'OPEN_FLOAT').length,
+      salesCount: shift._count.salesInvoices,
+    })),
+    purchaseInvoiceCount,
+    saleInvoiceCount,
+    salesPaymentCount,
+    cashSaleDrawerCount,
+    purchaseInvoices: recentPurchases.map((row) => ({
+      id: row.id,
+      paymentStatus: row.paymentStatus,
+      totalPence: row.totalPence,
+      qaTag: row.qaTag,
+    })),
     moneyIdempotency: moneyKeys.map((row) => ({
       commandKind: row.commandKind,
       createdAt: row.createdAt,
