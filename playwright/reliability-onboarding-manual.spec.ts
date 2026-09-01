@@ -66,7 +66,7 @@ test.describe('Reliability onboarding manual', () => {
       await confirmPreviewSha(page);
     });
 
-    await test.step('sign in dedicated PLAYWRIGHT_ONBOARDING_OWNER_EMAIL', async () => {
+    await test.step('sign in dedicated PLAYWRIGHT_ONBOARDING_OWNER_EMAIL_2', async () => {
       await ensureOnboardingQaOwner(page);
     });
 

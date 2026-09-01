@@ -297,11 +297,15 @@ async function fillReactInput(locator: Locator, value: string, fieldName: string
     });
   }
   await locator.click({ timeout: PREVIEW_QA_STAGE_TIMEOUT_MS, noWaitAfter: true });
+  // Playwright fill() is the proven controlled-input path. Native value assignment
+  // without resetting React's _valueTracker leaves Next disabled (DOM filled, state empty).
+  await locator.fill(value, { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
   await locator.evaluate((el, nextValue) => {
-    const input = el as HTMLInputElement;
+    const input = el as HTMLInputElement & { _valueTracker?: { setValue: (v: string) => void } };
+    input._valueTracker?.setValue('');
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
     setter?.call(input, nextValue);
-    input.dispatchEvent(new InputEvent('input', { bubbles: true, data: nextValue, inputType: 'insertText' }));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }, value, { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS });
 }

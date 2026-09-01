@@ -324,7 +324,7 @@ describe('Preview QA owner provisioning', () => {
 
   it('bounds every waiting locator action so Date.now loops cannot inherit the 480s test timeout', () => {
     const helper = source('tests/e2e/helpers/preview-qa-owner.ts');
-    for (const method of ['inputValue', 'isEnabled', 'waitFor', 'selectOption', 'textContent'] as const) {
+    for (const method of ['inputValue', 'isEnabled', 'waitFor', 'selectOption', 'textContent', 'fill'] as const) {
       const calls = [...helper.matchAll(new RegExp(`\\.${method}\\(([^)]*)\\)`, 'g'))];
       expect(calls.length, method).toBeGreaterThan(0);
       for (const [, args] of calls) {
@@ -333,6 +333,8 @@ describe('Preview QA owner provisioning', () => {
     }
     expect(helper).not.toMatch(/\.inputValue\(\s*\)/);
     expect(helper).not.toMatch(/\.isEnabled\(\s*\)/);
+    expect(helper).toContain('_valueTracker');
+    expect(helper).toContain('locator.fill(value, { timeout: PREVIEW_QA_STAGE_TIMEOUT_MS })');
   });
 
   it('does not treat another open till as Till 3 recovery', () => {

@@ -163,6 +163,7 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('phase9Setup.till3Ready');
     expect(config).toMatch(/name: 'reliability-journey'[\s\S]*?retries:\s*0/);
     expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('fillReactInput');
+    expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('_valueTracker');
     expect(read('tests/e2e/helpers/preview-qa-owner.ts')).toContain('diagnoseDisabledRegisterAdvance');
     expect(spec).not.toContain('reliability-${stamp}@example.com');
     expect(spec).not.toContain('Pass1234!');
@@ -511,7 +512,12 @@ describe('reliability-onboarding-manual Playwright project contract', () => {
 
     expect(specRel).toMatch(/reliability-onboarding-manual/);
     expect(scanned).toContain('clickOnboardingAddProductManually');
-    expect(scanned).toContain('PLAYWRIGHT_ONBOARDING_OWNER_EMAIL');
+    expect(scanned).toContain('PLAYWRIGHT_ONBOARDING_OWNER_EMAIL_2');
+    expect(read('tests/e2e/helpers/preview-qa-onboarding-owner.ts')).toContain(
+      'PLAYWRIGHT_ONBOARDING_OWNER_EMAIL_2',
+    );
+    expect(read('lib/reliability/onboarding-qa-tenants.ts')).toContain('suitableForPristineStep2: false');
+    expect(read('lib/reliability/onboarding-qa-tenants.ts')).toContain("productName: 'Gino'");
     expect(helper).toContain('Direct /products#product-create is not valid evidence');
     expect(helper).not.toMatch(/if \([\s\S]{0,200}goto\(['"]\/products#product-create/);
     expect(spec).toContain('proveDirectProductCreateHashSeparately');
@@ -533,7 +539,7 @@ describe('reliability-onboarding-manual Playwright project contract', () => {
     expect(scanned).toContain('/api/qa/deploy-sha');
     expect(scanned).toMatch(/isProductionPlaywrightTarget|assertPreviewQaOwnerTarget|cannot run against Production/);
     expect(scanned).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
-    expect(spec).not.toMatch(/PLAYWRIGHT_ONBOARDING_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_ONBOARDING_OWNER_PASSWORD_2\s*=\s*['"][^'"]+['"]/);
     expect(spec).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
     expect(spec).not.toContain('runManualImportGate');
     expect(spec).not.toContain('runManualProductEntryGate');
