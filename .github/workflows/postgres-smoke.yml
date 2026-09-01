@@ -8,7 +8,7 @@ name: Postgres Smoke
 # idempotent and Preview-only. Reliability-journey retries stay 0 so a timeout
 # cannot repeat Preview money writes. Reliability provisioning-only Playwright
 # project (retries 0, 180s, zero financial writes) is the next hosted gate.
-# Phase 9 product assertion uses table-row locators, not hidden mobile cards.
+# Phase 9 locators require exactly one visible target; actionTimeout 8s.
 # This comment keeps Postgres Smoke on those SHAs.
 
 on:

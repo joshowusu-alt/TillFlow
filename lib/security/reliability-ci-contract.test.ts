@@ -201,6 +201,31 @@ describe('reliability CI governance contract', () => {
     expect(config).toMatch(/name: 'reliability-provisioning'[\s\S]*?retries:\s*0/);
   });
 
+  it('bounds reliability action/navigation timeouts and forbids hidden .first() selects', () => {
+    const spec = read('playwright/reliability-journey.spec.ts');
+    const locators = read('tests/e2e/helpers/preview-qa-locators.ts');
+    const config = read('playwright.config.ts');
+    const journey = extractPlaywrightProject(config, 'reliability-journey');
+    const provisioning = extractPlaywrightProject(config, PROVISIONING_PROJECT);
+    expect(locators).toContain('RELIABILITY_ACTION_TIMEOUT_MS = 8_000');
+    expect(locators).toContain('RELIABILITY_NAVIGATION_TIMEOUT_MS = 15_000');
+    expect(locators).toContain('requireExactlyOneVisible');
+    expect(journey).toMatch(/actionTimeout:\s*8_000/);
+    expect(journey).toMatch(/navigationTimeout:\s*15_000/);
+    expect(journey).toMatch(/retries:\s*0/);
+    expect(provisioning).toMatch(/actionTimeout:\s*8_000/);
+    expect(provisioning).toMatch(/retries:\s*0/);
+    expect(provisioning).toMatch(/timeout:\s*180_000/);
+    expect(spec).toContain('till3OpenSelect');
+    expect(spec).toContain('closeTill3Shift');
+    expect(spec).toContain('What are you importing?');
+    expect(spec).toContain('No products yet.');
+    expect(spec).toContain('Till 3 · Open');
+    expect(spec).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);
+    expect(spec).not.toMatch(/locator\(['"]select['"]\)\.filter\(\{\s*hasText:\s*PRODUCT_NAME/);
+    expect(spec).not.toContain('test.setTimeout(600_000)');
+  });
+
   it('injects Vercel Preview bypass headers fail-closed and never hardcodes the secret', () => {
     const config = read('playwright.config.ts');
     const helper = read('tests/e2e/helpers/vercel-preview-bypass.ts');

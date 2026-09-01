@@ -142,9 +142,13 @@ export default defineConfig({
       // Financial E2E: never auto-retry. Setup writes (business, tills, products,
       // shifts, invoices, drawer) are not proven idempotent end-to-end.
       retries: 0,
-      // Do not raise global timeouts here. Helper locator waits must pass an
-      // explicit timeout — Playwright default 0 inherits test.setTimeout(480_000).
-      use: { ...devices['Desktop Chrome'] },
+      // Hidden responsive copies must fail in seconds, not inherit 480s.
+      // Do not raise the overall test timeout (desktop still uses setTimeout 480s).
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 8_000,
+        navigationTimeout: 15_000,
+      },
     },
     {
       name: 'reliability-provisioning',
@@ -153,7 +157,11 @@ export default defineConfig({
       // Zero-financial Preview setup only. Never auto-retry. Never Production.
       retries: 0,
       timeout: 180_000,
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 8_000,
+        navigationTimeout: 15_000,
+      },
     },
   ],
 });

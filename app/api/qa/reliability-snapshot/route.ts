@@ -54,7 +54,7 @@ export async function GET() {
           momoTotalPence: true,
         },
       },
-      payments: { select: { id: true, method: true, amountPence: true } },
+      payments: { select: { id: true, method: true, amountPence: true, reference: true } },
     },
   });
 
@@ -107,12 +107,52 @@ export async function GET() {
     where: { businessId: user.businessId, active: true },
   });
 
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { openingCapitalPence: true },
+  });
+
+  const openingMovements = await prisma.stockMovement.findMany({
+    where: {
+      store: { businessId: user.businessId },
+      type: 'OPENING',
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      qtyBase: true,
+      type: true,
+      referenceType: true,
+      product: { select: { name: true, sku: true } },
+    },
+  });
+
+  const expenses = await prisma.expense.findMany({
+    where: { businessId: user.businessId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: { reference: true, amountPence: true, vendorName: true },
+  });
+
   return NextResponse.json({
     deployedSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
     vercelEnv: process.env.VERCEL_ENV ?? null,
     businessId: user.businessId,
     userId: user.id,
     productCount,
+    openingCapitalPence: business?.openingCapitalPence ?? 0,
+    openingMovements: openingMovements.map((row) => ({
+      qtyBase: row.qtyBase,
+      type: row.type,
+      referenceType: row.referenceType,
+      productName: row.product.name,
+      productSku: row.product.sku,
+    })),
+    expenses: expenses.map((row) => ({
+      reference: row.reference,
+      amountPence: row.amountPence,
+      vendorName: row.vendorName,
+    })),
     moneyIdempotency: moneyKeys.map((row) => ({
       commandKind: row.commandKind,
       createdAt: row.createdAt,

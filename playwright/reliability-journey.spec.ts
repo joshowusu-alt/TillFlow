@@ -27,6 +27,21 @@ import {
   ensureImportedQaProduct,
   ensureSellableQaProduct,
 } from '../tests/e2e/helpers/preview-qa-product';
+import {
+  RELIABILITY_ACTION_TIMEOUT_MS,
+  RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  clickUniqueVisible,
+  fillUniqueVisible,
+  requireExactlyOneVisible,
+  selectUniqueVisible,
+  till3OpenSelect,
+} from '../tests/e2e/helpers/preview-qa-locators';
+import {
+  RELIABILITY_RERUN_IDS,
+  assertRerunDecision,
+  classifyOpeningStockRerun,
+  classifyTenderRef,
+} from '../lib/reliability/rerun-idempotency';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
 const PRODUCT_NAME = RELIABILITY_SELLABLE_PRODUCT.name;
@@ -49,12 +64,12 @@ async function requireSalesAllowed(step: string) {
 }
 
 async function selectTill3(locator: Locator, step: string) {
-  const count = await locator.count();
-  if (count === 0) blocked(step, 'till selector select[name="tillId"] is not on the page.');
-  const till3 = locator.locator('option', { hasText: /Till 3/i }).first();
+  const target = await requireExactlyOneVisible(locator, step);
+  const till3 = target.locator('option', { hasText: /^Till 3$/ });
+  if ((await till3.count()) !== 1) blocked(step, 'Till 3 option is missing or duplicated on the till selector.');
   const value = await till3.getAttribute('value');
   if (!value) blocked(step, 'Till 3 is not an option on the till selector.');
-  await locator.selectOption(value);
+  await target.selectOption(value, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
 }
 
 async function confirmPreviewSha(page: Page) {
@@ -83,9 +98,13 @@ async function ensureOwnerSession(page: Page) {
 
 async function clearRestoredCart(page: Page) {
   const clear = page.getByRole('button', { name: /clear all/i });
-  if ((await clear.count()) === 0) return;
-  await clear.first().click();
-  await expect(page.getByText(/Cart\s*0|This till is clear/i).first()).toBeVisible({ timeout: 10_000 });
+  if ((await visibleOnlyCount(clear)) === 0) return;
+  await clickUniqueVisible(clear, 'clear cart');
+  await expect(page.getByText('This till is clear')).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+}
+
+async function visibleOnlyCount(locator: Locator) {
+  return locator.locator('visible=true').count();
 }
 
 async function gotoPos(page: Page) {
@@ -97,7 +116,7 @@ async function gotoPos(page: Page) {
       // ignore
     }
   });
-  await page.goto('/pos', { waitUntil: 'domcontentloaded' });
+  await page.goto('/pos', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
   if (/\/login(?:\?|$)/.test(page.url())) blocked('POS', 'redirected to /login');
   await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
   await clearRestoredCart(page);
@@ -105,21 +124,70 @@ async function gotoPos(page: Page) {
 
 async function addJourneyProduct(page: Page, name = PRODUCT_NAME) {
   const search = page.getByPlaceholder(/type product name/i);
-  await search.click();
-  await search.fill(name);
-  const result = page.locator('button:not([disabled])').filter({ hasText: new RegExp(name, 'i') }).first();
-  await expect(result, `POS search did not return ${name}`).toBeVisible({ timeout: 20_000 });
-  await result.click();
+  await search.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  await search.fill(name, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  const result = page.getByRole('button', { name, exact: true });
+  await clickUniqueVisible(result, `POS search ${name}`);
 }
 
 async function completeSaleAndReset(page: Page, completeName: RegExp) {
-  const complete = page.getByRole('button', { name: completeName }).first();
-  await expect(complete).toBeEnabled({ timeout: 15_000 });
-  await complete.click();
-  await expect(page.getByText(/Sale Complete|Ready for next customer/i).first()).toBeVisible({
-    timeout: 30_000,
+  const viewCart = page.getByRole('button', { name: /View cart/i });
+  if (await viewCart.isVisible().catch(() => false)) {
+    await viewCart.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  }
+  await clickUniqueVisible(page.getByRole('button', { name: completeName }), 'complete sale');
+  await expect(page.getByText(/Sale Complete|Ready for next customer/i)).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
   await clearRestoredCart(page);
+}
+
+async function closeTill3Shift(page: Page, actualCash: string, step: string) {
+  await page.goto('/shifts', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
+  await clickUniqueVisible(page.getByRole('button', { name: 'Close Shift', exact: true }), `${step} open modal`);
+  const overlay = page.locator('.overlay-shell');
+  await expect(overlay.getByRole('heading', { name: /Close Shift/ })).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  await fillUniqueVisible(overlay.getByLabel('Actual Cash Counted'), actualCash, `${step} counted cash`);
+  const override = overlay.getByRole('button', { name: 'Owner Override (use password)' });
+  if (await override.isVisible().catch(() => false)) {
+    await override.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+    const password = process.env.PLAYWRIGHT_OWNER_PASSWORD?.trim();
+    if (!password) blocked(step, 'owner override requires PLAYWRIGHT_OWNER_PASSWORD (value not logged).');
+    await fillUniqueVisible(overlay.getByLabel('Your Password'), password, `${step} owner password`);
+    await selectUniqueVisible(
+      overlay.locator('select').filter({ has: overlay.locator('option', { hasText: 'Manager unavailable' }) }),
+      { value: 'MANAGER_UNAVAILABLE' },
+      `${step} override reason`,
+    );
+    await fillUniqueVisible(
+      overlay.getByLabel('Justification'),
+      'Reliability Phase 9 close',
+      `${step} override justification`,
+    );
+  }
+  await clickUniqueVisible(overlay.getByRole('button', { name: 'Close Shift', exact: true }), `${step} confirm`);
+}
+
+async function openTill3Shift(page: Page, float: string, step: string) {
+  await page.goto('/shifts', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
+  const shiftState = classifyTill3ShiftState({
+    shiftActiveVisible: await page.getByText('Shift Active', { exact: true }).isVisible().catch(() => false),
+    till3Visible: await page.getByRole('heading', { name: 'Till 3', exact: true }).isVisible().catch(() => false),
+  });
+  if (shiftState === 'other-till-open') {
+    blocked(step, 'another till is already open; Till 3 was not opened.');
+  }
+  if (shiftState === 'closed') {
+    await selectUniqueVisible(till3OpenSelect(page), { label: 'Till 3' }, step);
+    await fillUniqueVisible(page.getByLabel(/Opening Cash/i), float, `${step} float`);
+    await clickUniqueVisible(page.getByRole('button', { name: /Open Shift/i }), step);
+  }
+  await expect(page.getByText('Shift Active', { exact: true })).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  await expect(page.getByRole('heading', { name: 'Till 3', exact: true })).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
 }
 
 async function fetchSnapshot(page: Page) {
@@ -169,21 +237,51 @@ test.describe('Reliability journey', () => {
     });
 
     await test.step('create sellable product', async () => {
-      await page.goto('/products#product-create', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByText('Add product', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
-      const nameInput = page.locator('input[name="name"]').first();
-      if (!(await nameInput.isVisible())) {
-        await page.locator('#product-create').click();
+      await page.goto('/products#product-create', {
+        waitUntil: 'domcontentloaded',
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+      });
+      await expect(page.getByRole('heading', { name: 'Add product' })).toBeVisible({
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+      });
+      const nameInput = page.locator('#product-create input[name="name"]');
+      if (!(await nameInput.isVisible().catch(() => false))) {
+        await page.locator('#product-create').click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
       }
-      await expect(page.locator('input[name="name"]').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('#product-create input[name="name"]')).toBeVisible({
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+      });
       await ensureSellableQaProduct(page);
     });
 
     await test.step('import products', async () => {
-      await page.goto('/products', { waitUntil: 'domcontentloaded' });
+      await page.goto('/settings/import-stock', {
+        waitUntil: 'domcontentloaded',
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+      });
+      await expect(page).toHaveURL(/\/settings\/import-stock/);
+      await expect(page.getByRole('heading', { name: 'Import Stock' })).toBeVisible({
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+      });
+      await expect(page.getByRole('heading', { name: 'What are you importing?' })).toBeVisible();
+      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('The file had no product rows. Check the file and try again.')).toHaveCount(0);
+      await page.getByRole('button', { name: 'Product catalogue', exact: true }).click({
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+      });
+      await expect(page.getByTestId('import-stock-file-input')).toBeAttached();
+      await expect(page.getByText('No ready rows to import.')).toHaveCount(0);
+      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
+
+      await page.goto('/products', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
       await ensureImportedQaProduct(page, async () => {
-        await page.goto('/settings/import-stock', { waitUntil: 'domcontentloaded' });
-        await page.getByRole('button', { name: /Product catalogue/i }).click();
+        await page.goto('/settings/import-stock', {
+          waitUntil: 'domcontentloaded',
+          timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+        });
+        await page.getByRole('button', { name: 'Product catalogue', exact: true }).click({
+          timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+        });
         const csv = [
           'name,sku,barcode,category,selling_price,cost_price,base_unit,pack_unit,pack_size,supplier_name,reorder_point,storefront_published,image_url,notes',
           `${IMPORT_PRODUCT_NAME},${RELIABILITY_IMPORT_PRODUCT.sku},${RELIABILITY_IMPORT_PRODUCT.barcode},Drinks,4.00,2.00,Piece,,,,,yes,,`,
@@ -194,92 +292,118 @@ test.describe('Reliability journey', () => {
           buffer: Buffer.from(csv, 'utf8'),
         });
         const confirm = page.getByRole('button', { name: /Confirm Import/i });
-        await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({ timeout: 30_000 });
-        await confirm.click();
+        await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({
+          timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+        });
+        await confirm.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
         await expect(page.getByRole('heading', { name: 'Import complete!' })).toBeVisible({
           timeout: 60_000,
         });
         await expect(page.getByText('Products imported')).toBeVisible();
       });
+      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
     });
 
     await test.step('record opening stock', async () => {
-      await page.goto('/setup/opening-stock', { waitUntil: 'domcontentloaded' });
-      const addItem = page.getByRole('button', { name: /\+ Add stock item/i });
-      if ((await addItem.count()) === 0) blocked('opening stock', '+ Add stock item is not visible.');
-      await addItem.click();
-      const productSelect = page.locator('select').filter({ hasText: PRODUCT_NAME }).first();
-      if ((await productSelect.count()) === 0) {
-        blocked('opening stock', `${PRODUCT_NAME} is not on the opening-stock form.`);
+      await page.goto('/setup/opening-stock', {
+        waitUntil: 'domcontentloaded',
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+      });
+      const snapshot = await fetchSnapshot(page);
+      const openingDecision = assertRerunDecision(
+        'opening stock',
+        classifyOpeningStockRerun({
+          movements: (snapshot.openingMovements ?? []).map(
+            (row: { productName?: string; productSku?: string; qtyBase: number; type?: string; referenceType?: string | null }) => ({
+              productMatchesQa:
+                row.productName === PRODUCT_NAME || row.productSku === RELIABILITY_SELLABLE_PRODUCT.sku,
+              qtyBase: row.qtyBase,
+              type: row.type,
+              referenceType: row.referenceType,
+            }),
+          ),
+          openingCapitalPence: snapshot.openingCapitalPence ?? 0,
+        }),
+      );
+      if (openingDecision === 'skip') {
+        return;
       }
-      await productSelect.selectOption({ label: PRODUCT_NAME });
-      await page.getByRole('button', { name: /Save Opening Capital/i }).click();
+      if (await page.getByRole('heading', { name: 'Opening capital recorded!' }).isVisible().catch(() => false)) {
+        return;
+      }
+      const addItem = page.getByRole('button', { name: '+ Add stock item' });
+      await clickUniqueVisible(addItem, 'opening stock add');
+      await selectUniqueVisible(
+        page.getByRole('combobox', { name: 'Product' }),
+        { label: PRODUCT_NAME },
+        'opening stock product',
+      );
+      await clickUniqueVisible(page.getByRole('button', { name: /Save Opening Capital/i }), 'opening stock save');
       await expect(page.getByRole('heading', { name: 'Opening capital recorded!' })).toBeVisible({
-        timeout: 30_000,
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
       });
     });
 
     await test.step('open Till 3 with float', async () => {
-      await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-      const shiftState = classifyTill3ShiftState({
-        shiftActiveVisible: await page.getByText(/Shift Active/i).first().isVisible().catch(() => false),
-        till3Visible: await page.getByText(/Till 3/i).first().isVisible().catch(() => false),
-      });
-      if (shiftState === 'other-till-open') {
-        blocked('open Till 3', 'another till is already open; Till 3 was not opened.');
-      }
-      if (shiftState === 'closed') {
-        const tillSelect = page.locator('select').first();
-        await expect(tillSelect).toBeVisible({ timeout: 30_000 });
-        const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
-        if (!till3Value) blocked('open Till 3', 'Till 3 is not available on /shifts');
-        await tillSelect.selectOption(till3Value);
-        await page.getByPlaceholder('0.00').fill('100');
-        await page.getByRole('button', { name: /Open Shift/i }).click();
-      }
-      await expect(page.getByText(/Shift Active/i).first()).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText(/Till 3/i).first()).toBeVisible({ timeout: 15_000 });
+      await openTill3Shift(page, '100', 'open Till 3');
     });
 
     await test.step('cash / card / momo / transfer / split / receipt on Till 3', async () => {
       await requireSalesAllowed('POS tenders');
       await gotoPos(page);
-      await expect(page.getByText(/Till 3/i).first()).toBeVisible({ timeout: 15_000 });
+      const posTill = page.locator('#pos-till-select');
+      await expect(posTill.locator('option:checked')).toHaveText(/^Till 3$/);
+      await expect(page.getByText('Till 3 · Open')).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+
+      const snapshotBefore = await fetchSnapshot(page);
+      const paymentHits = (snapshotBefore.invoices ?? []).flatMap(
+        (row: { payments?: { reference?: string | null }[] }) => row.payments ?? [],
+      );
 
       await addJourneyProduct(page);
       await expect(page.getByRole('button', { name: 'Cash', exact: true })).toHaveAttribute('aria-pressed', 'true');
       await completeSaleAndReset(page, /Complete Cash Sale/i);
 
       for (const method of [
-        { button: 'Card', ref: /card ref/i, value: 'CARD-REL-1' },
-        { button: 'MoMo', ref: /transaction ref/i, value: 'MOMO-REL-1' },
-        { button: 'Bank Transfer', ref: /transfer ref/i, value: 'BT-REL-1' },
+        { button: 'Card', ref: /card ref/i, value: RELIABILITY_RERUN_IDS.cardRef, identity: RELIABILITY_RERUN_IDS.cardRef },
+        { button: 'MoMo', ref: /transaction ref/i, value: RELIABILITY_RERUN_IDS.momoRef, identity: RELIABILITY_RERUN_IDS.momoRef },
+        { button: 'Bank Transfer', ref: /transfer ref/i, value: RELIABILITY_RERUN_IDS.transferRef, identity: RELIABILITY_RERUN_IDS.transferRef },
       ] as const) {
+        if (assertRerunDecision(method.identity, classifyTenderRef(paymentHits, method.identity)) === 'skip') {
+          continue;
+        }
         await addJourneyProduct(page);
-        await page.getByRole('button', { name: method.button, exact: true }).click();
+        await clickUniqueVisible(page.getByRole('button', { name: method.button, exact: true }), method.button);
         await expect(page.getByRole('button', { name: method.button, exact: true })).toHaveAttribute(
           'aria-pressed',
           'true',
         );
-        await page.getByPlaceholder(method.ref).fill(method.value);
+        await fillUniqueVisible(page.getByPlaceholder(method.ref), method.value, method.identity);
         await completeSaleAndReset(page, /Complete Sale/i);
       }
 
       await addJourneyProduct(page);
-      await page.getByRole('button', { name: 'Split…' }).click();
+      await clickUniqueVisible(page.getByRole('button', { name: 'Split…' }), 'split tender');
       await expect(page.getByRole('button', { name: 'Split…' })).toHaveAttribute('aria-pressed', 'true');
-      await page.getByRole('button', { name: 'Cash', exact: true }).click();
-      await page.getByRole('button', { name: 'Card', exact: true }).click();
+      await clickUniqueVisible(page.getByRole('button', { name: 'Cash', exact: true }), 'split cash');
+      await clickUniqueVisible(page.getByRole('button', { name: 'Card', exact: true }), 'split card');
       await completeSaleAndReset(page, /Complete Sale/i);
 
       const reprint = page.getByRole('link', { name: /Reprint last receipt/i });
-      await expect(reprint, 'receipt reprint link missing after sale').toBeVisible({ timeout: 15_000 });
-      const href = await reprint.getAttribute('href');
+      await expect(
+        reprint.locator('visible=true'),
+        'receipt reprint link missing after sale',
+      ).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      const href = await reprint.locator('visible=true').getAttribute('href');
       if (!href) blocked('receipt', 'Reprint last receipt has no href.');
       const receipt = await page.context().newPage();
-      await receipt.goto(href, { waitUntil: 'domcontentloaded' });
+      await receipt.goto(href, { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
       await expect(receipt).toHaveURL(/\/receipts\//);
       await receipt.close();
+
+      const trust = page.getByLabel(/Today's sales/i);
+      await expect(trust).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      await expect(trust).not.toHaveAttribute('aria-label', /GH₵0\.00,\s*0 transactions/);
     });
 
     await test.step('credit sale so a customer receipt can be recorded', async () => {
@@ -287,53 +411,54 @@ test.describe('Reliability journey', () => {
       await gotoPos(page);
       await addJourneyProduct(page);
       const status = page.getByLabel(/payment status/i);
-      await expect(status, 'POS payment status control missing').toBeVisible({ timeout: 15_000 });
-      await status.selectOption('UNPAID');
+      await expect(status, 'POS payment status control missing').toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      await status.selectOption('UNPAID', { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
       await completeSaleAndReset(page, /Complete Sale|Complete Credit/i);
     });
 
     await test.step('cash expense explicitly against Till 3', async () => {
       await requireSalesAllowed('cash expense');
-      await page.goto('/expenses', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByText(/Record expense/i).first()).toBeVisible({ timeout: 30_000 });
-      await page.locator('input[name="amount"]').first().fill('1.00');
-      await selectTill3(page.locator('select[name="tillId"]').first(), 'cash expense');
-      await page.getByRole('button', { name: /Record expense|Save expense|Add expense/i }).first().click();
+      await page.goto('/expenses', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
+      const amount = page.locator('input[name="amount"]');
+      if ((await amount.locator('visible=true').count()) === 0) {
+        await page.locator('summary').filter({ hasText: /Record expense/i }).click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      }
+      await fillUniqueVisible(page.locator('input[name="amount"]'), '1.00', 'cash expense amount');
+      await fillUniqueVisible(page.locator('input[name="vendorName"]'), RELIABILITY_RERUN_IDS.expenseVendor, 'cash expense vendor');
+      await fillUniqueVisible(page.locator('input[name="reference"]'), RELIABILITY_RERUN_IDS.expenseRef, 'cash expense ref');
+      await selectTill3(page.locator('select[name="tillId"]'), 'cash expense');
+      await clickUniqueVisible(page.getByRole('button', { name: 'Record expense' }), 'cash expense save');
       await expect(page).not.toHaveURL(/error=/);
+      await expect(page.getByText(RELIABILITY_RERUN_IDS.expenseRef)).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
     });
 
     await test.step('supplier cash payment explicitly against Till 3', async () => {
       await requireSalesAllowed('supplier cash payment');
-      await page.goto('/purchases', { waitUntil: 'domcontentloaded' });
+      await page.goto('/purchases', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
       const productSearch = page.getByPlaceholder(/Type to search product/i);
-      await expect(productSearch, 'purchase product search missing').toBeVisible({ timeout: 30_000 });
-      await productSearch.fill(PRODUCT_NAME);
-      const hit = page.locator('button').filter({ hasText: new RegExp(PRODUCT_NAME, 'i') }).first();
-      await expect(hit, `purchase search did not return ${PRODUCT_NAME}`).toBeVisible({ timeout: 15_000 });
-      await hit.click();
-      await page.getByRole('button', { name: /Add line/i }).click();
-      await page.locator('select[name="paymentStatus"]').selectOption('UNPAID');
-      await page.getByRole('button', { name: /Record purchase/i }).click();
+      await expect(productSearch, 'purchase product search missing').toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      await productSearch.fill(PRODUCT_NAME, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      await clickUniqueVisible(page.getByRole('button', { name: PRODUCT_NAME, exact: true }), 'purchase product hit');
+      await clickUniqueVisible(page.getByRole('button', { name: /Add line/i }), 'purchase add line');
+      await page.locator('select[name="paymentStatus"]').selectOption('UNPAID', { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+      await clickUniqueVisible(page.getByRole('button', { name: /Record purchase/i }), 'record purchase');
       await expect(page).not.toHaveURL(/error=/);
 
-      const amount = page.locator('input[name="amount"]').first();
-      await expect(amount, 'supplier payment amount field missing').toBeVisible({ timeout: 20_000 });
-      await amount.fill('1.00');
-      await page.locator('select[name="paymentMethod"]').first().selectOption('CASH');
-      await selectTill3(page.locator('select[name="tillId"]').first(), 'supplier cash payment');
-      await page.getByRole('button', { name: /Record payment/i }).first().click();
+      await fillUniqueVisible(page.locator('input[name="amount"]'), '1.00', 'supplier payment amount');
+      await selectUniqueVisible(page.locator('select[name="paymentMethod"]'), 'CASH', 'supplier payment method');
+      await selectTill3(page.locator('select[name="tillId"]'), 'supplier cash payment');
+      await clickUniqueVisible(page.getByRole('button', { name: /Record payment/i }), 'supplier record payment');
       await expect(page).not.toHaveURL(/error=/);
     });
 
     await test.step('customer receipt against invoice till', async () => {
       await requireSalesAllowed('customer receipt');
-      await page.goto('/payments/customer-receipts', { waitUntil: 'domcontentloaded' });
-      const amount = page.locator('input[name="amount"]').first();
-      await expect(amount, 'customer receipt amount field missing — no outstanding invoice').toBeVisible({
-        timeout: 20_000,
+      await page.goto('/payments/customer-receipts', {
+        waitUntil: 'domcontentloaded',
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
       });
-      await amount.fill('1.00');
-      await page.getByRole('button', { name: /Record payment/i }).first().click();
+      await fillUniqueVisible(page.locator('input[name="amount"]'), '1.00', 'customer receipt amount');
+      await clickUniqueVisible(page.getByRole('button', { name: /Record payment/i }), 'customer receipt save');
       await expect(page).not.toHaveURL(/error=/);
     });
 
@@ -367,8 +492,38 @@ test.describe('Reliability journey', () => {
         blocked('Till 3 snapshot', `snapshot SHA ${body.deployedSha} !== deploy-sha ${sha.sha}`);
       }
       expect(body.businessId).toBeTruthy();
-      const till3Sales = (body.invoices ?? []).filter((row: { tillName?: string }) => row.tillName === 'Till 3');
+      const till3Sales = (body.invoices ?? []).filter(
+        (row: { tillName?: string; saleSource?: string }) =>
+          row.tillName === 'Till 3' && row.saleSource !== 'LATE_OFFLINE',
+      );
       expect(till3Sales.length, 'no Till 3 invoices in snapshot').toBeGreaterThan(0);
+      const shiftIds = new Set(till3Sales.map((row: { shiftId?: string }) => row.shiftId));
+      expect(shiftIds.size, 'Till 3 sales must share one shift').toBe(1);
+      const methods = new Set(
+        till3Sales.flatMap((sale: { payments?: { method: string }[] }) => (sale.payments ?? []).map((p) => p.method)),
+      );
+      expect(methods.has('CASH')).toBe(true);
+      expect(methods.has('CARD')).toBe(true);
+      expect(methods.has('MOBILE_MONEY')).toBe(true);
+      expect(methods.has('TRANSFER')).toBe(true);
+      const sample = till3Sales[0] as {
+        tillId: string;
+        shiftTillId: string;
+        expectedCashPence: number;
+        cardTotalPence: number;
+        momoTotalPence: number;
+        transferTotalPence: number;
+        drawer?: { entryType: string; amountPence: number; tillId: string; shiftId: string }[];
+      };
+      expect(sample.shiftTillId).toBe(sample.tillId);
+      expect(sample.cardTotalPence, 'cardTotal still 0 after Till 3 card sale').toBeGreaterThan(0);
+      expect(sample.momoTotalPence, 'momoTotal still 0 after Till 3 MoMo sale').toBeGreaterThan(0);
+      expect(sample.transferTotalPence, 'transferTotal still 0 after Till 3 transfer').toBeGreaterThan(0);
+      expect(sample.expectedCashPence, 'expectedCash still 0 after Till 3 activity').toBeGreaterThan(0);
+      const cashSalePence = (sample.drawer ?? [])
+        .filter((row) => row.entryType === 'CASH_SALE')
+        .reduce((sum, row) => sum + row.amountPence, 0);
+      expect(cashSalePence, 'no CASH_SALE CashDrawerEntry on Till 3').toBeGreaterThan(0);
       for (const sale of till3Sales) {
         expect(sale.businessId).toBe(body.businessId);
         expect(sale.storeId).toBeTruthy();
@@ -413,25 +568,11 @@ test.describe('Reliability journey', () => {
       const unit = product?.units?.find((row: { isBaseUnit?: boolean }) => row.isBaseUnit) ?? product?.units?.[0];
       if (!product || !unit) blocked('LATE_OFFLINE', 'offline cache-data has no sellable product/unit.');
 
-      await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-      const close = page.getByRole('button', { name: /Close Shift/i }).first();
-      await expect(close, 'Close Shift missing for captured Till 3').toBeVisible({ timeout: 20_000 });
-      await close.click();
-      const actualCash = page.getByLabel(/actual cash|counted cash/i).or(page.locator('input[type="number"]').nth(1));
-      if ((await actualCash.count()) > 0) await actualCash.first().fill('100');
-      await page.getByRole('button', { name: /Close Shift/i }).last().click();
-
-      await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-      const tillSelect = page.locator('select').first();
-      const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
-      if (!till3Value) blocked('LATE_OFFLINE', 'cannot reopen Till 3 after close.');
-      await tillSelect.selectOption(till3Value);
-      await page.getByPlaceholder('0.00').fill('50');
-      await page.getByRole('button', { name: /Open Shift/i }).click();
-      await expect(page.getByText(/Shift Active|Till 3/i).first()).toBeVisible({ timeout: 30_000 });
+      await closeTill3Shift(page, '100', 'LATE_OFFLINE close');
+      await openTill3Shift(page, '50', 'LATE_OFFLINE reopen');
 
       const createdAt = new Date().toISOString();
-      const offlineId = `late-off-${Date.now()}`;
+      const offlineId = RELIABILITY_RERUN_IDS.lateOfflineKey;
       const payloadBase = {
         id: offlineId,
         businessId: captured.businessId,
@@ -484,18 +625,17 @@ test.describe('Reliability journey', () => {
 
     await test.step('reports / Money Received', async () => {
       await requireSalesAllowed('Money Received');
-      await page.goto('/reports/money-received', { waitUntil: 'domcontentloaded' });
-      await expect(page.getByText(/Money Received|Received/i).first()).toBeVisible({ timeout: 30_000 });
+      await page.goto('/reports/money-received', {
+        waitUntil: 'domcontentloaded',
+        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+      });
+      await expect(page.getByRole('heading', { name: /Money Received/i })).toBeVisible({
+        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+      });
     });
 
     await test.step('close Till 3 shift', async () => {
-      await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-      const close = page.getByRole('button', { name: /Close Shift/i }).first();
-      await expect(close, 'Close Shift missing after LATE_OFFLINE reopen').toBeVisible({ timeout: 20_000 });
-      await close.click();
-      const actualCash = page.getByLabel(/actual cash|counted cash/i).or(page.locator('input[type="number"]').nth(1));
-      if ((await actualCash.count()) > 0) await actualCash.first().fill('50');
-      await page.getByRole('button', { name: /Close Shift/i }).last().click();
+      await closeTill3Shift(page, '50', 'close Till 3');
     });
   });
 
@@ -507,30 +647,14 @@ test.describe('Reliability journey', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await ensureOwnerSession(page);
 
-    await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-    const tillSelect = page.locator('select').first();
-    await expect(tillSelect, 'mobile flow needs a till selector on /shifts').toBeVisible({
-      timeout: 30_000,
-    });
-    const till3Value = await tillSelect.locator('option', { hasText: /Till 3/i }).first().getAttribute('value');
-    if (!till3Value) blocked('mobile POS', 'Till 3 is not available to reopen after close.');
-    await tillSelect.selectOption(till3Value);
-    await page.getByPlaceholder('0.00').fill('20');
-    await page.getByRole('button', { name: /Open Shift/i }).click();
-    await expect(page.getByText(/Shift Active|Till 3/i).first()).toBeVisible({ timeout: 30_000 });
-
+    await openTill3Shift(page, '20', 'mobile POS');
     await gotoPos(page);
     await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
-    await expect(page.getByText(/Till 3/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Till 3 · Open')).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
     await addJourneyProduct(page);
     await completeSaleAndReset(page, /Complete Cash Sale|Complete Sale/i);
+    await expect(page.getByText(/GH₵0\.00 · 0 txns/)).toHaveCount(0);
 
-    await page.goto('/shifts', { waitUntil: 'domcontentloaded' });
-    const close = page.getByRole('button', { name: /Close Shift/i }).first();
-    await expect(close, 'Close Shift missing after mobile Till 3 sale').toBeVisible({ timeout: 20_000 });
-    await close.click();
-    const actualCash = page.getByLabel(/actual cash|counted cash/i).or(page.locator('input[type="number"]').nth(1));
-    if ((await actualCash.count()) > 0) await actualCash.first().fill('20');
-    await page.getByRole('button', { name: /Close Shift/i }).last().click();
+    await closeTill3Shift(page, '20', 'mobile POS close');
   });
 });

@@ -534,6 +534,7 @@ export default function ShiftClient({
               <label className="label">Till</label>
               <select
                 className="input"
+                aria-label="Till"
                 value={selectedTill}
                 onChange={(e) => setSelectedTill(e.target.value)}
               >
