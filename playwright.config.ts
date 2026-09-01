@@ -163,5 +163,18 @@ export default defineConfig({
         navigationTimeout: 15_000,
       },
     },
+    {
+      name: 'reliability-catalogue',
+      testDir: './playwright',
+      testMatch: /reliability-catalogue\.spec\.ts/,
+      // Catalogue/import/opening-stock only. Never auto-retry. Never sales.
+      retries: 0,
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 8_000,
+        navigationTimeout: 15_000,
+      },
+    },
   ],
 });

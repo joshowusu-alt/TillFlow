@@ -22,11 +22,15 @@ import {
   classifyTill3ShiftState,
 } from '../tests/e2e/helpers/preview-qa-owner';
 import {
-  RELIABILITY_IMPORT_PRODUCT,
   RELIABILITY_SELLABLE_PRODUCT,
   ensureImportedQaProduct,
   ensureSellableQaProduct,
 } from '../tests/e2e/helpers/preview-qa-product';
+import {
+  confirmReliabilityImportCsv,
+  enterManualImportRoute,
+  ensureQaOpeningStock,
+} from '../tests/e2e/helpers/preview-qa-catalogue';
 import {
   RELIABILITY_ACTION_TIMEOUT_MS,
   RELIABILITY_NAVIGATION_TIMEOUT_MS,
@@ -39,13 +43,11 @@ import {
 import {
   RELIABILITY_RERUN_IDS,
   assertRerunDecision,
-  classifyOpeningStockRerun,
   classifyTenderRef,
 } from '../lib/reliability/rerun-idempotency';
 import { hashOfflineSalePayload } from '../lib/offline/payload-hash';
 
 const PRODUCT_NAME = RELIABILITY_SELLABLE_PRODUCT.name;
-const IMPORT_PRODUCT_NAME = RELIABILITY_IMPORT_PRODUCT.name;
 const EXPECTED_PREVIEW_SHA = process.env.RELIABILITY_EXPECTED_SHA?.trim() ?? '';
 
 const phase9Setup = { ownerReady: false, till3Ready: false };
@@ -238,112 +240,20 @@ test.describe('Reliability journey', () => {
       phase9Setup.till3Ready = true;
     });
 
-    await test.step('create sellable product', async () => {
-      await page.goto('/products#product-create', {
-        waitUntil: 'domcontentloaded',
-        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-      });
-      await expect(page.getByRole('heading', { name: 'Add product' })).toBeVisible({
-        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-      });
-      const nameInput = page.locator('#product-create input[name="name"]');
-      if (!(await nameInput.isVisible().catch(() => false))) {
-        await page.locator('#product-create').click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-      }
-      await expect(page.locator('#product-create input[name="name"]')).toBeVisible({
-        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-      });
+    await test.step('create or reuse sellable product', async () => {
       await ensureSellableQaProduct(page);
     });
 
     await test.step('import products', async () => {
-      await page.goto('/settings/import-stock', {
-        waitUntil: 'domcontentloaded',
-        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-      });
-      await expect(page).toHaveURL(/\/settings\/import-stock/);
-      await expect(page.getByRole('heading', { name: 'Import Stock' })).toBeVisible({
-        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-      });
-      await expect(page.getByRole('heading', { name: 'What are you importing?' })).toBeVisible();
-      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
-      await expect(page.getByText('The file had no product rows. Check the file and try again.')).toHaveCount(0);
-      await page.getByRole('button', { name: 'Product catalogue', exact: true }).click({
-        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-      });
-      await expect(page.getByTestId('import-stock-file-input')).toBeAttached();
-      await expect(page.getByText('No ready rows to import.')).toHaveCount(0);
-      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
-
-      await page.goto('/products', { waitUntil: 'domcontentloaded', timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS });
+      await enterManualImportRoute(page);
       await ensureImportedQaProduct(page, async () => {
-        await page.goto('/settings/import-stock', {
-          waitUntil: 'domcontentloaded',
-          timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-        });
-        await page.getByRole('button', { name: 'Product catalogue', exact: true }).click({
-          timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-        });
-        const csv = [
-          'name,sku,barcode,category,selling_price,cost_price,base_unit,pack_unit,pack_size,supplier_name,reorder_point,storefront_published,image_url,notes',
-          `${IMPORT_PRODUCT_NAME},${RELIABILITY_IMPORT_PRODUCT.sku},${RELIABILITY_IMPORT_PRODUCT.barcode},Drinks,4.00,2.00,Piece,,,,,yes,,`,
-        ].join('\r\n');
-        await page.getByTestId('import-stock-file-input').setInputFiles({
-          name: 'reliability-catalogue.csv',
-          mimeType: 'text/csv',
-          buffer: Buffer.from(csv, 'utf8'),
-        });
-        const confirm = page.getByRole('button', { name: /Confirm Import/i });
-        await expect(confirm, 'import preview did not offer Confirm Import').toBeEnabled({
-          timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-        });
-        await confirm.click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-        await expect(page.getByRole('heading', { name: 'Import complete!' })).toBeVisible({
-          timeout: 60_000,
-        });
-        await expect(page.getByText('Products imported')).toBeVisible();
+        await enterManualImportRoute(page);
+        await confirmReliabilityImportCsv(page);
       });
-      await expect(page.getByText('No products yet.', { exact: true })).toHaveCount(0);
     });
 
     await test.step('record opening stock', async () => {
-      await page.goto('/setup/opening-stock', {
-        waitUntil: 'domcontentloaded',
-        timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-      });
-      const snapshot = await fetchSnapshot(page);
-      const openingDecision = assertRerunDecision(
-        'opening stock',
-        classifyOpeningStockRerun({
-          movements: (snapshot.openingMovements ?? []).map(
-            (row: { productName?: string; productSku?: string; qtyBase: number; type?: string; referenceType?: string | null }) => ({
-              productMatchesQa:
-                row.productName === PRODUCT_NAME || row.productSku === RELIABILITY_SELLABLE_PRODUCT.sku,
-              qtyBase: row.qtyBase,
-              type: row.type,
-              referenceType: row.referenceType,
-            }),
-          ),
-          openingCapitalPence: snapshot.openingCapitalPence ?? 0,
-        }),
-      );
-      if (openingDecision === 'skip') {
-        return;
-      }
-      if (await page.getByRole('heading', { name: 'Opening capital recorded!' }).isVisible().catch(() => false)) {
-        return;
-      }
-      const addItem = page.getByRole('button', { name: '+ Add stock item' });
-      await clickUniqueVisible(addItem, 'opening stock add');
-      await selectUniqueVisible(
-        page.getByRole('combobox', { name: 'Product' }),
-        { label: PRODUCT_NAME },
-        'opening stock product',
-      );
-      await clickUniqueVisible(page.getByRole('button', { name: /Save Opening Capital/i }), 'opening stock save');
-      await expect(page.getByRole('heading', { name: 'Opening capital recorded!' })).toBeVisible({
-        timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-      });
+      await ensureQaOpeningStock(page, () => fetchSnapshot(page));
     });
 
     await test.step('open Till 3 with float', async () => {

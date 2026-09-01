@@ -5,9 +5,11 @@ import {
   RELIABILITY_IMPORT_PRODUCT,
   RELIABILITY_SELLABLE_PRODUCT,
   assertUniqueQaProductPresence,
+  assertUniqueQaProductRecordHrefs,
   classifyQaProductPresence,
   countQaProductIdentityHits,
   duplicateQaProductMessage,
+  parseQaProductRecordId,
   type QaProductDomHit,
 } from './preview-qa-product';
 
@@ -163,12 +165,98 @@ describe('Reliability QA product identity', () => {
     expect(helper).toContain("barcode: 'RELSKU1'");
     expect(helper).toContain('qaProductTableRows');
     expect(helper).toContain('qaProductTableLink');
+    expect(helper).toContain('qaProductVisibleTableRows');
+    expect(helper).toContain('gotoQaProductList');
+    expect(helper).toContain('openSellableQaProductCreateForm');
+    expect(helper).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
+    expect(helper).not.toContain("locator('input[name=\"name\"]').first()");
     expect(spec).toContain('ensureSellableQaProduct');
     expect(spec).toContain('ensureImportedQaProduct');
+    expect(spec).not.toContain('/products#product-create');
+    expect(spec).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
     expect(spec).not.toMatch(/getByText\(\s*PRODUCT_NAME\s*\)\.first\(\)/);
     expect(spec).not.toMatch(/getByText\(\s*IMPORT_PRODUCT_NAME[^)]*\)\.first\(\)/);
     expect(spec).not.toMatch(/getByText\(\s*RELIABILITY_SELLABLE_PRODUCT\.name\s*\)\.first\(\)/);
     expect(spec).not.toMatch(/getByText\(\s*RELIABILITY_IMPORT_PRODUCT\.name[^)]*\)\.first\(\)/);
+  });
+
+  it('reuses a name-only table row that has no SKU or barcode text', () => {
+    const nameOnly: QaProductDomHit[] = [
+      {
+        role: 'link',
+        inTable: false,
+        visible: false,
+        accessibleName: RELIABILITY_SELLABLE_PRODUCT.name,
+      },
+      {
+        role: 'row',
+        inTable: true,
+        visible: true,
+        accessibleName: `${RELIABILITY_SELLABLE_PRODUCT.name} GH₵5.00 GH₵2.00`,
+      },
+      {
+        role: 'link',
+        inTable: true,
+        visible: true,
+        accessibleName: RELIABILITY_SELLABLE_PRODUCT.name,
+      },
+    ];
+    expect(nameOnly[1]!.accessibleName.includes(RELIABILITY_SELLABLE_PRODUCT.sku)).toBe(false);
+    const summary = countQaProductIdentityHits(nameOnly, RELIABILITY_SELLABLE_PRODUCT);
+    expect(summary.tableRowCount).toBe(1);
+    expect(classifyQaProductPresence(summary.tableRowCount)).toBe('reuse');
+  });
+
+  it('treats a hidden card link with no table row as missing, not a create heading failure', () => {
+    expect(
+      countQaProductIdentityHits(hostedDesktopHits.slice(0, 1), RELIABILITY_SELLABLE_PRODUCT),
+    ).toEqual({
+      tableRowCount: 0,
+      hiddenLinkCount: 1,
+      visibleTableLinkCount: 0,
+    });
+    expect(classifyQaProductPresence(0)).toBe('missing');
+  });
+
+  it('fails closed on duplicate visible table rows and distinct record hrefs', () => {
+    expect(() => assertUniqueQaProductPresence(2, RELIABILITY_SELLABLE_PRODUCT)).toThrow(
+      /Genuine duplicates — do not pick a visible one/,
+    );
+    expect(
+      assertUniqueQaProductRecordHrefs(
+        ['/products/cmthxz35500058a6xmwxavr1a', '/products/cmthxz35500058a6xmwxavr1a'],
+        RELIABILITY_SELLABLE_PRODUCT,
+      ),
+    ).toBe('cmthxz35500058a6xmwxavr1a');
+    expect(() =>
+      assertUniqueQaProductRecordHrefs(
+        ['/products/aaa', '/products/bbb'],
+        RELIABILITY_SELLABLE_PRODUCT,
+      ),
+    ).toThrow(/distinct record hrefs/);
+  });
+
+  it('parses product record ids and ignores /products/new redirects', () => {
+    expect(parseQaProductRecordId('/products/cmthxz35500058a6xmwxavr1a')).toBe(
+      'cmthxz35500058a6xmwxavr1a',
+    );
+    expect(parseQaProductRecordId('/products/new')).toBeNull();
+    expect(parseQaProductRecordId('/products/labels')).toBeNull();
+    expect(source('app/(protected)/products/new/page.tsx')).toContain(
+      "redirect('/products#product-create')",
+    );
+    expect(source('tests/e2e/helpers/preview-qa-product.ts')).not.toContain('/products/new');
+    expect(source('lib/services/products-page-polish.test.ts')).toContain(
+      'keeps the Add product form present but closed by default',
+    );
+  });
+
+  it('does not treat hidden responsive product cards as the catalogue table', () => {
+    const products = source('app/(protected)/products/page.tsx');
+    expect(products).toContain('lg:hidden');
+    expect(products).toContain('hidden lg:block');
+    expect(source('tests/e2e/helpers/preview-qa-product.ts')).toContain("getByRole('table')");
+    expect(source('tests/e2e/helpers/preview-qa-product.ts')).toContain("locator('visible=true')");
   });
 
   it('pins a stable SKU/barcode identity distinct from the import product', () => {

@@ -1,10 +1,14 @@
 /**
- * Reliability QA product identity: create-or-reuse by stable SKU, never by
- * hidden responsive name links. Desktop /products renders the same product as
- * a hidden card <a class="truncate hover:underline"> (lg:hidden) and a visible
- * table row. Playwright retries of that hidden link are not extra products.
+ * Reliability QA product identity: create-or-reuse by exact visible table row
+ * (name) + unique /products/{id} href. Never by hidden responsive card links.
+ * Catalogue list has no SKU column — empty SKU/barcode must still reuse by name.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
+import {
+  RELIABILITY_ACTION_TIMEOUT_MS,
+  RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  fillUniqueVisible,
+} from './preview-qa-locators';
 
 export const RELIABILITY_SELLABLE_PRODUCT = {
   name: 'Reliability SKU',
@@ -43,6 +47,7 @@ export type QaProductHitCounts = {
 function matchesQaIdentity(text: string, identity: QaProductIdentity) {
   const haystack = text.trim();
   if (!haystack) return false;
+  // SKU match is optional: catalogue rows often omit SKU entirely.
   if (identity.sku && haystack.includes(identity.sku)) return true;
   if (haystack === identity.name) return true;
   if (!haystack.startsWith(identity.name)) return false;
@@ -79,12 +84,26 @@ export function duplicateQaProductMessage(identity: QaProductIdentity, tableRowC
   );
 }
 
+export function duplicateQaProductHrefMessage(identity: QaProductIdentity, hrefs: string[]) {
+  return (
+    `Phase 9 blocked at product: ${hrefs.length} distinct record hrefs for QA identity ` +
+    `${identity.name}: ${hrefs.join(', ')}. Genuine duplicates — do not pick a visible one.`
+  );
+}
+
 export function assertUniqueQaProductPresence(tableRowCount: number, identity: QaProductIdentity) {
   const presence = classifyQaProductPresence(tableRowCount);
   if (presence === 'duplicate') {
     throw new Error(duplicateQaProductMessage(identity, tableRowCount));
   }
   return presence;
+}
+
+export function parseQaProductRecordId(href: string | null): string | null {
+  if (!href) return null;
+  const match = href.match(/\/products\/([^/?#]+)/);
+  if (!match?.[1] || match[1] === 'new' || match[1] === 'labels') return null;
+  return match[1];
 }
 
 /** Table rows that contain the exact product-name link (not hidden card links). */
@@ -94,16 +113,66 @@ export function qaProductTableRows(page: Page, identity: QaProductIdentity): Loc
   });
 }
 
+/** Visible-only table rows — ignore any non-visible table copies. */
+export function qaProductVisibleTableRows(page: Page, identity: QaProductIdentity): Locator {
+  return qaProductTableRows(page, identity).locator('visible=true');
+}
+
 /** Visible table-cell product link. Do not assert the first name text node. */
 export function qaProductTableLink(page: Page, identity: QaProductIdentity): Locator {
   return page.getByRole('table').getByRole('link', { name: identity.name, exact: true });
 }
 
+export function qaProductVisibleTableLink(page: Page, identity: QaProductIdentity): Locator {
+  return qaProductTableLink(page, identity).locator('visible=true');
+}
+
+export function qaProductCreateDetails(page: Page): Locator {
+  return page.locator('details').filter({ has: page.locator('summary#product-create') });
+}
+
+export async function collectQaProductRecordHrefs(
+  page: Page,
+  identity: QaProductIdentity,
+): Promise<string[]> {
+  return qaProductVisibleTableLink(page, identity).evaluateAll((nodes) => [
+    ...new Set(
+      nodes
+        .map((node) => (node instanceof HTMLAnchorElement ? node.getAttribute('href') : null))
+        .map((href) => href?.split('#')[0] ?? '')
+        .filter(Boolean),
+    ),
+  ]);
+}
+
+export function assertUniqueQaProductRecordHrefs(hrefs: string[], identity: QaProductIdentity) {
+  const ids = [
+    ...new Set(hrefs.map((href) => parseQaProductRecordId(href)).filter(Boolean)),
+  ] as string[];
+  if (ids.length > 1) {
+    throw new Error(duplicateQaProductHrefMessage(identity, hrefs));
+  }
+  return ids[0] ?? null;
+}
+
 export async function resolveQaProductOnList(page: Page, identity: QaProductIdentity) {
-  const rows = qaProductTableRows(page, identity);
+  const rows = qaProductVisibleTableRows(page, identity);
   const tableRowCount = await rows.count();
   const presence = assertUniqueQaProductPresence(tableRowCount, identity);
-  return { presence, tableRowCount, rows };
+  const hrefs = presence === 'reuse' ? await collectQaProductRecordHrefs(page, identity) : [];
+  if (presence === 'reuse') {
+    assertUniqueQaProductRecordHrefs(hrefs, identity);
+  }
+  return { presence, tableRowCount, rows, hrefs };
+}
+
+export async function gotoQaProductList(page: Page, identity: QaProductIdentity) {
+  const q = encodeURIComponent(identity.name);
+  await page.goto(`/products?tab=products&q=${q}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  });
+  await expect(page).toHaveURL(/\/products/);
 }
 
 export async function expectUniqueQaProductRowVisible(
@@ -111,58 +180,108 @@ export async function expectUniqueQaProductRowVisible(
   identity: QaProductIdentity,
   timeout = 30_000,
 ) {
-  const rows = qaProductTableRows(page, identity);
+  const rows = qaProductVisibleTableRows(page, identity);
   await expect
     .poll(async () => rows.count(), {
       timeout,
-      message: `QA product table row for ${identity.name} / ${identity.sku}`,
+      message: `QA product visible table row for ${identity.name} (SKU optional on list)`,
     })
     .toBeGreaterThan(0);
   const tableRowCount = await rows.count();
   const presence = assertUniqueQaProductPresence(tableRowCount, identity);
   if (presence !== 'reuse') {
     throw new Error(
-      `Phase 9 blocked at product: expected one visible table row for ${identity.name} / ${identity.sku}, found ${tableRowCount}.`,
+      `Phase 9 blocked at product: expected one visible table row for ${identity.name}, found ${tableRowCount}.`,
     );
   }
+  const hrefs = await collectQaProductRecordHrefs(page, identity);
+  assertUniqueQaProductRecordHrefs(hrefs, identity);
   await expect(rows, `QA product table row for ${identity.name}`).toBeVisible({ timeout });
   await expect(
-    qaProductTableLink(page, identity),
+    qaProductVisibleTableLink(page, identity),
     `QA product table link for ${identity.name}`,
   ).toBeVisible({ timeout });
+}
+
+/**
+ * Open create only when needed. Do not assert heading "Add product"
+ * (that h2 lives inside a closed <details>; hash #product-create only scrolls).
+ * Labels lack htmlFor — assert named controls inside the opened details form.
+ */
+export async function openSellableQaProductCreateForm(page: Page) {
+  await expect(page).toHaveURL(/\/products(?:\?|#|$)/);
+  const details = qaProductCreateDetails(page);
+  await expect(details.locator('summary#product-create')).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  const alreadyOpen = (await details.getAttribute('open')) !== null;
+  if (!alreadyOpen) {
+    await details.locator('summary#product-create').click({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  }
+  await expect(details).toHaveAttribute('open', '');
+  const form = details.locator('form');
+  await expect(form.locator('input[name="name"]')).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  await expect(form.locator('input[name="sku"]')).toBeVisible();
+  await expect(form.locator('input[name="barcode"]')).toBeVisible();
+  await expect(form.locator('input[name="sellingPriceBasePence"]')).toBeVisible();
+  await expect(form.locator('input[name="defaultCostBasePence"]')).toBeVisible();
+  await expect(form.getByRole('button', { name: /Create product/i })).toBeVisible();
+  await expect(form.locator('label', { hasText: /^Name$/ })).toBeVisible();
+  await expect(form.locator('label', { hasText: /^SKU$/ })).toBeVisible();
+  return form;
 }
 
 export async function fillSellableQaProductForm(
   page: Page,
   product: typeof RELIABILITY_SELLABLE_PRODUCT = RELIABILITY_SELLABLE_PRODUCT,
 ) {
-  await page.locator('input[name="name"]').first().fill(product.name);
-  await page.locator('input[name="sku"]').first().fill(product.sku);
-  await page.locator('input[name="barcode"]').first().fill(product.barcode);
-  await page.locator('input[name="sellingPriceBasePence"]').fill(product.sellingPrice);
-  await page.locator('input[name="defaultCostBasePence"]').fill(product.defaultCost);
-  await page.getByRole('button', { name: /Create product/i }).click();
+  const form = await openSellableQaProductCreateForm(page);
+  await fillUniqueVisible(form.locator('input[name="name"]'), product.name, 'create product name');
+  await fillUniqueVisible(form.locator('input[name="sku"]'), product.sku, 'create product sku');
+  await fillUniqueVisible(
+    form.locator('input[name="barcode"]'),
+    product.barcode,
+    'create product barcode',
+  );
+  await fillUniqueVisible(
+    form.locator('input[name="sellingPriceBasePence"]'),
+    product.sellingPrice,
+    'create product price',
+  );
+  await fillUniqueVisible(
+    form.locator('input[name="defaultCostBasePence"]'),
+    product.defaultCost,
+    'create product cost',
+  );
+  await form.getByRole('button', { name: /Create product/i }).click({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
 }
 
 /**
- * Create the sellable QA product once with REL-SKU-1 / RELSKU1, or reuse the
- * single existing table row (name or SKU). Fails on genuine duplicate rows.
+ * Reuse the single visible table row named "Reliability SKU" (+ unique /products/{id}).
+ * Do not treat missing REL-SKU-1 text as a missing product. Create only when no row.
  */
 export async function ensureSellableQaProduct(page: Page) {
   const identity = RELIABILITY_SELLABLE_PRODUCT;
+  await gotoQaProductList(page, identity);
   const { presence } = await resolveQaProductOnList(page, identity);
   if (presence === 'missing') {
     await fillSellableQaProductForm(page, identity);
+    await gotoQaProductList(page, identity);
   }
   await expectUniqueQaProductRowVisible(page, identity);
 }
 
 export async function ensureImportedQaProduct(page: Page, importOnce: () => Promise<void>) {
   const identity = RELIABILITY_IMPORT_PRODUCT;
+  await gotoQaProductList(page, identity);
   const { presence } = await resolveQaProductOnList(page, identity);
   if (presence === 'missing') {
     await importOnce();
-    await page.goto('/products', { waitUntil: 'domcontentloaded' });
+    await gotoQaProductList(page, identity);
   }
   await expectUniqueQaProductRowVisible(page, identity);
 }

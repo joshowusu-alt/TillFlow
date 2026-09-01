@@ -73,13 +73,13 @@ function listQaRouteDirs(): string[] {
     .sort();
 }
 
-function resolveProvisioningSpecRel(project: string): string {
+function resolveReliabilitySpecRel(project: string, projectName: string): string {
   const testDir = project.match(/testDir:\s*['"]([^'"]+)['"]/)?.[1] ?? './playwright';
   const regexMatch = project.match(/testMatch:\s*\/([^/]+)\//);
   const stringMatch = project.match(/testMatch:\s*['"]([^'"]+)['"]/);
   const raw = regexMatch?.[1] ?? stringMatch?.[1];
   if (!raw) {
-    throw new Error(`Playwright project '${PROVISIONING_PROJECT}' has no testMatch`);
+    throw new Error(`Playwright project '${projectName}' has no testMatch`);
   }
   const fileName = raw
     .replace(/\\\./g, '.')
@@ -98,10 +98,14 @@ function resolveProvisioningSpecRel(project: string): string {
   const hit = candidates.find((rel) => existsSync(join(root, rel)));
   if (!hit) {
     throw new Error(
-      `Provisioning spec '${fileName}' is missing (looked in ${candidates.join(', ')})`,
+      `${projectName} spec '${fileName}' is missing (looked in ${candidates.join(', ')})`,
     );
   }
   return hit;
+}
+
+function resolveProvisioningSpecRel(project: string): string {
+  return resolveReliabilitySpecRel(project, PROVISIONING_PROJECT);
 }
 
 describe('reliability CI governance contract', () => {
@@ -165,9 +169,11 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('reliabilitySalesAllowed');
     expect(spec).toContain('/api/qa/deploy-sha');
     expect(spec).toContain('LATE_OFFLINE');
-    expect(spec).toContain('Product catalogue');
-    expect(spec).toContain('Import complete!');
-    expect(spec).toContain('Opening capital recorded!');
+    expect(spec).toContain('enterManualImportRoute');
+    expect(spec).toContain('ensureQaOpeningStock');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Product catalogue');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Import complete!');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Opening capital recorded!');
     expect(spec).not.toMatch(/test\.skip\(\s*!reliabilitySalesAllowed\(\)/);
     expect(spec).not.toMatch(/if \(!captured\?\.shiftId \|\| !captured\.tillId\) return;/);
     expect(spec).not.toContain('imported|Import complete|products');
@@ -186,6 +192,8 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('ensureSellableQaProduct');
     expect(spec).toContain('ensureImportedQaProduct');
     expect(spec).toContain('RELIABILITY_SELLABLE_PRODUCT');
+    expect(spec).not.toContain('/products#product-create');
+    expect(spec).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
     expect(helper).toContain("sku: 'REL-SKU-1'");
     expect(helper).toContain("barcode: 'RELSKU1'");
     expect(helper).toContain("getByRole('table')");
@@ -218,8 +226,9 @@ describe('reliability CI governance contract', () => {
     expect(provisioning).toMatch(/timeout:\s*180_000/);
     expect(spec).toContain('till3OpenSelect');
     expect(spec).toContain('closeTill3Shift');
-    expect(spec).toContain('What are you importing?');
-    expect(spec).toContain('No products yet.');
+    expect(spec).toContain('enterManualImportRoute');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('What are you importing?');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('No products yet.');
     expect(spec).toContain('pos-complete-checkout');
     expect(spec).toContain('#pos-till-select');
     expect(spec).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);
@@ -380,6 +389,76 @@ describe('reliability-provisioning Playwright project contract', () => {
       expect(scanned, `provisioning project must not perform ${action.name}`).not.toMatch(
         action.pattern,
       );
+    }
+  });
+});
+
+const CATALOGUE_PROJECT = 'reliability-catalogue';
+const FORBIDDEN_CATALOGUE_MONEY_ACTIONS = [
+  { name: 'Complete Sale', pattern: /Complete Sale|pos-complete-checkout|pos-complete-sheet/i },
+  { name: 'Open Shift', pattern: /Open Shift/i },
+  { name: 'refund', pattern: /Process Return|Confirm Return|\brefund\b/i },
+  { name: 'expense', pattern: /Record expense|Save expense|Add expense|\/expenses\b/i },
+  { name: 'POS', pattern: /goto\(\s*['"]\/pos/ },
+] as const;
+
+describe('reliability-catalogue Playwright project contract', () => {
+  const config = read('playwright.config.ts');
+
+  it('declares a separate catalogue-only project with retries 0 and a 180s ceiling', () => {
+    expect(config).toContain(`name: '${CATALOGUE_PROJECT}'`);
+    const project = extractPlaywrightProject(config, CATALOGUE_PROJECT);
+    expect(project).toMatch(/retries:\s*0\b/);
+    expect(project).not.toMatch(/retries:\s*(?:isCi|1|[1-9]\d*)\b/);
+    expect(project).toMatch(/timeout:\s*(?:180_000|180000)\b/);
+    expect(project).not.toMatch(/timeout:\s*(?:480_000|480000|[2-9]\d{5,})\b/);
+    expect(project).toMatch(/actionTimeout:\s*8_000/);
+    expect(project).toMatch(/navigationTimeout:\s*15_000/);
+    expect(project).not.toMatch(/dependencies:\s*\[[^\]]*reliability-journey/);
+    expect(extractPlaywrightProject(config, PROVISIONING_PROJECT)).toMatch(/retries:\s*0\b/);
+  });
+
+  it('exercises the original manual-import route and does not soft-skip on another product', () => {
+    const project = extractPlaywrightProject(config, CATALOGUE_PROJECT);
+    const specRel = resolveReliabilitySpecRel(project, CATALOGUE_PROJECT);
+    const spec = read(specRel);
+    const helper = read('tests/e2e/helpers/preview-qa-catalogue.ts');
+    const scanned = stripComments(`${spec}\n${helper}`);
+
+    expect(specRel).toMatch(/reliability-catalogue/);
+    expect(scanned).toContain('/settings/import-stock');
+    expect(scanned).toContain('Product catalogue');
+    expect(scanned).toContain('enterManualImportRoute');
+    expect(scanned).toContain('ensureImportedQaProduct');
+    expect(scanned).toContain('RELIABILITY_IMPORT_PRODUCT');
+    expect(scanned).toContain('RELIABILITY_SELLABLE_PRODUCT');
+    expect(scanned).toContain('No products yet.');
+    expect(scanned).toContain('The file had no product rows. Check the file and try again.');
+    expect(scanned).toContain('No ready rows to import.');
+    expect(scanned).toContain('import-stock-file-input');
+    expect(spec).toContain('enterManualImportRoute');
+    expect(spec).not.toMatch(/Download[\s\S]{0,40}template[\s\S]{0,80}\.click\(/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_ALLOW_QA_SALE/);
+    expect(spec).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
+    expect(spec).not.toContain('/products#product-create');
+  });
+
+  it('fails CI if the catalogue spec targets Production or writes sales money', () => {
+    const project = extractPlaywrightProject(config, CATALOGUE_PROJECT);
+    const specRel = resolveReliabilitySpecRel(project, CATALOGUE_PROJECT);
+    const spec = read(specRel);
+    const scanned = stripComments(`${project}\n${spec}`);
+
+    expect(scanned).toContain('/api/qa/deploy-sha');
+    expect(scanned).toMatch(/isProductionPlaywrightTarget|assertPreviewQaOwnerTarget|cannot run against Production/);
+    expect(scanned).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(spec).not.toMatch(/test\.setTimeout\(\s*(?:480_000|480000|[2-9]\d{5,})\s*\)/);
+    expect(spec).toContain('assertCatalogueDidNotWriteMoney');
+    expect(spec).toContain('ensureQaOpeningStock');
+
+    for (const action of FORBIDDEN_CATALOGUE_MONEY_ACTIONS) {
+      expect(scanned, `catalogue project must not perform ${action.name}`).not.toMatch(action.pattern);
     }
   });
 });
