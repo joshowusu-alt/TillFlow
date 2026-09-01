@@ -3,6 +3,14 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReadinessJourney from '@/components/ReadinessJourney';
 import type { ReadinessData } from '@/app/actions/onboarding';
+import {
+  ONBOARDING_ADD_PRODUCT_MANUALLY_NAME,
+  ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID,
+  PRODUCT_CREATE_FAULTY_DETAIL_PATH,
+  PRODUCT_CREATE_HREF,
+  isExactProductCreateDestination,
+  parseAppUrl,
+} from '@/lib/products/product-create-href';
 
 vi.mock('@/hooks/useRouterRefreshOnVisibility', () => ({
   useRouterRefreshOnVisibility: vi.fn(),
@@ -821,8 +829,87 @@ describe('ReadinessJourney onboarding import entry', () => {
     );
     expect(screen.getByRole('link', { name: 'Add a product manually' })).toHaveAttribute(
       'href',
-      '/products#product-create',
+      PRODUCT_CREATE_HREF,
     );
     expect(screen.queryByText('No products yet.')).not.toBeInTheDocument();
+  });
+
+  it('clicks the real Step 2 Add a product manually control and targets /products#product-create', () => {
+    const stages = [
+      {
+        key: 'business' as const,
+        title: 'Tell us about your business',
+        explanation: '',
+        done: true,
+        href: '/onboarding#business',
+      },
+      {
+        key: 'products' as const,
+        title: 'Add or import what you sell',
+        explanation: '',
+        done: false,
+        href: '/onboarding#products',
+      },
+      {
+        key: 'stock' as const,
+        title: 'Add stock now or later',
+        explanation: '',
+        done: false,
+        href: '/onboarding#stock',
+      },
+      {
+        key: 'selling' as const,
+        title: 'Start selling',
+        explanation: '',
+        done: false,
+        href: '/pos',
+      },
+    ];
+    const journey = {
+      ...completedJourney,
+      status: 'GETTING_READY' as const,
+      statusLabel: 'Add or import what you sell',
+      onboardingComplete: false,
+      hasValidProduct: false,
+      hasSellableProduct: false,
+      hasFirstSale: false,
+      stages,
+      upNext: {
+        key: 'add-product' as const,
+        title: 'Add or import what you sell',
+        explanation: 'Import a catalogue or add one product.',
+        href: '/onboarding#products',
+        isStartSelling: false,
+      },
+    };
+
+    renderDashboard({
+      onboardingComplete: false,
+      onboardingCompletedAt: null,
+      productCount: 0,
+      validProductCount: 0,
+      sellableProductCount: 0,
+      saleCount: 0,
+      activationStatus: 'SETUP_IN_PROGRESS',
+      activationStatusLabel: 'Add or import what you sell',
+      journey,
+      stages,
+      upNext: journey.upNext,
+    });
+
+    expect(screen.getAllByRole('heading', { name: 'Add or import what you sell' }).length).toBeGreaterThan(
+      0,
+    );
+    const control = screen.getByTestId(ONBOARDING_ADD_PRODUCT_MANUALLY_TESTID);
+    expect(control.tagName).toBe('A');
+    expect(control).toHaveAccessibleName(ONBOARDING_ADD_PRODUCT_MANUALLY_NAME);
+    fireEvent.click(control);
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(control).toHaveAttribute('href', PRODUCT_CREATE_HREF);
+    const target = parseAppUrl(control.getAttribute('href') ?? '');
+    expect(target.pathname).toBe('/products');
+    expect(target.hash).toBe('#product-create');
+    expect(isExactProductCreateDestination(control.getAttribute('href') ?? '')).toBe(true);
+    expect(target.pathname + target.hash).not.toBe(PRODUCT_CREATE_FAULTY_DETAIL_PATH);
   });
 });

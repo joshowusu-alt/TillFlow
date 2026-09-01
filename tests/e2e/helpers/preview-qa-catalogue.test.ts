@@ -42,7 +42,8 @@ describe('Reliability catalogue/import helpers', () => {
     );
     expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain("toHaveURL(/\\/products(?:\\?[^#]*)?#product-create/)");
     expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('toBeFocused');
-    expect(source('playwright/reliability-catalogue.spec.ts')).toContain('runManualProductEntryGate');
+    expect(source('playwright/reliability-catalogue.spec.ts')).not.toContain('runManualProductEntryGate');
+    expect(source('playwright/reliability-catalogue.spec.ts')).not.toContain('Add a product manually');
     expect(helper).toContain('proveManualImportPreview');
     expect(helper).toContain('runManualImportGate');
     expect(helper).toContain('setInputFiles');
@@ -50,8 +51,8 @@ describe('Reliability catalogue/import helpers', () => {
     expect(source('playwright/reliability-catalogue.spec.ts')).toContain('runManualImportGate');
     expect(source('playwright/reliability-catalogue.spec.ts')).not.toContain('ensureImportedQaProduct');
     expect(source('components/ReadinessJourney.tsx')).toContain('Import products');
-    expect(source('components/ReadinessJourney.tsx')).toContain('Add a product manually');
-    expect(source('components/ReadinessJourney.tsx')).toContain('/products#product-create');
+    expect(source('components/ReadinessJourney.tsx')).toContain('ONBOARDING_ADD_PRODUCT_MANUALLY_NAME');
+    expect(source('components/ReadinessJourney.tsx')).toContain('PRODUCT_CREATE_HREF');
   });
 
   it('does not treat visit-only absence of No products yet as a pass', () => {

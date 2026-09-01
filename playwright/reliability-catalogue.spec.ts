@@ -1,9 +1,8 @@
 /**
  * Preview-only catalogue gate. Zero sales and money writes.
  *
- * Flow A: onboarding “Add a product manually” → /products#product-create
- * must open the Add product form (REL-MAN-P104-01).
- * Flow B: Import Stock CATALOGUE CSV (REL-IMP-P104-01) with persisted ProductImport.
+ * CSV import (REL-IMP-P104-01) and persisted opening stock only.
+ * New-business onboarding button lives in reliability-onboarding-manual.
  */
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -33,16 +32,11 @@ import {
   runManualImportGate,
   type CatalogueSnapshotLike,
 } from '../tests/e2e/helpers/preview-qa-catalogue';
-import { runManualProductEntryGate } from '../tests/e2e/helpers/preview-qa-manual-entry';
 import { RELIABILITY_NAVIGATION_TIMEOUT_MS } from '../tests/e2e/helpers/preview-qa-locators';
 import {
   RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT,
   assertPersistedManualImport,
 } from '../lib/reliability/manual-import-gate';
-import {
-  RELIABILITY_MANUAL_ENTRY_PRODUCT,
-  assertPersistedManualEntry,
-} from '../lib/reliability/manual-entry-gate';
 
 function blocked(step: string, detail: string): never {
   throw new Error(`Catalogue gate blocked at ${step}: ${detail}`);
@@ -85,7 +79,7 @@ async function fetchSnapshot(page: Page): Promise<CatalogueSnapshotLike> {
 test.describe('Reliability catalogue', () => {
   test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
 
-  test('Preview catalogue, manual entry, CSV import, and persisted opening stock', async ({ page }) => {
+  test('Preview catalogue, CSV import, and persisted opening stock', async ({ page }) => {
     test.setTimeout(180_000);
 
     await test.step('confirm Preview host and SHA via deploy-sha', async () => {
@@ -104,13 +98,6 @@ test.describe('Reliability catalogue', () => {
     const before = await test.step('capture financial fingerprint (must not grow)', async () => {
       return catalogueFinancialFingerprint(await fetchSnapshot(page));
     });
-
-    const manualEntryDecision = await test.step(
-      'Add a product manually opens #product-create for REL-MAN-P104-01',
-      async () => {
-        return runManualProductEntryGate(page, () => fetchSnapshot(page));
-      },
-    );
 
     await test.step('confirm Till 3 exists', async () => {
       await page.goto('/settings?section=tills', {
@@ -142,11 +129,9 @@ test.describe('Reliability catalogue', () => {
       return runManualImportGate(page, () => fetchSnapshot(page));
     });
 
-    await test.step('prove sellable + manual-entry + CSV import products persist once', async () => {
+    await test.step('prove sellable + CSV import products persist once', async () => {
       await gotoQaProductList(page, RELIABILITY_SELLABLE_PRODUCT);
       await expectUniqueQaProductRowVisible(page, RELIABILITY_SELLABLE_PRODUCT);
-      await gotoQaProductList(page, RELIABILITY_MANUAL_ENTRY_PRODUCT);
-      await expectUniqueQaProductRowVisible(page, RELIABILITY_MANUAL_ENTRY_PRODUCT);
       await gotoQaProductList(page, RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT);
       await expectUniqueQaProductRowVisible(page, RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT);
     });
@@ -160,19 +145,15 @@ test.describe('Reliability catalogue', () => {
       const after = catalogueFinancialFingerprint(snapshot);
       assertCatalogueDidNotWriteMoney(before, after);
       assertCatalogueOpeningStockPersisted(snapshot);
-      assertPersistedManualEntry({
-        products: snapshot.manualEntryProducts ?? [],
-      });
       assertPersistedManualImport({
         gateProducts: snapshot.gateProducts ?? [],
         importRuns: snapshot.productImports ?? [],
       });
-      if ((snapshot.productCount ?? 0) < 3) {
-        blocked('snapshot', `productCount=${snapshot.productCount}; expected at least three catalogue products.`);
+      if ((snapshot.productCount ?? 0) < 2) {
+        blocked('snapshot', `productCount=${snapshot.productCount}; expected at least two catalogue products.`);
       }
 
       test.info().annotations.push(
-        { type: 'catalogue-manual-entry-decision', description: manualEntryDecision },
         { type: 'catalogue-import-decision', description: importDecision },
         { type: 'catalogue-product-count', description: String(snapshot.productCount) },
         { type: 'catalogue-invoices', description: String(after.invoiceCount) },

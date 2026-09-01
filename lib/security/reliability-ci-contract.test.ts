@@ -423,10 +423,8 @@ describe('reliability-catalogue Playwright project contract', () => {
     const specRel = resolveReliabilitySpecRel(project, CATALOGUE_PROJECT);
     const spec = read(specRel);
     const helper = read('tests/e2e/helpers/preview-qa-catalogue.ts');
-    const entry = read('tests/e2e/helpers/preview-qa-manual-entry.ts');
     const gate = read('lib/reliability/manual-import-gate.ts');
-    const entryGate = read('lib/reliability/manual-entry-gate.ts');
-    const scanned = stripComments(`${spec}\n${helper}\n${entry}\n${gate}\n${entryGate}`);
+    const scanned = stripComments(`${spec}\n${helper}\n${gate}`);
 
     expect(specRel).toMatch(/reliability-catalogue/);
     expect(scanned).toContain('/settings/import-stock');
@@ -438,29 +436,21 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(gate).toContain('run.fileName === MANUAL_IMPORT_GATE_CSV_FILENAME');
     expect(gate).not.toContain("file.includes('rel-imp-p104-01')");
     expect(scanned).toContain('runManualImportGate');
-    expect(scanned).toContain('runManualProductEntryGate');
     expect(scanned).toContain('REL-IMP-P104-01');
-    expect(scanned).toContain('REL-MAN-P104-01');
     expect(scanned).toContain('Reliability Manual Import Gate');
-    expect(scanned).toContain('Reliability Manual Entry Gate');
     expect(scanned).toContain('setInputFiles');
     expect(scanned).toContain('Confirm Import');
     expect(scanned).toContain('assertManualImportPreviewGate');
-    expect(scanned).toContain('Add a product manually');
-    expect(scanned).toContain('/products#product-create');
-    expect(scanned).toContain('product-create-details');
-    expect(scanned).toContain('No products yet.');
+    expect(spec).not.toContain('runManualProductEntryGate');
+    expect(spec).not.toContain('Add a product manually');
+    expect(spec).not.toContain('assertPersistedManualEntry');
     expect(scanned).toContain('The file had no product rows. Check the file and try again.');
     expect(scanned).toContain('No ready rows to import.');
     expect(scanned).toContain('import-stock-file-input');
     expect(spec).toContain('runManualImportGate');
-    expect(spec).toContain('runManualProductEntryGate');
     expect(spec).not.toContain('ensureImportedQaProduct');
     expect(spec).not.toMatch(/Download[\s\S]{0,40}template[\s\S]{0,80}\.click\(/);
     expect(spec).not.toMatch(/PLAYWRIGHT_ALLOW_QA_SALE/);
-    expect(read('tests/e2e/helpers/preview-qa-manual-entry.ts')).not.toContain(
-      "summary#product-create').click",
-    );
   });
 
   it('fails CI if the catalogue spec targets Production or writes sales money', () => {
@@ -478,7 +468,7 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(spec).toContain('ensureQaOpeningStock');
     expect(spec).toContain('assertCatalogueOpeningStockPersisted');
     expect(spec).toContain('assertPersistedManualImport');
-    expect(spec).toContain('assertPersistedManualEntry');
+    expect(spec).not.toContain('assertPersistedManualEntry');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('gateProducts');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('manualEntryProducts');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('productImports');
@@ -489,3 +479,70 @@ describe('reliability-catalogue Playwright project contract', () => {
     }
   });
 });
+
+const ONBOARDING_MANUAL_PROJECT = 'reliability-onboarding-manual';
+const FORBIDDEN_ONBOARDING_MANUAL_WRITES = [
+  { name: 'Create product', pattern: /Create product/i },
+  { name: 'Complete Sale', pattern: /Complete Sale|pos-complete-checkout|pos-complete-sheet/i },
+  { name: 'Open Shift', pattern: /Open Shift/i },
+  { name: 'Confirm Import', pattern: /Confirm Import/i },
+  { name: 'refund', pattern: /Process Return|Confirm Return|\brefund\b/i },
+] as const;
+
+describe('reliability-onboarding-manual Playwright project contract', () => {
+  const config = read('playwright.config.ts');
+
+  it('declares a separate onboarding-button project with retries 0 and a 180s ceiling', () => {
+    expect(config).toContain(`name: '${ONBOARDING_MANUAL_PROJECT}'`);
+    const project = extractPlaywrightProject(config, ONBOARDING_MANUAL_PROJECT);
+    expect(project).toMatch(/retries:\s*0\b/);
+    expect(project).toMatch(/timeout:\s*(?:180_000|180000)\b/);
+    expect(project).toMatch(/actionTimeout:\s*8_000/);
+    expect(project).toMatch(/navigationTimeout:\s*15_000/);
+    expect(project).not.toMatch(/dependencies:\s*\[[^\]]*reliability-journey/);
+  });
+
+  it('physically clicks Add a product manually and never falls back to direct hash', () => {
+    const project = extractPlaywrightProject(config, ONBOARDING_MANUAL_PROJECT);
+    const specRel = resolveReliabilitySpecRel(project, ONBOARDING_MANUAL_PROJECT);
+    const spec = read(specRel);
+    const helper = read('tests/e2e/helpers/preview-qa-onboarding-manual.ts');
+    const scanned = stripComments(`${spec}\n${helper}`);
+
+    expect(specRel).toMatch(/reliability-onboarding-manual/);
+    expect(scanned).toContain('clickOnboardingAddProductManually');
+    expect(scanned).toContain('PLAYWRIGHT_ONBOARDING_OWNER_EMAIL');
+    expect(helper).toContain('Direct /products#product-create is not valid evidence');
+    expect(helper).not.toMatch(/if \([\s\S]{0,200}goto\(['"]\/products#product-create/);
+    expect(spec).toContain('proveDirectProductCreateHashSeparately');
+    expect(spec).toContain('proveEstablishedBusinessAddProduct');
+    expect(spec).toContain('emulateStandaloneDisplayMode');
+    expect(spec).toContain('setViewportSize');
+    expect(read('components/ReadinessJourney.tsx')).toContain('href={PRODUCT_CREATE_HREF}');
+    expect(read('components/ReadinessJourney.tsx')).not.toContain('<Link href="/products#product-create"');
+    expect(read('app/(protected)/products/product-create/page.tsx')).toContain('location.replace');
+    expect(read('app/(protected)/products/[id]/page.tsx')).toContain('Product not found.');
+  });
+
+  it('fails CI if the onboarding-manual spec targets Production or writes catalogue/money', () => {
+    const project = extractPlaywrightProject(config, ONBOARDING_MANUAL_PROJECT);
+    const specRel = resolveReliabilitySpecRel(project, ONBOARDING_MANUAL_PROJECT);
+    const spec = read(specRel);
+    const scanned = stripComments(`${project}\n${spec}`);
+
+    expect(scanned).toContain('/api/qa/deploy-sha');
+    expect(scanned).toMatch(/isProductionPlaywrightTarget|assertPreviewQaOwnerTarget|cannot run against Production/);
+    expect(scanned).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_ONBOARDING_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(spec).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);
+    expect(spec).not.toContain('runManualImportGate');
+    expect(spec).not.toContain('runManualProductEntryGate');
+
+    for (const action of FORBIDDEN_ONBOARDING_MANUAL_WRITES) {
+      expect(scanned, `onboarding-manual project must not perform ${action.name}`).not.toMatch(
+        action.pattern,
+      );
+    }
+  });
+});
+

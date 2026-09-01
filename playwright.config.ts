@@ -164,6 +164,19 @@ export default defineConfig({
       },
     },
     {
+      name: 'reliability-onboarding-manual',
+      testDir: './playwright',
+      testMatch: /reliability-onboarding-manual\.spec\.ts/,
+      // New-business onboarding button only. Never auto-retry. Never sales.
+      retries: 0,
+      timeout: 180_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 8_000,
+        navigationTimeout: 15_000,
+      },
+    },
+    {
       name: 'reliability-catalogue',
       testDir: './playwright',
       testMatch: /reliability-catalogue\.spec\.ts/,

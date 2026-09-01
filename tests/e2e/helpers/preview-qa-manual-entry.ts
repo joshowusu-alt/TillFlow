@@ -76,21 +76,9 @@ export async function proveProductCreateHashOpenedForm(page: Page) {
 }
 
 export async function openManualProductEntryFromOnboarding(page: Page) {
-  await page.goto('/onboarding', {
-    waitUntil: 'domcontentloaded',
-    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-  });
-  const onboardingManual = page.getByRole('link', { name: 'Add a product manually', exact: true });
-  if ((await onboardingManual.locator('visible=true').count()) === 1) {
-    await clickUniqueVisible(onboardingManual, 'onboarding Add a product manually');
-  } else {
-    await page.goto('/products#product-create', {
-      waitUntil: 'domcontentloaded',
-      timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
-    });
-  }
-  await expect(page).toHaveURL(/\/products/);
-  await proveProductCreateHashOpenedForm(page);
+  throw new Error(
+    'Catalogue gate blocked at manual entry: onboarding button proof moved to reliability-onboarding-manual. Direct /products#product-create is not valid evidence.',
+  );
 }
 
 export async function proveDirectProductCreateHash(page: Page) {
