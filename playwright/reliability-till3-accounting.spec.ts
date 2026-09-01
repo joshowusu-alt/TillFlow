@@ -1,7 +1,7 @@
 /**
  * Preview-only Till 3 accounting EVIDENCE gate. Maximum five minutes.
- * Verifies the already persisted T3ACC invoice on Till 3.
- * Does not sell, pay, restock, open/close a shift, or reuse payment refs for writing.
+ * Sign in the existing Reliability Preview QA owner and verify INV-000001.
+ * Performs no registration, onboarding, product, stock, shift, sale, or payment writes.
  */
 import { test } from '@playwright/test';
 import {
@@ -10,14 +10,9 @@ import {
   shouldRunReliabilityJourney,
 } from '../tests/e2e/helpers/env';
 import {
-  completeOnboardingBusinessType,
-  ensurePreviewQaOwner,
-  waitForOwnerSession,
-} from '../tests/e2e/helpers/preview-qa-owner';
-import {
-  assertTill3ShiftSummaryUi,
   confirmTill3AccountingPreviewSha,
-  proveTill3AccountingPersisted,
+  proveTill3AccountingEvidenceOnly,
+  signInExistingReliabilityOwner,
 } from '../tests/e2e/helpers/preview-qa-till3-accounting';
 
 function blocked(detail: string): never {
@@ -27,11 +22,16 @@ function blocked(detail: string): never {
 test.describe('Reliability Till 3 accounting', () => {
   test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
 
-  test('persisted Till 3 T3ACC invoice has non-zero shift cash and tender totals', async ({ page }, testInfo) => {
+  test('persisted Till 3 INV-000001 T3ACC invoice has non-zero shift cash and tender totals', async ({
+    page,
+  }, testInfo) => {
     test.setTimeout(300_000);
 
     if (isProductionPlaywrightTarget()) {
       blocked('reliability-till3-accounting cannot run against Production.');
+    }
+    if (process.env.PLAYWRIGHT_ALLOW_QA_SALE || process.env.PLAYWRIGHT_QA_TENANT_CONFIRMED) {
+      blocked('evidence-only Till 3 gate forbids PLAYWRIGHT_ALLOW_QA_SALE / PLAYWRIGHT_QA_TENANT_CONFIRMED.');
     }
 
     await test.step('confirm Preview host and SHA via deploy-sha', async () => {
@@ -39,19 +39,13 @@ test.describe('Reliability Till 3 accounting', () => {
     });
 
     await test.step('sign in existing PLAYWRIGHT_OWNER_EMAIL', async () => {
-      await ensurePreviewQaOwner(page);
-      await waitForOwnerSession(page);
-      await completeOnboardingBusinessType(page);
+      await signInExistingReliabilityOwner(page);
     });
 
-    await test.step('verify persisted Till 3 invoice, payments, drawer, and shift totals', async () => {
-      const { table } = await proveTill3AccountingPersisted(page);
+    await test.step('verify persisted INV-000001, Till 3 UI, and zero writes', async () => {
+      const { table } = await proveTill3AccountingEvidenceOnly(page);
       testInfo.annotations.push({ type: 'till3-accounting', description: table.replace(/\n/g, ' | ') });
       console.info(table);
-    });
-
-    await test.step('assert hosted Shift Reconciliation UI for Till 3 is non-zero', async () => {
-      await assertTill3ShiftSummaryUi(page);
     });
   });
 });

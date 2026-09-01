@@ -553,6 +553,34 @@ describe('reliability-onboarding-manual Playwright project contract', () => {
 });
 
 const TILL3_ACCOUNTING_PROJECT = 'reliability-till3-accounting';
+const FORBIDDEN_TILL3_ACCOUNTING_WRITES = [
+  'ensurePreviewQaOwner',
+  'completeOnboardingBusinessType',
+  'provisionPreviewQaOwner',
+  'completeTill3AccountingTenders',
+  'openTill3ShiftForAccounting',
+  'ensureSellableQaOnHand',
+  'ensureTill3Exists',
+  'gotoTill3Pos',
+  'pos-complete-checkout',
+  'clickUniqueVisible',
+  'fillUniqueVisible',
+  'selectUniqueVisible',
+  "from './preview-qa-owner'",
+  "from './preview-qa-product'",
+  "from './login'",
+  '#record-purchase-form',
+  'reliabilitySalesAllowed',
+  'preview-qa-catalogue',
+  'preview-qa-manual-entry',
+  'preview-qa-onboarding-manual',
+  'preview-qa-onboarding-owner',
+  'ensureQaOpeningStock',
+  'enterManualImportRoute',
+  'ensureSellableQaProduct',
+  'runManualImportGate',
+  'runManualProductEntryGate',
+] as const;
 const FORBIDDEN_TILL3_ACCOUNTING_STAGES = [
   { name: 'import', pattern: /\/settings\/import-stock|runManualImportGate|Confirm Import/ },
   { name: 'refund', pattern: /Process Return|Confirm Return|\brefund\b/i },
@@ -584,27 +612,24 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     const helper = read('tests/e2e/helpers/preview-qa-till3-accounting.ts');
     const gate = read('lib/reliability/till3-accounting-gate.ts');
     const scanned = stripComments(`${spec}\n${helper}\n${gate}`);
+    const live = stripComments(`${spec}\n${helper}`);
 
     expect(specRel).toMatch(/reliability-till3-accounting/);
-    expect(spec).toContain('ensurePreviewQaOwner');
+    expect(spec).toContain('signInExistingReliabilityOwner');
     expect(spec).toContain('PLAYWRIGHT_OWNER_EMAIL');
-    expect(spec).toContain('proveTill3AccountingPersisted');
-    expect(spec).toContain('assertTill3ShiftSummaryUi');
-    expect(spec).not.toContain('completeTill3AccountingTenders');
-    expect(spec).not.toContain('ensureSellableQaOnHand');
-    expect(spec).not.toContain('openTill3ShiftForAccounting');
-    expect(spec).not.toContain('pos-complete-checkout');
+    expect(spec).toContain('proveTill3AccountingEvidenceOnly');
     expect(scanned).toContain('requireUniqueTill3AccountingInvoice');
     expect(scanned).toContain('CARD-REL-T3ACC-1');
     expect(scanned).toContain('MOMO-REL-T3ACC-1');
     expect(scanned).toContain('BT-REL-T3ACC-1');
+    expect(scanned).toContain('INV-000001');
     expect(scanned).toContain('CASH_SALE');
     expect(scanned).toContain('expectedCashPence');
     expect(scanned).toContain('cardTotalPence');
-    expect(scanned).toContain('pos-sale-complete');
+    expect(scanned).toContain('assertTill3AccountingNoWrites');
+    expect(scanned).toContain('assertReliabilityPreviewQaTenant');
     expect(scanned).toContain('HOSTED_4A36D522_SALE_COMPLETE_PAGE');
     expect(scanned).toContain('formatTill3AccountingTable');
-    expect(scanned).toContain('classifyTenderRef');
     expect(spec).toContain('test.setTimeout(300_000)');
     expect(read('lib/reliability/preview-defects.ts')).toContain(
       'PREVIEW VALIDATED — NEW-BUSINESS MANUAL PRODUCT ROUTING FIXED',
@@ -617,6 +642,10 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     );
     expect(read('lib/reliability/preview-defects.ts')).toContain('evidenceOnly: true');
     expect(read('lib/reliability/preview-defects.ts')).toContain('doNotCreateAnotherSale: true');
+
+    for (const token of FORBIDDEN_TILL3_ACCOUNTING_WRITES) {
+      expect(live, `till3-accounting live files must not contain ${token}`).not.toContain(token);
+    }
   });
 
   it('fails CI if the Till 3 accounting spec targets Production or expands into other stages', () => {

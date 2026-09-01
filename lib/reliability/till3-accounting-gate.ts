@@ -1,10 +1,17 @@
 /**
- * Focused Till 3 accounting gate. Proves a completed Till 3 sale posts
- * Payment rows, CASH_SALE drawer, and non-zero shift cash/tender totals.
- * Does not cover import, expenses, refunds, offline, catalogue, or mobile.
+ * Focused Till 3 accounting EVIDENCE gate.
+ * Proves the already-persisted INV-000001 / T3ACC split sale on Till 3.
+ * Never sells, pays, restocks, opens/closes a shift, or provisions an owner.
  */
 
+import {
+  RELIABILITY_PREVIEW_QA_BUSINESS_NAME,
+  RELIABILITY_PREVIEW_QA_TAG,
+} from './preview-qa-tag';
+
 export const TILL3_ACCOUNTING_TILL_NAME = 'Till 3';
+export const TILL3_ACCOUNTING_TXN = 'INV-000001';
+export const TILL3_ACCOUNTING_INVOICE_ID = 'cmtj3u47r000210vs057wpm6i';
 
 export const TILL3_ACCOUNTING_REFS = {
   card: 'CARD-REL-T3ACC-1',
@@ -60,6 +67,7 @@ export type Till3AccountingInvoice = {
   momoTotalPence?: number | null;
   payments?: Till3AccountingPayment[];
   drawer?: Till3AccountingDrawer[];
+  stockMovements?: Array<{ id?: string | null; productId?: string | null; qtyBase?: number | null }>;
 };
 
 export type Till3OpenShiftRow = {
@@ -80,6 +88,9 @@ export type Till3OpenShiftRow = {
 
 export type Till3AccountingSnapshot = {
   businessId?: string | null;
+  businessName?: string | null;
+  userRole?: string | null;
+  userQaTag?: string | null;
   invoices?: Till3AccountingInvoice[];
   sellableProduct?: { name?: string | null; sku?: string | null; qtyOnHandBase?: number | null } | null;
   openShifts?: Till3OpenShiftRow[];
@@ -87,6 +98,11 @@ export type Till3AccountingSnapshot = {
   saleInvoiceCount?: number | null;
   salesPaymentCount?: number | null;
   cashSaleDrawerCount?: number | null;
+  productCount?: number | null;
+  moneyIdempotency?: Array<{ commandKind?: string | null; createdAt?: string | Date | null }>;
+  expenses?: Array<{ reference?: string | null; amountPence?: number | null }>;
+  openingMovements?: Array<{ qtyBase?: number | null; productSku?: string | null }>;
+  productImports?: Array<{ id?: string | null; status?: string | null; rowsImported?: number | null }>;
   purchaseInvoices?: Array<{
     id?: string | null;
     paymentStatus?: string | null;
@@ -175,11 +191,26 @@ export const HOSTED_4A36D522_SALE_COMPLETE_PAGE = {
   readyForNextVisible: true,
   usedCombinedRegex: true,
   usedSaleCompleteTestId: false,
-  invoiceNumber: 'INV-000001',
-  receiptId: 'cmtj3u47r000210vs057wpm6i',
+  invoiceNumber: TILL3_ACCOUNTING_TXN,
+  receiptId: TILL3_ACCOUNTING_INVOICE_ID,
   totalDisplay: 'GH₵5.00',
   till3Selected: true,
 } as const;
+
+export const HOSTED_MISSING_BUSINESS_TYPE_PICKER = {
+  pickerCount: 0,
+  selectedValue: '',
+  editVisible: false,
+} as const;
+
+export function classifyExistingOwnerOnboarding(input: {
+  pickerCount: number;
+  selectedValue: string;
+  editVisible: boolean;
+}): 'already-complete' | 'must-not-provision' {
+  if (input.editVisible && input.pickerCount === 0) return 'already-complete';
+  return 'must-not-provision';
+}
 
 export type HostedTill3PosTillPage = {
   path: string;
@@ -463,11 +494,108 @@ export function assertPosBoundToPersistedTill3(view: PosTillBindingView) {
 /**
  * Fail closed on the original defect: sale identity present, shift totals still 0.
  */
+export function assertReliabilityPreviewQaTenant(snapshot: Till3AccountingSnapshot) {
+  if ((snapshot.businessName ?? '').trim() !== RELIABILITY_PREVIEW_QA_BUSINESS_NAME) {
+    blocked(
+      `tenant businessName=${snapshot.businessName ?? '(none)'}; expected ${RELIABILITY_PREVIEW_QA_BUSINESS_NAME}.`,
+    );
+  }
+  if ((snapshot.userRole ?? '') !== 'OWNER') {
+    blocked(`tenant role=${snapshot.userRole ?? '(none)'}; expected OWNER.`);
+  }
+  if ((snapshot.userQaTag ?? '') !== RELIABILITY_PREVIEW_QA_TAG) {
+    blocked(`tenant qaTag=${snapshot.userQaTag ?? '(none)'}; expected ${RELIABILITY_PREVIEW_QA_TAG}.`);
+  }
+  return snapshot;
+}
+
+export function fingerprintTill3Evidence(snapshot: Till3AccountingSnapshot) {
+  return JSON.stringify({
+    businessName: snapshot.businessName ?? '',
+    userRole: snapshot.userRole ?? '',
+    userQaTag: snapshot.userQaTag ?? '',
+    productCount: snapshot.productCount ?? 0,
+    purchaseInvoiceCount: snapshot.purchaseInvoiceCount ?? 0,
+    saleInvoiceCount: snapshot.saleInvoiceCount ?? 0,
+    salesPaymentCount: snapshot.salesPaymentCount ?? 0,
+    cashSaleDrawerCount: snapshot.cashSaleDrawerCount ?? 0,
+    sellableSku: snapshot.sellableProduct?.sku ?? '',
+    sellableQty: snapshot.sellableProduct?.qtyOnHandBase ?? 0,
+    invoices: [...(snapshot.invoices ?? [])]
+      .map((invoice) => ({
+        invoiceId: invoice.invoiceId ?? '',
+        txn: invoice.transactionNumber ?? '',
+        totalPence: invoice.totalPence ?? 0,
+        tillId: invoice.tillId ?? '',
+        shiftId: invoice.shiftId ?? '',
+        expectedCashPence: invoice.expectedCashPence ?? 0,
+        cardTotalPence: invoice.cardTotalPence ?? 0,
+        momoTotalPence: invoice.momoTotalPence ?? 0,
+        transferTotalPence: invoice.transferTotalPence ?? 0,
+        payments: [...(invoice.payments ?? [])]
+          .map((row) => `${row.method}:${row.amountPence}:${row.reference ?? ''}:${row.invoiceId ?? ''}`)
+          .sort(),
+        drawer: [...(invoice.drawer ?? [])]
+          .map((row) => `${row.entryType}:${row.amountPence}:${row.shiftId ?? ''}:${row.referenceId ?? ''}`)
+          .sort(),
+        stock: [...(invoice.stockMovements ?? [])]
+          .map((row) => `${row.id ?? ''}:${row.productId ?? ''}:${row.qtyBase ?? 0}`)
+          .sort(),
+      }))
+      .sort((a, b) => a.invoiceId.localeCompare(b.invoiceId)),
+    openShifts: [...(snapshot.openShifts ?? [])]
+      .map((row) => ({
+        id: row.id ?? '',
+        tillId: row.tillId ?? '',
+        tillName: row.tillName ?? '',
+        status: row.status ?? '',
+        expectedCashPence: row.expectedCashPence ?? 0,
+        cardTotalPence: row.cardTotalPence ?? 0,
+        momoTotalPence: row.momoTotalPence ?? 0,
+        transferTotalPence: row.transferTotalPence ?? 0,
+        salesCount: row.salesCount ?? 0,
+        openedAt: String(row.openedAt ?? ''),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    money: [...(snapshot.moneyIdempotency ?? [])].map((row) => `${row.commandKind}:${row.createdAt ?? ''}`),
+    expenses: [...(snapshot.expenses ?? [])].map((row) => `${row.reference ?? ''}:${row.amountPence ?? 0}`).sort(),
+    openingMovements: [...(snapshot.openingMovements ?? [])]
+      .map((row) => `${row.productSku ?? ''}:${row.qtyBase ?? 0}`)
+      .sort(),
+    productImports: [...(snapshot.productImports ?? [])]
+      .map((row) => `${row.id ?? ''}:${row.status ?? ''}:${row.rowsImported ?? 0}`)
+      .sort(),
+    purchases: [...(snapshot.purchaseInvoices ?? [])]
+      .map((row) => `${row.id ?? ''}:${row.paymentStatus ?? ''}:${row.totalPence ?? 0}`)
+      .sort(),
+  });
+}
+
+export function assertTill3AccountingNoWrites(
+  before: Till3AccountingSnapshot,
+  after: Till3AccountingSnapshot,
+) {
+  const left = fingerprintTill3Evidence(before);
+  const right = fingerprintTill3Evidence(after);
+  if (left !== right) {
+    blocked('before/after reliability snapshots differ; evidence-only run performed a write.');
+  }
+}
+
 export function assertTill3AccountingPersisted(snapshot: Till3AccountingSnapshot) {
   const cardRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.card);
   const momoRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.momo);
   const transferRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.transfer);
   const invoice = requireUniqueTill3AccountingInvoice(snapshot);
+  if ((invoice.transactionNumber ?? '') !== TILL3_ACCOUNTING_TXN) {
+    blocked(`invoice txn=${invoice.transactionNumber ?? '(none)'}; expected ${TILL3_ACCOUNTING_TXN}.`);
+  }
+  if ((invoice.invoiceId ?? '') !== TILL3_ACCOUNTING_INVOICE_ID) {
+    blocked(`invoiceId=${invoice.invoiceId ?? '(none)'}; expected hosted ${TILL3_ACCOUNTING_INVOICE_ID}.`);
+  }
+  if ((invoice.paymentStatus ?? '') !== 'PAID') {
+    blocked(`invoice paymentStatus=${invoice.paymentStatus ?? '(none)'}; expected PAID.`);
+  }
   if (!invoice.tillId) blocked('SalesInvoice.tillId is missing.');
   if (!invoice.shiftId) blocked('SalesInvoice.shiftId is missing.');
   if (invoice.tillName !== TILL3_ACCOUNTING_TILL_NAME) {

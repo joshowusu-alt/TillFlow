@@ -3,11 +3,17 @@ import {
   HOSTED_0DFA476B_POS_TILL_PAGE,
   HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
   HOSTED_4A36D522_SALE_COMPLETE_PAGE,
+  HOSTED_MISSING_BUSINESS_TYPE_PICKER,
+  TILL3_ACCOUNTING_INVOICE_ID,
   TILL3_ACCOUNTING_OPEN_FLOAT_PENCE,
   TILL3_ACCOUNTING_REFS,
   TILL3_ACCOUNTING_SPLIT,
+  TILL3_ACCOUNTING_TXN,
   assertPosBoundToPersistedTill3,
+  assertReliabilityPreviewQaTenant,
+  assertTill3AccountingNoWrites,
   assertTill3AccountingPersisted,
+  classifyExistingOwnerOnboarding,
   classifyHostedTill3OpenShiftFailure,
   classifyHostedTill3PosTillBinding,
   classifyPersistedTill3OpenShifts,
@@ -15,11 +21,12 @@ import {
   findTill3AccountingInvoice,
   formatTill3AccountingTable,
 } from './till3-accounting-gate';
+import { RELIABILITY_PREVIEW_QA_BUSINESS_NAME, RELIABILITY_PREVIEW_QA_TAG } from './preview-qa-tag';
 import { RELIABILITY_PREVIEW_DEFECT_1, RELIABILITY_PREVIEW_DEFECT_2 } from './preview-defects';
 
 function invoice(overrides: Record<string, unknown> = {}) {
   return {
-    invoiceId: 'inv-1',
+    invoiceId: TILL3_ACCOUNTING_INVOICE_ID,
     transactionNumber: 'INV-000001',
     paymentStatus: 'PAID',
     tillId: 'till-3',
@@ -36,24 +43,24 @@ function invoice(overrides: Record<string, unknown> = {}) {
     momoTotalPence: TILL3_ACCOUNTING_SPLIT.momoPence,
     transferTotalPence: TILL3_ACCOUNTING_SPLIT.transferPence,
     payments: [
-      { method: 'CASH', amountPence: TILL3_ACCOUNTING_SPLIT.cashPence, reference: null, invoiceId: 'inv-1' },
+      { method: 'CASH', amountPence: TILL3_ACCOUNTING_SPLIT.cashPence, reference: null, invoiceId: TILL3_ACCOUNTING_INVOICE_ID },
       {
         method: 'CARD',
         amountPence: TILL3_ACCOUNTING_SPLIT.cardPence,
         reference: TILL3_ACCOUNTING_REFS.card,
-        invoiceId: 'inv-1',
+        invoiceId: TILL3_ACCOUNTING_INVOICE_ID,
       },
       {
         method: 'MOBILE_MONEY',
         amountPence: TILL3_ACCOUNTING_SPLIT.momoPence,
         reference: TILL3_ACCOUNTING_REFS.momo,
-        invoiceId: 'inv-1',
+        invoiceId: TILL3_ACCOUNTING_INVOICE_ID,
       },
       {
         method: 'TRANSFER',
         amountPence: TILL3_ACCOUNTING_SPLIT.transferPence,
         reference: TILL3_ACCOUNTING_REFS.transfer,
-        invoiceId: 'inv-1',
+        invoiceId: TILL3_ACCOUNTING_INVOICE_ID,
       },
     ],
     drawer: [
@@ -63,7 +70,7 @@ function invoice(overrides: Record<string, unknown> = {}) {
         tillId: 'till-3',
         shiftId: 'shift-3',
         referenceType: 'SALES_INVOICE',
-        referenceId: 'inv-1',
+        referenceId: TILL3_ACCOUNTING_INVOICE_ID,
       },
     ],
     ...overrides,
@@ -301,6 +308,110 @@ describe('hosted Till 3 sale-complete artifact (SHA 4a36d522)', () => {
         usedSaleCompleteTestId: true,
       }),
     ).toBe('unique-complete');
+  });
+});
+
+describe('hosted failure classifiers the evidence gate must not re-hit', () => {
+  it('treats a missing business-type picker as must-not-provision', () => {
+    expect(classifyExistingOwnerOnboarding(HOSTED_MISSING_BUSINESS_TYPE_PICKER)).toBe(
+      'must-not-provision',
+    );
+    expect(
+      classifyExistingOwnerOnboarding({ pickerCount: 0, selectedValue: '', editVisible: true }),
+    ).toBe('already-complete');
+  });
+
+  it('classifies Preparing checkout as checkout extras not ready', () => {
+    expect(classifyHostedTill3PosTillBinding(HOSTED_0DFA476B_POS_TILL_PAGE).defectClass).toBe(
+      'checkout-extras-not-ready',
+    );
+  });
+
+  it('classifies duplicate visible till selects as hidden-or-duplicated-controls', () => {
+    expect(
+      classifyHostedTill3PosTillBinding({
+        ...HOSTED_0DFA476B_POS_TILL_PAGE,
+        checkoutTillState: 'ready',
+        tillDisabled: false,
+        tillOptions: ['Till 3'],
+        selectedOptionText: 'Till 3',
+        till3OptionCount: 1,
+        visibleTillSelectCount: 2,
+      }).defectClass,
+    ).toBe('hidden-or-duplicated-controls');
+  });
+
+  it('reuses a unique existing OPEN Till 3 shift and fails closed when identity is missing', () => {
+    expect(
+      classifyPersistedTill3OpenShifts([
+        {
+          id: 'shift-3',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: true,
+          openFloatCount: 1,
+        },
+      ]).state,
+    ).toBe('till-3-open');
+    expect(classifyPersistedTill3OpenShifts([]).state).toBe('closed');
+  });
+});
+
+describe('exact persisted T3ACC evidence', () => {
+  function tenantSnapshot(overrides: Record<string, unknown> = {}) {
+    return {
+      businessName: RELIABILITY_PREVIEW_QA_BUSINESS_NAME,
+      userRole: 'OWNER',
+      userQaTag: RELIABILITY_PREVIEW_QA_TAG,
+      saleInvoiceCount: 1,
+      salesPaymentCount: 4,
+      cashSaleDrawerCount: 1,
+      purchaseInvoiceCount: 0,
+      productCount: 1,
+      invoices: [invoice()],
+      openShifts: [
+        {
+          id: 'shift-3',
+          tillId: 'till-3',
+          tillName: 'Till 3',
+          status: 'OPEN',
+          ownedByCurrentUser: true,
+          openFloatCount: 1,
+        },
+      ],
+      moneyIdempotency: [{ commandKind: 'SALE', createdAt: '2026-09-01T20:00:00.000Z' }],
+      ...overrides,
+    };
+  }
+
+  it('accepts the hosted INV-000001 identity, payments, drawer, and tenant', () => {
+    const snapshot = tenantSnapshot();
+    expect(assertReliabilityPreviewQaTenant(snapshot).businessName).toBe(RELIABILITY_PREVIEW_QA_BUSINESS_NAME);
+    const persisted = assertTill3AccountingPersisted(snapshot);
+    expect(persisted.invoiceId).toBe(TILL3_ACCOUNTING_INVOICE_ID);
+    expect(persisted.transactionNumber).toBe(TILL3_ACCOUNTING_TXN);
+    expect(assertTill3AccountingNoWrites(snapshot, snapshot)).toBeUndefined();
+  });
+
+  it('fails closed on a wrong tenant, missing invoice, or extra write', () => {
+    expect(() =>
+      assertReliabilityPreviewQaTenant(tenantSnapshot({ businessName: 'Gino' })),
+    ).toThrow(/expected Reliability Preview QA/);
+    expect(() =>
+      assertTill3AccountingPersisted({ invoices: [invoice({ transactionNumber: 'INV-000002' })] }),
+    ).toThrow(/expected INV-000001/);
+    expect(() =>
+      assertTill3AccountingPersisted({ invoices: [invoice({ invoiceId: 'other' })] }),
+    ).toThrow(/expected hosted/);
+    const before = tenantSnapshot();
+    const after = tenantSnapshot({ saleInvoiceCount: 2 });
+    expect(() => assertTill3AccountingNoWrites(before, after)).toThrow(/performed a write/);
+    expect(() =>
+      assertTill3AccountingNoWrites(before, tenantSnapshot({
+        sellableProduct: { sku: 'REL-SKU-1', qtyOnHandBase: 9 },
+      })),
+    ).toThrow(/performed a write/);
   });
 });
 

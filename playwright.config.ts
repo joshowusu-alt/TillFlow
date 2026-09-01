@@ -193,7 +193,7 @@ export default defineConfig({
       name: 'reliability-till3-accounting',
       testDir: './playwright',
       testMatch: /reliability-till3-accounting\.spec\.ts/,
-      // Till 3 cash/tender totals only. Never auto-retry money. Never Production.
+      // Evidence-only: persisted INV-000001 / T3ACC on Till 3. Never writes. Never Production.
       retries: 0,
       timeout: 300_000,
       use: {

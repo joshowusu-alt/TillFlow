@@ -109,10 +109,16 @@ export async function GET() {
     where: { businessId: user.businessId, active: true },
   });
 
-  const business = await prisma.business.findUnique({
-    where: { id: user.businessId },
-    select: { openingCapitalPence: true },
-  });
+  const [business, actor] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { openingCapitalPence: true, name: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, qaTag: true },
+    }),
+  ]);
 
   const openingMovements = await prisma.stockMovement.findMany({
     where: {
@@ -257,7 +263,10 @@ export async function GET() {
     deployedSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
     vercelEnv: process.env.VERCEL_ENV ?? null,
     businessId: user.businessId,
+    businessName: business?.name ?? null,
     userId: user.id,
+    userRole: actor?.role ?? user.role,
+    userQaTag: actor?.qaTag ?? null,
     productCount,
     openingCapitalPence: business?.openingCapitalPence ?? 0,
     openingMovements: openingMovements.map((row) => ({
