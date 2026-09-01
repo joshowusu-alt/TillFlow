@@ -167,6 +167,19 @@ export async function GET() {
     take: 5,
   });
 
+  const manualEntryProducts = await prisma.product.findMany({
+    where: {
+      businessId: user.businessId,
+      active: true,
+      OR: [
+        { sku: 'REL-MAN-P104-01' },
+        { name: 'Reliability Manual Entry Gate' },
+      ],
+    },
+    select: { id: true, name: true, sku: true, barcode: true },
+    take: 5,
+  });
+
   const expenses = await prisma.expense.findMany({
     where: { businessId: user.businessId },
     orderBy: { createdAt: 'desc' },
@@ -205,6 +218,12 @@ export async function GET() {
       rowsSkipped: row.rowsSkipped,
     })),
     gateProducts: gateProducts.map((row) => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      barcode: row.barcode,
+    })),
+    manualEntryProducts: manualEntryProducts.map((row) => ({
       id: row.id,
       name: row.name,
       sku: row.sku,

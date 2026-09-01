@@ -423,8 +423,10 @@ describe('reliability-catalogue Playwright project contract', () => {
     const specRel = resolveReliabilitySpecRel(project, CATALOGUE_PROJECT);
     const spec = read(specRel);
     const helper = read('tests/e2e/helpers/preview-qa-catalogue.ts');
+    const entry = read('tests/e2e/helpers/preview-qa-manual-entry.ts');
     const gate = read('lib/reliability/manual-import-gate.ts');
-    const scanned = stripComments(`${spec}\n${helper}\n${gate}`);
+    const entryGate = read('lib/reliability/manual-entry-gate.ts');
+    const scanned = stripComments(`${spec}\n${helper}\n${entry}\n${gate}\n${entryGate}`);
 
     expect(specRel).toMatch(/reliability-catalogue/);
     expect(scanned).toContain('/settings/import-stock');
@@ -436,21 +438,29 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(gate).toContain('run.fileName === MANUAL_IMPORT_GATE_CSV_FILENAME');
     expect(gate).not.toContain("file.includes('rel-imp-p104-01')");
     expect(scanned).toContain('runManualImportGate');
+    expect(scanned).toContain('runManualProductEntryGate');
     expect(scanned).toContain('REL-IMP-P104-01');
+    expect(scanned).toContain('REL-MAN-P104-01');
     expect(scanned).toContain('Reliability Manual Import Gate');
+    expect(scanned).toContain('Reliability Manual Entry Gate');
     expect(scanned).toContain('setInputFiles');
     expect(scanned).toContain('Confirm Import');
     expect(scanned).toContain('assertManualImportPreviewGate');
+    expect(scanned).toContain('Add a product manually');
+    expect(scanned).toContain('/products#product-create');
+    expect(scanned).toContain('product-create-details');
     expect(scanned).toContain('No products yet.');
     expect(scanned).toContain('The file had no product rows. Check the file and try again.');
     expect(scanned).toContain('No ready rows to import.');
     expect(scanned).toContain('import-stock-file-input');
     expect(spec).toContain('runManualImportGate');
+    expect(spec).toContain('runManualProductEntryGate');
     expect(spec).not.toContain('ensureImportedQaProduct');
     expect(spec).not.toMatch(/Download[\s\S]{0,40}template[\s\S]{0,80}\.click\(/);
     expect(spec).not.toMatch(/PLAYWRIGHT_ALLOW_QA_SALE/);
-    expect(spec).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
-    expect(spec).not.toContain('/products#product-create');
+    expect(read('tests/e2e/helpers/preview-qa-manual-entry.ts')).not.toContain(
+      "summary#product-create').click",
+    );
   });
 
   it('fails CI if the catalogue spec targets Production or writes sales money', () => {
@@ -468,7 +478,9 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(spec).toContain('ensureQaOpeningStock');
     expect(spec).toContain('assertCatalogueOpeningStockPersisted');
     expect(spec).toContain('assertPersistedManualImport');
+    expect(spec).toContain('assertPersistedManualEntry');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('gateProducts');
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('manualEntryProducts');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('productImports');
     expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('openingJournals');
 

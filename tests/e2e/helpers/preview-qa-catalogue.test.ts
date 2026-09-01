@@ -30,9 +30,11 @@ describe('Reliability catalogue/import helpers', () => {
     expect(helper).toContain('Import products');
     expect(helper).toContain("getByTestId('import-mode-CATALOGUE')");
     expect(helper).not.toContain("name: 'Product catalogue', exact: true");
-    expect(helper).not.toContain('Add a product manually');
-    expect(helper).not.toContain('/products#product-create');
     expect(helper).toContain('attachManualImportGateCsv');
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('Add a product manually');
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('/products#product-create');
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('REL-MAN-P104-01');
+    expect(source('playwright/reliability-catalogue.spec.ts')).toContain('runManualProductEntryGate');
     expect(helper).toContain('proveManualImportPreview');
     expect(helper).toContain('runManualImportGate');
     expect(helper).toContain('setInputFiles');
@@ -40,6 +42,8 @@ describe('Reliability catalogue/import helpers', () => {
     expect(source('playwright/reliability-catalogue.spec.ts')).toContain('runManualImportGate');
     expect(source('playwright/reliability-catalogue.spec.ts')).not.toContain('ensureImportedQaProduct');
     expect(source('components/ReadinessJourney.tsx')).toContain('Import products');
+    expect(source('components/ReadinessJourney.tsx')).toContain('Add a product manually');
+    expect(source('components/ReadinessJourney.tsx')).toContain('/products#product-create');
   });
 
   it('does not treat visit-only absence of No products yet as a pass', () => {

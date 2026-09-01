@@ -20,6 +20,7 @@ import { Suspense } from 'react';
 import { DataCard, DataCardActions, DataCardField, DataCardHeader } from '@/components/DataCard';
 import ProductImageInput from '@/components/ProductImageInput';
 import ProductCreateFormEnhancer from '@/components/products/ProductCreateFormEnhancer';
+import ProductCreateHashOpener from '@/components/products/ProductCreateHashOpener';
 import GenerateMissingBarcodesButton from '@/components/products/GenerateMissingBarcodesButton';
 import { measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import OperationalMetricCard from '@/components/OperationalMetricCard';
@@ -331,7 +332,9 @@ export default async function ProductsPage({
 
           {/* Add product */}
           {isManager && !issueActive ? (
-            <details className="group">
+            <>
+              <ProductCreateHashOpener />
+              <details className="group" data-testid="product-create-details">
               <summary id="product-create" className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3 shadow-sm [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2 text-sm font-semibold text-ink">
                   <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -437,6 +440,7 @@ export default async function ProductsPage({
               </ProductCreateFormEnhancer>
               </div>
             </details>
+            </>
           ) : null}
           <div className="card p-4 sm:p-5">
             <div className="space-y-3 lg:hidden">

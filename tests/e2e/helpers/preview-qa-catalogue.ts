@@ -69,6 +69,7 @@ export type CatalogueSnapshotLike = {
     rowsImported?: number;
   }>;
   gateProducts?: Array<{ id?: string; name?: string; sku?: string | null }>;
+  manualEntryProducts?: Array<{ id?: string; name?: string; sku?: string | null }>;
   moneyIdempotency?: Array<{ commandKind?: string | null }>;
 };
 
