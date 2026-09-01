@@ -9,38 +9,29 @@ function source(rel: string) {
 }
 
 describe('Till 3 accounting helper', () => {
-  it('physically completes a Till 3 split sale and never falls back to catalogue or Phase 9', () => {
+  it('is evidence-only: unique sale-complete contract, no new sale/payment/shift write', () => {
     const helper = source('tests/e2e/helpers/preview-qa-till3-accounting.ts');
     const spec = source('playwright/reliability-till3-accounting.spec.ts');
-    expect(helper).toContain('completeTill3AccountingTenders');
-    expect(helper).toContain('TILL3_ACCOUNTING_REFS');
-    expect(source('lib/reliability/till3-accounting-gate.ts')).toContain('CARD-REL-T3ACC-1');
-    expect(helper).toContain('#pos-till-select');
-    expect(helper).toContain('data-checkout-till-state="ready"');
-    expect(helper).toContain('/pos?till=');
-    expect(helper).toContain('assertPosBoundToPersistedTill3');
-    const posFn = helper.slice(helper.indexOf('export async function gotoTill3Pos'));
-    expect(posFn).not.toContain('localStorage.clear');
-    expect(posFn).not.toContain('sessionStorage.clear');
-    expect(helper).toContain('pos-complete-checkout');
-    expect(helper).toContain('Expected Cash');
-    expect(helper).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);
+    const pos = source('app/(protected)/pos/PosClient.tsx');
+    expect(spec).toContain('proveTill3AccountingPersisted');
+    expect(spec).toContain('assertTill3ShiftSummaryUi');
     expect(spec).toContain('ensurePreviewQaOwner');
-    expect(spec).toContain('openTill3ShiftForAccounting');
+    expect(spec).not.toContain('completeTill3AccountingTenders');
+    expect(spec).not.toContain('openTill3ShiftForAccounting');
+    expect(spec).not.toContain('ensureSellableQaOnHand');
     expect(spec).not.toContain('enterManualImportRoute');
-    expect(helper).toContain('ensureSellableQaOnHand');
-    expect(helper).toContain('#record-purchase-form');
-    expect(helper).toContain('UNPAID');
-    expect(helper).toContain('classifyPersistedTill3OpenShifts');
-    expect(helper).toContain('Close Shift');
-    expect(helper).toContain("waitUntil: 'load'");
-    expect(helper).not.toMatch(/getByText\('Shift Active', \{ exact: true \}\)\.toBeVisible/);
-    const summaryFn = helper.slice(helper.indexOf('export async function assertTill3ShiftSummaryUi'));
-    expect(summaryFn).toContain("goto('/shifts'");
-    expect(summaryFn).not.toContain('proveTill3OpenShiftChrome');
     expect(spec).not.toContain('Process Return');
     expect(spec).not.toContain('LATE_OFFLINE');
     expect(spec).not.toContain('PLAYWRIGHT_ONBOARDING_OWNER_EMAIL_2');
     expect(spec).not.toContain('setViewportSize');
+    expect(helper).toContain("getByTestId('pos-sale-complete')");
+    expect(helper).not.toMatch(/Sale Complete\|Ready for next customer/);
+    expect(pos).toContain('data-testid="pos-sale-complete"');
+    expect(pos).toContain('data-testid="pos-ready-next-customer"');
+    expect(source('lib/reliability/till3-accounting-gate.ts')).toContain('CARD-REL-T3ACC-1');
+    expect(helper).toContain('Expected Cash');
+    const summaryFn = helper.slice(helper.indexOf('export async function assertTill3ShiftSummaryUi'));
+    expect(summaryFn).toContain("goto('/shifts'");
+    expect(summaryFn).not.toContain('proveTill3OpenShiftChrome');
   });
 });

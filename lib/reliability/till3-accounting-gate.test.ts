@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   HOSTED_0DFA476B_POS_TILL_PAGE,
   HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
+  HOSTED_4A36D522_SALE_COMPLETE_PAGE,
+  TILL3_ACCOUNTING_OPEN_FLOAT_PENCE,
   TILL3_ACCOUNTING_REFS,
   TILL3_ACCOUNTING_SPLIT,
   assertPosBoundToPersistedTill3,
@@ -9,6 +11,7 @@ import {
   classifyHostedTill3OpenShiftFailure,
   classifyHostedTill3PosTillBinding,
   classifyPersistedTill3OpenShifts,
+  classifySaleCompleteStrictLocator,
   findTill3AccountingInvoice,
   formatTill3AccountingTable,
 } from './till3-accounting-gate';
@@ -17,28 +20,40 @@ import { RELIABILITY_PREVIEW_DEFECT_1, RELIABILITY_PREVIEW_DEFECT_2 } from './pr
 function invoice(overrides: Record<string, unknown> = {}) {
   return {
     invoiceId: 'inv-1',
+    transactionNumber: 'INV-000001',
+    paymentStatus: 'PAID',
     tillId: 'till-3',
     tillName: 'Till 3',
     shiftId: 'shift-3',
     shiftTillId: 'till-3',
+    shiftStatus: 'OPEN',
+    shiftOpenedAt: '2026-09-01T20:00:00.000Z',
     saleSource: 'POS',
     totalPence: TILL3_ACCOUNTING_SPLIT.totalPence,
+    openingCashPence: TILL3_ACCOUNTING_OPEN_FLOAT_PENCE,
     expectedCashPence: 10_100,
     cardTotalPence: TILL3_ACCOUNTING_SPLIT.cardPence,
     momoTotalPence: TILL3_ACCOUNTING_SPLIT.momoPence,
     transferTotalPence: TILL3_ACCOUNTING_SPLIT.transferPence,
     payments: [
-      { method: 'CASH', amountPence: TILL3_ACCOUNTING_SPLIT.cashPence, reference: null },
-      { method: 'CARD', amountPence: TILL3_ACCOUNTING_SPLIT.cardPence, reference: TILL3_ACCOUNTING_REFS.card },
+      { method: 'CASH', amountPence: TILL3_ACCOUNTING_SPLIT.cashPence, reference: null, invoiceId: 'inv-1' },
+      {
+        method: 'CARD',
+        amountPence: TILL3_ACCOUNTING_SPLIT.cardPence,
+        reference: TILL3_ACCOUNTING_REFS.card,
+        invoiceId: 'inv-1',
+      },
       {
         method: 'MOBILE_MONEY',
         amountPence: TILL3_ACCOUNTING_SPLIT.momoPence,
         reference: TILL3_ACCOUNTING_REFS.momo,
+        invoiceId: 'inv-1',
       },
       {
         method: 'TRANSFER',
         amountPence: TILL3_ACCOUNTING_SPLIT.transferPence,
         reference: TILL3_ACCOUNTING_REFS.transfer,
+        invoiceId: 'inv-1',
       },
     ],
     drawer: [
@@ -47,6 +62,8 @@ function invoice(overrides: Record<string, unknown> = {}) {
         amountPence: TILL3_ACCOUNTING_SPLIT.cashPence,
         tillId: 'till-3',
         shiftId: 'shift-3',
+        referenceType: 'SALES_INVOICE',
+        referenceId: 'inv-1',
       },
     ],
     ...overrides,
@@ -82,6 +99,14 @@ describe('Till 3 accounting gate', () => {
         invoices: [invoice({ payments: [{ method: 'CASH', amountPence: 500, reference: null }] })],
       }),
     ).toBeUndefined();
+  });
+
+  it('fails closed on duplicate T3ACC payment references', () => {
+    expect(() =>
+      assertTill3AccountingPersisted({
+        invoices: [invoice(), invoice({ invoiceId: 'inv-2' })],
+      }),
+    ).toThrow(/duplicate payment rows/);
   });
 });
 
@@ -253,6 +278,32 @@ describe('hosted Till 3 POS till binding artifact (SHA 0dfa476b)', () => {
   });
 });
 
+describe('hosted Till 3 sale-complete artifact (SHA 4a36d522)', () => {
+  it('classifies the combined Sale Complete|Ready regex as a strict-mode violation when both banners are visible', () => {
+    expect(HOSTED_4A36D522_SALE_COMPLETE_PAGE.invoiceNumber).toBe('INV-000001');
+    expect(HOSTED_4A36D522_SALE_COMPLETE_PAGE.till3Selected).toBe(true);
+    expect(
+      classifySaleCompleteStrictLocator({
+        saleCompleteVisible: HOSTED_4A36D522_SALE_COMPLETE_PAGE.saleCompleteVisible,
+        readyForNextVisible: HOSTED_4A36D522_SALE_COMPLETE_PAGE.readyForNextVisible,
+        usedCombinedRegex: HOSTED_4A36D522_SALE_COMPLETE_PAGE.usedCombinedRegex,
+        usedSaleCompleteTestId: HOSTED_4A36D522_SALE_COMPLETE_PAGE.usedSaleCompleteTestId,
+      }),
+    ).toBe('strict-mode-violation');
+  });
+
+  it('accepts a unique pos-sale-complete test id even when Ready for next customer is also visible', () => {
+    expect(
+      classifySaleCompleteStrictLocator({
+        saleCompleteVisible: true,
+        readyForNextVisible: true,
+        usedCombinedRegex: false,
+        usedSaleCompleteTestId: true,
+      }),
+    ).toBe('unique-complete');
+  });
+});
+
 describe('Preview original defects', () => {
   it('records defect 1 as Preview-validated and does not reopen the register helper as an app defect', () => {
     expect(RELIABILITY_PREVIEW_DEFECT_1.verdict).toBe(
@@ -261,8 +312,14 @@ describe('Preview original defects', () => {
     expect(RELIABILITY_PREVIEW_DEFECT_1.doNotRerunOnboardingManual).toBe(true);
     expect(RELIABILITY_PREVIEW_DEFECT_1.registrationHelperIsTestInfrastructureDebt).toBe(true);
     expect(RELIABILITY_PREVIEW_DEFECT_2.verdict).toBe(
-      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING GATE REQUIRED',
+      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
     );
     expect(RELIABILITY_PREVIEW_DEFECT_2.gateProject).toBe('reliability-till3-accounting');
+    expect(RELIABILITY_PREVIEW_DEFECT_2.evidenceOnly).toBe(true);
+    expect(RELIABILITY_PREVIEW_DEFECT_2.doNotCreateAnotherSale).toBe(true);
+    expect(RELIABILITY_PREVIEW_DEFECT_2.doNotReusePaymentRefs).toBe(true);
+    expect(RELIABILITY_PREVIEW_DEFECT_2.hostedSaleCompletedOnSha).toBe(
+      '4a36d52206bc8e67a26f8c01fa3a5b670b0814d1',
+    );
   });
 });

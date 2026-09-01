@@ -359,7 +359,12 @@ describe('PosClient desktop layout', () => {
     expect(payload.externalRef).toMatch(/^POS_ONLINE:/);
 
     await waitFor(() => {
-      expect(screen.getByText(/Sale Complete/i)).toBeInTheDocument();
+      expect(screen.getByTestId('pos-sale-complete')).toBeVisible();
+      expect(screen.getByTestId('pos-ready-next-customer')).toBeVisible();
+      expect(screen.getByText('Sale Complete!')).toBeInTheDocument();
+      expect(screen.getByText('Ready for next customer')).toBeInTheDocument();
+      expect(screen.getAllByTestId('pos-sale-complete')).toHaveLength(1);
+      expect(screen.getAllByTestId('pos-ready-next-customer')).toHaveLength(1);
     });
   });
 

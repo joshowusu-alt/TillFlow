@@ -1,8 +1,10 @@
 /**
  * Preview-only Till 3 accounting Playwright helper.
- * One split sale on existing Till 3. Never Production. Never auto-retry money.
+ * Evidence-only hosted run: verify the persisted T3ACC invoice. Never Production.
+ * Write helpers remain for local recovery only and must not be called from the hosted spec.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
+import { formatMoney } from '../../../lib/format';
 import {
   getBaseUrl,
   isProductionPlaywrightTarget,
@@ -401,7 +403,7 @@ async function completeSale(page: Page) {
   } else {
     await clickUniqueVisible(page.getByTestId('pos-complete-checkout'), 'complete sale');
   }
-  await expect(page.getByText(/Sale Complete|Ready for next customer/i)).toBeVisible({
+  await expect(page.getByTestId('pos-sale-complete')).toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
   await clearRestoredCart(page);
@@ -487,7 +489,13 @@ export async function completeTill3AccountingTenders(page: Page) {
 }
 
 export async function assertTill3ShiftSummaryUi(page: Page) {
+  const { invoice, table } = await proveTill3AccountingPersisted(page);
   const persisted = await requirePersistedTill3OpenShift(page);
+  if (persisted.shiftId !== invoice.shiftId || persisted.tillId !== invoice.tillId) {
+    blocked(
+      `open Till 3 shift ${persisted.shiftId}/${persisted.tillId} !== invoice ${invoice.shiftId}/${invoice.tillId}.`,
+    );
+  }
   await page.goto('/shifts', {
     waitUntil: 'load',
     timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
@@ -515,27 +523,37 @@ export async function assertTill3ShiftSummaryUi(page: Page) {
     .locator('.rounded-xl')
     .filter({ has: page.getByText('Expected Cash', { exact: true }) })
     .locator('.text-2xl');
-  await expect(expectedCash).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-  await expect(expectedCash).not.toHaveText('GH₵0.00');
+  await expect(expectedCash).toHaveText(formatMoney(invoice.expectedCashPence ?? 0), {
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
   const cardTransfer = page
     .locator('.rounded-xl')
     .filter({ has: page.getByText('Card / Transfer', { exact: true }) })
     .locator('.text-2xl');
-  await expect(cardTransfer).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-  await expect(cardTransfer).not.toHaveText('GH₵0.00');
+  await expect(cardTransfer).toHaveText(
+    formatMoney((invoice.cardTotalPence ?? 0) + (invoice.transferTotalPence ?? 0)),
+    { timeout: RELIABILITY_ACTION_TIMEOUT_MS },
+  );
   const salesTotal = page
     .locator('.rounded-xl')
     .filter({ has: page.getByText('Sales Total', { exact: true }) })
     .locator('.text-2xl');
-  await expect(salesTotal).not.toHaveText('GH₵0.00');
+  await expect(salesTotal).toHaveText(formatMoney(invoice.totalPence ?? 0), {
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
   const salesCount = page
     .locator('.rounded-xl')
     .filter({ has: page.getByText('Sales Count', { exact: true }) })
     .locator('.text-2xl');
-  await expect(salesCount).not.toHaveText('0');
-  await expect(page.getByText('Mobile Money', { exact: true })).toBeVisible({
+  await expect(salesCount).toHaveText('1');
+  const momo = page
+    .locator('.rounded-xl')
+    .filter({ has: page.getByText('Mobile Money', { exact: true }) })
+    .locator('.text-2xl');
+  await expect(momo).toHaveText(formatMoney(invoice.momoTotalPence ?? 0), {
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
+  return table;
 }
 
 export async function proveTill3AccountingPersisted(page: Page) {

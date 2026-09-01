@@ -140,7 +140,7 @@ async function completeSaleAndReset(page: Page, _completeName: RegExp) {
   } else {
     await clickUniqueVisible(page.getByTestId('pos-complete-checkout'), 'complete sale');
   }
-  await expect(page.getByText(/Sale Complete|Ready for next customer/i)).toBeVisible({
+  await expect(page.getByTestId('pos-sale-complete')).toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
   await clearRestoredCart(page);

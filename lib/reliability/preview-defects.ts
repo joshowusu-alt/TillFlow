@@ -16,7 +16,12 @@ export const RELIABILITY_PREVIEW_DEFECT_1 = {
 
 export const RELIABILITY_PREVIEW_DEFECT_2 = {
   id: 'till3-sale-shift-totals-remain-zero',
-  verdict: 'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING GATE REQUIRED',
+  verdict: 'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
   gateProject: 'reliability-till3-accounting',
   symptom: 'TILL 3 SALE COMPLETES BUT SHIFT CASH/TENDER TOTALS REMAIN ZERO',
+  hostedSaleCompletedOnSha: '4a36d52206bc8e67a26f8c01fa3a5b670b0814d1',
+  doNotCreateAnotherSale: true,
+  doNotReusePaymentRefs: true,
+  doNotCloseShift: true,
+  evidenceOnly: true,
 } as const;

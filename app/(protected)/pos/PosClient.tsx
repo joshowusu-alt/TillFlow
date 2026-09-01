@@ -1687,7 +1687,7 @@ export default function PosClient({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold">Ready for next customer</div>
+                <div className="font-semibold" data-testid="pos-ready-next-customer">Ready for next customer</div>
                 <div className="text-xs text-emerald-700">Scanner focus is back on the till. Keep serving.</div>
               </div>
               {!isPhoneViewport ? (
@@ -1871,7 +1871,7 @@ export default function PosClient({
                         </svg>
                       </div>
                       <div>
-                        <div className="font-semibold">Sale Complete!</div>
+                        <div className="font-semibold" data-testid="pos-sale-complete">Sale Complete!</div>
                         <div className="text-sm opacity-90">{formatMoney(saleSuccess.totalPence, business.currency)}</div>
                         <div className="text-xs opacity-60 font-mono mt-0.5">TXN&nbsp;{saleSuccess.transactionNumber ?? `#${saleSuccess.receiptId.slice(0, 8).toUpperCase()}`}</div>
                       </div>

@@ -577,7 +577,7 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     expect(project).not.toMatch(/dependencies:\s*\[[^\]]*reliability-journey/);
   });
 
-  it('posts Till 3 cash and non-cash tenders then asserts persisted non-zero shift totals', () => {
+  it('posts no new sale; verifies the persisted T3ACC invoice and non-zero Till 3 shift totals', () => {
     const project = extractPlaywrightProject(config, TILL3_ACCOUNTING_PROJECT);
     const specRel = resolveReliabilitySpecRel(project, TILL3_ACCOUNTING_PROJECT);
     const spec = read(specRel);
@@ -586,28 +586,26 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     const scanned = stripComments(`${spec}\n${helper}\n${gate}`);
 
     expect(specRel).toMatch(/reliability-till3-accounting/);
-    expect(scanned).toContain('ensurePreviewQaOwner');
-    expect(scanned).toContain('PLAYWRIGHT_OWNER_EMAIL');
-    expect(scanned).toContain('completeTill3AccountingTenders');
-    expect(scanned).toContain('ensureSellableQaOnHand');
-    expect(scanned).toContain('#record-purchase-form');
+    expect(spec).toContain('ensurePreviewQaOwner');
+    expect(spec).toContain('PLAYWRIGHT_OWNER_EMAIL');
+    expect(spec).toContain('proveTill3AccountingPersisted');
+    expect(spec).toContain('assertTill3ShiftSummaryUi');
+    expect(spec).not.toContain('completeTill3AccountingTenders');
+    expect(spec).not.toContain('ensureSellableQaOnHand');
+    expect(spec).not.toContain('openTill3ShiftForAccounting');
+    expect(spec).not.toContain('pos-complete-checkout');
+    expect(scanned).toContain('requireUniqueTill3AccountingInvoice');
     expect(scanned).toContain('CARD-REL-T3ACC-1');
     expect(scanned).toContain('MOMO-REL-T3ACC-1');
     expect(scanned).toContain('BT-REL-T3ACC-1');
     expect(scanned).toContain('CASH_SALE');
     expect(scanned).toContain('expectedCashPence');
     expect(scanned).toContain('cardTotalPence');
-    expect(scanned).toContain('#pos-till-select');
-    expect(scanned).toContain('data-checkout-till-state="ready"');
-    expect(scanned).toContain('/pos?till=');
-    expect(scanned).toContain('assertPosBoundToPersistedTill3');
-    expect(scanned).toContain('HOSTED_0DFA476B_POS_TILL_PAGE');
-    expect(scanned).toContain('pos-complete-checkout');
-    expect(scanned).toContain('assertTill3ShiftSummaryUi');
+    expect(scanned).toContain('pos-sale-complete');
+    expect(scanned).toContain('HOSTED_4A36D522_SALE_COMPLETE_PAGE');
     expect(scanned).toContain('formatTill3AccountingTable');
     expect(scanned).toContain('classifyTenderRef');
     expect(spec).toContain('test.setTimeout(300_000)');
-    expect(scanned).toContain('reliabilitySalesAllowed');
     expect(read('lib/reliability/preview-defects.ts')).toContain(
       'PREVIEW VALIDATED — NEW-BUSINESS MANUAL PRODUCT ROUTING FIXED',
     );
@@ -615,8 +613,10 @@ describe('reliability-till3-accounting Playwright project contract', () => {
       'registrationHelperIsTestInfrastructureDebt: true',
     );
     expect(read('lib/reliability/preview-defects.ts')).toContain(
-      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING GATE REQUIRED',
+      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
     );
+    expect(read('lib/reliability/preview-defects.ts')).toContain('evidenceOnly: true');
+    expect(read('lib/reliability/preview-defects.ts')).toContain('doNotCreateAnotherSale: true');
   });
 
   it('fails CI if the Till 3 accounting spec targets Production or expands into other stages', () => {

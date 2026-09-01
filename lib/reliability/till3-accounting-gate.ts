@@ -24,26 +24,36 @@ export const TILL3_ACCOUNTING_SPLIT = {
 export const TILL3_ACCOUNTING_OPEN_FLOAT_PENCE = 10_000;
 
 export type Till3AccountingPayment = {
+  id?: string | null;
   method?: string | null;
   amountPence?: number | null;
   reference?: string | null;
+  invoiceId?: string | null;
 };
 
 export type Till3AccountingDrawer = {
+  id?: string | null;
   entryType?: string | null;
   amountPence?: number | null;
   tillId?: string | null;
   shiftId?: string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
 };
 
 export type Till3AccountingInvoice = {
   invoiceId?: string | null;
+  transactionNumber?: string | null;
+  paymentStatus?: string | null;
   tillId?: string | null;
   tillName?: string | null;
   shiftId?: string | null;
   shiftTillId?: string | null;
+  shiftStatus?: string | null;
+  shiftOpenedAt?: string | Date | null;
   saleSource?: string | null;
   totalPence?: number | null;
+  openingCashPence?: number | null;
   expectedCashPence?: number | null;
   cardTotalPence?: number | null;
   transferTotalPence?: number | null;
@@ -154,6 +164,23 @@ export const HOSTED_0DFA476B_POS_TILL_PAGE = {
   selectedShiftId: '',
 } as const;
 
+/**
+ * Hosted SHA 4a36d522 error-context.md: sale completed on Till 3.
+ * Both "Sale Complete!" and "Ready for next customer" were visible;
+ * Playwright strict mode failed getByText(/Sale Complete|Ready for next customer/i).
+ */
+export const HOSTED_4A36D522_SALE_COMPLETE_PAGE = {
+  path: '/pos',
+  saleCompleteVisible: true,
+  readyForNextVisible: true,
+  usedCombinedRegex: true,
+  usedSaleCompleteTestId: false,
+  invoiceNumber: 'INV-000001',
+  receiptId: 'cmtj3u47r000210vs057wpm6i',
+  totalDisplay: 'GH₵5.00',
+  till3Selected: true,
+} as const;
+
 export type HostedTill3PosTillPage = {
   path: string;
   barcodeVisible: boolean;
@@ -198,10 +225,10 @@ export function paymentHits(snapshot: Till3AccountingSnapshot): Till3AccountingP
   return (snapshot.invoices ?? []).flatMap((row) => row.payments ?? []);
 }
 
-export function findTill3AccountingInvoice(
+export function findTill3AccountingInvoices(
   snapshot: Till3AccountingSnapshot,
-): Till3AccountingInvoice | undefined {
-  return (snapshot.invoices ?? []).find((invoice) => {
+): Till3AccountingInvoice[] {
+  return (snapshot.invoices ?? []).filter((invoice) => {
     if (invoice.tillName !== TILL3_ACCOUNTING_TILL_NAME) return false;
     if (invoice.saleSource === 'LATE_OFFLINE') return false;
     const refs = new Set(
@@ -215,23 +242,80 @@ export function findTill3AccountingInvoice(
   });
 }
 
+export function findTill3AccountingInvoice(
+  snapshot: Till3AccountingSnapshot,
+): Till3AccountingInvoice | undefined {
+  const hits = findTill3AccountingInvoices(snapshot);
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+export function requireUniqueTill3AccountingInvoice(snapshot: Till3AccountingSnapshot) {
+  const hits = findTill3AccountingInvoices(snapshot);
+  if (hits.length === 0) {
+    blocked(
+      `no Till 3 invoice with ${TILL3_ACCOUNTING_REFS.card} / ${TILL3_ACCOUNTING_REFS.momo} / ${TILL3_ACCOUNTING_REFS.transfer}.`,
+    );
+  }
+  if (hits.length > 1) {
+    blocked(`duplicate Till 3 T3ACC invoices (${hits.length}); fail closed.`);
+  }
+  return hits[0]!;
+}
+
 function amountFor(invoice: Till3AccountingInvoice, method: string) {
   return (invoice.payments ?? [])
     .filter((payment) => (payment.method ?? '').toUpperCase() === method)
     .reduce((sum, payment) => sum + (payment.amountPence ?? 0), 0);
 }
 
+export function cashSaleDrawerRows(invoice: Till3AccountingInvoice) {
+  return (invoice.drawer ?? []).filter((row) => {
+    if ((row.entryType ?? '').toUpperCase() !== 'CASH_SALE') return false;
+    if (row.shiftId !== invoice.shiftId || row.tillId !== invoice.tillId) return false;
+    if (invoice.invoiceId && row.referenceId && row.referenceId !== invoice.invoiceId) return false;
+    return true;
+  });
+}
+
+function requireUniquePaymentRef(snapshot: Till3AccountingSnapshot, ref: string) {
+  const hits = paymentHits(snapshot).filter((payment) => (payment.reference ?? '').trim() === ref);
+  if (hits.length === 0) blocked(`no payment row for ${ref}.`);
+  if (hits.length > 1) blocked(`duplicate payment rows for ${ref} (${hits.length}); fail closed.`);
+  return hits[0]!;
+}
+
 export function formatTill3AccountingTable(invoice: Till3AccountingInvoice) {
-  const cashSale = (invoice.drawer ?? [])
-    .filter((row) => (row.entryType ?? '').toUpperCase() === 'CASH_SALE')
-    .reduce((sum, row) => sum + (row.amountPence ?? 0), 0);
+  const cashSale = cashSaleDrawerRows(invoice).reduce((sum, row) => sum + (row.amountPence ?? 0), 0);
+  const opening = invoice.openingCashPence ?? 0;
+  const cashPence = amountFor(invoice, 'CASH');
+  const paymentLines = (invoice.payments ?? []).map(
+    (payment) =>
+      `payment method=${payment.method ?? ''} amountPence=${payment.amountPence ?? 0} reference=${payment.reference ?? ''} invoiceId=${payment.invoiceId ?? invoice.invoiceId ?? ''}`,
+  );
   return [
     'Till 3 accounting snapshot (no PII)',
-    `tillName=${invoice.tillName ?? ''} tillMatchesShift=${invoice.tillId === invoice.shiftTillId}`,
-    `salePence=${invoice.totalPence ?? 0} cashPence=${amountFor(invoice, 'CASH')} cardPence=${amountFor(invoice, 'CARD')} momoPence=${amountFor(invoice, 'MOBILE_MONEY')} transferPence=${amountFor(invoice, 'TRANSFER')}`,
+    `invoiceId=${invoice.invoiceId ?? ''} txn=${invoice.transactionNumber ?? ''} status=${invoice.paymentStatus ?? ''}`,
+    `tillName=${invoice.tillName ?? ''} tillId=${invoice.tillId ?? ''} tillMatchesShift=${invoice.tillId === invoice.shiftTillId}`,
+    `shiftId=${invoice.shiftId ?? ''} shiftStatus=${invoice.shiftStatus ?? ''} openedAt=${invoice.shiftOpenedAt ?? ''}`,
+    `salePence=${invoice.totalPence ?? 0} cashPence=${cashPence} cardPence=${amountFor(invoice, 'CARD')} momoPence=${amountFor(invoice, 'MOBILE_MONEY')} transferPence=${amountFor(invoice, 'TRANSFER')}`,
+    ...paymentLines,
+    `openingCashPence=${opening} cashSaleDrawerPence=${cashSale} expectedCashPence=${invoice.expectedCashPence ?? 0} expectedCashFormula=${opening + cashSale}`,
     `shiftExpectedCashPence=${invoice.expectedCashPence ?? 0} shiftCardPence=${invoice.cardTotalPence ?? 0} shiftMomoPence=${invoice.momoTotalPence ?? 0} shiftTransferPence=${invoice.transferTotalPence ?? 0}`,
-    `cashSaleDrawerPence=${cashSale}`,
   ].join('\n');
+}
+
+export function classifySaleCompleteStrictLocator(input: {
+  saleCompleteVisible: boolean;
+  readyForNextVisible: boolean;
+  usedCombinedRegex: boolean;
+  usedSaleCompleteTestId: boolean;
+}): 'strict-mode-violation' | 'unique-complete' | 'missing' {
+  if (input.usedCombinedRegex && input.saleCompleteVisible && input.readyForNextVisible) {
+    return 'strict-mode-violation';
+  }
+  if (input.usedSaleCompleteTestId && input.saleCompleteVisible) return 'unique-complete';
+  if (!input.saleCompleteVisible && !input.readyForNextVisible) return 'missing';
+  return 'unique-complete';
 }
 
 export function classifyPersistedTill3OpenShifts(
@@ -380,12 +464,10 @@ export function assertPosBoundToPersistedTill3(view: PosTillBindingView) {
  * Fail closed on the original defect: sale identity present, shift totals still 0.
  */
 export function assertTill3AccountingPersisted(snapshot: Till3AccountingSnapshot) {
-  const invoice = findTill3AccountingInvoice(snapshot);
-  if (!invoice) {
-    blocked(
-      `no Till 3 invoice with ${TILL3_ACCOUNTING_REFS.card} / ${TILL3_ACCOUNTING_REFS.momo} / ${TILL3_ACCOUNTING_REFS.transfer}.`,
-    );
-  }
+  const cardRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.card);
+  const momoRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.momo);
+  const transferRow = requireUniquePaymentRef(snapshot, TILL3_ACCOUNTING_REFS.transfer);
+  const invoice = requireUniqueTill3AccountingInvoice(snapshot);
   if (!invoice.tillId) blocked('SalesInvoice.tillId is missing.');
   if (!invoice.shiftId) blocked('SalesInvoice.shiftId is missing.');
   if (invoice.tillName !== TILL3_ACCOUNTING_TILL_NAME) {
@@ -396,6 +478,11 @@ export function assertTill3AccountingPersisted(snapshot: Till3AccountingSnapshot
   }
   if ((invoice.totalPence ?? 0) !== TILL3_ACCOUNTING_SPLIT.totalPence) {
     blocked(`invoice total ${invoice.totalPence ?? 0}p !== ${TILL3_ACCOUNTING_SPLIT.totalPence}p.`);
+  }
+  for (const row of [cardRow, momoRow, transferRow]) {
+    if (row.invoiceId && invoice.invoiceId && row.invoiceId !== invoice.invoiceId) {
+      blocked(`payment ${row.reference ?? ''} invoiceId does not match the unique T3ACC invoice.`);
+    }
   }
 
   const cashPence = amountFor(invoice, 'CASH');
@@ -415,17 +502,16 @@ export function assertTill3AccountingPersisted(snapshot: Till3AccountingSnapshot
     blocked(`TRANSFER payment ${transferPence}p !== ${TILL3_ACCOUNTING_SPLIT.transferPence}p.`);
   }
 
-  const cashSale = (invoice.drawer ?? []).filter(
-    (row) => (row.entryType ?? '').toUpperCase() === 'CASH_SALE',
-  );
-  const cashSalePence = cashSale.reduce((sum, row) => sum + (row.amountPence ?? 0), 0);
-  if (cashSalePence < TILL3_ACCOUNTING_SPLIT.cashPence) {
+  const cashSale = cashSaleDrawerRows(invoice);
+  if (cashSale.length !== 1) {
+    blocked(`CASH_SALE CashDrawerEntry rows for the Till 3 invoice=${cashSale.length}; fail closed.`);
+  }
+  const cashSalePence = cashSale[0]!.amountPence ?? 0;
+  if (cashSalePence !== TILL3_ACCOUNTING_SPLIT.cashPence) {
     blocked(`CASH_SALE CashDrawerEntry on Till 3 shift is ${cashSalePence}p.`);
   }
-  for (const entry of cashSale) {
-    if (entry.tillId !== invoice.tillId || entry.shiftId !== invoice.shiftId) {
-      blocked('CASH_SALE drawer row is not on the Till 3 shift.');
-    }
+  if (cashSale[0]!.tillId !== invoice.tillId || cashSale[0]!.shiftId !== invoice.shiftId) {
+    blocked('CASH_SALE drawer row is not on the Till 3 shift.');
   }
 
   if ((invoice.cardTotalPence ?? 0) <= 0) {
@@ -440,7 +526,23 @@ export function assertTill3AccountingPersisted(snapshot: Till3AccountingSnapshot
   if ((invoice.expectedCashPence ?? 0) <= 0) {
     blocked('shift expectedCash still 0 after Till 3 cash tender.');
   }
-  if ((invoice.expectedCashPence ?? 0) < TILL3_ACCOUNTING_SPLIT.cashPence) {
+  if ((invoice.cardTotalPence ?? 0) !== cardPence) {
+    blocked(`shift cardTotal ${invoice.cardTotalPence ?? 0}p !== invoice CARD ${cardPence}p.`);
+  }
+  if ((invoice.momoTotalPence ?? 0) !== momoPence) {
+    blocked(`shift momoTotal ${invoice.momoTotalPence ?? 0}p !== invoice MOBILE_MONEY ${momoPence}p.`);
+  }
+  if ((invoice.transferTotalPence ?? 0) !== transferPence) {
+    blocked(`shift transferTotal ${invoice.transferTotalPence ?? 0}p !== invoice TRANSFER ${transferPence}p.`);
+  }
+  if (invoice.openingCashPence != null) {
+    const expectedFromOpenAndCash = invoice.openingCashPence + cashSalePence;
+    if ((invoice.expectedCashPence ?? 0) !== expectedFromOpenAndCash) {
+      blocked(
+        `shift expectedCash ${invoice.expectedCashPence ?? 0}p !== opening ${invoice.openingCashPence}p + CASH_SALE ${cashSalePence}p.`,
+      );
+    }
+  } else if ((invoice.expectedCashPence ?? 0) < TILL3_ACCOUNTING_SPLIT.cashPence) {
     blocked(
       `shift expectedCash ${invoice.expectedCashPence ?? 0}p does not include the Till 3 cash tender.`,
     );
