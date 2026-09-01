@@ -10,6 +10,9 @@ export const RELIABILITY_RERUN_IDS = {
   cardRef: 'CARD-REL-1',
   momoRef: 'MOMO-REL-1',
   transferRef: 'BT-REL-1',
+  till3AccCardRef: 'CARD-REL-T3ACC-1',
+  till3AccMomoRef: 'MOMO-REL-T3ACC-1',
+  till3AccTransferRef: 'BT-REL-T3ACC-1',
   /** Proposed split-tender card leg. Journey does not stamp this today. */
   splitCardRef: 'CARD-REL-SPLIT-1',
   expenseRef: 'REL-EXP-1',

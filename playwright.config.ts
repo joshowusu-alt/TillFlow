@@ -189,5 +189,18 @@ export default defineConfig({
         navigationTimeout: 15_000,
       },
     },
+    {
+      name: 'reliability-till3-accounting',
+      testDir: './playwright',
+      testMatch: /reliability-till3-accounting\.spec\.ts/,
+      // Till 3 cash/tender totals only. Never auto-retry money. Never Production.
+      retries: 0,
+      timeout: 300_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        actionTimeout: 8_000,
+        navigationTimeout: 15_000,
+      },
+    },
   ],
 });

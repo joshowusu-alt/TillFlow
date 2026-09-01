@@ -46,6 +46,8 @@ describe('Reliability unique-visible locators', () => {
     expect(config).toMatch(/name: 'reliability-catalogue'[\s\S]*?actionTimeout:\s*8_000/);
     expect(config).toMatch(/name: 'reliability-catalogue'[\s\S]*?navigationTimeout:\s*15_000/);
     expect(config).toMatch(/name: 'reliability-catalogue'[\s\S]*?retries:\s*0/);
+    expect(config).toMatch(/name: 'reliability-till3-accounting'[\s\S]*?actionTimeout:\s*8_000/);
+    expect(config).toMatch(/name: 'reliability-till3-accounting'[\s\S]*?retries:\s*0/);
     expect(config).not.toMatch(/test\.setTimeout\(\s*(?:[5-9]\d{5,}|[1-9]\d{6,})/);
   });
 

@@ -187,6 +187,19 @@ export async function GET() {
     select: { reference: true, amountPence: true, vendorName: true },
   });
 
+  const sellableProduct = await prisma.product.findFirst({
+    where: {
+      businessId: user.businessId,
+      active: true,
+      OR: [{ sku: 'REL-SKU-1' }, { name: 'Reliability SKU' }],
+    },
+    select: {
+      name: true,
+      sku: true,
+      inventoryBalances: { select: { qtyOnHandBase: true, storeId: true }, take: 5 },
+    },
+  });
+
   return NextResponse.json({
     deployedSha: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? null,
     vercelEnv: process.env.VERCEL_ENV ?? null,
@@ -234,6 +247,16 @@ export async function GET() {
       amountPence: row.amountPence,
       vendorName: row.vendorName,
     })),
+    sellableProduct: sellableProduct
+      ? {
+          name: sellableProduct.name,
+          sku: sellableProduct.sku,
+          qtyOnHandBase: sellableProduct.inventoryBalances.reduce(
+            (sum, row) => sum + row.qtyOnHandBase,
+            0,
+          ),
+        }
+      : null,
     moneyIdempotency: moneyKeys.map((row) => ({
       commandKind: row.commandKind,
       createdAt: row.createdAt,
