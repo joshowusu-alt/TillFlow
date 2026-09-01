@@ -28,7 +28,10 @@ describe('Reliability catalogue/import helpers', () => {
     const helper = source('tests/e2e/helpers/preview-qa-catalogue.ts');
     expect(helper).toContain('openManualImportEntryPoint');
     expect(helper).toContain('Import products');
-    expect(helper).toContain("name: 'Product catalogue'");
+    expect(helper).toContain("getByTestId('import-mode-CATALOGUE')");
+    expect(helper).not.toContain("name: 'Product catalogue', exact: true");
+    expect(helper).not.toContain('Add a product manually');
+    expect(helper).not.toContain('/products#product-create');
     expect(helper).toContain('attachManualImportGateCsv');
     expect(helper).toContain('proveManualImportPreview');
     expect(helper).toContain('runManualImportGate');

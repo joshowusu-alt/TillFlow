@@ -142,8 +142,28 @@ export async function assertImportBlockingStatesAbsent(page: Page, step: string)
   }
 }
 
+async function selectCatalogueImportMode(page: Page) {
+  await expect(page.getByRole('heading', { name: 'What are you importing?' })).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  await expect(page.getByTestId('import-mode-CATALOGUE')).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
+  await clickUniqueVisible(
+    page.getByTestId('import-mode-CATALOGUE'),
+    'import mode CATALOGUE',
+  );
+  await expect(page.getByTestId('import-mode-CATALOGUE')).toHaveAttribute(
+    'aria-label',
+    'Product catalogue',
+  );
+  await expect(page.getByTestId('import-stock-file-input')).toBeAttached();
+  const download = page.getByRole('button', { name: /Download Product catalogue template/i });
+  await expect(download).toBeEnabled({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+}
+
 /**
- * Journey helper: land on import-stock and select Product catalogue.
+ * Journey helper: land on import-stock and select CATALOGUE mode.
  * Catalogue gate uses openManualImportEntryPoint + attachManualImportGateCsv instead.
  */
 export async function enterManualImportRoute(page: Page) {
@@ -155,14 +175,7 @@ export async function enterManualImportRoute(page: Page) {
   await expect(page.getByRole('heading', { name: 'Import Stock' })).toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
-  await expect(page.getByRole('heading', { name: 'What are you importing?' })).toBeVisible({
-    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-  });
-  await clickUniqueVisible(
-    page.getByRole('button', { name: 'Product catalogue', exact: true }),
-    'import Product catalogue',
-  );
-  await expect(page.getByTestId('import-stock-file-input')).toBeAttached();
+  await selectCatalogueImportMode(page);
 }
 
 export async function openManualImportEntryPoint(page: Page) {
@@ -187,15 +200,7 @@ export async function openManualImportEntryPoint(page: Page) {
   await expect(page.getByRole('heading', { name: 'Import Stock' })).toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
-  await expect(page.getByRole('heading', { name: 'What are you importing?' })).toBeVisible({
-    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
-  });
-  await clickUniqueVisible(
-    page.getByRole('button', { name: 'Product catalogue', exact: true }),
-    'import Product catalogue',
-  );
-  await expect(page.getByTestId('import-stock-file-input')).toBeAttached();
-  await expect(page.getByRole('button', { name: 'Product catalogue', exact: true })).toBeVisible();
+  await selectCatalogueImportMode(page);
 }
 
 export async function attachManualImportGateCsv(page: Page) {

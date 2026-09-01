@@ -429,6 +429,12 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(specRel).toMatch(/reliability-catalogue/);
     expect(scanned).toContain('/settings/import-stock');
     expect(scanned).toContain('Product catalogue');
+    expect(scanned).toContain('import-mode-CATALOGUE');
+    expect(helper).not.toMatch(
+      /getByRole\('button',\s*\{\s*name:\s*'Product catalogue',\s*exact:\s*true\s*\}/,
+    );
+    expect(gate).toContain('run.fileName === MANUAL_IMPORT_GATE_CSV_FILENAME');
+    expect(gate).not.toContain("file.includes('rel-imp-p104-01')");
     expect(scanned).toContain('runManualImportGate');
     expect(scanned).toContain('REL-IMP-P104-01');
     expect(scanned).toContain('Reliability Manual Import Gate');

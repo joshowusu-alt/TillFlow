@@ -471,6 +471,8 @@ export default function ImportStockClient({
               <button
                 key={mode}
                 type="button"
+                data-testid={`import-mode-${mode}`}
+                aria-label={importModeLabel(mode)}
                 onClick={() => setImportMode(mode)}
                 className={`rounded-xl border px-3 py-3 text-left transition ${
                   importMode === mode

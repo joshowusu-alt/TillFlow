@@ -749,3 +749,80 @@ describe('Owner Home Phase 1 control centre', () => {
     expect(within(screen.getByRole('link', { name: /Expected Cash:/ })).getByText('No open till')).toBeInTheDocument();
   });
 });
+
+describe('ReadinessJourney onboarding import entry', () => {
+  it('routes Import products to import-stock and does not treat Add a product manually as import', () => {
+    const stages = [
+      {
+        key: 'business' as const,
+        title: 'Tell us about your business',
+        explanation: '',
+        done: true,
+        href: '/onboarding#business',
+      },
+      {
+        key: 'products' as const,
+        title: 'Add or import what you sell',
+        explanation: '',
+        done: false,
+        href: '/onboarding#products',
+      },
+      {
+        key: 'stock' as const,
+        title: 'Add stock now or later',
+        explanation: '',
+        done: false,
+        href: '/onboarding#stock',
+      },
+      {
+        key: 'selling' as const,
+        title: 'Start selling',
+        explanation: '',
+        done: false,
+        href: '/pos',
+      },
+    ];
+    const journey = {
+      ...completedJourney,
+      status: 'GETTING_READY' as const,
+      statusLabel: 'Add or import what you sell',
+      onboardingComplete: false,
+      hasValidProduct: false,
+      hasSellableProduct: false,
+      hasFirstSale: false,
+      stages,
+      upNext: {
+        key: 'add-product' as const,
+        title: 'Add or import what you sell',
+        explanation: 'Import a catalogue or add one product.',
+        href: '/onboarding#products',
+        isStartSelling: false,
+      },
+    };
+
+    renderDashboard({
+      onboardingComplete: false,
+      onboardingCompletedAt: null,
+      productCount: 0,
+      validProductCount: 0,
+      sellableProductCount: 0,
+      saleCount: 0,
+      activationStatus: 'SETUP_IN_PROGRESS',
+      activationStatusLabel: 'Add or import what you sell',
+      journey,
+      stages,
+      upNext: journey.upNext,
+    });
+
+    expect(screen.queryByRole('link', { name: 'Import manually' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Import products' })).toHaveAttribute(
+      'href',
+      '/settings/import-stock',
+    );
+    expect(screen.getByRole('link', { name: 'Add a product manually' })).toHaveAttribute(
+      'href',
+      '/products#product-create',
+    );
+    expect(screen.queryByText('No products yet.')).not.toBeInTheDocument();
+  });
+});

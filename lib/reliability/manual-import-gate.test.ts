@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseStockFileDetailed } from '@/lib/import/parse-stock-file';
 import {
   IMPORT_BLOCKING_COPY,
   MANUAL_IMPORT_GATE_CSV_FILENAME,
@@ -25,6 +26,17 @@ const validPreview = {
   parseError: null,
 };
 
+function csvFile(contents: string, name: string) {
+  const file = new File([contents], name, { type: 'text/csv' });
+  if (typeof file.text !== 'function') {
+    Object.defineProperty(file, 'text', {
+      configurable: true,
+      value: async () => contents,
+    });
+  }
+  return file;
+}
+
 describe('manual import gate identity', () => {
   it('pins the P104 catalogue-gate CSV identity', () => {
     expect(RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT).toEqual({
@@ -40,6 +52,15 @@ describe('manual import gate identity', () => {
     expect(manualImportGateCsv()).toContain('REL-IMP-P104-01');
     expect(manualImportGateCsv()).toContain('Reliability Manual Import Gate');
     expect(zeroRowImportCsv().trim().split(/\r?\n/).length).toBe(1);
+  });
+
+  it('parses REL-IMP-P104-01 through the real CSV parser', async () => {
+    const file = csvFile(manualImportGateCsv(), MANUAL_IMPORT_GATE_CSV_FILENAME);
+    const parsed = await parseStockFileDetailed(file);
+    expect(parsed.rows).toHaveLength(1);
+    expect(parsed.rows[0]?.sku).toBe('REL-IMP-P104-01');
+    expect(parsed.rows[0]?.name).toBe('Reliability Manual Import Gate');
+    expect(parsed.rows[0]?.errors).toEqual([]);
   });
 });
 
@@ -96,6 +117,41 @@ describe('already-imported / partial rerun', () => {
     rowsParsed: 1,
     rowsImported: 1,
   };
+
+  it('matches ProductImport by exact canonical filename, not substring', () => {
+    expect(() =>
+      assertPersistedManualImport({
+        gateProducts: [{ sku: 'REL-IMP-P104-01', name: 'Reliability Manual Import Gate' }],
+        importRuns: [
+          {
+            fileName: 'reliability-catalogue.csv',
+            status: 'COMPLETED',
+            rowsParsed: 1,
+            rowsImported: 1,
+          },
+        ],
+      }),
+    ).toThrow(/Import complete|matching COMPLETED ProductImport|fileName/i);
+    expect(() =>
+      assertPersistedManualImport({
+        gateProducts: [{ sku: 'REL-IMP-P104-01', name: 'Reliability Manual Import Gate' }],
+        importRuns: [
+          {
+            fileName: `prefix-${MANUAL_IMPORT_GATE_CSV_FILENAME}`,
+            status: 'COMPLETED',
+            rowsParsed: 1,
+            rowsImported: 1,
+          },
+        ],
+      }),
+    ).toThrow(/Import complete|matching COMPLETED ProductImport|fileName/i);
+    expect(() =>
+      assertPersistedManualImport({
+        gateProducts: [{ sku: 'REL-IMP-P104-01', name: 'Reliability Manual Import Gate' }],
+        importRuns: [completedRun],
+      }),
+    ).not.toThrow();
+  });
 
   it('requires a matching COMPLETED ProductImport, not an in-session heading', () => {
     expect(() =>

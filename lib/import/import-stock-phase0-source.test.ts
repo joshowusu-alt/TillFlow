@@ -53,5 +53,7 @@ describe('Phase 0 import-stock source contracts', () => {
     expect(client).toContain('What are you importing?');
     expect(client).toContain('downloadTemplateForMode');
     expect(client).toContain('Current cash will not be reduced');
+    expect(client).toContain('data-testid={`import-mode-${mode}`}');
+    expect(client).toContain('aria-label={importModeLabel(mode)}');
   });
 });

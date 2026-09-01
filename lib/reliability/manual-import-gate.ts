@@ -54,13 +54,15 @@ export type ManualImportSubmitInput = {
 
 function matchingImportRuns(runs: ManualImportRunHit[]) {
   return runs.filter((run) => {
-    const file = (run.fileName ?? '').toLowerCase();
     const status = (run.status ?? '').toUpperCase();
     const parsed = run.rowsParsed ?? 0;
     const imported = run.rowsImported ?? 0;
-    const fileMatches =
-      file.includes('rel-imp-p104-01') || file === MANUAL_IMPORT_GATE_CSV_FILENAME.toLowerCase();
-    return fileMatches && status === 'COMPLETED' && parsed > 0 && imported >= 1;
+    return (
+      run.fileName === MANUAL_IMPORT_GATE_CSV_FILENAME &&
+      status === 'COMPLETED' &&
+      parsed > 0 &&
+      imported >= 1
+    );
   });
 }
 
