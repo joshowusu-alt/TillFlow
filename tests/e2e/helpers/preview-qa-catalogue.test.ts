@@ -34,6 +34,14 @@ describe('Reliability catalogue/import helpers', () => {
     expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('Add a product manually');
     expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('/products#product-create');
     expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('REL-MAN-P104-01');
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain(
+      "details.getByRole('heading', { name: 'Add product', exact: true })",
+    );
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).not.toContain(
+      "form.getByRole('heading', { name: 'Add product' })",
+    );
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain("toHaveURL(/\\/products(?:\\?[^#]*)?#product-create/)");
+    expect(source('tests/e2e/helpers/preview-qa-manual-entry.ts')).toContain('toBeFocused');
     expect(source('playwright/reliability-catalogue.spec.ts')).toContain('runManualProductEntryGate');
     expect(helper).toContain('proveManualImportPreview');
     expect(helper).toContain('runManualImportGate');

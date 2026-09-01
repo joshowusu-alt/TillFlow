@@ -35,7 +35,7 @@ async function productCreateDetails(page: Page) {
 }
 
 export async function proveProductCreateHashOpenedForm(page: Page) {
-  await expect(page).toHaveURL(/\/products/);
+  await expect(page).toHaveURL(/\/products(?:\?[^#]*)?#product-create/);
   const details = await productCreateDetails(page);
   await expect(details, 'Add product details missing on /products').toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
@@ -43,12 +43,20 @@ export async function proveProductCreateHashOpenedForm(page: Page) {
   await expect(details, 'hash left Add product details closed').toHaveAttribute('open', '', {
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
+  // Real markup: <h2>Add product</h2> is a sibling of <form>, both inside details.
+  await expect(
+    details.getByRole('heading', { name: 'Add product', exact: true }),
+  ).toBeVisible({
+    timeout: RELIABILITY_ACTION_TIMEOUT_MS,
+  });
   const form = details.locator('form');
   const nameField = form.locator('input[name="name"]');
-  await expect(form.getByRole('heading', { name: 'Add product' })).toBeVisible({
+  await expect(form, 'manual product form missing inside open details').toBeVisible({
     timeout: RELIABILITY_ACTION_TIMEOUT_MS,
   });
   await expect(nameField).toBeVisible({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+  await expect(nameField).toBeEnabled();
+  await expect(nameField).toBeFocused({ timeout: RELIABILITY_ACTION_TIMEOUT_MS });
   await expect(form.locator('input[name="sku"]')).toBeVisible();
   await expect(form.getByRole('button', { name: /Create product/i })).toBeVisible();
   assertManualEntryFormNotTrapped({
@@ -60,7 +68,9 @@ export async function proveProductCreateHashOpenedForm(page: Page) {
   const emptyVisible =
     (await page.getByText('No products yet.', { exact: true }).locator('visible=true').count()) > 0;
   if (emptyVisible) {
+    await expect(form).toBeVisible();
     await expect(nameField).toBeVisible();
+    await expect(nameField).toBeEnabled();
   }
   return form;
 }
