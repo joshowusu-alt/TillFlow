@@ -1,9 +1,9 @@
 /**
  * Preview-only catalogue/import/opening-stock gate. Zero sales and money writes.
  *
- * Always enters /settings/import-stock (the original owner-reported manual
- * import route). Reuses existing Reliability SKU / Import SKU rows. Records
- * opening stock only when the snapshot classifier says create.
+ * Manual import always attaches reliability-manual-import-p104-rel-imp-p104-01.csv
+ * (Reliability Manual Import Gate / REL-IMP-P104-01). Presence of Reliability
+ * Import SKU or Reliability SKU is not import evidence.
  */
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -20,22 +20,24 @@ import {
   waitForOwnerSession,
 } from '../tests/e2e/helpers/preview-qa-owner';
 import {
-  RELIABILITY_IMPORT_PRODUCT,
   RELIABILITY_SELLABLE_PRODUCT,
-  ensureImportedQaProduct,
   ensureSellableQaProduct,
   expectUniqueQaProductRowVisible,
   gotoQaProductList,
 } from '../tests/e2e/helpers/preview-qa-product';
 import {
   assertCatalogueDidNotWriteMoney,
+  assertCatalogueOpeningStockPersisted,
   catalogueFinancialFingerprint,
-  confirmReliabilityImportCsv,
-  enterManualImportRoute,
   ensureQaOpeningStock,
+  runManualImportGate,
   type CatalogueSnapshotLike,
 } from '../tests/e2e/helpers/preview-qa-catalogue';
 import { RELIABILITY_NAVIGATION_TIMEOUT_MS } from '../tests/e2e/helpers/preview-qa-locators';
+import {
+  RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT,
+  assertPersistedManualImport,
+} from '../lib/reliability/manual-import-gate';
 
 function blocked(step: string, detail: string): never {
   throw new Error(`Catalogue gate blocked at ${step}: ${detail}`);
@@ -78,7 +80,7 @@ async function fetchSnapshot(page: Page): Promise<CatalogueSnapshotLike> {
 test.describe('Reliability catalogue', () => {
   test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
 
-  test('Preview catalogue, manual import, and opening stock', async ({ page }) => {
+  test('Preview catalogue, manual import CSV, and persisted opening stock', async ({ page }) => {
     test.setTimeout(180_000);
 
     await test.step('confirm Preview host and SHA via deploy-sha', async () => {
@@ -124,26 +126,18 @@ test.describe('Reliability catalogue', () => {
       await ensureSellableQaProduct(page);
     });
 
-    await test.step('enter exact manual-import route (never skip this visit)', async () => {
-      await enterManualImportRoute(page);
+    const importDecision = await test.step('manual import CSV for REL-IMP-P104-01', async () => {
+      return runManualImportGate(page, () => fetchSnapshot(page));
     });
 
-    await test.step('complete or reuse deterministic import product', async () => {
-      await gotoQaProductList(page, RELIABILITY_IMPORT_PRODUCT);
-      await ensureImportedQaProduct(page, async () => {
-        await enterManualImportRoute(page);
-        await confirmReliabilityImportCsv(page);
-      });
-    });
-
-    await test.step('prove both catalogue products persist', async () => {
+    await test.step('prove sellable + gate import products persist once', async () => {
       await gotoQaProductList(page, RELIABILITY_SELLABLE_PRODUCT);
       await expectUniqueQaProductRowVisible(page, RELIABILITY_SELLABLE_PRODUCT);
-      await gotoQaProductList(page, RELIABILITY_IMPORT_PRODUCT);
-      await expectUniqueQaProductRowVisible(page, RELIABILITY_IMPORT_PRODUCT);
+      await gotoQaProductList(page, RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT);
+      await expectUniqueQaProductRowVisible(page, RELIABILITY_MANUAL_IMPORT_GATE_PRODUCT);
     });
 
-    await test.step('record opening stock idempotently', async () => {
+    await test.step('record opening stock and assert persisted movement/journal', async () => {
       await ensureQaOpeningStock(page, () => fetchSnapshot(page));
     });
 
@@ -151,27 +145,24 @@ test.describe('Reliability catalogue', () => {
       const snapshot = await fetchSnapshot(page);
       const after = catalogueFinancialFingerprint(snapshot);
       assertCatalogueDidNotWriteMoney(before, after);
-
+      assertCatalogueOpeningStockPersisted(snapshot);
+      assertPersistedManualImport({
+        gateProducts: snapshot.gateProducts ?? [],
+        importRuns: snapshot.productImports ?? [],
+      });
       if ((snapshot.productCount ?? 0) < 2) {
         blocked('snapshot', `productCount=${snapshot.productCount}; expected at least two catalogue products.`);
       }
 
-      const opening = (snapshot.openingMovements ?? []).filter(
-        (row) =>
-          row.productName === RELIABILITY_SELLABLE_PRODUCT.name ||
-          row.productSku === RELIABILITY_SELLABLE_PRODUCT.sku,
-      );
-      if (opening.length !== 1) {
-        blocked(
-          'opening stock',
-          `expected exactly one QA opening movement, found ${opening.length}.`,
-        );
-      }
-
       test.info().annotations.push(
+        { type: 'catalogue-import-decision', description: importDecision },
         { type: 'catalogue-product-count', description: String(snapshot.productCount) },
         { type: 'catalogue-invoices', description: String(after.invoiceCount) },
-        { type: 'catalogue-opening-qty', description: String(opening[0]?.qtyBase ?? 'missing') },
+        { type: 'catalogue-payments', description: String(after.paymentCount) },
+        {
+          type: 'catalogue-opening-store',
+          description: String(snapshot.openingMovements?.find((row) => row.productSku === RELIABILITY_SELLABLE_PRODUCT.sku || row.productName === RELIABILITY_SELLABLE_PRODUCT.name)?.storeId ?? 'missing'),
+        },
       );
     });
   });

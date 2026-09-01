@@ -173,7 +173,7 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('ensureQaOpeningStock');
     expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Product catalogue');
     expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Import complete!');
-    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('Opening capital recorded!');
+    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('assertCatalogueOpeningStockPersisted');
     expect(spec).not.toMatch(/test\.skip\(\s*!reliabilitySalesAllowed\(\)/);
     expect(spec).not.toMatch(/if \(!captured\?\.shiftId \|\| !captured\.tillId\) return;/);
     expect(spec).not.toContain('imported|Import complete|products');
@@ -228,7 +228,7 @@ describe('reliability CI governance contract', () => {
     expect(spec).toContain('closeTill3Shift');
     expect(spec).toContain('enterManualImportRoute');
     expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('What are you importing?');
-    expect(read('tests/e2e/helpers/preview-qa-catalogue.ts')).toContain('No products yet.');
+    expect(read('lib/reliability/manual-import-gate.ts')).toContain('No products yet.');
     expect(spec).toContain('pos-complete-checkout');
     expect(spec).toContain('#pos-till-select');
     expect(spec).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);
@@ -423,20 +423,24 @@ describe('reliability-catalogue Playwright project contract', () => {
     const specRel = resolveReliabilitySpecRel(project, CATALOGUE_PROJECT);
     const spec = read(specRel);
     const helper = read('tests/e2e/helpers/preview-qa-catalogue.ts');
-    const scanned = stripComments(`${spec}\n${helper}`);
+    const gate = read('lib/reliability/manual-import-gate.ts');
+    const scanned = stripComments(`${spec}\n${helper}\n${gate}`);
 
     expect(specRel).toMatch(/reliability-catalogue/);
     expect(scanned).toContain('/settings/import-stock');
     expect(scanned).toContain('Product catalogue');
-    expect(scanned).toContain('enterManualImportRoute');
-    expect(scanned).toContain('ensureImportedQaProduct');
-    expect(scanned).toContain('RELIABILITY_IMPORT_PRODUCT');
-    expect(scanned).toContain('RELIABILITY_SELLABLE_PRODUCT');
+    expect(scanned).toContain('runManualImportGate');
+    expect(scanned).toContain('REL-IMP-P104-01');
+    expect(scanned).toContain('Reliability Manual Import Gate');
+    expect(scanned).toContain('setInputFiles');
+    expect(scanned).toContain('Confirm Import');
+    expect(scanned).toContain('assertManualImportPreviewGate');
     expect(scanned).toContain('No products yet.');
     expect(scanned).toContain('The file had no product rows. Check the file and try again.');
     expect(scanned).toContain('No ready rows to import.');
     expect(scanned).toContain('import-stock-file-input');
-    expect(spec).toContain('enterManualImportRoute');
+    expect(spec).toContain('runManualImportGate');
+    expect(spec).not.toContain('ensureImportedQaProduct');
     expect(spec).not.toMatch(/Download[\s\S]{0,40}template[\s\S]{0,80}\.click\(/);
     expect(spec).not.toMatch(/PLAYWRIGHT_ALLOW_QA_SALE/);
     expect(spec).not.toMatch(/getByRole\('heading',\s*\{\s*name:\s*'Add product'/);
@@ -456,6 +460,11 @@ describe('reliability-catalogue Playwright project contract', () => {
     expect(spec).not.toMatch(/test\.setTimeout\(\s*(?:480_000|480000|[2-9]\d{5,})\s*\)/);
     expect(spec).toContain('assertCatalogueDidNotWriteMoney');
     expect(spec).toContain('ensureQaOpeningStock');
+    expect(spec).toContain('assertCatalogueOpeningStockPersisted');
+    expect(spec).toContain('assertPersistedManualImport');
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('gateProducts');
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('productImports');
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('openingJournals');
 
     for (const action of FORBIDDEN_CATALOGUE_MONEY_ACTIONS) {
       expect(scanned, `catalogue project must not perform ${action.name}`).not.toMatch(action.pattern);

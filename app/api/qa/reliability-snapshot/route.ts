@@ -120,11 +120,51 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     take: 20,
     select: {
+      storeId: true,
+      productId: true,
       qtyBase: true,
       type: true,
       referenceType: true,
       product: { select: { name: true, sku: true } },
     },
+  });
+
+  const openingJournals = await prisma.journalEntry.findMany({
+    where: {
+      businessId: user.businessId,
+      referenceType: 'OPENING_BALANCE_INVENTORY',
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { id: true, referenceType: true, referenceId: true },
+  });
+
+  const productImports = await prisma.productImport.findMany({
+    where: { businessId: user.businessId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+    select: {
+      id: true,
+      fileName: true,
+      status: true,
+      rowsParsed: true,
+      rowsImported: true,
+      rowsUpdated: true,
+      rowsSkipped: true,
+    },
+  });
+
+  const gateProducts = await prisma.product.findMany({
+    where: {
+      businessId: user.businessId,
+      active: true,
+      OR: [
+        { sku: 'REL-IMP-P104-01' },
+        { name: 'Reliability Manual Import Gate' },
+      ],
+    },
+    select: { id: true, name: true, sku: true, barcode: true },
+    take: 5,
   });
 
   const expenses = await prisma.expense.findMany({
@@ -142,11 +182,33 @@ export async function GET() {
     productCount,
     openingCapitalPence: business?.openingCapitalPence ?? 0,
     openingMovements: openingMovements.map((row) => ({
+      storeId: row.storeId,
+      productId: row.productId,
       qtyBase: row.qtyBase,
       type: row.type,
       referenceType: row.referenceType,
       productName: row.product.name,
       productSku: row.product.sku,
+    })),
+    openingJournals: openingJournals.map((row) => ({
+      id: row.id,
+      referenceType: row.referenceType,
+      referenceId: row.referenceId,
+    })),
+    productImports: productImports.map((row) => ({
+      id: row.id,
+      fileName: row.fileName,
+      status: row.status,
+      rowsParsed: row.rowsParsed,
+      rowsImported: row.rowsImported,
+      rowsUpdated: row.rowsUpdated,
+      rowsSkipped: row.rowsSkipped,
+    })),
+    gateProducts: gateProducts.map((row) => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      barcode: row.barcode,
     })),
     expenses: expenses.map((row) => ({
       reference: row.reference,

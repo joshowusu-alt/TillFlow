@@ -904,7 +904,14 @@ export default function ImportStockClient({
     <div className="space-y-4">
       <ImportSteps steps={STEPS} activeIndex={3} />
       <div className="rounded-xl border border-accent/20 bg-accentSoft/30 px-4 py-3 text-sm text-ink space-y-1.5">
-        <p className="font-semibold">Import purpose: {importMode ? importModeLabel(importMode) : 'Not set'}</p>
+        <p className="font-semibold" data-testid="import-stock-purpose">
+          Import purpose: {importMode ? importModeLabel(importMode) : 'Not set'}
+        </p>
+        {fileName ? (
+          <p className="text-xs text-black/60" data-testid="import-stock-accepted-file">
+            File: {fileName}
+          </p>
+        ) : null}
         {importMode === 'CATALOGUE' ? (
           <>
             <p className="text-xs text-black/60">Products only — quantities are ignored. No stock movement, journal, cash or supplier debt.</p>
@@ -927,7 +934,8 @@ export default function ImportStockClient({
           <p className="text-xs text-black/60">Genuine purchases only. Paid reduces the selected payment account; unpaid requires a supplier and creates AP.</p>
         ) : null}
         <p className="text-xs text-black/55">
-          Ready {readyCount} · qty rows {previewRows.filter((r) => r.quantity > 0).length} · known cost{' '}
+          <span data-testid="import-stock-ready-count">Ready {readyCount}</span>
+          {' · '}qty rows {previewRows.filter((r) => r.quantity > 0).length} · known cost{' '}
           {previewRows.filter((r) => r.quantity > 0 && r.costPricePence > 0).length} · missing cost{' '}
           {previewRows.filter((r) => r.quantity > 0 && r.costPricePence <= 0).length}
         </p>
