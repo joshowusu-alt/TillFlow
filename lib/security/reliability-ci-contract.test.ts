@@ -598,6 +598,10 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     expect(scanned).toContain('expectedCashPence');
     expect(scanned).toContain('cardTotalPence');
     expect(scanned).toContain('#pos-till-select');
+    expect(scanned).toContain('data-checkout-till-state="ready"');
+    expect(scanned).toContain('/pos?till=');
+    expect(scanned).toContain('assertPosBoundToPersistedTill3');
+    expect(scanned).toContain('HOSTED_0DFA476B_POS_TILL_PAGE');
     expect(scanned).toContain('pos-complete-checkout');
     expect(scanned).toContain('assertTill3ShiftSummaryUi');
     expect(scanned).toContain('formatTill3AccountingTable');

@@ -922,6 +922,24 @@ describe('PosClient till selection', () => {
     });
   });
 
+  it('exposes the bound open-shift id once checkout extras are ready', async () => {
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-3']}
+        openShifts={[{ tillId: 'till-3', shiftId: 'shift-3' }]}
+      />,
+    );
+    await waitFor(() => {
+      const select = document.querySelector('#pos-till-select') as HTMLSelectElement | null;
+      expect(select).toHaveAttribute('data-checkout-till-state', 'ready');
+      expect(select).toHaveAttribute('data-pos-till-id', 'till-3');
+      expect(select).toHaveAttribute('data-pos-shift-id', 'shift-3');
+      expect(document.querySelector('[data-selected-shift-id="shift-3"]')).not.toBeNull();
+    });
+  });
+
   it('ignores localStorage when the saved till has no open shift', async () => {
     searchParamsGet.mockReturnValue(null);
     window.localStorage.setItem(

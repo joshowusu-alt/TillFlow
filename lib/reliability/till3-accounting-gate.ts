@@ -65,9 +65,11 @@ export type Till3OpenShiftRow = {
   ownedByCurrentUser?: boolean | null;
   openFloatCount?: number | null;
   salesCount?: number | null;
+  openedAt?: string | Date | null;
 };
 
 export type Till3AccountingSnapshot = {
+  businessId?: string | null;
   invoices?: Till3AccountingInvoice[];
   sellableProduct?: { name?: string | null; sku?: string | null; qtyOnHandBase?: number | null } | null;
   openShifts?: Till3OpenShiftRow[];
@@ -122,6 +124,64 @@ export type Till3OpenShiftDefectClass =
   | 'till-selection'
   | 'open-shift-write'
   | 'redirect-navigation-timing';
+
+export type Till3PosTillDefectClass =
+  | 'checkout-extras-not-ready'
+  | 'hidden-or-duplicated-controls'
+  | 'wrong-locator'
+  | 'till3-already-bound'
+  | 'stale-pos-state'
+  | 'till-selection-defect';
+
+/**
+ * Hosted SHA 0dfa476b error-context.md: genuine POS, barcode/cart ready,
+ * unique Till combobox still disabled on the loading placeholder.
+ */
+export const HOSTED_0DFA476B_POS_TILL_PAGE = {
+  path: '/pos',
+  barcodeVisible: true,
+  cartClearVisible: true,
+  visibleTillSelectCount: 1,
+  tillComboboxName: 'Till',
+  tillDisabled: true,
+  tillOptions: ['Preparing checkout…'],
+  selectedOptionText: 'Preparing checkout…',
+  till3OptionCount: 0,
+  checkoutTillState: 'loading',
+  completeSaleDisabled: true,
+  urlTillId: null,
+  selectedTillId: '',
+  selectedShiftId: '',
+} as const;
+
+export type HostedTill3PosTillPage = {
+  path: string;
+  barcodeVisible: boolean;
+  cartClearVisible: boolean;
+  visibleTillSelectCount: number;
+  tillComboboxName: string;
+  tillDisabled: boolean;
+  tillOptions: readonly string[];
+  selectedOptionText: string;
+  till3OptionCount: number;
+  checkoutTillState: string;
+  completeSaleDisabled: boolean;
+  urlTillId: string | null;
+  selectedTillId: string;
+  selectedShiftId: string;
+};
+
+export type PosTillBindingView = {
+  persistedShiftId: string;
+  persistedTillId: string;
+  urlTillId: string | null;
+  selectedTillId: string;
+  selectedShiftId: string;
+  checkoutTillState: string | null;
+  visibleTillSelectCount: number;
+  till3OptionCount: number;
+  selectedOptionText: string;
+};
 
 export type PersistedTill3OpenShift = {
   state: 'till-3-open' | 'closed' | 'ambiguous';
@@ -251,6 +311,69 @@ export function classifyHostedTill3OpenShiftFailure(page: HostedTill3ShiftPageVi
     visibleWording: 'ambiguous',
     defectClass: 'open-shift-write',
   };
+}
+
+export function classifyHostedTill3PosTillBinding(page: HostedTill3PosTillPage): {
+  isPosPage: boolean;
+  till3OptionPresent: boolean;
+  defectClass: Till3PosTillDefectClass;
+} {
+  const isPosPage = page.path === '/pos' || page.path.startsWith('/pos/') || page.barcodeVisible;
+  const till3OptionPresent = page.till3OptionCount === 1;
+  if (!isPosPage) {
+    return { isPosPage: false, till3OptionPresent, defectClass: 'stale-pos-state' };
+  }
+  if (page.visibleTillSelectCount > 1) {
+    return { isPosPage: true, till3OptionPresent, defectClass: 'hidden-or-duplicated-controls' };
+  }
+  if (
+    page.checkoutTillState === 'loading' ||
+    page.selectedOptionText === 'Preparing checkout…' ||
+    page.tillOptions.includes('Preparing checkout…')
+  ) {
+    return { isPosPage: true, till3OptionPresent: false, defectClass: 'checkout-extras-not-ready' };
+  }
+  if (page.till3OptionCount === 0 && page.selectedTillId && page.selectedShiftId) {
+    return { isPosPage: true, till3OptionPresent: false, defectClass: 'till3-already-bound' };
+  }
+  if (page.till3OptionCount === 0) {
+    return { isPosPage: true, till3OptionPresent: false, defectClass: 'wrong-locator' };
+  }
+  if (page.till3OptionCount > 1) {
+    return { isPosPage: true, till3OptionPresent: true, defectClass: 'hidden-or-duplicated-controls' };
+  }
+  if (page.selectedTillId && page.selectedTillId !== page.urlTillId && !page.urlTillId) {
+    return { isPosPage: true, till3OptionPresent, defectClass: 'stale-pos-state' };
+  }
+  return { isPosPage: true, till3OptionPresent, defectClass: 'till-selection-defect' };
+}
+
+export function assertPosBoundToPersistedTill3(view: PosTillBindingView) {
+  if (!view.persistedShiftId || !view.persistedTillId) {
+    blocked('persisted Till 3 shift identity is incomplete.');
+  }
+  if (view.visibleTillSelectCount !== 1) {
+    blocked(`POS till control visible=${view.visibleTillSelectCount}; expected exactly one.`);
+  }
+  if (view.checkoutTillState === 'loading' || view.selectedOptionText === 'Preparing checkout…') {
+    blocked('POS checkout extras are still loading; Till 3 is not selectable yet.');
+  }
+  if (view.checkoutTillState !== 'ready') {
+    blocked(`POS till state=${view.checkoutTillState ?? '(none)'}; expected ready on the persisted Till 3 shift.`);
+  }
+  if (view.urlTillId !== view.persistedTillId) {
+    blocked(`POS URL till=${view.urlTillId ?? '(none)'} !== persisted ${view.persistedTillId}.`);
+  }
+  if (view.selectedTillId !== view.persistedTillId) {
+    blocked(`POS selected till=${view.selectedTillId || '(none)'} !== persisted ${view.persistedTillId}.`);
+  }
+  if (view.selectedShiftId !== view.persistedShiftId) {
+    blocked(`POS selected shift=${view.selectedShiftId || '(none)'} !== persisted ${view.persistedShiftId}.`);
+  }
+  if (view.till3OptionCount !== 1) {
+    blocked(`POS Till 3 option count=${view.till3OptionCount}; expected exactly one in the unique till select.`);
+  }
+  return view;
 }
 
 /**

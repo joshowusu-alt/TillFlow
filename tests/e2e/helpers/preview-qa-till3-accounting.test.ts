@@ -16,6 +16,12 @@ describe('Till 3 accounting helper', () => {
     expect(helper).toContain('TILL3_ACCOUNTING_REFS');
     expect(source('lib/reliability/till3-accounting-gate.ts')).toContain('CARD-REL-T3ACC-1');
     expect(helper).toContain('#pos-till-select');
+    expect(helper).toContain('data-checkout-till-state="ready"');
+    expect(helper).toContain('/pos?till=');
+    expect(helper).toContain('assertPosBoundToPersistedTill3');
+    const posFn = helper.slice(helper.indexOf('export async function gotoTill3Pos'));
+    expect(posFn).not.toContain('localStorage.clear');
+    expect(posFn).not.toContain('sessionStorage.clear');
     expect(helper).toContain('pos-complete-checkout');
     expect(helper).toContain('Expected Cash');
     expect(helper).not.toMatch(/locator\(['"]select['"]\)\.first\(\)/);

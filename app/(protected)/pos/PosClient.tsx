@@ -1336,6 +1336,7 @@ export default function PosClient({
   const primaryCheckoutIssue = checkoutIssues.find((issue) => issue.tone === 'warning') ?? checkoutIssues[0] ?? null;
   const errorParam = searchParams?.get('error');
   const selectedTillName = tills.find((till) => till.id === tillId)?.name ?? null;
+  const boundShiftId = openShifts?.find((shift) => shift.tillId === tillId)?.shiftId ?? '';
   const showNoTillBlock =
     checkoutExtrasReady &&
     !checkoutUnavailable &&
@@ -1440,6 +1441,7 @@ export default function PosClient({
       }`}
       data-pos-mobile-phase="2"
       data-selected-till-id={tillId}
+      data-selected-shift-id={boundShiftId || undefined}
     >
       <div className="space-y-3 sm:space-y-4">
         {/* ── Scan / Search bar ─────────────────────────────── */}
@@ -2200,6 +2202,8 @@ export default function PosClient({
                   disabled
                   aria-busy="true"
                   data-checkout-till-state="loading"
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   <option value="">Preparing checkout…</option>
                 </select>
@@ -2223,6 +2227,8 @@ export default function PosClient({
                   onChange={(e) => setTillId(e.target.value)}
                   data-checkout-till-state="ready"
                   data-checkout-state="ready"
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   {tills.map((till) => (
                     <option key={till.id} value={till.id}>
@@ -2254,6 +2260,8 @@ export default function PosClient({
                             ? 'ready'
                             : 'closed'
                   }
+                  data-pos-till-id={tillId || undefined}
+                  data-pos-shift-id={boundShiftId || undefined}
                 >
                   {checkoutLoading ? (
                     <option value="">Preparing checkout…</option>

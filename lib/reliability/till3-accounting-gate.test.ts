@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  HOSTED_0DFA476B_POS_TILL_PAGE,
   HOSTED_4728EDBA_TILL3_SHIFT_PAGE,
   TILL3_ACCOUNTING_REFS,
   TILL3_ACCOUNTING_SPLIT,
+  assertPosBoundToPersistedTill3,
   assertTill3AccountingPersisted,
   classifyHostedTill3OpenShiftFailure,
+  classifyHostedTill3PosTillBinding,
   classifyPersistedTill3OpenShifts,
   findTill3AccountingInvoice,
   formatTill3AccountingTable,
@@ -187,6 +190,66 @@ describe('hosted Till 3 open-shift artifact (SHA 4728edba)', () => {
       momo: 'MOMO-REL-T3ACC-1',
       transfer: 'BT-REL-T3ACC-1',
     });
+  });
+});
+
+describe('hosted Till 3 POS till binding artifact (SHA 0dfa476b)', () => {
+  it('classifies Preparing checkout as checkout extras not ready, not a missing Till 3 till', () => {
+    const classified = classifyHostedTill3PosTillBinding(HOSTED_0DFA476B_POS_TILL_PAGE);
+    expect(HOSTED_0DFA476B_POS_TILL_PAGE.path).toBe('/pos');
+    expect(HOSTED_0DFA476B_POS_TILL_PAGE.tillComboboxName).toBe('Till');
+    expect(HOSTED_0DFA476B_POS_TILL_PAGE.tillOptions).toEqual(['Preparing checkout…']);
+    expect(classified.isPosPage).toBe(true);
+    expect(classified.till3OptionPresent).toBe(false);
+    expect(classified.defectClass).toBe('checkout-extras-not-ready');
+  });
+
+  it('fails closed when barcode is ready but the unique till select is still loading', () => {
+    expect(() =>
+      assertPosBoundToPersistedTill3({
+        persistedShiftId: 'shift-3',
+        persistedTillId: 'till-3',
+        urlTillId: null,
+        selectedTillId: '',
+        selectedShiftId: '',
+        checkoutTillState: 'loading',
+        visibleTillSelectCount: 1,
+        till3OptionCount: 0,
+        selectedOptionText: 'Preparing checkout…',
+      }),
+    ).toThrow(/checkout extras are still loading/);
+  });
+
+  it('accepts a unique ready till select bound to the persisted Till 3 shift id', () => {
+    expect(
+      assertPosBoundToPersistedTill3({
+        persistedShiftId: 'shift-3',
+        persistedTillId: 'till-3',
+        urlTillId: 'till-3',
+        selectedTillId: 'till-3',
+        selectedShiftId: 'shift-3',
+        checkoutTillState: 'ready',
+        visibleTillSelectCount: 1,
+        till3OptionCount: 1,
+        selectedOptionText: 'Till 3',
+      }).selectedShiftId,
+    ).toBe('shift-3');
+  });
+
+  it('does not treat duplicate visible till selects as bound', () => {
+    expect(() =>
+      assertPosBoundToPersistedTill3({
+        persistedShiftId: 'shift-3',
+        persistedTillId: 'till-3',
+        urlTillId: 'till-3',
+        selectedTillId: 'till-3',
+        selectedShiftId: 'shift-3',
+        checkoutTillState: 'ready',
+        visibleTillSelectCount: 2,
+        till3OptionCount: 1,
+        selectedOptionText: 'Till 3',
+      }),
+    ).toThrow(/visible=2/);
   });
 });
 

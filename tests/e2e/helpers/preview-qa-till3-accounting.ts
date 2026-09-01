@@ -29,6 +29,7 @@ import {
   TILL3_ACCOUNTING_REFS,
   TILL3_ACCOUNTING_SPLIT,
   TILL3_ACCOUNTING_TILL_NAME,
+  assertPosBoundToPersistedTill3,
   assertTill3AccountingPersisted,
   classifyPersistedTill3OpenShifts,
   formatTill3AccountingTable,
@@ -242,15 +243,6 @@ export async function openTill3ShiftForAccounting(page: Page) {
   return proveTill3OpenShiftChrome(page, persisted);
 }
 
-async function selectTill3(locator: Locator, step: string) {
-  const target = await requireExactlyOneVisible(locator, step);
-  const till3 = target.locator('option', { hasText: new RegExp(`^${TILL3_ACCOUNTING_TILL_NAME}$`) });
-  if ((await till3.count()) !== 1) blocked(`${step}: Till 3 option is missing or duplicated.`);
-  const value = await till3.getAttribute('value');
-  if (!value) blocked(`${step}: Till 3 is not an option on the till selector.`);
-  await target.selectOption(value, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
-}
-
 async function clearRestoredCart(page: Page) {
   const clear = page.getByRole('button', { name: /clear all/i });
   if ((await clear.locator('visible=true').count()) === 0) return;
@@ -299,30 +291,96 @@ export async function ensureSellableQaOnHand(page: Page) {
     .toBeGreaterThanOrEqual(1);
 }
 
+async function waitForUniquePosTillState(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const visible = visibleOnly(page.locator('#pos-till-select'));
+        const count = await visible.count();
+        if (count > 1) blocked('POS till: duplicate visible #pos-till-select controls.');
+        if (count !== 1) return 'missing';
+        return (await visible.getAttribute('data-checkout-till-state')) ?? 'missing';
+      },
+      { timeout: 45_000, message: 'POS checkout till extras left Preparing checkout…' },
+    )
+    .toMatch(/^(ready|closed)$/);
+}
+
+async function readPosTillBinding(page: Page, persisted: PersistedTill3OpenShift) {
+  const posTill = await requireExactlyOneVisible(
+    page.locator('#pos-till-select'),
+    'POS till',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  );
+  return {
+    persistedShiftId: persisted.shiftId ?? '',
+    persistedTillId: persisted.tillId ?? '',
+    urlTillId: new URL(page.url()).searchParams.get('till'),
+    selectedTillId: (await posTill.getAttribute('data-pos-till-id')) || (await posTill.inputValue()),
+    selectedShiftId: (await posTill.getAttribute('data-pos-shift-id')) || '',
+    checkoutTillState: await posTill.getAttribute('data-checkout-till-state'),
+    visibleTillSelectCount: await visibleOnly(page.locator('#pos-till-select')).count(),
+    till3OptionCount: await posTill
+      .locator('option', { hasText: new RegExp(`^${TILL3_ACCOUNTING_TILL_NAME}$`) })
+      .count(),
+    selectedOptionText: ((await posTill.locator('option:checked').textContent()) ?? '').trim(),
+  };
+}
+
 export async function gotoTill3Pos(page: Page) {
-  await page.addInitScript(() => {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } catch {
-      // ignore
-    }
-  });
-  await page.goto('/pos', {
-    waitUntil: 'domcontentloaded',
+  const snapshot = await fetchTill3AccountingSnapshot(page);
+  const persisted = classifyPersistedTill3OpenShifts(snapshot.openShifts);
+  if (persisted.state !== 'till-3-open' || !persisted.shiftId || !persisted.tillId) {
+    blocked('no unique OPEN Till 3 shift to bind POS; will not open another shift.');
+  }
+
+  await page.goto(`/pos?till=${encodeURIComponent(persisted.tillId)}`, {
+    waitUntil: 'load',
     timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
   });
   if (/\/login(?:\?|$)/.test(page.url())) blocked('POS redirected to /login');
   await expect(page.getByPlaceholder(/scan barcode/i)).toBeVisible({ timeout: 45_000 });
   await clearRestoredCart(page);
-  const posTill = page.locator('#pos-till-select');
-  const checked = posTill.locator('option:checked');
-  if (((await checked.textContent()) ?? '').trim() !== TILL3_ACCOUNTING_TILL_NAME) {
-    await selectTill3(posTill, 'POS till');
+  await waitForUniquePosTillState(page);
+
+  const posTill = await requireExactlyOneVisible(page.locator('#pos-till-select'), 'POS till', 45_000);
+  if ((await posTill.inputValue()) !== persisted.tillId) {
+    const till3 = posTill.locator('option', { hasText: new RegExp(`^${TILL3_ACCOUNTING_TILL_NAME}$`) });
+    if ((await till3.count()) !== 1) {
+      blocked('POS till: Till 3 option is missing or duplicated after checkout extras loaded.');
+    }
+    await posTill.selectOption(persisted.tillId, { timeout: RELIABILITY_ACTION_TIMEOUT_MS });
+    await waitForUniquePosTillState(page);
   }
-  await expect(posTill.locator('option:checked')).toHaveText(
-    new RegExp(`^${TILL3_ACCOUNTING_TILL_NAME}$`),
+
+  await expect
+    .poll(
+      async () =>
+        page
+          .locator(
+            `[data-selected-till-id="${persisted.tillId}"][data-selected-shift-id="${persisted.shiftId}"]`,
+          )
+          .count(),
+      { timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS, message: 'POS bound to persisted Till 3 shift id' },
+    )
+    .toBeGreaterThan(0);
+
+  await requireExactlyOneVisible(
+    page.locator('#pos-till-select[data-checkout-till-state="ready"]'),
+    'POS till ready',
+    RELIABILITY_NAVIGATION_TIMEOUT_MS,
   );
+  assertPosBoundToPersistedTill3(await readPosTillBinding(page, persisted));
+
+  if (snapshot.businessId) {
+    const captured = await page.evaluate(
+      ({ businessId, tillId }) => window.localStorage.getItem(`pos.capture.shift.${businessId}.${tillId}`),
+      { businessId: snapshot.businessId, tillId: persisted.tillId },
+    );
+    if (captured && captured !== persisted.shiftId) {
+      blocked(`POS capture shift ${captured} !== persisted ${persisted.shiftId}.`);
+    }
+  }
 }
 
 async function addSellableProduct(page: Page) {
@@ -378,6 +436,12 @@ export async function completeTill3AccountingTenders(page: Page) {
   if (skipCard !== skipMomo || skipMomo !== skipTransfer) {
     blocked('Till 3 accounting refs are partial; will not submit another money write.');
   }
+
+  const persisted = classifyPersistedTill3OpenShifts(before.openShifts);
+  if (persisted.state !== 'till-3-open' || !persisted.shiftId || !persisted.tillId) {
+    blocked('no unique OPEN Till 3 shift before selling; will not open another shift.');
+  }
+  assertPosBoundToPersistedTill3(await readPosTillBinding(page, persisted));
 
   await addSellableProduct(page);
   await clickUniqueVisible(page.getByRole('button', { name: 'Split…' }), 'split tender');
