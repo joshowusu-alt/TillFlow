@@ -602,6 +602,7 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     expect(project).not.toMatch(/timeout:\s*(?:480_000|480000|[4-9]\d{5,})\b/);
     expect(project).toMatch(/actionTimeout:\s*8_000/);
     expect(project).toMatch(/navigationTimeout:\s*15_000/);
+    expect(project).not.toMatch(/actionTimeout:\s*(?:30_000|45_000|60_000)/);
     expect(project).not.toMatch(/dependencies:\s*\[[^\]]*reliability-journey/);
   });
 
@@ -654,8 +655,16 @@ describe('reliability-till3-accounting Playwright project contract', () => {
     const spec = read(specRel);
     const helper = read('tests/e2e/helpers/preview-qa-till3-accounting.ts');
     const scanned = stripComments(`${project}\n${spec}\n${helper}`);
+    const live = stripComments(`${spec}\n${helper}`);
 
     expect(scanned).toContain('/api/qa/deploy-sha');
+    expect(live).not.toContain('page.request');
+    expect(live).toContain('fetchPageJsonRedacted');
+    expect(live).toContain('RELIABILITY_SNAPSHOT_TIMEOUT_MS');
+    expect(read('tests/e2e/helpers/preview-qa-redacted-fetch.ts')).toContain(
+      'RELIABILITY_SNAPSHOT_TIMEOUT_MAX_MS = 60_000',
+    );
+    expect(read('app/api/qa/reliability-snapshot/route.ts')).toContain('export const maxDuration = 30');
     expect(scanned).toMatch(/isProductionPlaywrightTarget|assertPreviewQaOwnerTarget|cannot run against Production/);
     expect(scanned).not.toMatch(/https:\/\/(?:www\.)?tillflow\.app/);
     expect(spec).not.toMatch(/PLAYWRIGHT_OWNER_PASSWORD\s*=\s*['"][^'"]+['"]/);

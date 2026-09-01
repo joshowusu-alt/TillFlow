@@ -14,6 +14,11 @@ import {
   visibleOnly,
 } from './preview-qa-locators';
 import {
+  RELIABILITY_IDENTITY_TIMEOUT_MS,
+  RELIABILITY_SNAPSHOT_TIMEOUT_MS,
+  fetchPageJsonRedacted,
+} from './preview-qa-redacted-fetch';
+import {
   TILL3_ACCOUNTING_TILL_NAME,
   assertTill3AccountingNoWrites,
   assertTill3AccountingPersisted,
@@ -39,13 +44,14 @@ export async function confirmTill3AccountingPreviewSha(page: Page) {
   if (!isVercelPreviewPlaywrightTarget(baseURL)) {
     blocked('reliability-till3-accounting requires a Vercel Preview host.');
   }
-  const res = await page.request.get('/api/qa/deploy-sha');
-  const body = res.ok()
-    ? ((await res.json()) as { sha?: string | null; vercelEnv?: string | null })
-    : {};
-  if (res.status() < 200 || res.status() >= 300) {
-    blocked('Preview deploy-sha identity endpoint is unavailable.');
-  }
+  await page.goto('/login', {
+    waitUntil: 'domcontentloaded',
+    timeout: RELIABILITY_NAVIGATION_TIMEOUT_MS,
+  });
+  const { json: body } = await fetchPageJsonRedacted<{
+    sha?: string | null;
+    vercelEnv?: string | null;
+  }>(page, '/api/qa/deploy-sha', RELIABILITY_IDENTITY_TIMEOUT_MS);
   if (body.vercelEnv !== 'preview') {
     blocked('deploy-sha vercelEnv is not preview.');
   }
@@ -59,10 +65,16 @@ export async function confirmTill3AccountingPreviewSha(page: Page) {
   return body;
 }
 
-export async function fetchTill3AccountingSnapshot(page: Page): Promise<Till3AccountingSnapshot> {
-  const snapshot = await page.request.get('/api/qa/reliability-snapshot');
-  if (!snapshot.ok()) blocked(`reliability-snapshot HTTP ${snapshot.status()}`);
-  return snapshot.json();
+export async function fetchTill3AccountingSnapshot(page: Page): Promise<{
+  snapshot: Till3AccountingSnapshot;
+  durationMs: number;
+}> {
+  const { json, durationMs } = await fetchPageJsonRedacted<Till3AccountingSnapshot>(
+    page,
+    '/api/qa/reliability-snapshot',
+    RELIABILITY_SNAPSHOT_TIMEOUT_MS,
+  );
+  return { snapshot: json, durationMs };
 }
 
 /**
@@ -119,7 +131,7 @@ export async function signInExistingReliabilityOwner(page: Page) {
 }
 
 export async function proveTill3AccountingPersisted(page: Page) {
-  const snapshot = await fetchTill3AccountingSnapshot(page);
+  const { snapshot, durationMs } = await fetchTill3AccountingSnapshot(page);
   assertReliabilityPreviewQaTenant(snapshot);
   const invoice = assertTill3AccountingPersisted(snapshot);
   const persisted = classifyPersistedTill3OpenShifts(snapshot.openShifts);
@@ -128,8 +140,8 @@ export async function proveTill3AccountingPersisted(page: Page) {
       `unique OPEN Till 3 shift ${persisted.shiftId ?? '(none)'}/${persisted.tillId ?? '(none)'} !== invoice ${invoice.shiftId}/${invoice.tillId}.`,
     );
   }
-  const table = formatTill3AccountingTable(invoice);
-  return { snapshot, invoice, table };
+  const table = `${formatTill3AccountingTable(invoice)}\nsnapshotDurationMs=${durationMs} snapshotTimeoutMs=${RELIABILITY_SNAPSHOT_TIMEOUT_MS}`;
+  return { snapshot, invoice, table, durationMs };
 }
 
 export async function assertTill3ShiftSummaryUi(page: Page) {
@@ -201,8 +213,8 @@ export async function proveTill3AccountingEvidenceOnly(page: Page) {
   const before = await proveTill3AccountingPersisted(page);
   await assertTill3ShiftSummaryUi(page);
   const after = await fetchTill3AccountingSnapshot(page);
-  assertReliabilityPreviewQaTenant(after);
-  assertTill3AccountingPersisted(after);
-  assertTill3AccountingNoWrites(before.snapshot, after);
+  assertReliabilityPreviewQaTenant(after.snapshot);
+  assertTill3AccountingPersisted(after.snapshot);
+  assertTill3AccountingNoWrites(before.snapshot, after.snapshot);
   return before;
 }

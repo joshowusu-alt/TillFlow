@@ -3,6 +3,8 @@ import { getUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
+/** Preview snapshot is a bounded evidence read. Measured ~8s sequential; keep headroom under 60s. */
+export const maxDuration = 30;
 
 function evidenceApiEnabled() {
   if (process.env.VERCEL_ENV === 'production') return false;
@@ -27,89 +29,67 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const invoices = await prisma.salesInvoice.findMany({
-    where: { businessId: user.businessId },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: {
-      id: true,
-      transactionNumber: true,
-      businessId: true,
-      storeId: true,
-      tillId: true,
-      shiftId: true,
-      cashierUserId: true,
-      saleSource: true,
-      totalPence: true,
-      paymentStatus: true,
-      till: { select: { name: true, active: true } },
-      shift: {
-        select: {
-          id: true,
-          status: true,
-          tillId: true,
-          openedAt: true,
-          openingCashPence: true,
-          expectedCashPence: true,
-          cardTotalPence: true,
-          transferTotalPence: true,
-          momoTotalPence: true,
+  const [
+    invoices,
+    moneyKeys,
+    productCount,
+    business,
+    actor,
+    openingMovements,
+    openingJournals,
+    productImports,
+    gateProducts,
+    manualEntryProducts,
+    expenses,
+    sellableProduct,
+    openShifts,
+    purchaseInvoiceCount,
+    saleInvoiceCount,
+    salesPaymentCount,
+    cashSaleDrawerCount,
+    recentPurchases,
+  ] = await Promise.all([
+    prisma.salesInvoice.findMany({
+      where: { businessId: user.businessId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        transactionNumber: true,
+        businessId: true,
+        storeId: true,
+        tillId: true,
+        shiftId: true,
+        cashierUserId: true,
+        saleSource: true,
+        totalPence: true,
+        paymentStatus: true,
+        till: { select: { name: true, active: true } },
+        shift: {
+          select: {
+            id: true,
+            status: true,
+            tillId: true,
+            openedAt: true,
+            openingCashPence: true,
+            expectedCashPence: true,
+            cardTotalPence: true,
+            transferTotalPence: true,
+            momoTotalPence: true,
+          },
         },
+        payments: { select: { id: true, method: true, amountPence: true, reference: true } },
       },
-      payments: { select: { id: true, method: true, amountPence: true, reference: true } },
-    },
-  });
-
-  const shiftIds = [...new Set(invoices.map((row) => row.shiftId).filter(Boolean))] as string[];
-  const drawers = shiftIds.length
-    ? await prisma.cashDrawerEntry.findMany({
-        where: { businessId: user.businessId, shiftId: { in: shiftIds } },
-        select: {
-          id: true,
-          tillId: true,
-          shiftId: true,
-          entryType: true,
-          amountPence: true,
-          referenceType: true,
-          referenceId: true,
-        },
-      })
-    : [];
-
-  const stock = invoices.length
-    ? await prisma.stockMovement.findMany({
-        where: {
-          storeId: { in: [...new Set(invoices.map((row) => row.storeId))] },
-          referenceType: 'SALES_INVOICE',
-          referenceId: { in: invoices.map((row) => row.id) },
-        },
-        select: { id: true, referenceId: true, productId: true, qtyBase: true, storeId: true },
-      })
-    : [];
-
-  const invoiceIds = invoices.map((row) => row.id);
-  const journals = invoiceIds.length
-    ? await prisma.journalEntry.findMany({
-        where: {
-          businessId: user.businessId,
-          referenceId: { in: invoiceIds },
-        },
-        select: { id: true, referenceType: true, referenceId: true },
-      })
-    : [];
-
-  const moneyKeys = await prisma.moneyIdempotency.findMany({
-    where: { businessId: user.businessId },
-    orderBy: { createdAt: 'desc' },
-    take: 40,
-    select: { commandKind: true, createdAt: true },
-  });
-
-  const productCount = await prisma.product.count({
-    where: { businessId: user.businessId, active: true },
-  });
-
-  const [business, actor] = await Promise.all([
+    }),
+    prisma.moneyIdempotency.findMany({
+      where: { businessId: user.businessId },
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+      select: { commandKind: true, createdAt: true },
+    }),
+    prisma.product.count({
+      where: { businessId: user.businessId, active: true },
+    }),
     prisma.business.findUnique({
       where: { id: user.businessId },
       select: { openingCapitalPence: true, name: true },
@@ -118,104 +98,87 @@ export async function GET() {
       where: { id: user.id },
       select: { role: true, qaTag: true },
     }),
-  ]);
-
-  const openingMovements = await prisma.stockMovement.findMany({
-    where: {
-      store: { businessId: user.businessId },
-      type: 'OPENING',
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: {
-      storeId: true,
-      productId: true,
-      qtyBase: true,
-      type: true,
-      referenceType: true,
-      product: { select: { name: true, sku: true } },
-    },
-  });
-
-  const openingJournals = await prisma.journalEntry.findMany({
-    where: {
-      businessId: user.businessId,
-      referenceType: 'OPENING_BALANCE_INVENTORY',
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    select: { id: true, referenceType: true, referenceId: true },
-  });
-
-  const productImports = await prisma.productImport.findMany({
-    where: { businessId: user.businessId },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-    select: {
-      id: true,
-      fileName: true,
-      status: true,
-      rowsParsed: true,
-      rowsImported: true,
-      rowsUpdated: true,
-      rowsSkipped: true,
-    },
-  });
-
-  const gateProducts = await prisma.product.findMany({
-    where: {
-      businessId: user.businessId,
-      active: true,
-      OR: [
-        { sku: 'REL-IMP-P104-01' },
-        { name: 'Reliability Manual Import Gate' },
-      ],
-    },
-    select: { id: true, name: true, sku: true, barcode: true },
-    take: 5,
-  });
-
-  const manualEntryProducts = await prisma.product.findMany({
-    where: {
-      businessId: user.businessId,
-      active: true,
-      OR: [
-        { sku: 'REL-MAN-P104-01' },
-        { name: 'Reliability Manual Entry Gate' },
-      ],
-    },
-    select: { id: true, name: true, sku: true, barcode: true },
-    take: 5,
-  });
-
-  const expenses = await prisma.expense.findMany({
-    where: { businessId: user.businessId },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
-    select: { reference: true, amountPence: true, vendorName: true },
-  });
-
-  const sellableProduct = await prisma.product.findFirst({
-    where: {
-      businessId: user.businessId,
-      active: true,
-      OR: [{ sku: 'REL-SKU-1' }, { name: 'Reliability SKU' }],
-    },
-    select: {
-      name: true,
-      sku: true,
-      inventoryBalances: { select: { qtyOnHandBase: true, storeId: true }, take: 5 },
-    },
-  });
-
-  const [
-    openShifts,
-    purchaseInvoiceCount,
-    saleInvoiceCount,
-    salesPaymentCount,
-    cashSaleDrawerCount,
-    recentPurchases,
-  ] = await Promise.all([
+    prisma.stockMovement.findMany({
+      where: {
+        store: { businessId: user.businessId },
+        type: 'OPENING',
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        storeId: true,
+        productId: true,
+        qtyBase: true,
+        type: true,
+        referenceType: true,
+        product: { select: { name: true, sku: true } },
+      },
+    }),
+    prisma.journalEntry.findMany({
+      where: {
+        businessId: user.businessId,
+        referenceType: 'OPENING_BALANCE_INVENTORY',
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { id: true, referenceType: true, referenceId: true },
+    }),
+    prisma.productImport.findMany({
+      where: { businessId: user.businessId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        fileName: true,
+        status: true,
+        rowsParsed: true,
+        rowsImported: true,
+        rowsUpdated: true,
+        rowsSkipped: true,
+      },
+    }),
+    prisma.product.findMany({
+      where: {
+        businessId: user.businessId,
+        active: true,
+        OR: [
+          { sku: 'REL-IMP-P104-01' },
+          { name: 'Reliability Manual Import Gate' },
+        ],
+      },
+      select: { id: true, name: true, sku: true, barcode: true },
+      take: 5,
+    }),
+    prisma.product.findMany({
+      where: {
+        businessId: user.businessId,
+        active: true,
+        OR: [
+          { sku: 'REL-MAN-P104-01' },
+          { name: 'Reliability Manual Entry Gate' },
+        ],
+      },
+      select: { id: true, name: true, sku: true, barcode: true },
+      take: 5,
+    }),
+    prisma.expense.findMany({
+      where: { businessId: user.businessId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { reference: true, amountPence: true, vendorName: true },
+    }),
+    prisma.product.findFirst({
+      where: {
+        businessId: user.businessId,
+        active: true,
+        OR: [{ sku: 'REL-SKU-1' }, { name: 'Reliability SKU' }],
+      },
+      select: {
+        name: true,
+        sku: true,
+        inventoryBalances: { select: { qtyOnHandBase: true, storeId: true }, take: 5 },
+      },
+    }),
     prisma.shift.findMany({
       where: {
         status: 'OPEN',
@@ -238,9 +201,9 @@ export async function GET() {
         _count: {
           select: {
             salesInvoices: { where: { paymentStatus: { notIn: ['VOID', 'RETURNED'] } } },
+            cashDrawerEntries: { where: { entryType: 'OPEN_FLOAT' } },
           },
         },
-        cashDrawerEntries: { select: { entryType: true } },
       },
     }),
     prisma.purchaseInvoice.count({ where: { businessId: user.businessId } }),
@@ -257,6 +220,46 @@ export async function GET() {
       take: 10,
       select: { id: true, paymentStatus: true, totalPence: true, qaTag: true },
     }),
+  ]);
+
+  const shiftIds = [...new Set(invoices.map((row) => row.shiftId).filter(Boolean))] as string[];
+  const invoiceIds = invoices.map((row) => row.id);
+  const storeIds = [...new Set(invoices.map((row) => row.storeId))];
+
+  const [drawers, stock, journals] = await Promise.all([
+    shiftIds.length
+      ? prisma.cashDrawerEntry.findMany({
+          where: { businessId: user.businessId, shiftId: { in: shiftIds } },
+          select: {
+            id: true,
+            tillId: true,
+            shiftId: true,
+            entryType: true,
+            amountPence: true,
+            referenceType: true,
+            referenceId: true,
+          },
+        })
+      : Promise.resolve([]),
+    invoiceIds.length
+      ? prisma.stockMovement.findMany({
+          where: {
+            storeId: { in: storeIds },
+            referenceType: 'SALES_INVOICE',
+            referenceId: { in: invoiceIds },
+          },
+          select: { id: true, referenceId: true, productId: true, qtyBase: true, storeId: true },
+        })
+      : Promise.resolve([]),
+    invoiceIds.length
+      ? prisma.journalEntry.findMany({
+          where: {
+            businessId: user.businessId,
+            referenceId: { in: invoiceIds },
+          },
+          select: { id: true, referenceType: true, referenceId: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   return NextResponse.json({
@@ -331,7 +334,7 @@ export async function GET() {
       momoTotalPence: shift.momoTotalPence,
       transferTotalPence: shift.transferTotalPence,
       ownedByCurrentUser: shift.userId === user.id,
-      openFloatCount: shift.cashDrawerEntries.filter((row) => row.entryType === 'OPEN_FLOAT').length,
+      openFloatCount: shift._count.cashDrawerEntries,
       salesCount: shift._count.salesInvoices,
     })),
     purchaseInvoiceCount,

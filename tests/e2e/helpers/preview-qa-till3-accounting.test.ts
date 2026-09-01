@@ -50,6 +50,10 @@ describe('Till 3 accounting helper', () => {
     expect(helper).toContain('assertTill3AccountingNoWrites');
     expect(helper).toContain('assertReliabilityPreviewQaTenant');
     expect(helper).toContain("goto('/shifts'");
+    expect(helper).not.toContain('page.request');
+    expect(helper).toContain('fetchPageJsonRedacted');
+    expect(helper).not.toContain('fetchPreviewJsonRedacted');
+    expect(helper).toContain('RELIABILITY_SNAPSHOT_TIMEOUT_MS');
     expect(helper).toContain('Expected Cash');
     expect(helper).toContain('Card / Transfer');
     expect(helper).toContain('Mobile Money');
