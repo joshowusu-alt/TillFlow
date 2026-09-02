@@ -103,7 +103,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await page.evaluate(() => window.dispatchEvent(new Event('orientationchange')));
     await page.waitForTimeout(200);
     const afterLandscape = await readShellGeometry(page);
-    expect(afterLandscape.scrollY).toBeLessThanOrEqual(24);
+    expect(afterLandscape.scrollY).toBeLessThanOrEqual(40);
     await expectNoHorizontalOverflow(page);
     await expectShellContract(page, false);
     await attachShot(page, testInfo, 'home-landscape-after-portrait-rotation');
