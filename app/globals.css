@@ -189,6 +189,7 @@ a {
 
 input, select, textarea {
   font-family: inherit;
+  scroll-margin-top: calc(var(--app-header-offset) + 0.5rem);
   scroll-margin-bottom: calc(9rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-safe-bottom));
 }
 
@@ -288,8 +289,8 @@ textarea {
 /*
  * Compact phone landscape and keyboard-open portrait (shared with
  * lib/navigation/shell-layout.ts). One identity row; Sign out lives in More.
- * !important is required on two utilities that otherwise win below 1024px:
- * status strip `lg:hidden` is a no-op under `lg`, and Sign out uses `md:block`.
+ * Status-strip and Sign out are hidden here with higher specificity than
+ * `lg:hidden` / `md:block` so `!important` is not required.
  */
 @media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px),
        (orientation: portrait) and (max-height: 500px) and (max-width: 767px) {
@@ -301,6 +302,8 @@ textarea {
 
   .app-shell-header {
     background-color: #fff;
+    position: relative;
+    top: auto;
   }
 
   .app-shell-header-row {
@@ -310,7 +313,7 @@ textarea {
   }
 
   .app-shell-status-strip {
-    display: none !important;
+    display: none;
   }
 
   .nav-trust {
@@ -318,10 +321,9 @@ textarea {
     min-width: 0;
   }
 
-  .nav-trust-signout,
-  .nav-trust-status-label,
-  .nav-trust-sales {
-    display: none !important;
+  .app-shell-header .nav-trust-signout,
+  .app-shell-header .nav-trust-sales {
+    display: none;
   }
 
   .app-shell-header-pos .app-shell-menu-button {
@@ -507,8 +509,8 @@ html:has(input:focus, textarea:focus, select:focus) .hide-when-keyboard-open {
 
 /* Restore header Sign out only for a real visual-viewport keyboard, not for
    POS autofocus (`data-text-entry-active` / :has(input:focus)). */
-html[data-keyboard-open] .nav-trust-signout {
-  display: block !important;
+html[data-keyboard-open] .app-shell-header .nav-trust-signout {
+  display: block;
 }
 
 .overlay-shell {

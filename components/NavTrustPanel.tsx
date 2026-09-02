@@ -25,8 +25,12 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
     <div className="nav-trust flex min-w-0 items-center gap-2" data-nav-trust="true">
       <span
         className={isOnline ? 'status-dot-online' : 'status-dot-offline'}
+        role="img"
+        aria-label={isOnline ? 'Online' : 'Offline — sales will sync when reconnected'}
         title={isOnline ? 'Online' : 'Offline — sales will sync when reconnected'}
-      />
+      >
+        <span className="sr-only">{isOnline ? 'Online' : 'Offline'}</span>
+      </span>
       <div className="min-w-0">
         <div className="truncate text-xs font-semibold leading-tight text-ink sm:text-sm" data-nav-trust-name="true">
           {user.name}
@@ -48,6 +52,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         className={`nav-trust-status-label hidden sm:inline-flex ${
           isOnline ? 'status-badge-online' : 'status-badge-offline'
         }`}
+        aria-hidden="true"
       >
         {isOnline ? 'Online' : 'Offline'}
       </span>

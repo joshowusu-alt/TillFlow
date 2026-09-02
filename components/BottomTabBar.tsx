@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import type { AppRole } from '@/lib/navigation-config';
 import { getBottomTabsForRole } from '@/lib/navigation/mobile-menu-config';
 
@@ -13,6 +14,7 @@ import { getBottomTabsForRole } from '@/lib/navigation/mobile-menu-config';
  * which is a server component.
  */
 export const OPEN_MOBILE_NAV_EVENT = 'tillflow:open-mobile-nav';
+export const MOBILE_NAV_STATE_EVENT = 'tillflow:mobile-nav-state';
 
 /** Routes that should NOT render the bottom tab bar. */
 const HIDDEN_ROUTES = [
@@ -140,6 +142,15 @@ function TabIcon({ name }: { name: TabIconName }) {
 
 export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
   const pathname = usePathname() ?? '';
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const onState = (event: Event) => {
+      setMenuOpen(Boolean((event as CustomEvent<{ open?: boolean }>).detail?.open));
+    };
+    window.addEventListener(MOBILE_NAV_STATE_EVENT, onState);
+    return () => window.removeEventListener(MOBILE_NAV_STATE_EVENT, onState);
+  }, []);
 
   if (HIDDEN_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
     return null;
@@ -176,7 +187,15 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
           return (
             <li key={tab.label} className="flex-1">
               {tab.opensMenu ? (
-                <button type="button" onClick={openMobileNav} className={`${common} ${stateClasses} w-full`} data-shell-more="true">
+                <button
+                  type="button"
+                  onClick={openMobileNav}
+                  className={`${common} ${stateClasses} w-full`}
+                  data-shell-more="true"
+                  aria-haspopup="dialog"
+                  aria-expanded={menuOpen}
+                  aria-controls="shell-more-drawer"
+                >
                   {content}
                 </button>
               ) : (

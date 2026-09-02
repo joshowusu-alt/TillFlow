@@ -46,9 +46,11 @@ const PUBLIC_PATHS = [
 ];
 
 function isDevHarnessAllowed(): boolean {
+  if (process.env.VERCEL_ENV === 'production') return false;
   return (
     process.env.NODE_ENV === 'development' ||
-    process.env.ALLOW_OWNER_HOME_PREVIEW === 'true'
+    process.env.ALLOW_OWNER_HOME_PREVIEW === 'true' ||
+    process.env.E2E_LOADING_HARNESS === '1'
   );
 }
 

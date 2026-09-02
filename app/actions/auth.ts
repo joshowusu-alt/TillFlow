@@ -13,6 +13,7 @@ import { clearLoginFailures, getLoginThrottleStatus, recordLoginFailure } from '
 import { verifyTwoFactorCode } from '@/lib/security/two-factor';
 import { appLog, measureServerOperation, PERFORMANCE_THRESHOLDS_MS } from '@/lib/observability';
 import { ACTIVE_BUSINESS_COOKIE, getBusinessSessionCookieName, SESSION_COOKIE_PREFIX } from '@/lib/business-scope';
+import { HOME_LOADING_KIND_COOKIE, writeHomeLoadingKindCookie } from '@/lib/owner-home/home-loading-kind';
 import type { LoginFormState } from '@/lib/auth/login-form-state';
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -191,10 +192,23 @@ export async function login(_prevState: LoginFormState, formData: FormData): Pro
   // Redirect owners to onboarding if guided setup has not yet been completed,
   // otherwise straight to the reports dashboard.
   if (user.role === 'OWNER') {
-    const business = await prisma.business.findFirst({
-      where: { id: user.businessId },
-      select: { guidedSetup: true },
-    });
+    const [business, firstSale] = await Promise.all([
+      prisma.business.findFirst({
+        where: { id: user.businessId },
+        select: { guidedSetup: true, onboardingCompletedAt: true },
+      }),
+      prisma.salesInvoice.findFirst({
+        where: {
+          businessId: user.businessId,
+          paymentStatus: { notIn: ['RETURNED', 'VOID'] },
+          OR: [{ qaTag: null }, { qaTag: { not: 'DEMO_DAY' } }],
+        },
+        select: { id: true },
+      }),
+    ]);
+    writeHomeLoadingKindCookie(
+      business?.onboardingCompletedAt || firstSale ? 'established' : 'checklist',
+    );
     if (business?.guidedSetup) {
       redirect('/onboarding');
     }
@@ -221,5 +235,6 @@ export async function logout() {
     for (const c of sessionCookies) { cookieStore.delete(c.name); }
   }
   cookieStore.delete(ACTIVE_BUSINESS_COOKIE);
+  cookieStore.delete(HOME_LOADING_KIND_COOKIE);
   redirect('/login');
 }

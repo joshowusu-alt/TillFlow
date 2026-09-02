@@ -25,12 +25,13 @@ describe('Loading Phase 1: skeleton and route-loader polish', () => {
     expect(homeSkeleton).toContain('Completed owner-home');
   });
 
-  it('selects Home Instant Loading skeleton from owner critical-shell state', () => {
+  it('selects Home Instant Loading skeleton from owner home loading kind', () => {
     const loading = read('app/(protected)/onboarding/loading.tsx');
-    expect(loading).toContain('getOwnerHomeCriticalShell');
-    expect(loading).toContain('needsFullReadiness');
-    expect(loading).toContain('ChecklistReadinessSkeleton');
-    expect(loading).toContain('OwnerReadinessSkeleton');
+    const instant = read('app/(protected)/onboarding/HomeInstantLoading.tsx');
+    expect(loading).toContain('HomeInstantLoading');
+    expect(instant).toContain('getOwnerHomeLoadingKind');
+    expect(instant).toContain('ChecklistReadinessSkeleton');
+    expect(instant).toContain('OwnerReadinessSkeleton');
   });
 
   it('renders checklist skeleton without dark completed-home control-centre shell', () => {
@@ -68,7 +69,7 @@ describe('Loading Phase 1: skeleton and route-loader polish', () => {
     expect(read('app/(protected)/customers/loading.tsx')).toContain('variant="list"');
     expect(read('app/(protected)/suppliers/loading.tsx')).toContain('variant="list"');
     expect(read('app/(protected)/users/loading.tsx')).toContain('variant="people"');
-    expect(read('app/(protected)/payments/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/payments/loading.tsx')).toContain('variant="payments"');
     expect(read('app/(protected)/shifts/loading.tsx')).toContain('variant="shifts"');
     expect(read('app/(protected)/settings/loading.tsx')).toContain('variant="settings"');
 

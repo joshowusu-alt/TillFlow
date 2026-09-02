@@ -17,7 +17,7 @@ import MerchantBrandBadge from './MerchantBrandBadge';
 import NavTrustPanel from './NavTrustPanel';
 import NavMobileMenu from './NavMobileMenu';
 import NavIcon from './navigation/NavIcon';
-import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
+import { OPEN_MOBILE_NAV_EVENT, MOBILE_NAV_STATE_EVENT } from './BottomTabBar';
 import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
 import { mobileReportingScopeLabel } from '@/lib/navigation/mobile-scope-label';
 import { SHELL_COMPACT_LANDSCAPE_MQ, SHELL_LG_PX } from '@/lib/navigation/shell-layout';
@@ -60,6 +60,7 @@ export default function TopNav({
   const [pendingMobileHref, setPendingMobileHref] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
   const [liveOnlineOrdersCount, setLiveOnlineOrdersCount] = useState(onlineOrdersCount);
+  const [suppressDesktopNav, setSuppressDesktopNav] = useState(false);
   const lastSalesRefreshAtRef = useRef(todaySales ? Date.now() : 0);
   const isOnline = useNetworkStatus();
   const router = useRouter();
@@ -156,8 +157,8 @@ export default function TopNav({
       }
     };
 
-    void refreshNavKpis(false);
-
+    // Do not fetch on first paint. Layout does not pass todaySales; a mount
+    // refetch races Home/POS useful-shell. Refresh on More, focus, or a sale.
     if (mobileOpen) {
       void refreshNavKpis(true);
     }
@@ -225,6 +226,23 @@ export default function TopNav({
     return () => window.removeEventListener(OPEN_MOBILE_NAV_EVENT, handleOpen);
   }, []);
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(MOBILE_NAV_STATE_EVENT, { detail: { open: mobileOpen } }));
+    const main = document.getElementById('main-content');
+    const bottom = document.querySelector('.mobile-bottom-tab-bar');
+    if (mobileOpen) {
+      main?.setAttribute('inert', '');
+      bottom?.setAttribute('inert', '');
+    } else {
+      main?.removeAttribute('inert');
+      bottom?.removeAttribute('inert');
+    }
+    return () => {
+      main?.removeAttribute('inert');
+      bottom?.removeAttribute('inert');
+    };
+  }, [mobileOpen]);
+
   // Keep sticky/scroll offsets aligned with the real header height so POS
   // content never starts underneath an opaque sticky banner.
   useEffect(() => {
@@ -232,7 +250,7 @@ export default function TopNav({
     if (!header) return;
 
     const publishOffset = () => {
-      const height = Math.ceil(header.getBoundingClientRect().height);
+      const height = Math.ceil(header.offsetHeight || header.getBoundingClientRect().height);
       if (height <= 0) return;
       document.documentElement.style.setProperty('--app-header-offset', `${height}px`);
       document.documentElement.style.setProperty('--app-header-height-mobile', `${height}px`);
@@ -277,6 +295,14 @@ export default function TopNav({
     return () => mq.removeEventListener('change', sync);
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${SHELL_LG_PX}px)`);
+    const sync = () => setSuppressDesktopNav(!mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
   return (
     <>
       <header
@@ -284,7 +310,6 @@ export default function TopNav({
         className={`app-shell-header border-b border-slate-200 bg-white shadow-nav${isPosRoute ? ' app-shell-header-pos' : ''}`}
         role="banner"
         data-pos-compact-header={isPosRoute ? 'true' : undefined}
-        style={{ position: 'sticky', top: 0, zIndex: 30 }}
       >
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
@@ -306,12 +331,15 @@ export default function TopNav({
             ref={navRef}
             aria-label="Main navigation"
             className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex"
+            data-desktop-nav={suppressDesktopNav ? 'deferred' : 'hydrated'}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setOpenGroup(null);
               }
             }}
           >
+            {!suppressDesktopNav ? (
+              <>
             {user.role === 'OWNER' ? (
               <Link
                 href="/onboarding"
@@ -492,6 +520,8 @@ export default function TopNav({
                 </div>
               );
             })}
+              </>
+            ) : null}
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -553,6 +583,8 @@ export default function TopNav({
               }`}
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-expanded={mobileOpen}
+              aria-haspopup="dialog"
+              aria-controls="shell-more-drawer"
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
               data-shell-menu-button="true"
             >

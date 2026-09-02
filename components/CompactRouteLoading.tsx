@@ -10,7 +10,12 @@ type CompactRouteLoadingProps = {
     | 'shifts'
     | 'settings'
     | 'people'
-    | 'list';
+    | 'people-hub'
+    | 'list'
+    | 'product-form'
+    | 'purchase-detail'
+    | 'online-orders'
+    | 'payments';
 };
 
 const ARIA_LABEL: Record<CompactRouteLoadingProps['variant'], string> = {
@@ -24,7 +29,12 @@ const ARIA_LABEL: Record<CompactRouteLoadingProps['variant'], string> = {
   shifts: 'Loading shifts',
   settings: 'Loading settings',
   people: 'Loading people',
+  'people-hub': 'Loading people',
   list: 'Loading list',
+  'product-form': 'Loading product form',
+  'purchase-detail': 'Loading purchase',
+  'online-orders': 'Loading online orders',
+  payments: 'Loading payments',
 };
 
 function PageHeaderPlaceholder({ subtitle = true }: { subtitle?: boolean }) {
@@ -176,8 +186,15 @@ export default function CompactRouteLoading({ variant }: CompactRouteLoadingProp
 
       {variant === 'report-detail' ? (
         <>
-          <FilterBarPlaceholder />
-          <StatChips count={2} />
+          <div className="rounded-2xl border border-black/5 bg-white/90 p-3 shadow-sm">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="h-10 rounded-xl bg-black/5" />
+              <div className="h-10 rounded-xl bg-black/5" />
+              <div className="h-10 rounded-xl bg-black/5" />
+            </div>
+            <div className="mt-2 h-10 w-28 rounded-xl bg-black/5" />
+          </div>
+          <StatChips count={4} />
           <ListRows count={6} />
         </>
       ) : null}
@@ -219,6 +236,54 @@ export default function CompactRouteLoading({ variant }: CompactRouteLoadingProp
         <>
           <FilterBarPlaceholder />
           <ListRows count={6} />
+        </>
+      ) : null}
+
+      {variant === 'people-hub' ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-2xl border border-black/5 bg-white p-4">
+              <div className="h-8 w-8 rounded-xl bg-black/5" />
+              <div className="mt-3 h-4 w-2/3 rounded bg-black/5" />
+              <div className="mt-2 h-3 w-full rounded bg-black/5" />
+              <div className="mt-4 h-10 w-36 rounded-xl bg-black/5" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {variant === 'product-form' ? (
+        <>
+          <div className="h-40 w-full rounded-2xl bg-black/5 sm:max-w-sm" />
+          <FormPanelPlaceholder />
+          <FormPanelPlaceholder />
+        </>
+      ) : null}
+
+      {variant === 'purchase-detail' ? (
+        <>
+          <StatChips count={3} />
+          <ListRows count={4} />
+          <FormPanelPlaceholder />
+        </>
+      ) : null}
+
+      {variant === 'online-orders' ? (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-9 w-24 rounded-full bg-black/5" />
+            ))}
+          </div>
+          <ListRows count={5} />
+        </>
+      ) : null}
+
+      {variant === 'payments' ? (
+        <>
+          <FilterBarPlaceholder />
+          <FormPanelPlaceholder />
+          <ListRows count={5} />
         </>
       ) : null}
     </div>

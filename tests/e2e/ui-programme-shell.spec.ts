@@ -12,10 +12,15 @@ import { isProductionPlaywrightTarget } from './helpers/env';
 const VIEWPORTS = [
   { name: 'phone-portrait-320', width: 320, height: 568 },
   { name: 'phone-portrait-390', width: 390, height: 844 },
-  { name: 'phone-landscape-844', width: 844, height: 390 },
   { name: 'phone-landscape-568', width: 568, height: 320 },
+  { name: 'phone-landscape-667', width: 667, height: 375 },
+  { name: 'phone-landscape-740', width: 740, height: 360 },
+  { name: 'phone-landscape-844', width: 844, height: 390 },
+  { name: 'phone-landscape-915', width: 915, height: 412 },
+  { name: 'phone-landscape-932', width: 932, height: 430 },
   { name: 'phone-keyboard-390', width: 390, height: 400 },
   { name: 'tablet-portrait', width: 768, height: 1024 },
+  { name: 'tablet-landscape', width: 1024, height: 768 },
   { name: 'desktop-short', width: 1280, height: 480 },
   { name: 'desktop-1280', width: 1280, height: 720 },
 ] as const;
@@ -106,6 +111,15 @@ test.describe('UI programme shell geometry (read-only)', () => {
     expect(afterLandscape.scrollY).toBeLessThanOrEqual(40);
     await expectNoHorizontalOverflow(page);
     await expectShellContract(page, false);
+    const primary = page.locator('a.home-open-pos, a[href="/pos"]').first();
+    if ((await primary.count()) > 0 && (await primary.isVisible().catch(() => false))) {
+      const box = await primary.boundingBox();
+      expect(box, 'primary action remains in the landscape viewport').toBeTruthy();
+      if (box) {
+        expect(box.y).toBeGreaterThanOrEqual(-8);
+        expect(box.y + box.height).toBeLessThanOrEqual(390 + 8);
+      }
+    }
     await attachShot(page, testInfo, 'home-landscape-after-portrait-rotation');
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -140,7 +154,18 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await page.locator('[data-shell-more="true"]').click();
     await expect(page.locator('[data-shell-signout="drawer"]').first()).toBeVisible();
     await attachShot(page, testInfo, 'home-more-drawer');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect(page.locator('[data-shell-drawer-close="true"]')).toBeFocused();
+    await page.keyboard.press('Tab');
+    const focusInside = await page.evaluate(() => {
+      const dialogNode = document.getElementById('shell-more-drawer');
+      return Boolean(dialogNode && dialogNode.contains(document.activeElement));
+    });
+    expect(focusInside, 'Tab stays inside the More drawer').toBe(true);
     await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[data-shell-more="true"]')).toBeFocused();
   });
 
   test('operational list routes keep shell clearance', async ({ page }, testInfo) => {
@@ -189,15 +214,13 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await expect(skip).toBeFocused();
     await skip.press('Enter');
     await expect(page.locator('#main-content')).toBeFocused();
-    await page.evaluate(() => {
-      document.documentElement.style.zoom = '2';
-    });
+    await page.addStyleTag({ content: 'html { font-size: 32px !important; }' });
     await page.waitForTimeout(100);
     await expectNoHorizontalOverflow(page, 8);
     await attachShot(page, testInfo, 'home-200pct-zoom');
 
     await page.evaluate(() => {
-      document.documentElement.style.zoom = '1';
+      document.documentElement.style.fontSize = '';
     });
     await page.goto('/products', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
@@ -207,5 +230,86 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await expect(page).toHaveURL(/\/products/);
     await page.goForward();
     await expect(page).toHaveURL(/\/onboarding/);
+  });
+
+  test('Home never flashes the generic parent loader or the wrong journey skeleton', async ({ page }) => {
+    await page.addInitScript(() => {
+      const frames: string[] = [];
+      (window as unknown as { __tfLoadingFrames: string[] }).__tfLoadingFrames = frames;
+      const record = () => {
+        document.querySelectorAll('[role="status"][aria-label]').forEach((node) => {
+          const label = node.getAttribute('aria-label');
+          if (label) frames.push(label);
+        });
+      };
+      new MutationObserver(record).observe(document.documentElement, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['aria-label'],
+      });
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.locator('#main-content').waitFor({ state: 'visible' });
+    const frames = await page.evaluate(
+      () => (window as unknown as { __tfLoadingFrames?: string[] }).__tfLoadingFrames ?? [],
+    );
+    expect(frames.filter((label) => label === 'Loading page'), 'generic parent loader must not flash').toEqual([]);
+    const hadChecklist = frames.includes('Preparing setup checklist');
+    const hadEstablished = frames.includes('Preparing owner home');
+    expect(hadChecklist && hadEstablished, 'both Home skeletons must not appear').toBe(false);
+    const establishedHome = (await page.locator('.home-hero').count()) > 0;
+    if (establishedHome) {
+      expect(hadChecklist, 'established Home must not show the checklist skeleton').toBe(false);
+    }
+  });
+
+  test('short landscape Home keeps content below the header when a field is focused', async ({ page }) => {
+    await page.setViewportSize({ width: 568, height: 320 });
+    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.locator('#main-content').waitFor({ state: 'visible' });
+    const field = page.locator('#main-content input, #main-content textarea, #main-content select').first();
+    if ((await field.count()) > 0) {
+      await field.focus();
+    }
+    await expectShellContract(page, false, { keepFocus: true });
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('status is not colour-only and only one navigation is exposed on phones', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
+    await page.locator('#main-content').waitFor({ state: 'visible' });
+    await expect(page.getByRole('img', { name: /online|offline/i }).first()).toBeVisible();
+    const desktopNav = page.locator('nav[aria-label="Main navigation"]');
+    await expect(desktopNav).toHaveAttribute('inert', '');
+    await expect(page.getByRole('navigation', { name: /primary mobile navigation/i })).toBeVisible();
+  });
+
+  test('deterministic loading harness matches route skeleton families', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const probe = await page.goto('/dev/loading-harness?route=/products', { waitUntil: 'domcontentloaded' });
+    if ((probe?.status() ?? 404) === 404) {
+      test.skip(true, 'E2E loading harness is disabled on this server');
+    }
+    const routes = [
+      '/products',
+      '/purchases',
+      '/shifts',
+      '/settings',
+      '/reports',
+      '/reports/money-received',
+      '/online-orders',
+      '/people',
+    ];
+    for (const route of routes) {
+      await page.goto(`/dev/loading-harness?route=${encodeURIComponent(route)}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('[data-route-skeleton]').first()).toBeVisible();
+      await attachShot(page, testInfo, `harness${route.replace(/\//g, '-')}`);
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      await page.locator('#main-content').waitFor({ state: 'visible' });
+      await attachShot(page, testInfo, `final${route.replace(/\//g, '-')}`);
+    }
   });
 });

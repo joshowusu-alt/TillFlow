@@ -80,7 +80,11 @@ export async function readShellGeometry(page: Page) {
   });
 }
 
-export async function expectShellContract(page: Page, isPosRoute: boolean) {
+export async function expectShellContract(
+  page: Page,
+  isPosRoute: boolean,
+  options: { keepFocus?: boolean } = {},
+) {
   await page.waitForFunction((lg) => {
     const nav = document.querySelector('nav[aria-label="Main navigation"]');
     if (!nav) return false;
@@ -89,19 +93,35 @@ export async function expectShellContract(page: Page, isPosRoute: boolean) {
     return desktop ? !inert : inert;
   }, SHELL_LG_PX);
 
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && active !== document.body) active.blur();
-    window.scrollTo(0, 0);
-  });
+  if (!options.keepFocus) {
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body) active.blur();
+      window.scrollTo(0, 0);
+    });
+  }
 
   const geo = await readShellGeometry(page);
   const mode = classifyShellLayout({ width: geo.width, height: geo.height });
 
   expect(geo.headerHeight, 'header occupies space').toBeGreaterThan(32);
-  if (geo.height > 360) {
-    expect(geo.mainTop + 1, 'main starts below sticky header').toBeGreaterThanOrEqual(geo.headerBottom - 8);
-  }
+  expect(geo.mainTop + 1, 'main starts below sticky header').toBeGreaterThanOrEqual(geo.headerBottom - 8);
+
+  const covered = await page.evaluate(() => {
+    const header = document.querySelector('.app-shell-header') as HTMLElement | null;
+    const main = document.querySelector('#main-content') as HTMLElement | null;
+    if (!header || !main) return 'missing-shell';
+    const headerBottom = header.getBoundingClientRect().top + header.offsetHeight;
+    const probe = main.querySelector('h1, h2, [data-home-hero], .home-hero, input, a.home-open-pos, [data-route-skeleton]') as HTMLElement | null;
+    const target = probe ?? (main.firstElementChild as HTMLElement | null);
+    if (!target) return null;
+    const top = target.getBoundingClientRect().top;
+    if (top + 8 < headerBottom && target.getBoundingClientRect().height > 8) {
+      return `contentTop=${Math.round(top)} headerBottom=${Math.round(headerBottom)}`;
+    }
+    return null;
+  });
+  expect(covered, 'Home/main content must not sit under the header').toBeNull();
   expect(geo.trustNameVisible, 'owner identity visible').toBe(true);
   expect(geo.logoVisible, 'logo visible').toBe(true);
   expect(geo.logoHeight, 'logo readable').toBeGreaterThanOrEqual(16);

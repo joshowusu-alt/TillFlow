@@ -75,10 +75,9 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
   it('uses a state-aware Instant Loading fallback for Home', () => {
     const checklist = read('app/(protected)/onboarding/ChecklistReadinessSkeleton.tsx');
     const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
-    const loading = read('app/(protected)/onboarding/loading.tsx');
+    const loading = read('app/(protected)/onboarding/HomeInstantLoading.tsx');
 
-    expect(loading).toContain('getOwnerHomeCriticalShell');
-    expect(loading).toContain('needsFullReadiness');
+    expect(loading).toContain('getOwnerHomeLoadingKind');
     expect(loading).toContain('ChecklistReadinessSkeleton');
     expect(loading).toContain('OwnerReadinessSkeleton');
     expect(checklist).toContain('Preparing setup checklist');

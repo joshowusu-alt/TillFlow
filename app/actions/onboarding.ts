@@ -3,6 +3,7 @@
 import { revalidateTag } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireBusiness } from '@/lib/auth';
+import { writeHomeLoadingKindCookie } from '@/lib/owner-home/home-loading-kind';
 import { getTodayKPIs } from '@/lib/reports/today-kpis';
 import { DEMO_SKUS } from '@/lib/demo-data-constants';
 import {
@@ -384,6 +385,7 @@ export async function markOnboardingCompleteAfterFirstSale(businessId: string): 
     where: { id: businessId },
     data: { onboardingCompletedAt: new Date() },
   });
+  writeHomeLoadingKindCookie('established');
   revalidateTag(`readiness-${businessId}`);
   revalidateTag('control-portfolio');
 }
