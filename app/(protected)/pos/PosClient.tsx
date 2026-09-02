@@ -2396,14 +2396,14 @@ export default function PosClient({
               compactDenominations={totalDue <= 0}
             />
             </div>
-            <div
-              className={`rounded-xl border border-black/5 bg-black/[.02] px-3 py-2 text-xs text-black/55 ${
-                showCheckoutPanel ? 'hidden' : 'md:hidden'
-              }`}
-              data-pos-checkout-collapsed="true"
-            >
-              Paid · Cash ready — add an item to open checkout.
-            </div>
+            {showCheckoutPanel ? null : (
+              <div
+                className="rounded-xl border border-black/5 bg-black/[.02] px-3 py-2 text-xs text-black/55 md:hidden"
+                data-pos-checkout-collapsed="true"
+              >
+                Paid · Cash ready — add an item to open checkout.
+              </div>
+            )}
 
             {checkoutIssues.length > 0 ? (
               <div className="space-y-1.5">

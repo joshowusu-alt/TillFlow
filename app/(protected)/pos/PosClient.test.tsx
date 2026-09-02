@@ -486,6 +486,24 @@ describe('PosClient mobile phase 1 layout', () => {
     expect(checkoutFull?.querySelector('#pos-payment-panel')).not.toBeNull();
   });
 
+  it('unmounts the empty-cart cash-ready hint once a line is in the cart', async () => {
+    render(<PosClient {...baseProps} />);
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-checkout-collapsed="true"]')).not.toBeNull();
+    });
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    await waitFor(() => {
+      expect(document.querySelector('[data-pos-checkout-collapsed="true"]')).toBeNull();
+    });
+    expect(screen.getByText(/✓ Ready —/i)).toBeInTheDocument();
+  });
+
   it('keeps loading feedback compact and does not claim a false no-till state', async () => {
     render(<PosClient {...baseProps} tills={[]} openShiftTillIds={[]} checkoutExtrasReady={false} />);
     await waitFor(() => {

@@ -23,7 +23,7 @@ PerformanceObserver layout-shift entries named the POS checkout / cart regions, 
 
 1. **One POS DOM** for phone and desktop. Chrome is CSS (`max-md` / `md` / `lg`), not `matchMedia`.
 2. Empty-cart checkout: full panel stays in the tree with `max-md:hidden`; collapsed hint is `md:hidden`.
-3. Filled-cart phone sheet is `md:hidden`; inline sale panel is `max-md:hidden`. Cart data, not viewport JS, decides whether the sheet exists.
+3. Filled-cart phone sheet is `md:hidden`; inline sale panel is `max-md:hidden`. Cart data, not viewport JS, decides whether the sheet exists. The empty-cart “Cash ready” hint unmounts once a line is in the cart so it cannot match checkout-ready locators.
 4. `PosBoardSkeleton` matches empty-cart regions: search card, in-flow cart, compact till/checkout, welcome slot, desktop sidebar.
 5. Deferred extras: `PosWelcomeShelfSkeleton` is the Suspense fallback so the welcome slot does not appear after first paint. Live shelf starts `visible=true`.
 6. Compact-landscape POS header is sticky so barcode focus cannot scroll the hamburger off-screen. Barcode focus uses `{ preventScroll: true }`.
