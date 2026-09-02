@@ -4,7 +4,7 @@
  */
 export default function ProtectedRouteLoading() {
   return (
-    <div className="space-y-5 animate-pulse" role="status" aria-live="polite" aria-label="Loading page">
+    <div className="space-y-5 animate-pulse motion-reduce:animate-none" role="status" aria-live="polite" aria-label="Loading page">
       <div className="space-y-2">
         <div className="h-7 w-40 rounded-xl bg-black/5" />
         <p className="text-xs text-black/40">Loading page…</p>

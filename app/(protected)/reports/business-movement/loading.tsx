@@ -1,5 +1,5 @@
 import CompactRouteLoading from '@/components/CompactRouteLoading';
 
-export default function BalanceSheetLoading() {
+export default function Loading() {
   return <CompactRouteLoading variant="report-detail" />;
 }

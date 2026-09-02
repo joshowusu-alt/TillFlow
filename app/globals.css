@@ -279,11 +279,13 @@ textarea {
 }
 
 /*
- * Compact phone landscape: width often looks like "tablet" (sm/md) while height
- * is ~320–430px. Collapse chrome to one header row, keep identity readable,
- * and never let the bottom tab bar cover primary actions.
+ * Compact phone landscape and keyboard-open portrait (shared with
+ * lib/navigation/shell-layout.ts). One identity row; Sign out lives in More.
+ * !important is required on two utilities that otherwise win below 1024px:
+ * status strip `lg:hidden` is a no-op under `lg`, and Sign out uses `md:block`.
  */
-@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px) {
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px),
+       (orientation: portrait) and (max-height: 500px) and (max-width: 767px) {
   :root {
     --app-header-height-mobile: 3.25rem;
     --mobile-bottom-nav-content-height: 3.75rem;
@@ -304,22 +306,14 @@ textarea {
     display: none !important;
   }
 
-  .nav-trust-tablet,
-  .nav-trust-desktop,
-  .nav-trust-signout-tablet,
-  .nav-trust-signout-desktop {
-    display: none !important;
-  }
-
-  .nav-trust-compact {
-    display: flex !important;
-    min-width: 0;
+  .nav-trust {
     flex: 1 1 auto;
+    min-width: 0;
   }
 
-  /* Non-POS: More tab opens the drawer. Keep the header hamburger on POS
-     because the bottom tab bar is hidden on /pos. */
-  .app-shell-header:not(.app-shell-header-pos) .app-shell-menu-button {
+  .nav-trust-signout,
+  .nav-trust-status-label,
+  .nav-trust-sales {
     display: none !important;
   }
 
@@ -354,6 +348,17 @@ textarea {
     position: sticky;
     bottom: calc(var(--mobile-bottom-nav-height) + 0.5rem);
     z-index: 20;
+  }
+}
+
+/* Short desktop: keep header Sign out. Never apply phone-compact hiding. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 1024px) {
+  :root {
+    --app-header-height-desktop: 3.5rem;
+  }
+
+  .nav-trust-signout {
+    display: block;
   }
 }
 

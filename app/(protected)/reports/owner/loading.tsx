@@ -1,6 +1,6 @@
 export default function OwnerIntelligenceLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6 animate-pulse motion-reduce:animate-none" role="status" aria-live="polite" aria-label="Loading owner intelligence" data-route-skeleton="owner">
       <div className="card space-y-4 rounded-[1.75rem] p-6">
         <div className="h-3 w-32 rounded-full bg-border" />
         <div className="h-8 w-72 rounded-xl bg-border" />

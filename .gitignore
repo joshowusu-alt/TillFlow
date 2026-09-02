@@ -34,6 +34,8 @@ tsconfig.tsbuildinfo
 
 ci.db
 ci.db-journal
+ci-ui-evidence.db
+ci-ui-evidence.db-journal
 perf.db
 perf.db-journal
 /prisma/ci.db
@@ -43,6 +45,7 @@ perf.db-journal
 
 # Local visual QA evidence (never commit)
 /tmp/home-qa/
+/tmp/ui-programme-evidence/
 /tmp/*.local.env
 /tmp/*preview*.env
 

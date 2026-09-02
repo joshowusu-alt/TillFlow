@@ -186,6 +186,11 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
+      - name: UI programme shell geometry
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:6200
+        run: npm run test:e2e:ui-programme
+
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 
@@ -206,6 +211,7 @@ jobs:
         with:
           name: pos-safety-artifacts
           path: |
-            .playwright-mcp/**
+            playwright/test-results/**
+            tmp/ui-programme-evidence/**
             .ci-server.log
           if-no-files-found: ignore

@@ -6,7 +6,7 @@
 export default function ChecklistReadinessSkeleton() {
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-accentSoft via-white to-paper"
+      className="bg-gradient-to-br from-accentSoft via-white to-paper"
       role="status"
       aria-live="polite"
       aria-label="Preparing setup checklist"

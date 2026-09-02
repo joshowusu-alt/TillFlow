@@ -136,6 +136,26 @@ export default defineConfig({
       },
     },
     {
+      name: 'ui-programme-setup',
+      testMatch: /ui-programme\.auth\.ts/,
+      retries: 0,
+      timeout: 90_000,
+    },
+    {
+      name: 'ui-programme-chromium',
+      dependencies: ['ui-programme-setup'],
+      testMatch: /ui-programme-shell\.spec\.ts/,
+      retries: 0,
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        hasTouch: true,
+        actionTimeout: 8_000,
+        navigationTimeout: 20_000,
+        storageState: 'playwright/.auth/seed-owner.json',
+      },
+    },
+    {
       name: 'reliability-journey',
       testDir: './playwright',
       testMatch: /reliability-journey\.spec\.ts/,

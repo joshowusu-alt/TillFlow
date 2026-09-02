@@ -20,6 +20,7 @@ import NavIcon from './navigation/NavIcon';
 import { OPEN_MOBILE_NAV_EVENT } from './BottomTabBar';
 import { NAV_KPI_REFRESH_EVENT, type NavKpiRefreshDetail } from '@/lib/navigation/nav-kpi-events';
 import { mobileReportingScopeLabel } from '@/lib/navigation/mobile-scope-label';
+import { SHELL_COMPACT_LANDSCAPE_MQ, SHELL_LG_PX } from '@/lib/navigation/shell-layout';
 
 export type TopNavUser = {
   name: string;
@@ -59,7 +60,7 @@ export default function TopNav({
   const [pendingMobileHref, setPendingMobileHref] = useState<string | null>(null);
   const [liveTodaySales, setLiveTodaySales] = useState(todaySales);
   const [liveOnlineOrdersCount, setLiveOnlineOrdersCount] = useState(onlineOrdersCount);
-  const lastSalesRefreshAtRef = useRef(0);
+  const lastSalesRefreshAtRef = useRef(todaySales ? Date.now() : 0);
   const isOnline = useNetworkStatus();
   const router = useRouter();
   const [isRefreshing, startRefreshTransition] = useTransition();
@@ -155,7 +156,7 @@ export default function TopNav({
       }
     };
 
-    void refreshNavKpis(!todaySales);
+    void refreshNavKpis(false);
 
     if (mobileOpen) {
       void refreshNavKpis(true);
@@ -244,9 +245,7 @@ export default function TopNav({
     const resetInvalidScroll = () => {
       publishOffset();
       if (typeof window === 'undefined') return;
-      const compactLandscape = window.matchMedia(
-        '(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)',
-      ).matches;
+      const compactLandscape = window.matchMedia(SHELL_COMPACT_LANDSCAPE_MQ).matches;
       if (compactLandscape) {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       }
@@ -258,6 +257,27 @@ export default function TopNav({
       window.removeEventListener('orientationchange', resetInvalidScroll);
     };
   }, [pathname, mobileOpen, pendingMobileHref, liveTodaySales, isOnline]);
+
+  // Desktop nav stays in the tree for SSR, but must not remain an accessible
+  // landmark on phone/tablet. `inert` removes it from the a11y tree without a
+  // second mounted menu identity.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const mq = window.matchMedia(`(min-width: ${SHELL_LG_PX}px)`);
+    const sync = () => {
+      if (mq.matches) {
+        nav.removeAttribute('inert');
+        nav.removeAttribute('aria-hidden');
+      } else {
+        nav.setAttribute('inert', '');
+        nav.setAttribute('aria-hidden', 'true');
+      }
+    };
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   return (
     <>
@@ -530,10 +550,13 @@ export default function TopNav({
             <NavTrustPanel user={user} storeName={storeName} isOnline={isOnline} todaySales={liveTodaySales} />
             <button
               type="button"
-              className="app-shell-menu-button flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white shadow-sm transition hover:bg-slate-50 active:bg-slate-100 lg:hidden"
+              className={`app-shell-menu-button h-11 w-11 items-center justify-center rounded-xl border border-slate-200/80 bg-white shadow-sm transition hover:bg-slate-50 active:bg-slate-100 ${
+                isPosRoute ? 'flex lg:hidden' : 'hidden'
+              }`}
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-expanded={mobileOpen}
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              data-shell-menu-button="true"
             >
               {mobileOpen ? (
                 <svg className="h-5 w-5 text-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -176,7 +176,7 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
           return (
             <li key={tab.label} className="flex-1">
               {tab.opensMenu ? (
-                <button type="button" onClick={openMobileNav} className={`${common} ${stateClasses} w-full`}>
+                <button type="button" onClick={openMobileNav} className={`${common} ${stateClasses} w-full`} data-shell-more="true">
                   {content}
                 </button>
               ) : (

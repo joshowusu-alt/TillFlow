@@ -49,7 +49,7 @@ describe('Phase 2a compact route skeletons', () => {
     expect(loader).toContain('variant="reports"');
     expect(loader).not.toMatch(GENERIC_FOUR_STAT_PATTERN);
     expect(loader).not.toMatch(LEGACY_TABLE_SIX_ROWS);
-    expect(component).toContain('ChartBlockPlaceholder');
+    expect(component).toContain('ReportCards');
     expect(component).toContain('StatChips');
   });
 
@@ -73,8 +73,11 @@ describe('Phase 2a compact route skeletons', () => {
   it('uses compact expenses and list loaders for previously legacy routes', () => {
     expect(read('app/(protected)/expenses/loading.tsx')).toContain('CompactRouteLoading');
     expect(read('app/(protected)/expenses/loading.tsx')).toContain('variant="expenses"');
-    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="list"');
     expect(read('app/(protected)/customers/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="products"');
+    expect(read('app/(protected)/shifts/loading.tsx')).toContain('variant="shifts"');
+    expect(read('app/(protected)/settings/loading.tsx')).toContain('variant="settings"');
+    expect(read('app/(protected)/users/loading.tsx')).toContain('variant="people"');
   });
 
   it('does not change checkout sale creation logic', () => {
@@ -91,7 +94,7 @@ describe('Phase 2a compact route skeletons', () => {
   it('renders compact route loaders without full-screen splash behaviour', () => {
     render(React.createElement(CompactRouteLoading, { variant: 'sales' }));
 
-    expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading sales' })).toBeInTheDocument();
     expect(screen.queryByText(/Opening/i)).not.toBeInTheDocument();
   });
 });

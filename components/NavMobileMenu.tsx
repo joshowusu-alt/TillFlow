@@ -301,7 +301,7 @@ export default function NavMobileMenu({
         Help & support
       </Link>
       <LogoutForm>
-        <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70">
+        <button type="submit" className="btn-ghost w-full py-2 text-sm text-black/70" data-shell-signout="drawer">
           Sign out
         </button>
       </LogoutForm>
@@ -332,6 +332,7 @@ export default function NavMobileMenu({
           <button
             type="submit"
             className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-3 text-left text-sm font-medium text-black/70"
+            data-shell-signout="drawer"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
               <NavIcon iconKey="account" className="h-[18px] w-[18px]" />
@@ -350,7 +351,11 @@ export default function NavMobileMenu({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden" onClick={() => setMobileOpen(false)} />
+      <div
+        className="fixed inset-0 z-40 bg-slate-950/25 backdrop-blur-[2px] lg:hidden"
+        onClick={() => setMobileOpen(false)}
+        data-shell-drawer-overlay="true"
+      />
       <div
         className={`${panelClassName} fixed z-50 overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-floating backdrop-blur-xl lg:hidden`}
         data-mobile-drawer-variant={isCashierCompactDrawer ? 'cashier-compact' : user.role === 'OWNER' ? 'owner-launcher' : 'manager-menu'}

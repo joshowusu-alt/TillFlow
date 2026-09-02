@@ -54,6 +54,8 @@ describe('Authenticated Playwright QA setup', () => {
     const authPaths = read('tests/e2e/helpers/auth-paths.ts');
     expect(config).toContain("storageState: 'playwright/.auth/owner.json'");
     expect(config).toContain('setup-auth');
+    expect(config).toContain('ui-programme-chromium');
+    expect(config).toContain("testMatch: /ui-programme-shell\\.spec\\.ts/");
     expect(authPaths).toContain("path.resolve(process.cwd(), 'playwright', '.auth')");
     expect(config).not.toContain('storageState: process.env');
   });

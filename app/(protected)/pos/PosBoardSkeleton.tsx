@@ -7,7 +7,7 @@
 export default function PosBoardSkeleton() {
   return (
     <div
-      className="animate-pulse"
+      className="animate-pulse motion-reduce:animate-none"
       role="status"
       aria-live="polite"
       aria-label="Loading point of sale"

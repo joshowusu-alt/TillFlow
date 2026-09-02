@@ -64,13 +64,13 @@ describe('Loading Phase 1: skeleton and route-loader polish', () => {
 
   it('unifies expenses and similar list routes onto CompactRouteLoading', () => {
     expect(read('app/(protected)/expenses/loading.tsx')).toContain('variant="expenses"');
-    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/products/loading.tsx')).toContain('variant="products"');
     expect(read('app/(protected)/customers/loading.tsx')).toContain('variant="list"');
     expect(read('app/(protected)/suppliers/loading.tsx')).toContain('variant="list"');
-    expect(read('app/(protected)/users/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/users/loading.tsx')).toContain('variant="people"');
     expect(read('app/(protected)/payments/loading.tsx')).toContain('variant="list"');
-    expect(read('app/(protected)/shifts/loading.tsx')).toContain('variant="list"');
-    expect(read('app/(protected)/settings/loading.tsx')).toContain('variant="list"');
+    expect(read('app/(protected)/shifts/loading.tsx')).toContain('variant="shifts"');
+    expect(read('app/(protected)/settings/loading.tsx')).toContain('variant="settings"');
 
     const compact = read('components/CompactRouteLoading.tsx');
     expect(compact).toContain("'expenses'");
