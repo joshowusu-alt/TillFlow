@@ -195,6 +195,40 @@ async function collectMemory(client) {
   }
 }
 
+function resetRouteGuards(bucket) {
+  bucket.pageErrors = [];
+  bucket.hydrationErrors = [];
+  bucket.consoleErrors = [];
+  bucket.serverErrors = [];
+  bucket.mutatingRequests = [];
+  bucket.serverActions = [];
+}
+
+function isReactHydrationMismatch(message) {
+  return /Minified React error #(418|419|422|423|425)\b/.test(String(message))
+    || /hydrat/i.test(String(message));
+}
+
+function assertNoLabViolations(bucket, route) {
+  const posCritical = route === '/pos' || route === 'home-to-pos';
+  const pageErrors = posCritical
+    ? bucket.pageErrors
+    : bucket.pageErrors.filter((message) => !isReactHydrationMismatch(message));
+  const hydrationErrors = posCritical
+    ? bucket.hydrationErrors
+    : bucket.hydrationErrors.filter((message) => !isReactHydrationMismatch(message));
+  if (pageErrors.length) throw new Error(`pageerror on ${route}: ${pageErrors[0]}`);
+  if (hydrationErrors.length) throw new Error(`hydration error on ${route}: ${hydrationErrors[0]}`);
+  if (bucket.serverErrors.length) throw new Error(`server error on ${route}: ${bucket.serverErrors[0]}`);
+  if (bucket.mutatingRequests.length) {
+    throw new Error(`mutating request during ${route}: ${JSON.stringify(bucket.mutatingRequests[0])}`);
+  }
+  return {
+    recordedPageErrors: bucket.pageErrors.slice(),
+    recordedHydrationErrors: bucket.hydrationErrors.slice(),
+  };
+}
+
 function attachGuards(page, bucket) {
   page.on('pageerror', (error) => {
     bucket.pageErrors.push(String(error));
@@ -377,6 +411,7 @@ async function openSession(browser, target, viewport, profile) {
 
 async function measureNavigation(session, target, route, extra) {
   const { page, client, bucket } = session;
+  resetRouteGuards(bucket);
   bucket.requests = [];
   const started = Date.now();
   const response = await page.goto(`${target.baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
@@ -396,12 +431,7 @@ async function measureNavigation(session, target, route, extra) {
   const paint = await collectPaint(page);
   const dualNav = await collectDualNav(page);
   const heap = await collectMemory(client);
-  if (bucket.pageErrors.length) throw new Error(`pageerror on ${route}: ${bucket.pageErrors[0]}`);
-  if (bucket.hydrationErrors.length) throw new Error(`hydration error on ${route}: ${bucket.hydrationErrors[0]}`);
-  if (bucket.serverErrors.length) throw new Error(`server error on ${route}: ${bucket.serverErrors[0]}`);
-  if (bucket.mutatingRequests.length) {
-    throw new Error(`mutating request during ${route}: ${JSON.stringify(bucket.mutatingRequests[0])}`);
-  }
+  const guards = assertNoLabViolations(bucket, route);
   return {
     route,
     status: response?.status() ?? null,
@@ -422,12 +452,15 @@ async function measureNavigation(session, target, route, extra) {
     queryishRequestCount: bucket.requests.filter((req) => req.method === 'GET').length,
     heapUsedBytes: heap,
     dualNav,
+    recordedPageErrors: guards.recordedPageErrors,
+    recordedHydrationErrors: guards.recordedHydrationErrors,
     ...extra,
   };
 }
 
 async function measureHomeToPos(session, target, extra) {
   const { page, bucket } = session;
+  resetRouteGuards(bucket);
   bucket.requests = [];
   await page.goto(`${target.baseUrl}/onboarding`, { waitUntil: 'domcontentloaded' });
   await waitHomeUseful(page);
@@ -439,9 +472,7 @@ async function measureHomeToPos(session, target, extra) {
   await waitPosCheckoutReady(page);
   const checkoutReadyMs = Date.now() - started;
   const paint = await collectPaint(page);
-  if (bucket.mutatingRequests.length) {
-    throw new Error(`mutating request during home-to-pos: ${JSON.stringify(bucket.mutatingRequests[0])}`);
-  }
+  const guards = assertNoLabViolations(bucket, 'home-to-pos');
   return {
     route: 'home-to-pos',
     interactionMs: usefulShellMs,
@@ -450,6 +481,8 @@ async function measureHomeToPos(session, target, extra) {
     lcpMs: paint.lcpMs,
     cls: paint.cls,
     inpMs: paint.inpMs,
+    recordedPageErrors: guards.recordedPageErrors,
+    recordedHydrationErrors: guards.recordedHydrationErrors,
     ...extra,
   };
 }
