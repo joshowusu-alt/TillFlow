@@ -266,7 +266,6 @@ textarea {
   overflow-x: clip;
 }
 
-.app-shell-header,
 .app-shell-status-strip,
 .app-shell-header-row {
   max-width: 100%;
