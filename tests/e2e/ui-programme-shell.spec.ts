@@ -287,12 +287,13 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await expect(page.getByRole('navigation', { name: /primary mobile navigation/i })).toBeVisible();
   });
 
-  test('deterministic loading harness matches route skeleton families', async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+  test('loading harness route is compiled out of the application', async ({ page }) => {
     const probe = await page.goto('/dev/loading-harness?route=/products', { waitUntil: 'domcontentloaded' });
-    if ((probe?.status() ?? 404) === 404) {
-      test.skip(true, 'E2E loading harness is disabled on this server');
-    }
+    expect(probe?.status() ?? 404).toBe(404);
+  });
+
+  test('route loading families stay compact on live pages', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     const routes = [
       '/products',
       '/purchases',
@@ -304,9 +305,6 @@ test.describe('UI programme shell geometry (read-only)', () => {
       '/people',
     ];
     for (const route of routes) {
-      await page.goto(`/dev/loading-harness?route=${encodeURIComponent(route)}`, { waitUntil: 'domcontentloaded' });
-      await expect(page.locator('[data-route-skeleton]').first()).toBeVisible();
-      await attachShot(page, testInfo, `harness${route.replace(/\//g, '-')}`);
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       await page.locator('#main-content').waitFor({ state: 'visible' });
       await attachShot(page, testInfo, `final${route.replace(/\//g, '-')}`);

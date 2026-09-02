@@ -171,11 +171,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Start app
-        env:
-          E2E_LOADING_HARNESS: '1'
         run: |
           set -euo pipefail
-          E2E_LOADING_HARNESS=1 npm run start -- -p 6200 > .ci-server.log 2>&1 &
+          npm run start -- -p 6200 > .ci-server.log 2>&1 &
           echo $! > .ci-server.pid
           for i in {1..60}; do
             if curl -fsS "$BASE_URL/login" >/dev/null; then
@@ -207,7 +205,6 @@ jobs:
       - name: UI programme shell geometry
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:6200
-          E2E_LOADING_HARNESS: '1'
         run: npm run test:e2e:ui-programme
 
       - name: Upload POS-safety artifacts
@@ -217,6 +214,8 @@ jobs:
           name: pos-safety-artifacts
           path: |
             playwright/test-results/**
+            docs/loading/GATE_E_LABORATORY_BENCHMARK.md
+            docs/loading/GATE_F_POS_STABILITY.md
             tmp/ui-programme-evidence/**
             .ci-server.log
           if-no-files-found: ignore

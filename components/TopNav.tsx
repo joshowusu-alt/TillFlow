@@ -606,7 +606,7 @@ export default function TopNav({
             isPosRoute ? 'py-1.5' : 'py-2'
           }`}
         >
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex flex-nowrap items-center gap-x-2 overflow-x-clip">
             <span
               className="metric-chip"
               title={

@@ -1,4 +1,6 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -416,6 +418,25 @@ function mockPhoneViewport(isPhone: boolean) {
   });
 }
 
+function expectClassName(el: Element | null, fragment: string) {
+  expect(el).not.toBeNull();
+  expect(el!.className).toContain(fragment);
+}
+
+function expectHiddenBelowMd(el: Element | null) {
+  expectClassName(el, 'max-md:hidden');
+}
+
+describe('PosClient CSS-first layout contract', () => {
+  it('does not swap phone vs desktop POS structure with useMatchMedia', () => {
+    const src = readFileSync(join(process.cwd(), 'app/(protected)/pos/PosClient.tsx'), 'utf8');
+    expect(src).not.toContain('useMatchMedia');
+    expect(src).not.toContain('isPhoneViewport');
+    expect(src).toContain('data-pos-checkout-full');
+    expect(src).toContain('data-pos-checkout-collapsed');
+  });
+});
+
 describe('PosClient mobile phase 1 layout', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -434,12 +455,12 @@ describe('PosClient mobile phase 1 layout', () => {
     await waitFor(() => {
       expect(screen.getByText('Cart is empty')).toBeInTheDocument();
     });
-    expect(screen.queryByRole('button', { name: /F2 focus barcode/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /\? keyboard help/i })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Keyboard help')).not.toBeInTheDocument();
-    // Camera remains on the primary barcode field; only the empty-cart duplicate is removed.
+    expectClassName(document.querySelector('[data-pos-desktop-empty-actions="true"]'), 'hidden');
+    expectClassName(document.querySelector('[data-pos-desktop-empty-actions="true"]'), 'md:flex');
+    expectClassName(screen.getByLabelText('Keyboard help'), 'hidden');
+    expectClassName(screen.getByLabelText('Keyboard help'), 'md:inline-flex');
+    // Camera remains on the primary barcode field; empty-cart duplicate stays desktop-only via CSS.
     expect(screen.getByLabelText('Scan with camera')).toBeInTheDocument();
-    expect(document.querySelector('[data-pos-desktop-shortcut]')).toBeNull();
   });
 
   it('keeps desktop shortcut controls available off phone widths', () => {
@@ -457,10 +478,12 @@ describe('PosClient mobile phase 1 layout', () => {
       expect(document.querySelector('[data-pos-till-compact="ready"]')).not.toBeNull();
     });
     expect(screen.getByText('Cart is empty')).toBeInTheDocument();
-    expect(screen.queryByText(/Scan a barcode or search a product/i)).not.toBeInTheDocument();
+    expectClassName(screen.getByText(/Scan a barcode or search a product/i), 'hidden');
     expect(screen.queryByText(/Use search or the barcode field above/i)).not.toBeInTheDocument();
     expect(document.querySelector('[data-pos-checkout-collapsed="true"]')).not.toBeNull();
-    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    const checkoutFull = document.querySelector('[data-pos-checkout-full="true"]');
+    expectHiddenBelowMd(checkoutFull);
+    expect(checkoutFull?.querySelector('#pos-payment-panel')).not.toBeNull();
   });
 
   it('keeps loading feedback compact and does not claim a false no-till state', async () => {
@@ -474,7 +497,7 @@ describe('PosClient mobile phase 1 layout', () => {
     // Compact loading chip — not the former oversized blank checkout stack.
     const loadingChip = document.querySelector('[data-pos-till-compact="loading"]');
     expect(loadingChip?.textContent).toMatch(/Preparing checkout/);
-    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    expectHiddenBelowMd(document.querySelector('[data-pos-checkout-full="true"]'));
   });
 
   it('surfaces a clear no-open-till blocking action on phone', async () => {
@@ -509,9 +532,11 @@ describe('PosClient mobile phase 1 layout', () => {
     await waitFor(() => {
       expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).not.toBeNull();
     });
-    // Phase 2: checkout stays in the sheet — not inline under the catalogue.
-    expect(document.querySelector('#pos-payment-panel')).toBeNull();
-    expect(document.querySelector('[data-pos-mobile-checkout-bar="true"]')).toBeNull();
+    // Phase 2: phone chrome hides the inline sale panel with CSS; checkout stays in the sheet.
+    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
+    const tabletBar = document.querySelector('[data-pos-mobile-checkout-bar="true"]');
+    expectClassName(tabletBar, 'hidden');
+    expectClassName(tabletBar, 'md:block');
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
     await waitFor(() => {
@@ -582,8 +607,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     expect(openButton).toBeInTheDocument();
     expect(openButton).toHaveTextContent(/1 item/i);
     expect(openButton.textContent).toMatch(/GH₵|GHS|₵/);
-    expect(document.querySelector('#pos-payment-panel')).toBeNull();
-    expect(document.querySelector('[data-pos-cart-card="true"]')).toBeNull();
+    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
   });
 
   it('updates the cart bar total when quantity changes inside the sheet', async () => {
@@ -630,7 +654,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
     });
-    expect(document.querySelector('#pos-payment-panel')).toBeNull();
+    expectHiddenBelowMd(document.querySelector('[data-pos-cart-card="true"]')?.parentElement ?? null);
     expect(screen.getByRole('button', { name: /View cart, 1 item/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /View cart/i }));
@@ -725,7 +749,7 @@ describe('PosClient mobile phase 2 cart bar and sheet', () => {
     await waitFor(() => {
       expect(document.querySelector('#pos-payment-panel')).not.toBeNull();
     });
-    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')).toBeNull();
+    expect(document.querySelector('[data-pos-mobile-cart-bar="true"]')?.closest('[class*="md:hidden"]')).not.toBeNull();
     expect(screen.queryByRole('dialog', { name: /Cart & checkout/i })).not.toBeInTheDocument();
     expect(document.querySelector('[data-pos-cart-card="true"]')).not.toBeNull();
   });

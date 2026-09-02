@@ -15,10 +15,22 @@ const NPX = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const useShell = process.platform === 'win32';
 
+function gitHead() {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error('git rev-parse HEAD failed');
+  return result.stdout.trim();
+}
+
 const TARGETS = [
   { label: 'production', sha: '8bd7d54e061aafae251100cff0e91c05bb666e77', port: 6202 },
   { label: 'phase1', sha: 'a344a233a83dc62a36be894d308c0f81dedbbf99', port: 6203 },
-  { label: 'final', sha: 'fd7b32ac3a02c6c781c895f6f0bb4d1e4283e624', port: 6204 },
+  {
+    label: 'final',
+    sha: (process.env.GATE_E_FINAL_SHA || '').trim() || gitHead(),
+    port: 6204,
+    destOverride: (process.env.GATE_E_FINAL_DIR || '').trim() || undefined,
+    databaseUrl: (process.env.GATE_E_FINAL_DATABASE_URL || '').trim() || undefined,
+  },
 ];
 
 function log(message) {
@@ -50,6 +62,13 @@ function worktreePath(label) {
 }
 
 function ensureWorktree(target) {
+  if (target.destOverride) {
+    if (!fs.existsSync(target.destOverride)) {
+      throw new Error(`GATE_E_FINAL_DIR does not exist: ${target.destOverride}`);
+    }
+    log(`using override dir ${target.label} -> ${target.destOverride} @ ${target.sha}`);
+    return target.destOverride;
+  }
   const dest = worktreePath(target.label);
   fs.mkdirSync(WORKTREE_ROOT, { recursive: true });
   if (fs.existsSync(path.join(dest, '.git')) || fs.existsSync(dest)) {
@@ -96,7 +115,7 @@ function copyNodeModules(dest) {
 function envFor(target, dest, extra = {}) {
   return {
     ...process.env,
-    DATABASE_URL: 'file:./gate-e.db',
+    DATABASE_URL: target.databaseUrl || 'file:./gate-e.db',
     NEXT_TELEMETRY_DISABLED: '1',
     TILLFLOW_REQUIRE_WHATSAPP: 'false',
     PORT: String(target.port),
@@ -260,8 +279,10 @@ async function main() {
     for (const target of TARGETS) {
       const dest = ensureWorktree(target);
       target.dest = dest;
-      if (process.env.GATE_E_SKIP_SETUP === '1') {
-        log(`skip setup ${target.label} (reuse install/build/db)`);
+      const skipSetup = process.env.GATE_E_SKIP_SETUP === '1' && target.label !== 'final';
+      const reuseFinalBuild = Boolean(target.destOverride) && process.env.GATE_E_REUSE_FINAL_BUILD === '1';
+      if (skipSetup || reuseFinalBuild) {
+        log(`${reuseFinalBuild ? 'reuse final build' : 'skip setup'} ${target.label}`);
         bundles.push(collectBundles(target, dest));
         continue;
       }

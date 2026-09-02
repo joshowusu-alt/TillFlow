@@ -44,14 +44,16 @@ describe('Home and POS skeleton state selection', () => {
     expect(screen.getByRole('status', { name: 'Preparing owner home' })).toBeInTheDocument();
   });
 
-  it('POS skeleton uses a mobile checkout bar and a desktop cart, not a promised till control', () => {
+  it('POS skeleton reserves search, in-flow cart, compact checkout and a desktop sidebar', () => {
     const { container } = render(React.createElement(PosBoardSkeleton));
     expect(screen.getByRole('status', { name: 'Loading point of sale' })).toBeInTheDocument();
-    expect(container.querySelector('[data-pos-skeleton-search="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-pos-skeleton-welcome="true"]')).not.toBeNull();
     expect(container.querySelector('[data-pos-skeleton-cart="mobile"]')).not.toBeNull();
+    expect(container.querySelector('[data-pos-skeleton-checkout="true"]')).not.toBeNull();
     expect(container.querySelector('[data-pos-skeleton-cart="desktop"]')).not.toBeNull();
     expect(container.querySelector('[data-pos-skeleton-cart="desktop"]')?.className).toContain('hidden');
     expect(container.querySelector('[data-pos-skeleton-cart="desktop"]')?.className).toContain('lg:block');
+    expect(container.querySelector('[data-pos-skeleton-grid]')).toBeNull();
     expect(screen.queryByText(/Preparing checkout/i)).toBeNull();
     expect(screen.queryByText(/Till 3/i)).toBeNull();
   });
