@@ -289,7 +289,7 @@ export default function TopNav({
         <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white">
           Skip to content
         </a>
-      <div className="flex w-full items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-7 lg:py-2 app-shell-header-row">
+      <div className="flex w-full min-w-0 max-w-full items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 lg:px-7 lg:py-2 app-shell-header-row">
           <a
             href="/pos"
             aria-label="TillFlow — go to POS"
@@ -570,7 +570,7 @@ export default function TopNav({
         </div>
 
         <div
-          className={`app-shell-status-strip border-t border-slate-200/60 bg-white px-4 lg:hidden sm:px-6 ${
+          className={`app-shell-status-strip max-w-full overflow-x-clip border-t border-slate-200/60 bg-white px-3 lg:hidden sm:px-6 ${
             isPosRoute ? 'py-1.5' : 'py-2'
           }`}
         >

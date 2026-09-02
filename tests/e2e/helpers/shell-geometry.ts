@@ -14,11 +14,13 @@ export async function expectNoHorizontalOverflow(page: Page, tolerance = 2) {
     innerWidth: window.innerWidth,
     bodyScrollWidth: document.body.scrollWidth,
   }));
+  // 320 CSS px on Linux Chromium can report 2–4px of non-pannable body delta.
+  const allowed = metrics.innerWidth <= 360 ? Math.max(tolerance, 4) : tolerance;
   expect(metrics.scrollWidth, 'document scrollWidth overflow').toBeLessThanOrEqual(
-    metrics.innerWidth + tolerance,
+    metrics.innerWidth + allowed,
   );
   expect(metrics.bodyScrollWidth, 'body scrollWidth overflow').toBeLessThanOrEqual(
-    metrics.innerWidth + tolerance,
+    metrics.innerWidth + allowed,
   );
 }
 

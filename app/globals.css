@@ -266,6 +266,14 @@ textarea {
   overflow-x: clip;
 }
 
+.app-shell-header,
+.app-shell-status-strip,
+.app-shell-header-row {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
 .app-main-shell[data-route-shell='pos'] {
   padding-bottom: calc(var(--pos-mobile-bottom-clearance) + 1rem);
 }
