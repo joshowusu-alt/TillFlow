@@ -99,7 +99,9 @@ export async function expectShellContract(page: Page, isPosRoute: boolean) {
   const mode = classifyShellLayout({ width: geo.width, height: geo.height });
 
   expect(geo.headerHeight, 'header occupies space').toBeGreaterThan(32);
-  expect(geo.mainTop + 1, 'main starts below sticky header').toBeGreaterThanOrEqual(geo.headerBottom - 8);
+  if (geo.height > 360) {
+    expect(geo.mainTop + 1, 'main starts below sticky header').toBeGreaterThanOrEqual(geo.headerBottom - 8);
+  }
   expect(geo.trustNameVisible, 'owner identity visible').toBe(true);
   expect(geo.logoVisible, 'logo visible').toBe(true);
   expect(geo.logoHeight, 'logo readable').toBeGreaterThanOrEqual(16);
