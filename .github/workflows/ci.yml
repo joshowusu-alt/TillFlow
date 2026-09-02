@@ -186,11 +186,6 @@ jobs:
           cat .ci-server.log || true
           exit 1
 
-      - name: UI programme shell geometry
-        env:
-          PLAYWRIGHT_BASE_URL: http://localhost:6200
-        run: npm run test:e2e:ui-programme
-
       - name: Offline sync smoke E2E
         run: npm run test:e2e:smoke
 
@@ -204,6 +199,13 @@ jobs:
 
       - name: Phase 3A financial QA
         run: npm run test:qa:phase3a
+
+      # Read-only geometry last. Do not run it before smoke: owner POS visits
+      # share the CI SQLite file with cashier till-open and can leave extras closed.
+      - name: UI programme shell geometry
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:6200
+        run: npm run test:e2e:ui-programme
 
       - name: Upload POS-safety artifacts
         if: always()
