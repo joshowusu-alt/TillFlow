@@ -78,6 +78,7 @@ export async function readShellGeometry(page: Page) {
 }
 
 export async function expectShellContract(page: Page, isPosRoute: boolean) {
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForFunction((lg) => {
     const nav = document.querySelector('nav[aria-label="Main navigation"]');
     if (!nav) return false;
