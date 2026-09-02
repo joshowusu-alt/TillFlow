@@ -27,8 +27,8 @@ describe('Loading Phase 1: skeleton and route-loader polish', () => {
 
   it('selects Home Instant Loading skeleton from owner critical-shell state', () => {
     const loading = read('app/(protected)/onboarding/loading.tsx');
-    expect(loading).toContain('requireBusiness');
-    expect(loading).toContain('onboardingCompletedAt');
+    expect(loading).toContain('getOwnerHomeCriticalShell');
+    expect(loading).toContain('needsFullReadiness');
     expect(loading).toContain('ChecklistReadinessSkeleton');
     expect(loading).toContain('OwnerReadinessSkeleton');
   });

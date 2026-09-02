@@ -10,6 +10,13 @@ import OwnerReadinessSkeleton from '@/app/(protected)/onboarding/OwnerReadinessS
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('Home and POS skeleton state selection', () => {
+  it('selects Instant Loading from the same journey gate as completed Home', () => {
+    const loading = read('app/(protected)/onboarding/loading.tsx');
+    expect(loading).toContain('getOwnerHomeCriticalShell');
+    expect(loading).toContain('needsFullReadiness');
+    expect(loading).not.toMatch(/if \(business\.onboardingCompletedAt\)/);
+  });
+
   it('does not wrap completed Home in a page-level checklist Suspense fallback', () => {
     const page = read('app/(protected)/onboarding/page.tsx');
     const content = read('app/(protected)/onboarding/OwnerReadinessContent.tsx');

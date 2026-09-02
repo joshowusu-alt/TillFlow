@@ -245,7 +245,7 @@ export default function TopNav({
       publishOffset();
       if (typeof window === 'undefined') return;
       const compactLandscape = window.matchMedia(
-        '(orientation: landscape) and (max-height: 500px)',
+        '(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)',
       ).matches;
       if (compactLandscape) {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' });

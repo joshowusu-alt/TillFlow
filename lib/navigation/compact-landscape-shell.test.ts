@@ -7,7 +7,9 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 describe('Compact phone-landscape shell', () => {
   it('defines an orientation + short-height compact shell, not width-only sm/md tablet chrome', () => {
     const css = read('app/globals.css');
-    expect(css).toContain('@media (orientation: landscape) and (max-height: 500px)');
+    expect(css).toContain(
+      '@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px)',
+    );
     expect(css).toContain('.app-shell-status-strip');
     expect(css).toContain('.nav-trust-compact');
     expect(css).toContain('.nav-trust-tablet');
@@ -24,6 +26,7 @@ describe('Compact phone-landscape shell', () => {
     expect(topNav).toContain('app-shell-menu-button');
     expect(topNav).toContain('orientationchange');
     expect(topNav).toContain("max-height: 500px");
+    expect(topNav).toContain('max-width: 1023px');
   });
 
   it('shows compact identity in landscape and keeps Sign out inside the More drawer', () => {
@@ -33,6 +36,17 @@ describe('Compact phone-landscape shell', () => {
     expect(trust).toContain('nav-trust-tablet');
     expect(trust).toContain('nav-trust-signout-tablet');
     expect(menu).toContain('Sign out');
+  });
+
+  it('does not apply compact landscape rules at desktop width where Sign out lives in the header', () => {
+    const css = read('app/globals.css');
+    const compactBlock = css.slice(
+      css.indexOf('@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px)'),
+      css.indexOf('.operational-page'),
+    );
+    expect(compactBlock).toContain('max-width: 1023px');
+    expect(compactBlock).toContain('.nav-trust-signout-desktop');
+    expect(css.indexOf('@media (orientation: landscape) and (max-height: 500px) {')).toBe(-1);
   });
 
   it('reserves bottom-nav space including safe-area and prefetches POS from the tab bar', () => {

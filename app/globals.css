@@ -283,7 +283,7 @@ textarea {
  * is ~320–430px. Collapse chrome to one header row, keep identity readable,
  * and never let the bottom tab bar cover primary actions.
  */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px) {
   :root {
     --app-header-height-mobile: 3.25rem;
     --mobile-bottom-nav-content-height: 3.75rem;

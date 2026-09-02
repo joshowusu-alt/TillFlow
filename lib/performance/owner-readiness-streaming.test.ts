@@ -77,8 +77,8 @@ describe('Trust Breakers T2: owner home readiness streaming', () => {
     const homeSkeleton = read('app/(protected)/onboarding/OwnerReadinessSkeleton.tsx');
     const loading = read('app/(protected)/onboarding/loading.tsx');
 
-    expect(loading).toContain('requireBusiness');
-    expect(loading).toContain('onboardingCompletedAt');
+    expect(loading).toContain('getOwnerHomeCriticalShell');
+    expect(loading).toContain('needsFullReadiness');
     expect(loading).toContain('ChecklistReadinessSkeleton');
     expect(loading).toContain('OwnerReadinessSkeleton');
     expect(checklist).toContain('Preparing setup checklist');
