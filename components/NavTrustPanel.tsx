@@ -12,12 +12,30 @@ interface NavTrustPanelProps {
 }
 
 export default function NavTrustPanel({ user, storeName, isOnline, todaySales }: NavTrustPanelProps) {
+  const roleBranch = `${user.role}${storeName ? ` · ${storeName}` : ''}`;
+
   return (
     <>
-      <div className="hidden items-center gap-2 xl:flex">
+      <div className="nav-trust-compact hidden min-w-0 items-center gap-2">
+        <span
+          className={isOnline ? 'status-dot-online' : 'status-dot-offline'}
+          title={isOnline ? 'Online' : 'Offline — sales will sync when reconnected'}
+        />
+        <div className="min-w-0">
+          <div className="truncate text-xs font-semibold leading-tight text-ink">{user.name}</div>
+          <div className="truncate text-[10px] uppercase tracking-[0.12em] text-muted">{roleBranch}</div>
+        </div>
+        {todaySales ? (
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-ink">
+            {formatMoney(todaySales.totalPence, todaySales.currency)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="nav-trust-desktop hidden items-center gap-2 xl:flex">
         {todaySales ? (
           <div
-            className="hidden h-9 items-center gap-3 rounded-xl border border-slate-200/75 bg-white/86 px-3 shadow-sm xl:flex"
+            className="hidden h-9 items-center gap-3 rounded-xl border border-slate-200/75 bg-white px-3 shadow-sm xl:flex"
             aria-label={`Today's sales ${formatMoney(todaySales.totalPence, todaySales.currency)}, ${todaySales.txCount} transactions`}
             title={`Today's sales: ${formatMoney(todaySales.totalPence, todaySales.currency)} · ${todaySales.txCount} transaction${todaySales.txCount !== 1 ? 's' : ''}`}
           >
@@ -40,21 +58,21 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
             <div className="min-w-0">
               <div className="max-w-[10rem] truncate text-sm font-semibold text-ink 2xl:max-w-[13rem]">{user.name}</div>
               <div className="truncate text-[10px] uppercase tracking-[0.18em] text-muted">
-                {user.role}{storeName ? ` · ${storeName}` : ''}
+                {roleBranch}
               </div>
             </div>
           </div>
         </div>
 
-        <LogoutForm>
-          <button type="submit" className="inline-flex h-9 items-center rounded-xl border border-slate-200/75 bg-white/86 px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
+        <LogoutForm className="nav-trust-signout-desktop">
+          <button type="submit" className="inline-flex h-9 items-center rounded-xl border border-slate-200/75 bg-white px-3 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50" aria-label="Sign out">
             Sign out
           </button>
         </LogoutForm>
       </div>
 
-      {/* Trust panel: compact tablet variant */}
-      <div className="hidden text-right text-xs sm:block xl:hidden">
+      {/* Trust panel: compact tablet / large-phone portrait. Hidden in compact landscape via CSS. */}
+      <div className="nav-trust-tablet hidden text-right text-xs sm:block xl:hidden">
         <div className="flex items-center justify-end gap-2">
           <span
             className={isOnline ? 'status-dot-online' : 'status-dot-offline'}
@@ -66,7 +84,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
           </span>
         </div>
         <div className="text-gray-500 uppercase tracking-[0.15em]">
-          {user.role}{storeName ? ` · ${storeName}` : ''}
+          {roleBranch}
         </div>
         {todaySales ? (
           <div className="text-gray-400 tabular-nums">
@@ -76,7 +94,7 @@ export default function NavTrustPanel({ user, storeName, isOnline, todaySales }:
         ) : null}
       </div>
 
-      <LogoutForm className="hidden sm:block xl:hidden">
+      <LogoutForm className="nav-trust-signout-tablet hidden sm:block xl:hidden">
         <button type="submit" className="btn-ghost text-xs" aria-label="Sign out">
           Sign out
         </button>

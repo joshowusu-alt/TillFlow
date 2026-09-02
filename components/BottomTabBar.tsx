@@ -161,7 +161,7 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
         {tabs.map((tab) => {
           const active = tab.match ? tab.match(pathname) : false;
           const common =
-            'flex h-14 min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 transition-colors';
+            'mobile-bottom-tab-item flex h-14 min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 transition-colors';
           const stateClasses = active
             ? 'text-accent font-semibold'
             : 'text-slate-600 hover:text-slate-900 active:bg-slate-100';
@@ -182,6 +182,7 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
               ) : (
                 <Link
                   href={tab.href!}
+                  prefetch={tab.href === '/pos' ? true : undefined}
                   aria-current={active ? 'page' : undefined}
                   className={`${common} ${stateClasses}`}
                 >

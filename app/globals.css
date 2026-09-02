@@ -278,6 +278,85 @@ textarea {
   padding-bottom: 0.2rem;
 }
 
+/*
+ * Compact phone landscape: width often looks like "tablet" (sm/md) while height
+ * is ~320–430px. Collapse chrome to one header row, keep identity readable,
+ * and never let the bottom tab bar cover primary actions.
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --app-header-height-mobile: 3.25rem;
+    --mobile-bottom-nav-content-height: 3.75rem;
+    --mobile-bottom-nav-clearance: calc(var(--mobile-bottom-nav-height) + 1.25rem);
+  }
+
+  .app-shell-header {
+    background-color: #fff;
+  }
+
+  .app-shell-header-row {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    gap: 0.5rem;
+  }
+
+  .app-shell-status-strip {
+    display: none !important;
+  }
+
+  .nav-trust-tablet,
+  .nav-trust-desktop,
+  .nav-trust-signout-tablet,
+  .nav-trust-signout-desktop {
+    display: none !important;
+  }
+
+  .nav-trust-compact {
+    display: flex !important;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Non-POS: More tab opens the drawer. Keep the header hamburger on POS
+     because the bottom tab bar is hidden on /pos. */
+  .app-shell-header:not(.app-shell-header-pos) .app-shell-menu-button {
+    display: none !important;
+  }
+
+  .app-shell-header-pos .app-shell-menu-button {
+    height: 2.75rem;
+    width: 2.75rem;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .mobile-bottom-tab-item {
+    height: 2.75rem;
+    min-height: 44px;
+  }
+
+  .home-hero-inner {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .home-hero h1 {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .home-completed-actions {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .home-open-pos {
+    position: sticky;
+    bottom: calc(var(--mobile-bottom-nav-height) + 0.5rem);
+    z-index: 20;
+  }
+}
+
 .operational-page {
   min-width: 0;
   max-width: 100%;
