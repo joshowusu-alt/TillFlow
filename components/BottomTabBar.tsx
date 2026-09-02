@@ -194,7 +194,7 @@ export default function BottomTabBar({ userRole }: { userRole: AppRole }) {
                   data-shell-more="true"
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
-                  aria-controls="shell-more-drawer"
+                  aria-controls={menuOpen ? 'shell-more-drawer' : undefined}
                 >
                   {content}
                 </button>

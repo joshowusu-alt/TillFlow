@@ -584,7 +584,7 @@ export default function TopNav({
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-expanded={mobileOpen}
               aria-haspopup="dialog"
-              aria-controls="shell-more-drawer"
+              aria-controls={mobileOpen ? 'shell-more-drawer' : undefined}
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
               data-shell-menu-button="true"
             >

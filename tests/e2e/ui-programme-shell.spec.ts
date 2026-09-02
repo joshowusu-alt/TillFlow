@@ -281,7 +281,7 @@ test.describe('UI programme shell geometry (read-only)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
     await page.locator('#main-content').waitFor({ state: 'visible' });
-    await expect(page.getByRole('img', { name: /online|offline/i }).first()).toBeVisible();
+    await expect(page.locator('.nav-trust-status-compact, .nav-trust-status-label').first()).toBeVisible();
     const desktopNav = page.locator('nav[aria-label="Main navigation"]');
     await expect(desktopNav).toHaveAttribute('inert', '');
     await expect(page.getByRole('navigation', { name: /primary mobile navigation/i })).toBeVisible();
