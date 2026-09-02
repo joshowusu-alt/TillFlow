@@ -16,10 +16,11 @@ export const RELIABILITY_PREVIEW_DEFECT_1 = {
 
 export const RELIABILITY_PREVIEW_DEFECT_2 = {
   id: 'till3-sale-shift-totals-remain-zero',
-  verdict: 'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
+  verdict: 'PREVIEW VALIDATED — TILL 3 ACCOUNTING FIXED',
   gateProject: 'reliability-till3-accounting',
   symptom: 'TILL 3 SALE COMPLETES BUT SHIFT CASH/TENDER TOTALS REMAIN ZERO',
   hostedSaleCompletedOnSha: '4a36d52206bc8e67a26f8c01fa3a5b670b0814d1',
+  evidence: 'owner hosted INV-000001 split sale on Till 3 with invoice/shift linkage, CASH_SALE, non-zero Shift Reconciliation',
   doNotCreateAnotherSale: true,
   doNotReusePaymentRefs: true,
   doNotCloseShift: true,

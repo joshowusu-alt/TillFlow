@@ -184,6 +184,14 @@ describe('reliability CI governance contract', () => {
     expect(env).toContain("process.env.RELIABILITY_E2E === '1'");
     expect(env).toContain('www.tillflow.app');
     expect(env).toContain('isProductionPlaywrightTarget');
+    expect(env).toContain('RELIABILITY_ALLOW_WRITE_GATES');
+    expect(env).toContain('reliabilityWriteGatesAllowed');
+    expect(spec).toContain('reliabilityWriteGatesAllowed');
+    expect(read('playwright/reliability-provisioning.spec.ts')).toContain('reliabilityWriteGatesAllowed');
+    expect(read('playwright/reliability-catalogue.spec.ts')).toContain('reliabilityWriteGatesAllowed');
+    expect(read('playwright/reliability-onboarding-manual.spec.ts')).toContain('reliabilityWriteGatesAllowed');
+    expect(read('playwright/reliability-till3-accounting.spec.ts')).toContain('shouldRunReliabilityJourney');
+    expect(read('playwright/reliability-till3-accounting.spec.ts')).not.toContain('reliabilityWriteGatesAllowed');
   });
 
   it('asserts QA products via a unique table row or table link, never getByText().first()', () => {
@@ -639,7 +647,7 @@ describe('reliability-till3-accounting Playwright project contract', () => {
       'registrationHelperIsTestInfrastructureDebt: true',
     );
     expect(read('lib/reliability/preview-defects.ts')).toContain(
-      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
+      'PREVIEW VALIDATED — TILL 3 ACCOUNTING FIXED',
     );
     expect(read('lib/reliability/preview-defects.ts')).toContain('evidenceOnly: true');
     expect(read('lib/reliability/preview-defects.ts')).toContain('doNotCreateAnotherSale: true');

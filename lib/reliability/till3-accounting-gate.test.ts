@@ -84,6 +84,27 @@ describe('Till 3 accounting gate', () => {
     expect(formatTill3AccountingTable(persisted)).toContain('shiftExpectedCashPence=10100');
   });
 
+  it('does not treat an unlinked CASH_SALE on the same till as the invoice drawer row', () => {
+    expect(() =>
+      assertTill3AccountingPersisted({
+        invoices: [
+          invoice({
+            drawer: [
+              {
+                entryType: 'CASH_SALE',
+                amountPence: TILL3_ACCOUNTING_SPLIT.cashPence,
+                tillId: 'till-3',
+                shiftId: 'shift-3',
+                referenceType: 'SALES_INVOICE',
+                referenceId: null,
+              },
+            ],
+          }),
+        ],
+      }),
+    ).toThrow(/CASH_SALE/);
+  });
+
   it('fails the original defect: sale identity present but shift totals remain zero', () => {
     expect(() =>
       assertTill3AccountingPersisted({
@@ -423,7 +444,7 @@ describe('Preview original defects', () => {
     expect(RELIABILITY_PREVIEW_DEFECT_1.doNotRerunOnboardingManual).toBe(true);
     expect(RELIABILITY_PREVIEW_DEFECT_1.registrationHelperIsTestInfrastructureDebt).toBe(true);
     expect(RELIABILITY_PREVIEW_DEFECT_2.verdict).toBe(
-      'PREVIEW BLOCKED — FOCUSED TILL 3 ACCOUNTING EVIDENCE GATE REQUIRED',
+      'PREVIEW VALIDATED — TILL 3 ACCOUNTING FIXED',
     );
     expect(RELIABILITY_PREVIEW_DEFECT_2.gateProject).toBe('reliability-till3-accounting');
     expect(RELIABILITY_PREVIEW_DEFECT_2.evidenceOnly).toBe(true);

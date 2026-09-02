@@ -31,4 +31,14 @@ describe('POS till context', () => {
       openShiftTillIds: ['till-other-store'],
     })).toBe('');
   });
+
+  it('binds an additional owned till (Till 3) to its unique id, not Till 1 or Till 2', () => {
+    expect(resolvePosTillId({
+      requestedTillId: 'till-3',
+      savedTillId: 'till-1',
+      currentTillId: 'till-2',
+      tills: [...tills, { id: 'till-3', name: 'Till 3' }],
+      openShiftTillIds: ['till-1', 'till-2', 'till-3'],
+    })).toBe('till-3');
+  });
 });

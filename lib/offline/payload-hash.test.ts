@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeOfflineSalePayload, hashOfflineSalePayload } from './payload-hash';
+import { canonicalizeOfflineSalePayload, hashOfflineSalePayload, offlineReplayMatches } from './payload-hash';
 
 const sample = {
   businessId: 'biz-1',
@@ -48,5 +48,30 @@ describe('offline sale payload hash', () => {
     expect(canonical).toContain('"unitPricePence":2500');
     expect(canonical).toContain('"shiftId":"shift-1"');
     expect(canonical).toContain('"cashierUserId":"cashier-1"');
+  });
+
+  it('does not treat the same cart on a different shift as an exact replay', () => {
+    expect(
+      offlineReplayMatches(
+        {
+          storeId: sample.storeId,
+          tillId: sample.tillId,
+          shiftId: 'shift-1',
+          cashierUserId: sample.cashierUserId,
+          customerId: null,
+          lines: sample.lines,
+          payments: sample.payments,
+        },
+        {
+          storeId: sample.storeId,
+          tillId: sample.tillId,
+          shiftId: 'shift-2',
+          cashierUserId: sample.cashierUserId,
+          customerId: null,
+          lines: sample.lines,
+          payments: sample.payments,
+        },
+      ),
+    ).toBe(false);
   });
 });

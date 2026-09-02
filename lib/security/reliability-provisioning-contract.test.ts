@@ -39,7 +39,7 @@ describe('reliability provisioning Playwright contract', () => {
     expect(spec).toMatch(/ensurePreviewQaOwner|login/);
     expect(spec).toContain('Till 3');
     expect(spec).toContain('shouldAddNamedTill');
-    expect(spec).toContain('shouldRunReliabilityJourney');
+    expect(spec).toContain('reliabilityWriteGatesAllowed');
     expect(spec).toContain('isProductionPlaywrightTarget');
     expect(spec).toContain('assertPreviewQaOwnerTarget');
     expect(spec).toContain('completeOnboardingBusinessType');

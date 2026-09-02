@@ -814,6 +814,9 @@ describe('createSale — payments & stock', () => {
       totalPence: 500,
       transactionNumber: 'INV-000001',
       externalRef: 'POS_ONLINE:attempt-1',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-1',
     };
     prismaMock.salesInvoice.findFirst.mockResolvedValueOnce(existing);
 
@@ -826,12 +829,52 @@ describe('createSale — payments & stock', () => {
     expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a duplicate externalRef that already belongs to another till', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({
+      id: 'inv-existing',
+      totalPence: 500,
+      transactionNumber: 'INV-000001',
+      externalRef: 'POS_ONLINE:attempt-1',
+      storeId: STORE_ID,
+      tillId: 'till-other',
+      shiftId: 'shift-1',
+    });
+
+    await expect(createSale(makeBaseInput({
+      externalRef: 'POS_ONLINE:attempt-1',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }))).rejects.toThrow('different till or shift');
+    expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a duplicate externalRef captured against a different shift', async () => {
+    prismaMock.salesInvoice.findFirst.mockResolvedValueOnce({
+      id: 'inv-existing',
+      totalPence: 500,
+      transactionNumber: 'INV-000001',
+      externalRef: 'POS_ONLINE:attempt-shift',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-original',
+    });
+
+    await expect(createSale(makeBaseInput({
+      capturedShiftId: 'shift-later',
+      externalRef: 'POS_ONLINE:attempt-shift',
+      payments: [{ method: 'CASH', amountPence: 500 }],
+    }))).rejects.toThrow('different till or shift');
+    expect((prismaMock as any).salesInvoice.create).not.toHaveBeenCalled();
+  });
+
   it('returns the winner invoice when a concurrent externalRef create races on P2002', async () => {
     const existing = {
       id: 'inv-race-winner',
       totalPence: 500,
       transactionNumber: 'INV-000042',
       externalRef: 'POS_ONLINE:race-1',
+      storeId: STORE_ID,
+      tillId: TILL_ID,
+      shiftId: 'shift-1',
     };
     prismaMock.salesInvoice.findFirst
       .mockResolvedValueOnce(null) // pre-create idempotency miss

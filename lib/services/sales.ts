@@ -353,6 +353,21 @@ export type CreateSaleInput = {
   lines: SaleLineInput[];
 };
 
+export const IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG =
+  'This sale was already recorded on a different till or shift. Start a new checkout.';
+
+/** Same externalRef may replay only onto the original store, till, and captured shift. */
+export function idempotentCheckoutMatchesExisting(
+  existing: { storeId: string; tillId: string; shiftId?: string | null },
+  input: { storeId: string; tillId: string; capturedShiftId?: string | null },
+): boolean {
+  if (existing.storeId !== input.storeId) return false;
+  if (existing.tillId !== input.tillId) return false;
+  const captured = input.capturedShiftId?.trim() || null;
+  if (captured && (existing.shiftId ?? null) !== captured) return false;
+  return true;
+}
+
 type LockedCapturedShift = {
   id: string;
   status: string;
@@ -503,6 +518,9 @@ async function createSaleImpl(input: CreateSaleInput) {
       },
     });
     if (existingByRef) {
+      if (!idempotentCheckoutMatchesExisting(existingByRef, input)) {
+        throw new UserError(IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG);
+      }
       return existingByRef;
     }
   }
@@ -1055,6 +1073,9 @@ async function createSaleImpl(input: CreateSaleInput) {
               },
             });
             if (existingByRef) {
+              if (!idempotentCheckoutMatchesExisting(existingByRef, input)) {
+                throw new UserError(IDEMPOTENT_SALE_CONTEXT_MISMATCH_MSG);
+              }
               idempotentReplayInvoice = existingByRef;
               return existingByRef;
             }

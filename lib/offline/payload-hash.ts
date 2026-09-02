@@ -159,6 +159,7 @@ export function offlineReplayIdentityFingerprint(input: {
 function identityWithoutCashAmounts(input: {
   storeId: string;
   tillId: string;
+  shiftId?: string | null;
   cashierUserId?: string | null;
   customerId?: string | null;
   lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;
@@ -167,6 +168,7 @@ function identityWithoutCashAmounts(input: {
   return JSON.stringify({
     storeId: input.storeId,
     tillId: input.tillId,
+    shiftId: input.shiftId ?? null,
     cashierUserId: input.cashierUserId ?? null,
     customerId: input.customerId ?? null,
     lines: sortBy(input.lines, (line) => `${line.productId}:${line.unitId}`).map((line) => ({
@@ -186,6 +188,7 @@ export function offlineReplayMatches(
   stored: {
     storeId: string;
     tillId: string;
+    shiftId?: string | null;
     cashierUserId?: string | null;
     customerId?: string | null;
     lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;
@@ -194,6 +197,7 @@ export function offlineReplayMatches(
   incoming: {
     storeId: string;
     tillId: string;
+    shiftId?: string | null;
     cashierUserId?: string | null;
     customerId?: string | null;
     lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;

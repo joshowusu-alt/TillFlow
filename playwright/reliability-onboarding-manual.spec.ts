@@ -8,8 +8,8 @@ import { test, type Page } from '@playwright/test';
 import {
   getBaseUrl,
   isProductionPlaywrightTarget,
-  reliabilityJourneySkipReason,
-  shouldRunReliabilityJourney,
+  reliabilityWriteGateSkipReason,
+  reliabilityWriteGatesAllowed,
 } from '../tests/e2e/helpers/env';
 import {
   assertPreviewQaOwnerTarget,
@@ -57,7 +57,7 @@ async function confirmPreviewSha(page: Page) {
 }
 
 test.describe('Reliability onboarding manual', () => {
-  test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+  test.skip(!reliabilityWriteGatesAllowed(), reliabilityWriteGateSkipReason());
 
   test('new-business Add a product manually lands on /products#product-create', async ({ page }) => {
     test.setTimeout(180_000);

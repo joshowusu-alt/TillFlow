@@ -83,6 +83,7 @@ function replayMatchesExisting(
   existing: {
     storeId: string;
     tillId: string;
+    shiftId?: string | null;
     cashierUserId?: string | null;
     customerId?: string | null;
     lines: Array<{ productId: string; unitId: string; qtyInUnit: number }>;
@@ -93,6 +94,7 @@ function replayMatchesExisting(
   return offlineReplayMatches(existing, {
     storeId: payload.storeId,
     tillId: payload.tillId,
+    shiftId: payload.shiftId ?? null,
     cashierUserId: payload.cashierUserId ?? null,
     customerId: payload.customerId ?? null,
     lines: payload.lines ?? [],

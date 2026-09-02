@@ -9,9 +9,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
   isPreviewPlaywrightTarget,
-  reliabilityJourneySkipReason,
   reliabilitySalesAllowed,
-  shouldRunReliabilityJourney,
+  reliabilityWriteGateSkipReason,
+  reliabilityWriteGatesAllowed,
 } from '../tests/e2e/helpers/env';
 import {
   assertMobilePhase9Prereqs,
@@ -202,7 +202,7 @@ async function fetchSnapshot(page: Page) {
 
 test.describe('Reliability journey', () => {
   test.describe.configure({ mode: 'serial' });
-  test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+  test.skip(!reliabilityWriteGatesAllowed(), reliabilityWriteGateSkipReason());
 
   test('register, three tills, product, Till 3 tenders, close', async ({ page }) => {
     test.setTimeout(480_000);
@@ -551,7 +551,7 @@ test.describe('Reliability journey', () => {
   });
 
   test('core Till 3 POS flow on mobile viewport', async ({ page }) => {
-    test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+    test.skip(!reliabilityWriteGatesAllowed(), reliabilityWriteGateSkipReason());
     assertMobilePhase9Prereqs(phase9Setup);
     await requireSalesAllowed('mobile POS');
     test.setTimeout(180_000);

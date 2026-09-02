@@ -1387,6 +1387,7 @@ export default function PosClient({
   const saleIdentity = useMemo(
     () =>
       JSON.stringify({
+        tillId,
         cart,
         customerId,
         paymentStatus,
@@ -1402,6 +1403,7 @@ export default function PosClient({
         dueDateDecision,
       }),
     [
+      tillId,
       cart,
       customerId,
       paymentStatus,

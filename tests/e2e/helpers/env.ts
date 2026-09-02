@@ -102,6 +102,9 @@ export function isPreviewPlaywrightTarget(url = getBaseUrl()) {
  * Opt-in only. Default CI stays green.
  * Runs when RELIABILITY_E2E=1, or when a Preview base URL plus owner creds exist.
  * Always false for Production.
+ *
+ * Write-capable projects (journey, provisioning, catalogue, onboarding-manual)
+ * also require RELIABILITY_ALLOW_WRITE_GATES=1. Evidence-only Till 3 does not.
  */
 export function shouldRunReliabilityJourney() {
   if (isProductionPlaywrightTarget()) return false;
@@ -121,6 +124,23 @@ export function reliabilityJourneySkipReason() {
     return missingRoleEnvMessage('owner');
   }
   return '';
+}
+
+/** Explicit unlock for write-capable reliability Playwright projects. Never Production. */
+export function reliabilityWriteGatesAllowed() {
+  if (isProductionPlaywrightTarget()) return false;
+  if (process.env.RELIABILITY_ALLOW_WRITE_GATES !== '1') return false;
+  return shouldRunReliabilityJourney();
+}
+
+export function reliabilityWriteGateSkipReason() {
+  if (isProductionPlaywrightTarget()) {
+    return 'Reliability write gates are blocked against Production.';
+  }
+  if (process.env.RELIABILITY_ALLOW_WRITE_GATES !== '1') {
+    return 'Write-capable reliability journeys are quarantined. Set RELIABILITY_ALLOW_WRITE_GATES=1 (never Production).';
+  }
+  return reliabilityJourneySkipReason();
 }
 
 /** Completing live sales requires an explicit sale allow, except local RELIABILITY_E2E=1. */

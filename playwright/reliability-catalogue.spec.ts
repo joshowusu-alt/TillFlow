@@ -8,8 +8,8 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   getBaseUrl,
   isProductionPlaywrightTarget,
-  reliabilityJourneySkipReason,
-  shouldRunReliabilityJourney,
+  reliabilityWriteGateSkipReason,
+  reliabilityWriteGatesAllowed,
 } from '../tests/e2e/helpers/env';
 import {
   assertPreviewQaOwnerTarget,
@@ -77,7 +77,7 @@ async function fetchSnapshot(page: Page): Promise<CatalogueSnapshotLike> {
 }
 
 test.describe('Reliability catalogue', () => {
-  test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+  test.skip(!reliabilityWriteGatesAllowed(), reliabilityWriteGateSkipReason());
 
   test('Preview catalogue, CSV import, and persisted opening stock', async ({ page }) => {
     test.setTimeout(180_000);

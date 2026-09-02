@@ -945,6 +945,49 @@ describe('PosClient till selection', () => {
     });
   });
 
+  it('rotates the online idempotency key when the cashier switches till after an unclear sale', async () => {
+    mockedCompleteSaleAction.mockRejectedValueOnce(new Error('network reset after accept'));
+    render(
+      <PosClient
+        {...baseProps}
+        tills={tills}
+        openShiftTillIds={['till-1', 'till-3']}
+        openShifts={[
+          { tillId: 'till-1', shiftId: 'shift-1' },
+          { tillId: 'till-3', shiftId: 'shift-3' },
+        ]}
+      />,
+    );
+    const search = screen.getByPlaceholderText(/type product name/i);
+    fireEvent.focus(search);
+    fireEvent.change(search, { target: { value: 'Coca' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Coca Cola/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Coca Cola/i }));
+    const completeButtons = screen.getAllByRole('button', { name: /Complete Cash Sale/i });
+    const complete = completeButtons.find((btn) => !(btn as HTMLButtonElement).disabled)!;
+    fireEvent.click(complete);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(1));
+    const firstRef = mockedCompleteSaleAction.mock.calls[0][0].externalRef as string;
+
+    const select = document.querySelector('#pos-till-select') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'till-1' } });
+    await waitFor(() => {
+      expect(document.querySelector('[data-selected-till-id="till-1"]')).not.toBeNull();
+    });
+    mockedCompleteSaleAction.mockResolvedValueOnce({
+      success: true,
+      data: { receiptId: 'inv-other-till', totalPence: 250, transactionNumber: 'INV-2' },
+    });
+    const retry = screen.getAllByRole('button', { name: /Complete Cash Sale/i })
+      .find((btn) => !(btn as HTMLButtonElement).disabled)!;
+    fireEvent.click(retry);
+    await waitFor(() => expect(mockedCompleteSaleAction).toHaveBeenCalledTimes(2));
+    expect(mockedCompleteSaleAction.mock.calls[1][0].externalRef).not.toBe(firstRef);
+    expect(mockedCompleteSaleAction.mock.calls[1][0].tillId).toBe('till-1');
+  });
+
   it('ignores localStorage when the saved till has no open shift', async () => {
     searchParamsGet.mockReturnValue(null);
     window.localStorage.setItem(

@@ -1,16 +1,16 @@
 /**
  * Preview-only owner + Till 3 provisioning. Zero financial writes.
  *
- * Opt-in: skipped unless shouldRunReliabilityJourney() (Preview + owner creds
- * or RELIABILITY_E2E=1). Fail-closed on Production via denial helpers.
+ * Opt-in: skipped unless RELIABILITY_ALLOW_WRITE_GATES=1 plus Preview/RELIABILITY_E2E.
+ * Fail-closed on Production via denial helpers.
  * Uses PLAYWRIGHT_OWNER_EMAIL through ensurePreviewQaOwner (existing-login).
  */
 import { expect, test, type Page } from '@playwright/test';
 import {
   getBaseUrl,
   isProductionPlaywrightTarget,
-  reliabilityJourneySkipReason,
-  shouldRunReliabilityJourney,
+  reliabilityWriteGateSkipReason,
+  reliabilityWriteGatesAllowed,
 } from '../tests/e2e/helpers/env';
 import {
   PREVIEW_QA_STAGE_TIMEOUT_MS,
@@ -146,7 +146,7 @@ async function proveTill3OnSettings(page: Page) {
 }
 
 test.describe('Reliability provisioning', () => {
-  test.skip(!shouldRunReliabilityJourney(), reliabilityJourneySkipReason());
+  test.skip(!reliabilityWriteGatesAllowed(), reliabilityWriteGateSkipReason());
 
   test('Preview owner session and Till 3 only', async ({ page }) => {
     await test.step('confirm Preview host and SHA via deploy-sha', async () => {

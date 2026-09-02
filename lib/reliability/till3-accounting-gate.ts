@@ -303,7 +303,7 @@ export function cashSaleDrawerRows(invoice: Till3AccountingInvoice) {
   return (invoice.drawer ?? []).filter((row) => {
     if ((row.entryType ?? '').toUpperCase() !== 'CASH_SALE') return false;
     if (row.shiftId !== invoice.shiftId || row.tillId !== invoice.tillId) return false;
-    if (invoice.invoiceId && row.referenceId && row.referenceId !== invoice.invoiceId) return false;
+    if (invoice.invoiceId && row.referenceId !== invoice.invoiceId) return false;
     return true;
   });
 }

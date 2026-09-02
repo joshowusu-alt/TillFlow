@@ -90,3 +90,19 @@ describe('Preview deploy-sha route identity', () => {
     expect(body.vercelEnv).toBe('preview');
   });
 });
+
+describe('QA evidence Production deny', () => {
+  beforeEach(() => snapshotEnv());
+  afterEach(() => restoreEnv());
+
+  it('returns 404 for reliability-snapshot on Vercel Production even if the evidence flag is set', async () => {
+    const { GET: snapshotGET } = await import('@/app/api/qa/reliability-snapshot/route');
+    process.env.VERCEL_ENV = 'production';
+    process.env.RELIABILITY_EVIDENCE_API = '1';
+    const response = await snapshotGET();
+    expect(response.status).toBe(404);
+    const body = await response.json();
+    expect(body).toEqual({ error: 'not_available' });
+    expect(JSON.stringify(body)).not.toMatch(/businessId|userId|invoice|payment|session|password|token/i);
+  });
+});

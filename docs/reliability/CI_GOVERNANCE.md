@@ -60,11 +60,13 @@ with `DATABASE_URL` pointing at the workflow Postgres service. SQLite-mocked sui
 
 ## Reliability Playwright journey
 
-`playwright/reliability-journey.spec.ts` (project `reliability-journey`) is skipped unless:
+Write-capable reliability Playwright projects (`reliability-journey`, `reliability-provisioning`, `reliability-catalogue`, `reliability-onboarding-manual`) are quarantined. They skip unless:
 
-- `RELIABILITY_E2E=1`, or
-- a Preview `PLAYWRIGHT_BASE_URL` plus owner credentials exist
+- `RELIABILITY_ALLOW_WRITE_GATES=1`, and
+- `RELIABILITY_E2E=1`, or a Preview `PLAYWRIGHT_BASE_URL` plus owner credentials exist
 
-It never targets Production (`tillflow.app` / `www.tillflow.app`). Completing sales on Preview still requires `PLAYWRIGHT_ALLOW_QA_SALE=true` and `PLAYWRIGHT_QA_TENANT_CONFIRMED=true`.
+The evidence-only `reliability-till3-accounting` project does not require the write-gate flag. It never sells.
+
+All reliability projects never target Production (`tillflow.app` / `www.tillflow.app`). Completing sales on Preview still requires `PLAYWRIGHT_ALLOW_QA_SALE=true` and `PLAYWRIGHT_QA_TENANT_CONFIRMED=true`.
 
 Authenticated production QA must keep `PLAYWRIGHT_ALLOW_QA_SALE: 'false'`.
